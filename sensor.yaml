@@ -1,0 +1,37 @@
+- platform: forecast
+  api_key: !secret forecast_api_key
+  monitored_conditions:
+    - summary
+    - precip_type
+    - precip_intensity
+    - temperature
+#  - dew_point
+#  - wind_speed
+#  - wind_bearing
+    - cloud_cover
+    - humidity
+#  - pressure
+#  - visibility
+#  - ozone
+
+- platform: mqtt
+  state_topic: "sensor/temperature"
+  name: "ESP8266 Temperature"
+  unit_of_measurement: "ºF"
+#  value_template: '{{ value_json.temp }}'
+
+- platform: mqtt
+  state_topic: "sensor/humidity"
+  name: "ESP8266 Humidity"
+  unit_of_measurement: "%"
+#  value_template: '{{ value_json.humidity }}'
+
+- platform: nest
+  monitored_conditions:
+    - 'temperature'
+    - 'target'
+    - 'humidity'
+
+- platform: time_date
+  display_options:
+    - time

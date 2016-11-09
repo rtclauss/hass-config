@@ -1,0 +1,204 @@
+- alias: Turn on lights when I get home
+  trigger:
+    - platform: state
+      entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+      from: 'not_home'
+      to: 'home'
+  condition:
+    condition: and
+    conditions:
+      - condition: sun
+        after: sunset
+      - condition: state
+        entity_id: input_boolean.home
+        state: 'off'
+  action:
+    - service: scene.turn_on
+      entity_id: scene.arrive_home
+    - service: notify.telegram
+      data:
+        message: Arriving home. Turning on arrival.
+    - service: input_boolean.turn_on
+      entity_id: input_boolean.home
+
+- alias: Turn off lights when I leave
+  trigger:
+    - platform: state
+      entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+      from: 'home'
+      to: 'not_home'
+  condition: 
+      - condition: state
+        entity_id: input_boolean.home
+        state: 'on'
+  action:
+    - service: scene.turn_on
+      entity_id: scene.leave_home
+    - service: notify.telegram
+      data:
+        message: Leaving home. Turning everything off...
+    - service: input_boolean.turn_off
+      entity_id: input_boolean.home
+
+- alias: Cloudy Day Arrival
+  trigger:
+    - platform: state
+      entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+      from: 'not_home'
+      to: 'home'
+  condition:
+   condition: and
+   conditions:
+      - condition: sun
+        before: sunset
+      - condition: numeric_state
+        entity_id: sensor.forecastio_cloud_cover
+        above: 50
+      - condition: state
+        entity_id: input_boolean.home
+        state: 'off'
+  action:
+    - service: scene.turn_on
+      entity_id: scene.arrive_home
+    - service: notify.telegram
+      data:
+        message: Cloudy day arrival.
+    - service: input_boolean.turn_on
+      entity_id: input_boolean.home
+
+- alias: On Vacation trigger
+  trigger:
+    - platform: state
+      entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+      state: 'not_home'
+      for:
+        hours: 20
+  condition:
+    - condition: state
+      entity_id: input_boolean.vacation
+      state: 'off'
+  action:
+    - service: input_boolean.turn_on
+      entity_id: input_boolean.vacation
+    - service: notify.telegram
+      data:
+        message: Setting you as on vacation.
+
+- alias: On Vacation off
+  trigger:
+    - platform: state
+      entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+      state: 'home'
+      for:
+        minutes: 2 
+  condition: 
+      - condition: state
+        entity_id: input_boolean.vacation
+        state: 'on'
+  action:
+    - service: input_boolean.turn_off
+      entity_id: input_boolean.vacation
+    - service: notify.telegram
+      data:
+        message: Setting you as back from vacation.
+
+
+- alias: Turn on lights when I am away
+  trigger:
+    - platform: sun
+      event: sunset
+      offset: '-00:30:00'
+  condition:
+      - condition: state
+        entity_id: input_boolean.vacation
+        state: 'on'
+  action:
+    - service: scene.turn_on
+      entity_id: scene.arrive_home
+    - service: notify.telegram
+      data:
+        message: Turning on lights while you're away.
+
+
+- alias: Turn off lights at night when I am away
+  trigger:
+    - platform: state
+      entity_id: input_boolean.vacation
+      state: 'on'
+    - platform: template
+      value_template: "{{ is_state('sensor.time', states('input_slider.random_hour')|int ~ ':' ~ states('input_slider.random_minute')|int) }}"
+#    - platform: time
+#      after: '23:45:00'
+  condition:
+    - condition: state
+      entity_id: input_boolean.vacation
+      state: 'on'
+  action:
+    - service: scene.turn_on
+      entity_id: scene.leave_home
+    - service: notify.telegram
+      data:
+        message: Lights off while you're away.
+
+- alias: Return home from SPCC and OCC
+  trigger:
+    - platform: template
+      value_template: >
+        {% if states.proximity.spcc.attributes.dir_of_travel == "away_from" or states.proximity.occ.attributes.dir_of_travel == "away_from" %}
+          true
+        {% else %}
+          false
+        {% endif %}
+  condition:
+    condition: template
+    value_template: >
+      {% if states.proximity.home.attributes.dir_of_travel == "towards" %}
+        true
+      {% else %}
+        false
+      {% endif %}
+  action:
+    - service: climate.set_away_mode
+      data:
+          entity_id: climate.hallwayglycol
+          away_mode: false
+    - service: notify.telegram
+      data:
+        message: You're driving home from curling.  Turning off Nest Away..
+
+
+- alias: Close forgotten garage door
+  trigger:
+    - platform: state
+      entity_id: cover.garage_door_opener
+      state: 'open'
+      for:
+        hours: 1
+        minutes: 30
+  condition:
+    - condition: time 
+      after: '22:30:00'
+  action:
+    - service: notify.telegram
+      data:
+        message: Garage door left open. Close it.
+# This does not work due to chamberlain limitations.  https://home-assistant.io/components/cover.wink/
+#    - service: cover.close_cover
+#      entity_id: cover.garage_door_opener.
+
+- alias: Set random turn off time
+  trigger:
+    - platform: time
+      after: '21:00:00'
+  action:
+    - service: input_slider.select_value
+      data_template:
+        entity_id: input_slider.random_hour
+        # The endpoint is omitted, see: http://jinja.pocoo.org/docs/dev/templates/#range
+        value: '{{ (range(22, 24)|random) }}'
+    - service: input_slider.select_value
+      data_template:
+        entity_id: input_slider.random_minute
+        value: '{{ (range(30, 50)|random) }}'
+
+
