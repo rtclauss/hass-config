@@ -52,7 +52,7 @@
       - condition: sun
         before: sunset
       - condition: numeric_state
-        entity_id: sensor.forecastio_cloud_cover
+        entity_id: sensor.dark_sky_cloud_cover
         above: 50
       - condition: state
         entity_id: input_boolean.home
@@ -144,19 +144,20 @@
   trigger:
     - platform: template
       value_template: >
-        {% if states.proximity.spcc.attributes.dir_of_travel == "away_from" or states.proximity.occ.attributes.dir_of_travel == "away_from" %}
-          true
+        {% if 
+          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed) < 1200) and states.sensor.heading_spcc.state=="away_from") 
+          or 
+          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed) < 600) and states.sensor.heading_occ.state=="away_from")
+        %} True
         {% else %}
-          false
+          False
         {% endif %}
   condition:
     condition: template
     value_template: >
-      {% if states.proximity.home.attributes.dir_of_travel == "towards" %}
-        true
-      {% else %}
-        false
-      {% endif %}
+      {{
+        ((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed) < 900) and states.sensor.heading_home.state=="toward")
+      }}
   action:
     - service: climate.set_away_mode
       data:
@@ -200,5 +201,32 @@
       data_template:
         entity_id: input_slider.random_minute
         value: '{{ (range(30, 50)|random) }}'
+
+- alias: "Update Available"
+  trigger:
+    platform: state
+    entity_id: updater.updater
+  action:
+    service: notify.telegram
+    data:
+      message: 'Update for Home Assistant is available.'
+
+- alias: "The Walking Dead"
+  trigger:
+    platform: state
+    entity_id: media_player.directv_rid036071639219
+  condition:
+    - condition: template
+      value_template: >  
+        {% if states.media_player.directv_rid036071639219.attributes.media_title == "The Walking Dead" %}
+          True
+        {% else %}
+          False
+        {% endif %}
+  action:
+    service: scene.turn_on
+    entity_id: scene.twd
+
+
 
 
