@@ -1,10 +1,11 @@
-- platform: forecast
-  api_key: !secret forecast_api_key
+- platform: darksky
+  api_key: !secret darksky_api_key
   monitored_conditions:
     - summary
     - precip_type
     - precip_intensity
     - temperature
+    - apparent_temperature
 #  - dew_point
 #  - wind_speed
 #  - wind_bearing
@@ -46,4 +47,17 @@
     heading_example_zone_05:
       value_template: '{{ states.proximity.example_zone_05.attributes.dir_of_travel }}'
       friendly_name: 'Direction of OCC'
-
+    heading_home:
+      value_template: '{{ states.proximity.home.attributes.dir_of_travel }}'
+      friendly_name: 'Direction of Home'
+    test_home:
+      value_template: >
+        {% if
+          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_08.last_changed) < 1200) and states.sensor.heading_example_zone_08.state=="away_from")
+          or
+          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_05.last_changed) < 600) and states.sensor.heading_example_zone_05.state=="away_from")
+        %} True
+        {% else %}
+          False
+        {% endif %}
+      friendly_name: 'Test for heading home'
