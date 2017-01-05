@@ -27,6 +27,18 @@
   unit_of_measurement: "%"
 #  value_template: '{{ value_json.humidity }}'
 
+- platform: mqtt
+  state_topic: "sensor/basement_temperature"
+  name: "Basement Temperature"
+  unit_of_measurement: "ºF"
+#  value_template: '{{ value_json.temp }}'
+
+- platform: mqtt
+  state_topic: "sensor/basement_humidity"
+  name: "Basement Humidity"
+  unit_of_measurement: "%"
+#  value_template: '{{ value_json.humidity }}'
+
 - platform: nest
   monitored_conditions:
     - 'temperature'
@@ -41,34 +53,61 @@
 ##Since sensors have a last changed timestamp.
 - platform: template
   sensors:
+    example_zone_05_time:
+      value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_05.last_changed)) | int //60 }}'
+      friendly_name: "Last change in OCC Dir"
+      entity_id: sensor.time
+      unit_of_measurement: 'minutes'
+    example_zone_08_time:
+      value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_08.last_changed)) | int //60 }}'
+      friendly_name: "Last Change in SPCC Dir"
+      entity_id: sensor.time
+      unit_of_measurement: 'minutes'
+    example_zone_08_distance:
+      value_template: '{{ states.proximity.example_zone_08.state }}'
+      friendly_name: "Distance to SPCC"
+      entity_id: sensor.time
+      unit_of_measurement: 'mi'
+    home_distance:
+      value_template: '{{ states.proximity.home.state }}'
+      friendly_name: "Distance to Home"
+      entity_id: sensor.time
+      unit_of_measurement: 'mi'
+    home_time:
+      value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed)) | int //60 }}'
+      friendly_name: "Last Change in Home Dir"
+      entity_id: sensor.time
+      unit_of_measurement: 'minutes'
     heading_example_zone_08:
       value_template: '{{ states.proximity.example_zone_08.attributes.dir_of_travel |default("unknown") }}'
       friendly_name: 'Direction of SPCC'
     heading_example_zone_05:
       value_template: '{{ states.proximity.example_zone_05.attributes.dir_of_travel |default("unknown") }}'
       friendly_name: 'Direction of OCC'
+    example_zone_10:
+      value_template: '{{ states.proximity.example_zone_10.attributes.dir_of_travel |default("unknown") }}'
+      friendly_name: 'Heading from Example Zone 10'
     heading_home:
       value_template: '{{ states.proximity.home.attributes.dir_of_travel |default("unknown") }}'
       friendly_name: 'Direction of Home'
     test_home:
       value_template: >
         {% if
-          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_08.last_changed) < 1200) and states.sensor.heading_example_zone_08.state=="away_from")
+          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_08.last_changed)) > 1200) and states.sensor.heading_example_zone_08.state=="away_from")
           or
-          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_05.last_changed) < 600) and states.sensor.heading_example_zone_05.state=="away_from")
-        %} True
+          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_05.last_changed)) > 600) and states.sensor.heading_example_zone_05.state=="away_from")
+        %} true
         {% else %}
-          False
+          false
         {% endif %}
       friendly_name: 'Test for heading home'
     test_homeward:
       value_template: >
         {% if
-          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed) < 900) and states.sensor.heading_home.state=="toward")
-        %} True
+           (((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed))//60) > 10) and (states.sensor.heading_home.state=="towards")
+        %} true
         {% else %}
-          False
+          false
         {% endif %}
       friendly_name: "Homeward bound"
-
-
+      entity_id: sensor.time

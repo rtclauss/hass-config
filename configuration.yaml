@@ -47,8 +47,10 @@ climate:
 #  measurement_scale: 'F'
 
 nest:
-  username:  !secret email_address
-  password:  !secret nest_password
+  client_id: !secret nest_client_id
+  client_secret: !secret nest_client_secret
+#  username:  !secret email_address
+#  password:  !secret nest_password
 #  measurement_scale: 'F'
 
 device_tracker:
@@ -74,6 +76,8 @@ scene: !include scene.yaml
 automation: !include automation.yaml
 
 sensor: !include sensor.yaml
+
+binary_sensor: !include binary_sensor.yaml
 
 zone: !include_dir_list zone
 
@@ -106,4 +110,22 @@ notify:
   platform: telegram
   api_key: !secret telegram_api_key
   chat_id: !secret telegram_chat_id
+
+input_slider:
+  random_hour:
+    name: Random Light Off Hour
+    min: 21
+    max: 24
+    step: 1
+    initial: 22
+  random_minute:
+    name: Random Light Off Minute
+    min: 30
+    max: 50
+    step: 1
+    initial: 37
+
+shell_command:
+  save_input_settings: '/var/opt/homeassistant/python/hass_saved_settings.py -act update_settings -sec {{ section }} -set {{ settings }} -val "{{ value }}"'
+  load_input_settings: '/var/opt/homeassistant/python/hass_saved_settings.py -act update_hass'
 
