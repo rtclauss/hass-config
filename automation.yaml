@@ -27,7 +27,7 @@
       entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
       from: 'home'
       to: 'not_home'
-  condition: 
+  condition:
       - condition: state
         entity_id: input_boolean.home
         state: 'on'
@@ -90,8 +90,8 @@
       entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
       state: 'home'
       for:
-        minutes: 2 
-  condition: 
+        minutes: 2
+  condition:
       - condition: state
         entity_id: input_boolean.vacation
         state: 'on'
@@ -122,17 +122,16 @@
 
 - alias: Turn off lights at night when I am away
   trigger:
-    - platform: state
-      entity_id: input_boolean.vacation
-      state: 'on'
     - platform: template
       value_template: "{{ is_state('sensor.time', states('input_slider.random_hour')|int ~ ':' ~ states('input_slider.random_minute')|int) }}"
+  condition:
+    condition: and
+    conditions:
+      - condition: state
+        entity_id: input_boolean.vacation
+        state: 'on'
 #    - platform: time
 #      after: '23:45:00'
-  condition:
-    - condition: state
-      entity_id: input_boolean.vacation
-      state: 'on'
   action:
     - service: scene.turn_on
       entity_id: scene.leave_home
@@ -143,28 +142,14 @@
 - alias: Return home from SPCC and OCC
   trigger:
     - platform: template
-      value_template: >
-        {% if 
-          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed) < 1200) and states.sensor.heading_spcc.state=="away_from") 
-          or 
-          ((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed) < 600) and states.sensor.heading_occ.state=="away_from")
-        %} True
-        {% else %}
-          False
-        {% endif %}
+      value_template: '{{ states.binary_sensor.test_homeward.state == "on" or states.binary_sensor.away_from_curling.state == "on"}}'
   condition:
     condition: template
-    value_template: >
-      {% if
-        ((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed) < 900) and states.sensor.heading_home.state=="toward")
-      %} True
-      {% else %}
-        False
-      {% endif %}
+    value_template: '{{ states.binary_sensor.away_from_curling.state == "on" and states.binary_sensor.test_homeward.state == "on" }}'
   action:
     - service: climate.set_away_mode
       data:
-          entity_id: climate.hallwayglycol
+          entity_id: climate.hallway_glycol
           away_mode: false
     - service: notify.telegram
       data:
@@ -180,7 +165,7 @@
 #        hours: 1
 #        minutes: 30
   condition:
-    - condition: time 
+    - condition: time
       after: '22:30:00'
   action:
     - service: notify.telegram
@@ -204,6 +189,9 @@
       data_template:
         entity_id: input_slider.random_minute
         value: '{{ (range(30, 50)|random) }}'
+    - service: notify.telegram
+      data:
+        message: 'Turning off lights at {{ states("input_slider.random_hour")|int }}:{{states("input_slider.random_minute")|int}}'
 
 - alias: "Update Available"
   trigger:
@@ -220,16 +208,84 @@
     entity_id: media_player.directv_rid036071639219
   condition:
     - condition: template
-      value_template: >  
+      value_template: >
         {% if states.media_player.directv_rid036071639219.attributes.media_title == "The Walking Dead" %}
-          True
+          true
         {% else %}
-          False
+          false
         {% endif %}
   action:
     service: scene.turn_on
     entity_id: scene.twd
 
+- alias: "Load input states from Settings.ini"
+  trigger:
+    platform: event
+    event_type: homeassistant_start
+  action:
+    - delay:
+        seconds: 15
+    - service: shell_command.load_input_settings
 
+- alias: "Save Input States to Settings.ini"
+  trigger:
+    ## Input Boolean
+    - platform: state
+      entity_id: input_boolean.home
+    - platform: state
+      entity_id: input_boolean.vacation
+    ## Input Select
+    #    - platform: state
+    ##      entity_id: input_select.your_input_select_01
+    #    - platform: state
+    #      entity_id: input_select.your_input_select_02
+    ## Input Slider
+    #    - platform: state
+    #      entity_id: input_slider.your_input_slider_01
+    #    - platform: state
+    #      entity_id: input_slider.your_input_slider_02
+    ## Device Trackers
+    #    - platform: state
+    #      entity_id: device_tracker.your_ios_device
+    #    - platform: state
+    #      entity_id: device_your_android_device
+  action:
+    service: shell_command.save_input_settings
+    data_template:
+      section: '{{ trigger.entity_id }}'
+      settings: '{{ trigger.entity_id }}'
+      value: "{{ trigger.to_state.state }}"
+
+- alias: Turn on Christmas Tree
+  trigger:
+    - platform: sun
+      event: sunset
+      offset: '-00:45:00'
+  action:
+    - service: homeassistant.turn_on
+      entity_id: switch.christmas_tree, light.christmas_lights
+    - service: notify.telegram
+      data:
+        message: Turning on Christmas Tree.
+
+- alias: Turn off Christmas Tree
+  trigger:
+    - platform: time
+      after: '00:00:00'
+  action:
+    - service: homeassistant.turn_off
+      entity_id: switch.christmas_tree
+    - service: notify.telegram
+      data:
+        message: Turning off Christmas Tree.
+
+- alias: Turn off Christmas Tree if bedroom lights turned off.
+  trigger:
+    - platform: state
+      entity_id: light.bedroom_lamp, light.bedroom_lamp_2
+      state: 'off'
+  action:
+    - service: homeassistant.turn_off
+      entity_id: switch.christmas_tree, light.christmas_lights
 
 
