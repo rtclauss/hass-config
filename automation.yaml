@@ -257,6 +257,7 @@
       value: "{{ trigger.to_state.state }}"
 
 - alias: Turn on Christmas Tree
+  initial_state: False
   trigger:
     - platform: sun
       event: sunset
@@ -269,17 +270,19 @@
         message: Turning on Christmas Tree.
 
 - alias: Turn off Christmas Tree
+  initial_state: False
   trigger:
     - platform: time
       after: '00:00:00'
   action:
     - service: homeassistant.turn_off
-      entity_id: switch.christmas_tree
+      entity_id: switch.christmas_tree, light.christmas_lights
     - service: notify.telegram
       data:
         message: Turning off Christmas Tree.
 
 - alias: Turn off Christmas Tree if bedroom lights turned off.
+  initial_state: False
   trigger:
     - platform: state
       entity_id: light.bedroom_lamp, light.bedroom_lamp_2
