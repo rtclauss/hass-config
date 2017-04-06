@@ -3,9 +3,9 @@
     away_from_curling:
       value_template: >
         {% if
-          (((as_timestamp(now()) - as_timestamp(states.sensor.twincities.last_changed)) > 1200) and states.sensor.twincities.state=="away_from")
+          (((as_timestamp(now()) - as_timestamp(states.sensor.twincities.last_changed))//60) > 10) and (states.sensor.twincities.state=="away_from")
           or
-          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) > 300) and states.sensor.heading_occ.state=="away_from")
+          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed))//60) > 5) and (states.sensor.heading_occ.state=="away_from")
         %} true
         {% else %}
           false

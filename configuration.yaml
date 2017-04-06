@@ -39,6 +39,8 @@ logbook:
 discovery:
 
 wink:
+#  email: !secret wink_email
+#  password: !secret wink_password
   access_token: !secret wink_access_t
 #  refresh_token: !secret wink_refresh_t
 
@@ -98,12 +100,13 @@ input_boolean:
 
 mqtt:
   broker: 192.168.1.99
-  port: 8883
-  client_id: home-assistant_1
+  port: 1883
+  client_id: home-assistant-1
   keepalive: 60
   username: !secret mqtt_user
   password: !secret mqtt_password
   protocol: 3.1.1
+#  certificate: /etc/ssl/certs/ca-certificates.crt
 
 notify:
   name: telegram
@@ -129,3 +132,9 @@ shell_command:
   save_input_settings: '/var/opt/homeassistant/python/hass_saved_settings.py -act update_settings -sec {{ section }} -set {{ settings }} -val "{{ value }}"'
   load_input_settings: '/var/opt/homeassistant/python/hass_saved_settings.py -act update_hass'
 
+media_player:
+  - platform: plex
+  - platform: cast
+
+recorder:
+  db_url: postgresql://@/hass
