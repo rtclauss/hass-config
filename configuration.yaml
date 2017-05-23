@@ -9,6 +9,8 @@ homeassistant:
   elevation: !secret home_elevation
   customize: !include customize.yaml
 
+ios:
+
 logger:
   default: info
   logs:
@@ -39,9 +41,9 @@ logbook:
 discovery:
 
 wink:
-#  email: !secret wink_email
-#  password: !secret wink_password
-  access_token: !secret wink_access_t
+  email: !secret wink_email
+  password: !secret wink_password
+#  access_token: !secret wink_access_t
 #  refresh_token: !secret wink_refresh_t
 
 climate:
@@ -63,9 +65,9 @@ device_tracker:
     password: !secret router_password
     track_new_devices: no
     interval_seconds: 30
-  - platform: icloud
-    username: !secret email_address
-    password: !secret icloud_password
+#  - platform: icloud
+#    username: !secret email_address
+#    password: !secret icloud_password
   - platform: automatic
     client_id: !secret automatic_client_id
     secret: !secret automatic_secret
@@ -107,6 +109,12 @@ mqtt:
   password: !secret mqtt_password
   protocol: 3.1.1
 #  certificate: /etc/ssl/certs/ca-certificates.crt
+
+telegram_bot:
+  platform: polling
+  api_key: !secret telegram_api_key
+  allowed_chat_ids:
+    - !secret telegram_chat_id
 
 notify:
   name: telegram
