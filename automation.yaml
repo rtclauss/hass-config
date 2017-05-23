@@ -1,4 +1,4 @@
-- alias: Turn on lights at night  when I get home
+- alias: Turn on lights at night when I get home
   trigger:
     - platform: state
       entity_id: input_boolean.home
@@ -15,6 +15,27 @@
     - service: notify.telegram
       data:
         message: Arriving home. Turning on nighttime arrival.
+    - service: notify.ios_wethop
+      data:
+        message: Home again, home again, jiggity jig.
+
+- alias: (New) Arrive at work
+  trigger:
+    - platform: zone
+      entity_id: device_tracker.wethop
+      zone: zone.work
+      event: enter
+  action:
+    - service: climate.set_away_mode
+      data:
+          entity_id: climate.hallway_glycol
+          away_mode: true
+    - service: notify.telegram
+      data:
+        message: (New) Arriving at work. Setting Nest Away.
+    - service: notify.ios_wethop
+      data:
+        message: (New) Arriving at work. Setting Nest Away.
 
 - alias: Arrive home
   trigger:
@@ -48,7 +69,11 @@
       entity_id: scene.leave_home
     - service: notify.telegram
       data:
-        message: Leaving home. Turning everything off...
+        message: Leaving home. Turning everything off.
+    - service: notify.ios_wethop
+      data:
+        message: Auf weidersehen!
+
 
 - alias: Cloudy Day Arrival
   trigger:
@@ -61,8 +86,9 @@
    conditions:
       - condition: sun
         before: sunset
+        before_offset: '01:00:00'
       - condition: numeric_state
-        entity_id: sensor.dark_sky_cloud_cover
+        entity_id: sensor.dark_sky_cloud_coverage
         above: 50
   action:
     - service: scene.turn_on
@@ -70,6 +96,11 @@
     - service: notify.telegram
       data:
         message: Cloudy day arrival.
+    - service: notify.ios_wethop
+      data:
+        message: Cloudy arrival.
+
+
 
 - alias: On Vacation trigger
   trigger:
@@ -88,6 +119,9 @@
     - service: notify.telegram
       data:
         message: Setting you as on vacation.
+    - service: notify.ios_wethop
+      data:
+        message: On vacation.
 
 - alias: On Vacation off
   trigger:
@@ -106,6 +140,9 @@
     - service: notify.telegram
       data:
         message: Setting you as back from vacation.
+    - service: notify.ios_wethop
+      data:
+        message: Back from vacation.
 
 
 - alias: Turn on lights when I am away
@@ -123,7 +160,9 @@
     - service: notify.telegram
       data:
         message: Turning on lights while you're away.
-
+    - service: notify.ios_wethop
+      data:
+        message: Turn on lights while you're away.
 
 - alias: Turn off lights at night when I am away
   trigger:
@@ -143,23 +182,52 @@
     - service: notify.telegram
       data:
         message: Lights off while you're away.
+    - service: notify.ios_wethop
+      data:
+        message: Turn off lights while you're away.
 
-- alias: Return home from SPCC and OCC
+
+- alias: New return home from SPCC and OCC
   trigger:
-    - platform: state
-      entity_id: binary_sensor.test_homeward, binary_sensor.away_from_curling
-      state: 'on'
+    - platform: zone
+      entity_id: device_tracker.wethop
+      zone: zone.twincities
+      event: leave
   condition:
     condition: template
-    value_template: '{{ states.binary_sensor.away_from_curling.state == "on" and states.binary_sensor.test_homeward.state == "on" }}'
+    value_template: '{{ states.binary_sensor.test_homeward.state == "on" }}'
   action:
     - service: climate.set_away_mode
-      data:
+      data: 
           entity_id: climate.hallway_glycol
           away_mode: false
     - service: notify.telegram
       data:
-        message: You're driving home from curling.  Turning off Nest Away..
+        message: (New) You're driving home from curling.  Turning off Nest Eco.
+    - service: notify.ios_wethop
+      data:
+        message: (New) Turn off Nest away while you drive home from curling.
+
+
+#- alias: Return home from SPCC and OCC
+#  trigger:
+#    - platform: state
+#      entity_id: binary_sensor.test_homeward, binary_sensor.away_from_curling
+#      state: 'on'
+#  condition:
+#    condition: template
+#    value_template: '{{ states.binary_sensor.away_from_curling.state == "on" and states.binary_sensor.test_homeward.state == "on" }}'
+#  action:
+#    - service: climate.set_away_mode
+#      data:
+#          entity_id: climate.hallway_glycol
+#          away_mode: false
+#    - service: notify.telegram
+#      data:
+#        message: You're driving home from curling.  Turning off Nest Away..
+#    - service: notify.ios_wethop
+#      data:
+#        message: Turn off Nest away while you drive home from curling.
 
 
 - alias: Close forgotten garage door
@@ -177,6 +245,9 @@
     - service: notify.telegram
       data:
         message: Garage door left open. Close it.
+    - service: notify.ios_wethop
+      data:
+        message: Close the garage door.
 # This does not work due to chamberlain limitations.  https://home-assistant.io/components/cover.wink/
 #    - service: cover.close_cover
 #      entity_id: cover.garage_door_opener.
@@ -204,9 +275,12 @@
     platform: state
     entity_id: updater.updater
   action:
-    service: notify.telegram
-    data:
-      message: 'Update for Home Assistant is available.'
+    - service: notify.telegram
+      data:
+        message: 'Update for Home Assistant is available.'
+    - service: notify.ios_wethop
+      data:
+        message: Update available for HASS.
 
 - alias: "The Walking Dead"
   trigger:
