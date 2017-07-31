@@ -40,7 +40,7 @@
 - alias: Arrive home
   trigger:
     - platform: state
-      entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+      entity_id: device_tracker.wethop, device_tracker.d4dccdaae707
       from: 'not_home'
       to: 'home'
   action:
@@ -106,13 +106,13 @@
   trigger:
     - platform: state
       entity_id: input_boolean.home
-      state: 'off'
+      to: 'off'
       for:
         hours: 20
   condition:
     - condition: state
       entity_id: input_boolean.vacation
-      state: 'off'
+      to: 'off'
   action:
     - service: input_boolean.turn_on
       entity_id: input_boolean.vacation
@@ -127,13 +127,13 @@
   trigger:
     - platform: state
       entity_id: input_boolean.home
-      state: 'on'
+      to: 'on'
       for:
         minutes: 2
   condition:
       - condition: state
         entity_id: input_boolean.vacation
-        state: 'on'
+        to: 'on'
   action:
     - service: input_boolean.turn_off
       entity_id: input_boolean.vacation
@@ -153,7 +153,7 @@
   condition:
       - condition: state
         entity_id: input_boolean.vacation
-        state: 'on'
+        to: 'on'
   action:
     - service: scene.turn_on
       entity_id: scene.arrive_home
@@ -173,9 +173,9 @@
     conditions:
       - condition: state
         entity_id: input_boolean.vacation
-        state: 'on'
+        to: 'on'
 #    - platform: time
-#      after: '23:45:00'
+#      at: '23:45:00'
   action:
     - service: scene.turn_on
       entity_id: scene.leave_home
@@ -213,7 +213,7 @@
 #  trigger:
 #    - platform: state
 #      entity_id: binary_sensor.test_homeward, binary_sensor.away_from_curling
-#      state: 'on'
+#      to: 'on'
 #  condition:
 #    condition: template
 #    value_template: '{{ states.binary_sensor.away_from_curling.state == "on" and states.binary_sensor.test_homeward.state == "on" }}'
@@ -234,13 +234,13 @@
   trigger:
     - platform: state
       entity_id: cover.garage_door_opener
-      state: 'open'
+      to: 'open'
 #      for:
 #        hours: 1
 #        minutes: 30
   condition:
     - condition: time
-      at: '22:30:00'
+      at: '23:30:00'
   action:
     - service: notify.telegram
       data:
@@ -366,7 +366,7 @@
   trigger:
     - platform: state
       entity_id: light.bedroom_lamp, light.bedroom_lamp_2
-      state: 'off'
+      to: 'off'
   action:
     - service: homeassistant.turn_off
       entity_id: switch.christmas_tree, light.christmas_lights
