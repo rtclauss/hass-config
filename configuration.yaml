@@ -77,7 +77,7 @@ device_tracker:
 
 scene: !include scene.yaml
 
-automation: !include automation.yaml
+#automation: !include automation.yaml
 
 sensor: !include sensor.yaml
 
@@ -97,7 +97,7 @@ input_boolean:
     icon: mdi:nature-people
   home:
     name: Home
-    initial: off 
+    initial: off
     icon: mdi:home
 
 mqtt:
@@ -146,3 +146,377 @@ media_player:
 
 recorder:
   db_url: postgresql://@/hass
+
+automation:
+  - alias: Turn on lights at night when I get home
+    trigger:
+      - platform: state
+        entity_id: input_boolean.home
+        from: 'off'
+        to: 'on'
+    condition:
+      condition: and
+      conditions:
+        - condition: sun
+          after: sunset
+    action:
+      - service: scene.turn_on
+        entity_id: scene.arrive_home
+      - service: notify.telegram
+        data:
+          message: Arriving home. Turning on nighttime arrival.
+      - service: notify.ios_wethop
+        data:
+          message: Home again, home again, jiggity jig.
+
+  - alias: (New) Arrive at work
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.wethop
+        zone: zone.work
+        event: enter
+    action:
+      - service: climate.set_away_mode
+        data:
+            entity_id: climate.hallway_glycol
+            away_mode: true
+      - service: notify.telegram
+        data:
+          message: (New) Arriving at work. Setting Nest Away.
+      - service: notify.ios_wethop
+        data:
+          message: (New) Arriving at work. Setting Nest Away.
+
+  - alias: Arrive home
+    trigger:
+      - platform: state
+        entity_id: device_tracker.wethop, device_tracker.d4dccdaae707
+        from: 'not_home'
+        to: 'home'
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.home
+
+  - alias: Leave home
+    trigger:
+      - platform: state
+        entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+        from: 'home'
+        to: 'not_home'
+    action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.home
+
+
+  - alias: Turn off lights when I leave
+    trigger:
+      - platform: state
+        entity_id: input_boolean.home
+        from: 'on'
+        to: 'off'
+    action:
+      - service: scene.turn_on
+        entity_id: scene.leave_home
+      - service: notify.telegram
+        data:
+          message: Leaving home. Turning everything off.
+      - service: notify.ios_wethop
+        data:
+          message: Auf weidersehen!
+
+
+  - alias: Cloudy Day Arrival
+    trigger:
+      - platform: state
+        entity_id: input_boolean.home
+        from: 'off'
+        to: 'on'
+    condition:
+     condition: and
+     conditions:
+        - condition: sun
+          before: sunset
+          before_offset: '01:00:00'
+        - condition: numeric_state
+          entity_id: sensor.dark_sky_cloud_coverage
+          above: 50
+    action:
+      - service: scene.turn_on
+        entity_id: scene.cloudy_arrive_home
+      - service: notify.telegram
+        data:
+          message: Cloudy day arrival.
+      - service: notify.ios_wethop
+        data:
+          message: Cloudy arrival.
+
+
+
+  - alias: On Vacation trigger
+    trigger:
+      - platform: state
+        entity_id: input_boolean.home
+        to: 'off'
+        for:
+          hours: 20
+    condition:
+      - condition: state
+        entity_id: input_boolean.vacation
+        to: 'off'
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.vacation
+      - service: notify.telegram
+        data:
+          message: Setting you as on vacation.
+      - service: notify.ios_wethop
+        data:
+          message: On vacation.
+
+  - alias: On Vacation off
+    trigger:
+      - platform: state
+        entity_id: input_boolean.home
+        to: 'on'
+        for:
+          minutes: 2
+    condition:
+        - condition: state
+          entity_id: input_boolean.vacation
+          to: 'on'
+    action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.vacation
+      - service: notify.telegram
+        data:
+          message: Setting you as back from vacation.
+      - service: notify.ios_wethop
+        data:
+          message: Back from vacation.
+
+
+  - alias: Turn on lights when I am away
+    trigger:
+      - platform: sun
+        event: sunset
+        offset: '-00:30:00'
+    condition:
+        - condition: state
+          entity_id: input_boolean.vacation
+          to: 'on'
+    action:
+      - service: scene.turn_on
+        entity_id: scene.arrive_home
+      - service: notify.telegram
+        data:
+          message: Turning on lights while you're away.
+      - service: notify.ios_wethop
+        data:
+          message: Turn on lights while you're away.
+
+  - alias: Turn off lights at night when I am away
+    trigger:
+      - platform: template
+        value_template: "{{ is_state('sensor.time', states('input_slider.random_hour')|int ~ ':' ~ states('input_slider.random_minute')|int) }}"
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: input_boolean.vacation
+          to: 'on'
+  #    - platform: time
+  #      at: '23:45:00'
+    action:
+      - service: scene.turn_on
+        entity_id: scene.leave_home
+      - service: notify.telegram
+        data:
+          message: Lights off while you're away.
+      - service: notify.ios_wethop
+        data:
+          message: Turn off lights while you're away.
+
+
+  - alias: New return home from SPCC and OCC
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.wethop
+        zone: zone.twincities
+        event: leave
+    condition:
+      condition: template
+      value_template: '{{ states.binary_sensor.test_homeward.state == "on" }}'
+    action:
+      - service: climate.set_away_mode
+        data:
+            entity_id: climate.hallway_glycol
+            away_mode: false
+      - service: notify.telegram
+        data:
+          message: (New) You're driving home from curling.  Turning off Nest Eco.
+      - service: notify.ios_wethop
+        data:
+          message: (New) Turn off Nest away while you drive home from curling.
+
+
+  #- alias: Return home from SPCC and OCC
+  #  trigger:
+  #    - platform: state
+  #      entity_id: binary_sensor.test_homeward, binary_sensor.away_from_curling
+  #      to: 'on'
+  #  condition:
+  #    condition: template
+  #    value_template: '{{ states.binary_sensor.away_from_curling.state == "on" and states.binary_sensor.test_homeward.state == "on" }}'
+  #  action:
+  #    - service: climate.set_away_mode
+  #      data:
+  #          entity_id: climate.hallway_glycol
+  #          away_mode: false
+  #    - service: notify.telegram
+  #      data:
+  #        message: You're driving home from curling.  Turning off Nest Away..
+  #    - service: notify.ios_wethop
+  #      data:
+  #        message: Turn off Nest away while you drive home from curling.
+
+
+  - alias: Close forgotten garage door
+    trigger:
+      - platform: state
+        entity_id: cover.garage_door_opener
+        to: 'open'
+  #      for:
+  #        hours: 1
+  #        minutes: 30
+    condition:
+      - condition: time
+        at: '23:30:00'
+    action:
+      - service: notify.telegram
+        data:
+          message: Garage door left open. Close it.
+      - service: notify.ios_wethop
+        data:
+          message: Close the garage door.
+  # This does not work due to chamberlain limitations.  https://home-assistant.io/components/cover.wink/
+  #    - service: cover.close_cover
+  #      entity_id: cover.garage_door_opener.
+
+  - alias: Set random turn off time
+    trigger:
+      - platform: time
+        at: '21:00:00'
+    action:
+      - service: input_slider.select_value
+        data_template:
+          entity_id: input_slider.random_hour
+          # The endpoint is omitted, see: http://jinja.pocoo.org/docs/dev/templates/#range
+          value: '{{ (range(22, 24)|random) }}'
+      - service: input_slider.select_value
+        data_template:
+          entity_id: input_slider.random_minute
+          value: '{{ (range(30, 50)|random) }}'
+      - service: notify.telegram
+        data:
+          message: 'Turning off lights at {{ states("input_slider.random_hour")|int }}:{{states("input_slider.random_minute")|int}}'
+
+  - alias: "Update Available"
+    trigger:
+      platform: state
+      entity_id: updater.updater
+    action:
+      - service: notify.telegram
+        data:
+          message: 'Update for Home Assistant is available.'
+      - service: notify.ios_wethop
+        data:
+          message: Update available for HASS.
+
+  - alias: "The Walking Dead"
+    trigger:
+      platform: state
+      entity_id: media_player.directv_rid036071639219
+    condition:
+      - condition: template
+        value_template: >
+          {% if states.media_player.directv_rid036071639219.attributes.media_title == "The Walking Dead" %}
+            true
+          {% else %}
+            false
+          {% endif %}
+    action:
+      service: scene.turn_on
+      entity_id: scene.twd
+
+  - alias: "Load input states from Settings.ini"
+    trigger:
+      platform: event
+      event_type: homeassistant_start
+    action:
+      - delay:
+          seconds: 15
+      - service: shell_command.load_input_settings
+
+  - alias: "Save Input States to Settings.ini"
+    trigger:
+      ## Input Boolean
+      - platform: state
+        entity_id: input_boolean.home
+      - platform: state
+        entity_id: input_boolean.vacation
+      ## Input Select
+      #    - platform: state
+      ##      entity_id: input_select.your_input_select_01
+      #    - platform: state
+      #      entity_id: input_select.your_input_select_02
+      ## Input Slider
+      #    - platform: state
+      #      entity_id: input_slider.your_input_slider_01
+      #    - platform: state
+      #      entity_id: input_slider.your_input_slider_02
+      ## Device Trackers
+      #    - platform: state
+      #      entity_id: device_tracker.your_ios_device
+      #    - platform: state
+      #      entity_id: device_your_android_device
+    action:
+      service: shell_command.save_input_settings
+      data_template:
+        section: '{{ trigger.entity_id }}'
+        settings: '{{ trigger.entity_id }}'
+        value: "{{ trigger.to_state.state }}"
+
+  - alias: Turn on Christmas Tree
+    initial_state: False
+    trigger:
+      - platform: sun
+        event: sunset
+        offset: '-00:45:00'
+    action:
+      - service: homeassistant.turn_on
+        entity_id: switch.christmas_tree, light.christmas_lights
+      - service: notify.telegram
+        data:
+          message: Turning on Christmas Tree.
+
+  - alias: Turn off Christmas Tree
+    initial_state: False
+    trigger:
+      - platform: time
+        at: '00:00:00'
+    action:
+      - service: homeassistant.turn_off
+        entity_id: switch.christmas_tree, light.christmas_lights
+      - service: notify.telegram
+        data:
+          message: Turning off Christmas Tree.
+
+  - alias: Turn off Christmas Tree if bedroom lights turned off.
+    initial_state: False
+    trigger:
+      - platform: state
+        entity_id: light.bedroom_lamp, light.bedroom_lamp_2
+        to: 'off'
+    action:
+      - service: homeassistant.turn_off
+        entity_id: switch.christmas_tree, light.christmas_lights
