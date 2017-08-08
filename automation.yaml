@@ -45,17 +45,19 @@
       to: 'home'
   action:
     - service: input_boolean.turn_on
-      entity_id: input_boolean.home
+      data:  
+        entity_id: input_boolean.home
 
 - alias: Leave home
   trigger:
     - platform: state
-      entity_id: device_tracker.wethop, device_tracker.2c3361457e8b
+      entity_id: device_tracker.wethop, device_tracker.d4dccdaae707
       from: 'home'
       to: 'not_home'
   action:
     - service: input_boolean.turn_off
-      entity_id: input_boolean.home
+      data:
+        entity_id: input_boolean.home
 
 
 - alias: Turn off lights when I leave
@@ -115,7 +117,8 @@
       state: 'off'
   action:
     - service: input_boolean.turn_on
-      entity_id: input_boolean.vacation
+      data:
+        entity_id: input_boolean.vacation
     - service: notify.telegram
       data:
         message: Setting you as on vacation.
@@ -127,16 +130,17 @@
   trigger:
     - platform: state
       entity_id: input_boolean.home
-      state: 'on'
+      to: 'on'
       for:
         minutes: 2
   condition:
       - condition: state
         entity_id: input_boolean.vacation
-        state'on'
+        state: 'on'
   action:
     - service: input_boolean.turn_off
-      entity_id: input_boolean.vacation
+      data:
+        entity_id: input_boolean.vacation
     - service: notify.telegram
       data:
         message: Setting you as back from vacation.
@@ -175,7 +179,7 @@
         entity_id: input_boolean.vacation
         state: 'on'
 #    - platform: time
-#      at: '23:45:00'
+#      after: '23:45:00'
   action:
     - service: scene.turn_on
       entity_id: scene.leave_home
@@ -240,7 +244,7 @@
 #        minutes: 30
   condition:
     - condition: time
-      at: '23:30:00'
+      after: '23:30:00'
   action:
     - service: notify.telegram
       data:
@@ -325,8 +329,8 @@
     #    - platform: state
     #      entity_id: input_slider.your_input_slider_02
     ## Device Trackers
-    #    - platform: state
-    #      entity_id: device_tracker.your_ios_device
+    - platform: state
+      entity_id: device_tracker.wethop
     #    - platform: state
     #      entity_id: device_your_android_device
   action:
