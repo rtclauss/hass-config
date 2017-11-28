@@ -9,6 +9,8 @@ homeassistant:
   elevation: !secret home_elevation
   customize: !include customize.yaml
 
+map:
+
 ios:
 
 logger:
@@ -27,7 +29,7 @@ sun:
 
 # Enables the frontend
 frontend:
-
+  javascript_version: latest
 # Checks for available updates
 updater:
 
@@ -41,8 +43,8 @@ logbook:
 discovery:
 
 wink:
-  email: !secret wink_email
-  password: !secret wink_password
+#  email: !secret wink_email
+#  password: !secret wink_password
 #  access_token: !secret wink_access_t
 #  refresh_token: !secret wink_refresh_t
 
@@ -58,8 +60,8 @@ nest:
 #  measurement_scale: 'F'
 
 device_tracker:
-#  - platform: luci
-  - platform: ubus
+  - platform: luci
+#  - platform: ubus
     host: 192.168.1.1
     username: root
     password: !secret router_password
@@ -122,19 +124,21 @@ notify:
   api_key: !secret telegram_api_key
   chat_id: !secret telegram_chat_id
 
-input_slider:
+input_number:
   random_hour:
     name: Random Light Off Hour
     min: 21
     max: 24
     step: 1
     initial: 22
+    mode: box
   random_minute:
     name: Random Light Off Minute
     min: 30
-    max: 50
+    max: 59
     step: 1
     initial: 35
+    mode: box
 
 shell_command:
   save_input_settings: '/var/opt/homeassistant/python/hass_saved_settings.py -act update_settings -sec {{ section }} -set {{ settings }} -val "{{ value }}"'

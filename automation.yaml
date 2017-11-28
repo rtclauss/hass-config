@@ -40,7 +40,7 @@
 - alias: Arrive home
   trigger:
     - platform: state
-      entity_id: device_tracker.wethop, device_tracker.d4dccdaae707
+      entity_id: device_tracker.wethop, device_tracker.4098ad3265d4
       from: 'not_home'
       to: 'home'
   action:
@@ -51,7 +51,7 @@
 - alias: Leave home
   trigger:
     - platform: state
-      entity_id: device_tracker.wethop, device_tracker.d4dccdaae707
+      entity_id: device_tracker.wethop, device_tracker.4098ad3265d4
       from: 'home'
       to: 'not_home'
   action:
@@ -59,6 +59,24 @@
       data:
         entity_id: input_boolean.home
 
+- alias: Leave for curling
+  trigger:
+    - platform: state
+      entity_id: device_tracker.wethop, device_tracker.4098ad3265d4
+      from: 'home'
+      to: 'not_home'
+  condition: 
+    condition: time
+    after: '18:00:00'
+    before: '19:45:00'
+    weekday:
+      - tue
+      - wed
+  action:
+    - service: climate.set_away_mode
+      data:
+        entity_id: climate.hallway_glycol
+        away_mode: true
 
 - alias: Turn off lights when I leave
   trigger:
@@ -171,7 +189,7 @@
 - alias: Turn off lights at night when I am away
   trigger:
     - platform: template
-      value_template: "{{ is_state('sensor.time', states('input_slider.random_hour')|int ~ ':' ~ states('input_slider.random_minute')|int) }}"
+      value_template: "{{ is_state('sensor.time', states('input_number.random_hour')|int ~ ':' ~ states('input_number.random_minute')|int) }}"
   condition:
     condition: and
     conditions:
@@ -191,7 +209,7 @@
         message: Turn off lights while you're away.
 
 
-- alias: New return home from SPCC and OCC
+- alias: New return home from Twin Cities
   trigger:
     - platform: zone
       entity_id: device_tracker.wethop
@@ -207,10 +225,35 @@
           away_mode: false
     - service: notify.telegram
       data:
-        message: (New) You're driving home from curling.  Turning off Nest Eco.
+        message: (New) You're driving home from curling.  Turning off Nest Away.
     - service: notify.ios_wethop
       data:
         message: (New) Turn off Nest away while you drive home from curling.
+
+- alias: New return home OCC
+  trigger:
+    - platform: zone
+      entity_id: device_tracker.wethop
+      zone: zone.occ
+      event: leave
+  condition:
+    condition: time
+    weekday:
+      - sun
+      - tue
+  action:
+    - service: climate.set_away_mode
+      data:
+          entity_id: climate.hallway_glycol
+          away_mode: false
+    - service: notify.telegram
+      data:
+        message: (New) You're driving home from curling.  Turning off Nest Away.
+    - service: notify.ios_wethop
+      data:
+        message: (New) Turn off Nest away while you drive home from curling.
+
+
 
 
 #- alias: Return home from SPCC and OCC
@@ -261,18 +304,18 @@
     - platform: time
       at: '21:00:00'
   action:
-    - service: input_slider.select_value
+    - service: input_number.select_value
       data_template:
-        entity_id: input_slider.random_hour
+        entity_id: input_number.random_hour
         # The endpoint is omitted, see: http://jinja.pocoo.org/docs/dev/templates/#range
         value: '{{ (range(22, 24)|random) }}'
-    - service: input_slider.select_value
+    - service: input_number.select_value
       data_template:
-        entity_id: input_slider.random_minute
+        entity_id: input_number.random_minute
         value: '{{ (range(30, 50)|random) }}'
     - service: notify.telegram
       data:
-        message: 'Turning off lights at {{ states("input_slider.random_hour")|int }}:{{states("input_slider.random_minute")|int}}'
+        message: 'Turning off lights at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}'
 
 - alias: "Update Available"
   trigger:
