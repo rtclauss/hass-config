@@ -19,6 +19,23 @@
       data:
         message: Home again, home again, jiggity jig.
 
+- alias: Turn on lights at night when I get home
+  trigger:
+    - platform: state
+      entity_id: input_boolean.home
+      from: 'off'
+      to: 'on'
+  condition:
+    condition: or
+    conditions:
+      - condition: time
+        after: '22:00:00'
+      - condition: sun
+        before: 'sunrise'
+  action:
+    - service: scene.turn_on
+      entity_id: scene.bedroom_prep
+
 - alias: (New) Arrive at work
   trigger:
     - platform: zone
@@ -177,8 +194,11 @@
         entity_id: input_boolean.vacation
         state: 'on'
   action:
+    - delay: '00:{{ (range(5,45)|random|int) }}:00'
     - service: scene.turn_on
-      entity_id: scene.arrive_home
+      data_template:
+        entity_id: 'scene.vacation_group_{{ (range(1,4)|random|int) }}'
+      # entity_id: scene.arrive_home
     - service: notify.telegram
       data:
         message: Turning on lights while you're away.
@@ -303,19 +323,21 @@
   trigger:
     - platform: time
       at: '21:00:00'
+    - platform: homeassistant
+      event: start 
   action:
     - service: input_number.select_value
       data_template:
         entity_id: input_number.random_hour
         # The endpoint is omitted, see: http://jinja.pocoo.org/docs/dev/templates/#range
-        value: '{{ (range(22, 24)|random) }}'
+        value: '{{ (range(22, 24)|random|int) }}'
     - service: input_number.select_value
       data_template:
         entity_id: input_number.random_minute
-        value: '{{ (range(30, 50)|random) }}'
+        value: '{{ (range(30, 50)|random|int) }}'
     - service: notify.telegram
       data:
-        message: 'Turning off lights at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}'
+        message: 'Turning off lights at {{ states("input_number.random_hour") }}:{{states("input_number.random_minute")}}'
 
 - alias: "Update Available"
   trigger:
@@ -345,46 +367,7 @@
     service: scene.turn_on
     entity_id: scene.twd
 
-- alias: "Load input states from Settings.ini"
-  trigger:
-    platform: event
-    event_type: homeassistant_start
-  action:
-    - delay:
-        seconds: 15
-    - service: shell_command.load_input_settings
-
-- alias: "Save Input States to Settings.ini"
-  trigger:
-    ## Input Boolean
-    - platform: state
-      entity_id: input_boolean.home
-    - platform: state
-      entity_id: input_boolean.vacation
-    ## Input Select
-    #    - platform: state
-    ##      entity_id: input_select.your_input_select_01
-    #    - platform: state
-    #      entity_id: input_select.your_input_select_02
-    ## Input Slider
-    #    - platform: state
-    #      entity_id: input_slider.your_input_slider_01
-    #    - platform: state
-    #      entity_id: input_slider.your_input_slider_02
-    ## Device Trackers
-    - platform: state
-      entity_id: device_tracker.wethop
-    #    - platform: state
-    #      entity_id: device_your_android_device
-  action:
-    service: shell_command.save_input_settings
-    data_template:
-      section: '{{ trigger.entity_id }}'
-      settings: '{{ trigger.entity_id }}'
-      value: "{{ trigger.to_state.state }}"
-
 - alias: Turn on Christmas Tree
-  initial_state: False
   trigger:
     - platform: sun
       event: sunset
@@ -397,7 +380,6 @@
         message: Turning on Christmas Tree.
 
 - alias: Turn off Christmas Tree
-  initial_state: False
   trigger:
     - platform: time
       at: '00:00:00'
@@ -409,7 +391,6 @@
         message: Turning off Christmas Tree.
 
 - alias: Turn off Christmas Tree if bedroom lights turned off.
-  initial_state: False
   trigger:
     - platform: state
       entity_id: light.bedroom_lamp, light.bedroom_lamp_2

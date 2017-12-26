@@ -20,6 +20,9 @@ logger:
 
 http:
   api_password: !secret http_password
+  use_x_forwarded_for: true
+  ip_ban_enabled: true
+  login_attempts_threshold: 5
 
 # Enables support for tracking state changes over time.
 history:
@@ -95,11 +98,9 @@ proximity: !include proximity.yaml
 input_boolean:
   vacation:
     name: On Vacation
-    initial: off
     icon: mdi:nature-people
   home:
     name: Home
-    initial: off
     icon: mdi:home
 
 mqtt:
@@ -130,23 +131,18 @@ input_number:
     min: 21
     max: 24
     step: 1
-    initial: 22
     mode: box
   random_minute:
     name: Random Light Off Minute
     min: 30
     max: 59
     step: 1
-    initial: 35
     mode: box
-
-shell_command:
-  save_input_settings: '/var/opt/homeassistant/python/hass_saved_settings.py -act update_settings -sec {{ section }} -set {{ settings }} -val "{{ value }}"'
-  load_input_settings: '/var/opt/homeassistant/python/hass_saved_settings.py -act update_hass'
 
 media_player:
   - platform: plex
   - platform: cast
 
 recorder:
-  db_url: postgresql://@/hass
+##  db_url: postgresql://@/hass
+  db_url: !secret recorder_db_url
