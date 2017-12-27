@@ -326,12 +326,12 @@
     - platform: homeassistant
       event: start 
   action:
-    - service: input_number.select_value
+    - service: input_number.set_value
       data_template:
         entity_id: input_number.random_hour
         # The endpoint is omitted, see: http://jinja.pocoo.org/docs/dev/templates/#range
         value: '{{ (range(22, 24)|random|int) }}'
-    - service: input_number.select_value
+    - service: input_number.set_value
       data_template:
         entity_id: input_number.random_minute
         value: '{{ (range(30, 50)|random|int) }}'
@@ -397,4 +397,13 @@
       to: 'off'
   action:
     - service: homeassistant.turn_off
-      entity_id: switch.christmas_tree, light.christmas_lights
+      entity_id: switch.christmas_tree, light.christmas_light
+
+- alias: Get location on restart of HASS
+  trigger:
+    platform: homeassistant
+    event: start
+  action:
+  - service: device_tracker.see
+    data: 
+      dev_id: wethop
