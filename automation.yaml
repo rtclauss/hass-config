@@ -368,6 +368,7 @@
     entity_id: scene.twd
 
 - alias: Turn on Christmas Tree
+  initial_state: False
   trigger:
     - platform: sun
       event: sunset
@@ -380,6 +381,7 @@
         message: Turning on Christmas Tree.
 
 - alias: Turn off Christmas Tree
+  initial_state: False
   trigger:
     - platform: time
       at: '00:00:00'
@@ -391,6 +393,7 @@
         message: Turning off Christmas Tree.
 
 - alias: Turn off Christmas Tree if bedroom lights turned off.
+  initial_state: False
   trigger:
     - platform: state
       entity_id: light.bedroom_lamp, light.bedroom_lamp_2
@@ -400,6 +403,7 @@
       entity_id: switch.christmas_tree, light.christmas_light
 
 - alias: Get location on restart of HASS
+  initial_state: True
   trigger:
     platform: homeassistant
     event: start
@@ -407,3 +411,6 @@
   - service: device_tracker.see
     data: 
       dev_id: wethop
+  - service: notify.ios_wethop
+    data:
+      message: "request_location_update"
