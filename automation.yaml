@@ -19,7 +19,7 @@
       data:
         message: Home again, home again, jiggity jig.
 
-- alias: Turn on lights at night when I get home
+- alias: Turn on bedroom lights at night when I get home
   trigger:
     - platform: state
       entity_id: input_boolean.home
@@ -324,7 +324,11 @@
     - platform: time
       at: '21:00:00'
     - platform: homeassistant
-      event: start 
+      event: start
+  condition:
+      - condition: state
+        entity_id: input_boolean.vacation
+        state: 'on' 
   action:
     - service: input_number.set_value
       data_template:
