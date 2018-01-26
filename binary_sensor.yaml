@@ -27,7 +27,7 @@
     nest_home:
       friendly_name: 'Nest Home/Away Mode'
       device_class: presence
-      value_template: "{% if is_state('states.climate.hallway_glycol.attributes.away_mode', 'on') %} false {%- else -%} true  {%- endif %}"
+      value_template: "{% if is_state_attr('climate.hallway_glycol', 'away_mode', 'on') %} False {% else %} True  {% endif %}"
 
 - platform: bayesian
   prior: 0.5
@@ -37,7 +37,7 @@
   observations: 
   - entity_id: device_tracker.4098ad3265d4
     prob_given_true: 0.99
-    prob_given_false: 0.15
+    prob_given_false: 0.1
     platform: 'state'
     to_state: 'home'
   - entity_id: device_tracker.wethop
@@ -46,8 +46,8 @@
     platform: 'state'
     to_state: 'home'
   - entity_id: sensor.iphone_battery_state
-    prob_given_true: 0.75
-    prob_given_false: 0.3
+    prob_given_true: 0.65
+    prob_given_false: 0.43
     platform: 'state'
     to_state: 'Charging'
   - entity_id: binary_sensor.nest_home
