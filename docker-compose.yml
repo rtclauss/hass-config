@@ -1,8 +1,15 @@
 version: '3'
 services:
+  mqttbridge:
+    image: stjohnjohnson/smartthings-mqtt-bridge
+    volumes:
+        - ./mqtt-bridge:/config
+    ports:
+        - 8080:8080
+    network_mode: host
   web:
-    #image: homeassistant/home-assistant:0.62.0
-    image: rtclauss/home-assistant:latest
+    image: homeassistant/home-assistant:latest
+    #image: rtclauss/home-assistant:latest
     devices:
       - /dev/ttyUSB0:/dev/ttyUSB0
       - /dev/ttyUSB1:/dev/ttyUSB1
