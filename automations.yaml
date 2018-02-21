@@ -74,29 +74,28 @@
   - service: input_boolean.turn_off
     data:
       entity_id: input_boolean.home
-  - service: vacuum.turn_on
 - id: leave_home_for_curling
   alias: Leave for curling
   trigger:
-  - platform: state
-    entity_id: binary_sensor.bayesian_zeke_home
-    from: 'off'
-    to: 'on'
+  - entity_id: binary_sensor.bayesian_zeke_home
+    from: 'on'
+    platform: state
+    to: 'off'
   condition:
-    condition: time
-    after: '17:00:00'
+  - after: '17:00:00'
     before: '19:45:00'
+    condition: time
     weekday:
     - tue
     - wed
   action:
-  - service: climate.set_away_mode
-    data:
-      entity_id: climate.hallway_glycol
+  - data:
       away_mode: true
-  - service: notify.ios_wethop
-    data:
+      entity_id: climate.hallway_glycol
+    service: climate.set_away_mode
+  - data:
       message: Good Curling!
+    service: notify.ios_wethop
 - id: lurn_off_lights_when_leaving
   alias: Turn off lights when I leave
   trigger:
@@ -393,3 +392,13 @@
     from: 'off'
     platform: state
     to: 'on'
+- action:
+  - service: vacuum.turn_on
+  alias: Vacuum while at work
+  condition: []
+  id: '1519229573610'
+  trigger:
+  - entity_id: device_tracker.wethop
+    event: enter
+    platform: zone
+    zone: zone.work
