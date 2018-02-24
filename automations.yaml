@@ -240,10 +240,30 @@
       away_mode: false
   - service: notify.telegram
     data:
-      message: (New) You're driving home from curling.  Turning off Nest Away.
+      message:  You're driving home from the Cities.  Turning off Nest Away.
   - service: notify.ios_wethop
     data:
-      message: (New) Turn off Nest away while you drive home from curling.
+      message: Turn off Nest Away while you drive home from the Cities.
+- id: return_home_from_spcc
+  alias: Return home from SPCC
+  trigger:
+  - platform: zone
+    entity_id: device_tracker.wethop
+    zone: zone.spcc
+    event: leave
+  condition:
+    condition: time
+    weekday:
+    - sun
+    - wed
+  action:
+  - service: climate.set_away_mode
+    data:
+      entity_id: climate.hallway_glycol
+      away_mode: false
+  - service: notify.ios_wethop
+    data:
+      message: Turn off Nest Away while you drive home from the SPCC.
 - id: return_home_from_OCC
   alias: Return home from OCC
   trigger:
@@ -263,10 +283,10 @@
       away_mode: false
   - service: notify.telegram
     data:
-      message: (New) You're driving home from curling.  Turning off Nest Away.
+      message: You're driving home from curling.  Turning off Nest Away.
   - service: notify.ios_wethop
     data:
-      message: (New) Turn off Nest away while you drive home from curling.
+      message: Turn off Nest Away while you drive home from curling.
 - id: garage_door_reminder
   alias: Close forgotten garage door
   trigger:
