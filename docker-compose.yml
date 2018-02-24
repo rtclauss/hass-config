@@ -7,6 +7,14 @@ services:
     ports:
         - 8080:8080
     network_mode: host
+  firetv:
+    image: sytone/python-firetv:latest
+    command: -c /config/config.yaml 
+    volumes:
+        - ./firetv:/config
+    ports:
+        - 5556:5556
+    network_mode: host
   web:
     image: homeassistant/home-assistant:latest
     #image: rtclauss/home-assistant:latest
@@ -20,4 +28,3 @@ services:
       - /var/log/fail2ban:/fail2ban
     restart: always
     network_mode: host
-
