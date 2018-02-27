@@ -240,7 +240,7 @@
       away_mode: false
   - service: notify.telegram
     data:
-      message:  You're driving home from the Cities.  Turning off Nest Away.
+      message: You're driving home from the Cities.  Turning off Nest Away.
   - service: notify.ios_wethop
     data:
       message: Turn off Nest Away while you drive home from the Cities.
@@ -322,7 +322,7 @@
   - service: input_number.set_value
     data_template:
       entity_id: input_number.random_minute
-      value: '{{ (range(30, 50)|random|int) }}'
+      value: '{{ (range(00, 59)|random|int) }}'
   - service: notify.telegram
     data:
       message: Turning off lights at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
@@ -422,3 +422,18 @@
     event: enter
     platform: zone
     zone: zone.work
+- action:
+  - data:
+      message: Garage door is still open!
+    service: notify.ios_wethop
+  alias: Garage Door Open When Leaving Home
+  condition:
+  - condition: state
+    entity_id: cover.garage_door_opener
+    state: open
+  id: '1519587916107'
+  trigger:
+  - entity_id: binary_sensor.bayesian_zeke_home
+    from: home
+    platform: state
+    to: away
