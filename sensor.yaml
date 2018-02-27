@@ -161,6 +161,16 @@
 ##Since sensors have a last changed timestamp.
 - platform: template
   sensors:
+    fail2ban_total_sshd:
+      friendly_name: "Total sshd bans"
+      icon_template: mdi:cancel
+      entity_id: sensor.fail2ban_sshd
+      value_template: "{{states.sensor.fail2ban_sshd.attributes.current_bans|length}}" 
+    fail2ban_recidive_sshd:
+      friendly_name: "Recidive bans"
+      icon_template: mdi:cancel
+      entity_id: sensor.fail2ban_recidive
+      value_template: "{{states.sensor.fail2ban_recidive.attributes.current_bans|length}}" 
     occ_time:
       value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
       friendly_name: "Last change in OCC Dir"
