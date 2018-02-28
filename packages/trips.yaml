@@ -1,0 +1,476 @@
+homeassistant:
+#  customize:
+
+    ########################
+    # Input Booleans
+    ########################
+
+
+########################
+# Groups
+########################
+group:
+  trip_status_card:
+    name: Trip Status
+    entities:
+    - sensor.planned_vacation_calendar
+    - sensor.planned_work_trip_calendar
+    - sensor.sensed_trip
+    - sensor.flying_home_today
+    - sensor.average_house_temp
+    - sensor.average_house_humidity
+  vacation_group_card_1:
+    name: Vacation Group 1
+    entities:
+    - light.right_lamp
+    - light.left_lamp
+    - light.pendant_lamp
+    - light.front_door
+    - scene.vacation_group_1
+  vacation_group_card_2:
+    name: Vacation Group 2
+    entities:
+    - light.pendant_lamp
+    - light.tv
+    - light.bedroom_lamp
+    - light.bedroom_lamp_2
+    - light.stairs
+    - scene.vacation_group_2
+  vacation_group_card_3:
+    name: Vacation Group 3
+    entities:
+    - light.pendant_lamp
+    - light.bedroom_lamp
+    - light.bedroom_lamp_2
+    - light.kitchen_table
+    - scene.vacation_group_3
+  vacation_group_card_4:
+    name: Vacation Group 4
+    entities:
+    - light.pendant_lamp
+    - light.right_lamp
+    - light.left_lamp
+    - light.kitchen_table
+    - light.office
+    - light.stairs
+    - light.front_door
+    - scene.vacation_group_4
+
+########################
+# Scenes
+########################
+scene:
+  - name: Vacation Group 1
+    entities:
+      light.right_lamp:
+        state: on
+        brightness: 255
+        color_temp: 500
+      light.left_lamp:
+        state: on
+        brightness: 255
+        color_temp: 500
+      light.pendant_lamp:
+        state: on
+        brightness: 255
+        color_temp: 500
+      light.front_door:
+        state: on
+  - name: Vacation Group 2
+    entities:
+      light.pendant_lamp:
+        state: on
+        brightness: 255
+        color_temp: 500
+      light.tv:
+        state: on
+        brightness: 255
+        color_temp: 500
+      light.bedroom_lamp:
+        state: on
+        brightness: 255
+      light.bedroom_lamp_2:
+        state: on
+        brightness: 255
+      light.stairs:
+        state: on
+  - name: Vacation Group 3
+    entities:
+      light.pendant_lamp:
+        state: on
+        brightness: 255
+        color_temp: 500
+      light.bedroom_lamp:
+        state: on
+        brightness: 255
+      light.bedroom_lamp_2:
+        state: on
+        brightness: 255
+      light.kitchen_table:
+        state: on
+  - name: Vacation Group 4
+    entities:
+      light.pendant_lamp:
+        state: on
+        brightness: 128
+        color_temp: 500
+      light.right_lamp:
+        state: on
+        brightness: 200
+        color_temp: 500
+      light.left_lamp:
+        state: on
+        brightness: 200
+        color_temp: 500
+      light.kitchen_table:
+        state: on
+      light.office:
+        state: on
+      light.stairs:
+        state: on
+      light.front_door:
+        state: on
+
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  vacation:
+    name: On Vacation
+    icon: mdi:nature-people
+  home:
+    name: Home
+    icon: mdi:home
+
+########################
+# Input Booleans
+########################
+input_number:
+  random_hour:
+    name: Random Light Off Hour
+    min: 21
+    max: 24
+    step: 1
+    mode: box
+  random_minute:
+    name: Random Light Off Minute
+    min: 30
+    max: 59
+    step: 1
+    mode: box
+  random_vacation_light_group:
+    name: Random Group of Lights to Turn on
+    min: 1
+    max: 4
+    step: 1
+    mode: box
+
+
+########################
+# Scripts
+########################
+script:
+  group_visibility:
+    sequence:
+      - service: group.set_visibility
+        data_template:
+          entity_id: '{{ entity_id }}'
+          visible: '{{ is_state(cond, visible_state) }}'
+
+
+########################
+# Sensors
+########################
+# Maybe these trip sensors should be input boolean with automations on restart to trigger
+sensor:
+  - platform: template
+    sensors:
+      sensed_trip:
+        friendly_name: "Sensed a Trip"
+        icon_template: mdi:airplane-takeoff
+        entity_id: input_boolean.vacation
+        value_template: >-
+          {% if is_state("input_boolean.vacation", "on") %}
+            true
+          {% else %}
+            false
+          {% endif %}
+      planned_vacation_calendar:
+        friendly_name: "Scheduled Vacation Day"
+        icon_template: mdi:airplane-takeoff
+        entity_id:
+          - calendar.curling_vacation
+          - calendar.personal_vacation
+        value_template: >-
+          {% if is_state("calendar.curling_vacation", "on") or is_state("calendar.personal_vacation","on")  %}
+            true
+          {% else %}
+            false
+          {% endif %}
+      planned_work_trip_calendar:
+        friendly_name: "Scheduled Work Trip Day"
+        icon_template: mdi:airplane-takeoff
+        entity_id:
+          - calendar.work_trip
+        value_template: >-
+          {% if is_state("calendar.work_trip", "on") %}
+            true
+          {% else %}
+            false
+          {% endif %}
+      flying_home_today:
+        friendly_name: "Flying Home Today"
+        icon_template: mdi:airplane-takeoff
+        entity_id:
+          - calendar.flight_to_msp_today
+          - calendar.flight_to_rst_today
+        value_template: >-
+          {% if is_state("calendar.flight_to_msp_today", "on") or is_state("calendar.flight_to_msp_today","on")  %}
+            true
+          {% else %}
+            false
+          {% endif %}
+      average_house_temp:
+        friendly_name: "Average House Temperature"
+        unit_of_measurement: "°F"
+        icon_template: mdi:airplane-takeoff
+        entity_id:
+          - sensor.living_room_temperature
+          - sensor.master_bedroom_temperature
+          - sensor.guest_room_temperature
+          - sensor.bathroom_temperature
+          - sensor.motion_sensor_temperature
+          - sensor.hallway_thermostat_glycol_temperature
+        value_template: >-
+          {{ ( states("sensor.living_room_temperature")|float +
+          states("sensor.master_bedroom_temperature")|float +
+          states("sensor.guest_room_temperature")|float +
+          states("sensor.bathroom_temperature")|float +
+          states("sensor.motion_sensor_temperature")|float +
+          states("sensor.hallway_thermostat_glycol_temperature")|float )
+          / 6.0 |round}}
+      average_house_humidity:
+        friendly_name: "Average House Temperature"
+        unit_of_measurement: "%"
+        icon_template: mdi:airplane-takeoff
+        entity_id:
+          - sensor.living_room_humidity
+          - sensor.master_bedroom_temperature
+          - sensor.guest_room_humidity
+          - sensor.bathroom_humidity
+          - sensor.hallway_thermostat_glycol_humidity
+        value_template: >-
+          {{ ( states("sensor.living_room_humidity")|float +
+          states("sensor.master_bedroom_humidity")|float +
+          states("sensor.guest_room_humidity")|float +
+          states("sensor.bathroom_humidity")|float +
+          states("sensor.hallway_thermostat_glycol_humidity")|float )
+          / 5.0 |round}}
+
+########################
+# Automations
+########################
+automation:
+  - id: init_vacation
+    alias: Initialize Vacation Items
+    trigger:
+    - platform: homeassistant
+      event: start
+    action:
+      # Update iPhone Location
+    - service: device_tracker.see
+      data:
+        dev_id: wethop
+    - service: notify.ios_wethop
+      data:
+        message: request_location_update
+      # Hide all vacation group cards at startup.  Should find out how to loop this.
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_1
+        cond: input_number.random_vacation_light_group
+        visible_state: '-0.0'
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_2
+        cond: input_number.random_vacation_light_group
+        visible_state: '-0.0'
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_3
+        cond: input_number.random_vacation_light_group
+        visible_state: '-0.0'
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_4
+        cond: input_number.random_vacation_light_group
+        visible_state: '-0.0'
+
+  - id: on_vacation_trigger
+    alias: On Vacation trigger
+    trigger:
+    - platform: state
+      entity_id: input_boolean.home
+      to: 'off'
+      for:
+        hours: 20
+    - platform: state
+      entity_id: input_boolean.home
+      to: 'off'
+    condition:
+      condition: or
+      conditions:
+      - condition: state
+        entity_id: sensor.planned_vacation_calendar
+        state: 'true'
+      - condition: state
+        entity_id: sensor.planned_work_trip_calendar
+        state: 'true'
+    action:
+    - service: input_boolean.turn_on
+      data:
+        entity_id: input_boolean.vacation
+    - service: notify.telegram
+      data:
+        message: "You're on a trip! \uD83D\uDEEB"
+    - service: notify.ios_wethop
+      data:
+        message: "You're on a trip! \uD83D\uDEEB"
+
+  - id: off_vacation_trigger
+    alias: Back from Trip
+    trigger:
+    - platform: state
+      entity_id: input_boolean.home
+      to: 'on'
+      for:
+        minutes: 2
+    condition:
+    - condition: state
+      entity_id: input_boolean.vacation
+      state: 'on'
+    action:
+    - service: input_boolean.turn_off
+      data:
+        entity_id: input_boolean.vacation
+    - service: notify.telegram
+      data:
+        message: Setting you as back from vacation.
+    - service: notify.ios_wethop
+      data:
+        message: Back from vacation.
+
+  - id: random_off_time
+    alias: Set random turn off time
+    trigger:
+    - platform: time
+      at: '12:00:00'
+    condition:
+    - condition: state
+      entity_id: input_boolean.vacation
+      state: 'on'
+    action:
+    - service: input_number.set_value
+      data_template:
+        entity_id: input_number.random_hour
+        value: '{{ (range(22, 24)|random|int) }}'
+    - service: input_number.set_value
+      data_template:
+        entity_id: input_number.random_minute
+        value: '{{ (range(00, 59)|random|int) }}'
+    - service: input_number.set_value
+      data_template:
+        entity_id: input_number.random_vacation_light_group
+        value: '{{ (range(1, 4)|random|int) }}'
+    - service: notify.telegram
+      data:
+        message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
+    - service: notify.ios_wethop
+      data:
+        message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_1
+        cond: input_number.random_vacation_light_group
+        visible_state: '1.0'
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_2
+        cond: input_number.random_vacation_light_group
+        visible_state: '2.0'
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_3
+        cond: input_number.random_vacation_light_group
+        visible_state: '3.0'
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation_group_card_4
+        cond: input_number.random_vacation_light_group
+        visible_state: '4.0'
+
+  - id: vacation_lights_on
+    alias: Turn on lights when I am away
+    trigger:
+    - platform: sun
+      event: sunset
+      offset: -00:30:00
+    condition:
+    - condition: state
+      entity_id: input_boolean.vacation
+      state: 'on'
+    action:
+    - delay: 00:{{ (range(5,45)|random|int) }}:00
+    - service: scene.turn_on
+      data_template:
+        entity_id: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
+    - service: notify.telegram
+      data:
+        message: Turning on lights while you're away.
+    - service: notify.ios_wethop
+      data:
+        message: Turn on lights while you're away.
+
+  - id: vacation_lights_off
+    alias: Turn off lights at night when I am away
+    trigger:
+    - platform: template
+      value_template: '{{ is_state(''sensor.time'', states(''input_number.random_hour'')|int
+        ~ '':'' ~ states(''input_number.random_minute'')|int) }}'
+    condition:
+      condition: and
+      conditions:
+      - condition: state
+        entity_id: input_boolean.vacation
+        state: 'on'
+    action:
+    - service: scene.turn_on
+      entity_id: scene.leave_home
+    - service: notify.telegram
+      data:
+        message: Lights off while you're away.
+    - service: notify.ios_wethop
+      data:
+        message: Turn off lights while you're away.
+
+  - id: vacuum_flying_home
+    alias: Vacuum house when flying home
+    trigger:
+    - entity_id: calendar.flight_to_msp_today
+      from: 'off'
+      platform: state
+      to: 'on'
+    - entity_id: calendar.flight_to_rst_today
+      from: 'off'
+      platform: state
+      to: 'on'
+    condition: []
+    action:
+    - service: vacuum.turn_on
+    - service: notify.telegram
+      data:
+        message: Lights off while you're away.
+    - service: notify.ios_wethop
+      data:
+        message: Vacuuming the house while you fly home

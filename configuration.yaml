@@ -1,6 +1,6 @@
 homeassistant:
   # Name of the location where Home Assistant is running
-  name: Home
+  name: The Brewery
   unit_system: imperial
   # Pick yours from here: http://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   time_zone: America/Chicago
@@ -8,6 +8,7 @@ homeassistant:
   longitude: !secret home_longitude
   elevation: !secret home_elevation
   customize: !include customize.yaml
+  packages: !include_dir_named packages
 
 map:
 
@@ -16,14 +17,13 @@ ios:
 config:
 
 logger:
-  default: critical 
+  default: warn
   logs:
     custom_components.device: debug
     homeassistant.components.zha_new: debug
     homeassistant.custom_components.zha_new: debug
     homeassistant.components.sensor.zha_new: debug
-    homeassistant.components.device_tracker: debug
-
+    homeassistant.components.recorder: debug
 
 http:
   api_password: !secret http_password
@@ -109,14 +109,6 @@ proximity: !include proximity.yaml
 
 vacuum: !include vacuum.yaml
 
-input_boolean:
-  vacation:
-    name: On Vacation
-    icon: mdi:nature-people
-  home:
-    name: Home
-    icon: mdi:home
-
 mqtt:
   broker: 192.168.1.99
   port: 1883
@@ -139,20 +131,6 @@ notify:
   api_key: !secret telegram_api_key
   chat_id: !secret telegram_chat_id
 
-input_number:
-  random_hour:
-    name: Random Light Off Hour
-    min: 21
-    max: 24
-    step: 1
-    mode: box
-  random_minute:
-    name: Random Light Off Minute
-    min: 30
-    max: 59
-    step: 1
-    mode: box
-
 media_player:
   - platform: plex
   - platform: cast
@@ -160,7 +138,9 @@ media_player:
 
 recorder:
 ##  db_url: postgresql://@/hass
-  db_url: !secret recorder_db_url
+#  db_url: !secret recorder_db_url
+  purge_interval: 30
+
 
 influxdb:
   host: 127.0.0.1
@@ -168,5 +148,5 @@ influxdb:
   #password: !secret influx_db_pass
 
 google:
-  client_id: !secret google_client_id 
+  client_id: !secret google_client_id
   client_secret: !secret google_client_secret
