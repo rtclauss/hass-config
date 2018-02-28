@@ -17,14 +17,16 @@ ios:
 config:
 
 logger:
+#  default: info
   default: warn
   logs:
     custom_components.device: debug
     homeassistant.components.zha_new: debug
     homeassistant.custom_components.zha_new: debug
     homeassistant.components.sensor.zha_new: debug
-    homeassistant.components.recorder: debug
-
+    homeassistant.components.wink: debug
+    homeassistant.components.hue: debug
+    
 http:
   api_password: !secret http_password
   use_x_forwarded_for: true
@@ -51,6 +53,10 @@ logbook:
 
 # Discover some devices automatically
 discovery:
+
+hue:
+  bridges:
+    - host: 192.168.1.150
 
 wink:
 #  email: !secret wink_email
@@ -144,7 +150,9 @@ recorder:
     domains:
       - media_player
       - updater
+      - sun
     entities:
+      - sensor.time
       - sensor.fail2ban_sshd
       - sensor.fail2ban_recidive
 
