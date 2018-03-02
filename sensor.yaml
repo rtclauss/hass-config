@@ -171,21 +171,6 @@
       icon_template: mdi:cancel
       entity_id: sensor.fail2ban_recidive
       value_template: "{{states.sensor.fail2ban_recidive.attributes.current_bans|length}}"
-    occ_time:
-      value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
-      friendly_name: "Last change in OCC Dir"
-      entity_id: sensor.time
-      unit_of_measurement: 'minutes'
-    spcc_time:
-      value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}'
-      friendly_name: "Last Change in SPCC Dir"
-      entity_id: sensor.time
-      unit_of_measurement: 'minutes'
-    spcc_distance:
-      value_template: '{{ states.proximity.spcc.state }}'
-      friendly_name: "Distance to SPCC"
-      entity_id: sensor.time
-      unit_of_measurement: 'mi'
     home_distance:
       value_template: '{{ states.proximity.home.state }}'
       friendly_name: "Distance to Home"
@@ -196,12 +181,6 @@
       friendly_name: "Last Change in Home Dir"
       entity_id: sensor.time
       unit_of_measurement: 'minutes'
-    heading_spcc:
-      value_template: '{{ states.proximity.spcc.attributes.dir_of_travel |default("unknown") }}'
-      friendly_name: 'Direction of SPCC'
-    heading_occ:
-      value_template: '{{ states.proximity.occ.attributes.dir_of_travel |default("unknown") }}'
-      friendly_name: 'Direction of OCC'
     twincities:
       value_template: '{{ states.proximity.twincities.attributes.dir_of_travel |default("unknown") }}'
       friendly_name: 'Direction of Twin Cities'
@@ -211,17 +190,6 @@
     motion_sensor_battery:
       value_template: '{{ states.binary_sensor.motion_sensor_motion.attributes.battery_level }}'
       friendly_name: 'Motion Sensor Battery'
-    test_home:
-      value_template: >
-        {% if
-          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) > 1200) and states.sensor.heading_spcc.state=="away_from")
-          or
-          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) > 600) and states.sensor.heading_occ.state=="away_from")
-        %} true
-        {% else %}
-          false
-        {% endif %}
-      friendly_name: 'Test for heading home'
     test_homeward:
       value_template: >
         {% if

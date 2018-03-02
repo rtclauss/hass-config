@@ -1,18 +1,5 @@
 - platform: template
   sensors:
-    away_from_curling:
-      value_template: >
-        {% if
-          (((as_timestamp(now()) - as_timestamp(states.sensor.twincities.last_changed))//60) > 10) and (states.sensor.twincities.state=="away_from")
-          or
-          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed))//60) > 5) and (states.sensor.heading_occ.state=="away_from")
-        %} true
-        {% else %}
-          false
-        {% endif %}
-      friendly_name: 'Leaving Curling'
-      entity_id: sensor.time
-      device_class: moving
     test_homeward:
       value_template: >
         {% if
@@ -34,7 +21,7 @@
   name: Bayesian Zeke Home
   device_class: occupancy
   probability_threshold: 0.9
-  observations: 
+  observations:
   - entity_id: device_tracker.4098ad3265d4
     prob_given_true: 0.80
     prob_given_false: 0.15

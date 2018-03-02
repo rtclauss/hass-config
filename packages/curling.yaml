@@ -1,0 +1,169 @@
+########################
+# Groups
+########################
+group:
+  curling_sensors:
+    name: Curling Sensors
+    entities:
+      - binary_sensor.away_from_curling
+      - sensor.occ_time
+      - sensor.heading_occ
+      - sensor.spcc_time
+      - sensor.spcc_distance
+      - sensor.heading_spcc
+      - sensor.test_home
+  curling_automations:
+    name: Curling Automations
+    entities:
+      - automation.leave_home_for_curling
+      - automation.return_home_from_OCC
+      - automation.return_home_from_spcc
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+  - platform: template
+    sensors:
+      away_from_curling:
+        value_template: >
+          {% if
+            (((as_timestamp(now()) - as_timestamp(states.sensor.twincities.last_changed))//60) > 10) and (states.sensor.twincities.state=="away_from")
+            or
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed))//60) > 5) and (states.sensor.heading_occ.state=="away_from")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+        friendly_name: 'Leaving Curling'
+        entity_id: sensor.time
+        device_class: moving
+
+########################
+# Sensors
+########################
+sensor:
+  - platform: template
+    sensors:
+      curling_season:
+        icon_template: mdi:calendar
+        entity_id: sensor.time
+        value_template: >-
+          {{ now().strftime("%m") |int in [1,2,3,4,5,10,11,12] }}
+      occ_time:
+        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
+        friendly_name: "Last change in OCC Dir"
+        entity_id: sensor.time
+        unit_of_measurement: 'minutes'
+      spcc_time:
+        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}'
+        friendly_name: "Last Change in SPCC Dir"
+        entity_id: sensor.time
+        unit_of_measurement: 'minutes'
+      spcc_distance:
+        value_template: '{{ states.proximity.spcc.state }}'
+        friendly_name: "Distance to SPCC"
+        entity_id: sensor.time
+        unit_of_measurement: 'mi'
+      heading_spcc:
+        value_template: '{{ states.proximity.spcc.attributes.dir_of_travel |default("unknown") }}'
+        friendly_name: 'Direction of SPCC'
+      heading_occ:
+        value_template: '{{ states.proximity.occ.attributes.dir_of_travel |default("unknown") }}'
+        friendly_name: 'Direction of OCC'
+      test_home:
+        value_template: >
+          {% if
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) > 1200) and states.sensor.heading_spcc.state=="away_from")
+            or
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) > 600) and states.sensor.heading_occ.state=="away_from")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+        friendly_name: 'Test for heading home from curling'
+
+########################
+# Automations
+########################
+automation:
+  - id: leave_home_for_curling
+    alias: Leave for curling
+    trigger:
+    - entity_id: binary_sensor.bayesian_zeke_home
+      from: 'on'
+      platform: state
+      to: 'off'
+    condition:
+    - after: '17:00:00'
+      before: '19:45:00'
+      condition: time
+      weekday:
+      - tue
+      - wed
+    action:
+    - data:
+        away_mode: true
+        entity_id: climate.hallway_glycol
+      service: climate.set_away_mode
+    - data:
+        message: Good Curling!
+      service: notify.ios_wethop
+  - id: return_home_from_OCC
+    alias: Return home from OCC
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.wethop
+      zone: zone.occ
+      event: leave
+    condition:
+      condition: time
+      weekday:
+      - sun
+      - tue
+    action:
+    - service: climate.set_away_mode
+      data:
+        entity_id: climate.hallway_glycol
+        away_mode: false
+    - service: notify.telegram
+      data:
+        message: You're driving home from curling.  Turning off Nest Away.
+    - service: notify.ios_wethop
+      data:
+        message: Turn off Nest Away while you drive home from curling.
+  - id: return_home_from_spcc
+    alias: Return home from SPCC
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.wethop
+      zone: zone.spcc
+      event: leave
+    condition:
+      condition: time
+      weekday:
+      - sun
+      - wed
+    action:
+    - service: climate.set_away_mode
+      data:
+        entity_id: climate.hallway_glycol
+        away_mode: false
+    - service: notify.ios_wethop
+      data:
+        message: Turn off Nest Away while you drive home from the SPCC.
+  - id: display_curling_tab
+    alias: Display Curling tab
+    trigger:
+    - platform: template
+      value_template: >-
+        {% if now().strftime("%d")|int == 1 %}True{% endif%}
+    - platform: homeassistant
+      event: start
+    condition: []
+    action:
+    - service: script.group_visibility
+      data:
+        entity_id: group.curling
+        cond: sensor.curling_season
+        visible_state: 'True'

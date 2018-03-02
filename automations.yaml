@@ -74,28 +74,6 @@
   - service: input_boolean.turn_off
     data:
       entity_id: input_boolean.home
-- id: leave_home_for_curling
-  alias: Leave for curling
-  trigger:
-  - entity_id: binary_sensor.bayesian_zeke_home
-    from: 'on'
-    platform: state
-    to: 'off'
-  condition:
-  - after: '17:00:00'
-    before: '19:45:00'
-    condition: time
-    weekday:
-    - tue
-    - wed
-  action:
-  - data:
-      away_mode: true
-      entity_id: climate.hallway_glycol
-    service: climate.set_away_mode
-  - data:
-      message: Good Curling!
-    service: notify.ios_wethop
 - id: lurn_off_lights_when_leaving
   alias: Turn off lights when I leave
   trigger:
@@ -158,49 +136,6 @@
   - service: notify.ios_wethop
     data:
       message: Turn off Nest Away while you drive home from the Cities.
-- id: return_home_from_spcc
-  alias: Return home from SPCC
-  trigger:
-  - platform: zone
-    entity_id: device_tracker.wethop
-    zone: zone.spcc
-    event: leave
-  condition:
-    condition: time
-    weekday:
-    - sun
-    - wed
-  action:
-  - service: climate.set_away_mode
-    data:
-      entity_id: climate.hallway_glycol
-      away_mode: false
-  - service: notify.ios_wethop
-    data:
-      message: Turn off Nest Away while you drive home from the SPCC.
-- id: return_home_from_OCC
-  alias: Return home from OCC
-  trigger:
-  - platform: zone
-    entity_id: device_tracker.wethop
-    zone: zone.occ
-    event: leave
-  condition:
-    condition: time
-    weekday:
-    - sun
-    - tue
-  action:
-  - service: climate.set_away_mode
-    data:
-      entity_id: climate.hallway_glycol
-      away_mode: false
-  - service: notify.telegram
-    data:
-      message: You're driving home from curling.  Turning off Nest Away.
-  - service: notify.ios_wethop
-    data:
-      message: Turn off Nest Away while you drive home from curling.
 - id: garage_door_reminder
   alias: Close forgotten garage door
   trigger:
