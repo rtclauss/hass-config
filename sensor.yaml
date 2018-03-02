@@ -171,21 +171,6 @@
       icon_template: mdi:cancel
       entity_id: sensor.fail2ban_recidive
       value_template: "{{states.sensor.fail2ban_recidive.attributes.current_bans|length}}"
-    example_zone_05_time:
-      value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_05.last_changed)) | int //60 }}'
-      friendly_name: "Last change in OCC Dir"
-      entity_id: sensor.time
-      unit_of_measurement: 'minutes'
-    example_zone_08_time:
-      value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_08.last_changed)) | int //60 }}'
-      friendly_name: "Last Change in SPCC Dir"
-      entity_id: sensor.time
-      unit_of_measurement: 'minutes'
-    example_zone_08_distance:
-      value_template: '{{ states.proximity.example_zone_08.state }}'
-      friendly_name: "Distance to SPCC"
-      entity_id: sensor.time
-      unit_of_measurement: 'mi'
     home_distance:
       value_template: '{{ states.proximity.home.state }}'
       friendly_name: "Distance to Home"
@@ -196,12 +181,6 @@
       friendly_name: "Last Change in Home Dir"
       entity_id: sensor.time
       unit_of_measurement: 'minutes'
-    heading_example_zone_08:
-      value_template: '{{ states.proximity.example_zone_08.attributes.dir_of_travel |default("unknown") }}'
-      friendly_name: 'Direction of SPCC'
-    heading_example_zone_05:
-      value_template: '{{ states.proximity.example_zone_05.attributes.dir_of_travel |default("unknown") }}'
-      friendly_name: 'Direction of OCC'
     example_zone_10:
       value_template: '{{ states.proximity.example_zone_10.attributes.dir_of_travel |default("unknown") }}'
       friendly_name: 'Direction of Example Zone 10'
@@ -211,17 +190,6 @@
     motion_sensor_battery:
       value_template: '{{ states.binary_sensor.motion_sensor_motion.attributes.battery_level }}'
       friendly_name: 'Motion Sensor Battery'
-    test_home:
-      value_template: >
-        {% if
-          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_08.last_changed)) > 1200) and states.sensor.heading_example_zone_08.state=="away_from")
-          or
-          (((as_timestamp(now()) - as_timestamp(states.sensor.heading_example_zone_05.last_changed)) > 600) and states.sensor.heading_example_zone_05.state=="away_from")
-        %} true
-        {% else %}
-          false
-        {% endif %}
-      friendly_name: 'Test for heading home'
     test_homeward:
       value_template: >
         {% if
