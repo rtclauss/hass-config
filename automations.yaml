@@ -13,10 +13,7 @@
   action:
   - service: scene.turn_on
     entity_id: scene.arrive_home
-  - service: notify.telegram
-    data:
-      message: Arriving home. Turning on nighttime arrival.
-  - service: notify.ios_wethop
+  - service: notify.all
     data:
       message: Home again, home again, jiggity jig.
   - service: vacuum.return_to_home
@@ -51,7 +48,7 @@
     service: climate.set_away_mode
   - data:
       message: ' Arriving at work. Setting Nest Away.'
-    service: notify.ios_wethop
+    service: notify.all
 - id: arrive_home_update_input_boolean
   alias: Arrive home
   trigger:
@@ -84,10 +81,7 @@
   action:
   - service: scene.turn_on
     entity_id: scene.leave_home
-  - service: notify.telegram
-    data:
-      message: Leaving home. Turning everything off.
-  - service: notify.ios_wethop
+  - service: notify.all
     data:
       message: Auf weidersehen!
 - id: cloudy_home_arrival
@@ -109,12 +103,9 @@
   action:
   - service: scene.turn_on
     entity_id: scene.cloudy_arrive_home
-  - service: notify.telegram
+  - service: notify.all
     data:
       message: Cloudy day arrival.
-  - service: notify.ios_wethop
-    data:
-      message: Cloudy arrival.
 - id: return_home_from_cities
   alias: Return home from Twin Cities
   trigger:
@@ -130,10 +121,7 @@
     data:
       entity_id: climate.hallway_glycol
       away_mode: false
-  - service: notify.telegram
-    data:
-      message: You're driving home from the Cities.  Turning off Nest Away.
-  - service: notify.ios_wethop
+  - service: notify.all
     data:
       message: Turn off Nest Away while you drive home from the Cities.
 - id: garage_door_reminder
@@ -146,10 +134,7 @@
   - condition: time
     after: '23:30:00'
   action:
-  - service: notify.telegram
-    data:
-      message: Garage door left open. Close it.
-  - service: notify.ios_wethop
+  - service: notify.all
     data:
       message: Close the garage door.
 - id: update_hass
@@ -158,12 +143,9 @@
     platform: state
     entity_id: updater.updater
   action:
-  - service: notify.telegram
+  - service: notify.all
     data:
       message: Update for Home Assistant is available.
-  - service: notify.ios_wethop
-    data:
-      message: Update available for HASS.
 - id: twd
   alias: The Walking Dead
   trigger:
@@ -189,7 +171,7 @@
 - action:
   - data:
       message: Garage door is still open!
-    service: notify.ios_wethop
+    service: notify.all
   alias: Garage Door Open When Leaving Home
   condition:
   - condition: state

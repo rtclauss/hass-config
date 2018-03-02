@@ -295,9 +295,6 @@ automation:
     - service: device_tracker.see
       data:
         dev_id: wethop
-    - service: notify.ios_wethop
-      data:
-        message: request_location_update
     - service: script.group_visibility
       data:
         entity_id: group.vacation_group_card_1
@@ -346,10 +343,7 @@ automation:
     - service: input_boolean.turn_on
       data:
         entity_id: input_boolean.vacation
-    - service: notify.telegram
-      data:
-        message: "You're on a trip! \uD83D\uDEEB"
-    - service: notify.ios_wethop
+    - service: notify.all
       data:
         message: "You're on a trip! \uD83D\uDEEB"
 
@@ -369,12 +363,9 @@ automation:
     - service: input_boolean.turn_off
       data:
         entity_id: input_boolean.vacation
-    - service: notify.telegram
+    - service: notify.all
       data:
-        message: Setting you as back from vacation.
-    - service: notify.ios_wethop
-      data:
-        message: Back from vacation.
+        message: "Back from vacation. \uD83D\uDEEC"
 
   - id: random_off_time
     alias: Set random turn off time
@@ -398,10 +389,7 @@ automation:
       data_template:
         entity_id: input_number.random_vacation_light_group
         value: '{{ (range(1, 4)|random|int) }}'
-    - service: notify.telegram
-      data:
-        message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
-    - service: notify.ios_wethop
+    - service: notify.all
       data:
         message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
     - service: script.group_visibility
@@ -440,12 +428,9 @@ automation:
     - service: scene.turn_on
       data_template:
         entity_id: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
-    - service: notify.telegram
+    - service: notify.all
       data:
         message: Turning on lights while you're away.
-    - service: notify.ios_wethop
-      data:
-        message: Turn on lights while you're away.
 
   - id: vacation_lights_off
     alias: Turn off lights at night when I am away
@@ -462,12 +447,9 @@ automation:
     action:
     - service: scene.turn_on
       entity_id: scene.leave_home
-    - service: notify.telegram
+    - service: notify.all
       data:
         message: Lights off while you're away.
-    - service: notify.ios_wethop
-      data:
-        message: Turn off lights while you're away.
 
   - id: vacuum_flying_home
     alias: Vacuum house when flying home
@@ -479,12 +461,9 @@ automation:
     condition: []
     action:
     - service: vacuum.turn_on
-    - service: notify.telegram
+    - service: notify.all
       data:
-        message: Lights off while you're away.
-    - service: notify.ios_wethop
-      data:
-        message: Vacuuming the house while you fly home
+        message: "Vacuuming the house while you fly home \uD83D\uDEEC"
 
   - id: display_vacation_tab
     alias: Display Vacation tab
