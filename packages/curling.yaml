@@ -5,13 +5,14 @@ group:
   curling_sensors:
     name: Curling Sensors
     entities:
+      - binary_sensor.curling_season
       - binary_sensor.away_from_curling
       - sensor.occ_time
       - sensor.heading_occ
       - sensor.spcc_time
       - sensor.spcc_distance
       - sensor.heading_spcc
-      - sensor.test_home
+      - binary_sensor.test_home
   curling_automations:
     name: Curling Automations
     entities:
@@ -25,6 +26,11 @@ group:
 binary_sensor:
   - platform: template
     sensors:
+      curling_season:
+        icon_template: mdi:calendar
+        entity_id: sensor.time
+        value_template: >-
+          {{ now().strftime("%m") |int in [1,2,3,4,5,10,11,12] }}
       away_from_curling:
         value_template: >
           {% if
@@ -38,6 +44,17 @@ binary_sensor:
         friendly_name: 'Leaving Curling'
         entity_id: sensor.time
         device_class: moving
+      test_home:
+        value_template: >
+          {% if
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) > 1200) and states.sensor.heading_spcc.state=="away_from")
+            or
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) > 600) and states.sensor.heading_occ.state=="away_from")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+        friendly_name: 'Test for heading home from curling'
 
 ########################
 # Sensors
@@ -45,11 +62,6 @@ binary_sensor:
 sensor:
   - platform: template
     sensors:
-      curling_season:
-        icon_template: mdi:calendar
-        entity_id: sensor.time
-        value_template: >-
-          {{ now().strftime("%m") |int in [1,2,3,4,5,10,11,12] }}
       occ_time:
         value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
         friendly_name: "Last change in OCC Dir"
@@ -71,17 +83,6 @@ sensor:
       heading_occ:
         value_template: '{{ states.proximity.occ.attributes.dir_of_travel |default("unknown") }}'
         friendly_name: 'Direction of OCC'
-      test_home:
-        value_template: >
-          {% if
-            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) > 1200) and states.sensor.heading_spcc.state=="away_from")
-            or
-            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) > 600) and states.sensor.heading_occ.state=="away_from")
-          %} true
-          {% else %}
-            false
-          {% endif %}
-        friendly_name: 'Test for heading home from curling'
 
 ########################
 # Automations
@@ -165,5 +166,5 @@ automation:
     - service: script.group_visibility
       data:
         entity_id: group.curling
-        cond: sensor.curling_season
-        visible_state: 'True'
+        cond: binary_sensor.curling_season
+        visible_state: 'on'

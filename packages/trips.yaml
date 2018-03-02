@@ -13,12 +13,13 @@ group:
   trip_status_card:
     name: Trip Status
     entities:
-    - sensor.planned_vacation_calendar
-    - sensor.planned_work_trip_calendar
-    - sensor.sensed_trip
-    - sensor.flying_home_today
+    - binary_sensor.planned_vacation_calendar
+    - binary_sensor.planned_work_trip_calendar
+    - binary_sensor.sensed_trip
+    - binary_sensor.flying_home_today
     - sensor.average_house_temp
     - sensor.average_house_humidity
+    - sensor.turn_off_time
   vacation_group_card_1:
     name: Vacation Group 1
     entities:
@@ -177,13 +178,10 @@ input_number:
 ########################
 # script:
 
-
-
 ########################
-# Sensors
+# Binary Sensors
 ########################
-# Maybe these trip sensors should be input boolean with automations on restart to trigger
-sensor:
+binary_sensor:
   - platform: template
     sensors:
       sensed_trip:
@@ -231,6 +229,21 @@ sensor:
           {% else %}
             false
           {% endif %}
+
+
+########################
+# Sensors
+########################
+# Maybe these trip sensors should be input boolean with automations on restart to trigger
+sensor:
+  - platform: template
+    sensors:
+      turn_off_time:
+        friendly_name: Turn off time
+        icon_template: mdi:clock
+        entity_id: input_number.random_hour
+        value_template: >-
+          {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
       average_house_temp:
         friendly_name: "Average House Temperature"
         unit_of_measurement: "°F"
@@ -285,27 +298,26 @@ automation:
     - service: notify.ios_wethop
       data:
         message: request_location_update
-      # Hide all vacation group cards at startup.  Should find out how to loop this.
     - service: script.group_visibility
       data:
         entity_id: group.vacation_group_card_1
         cond: input_number.random_vacation_light_group
-        visible_state: '-0.0'
+        visible_state: '1.0'
     - service: script.group_visibility
       data:
         entity_id: group.vacation_group_card_2
         cond: input_number.random_vacation_light_group
-        visible_state: '-0.0'
+        visible_state: '2.0'
     - service: script.group_visibility
       data:
         entity_id: group.vacation_group_card_3
         cond: input_number.random_vacation_light_group
-        visible_state: '-0.0'
+        visible_state: '3.0'
     - service: script.group_visibility
       data:
         entity_id: group.vacation_group_card_4
         cond: input_number.random_vacation_light_group
-        visible_state: '-0.0'
+        visible_state: '4.0'
 
   - id: on_vacation_trigger
     alias: On Vacation trigger
@@ -322,11 +334,11 @@ automation:
       condition: or
       conditions:
       - condition: state
-        entity_id: sensor.planned_vacation_calendar
-        state: 'true'
+        entity_id: binary_sensor.planned_vacation_calendar
+        state: 'on'
       - condition: state
-        entity_id: sensor.planned_work_trip_calendar
-        state: 'true'
+        entity_id: binary_sensor.planned_work_trip_calendar
+        state: 'on'
     action:
     - service: input_boolean.turn_on
       data:
@@ -457,11 +469,7 @@ automation:
   - id: vacuum_flying_home
     alias: Vacuum house when flying home
     trigger:
-    - entity_id: calendar.flight_to_msp_today
-      from: 'off'
-      platform: state
-      to: 'on'
-    - entity_id: calendar.flight_to_rst_today
+    - entity_id: binary_sensor.flying_home_today
       from: 'off'
       platform: state
       to: 'on'
@@ -474,3 +482,18 @@ automation:
     - service: notify.ios_wethop
       data:
         message: Vacuuming the house while you fly home
+
+  - id: display_vacation_tab
+    alias: Display Vacation tab
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.sensed_trip
+    - platform: homeassistant
+      event: start
+    condition: []
+    action:
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation
+        cond: binary_sensor.sensed_trip
+        visible_state: 'on'
