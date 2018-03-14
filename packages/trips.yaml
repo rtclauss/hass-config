@@ -466,6 +466,24 @@ automation:
       data:
         message: "Vacuuming the house while you fly home \uD83D\uDEEC"
 
+  - id: hide_vacation_tab
+    alias: Hide Vacation tab
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.sensed_trip
+    - platform: homeassistant
+      event: start
+    condition:
+    - condition: state
+      entity_id: binary_sensor.sensed_trip
+      state: 'off'
+    action:
+    - service: script.group_visibility
+      data:
+        entity_id: group.vacation
+        cond: binary_sensor.sensed_trip
+        visible_state: 'off'
+
   - id: display_vacation_tab
     alias: Display Vacation tab
     trigger:
@@ -473,7 +491,10 @@ automation:
       entity_id: binary_sensor.sensed_trip
     - platform: homeassistant
       event: start
-    condition: []
+    condition:
+    - condition: state
+      entity_id: binary_sensor.sensed_trip
+      state: 'on'
     action:
     - service: script.group_visibility
       data:
