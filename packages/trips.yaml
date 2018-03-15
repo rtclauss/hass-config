@@ -125,8 +125,8 @@ scene:
 # Input Booleans
 ########################
 input_boolean:
-  vacation:
-    name: On Vacation
+  trip:
+    name: On a Trip
     icon: mdi:nature-people
   home:
     name: Home
@@ -170,9 +170,9 @@ binary_sensor:
       sensed_trip:
         friendly_name: "Sensed a Trip"
         icon_template: mdi:airplane-takeoff
-        entity_id: input_boolean.vacation
+        entity_id: input_boolean.trip
         value_template: >-
-          {% if is_state("input_boolean.vacation", "on") %}
+          {% if is_state("input_boolean.trip", "on") %}
             true
           {% else %}
             false
@@ -326,7 +326,7 @@ automation:
     action:
     - service: input_boolean.turn_on
       data:
-        entity_id: input_boolean.vacation
+        entity_id: input_boolean.trip
     - service: notify.all
       data:
         message: "You're on a trip! \uD83D\uDEEB"
@@ -341,15 +341,15 @@ automation:
         minutes: 2
     condition:
     - condition: state
-      entity_id: input_boolean.vacation
+      entity_id: input_boolean.trip
       state: 'on'
     action:
     - service: input_boolean.turn_off
       data:
-        entity_id: input_boolean.vacation
+        entity_id: input_boolean.trip
     - service: notify.all
       data:
-        message: "Back from vacation. \uD83D\uDEEC"
+        message: "Back from trip. \uD83D\uDEEC"
 
   - id: random_off_time
     alias: Set random turn off time
@@ -358,7 +358,7 @@ automation:
       at: '12:00:00'
     condition:
     - condition: state
-      entity_id: input_boolean.vacation
+      entity_id: input_boolean.trip
       state: 'on'
     action:
     - service: input_number.set_value
@@ -405,7 +405,7 @@ automation:
       offset: -00:30:00
     condition:
     - condition: state
-      entity_id: input_boolean.vacation
+      entity_id: input_boolean.trip
       state: 'on'
     action:
     - delay: 00:{{ (range(5,45)|random|int) }}:00
@@ -426,7 +426,7 @@ automation:
       condition: and
       conditions:
       - condition: state
-        entity_id: input_boolean.vacation
+        entity_id: input_boolean.trip
         state: 'on'
     action:
     - service: scene.turn_on
