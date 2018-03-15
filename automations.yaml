@@ -183,3 +183,19 @@
     from: home
     platform: state
     to: away
+
+- id: turn_off_all_lights_when_bed_off
+  name: Turn off all lights when bedroom lights turn off
+  trigger:
+  - platform: state
+    entity_id: light.bedroom_lamp, light.bedroom_lamp_2
+    to: 'off'
+  condition:
+    condition: time
+    after: '22:00:00'
+    before: '06:00:00'
+  action:
+  - service: scene.turn_on
+    entity_id: scene.leave_home
+
+
