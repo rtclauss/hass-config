@@ -1,88 +1,100 @@
-########################
-# Groups
-########################
-group:
-  curling_sensors:
-    name: Curling Sensors
-    entities:
-      - binary_sensor.curling_season
-      - binary_sensor.away_from_curling
-      - sensor.occ_time
-      - sensor.heading_occ
-      - sensor.spcc_time
-      - sensor.spcc_distance
-      - sensor.heading_spcc
-      - binary_sensor.test_home
-  curling_automations:
-    name: Curling Automations
-    entities:
-      - automation.leave_home_for_curling
-      - automation.return_home_from_OCC
-      - automation.return_home_from_spcc
+################################################################
+## Packages / Curling
+################################################################
 
-########################
-# Binary Sensors
-########################
-binary_sensor:
-  - platform: template
-    sensors:
-      curling_season:
-        icon_template: mdi:calendar
-        entity_id: sensor.time
-        value_template: >-
-          {{ now().strftime("%m") |int in [1,2,3,4,5,10,11,12] }}
-      away_from_curling:
-        value_template: >
-          {% if
-            (((as_timestamp(now()) - as_timestamp(states.sensor.twincities.last_changed))//60) > 10) and (states.sensor.twincities.state=="away_from")
-            or
-            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed))//60) > 5) and (states.sensor.heading_occ.state=="away_from")
-          %} true
-          {% else %}
-            false
-          {% endif %}
-        friendly_name: 'Leaving Curling'
-        entity_id: sensor.time
-        device_class: moving
-      test_home:
-        value_template: >
-          {% if
-            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) > 1200) and states.sensor.heading_spcc.state=="away_from")
-            or
-            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) > 600) and states.sensor.heading_occ.state=="away_from")
-          %} true
-          {% else %}
-            false
-          {% endif %}
-        friendly_name: 'Test for heading home from curling'
+################################################
+## Customize
+################################################
 
-########################
-# Sensors
-########################
-sensor:
-  - platform: template
-    sensors:
-      occ_time:
-        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
-        friendly_name: "Last change in OCC Dir"
-        entity_id: sensor.time
-        unit_of_measurement: 'minutes'
-      spcc_time:
-        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}'
-        friendly_name: "Last Change in SPCC Dir"
-        entity_id: sensor.time
-        unit_of_measurement: 'minutes'
-      spcc_distance:
-        value_template: '{{ states.proximity.spcc.state }}'
-        friendly_name: "Distance to SPCC"
-        entity_id: sensor.time
-        unit_of_measurement: 'mi'
-      heading_spcc:
-        value_template: '{{ states.proximity.spcc.attributes.dir_of_travel |default("unknown") }}'
-        friendly_name: 'Direction of SPCC'
-      heading_occ:
-        value_template: '{{ states.proximity.occ.attributes.dir_of_travel |default("unknown") }}'
-        friendly_name: 'Direction of OCC'
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: 'curling'
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automation
+    ################################################
+
+    automation.leave_home_for_curling:
+      <<: *customize
+      friendly_name: "Leave home for curling"
+
+    automation.return_home_from_OCC:
+      <<: *customize
+      friendly_name: "Return home from OCC"
+
+    automation.return_home_from_spcc:
+      <<: *customize
+      friendly_name: "Return home from SPCC"
+
+    automation.display_curling_tab:
+      <<: *customize
+      friendly_name: "Display Curling tab"
+
+    ################################################
+    ## Binary Sensor
+    ################################################
+
+    binary_sensor.curling_season:
+      <<: *customize
+      friendly_name: "Curling Season"
+      icon_template: mdi:calendar
+
+    binary_sensor.away_from_curling:
+      <<: *customize
+      friendly_name: "Leaving Curling"
+
+    binary_sensor.test_home:
+      <<: *customize
+      friendly_name: "Test for heading home from curling"
+
+    ################################################
+    ## Group
+    ################################################
+
+    group.curling_sensors:
+      <<: *customize
+      friendly_name: "Curling Sensors"
+
+    group.curling_automations:
+      <<: *customize
+      friendly_name: "Curling Automations"
+
+    ################################################
+    ## Sensors
+    ################################################
+
+    sensor.occ_time:
+      <<: *customize
+      friendly_name: "Last change in OCC Dir"
+      icon_template: mdi:clock
+
+    sensor.spcc_time:
+      <<: *customize
+      friendly_name: "Last Change in SPCC Dir"
+      icon_template: mdi:clock
+
+    sensor.spcc_distance:
+      <<: *customize
+      friendly_name: "Distance to SPCC"
+
+    sensor.heading_spcc:
+      <<: *customize
+      friendly_name: "Direction of SPCC"
+
+    sensor.heading_occ:
+      <<: *customize
+      friendly_name: "Direction of OCC"
 
 ########################
 # Automations
@@ -165,3 +177,89 @@ automation:
         entity_id: group.curling
         cond: binary_sensor.curling_season
         visible_state: 'on'
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+  - platform: template
+    sensors:
+      curling_season:
+        icon_template: mdi:calendar
+        entity_id: sensor.time
+        value_template: >-
+          {{ now().strftime("%m") |int in [1,2,3,4,5,10,11,12] }}
+      away_from_curling:
+        value_template: >
+          {% if
+            (((as_timestamp(now()) - as_timestamp(states.sensor.twincities.last_changed))//60) > 10) and (states.sensor.twincities.state=="away_from")
+            or
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed))//60) > 5) and (states.sensor.heading_occ.state=="away_from")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+        friendly_name: 'Leaving Curling'
+        entity_id: sensor.time
+        device_class: moving
+      test_home:
+        value_template: >
+          {% if
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) > 1200) and states.sensor.heading_spcc.state=="away_from")
+            or
+            (((as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) > 600) and states.sensor.heading_occ.state=="away_from")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+        friendly_name: 'Test for heading home from curling'
+
+########################
+# Groups
+########################
+group:
+  curling_sensors:
+    name: Curling Sensors
+    entities:
+      - binary_sensor.curling_season
+      - binary_sensor.away_from_curling
+      - sensor.occ_time
+      - sensor.heading_occ
+      - sensor.spcc_time
+      - sensor.spcc_distance
+      - sensor.heading_spcc
+      - binary_sensor.test_home
+  curling_automations:
+    name: Curling Automations
+    entities:
+      - automation.leave_home_for_curling
+      - automation.return_home_from_OCC
+      - automation.return_home_from_spcc
+
+########################
+# Sensors
+########################
+sensor:
+  - platform: template
+    sensors:
+      occ_time:
+        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
+        friendly_name: "Last change in OCC Dir"
+        entity_id: sensor.time
+        unit_of_measurement: 'minutes'
+      spcc_time:
+        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}'
+        friendly_name: "Last Change in SPCC Dir"
+        entity_id: sensor.time
+        unit_of_measurement: 'minutes'
+      spcc_distance:
+        value_template: '{{ states.proximity.spcc.state }}'
+        friendly_name: "Distance to SPCC"
+        entity_id: sensor.time
+        unit_of_measurement: 'mi'
+      heading_spcc:
+        value_template: '{{ states.proximity.spcc.attributes.dir_of_travel |default("unknown") }}'
+        friendly_name: 'Direction of SPCC'
+      heading_occ:
+        value_template: '{{ states.proximity.occ.attributes.dir_of_travel |default("unknown") }}'
+        friendly_name: 'Direction of OCC'
