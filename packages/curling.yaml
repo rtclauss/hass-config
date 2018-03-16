@@ -189,7 +189,6 @@ binary_sensor:
   - platform: template
     sensors:
       curling_season:
-        icon_template: mdi:calendar
         entity_id: sensor.time
         value_template: >-
           {{ now().strftime("%m") |int in [1,2,3,4,5,10,11,12] }}
@@ -203,7 +202,6 @@ binary_sensor:
           {% else %}
             false
           {% endif %}
-        friendly_name: 'Leaving Curling'
         entity_id: sensor.time
         device_class: moving
       test_home:
@@ -216,14 +214,12 @@ binary_sensor:
           {% else %}
             false
           {% endif %}
-        friendly_name: 'Test for heading home from curling'
 
 ########################
 # Groups
 ########################
 group:
   curling_sensors:
-    name: Curling Sensors
     entities:
       - binary_sensor.curling_season
       - binary_sensor.away_from_curling
@@ -234,7 +230,6 @@ group:
       - sensor.heading_spcc
       - binary_sensor.test_home
   curling_automations:
-    name: Curling Automations
     entities:
       - automation.leave_home_for_curling
       - automation.return_home_from_OCC
@@ -248,22 +243,17 @@ sensor:
     sensors:
       occ_time:
         value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
-        friendly_name: "Last change in OCC Dir"
         entity_id: sensor.time
         unit_of_measurement: 'minutes'
       spcc_time:
         value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}'
-        friendly_name: "Last Change in SPCC Dir"
         entity_id: sensor.time
         unit_of_measurement: 'minutes'
       spcc_distance:
         value_template: '{{ states.proximity.spcc.state }}'
-        friendly_name: "Distance to SPCC"
         entity_id: sensor.time
         unit_of_measurement: 'mi'
       heading_spcc:
         value_template: '{{ states.proximity.spcc.attributes.dir_of_travel |default("unknown") }}'
-        friendly_name: 'Direction of SPCC'
       heading_occ:
         value_template: '{{ states.proximity.occ.attributes.dir_of_travel |default("unknown") }}'
-        friendly_name: 'Direction of OCC'
