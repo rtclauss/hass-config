@@ -191,16 +191,36 @@ automation:
     trigger:
     - platform: template
       value_template: >-
-        {% if now().strftime("%d")|int == 1 %}True{% endif%}
+        {% if now().strftime("%d")|int == 1 %}True{% endif %}
     - platform: homeassistant
       event: start
-    condition: []
+    condition:
+    - condition: state
+      entity_id: binary_sensor.curling_season
+      state: 'on'  
     action:
-    - service: script.group_visibility
+    - service: script.toggle_view
       data:
-        entity_id: group.curling
-        cond: binary_sensor.curling_season
-        visible_state: 'on'
+        view_id: curling
+        visible: true
+
+  - id: hide_curling_tab
+    alias: hide_curling_tab
+    trigger:
+    - platform: template
+      value_template: >-
+        {% if now().strftime("%d")|int == 1 %}True{% endif %}
+    - platform: homeassistant
+      event: start
+    condition:
+    - condition: state
+      entity_id: binary_sensor.curling_season
+      state: 'off'  
+    action:
+    - service: script.toggle_view
+      data:
+        view_id: curling
+        visible: false
 
 ########################
 # Binary Sensors
