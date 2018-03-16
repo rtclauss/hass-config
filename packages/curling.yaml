@@ -41,6 +41,10 @@ homeassistant:
       <<: *customize
       friendly_name: "Display Curling tab"
 
+    automation.toggle_curling_automations_on_season_change:
+      <<: *customize
+      friendly_name: "Toggle Curling season automations"      
+
     ################################################
     ## Binary Sensor
     ################################################
@@ -48,7 +52,7 @@ homeassistant:
     binary_sensor.curling_season:
       <<: *customize
       friendly_name: "Curling Season"
-      icon_template: mdi:calendar
+      icon: mdi:calendar
 
     binary_sensor.away_from_curling:
       <<: *customize
@@ -165,6 +169,22 @@ automation:
       data:
         message: Turn off Nest Away while you drive home from the SPCC.
 
+  - id: toggle_curling_automations_on_season_change
+    alias: toggle_curling_automations_on_season_change
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.curling_season
+    action:
+    - service: automation.toggle
+      data:
+        entity_id: automation.return_home_from_occ
+    - service: automation.toggle
+      data:
+        entity_id: automation.leave_home_for_curling
+    - service: automation.toggle
+      data:
+        entity_id: automation.return_home_from_spcc
+
 # Doesn't work at this point
   - id: display_curling_tab
     alias: display_curling_tab
@@ -222,12 +242,12 @@ group:
   curling_sensors:
     entities:
       - binary_sensor.curling_season
-      - binary_sensor.away_from_curling
       - sensor.occ_time
       - sensor.heading_occ
       - sensor.spcc_time
       - sensor.spcc_distance
       - sensor.heading_spcc
+      - binary_sensor.away_from_curling
       - binary_sensor.test_home
   curling_automations:
     entities:
