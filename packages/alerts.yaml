@@ -1,0 +1,124 @@
+################################################################
+## Packages / Alerts
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: 'alerts'
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automation
+    ################################################
+
+    automation.motion_detected_on_trip:
+      <<: *customize
+      friendly_name: "Detected motion while on trip"
+
+    ################################################
+    ## Binary Sensor
+    ################################################
+
+
+
+    ################################################
+    ## Groups
+    ################################################
+
+    group.christmas_lights:
+      <<: *customize
+      friendly_name: "Christmas Sensors"
+
+    group.christmas_automations:
+      <<: *customize
+      friendly_name: "Christmas Automations"
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.toggle_christmas_automation_during_christmas_season:
+      <<: *customize
+      friendly_name: "Toggle Christmas Automation Based on Boolean Sensor"
+
+########################
+# Automations
+########################
+automation:
+  - id: motion_detected_on_trip
+    alias: motion_detected_on_trip
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.motion_sensor_motion
+      from: 'off'
+      to: 'on'
+    condition:
+    - condition: state
+      entity_id: binary_sensor.sensed_trip
+      state: 'on'      
+    action:
+    - service: notify.all
+      data:
+        message: Motion detected in living room while you're away!
+    - service: light.turn_on
+      data:
+        entity_id: light.all_living_room
+        flash: long
+    - service: light.turn_on
+      data:
+        entity_id: light.all_living_room
+        flash: long
+    - service: light.turn_on
+      data:
+        entity_id: light.all_living_room
+        flash: long
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+
+
+########################
+# Groups
+########################
+group:
+
+
+########################
+# Scripts
+########################
+script:
+  flash_lights:
+    sequence:
+      - alias: Lights On
+        service: homeassistant.turn_on
+        data:
+          entity_id: group.all_lights
+      - delay:
+          # time for flash light on
+          seconds: 1
+      - alias: Lights Off
+        service: homeassistant.turn_off
+        data:
+          entity_id: group.all_lights
+      - delay:
+          # time for flash light off
+          seconds: 1
+      - alias: loop_lights
+        service: script.turn_on
+        data:
+          entity_id: script.flash_lights
