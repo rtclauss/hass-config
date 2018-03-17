@@ -43,8 +43,11 @@ homeassistant:
 
     automation.toggle_curling_automations_on_season_change:
       <<: *customize
-      friendly_name: "Toggle Curling season automations"      
+      friendly_name: "Toggle Curling season automations"
 
+    automation.toggle_curling_tab:
+      <<: *customize
+      friendly_name: "Toggle Curling tab"
     ################################################
     ## Binary Sensor
     ################################################
@@ -73,6 +76,13 @@ homeassistant:
     group.curling_automations:
       <<: *customize
       friendly_name: "Curling Automations"
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.toggle_curling_automation_on_curling_season:
+      <<: *customize
+      friendly_name: "Toggle Curling Automation Based on Boolean Sensor"
 
     ################################################
     ## Sensors
@@ -127,8 +137,8 @@ automation:
         message: Good Curling!
       service: notify.all
 
-  - id: return_home_from_OCC
-    alias: return_home_from_OCC
+  - id: return_home_from_occ
+    alias: return_home_from_occ
     trigger:
     - platform: zone
       entity_id: device_tracker.wethop
@@ -175,50 +185,31 @@ automation:
     - platform: state
       entity_id: binary_sensor.curling_season
     action:
-    - service: automation.toggle
+    - service: script.toggle_curling_automation_on_curling_season
       data:
-        entity_id: automation.return_home_from_occ
-    - service: automation.toggle
+        entity_id: automation.return_home_from_OCC
+    - service: script.toggle_curling_automation_on_curling_season
       data:
         entity_id: automation.leave_home_for_curling
-    - service: automation.toggle
+    - service: script.toggle_curling_automation_on_curling_season
       data:
         entity_id: automation.return_home_from_spcc
 
-# Doesn't work at this point
-  - id: display_curling_tab
-    alias: display_curling_tab
+  - id: toggle_curling_tab
+    alias: toggle_curling_tab
     trigger:
     - platform: state
       entity_id: binary_sensor.curling_season
     - platform: homeassistant
       event: start
-    condition:
-    - condition: state
-      entity_id: binary_sensor.curling_season
-      state: 'on'  
+    condition: []
     action:
+    - delay: '00:00:{{ (range(1,30)|random|int) }}'
     - service: script.toggle_view
-      data:
+      data_template:
         view_id: curling
-        visible: true
-
-  - id: hide_curling_tab
-    alias: hide_curling_tab
-    trigger:
-    - platform: state
-      entity_id: binary_sensor.curling_season
-    - platform: homeassistant
-      event: start
-    condition:
-    - condition: state
-      entity_id: binary_sensor.curling_season
-      state: 'off'  
-    action:
-    - service: script.toggle_view
-      data:
-        view_id: curling
-        visible: false
+        visible: >-
+          {{ is_state("binary_sensor.curling_season", "on") | lower }}
 
 ########################
 # Binary Sensors
@@ -272,6 +263,21 @@ group:
       - automation.leave_home_for_curling
       - automation.return_home_from_OCC
       - automation.return_home_from_spcc
+
+########################
+# Scripts
+########################
+script:
+  toggle_curling_automation_on_curling_season:
+    sequence:
+      - service_template: >-
+          {% if is_state("binary_sensor.curling_season", "on") %}
+            automation.turn_on
+          {% else %}
+            automation.turn_off
+          {% endif %}
+        data_template:
+          entity_id: "{{ entity_id }}"
 
 ########################
 # Sensors
