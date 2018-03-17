@@ -1,10 +1,84 @@
+################################################################
+## Packages / Christmas
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: 'christmas'
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automation
+    ################################################
+
+    automation.christmas_tree_on:
+      <<: *customize
+      friendly_name: "Turn on Christmas Tree"
+
+    automation.christmas_tree_off_midnight:
+      <<: *customize
+      friendly_name: "Turn off Christmas Tree"
+
+    automation.christmas_lights_off_bedroom_off:
+      <<: *customize
+      friendly_name: "Turn off Christmas Tree if bedroom lights turned off"
+
+    automation.toggle_christmas_automations_on_season_change:
+      <<: *customize
+      friendly_name: "Display Christmas tab"
+
+    automation.toggle_christmas_tab:
+      <<: *customize
+      friendly_name: "Display Christmas tab"
+
+    ################################################
+    ## Binary Sensor
+    ################################################
+
+    binary_sensor.christmas_season:
+      <<: *customize
+      friendly_name: "Christmas Season"
+      icon: mdi:calendar
+
+    ################################################
+    ## Groups
+    ################################################
+
+    group.christmas_lights:
+      <<: *customize
+      friendly_name: "Christmas Sensors"
+
+    group.christmas_automations:
+      <<: *customize
+      friendly_name: "Christmas Automations"
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.toggle_christmas_automation_during_christmas_season:
+      <<: *customize
+      friendly_name: "Toggle Christmas Automation Based on Boolean Sensor"
 
 ########################
 # Automations
 ########################
 automation:
   - id: christmas_tree_on
-    alias: Turn on Christmas Tree
+    alias: christmas_tree_on
     initial_state: false
     trigger:
     - platform: sun
@@ -16,8 +90,9 @@ automation:
     - service: notify.all
       data:
         message: Turning on Christmas Tree.
+
   - id: christmas_tree_off_midnight
-    alias: Turn off Christmas Tree
+    alias: christmas_tree_off_midnight
     initial_state: false
     trigger:
     - platform: time
@@ -28,8 +103,9 @@ automation:
     - service: notify.all
       data:
         message: Turning off Christmas Tree.
+
   - id: christmas_lights_off_bedroom_off
-    alias: Turn off Christmas Tree if bedroom lights turned off.
+    alias: christmas_lights_off_bedroom_off
     initial_state: false
     trigger:
     - platform: state
@@ -38,3 +114,75 @@ automation:
     action:
     - service: homeassistant.turn_off
       entity_id: switch.christmas_tree, light.christmas_lights
+
+  - id: toggle_christmas_automations_on_season_change
+    alias: toggle_christmas_automations_on_season_change
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.christmas_season
+    action:
+    - service: script.toggle_christmas_automation_during_christmas_season
+      data:
+        entity_id: automation.christmas_tree_on
+    - service: script.toggle_christmas_automation_during_christmas_season
+      data:
+        entity_id: automation.christmas_tree_off_midnight
+    - service: script.toggle_christmas_automation_during_christmas_season
+      data:
+        entity_id: automation.christmas_lights_off_bedroom_off
+
+  - id: toggle_christmas_tab
+    alias: toggle_christmas_tab
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.christmas_season
+    - platform: homeassistant
+      event: start
+    condition: []
+    action:
+    - delay: '00:00:{{ (range(1,30)|random|int) }}'
+    - service: script.toggle_view
+      data_template:
+        view_id: christmas
+        visible: >-
+          {{ is_state("binary_sensor.christmas_season", "on") | lower }}
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+  - platform: template
+    sensors:
+      christmas_season:
+        entity_id: sensor.time
+        value_template: >-
+          {{ now().strftime("%m") |int in [1,11,12] }}
+
+########################
+# Groups
+########################
+group:
+  christmas_lights:
+    entities:
+      - switch.christmas_tree
+      - light.christmas_lights
+  christmas_automations:
+    entities:
+      - automation.christmas_tree_on
+      - automation.christmas_tree_off_midnight
+      - automation.christmas_lights_off_bedroom_off
+
+########################
+# Scripts
+########################
+script:
+  toggle_christmas_automation_during_christmas_season:
+    sequence:
+      - service_template: >-
+          {% if is_state("binary_sensor.christmas_season", "on") %}
+            automation.turn_on
+          {% else %}
+            automation.turn_off
+          {% endif %}
+        data_template:
+          entity_id: "{{ entity_id }}"

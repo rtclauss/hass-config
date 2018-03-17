@@ -53,13 +53,9 @@ homeassistant:
       <<: *customize
       friendly_name: "Vacuum house when flying home"
 
-    automation.hide_vacation_tab:
+    automation.toggle_vacation_tab:
       <<: *customize
-      friendly_name: "Hide Vacation tab"
-
-    automation.display_vacation_tab:
-      <<: *customize
-      friendly_name: "Display Vacation tab"
+      friendly_name: "Show/Hide Vacation tab"
 
     ################################################
     ## Binary Sensor
@@ -177,26 +173,8 @@ automation:
     - service: device_tracker.see
       data:
         dev_id: wethop
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_1
-        cond: input_number.random_vacation_light_group
-        visible_state: '1.0'
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_2
-        cond: input_number.random_vacation_light_group
-        visible_state: '2.0'
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_3
-        cond: input_number.random_vacation_light_group
-        visible_state: '3.0'
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_4
-        cond: input_number.random_vacation_light_group
-        visible_state: '4.0'
+    - delay: '00:00:{{ (range(1,30)|random|int) }}'
+    - service: script.vacation_group_visibility
 
   - id: on_vacation_trigger
     alias: on_vacation_trigger
@@ -274,26 +252,7 @@ automation:
     - service: notify.all
       data:
         message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_1
-        cond: input_number.random_vacation_light_group
-        visible_state: '1.0'
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_2
-        cond: input_number.random_vacation_light_group
-        visible_state: '2.0'
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_3
-        cond: input_number.random_vacation_light_group
-        visible_state: '3.0'
-    - service: script.group_visibility
-      data:
-        entity_id: group.vacation_group_card_4
-        cond: input_number.random_vacation_light_group
-        visible_state: '4.0'
+    - service: script.vacation_group_visibility
 
   - id: vacation_lights_on
     alias: vacation_lights_on
@@ -347,40 +306,21 @@ automation:
       data:
         message: "Vacuuming the house while you fly home \uD83D\uDEEC"
 
-### Currently these two items do nothing as you cannot show/hide a view
-  - id: hide_vacation_tab
-    alias: hide_vacation_tab
+  - id: toggle_vacation_tab
+    alias: toggle_vacation_tab
     trigger:
     - platform: state
       entity_id: binary_sensor.sensed_trip
     - platform: homeassistant
       event: start
-    condition:
-    - condition: state
-      entity_id: binary_sensor.sensed_trip
-      state: 'off'
+    condition: []
     action:
+    - delay: '00:00:{{ (range(1,30)|random|int) }}'
     - service: script.toggle_view
-      data:
+      data_template:
         view_id: vacation
-        visible: false 
-
-  - id: display_vacation_tab
-    alias: display_vacation_tab
-    trigger:
-    - platform: state
-      entity_id: binary_sensor.sensed_trip
-    - platform: homeassistant
-      event: start
-    condition:
-    - condition: state
-      entity_id: binary_sensor.sensed_trip
-      state: 'on'
-    action:
-    - service: script.toggle_view
-      data:
-        view_id: vacation
-        visible: true
+        visible: >-
+          {{ is_state("binary_sensor.sensed_trip", "on") | lower }}
 
 ########################
 # Binary Sensors
@@ -495,51 +435,6 @@ input_number:
     mode: box
 
 ########################
-# Sensors
-########################
-# Maybe these trip sensors should be input boolean with automations on restart to trigger
-sensor:
-  - platform: template
-    sensors:
-      turn_off_time:
-        entity_id:
-          - input_number.random_hour
-          - input_number.random_minute
-        value_template: >-
-          {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
-      average_house_temp:
-        unit_of_measurement: "°F"
-        entity_id:
-          - sensor.living_room_temperature
-          - sensor.master_bedroom_temperature
-          - sensor.guest_room_temperature
-          - sensor.bathroom_temperature
-          - sensor.motion_sensor_temperature
-          - sensor.hallway_thermostat_glycol_temperature
-        value_template: >-
-          {{ (( states("sensor.living_room_temperature")|float +
-          states("sensor.master_bedroom_temperature")|float +
-          states("sensor.guest_room_temperature")|float +
-          states("sensor.bathroom_temperature")|float +
-          states("sensor.motion_sensor_temperature")|float )
-          / 5.0) |round(2)}}
-      average_house_humidity:
-        unit_of_measurement: "%"
-        entity_id:
-          - sensor.living_room_humidity
-          - sensor.master_bedroom_temperature
-          - sensor.guest_room_humidity
-          - sensor.bathroom_humidity
-          - sensor.hallway_thermostat_glycol_humidity
-        value_template: >-
-          {{ ( states("sensor.living_room_humidity")|float +
-          states("sensor.master_bedroom_humidity")|float +
-          states("sensor.guest_room_humidity")|float +
-          states("sensor.bathroom_humidity")|float +
-          states("sensor.hallway_thermostat_glycol_humidity")|float )
-          / 5.0 |round}}
-
-########################
 # Scenes
 ########################
 scene:
@@ -610,4 +505,71 @@ scene:
 ########################
 # Scripts
 ########################
-# script:
+script:
+  vacation_group_visibility:
+    sequence:
+      - service: script.group_visibility
+        data:
+          entity_id: group.vacation_group_card_1
+          cond: input_number.random_vacation_light_group
+          visible_state: '1.0'
+      - service: script.group_visibility
+        data:
+          entity_id: group.vacation_group_card_2
+          cond: input_number.random_vacation_light_group
+          visible_state: '2.0'
+      - service: script.group_visibility
+        data:
+          entity_id: group.vacation_group_card_3
+          cond: input_number.random_vacation_light_group
+          visible_state: '3.0'
+      - service: script.group_visibility
+        data:
+          entity_id: group.vacation_group_card_4
+          cond: input_number.random_vacation_light_group
+          visible_state: '4.0'
+
+########################
+# Sensors
+########################
+# Maybe these trip sensors should be input boolean with automations on restart to trigger
+sensor:
+  - platform: template
+    sensors:
+      turn_off_time:
+        entity_id:
+          - input_number.random_hour
+          - input_number.random_minute
+        value_template: >-
+          {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
+      average_house_temp:
+        unit_of_measurement: "°F"
+        entity_id:
+          - sensor.living_room_temperature
+          - sensor.master_bedroom_temperature
+          - sensor.guest_room_temperature
+          - sensor.bathroom_temperature
+          - sensor.motion_sensor_temperature
+          - sensor.hallway_thermostat_glycol_temperature
+        value_template: >-
+          {{ (( states("sensor.living_room_temperature")|float +
+          states("sensor.master_bedroom_temperature")|float +
+          states("sensor.guest_room_temperature")|float +
+          states("sensor.bathroom_temperature")|float +
+          states("sensor.motion_sensor_temperature")|float )
+          / 5.0) |round(2)}}
+      average_house_humidity:
+        unit_of_measurement: "%"
+        entity_id:
+          - sensor.living_room_humidity
+          - sensor.master_bedroom_temperature
+          - sensor.guest_room_humidity
+          - sensor.bathroom_humidity
+          - sensor.hallway_thermostat_glycol_humidity
+        value_template: >-
+          {{ ( states("sensor.living_room_humidity")|float +
+          states("sensor.master_bedroom_humidity")|float +
+          states("sensor.guest_room_humidity")|float +
+          states("sensor.bathroom_humidity")|float +
+          states("sensor.hallway_thermostat_glycol_humidity")|float )
+          / 5.0 |round}}
