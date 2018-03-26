@@ -24,6 +24,13 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
+    automation.notify_tornado_warning_alert:
+      <<: *customize
+      friendly_name: Tornado Warning
+
+    automation.notify_weather_alert:
+      <<: *customize
+      friendly_name: Weather Alerts
 
     ################################################
     ## Binary Sensors
@@ -65,6 +72,44 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: notify_tornado_warning_alert
+    alias: notify_tornado_warning_alert
+    trigger:
+    - platform: state
+      entity_id: sensor.pws_alerts
+      above: 1
+    condition:
+      condition: data_template
+      value_template: >-
+        {{ ((states.sensor.pws_alerts.attributes.TYPE == "TOR") or
+        (states.sensor.pws_alerts.attributes.Description == "Tornado Warning"))
+        and (is_state("binary_sensor.bayesian_zeke_home", "on")) }}
+    action:
+    - service: light.turn_on
+      data:
+        entity_id: light.all_living_room
+        flash: long
+    - service: light.turn_on
+      data:
+        entity_id: group.all_lights
+    - service: switch.turn_on
+      data:
+        entity_id: group.all_switches
+
+  - id: notify_weather_alert
+    alias: notify_weather_alert
+    trigger:
+    - platform: state
+      entity_id: sensor.pws_alerts
+      above: 1
+    condition: []
+    action:
+    - service: notify.all
+      data_template:
+        message: >-
+          {{ states.sensor.pws_alerts.attributes.Description }}
+
+
 
 ########################
 # Binary Sensors
