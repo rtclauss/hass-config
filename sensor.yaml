@@ -15,6 +15,37 @@
 #  - visibility
 #  - ozone
 
+- platform: wunderground
+  api_key: !secret wunderground_api_key
+  monitored_conditions:
+    - alerts
+    - dewpoint_f
+    - feelslike_f
+    - heat_index_f
+    - observation_time
+    - precip_today_in
+    - precip_1d_in
+    - precip_1d
+    - pressure_trend
+    - relative_humidity
+    - temp_f
+    - temp_high_1d_f
+    - temp_low_1d_f
+    - weather
+    - weather_1d
+    - weather_1n
+    - weather_2d
+    - weather_2n
+    - weather_3d
+    - weather_3n
+    - weather_1h
+    - weather_2h
+    - weather_3h
+    - weather_4h
+    - wind_mph
+    - wind_dir
+    - wind_1d_mph
+
 - platform: mqtt
   state_topic: "sensor/temperature"
   name: "Garage Temperature"
@@ -188,7 +219,7 @@
       value_template: '{{ states.proximity.home.attributes.dir_of_travel |default("unknown") }}'
       friendly_name: 'Direction of Home'
     motion_sensor_battery:
-      value_template: '{{ states.binary_sensor.motion_sensor_motion.attributes.battery_level }}'
+      value_template: '{{ states.binary_sensor.motion_sensor_motion.attributes.battery_level |int}}'
       friendly_name: 'Motion Sensor Battery'
       entity_id: binary_sensor.motion_sensor_motion
       unit_of_measurement: '%'
