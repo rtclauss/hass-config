@@ -1,2 +1,2 @@
 #!/bin/bash
-docker-compose pull && docker-compose create &&  docker-compose restart
+docker-compose pull && docker-compose up --no-start &&  docker-compose restart
