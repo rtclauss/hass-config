@@ -67,6 +67,9 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
+    sensor.precip_next_6h:
+      <<: *customize
+      friendly_name: Chance of Precipitation next 6 hours
 
 ################################################
 ## Automation
@@ -145,6 +148,8 @@ group:
       - sensor.pws_weather_2h
       - sensor.pws_weather_3h
       - sensor.pws_weather_4h
+      - sensor.pws_weather_5ßh
+      - sensor.pws_weather_6h
   weather_alert_card:
     entities:
       - sensor.pws_alerts
@@ -161,6 +166,7 @@ group:
       - sensor.dark_sky_cloud_coverage
       - sensor.dark_sky_precip_intensity
       - sensor.dark_sky_precip
+      - sensor.precip_next_6h
       - sensor.pws_observation_time
 ########################
 # Scenes
@@ -176,3 +182,63 @@ script:
 ## Sensors
 ################################################
 sensor:
+  - platform: wunderground
+    api_key: !secret wunderground_api_key
+    monitored_conditions:
+      - alerts
+      - dewpoint_f
+      - feelslike_f
+      - heat_index_f
+      - observation_time
+      - precip_today_in
+      - precip_1d_in
+      - precip_1d
+      - pressure_trend
+      - relative_humidity
+      - temp_f
+      - temp_high_1d_f
+      - temp_low_1d_f
+      - weather
+      - weather_1d
+      - weather_1n
+      - weather_2d
+      - weather_2n
+      - weather_3d
+      - weather_3n
+      - weather_1h
+      - weather_2h
+      - weather_3h
+      - weather_4h
+      - weather_5h
+      - weather_6h
+      - wind_mph
+      - wind_dir
+      - wind_1d_mph
+
+  - platform: darksky
+    api_key: !secret darksky_api_key
+    monitored_conditions:
+      - summary
+      - precip_type
+      - precip_intensity
+      - temperature
+      - apparent_temperature
+   #  - dew_point
+   #  - wind_speed
+   #  - wind_bearing
+      - cloud_cover
+      - humidity
+   #  - pressure
+   #  - visibility
+   #  - ozone
+  - platform: template
+    sensors:
+      precip_next_6h:
+        unit_of_measurement: "%"
+        value_template: >-
+          {{ [ (states.sensor.pws_weather_1h.attributes.precip_prop|int),
+               (states.sensor.pws_weather_2h.attributes.precip_prop|int),
+               (states.sensor.pws_weather_3h.attributes.precip_prop|int),
+               (states.sensor.pws_weather_4h.attributes.precip_prop|int),
+               (states.sensor.pws_weather_5h.attributes.precip_prop|int),
+               (states.sensor.pws_weather_6h.attributes.precip_prop|int), ] |max }}
