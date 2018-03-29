@@ -1,129 +1,3 @@
-- id: home_night_arrival
-  alias: Turn on lights at night when I get home
-  trigger:
-  - platform: state
-    entity_id: binary_sensor.bayesian_zeke_home
-    from: 'off'
-    to: 'on'
-  condition:
-    condition: and
-    conditions:
-    - condition: sun
-      after: sunset
-      after_offset: "-1:00:00"
-  action:
-  - service: scene.turn_on
-    entity_id: scene.arrive_home
-  - service: notify.all
-    data:
-      message: Home again, home again, jiggity jig.
-  - service: vacuum.return_to_home
-- id: master_bedroom_night_arrival
-  alias: Turn on bedroom lights at night when I get home
-  trigger:
-  - platform: state
-    entity_id: binary_sensor.bayesian_zeke_home
-    from: 'off'
-    to: 'on'
-  condition:
-    condition: or
-    conditions:
-    - condition: time
-      after: '22:00:00'
-    - condition: sun
-      before: sunrise
-  action:
-  - service: scene.turn_on
-    entity_id: scene.bedroom_prep
-
-#- id: arrive_home_update_input_boolean
-#  alias: Arrive home
-#  trigger:
-#  - platform: state
-#    entity_id: binary_sensor.bayesian_zeke_home
-#    from: 'off'
-#    to: 'on'
-#  action:
-#  - service: input_boolean.turn_on
-#    data:
-#      entity_id: input_boolean.home
-#- id: leave_home_update_input_boolean
-#  alias: Leave home
-#  trigger:
-#  - platform: state
-#    entity_id: binary_sensor.bayesian_zeke_home
-#    from: 'on'
-#    to: 'off'
-#  action:
-#  - service: input_boolean.turn_off
-#    data:
-#      entity_id: input_boolean.home
-- id: lurn_off_lights_when_leaving
-  alias: Turn off lights when I leave
-  trigger:
-  - platform: state
-    entity_id: binary_sensor.bayesian_zeke_home
-    from: 'on'
-    to: 'off'
-  action:
-  - service: scene.turn_on
-    entity_id: scene.leave_home
-  - service: notify.all
-    data:
-      message: Auf weidersehen!
-- id: cloudy_home_arrival
-  alias: Cloudy Day Arrival
-  trigger:
-  - platform: state
-    entity_id: binary_sensor.bayesian_zeke_home
-    from: 'off'
-    to: 'on'
-  condition:
-    condition: and
-    conditions:
-    - condition: sun
-      before: sunset
-      before_offset: 01:00:00
-    - condition: numeric_state
-      entity_id: sensor.dark_sky_cloud_coverage
-      above: 50
-  action:
-  - service: scene.turn_on
-    entity_id: scene.cloudy_arrive_home
-  - service: notify.all
-    data:
-      message: Cloudy day arrival.
-- id: return_home_from_cities
-  alias: Return home from Twin Cities
-  trigger:
-  - platform: zone
-    entity_id: device_tracker.wethop
-    zone: zone.twincities
-    event: leave
-  condition:
-    condition: template
-    value_template: '{{ states.binary_sensor.test_homeward.state == "on" }}'
-  action:
-  - service: climate.set_away_mode
-    data:
-      entity_id: climate.hallway_glycol
-      away_mode: false
-  - service: notify.all
-    data:
-      message: Turn off Nest Away while you drive home from the Cities.
-- id: garage_door_reminder
-  alias: Close forgotten garage door
-  trigger:
-  - platform: state
-    entity_id: cover.garage_door_opener
-    to: open
-  condition:
-  - condition: time
-    after: '23:30:00'
-  action:
-  - service: notify.all
-    data:
-      message: Close the garage door.
 - id: update_hass
   alias: Update Available
   trigger:
@@ -145,22 +19,19 @@
   action:
     service: scene.turn_on
     entity_id: scene.twd
-- action:
-  - data:
-      message: Garage door is still open!
-    service: notify.all
-  alias: Garage Door Open When Leaving Home
-  condition:
-  - condition: state
-    entity_id: cover.garage_door_opener
-    state: open
-  id: '1519587916107'
+- id: garage_door_reminder
+  alias: Close forgotten garage door
   trigger:
-  - entity_id: binary_sensor.bayesian_zeke_home
-    from: home
-    platform: state
-    to: away
-
+  - platform: state
+    entity_id: cover.garage_door_opener
+    to: open
+  condition:
+  - condition: time
+    after: '23:30:00'
+  action:
+  - service: notify.all
+    data:
+      message: Close the garage door.
 - id: turn_off_all_lights_when_bed_off
   alias: Turn off all lights when bedroom lights turn off
   trigger:

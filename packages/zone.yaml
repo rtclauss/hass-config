@@ -33,17 +33,50 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
-
+    automation.cloudy_home_arrival:
+      <<: *customize
+      friendly_name: Cloudy Day Arrival
+    automation.garage_door_open_when_leaving_home:
+      <<: *customize
+      friendly_name: Garage Door Left Open When Leaving
+    automation.turn_on_lights_at_night_when_i_get_home:
+      <<: *customize
+      friendly_name: Night Arrival
+    automation.turn_on_bedroom_lights_at_night_when_i_get_home:
+      <<: *customize
+      friendly_name: Bedroom Night Arrival
+    automation.return_from_road_trip:
+      <<: *customize
+      friendly_name: Returning Home From Road Trip
+    automation.return_home_from_twin_cities:
+      <<: *customize
+      friendly_name: Returning Home From Twin Cities
+    automation.turn_off_lights_when_i_leave:
+      <<: *customize
+      friendly_name: Lights Off on Departure
+    automation.vacuum_return_home:
+      <<: *customize
+      friendly_name: Stop Vacuuming on Arrival
+      
     ################################################
     ## Binary Sensors
     ################################################
     binary_sensor.test_homeward:
       <<: *customize
       friendly_name: "Returning from long road trip"
+    
+    ################################################
+    ## Device Trackers
+    ################################################
+    device_tracker.arrival_sensor:
+      <<: *customize
+      friendly_name: Zwave Arrival Sensor
     ################################################
     ## Groups
     ################################################
-
+    group.bayesian_inputs:
+      <<: *customize
+      friendly_name: Bayesian Presence Detection Entities
     ################################################
     ## Input Boolean
     ################################################
@@ -121,6 +154,84 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: cloudy_home_arrival
+    alias: cloudy_home_arrival
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      from: 'off'
+      to: 'on'
+    condition:
+      condition: and
+      conditions:
+      - condition: sun
+        before: sunset
+        before_offset: 02:00:00
+      - condition: numeric_state
+        entity_id: sensor.dark_sky_cloud_coverage
+        above: 50
+    action:
+    - service: scene.turn_on
+      entity_id: scene.cloudy_arrive_home
+    - service: notify.all
+      data:
+        message: Cloudy day arrival.
+
+  - id: garage_door_open_when_leaving_home
+    alias: garage_door_open_when_leaving_home
+    trigger:
+    - entity_id: binary_sensor.bayesian_zeke_home
+      from: home
+      platform: state
+      to: away
+    condition:
+    - condition: state
+      entity_id: cover.garage_door_opener
+      state: open
+    action:
+    - data:
+        message: Garage door is still open!
+      service: notify.all
+
+  - id: turn_on_lights_at_night_when_i_get_home
+    alias: turn_on_lights_at_night_when_i_get_home
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      from: 'off'
+      to: 'on'
+    condition:
+      condition: and
+      conditions:
+      - condition: sun
+        after: sunset
+        after_offset: "-1:00:00"
+    action:
+    - service: scene.turn_on
+      entity_id: scene.arrive_home
+    - service: notify.all
+      data:
+        message: Home again, home again, jiggity jig.
+    - service: vacuum.return_to_home
+  
+  - id: turn_on_bedroom_lights_at_night_when_i_get_home
+    alias: turn_on_bedroom_lights_at_night_when_i_get_home
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      from: 'off'
+      to: 'on'
+    condition:
+      condition: or
+      conditions:
+      - condition: time
+        after: '22:00:00'
+      - condition: sun
+        before: sunrise
+    action:
+    - service: scene.turn_on
+      entity_id: scene.bedroom_prep
+  
   - id: return_from_road_trip
     alias: return_from_road_trip
     trigger:
@@ -135,6 +246,50 @@ automation:
     - service: notify.all
       data:
         message: Turn off Nest Away while you drive home from a road trip.
+        
+  - id: return_home_from_twin_cities
+    alias: return_home_from_twin_cities
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.wethop
+      zone: zone.twincities
+      event: leave
+    condition:
+      condition: template
+      value_template: '{{ states.binary_sensor.test_homeward.state == "on" }}'
+    action:
+    - service: climate.set_away_mode
+      data:
+        entity_id: climate.hallway_glycol
+        away_mode: false
+    - service: notify.all
+      data:
+        message: Turn off Nest Away while you drive home from the Cities.
+
+  - id: turn_off_lights_when_i_leave
+    alias: turn_off_lights_when_i_leave
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      from: 'on'
+      to: 'off'
+    action:
+    - service: scene.turn_on
+      entity_id: scene.leave_home
+    - service: notify.all
+      data:
+        message: Auf weidersehen!
+
+  - id: vacuum_return_home
+    alias: vacuum_return_home
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      from: 'off'
+      to: 'on'
+    action:
+    - service: vacuum.return_to_home
+
 ########################
 # Binary Sensors
 ########################
@@ -150,6 +305,62 @@ binary_sensor:
           {% else %}
             false
           {% endif %}
+          
+  - platform: bayesian
+    prior: 0.3
+    name: bayesian_zeke_home
+    device_class: occupancy
+    probability_threshold: 0.9
+    observations:
+    - entity_id: device_tracker.4098ad3265d4
+      prob_given_true: 0.80
+      prob_given_false: 0.15
+      platform: 'state'
+      to_state: 'home'
+    - entity_id: device_tracker.wethop
+      prob_given_true: 0.95
+      prob_given_false: 0.1
+      platform: 'state'
+      to_state: 'home'
+    - entity_id: device_tracker.iphone_bt
+      prob_given_true: 0.80
+      prob_given_false: 0.4
+      platform: 'state'
+      to_state: 'home'
+    - entity_id: device_tracker.arrival_sensor
+      prob_given_true: 0.97
+      prob_given_false: 0.21
+      platform: 'state'
+      to_state: 'present'
+    - entity_id: sensor.iphone_battery_state
+      prob_given_true: 0.65
+      prob_given_false: 0.43
+      platform: 'state'
+      to_state: 'Charging'
+    - entity_id: binary_sensor.nest_home
+      prob_given_true: 0.7
+      prob_given_false: 0.4
+      platform: 'state'
+      to_state: 'on'
+
+########################
+# Device Trackers
+########################
+device_tracker:
+  - platform: luci
+#  - platform: ubus
+    host: !secret router_host
+    username: root
+    password: !secret router_password
+    consider_home: 180
+    track_new_devices: no
+    interval_seconds: 30
+    
+  - platform: bluetooth_tracker
+  
+  - platform: mqtt
+    devices:
+      arrival_sensor: 'smartthings/Arrival Sensor/presence'
 
 ########################
 # Input Booleans
@@ -165,6 +376,15 @@ input_number:
 # Groups
 ########################
 group:
+  bayesian_inputs:
+    entities:
+      - device_tracker.wethop
+      - device_tracker.4098ad3265d4
+      - device_tracker.arrival_sensor
+      - device_tracker.iphone_bt
+      - binary_sensor.bayesian_zeke_home
+      - sensor.iphone_battery_state
+      - binary_sensor.nest_home
 
 ########################
 # Proximity
@@ -266,10 +486,8 @@ zone:
     latitude: 44.937904
     longitude: -93.200830
     radius: 32187 
-    icon: mdi:city
-
-    -name: Work
+    
+  - name: Work
     latitude: !secret work_latitude
     longitude: !secret work_longitude
     radius: 400
-    icon: mdi:domain
