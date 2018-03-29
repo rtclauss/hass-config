@@ -87,6 +87,18 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
+  - platform: template
+    sensors:
+      nest_home:
+        friendly_name: 'Nest Home/Away Mode'
+        device_class: presence
+        value_template: >-
+          {% if 
+              is_state_attr('climate.hallway_glycol', 'away_mode', 'on') 
+          %} False 
+          {% else %} 
+             True  
+          {% endif %}
 
 ########################
 # Input Booleans
@@ -102,6 +114,13 @@ input_number:
 # Groups
 ########################
 group:
+  Climate:
+    entities:
+      - climate.hallway_glycol
+      - sensor.hallway_thermostat_glycol_temperature
+      - sensor.hallway_thermostat_glycol_humidity
+      - sensor.hallway_thermostat_glycol_target
+      - sensor.hallway_thermostat_glycol_operation_mode
 
 ########################
 # Scenes
