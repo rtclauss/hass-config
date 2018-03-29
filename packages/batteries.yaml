@@ -1,0 +1,191 @@
+################################################################
+## Packages / Batteries
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: 'batteries'
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+    automation.notify_battery_dying_20:
+      <<: *customize
+      icon: mdi:battery-charging-wireless-20
+    automation.notify_battery_dying_10:
+      <<: *customize
+      icon: mdi:battery-charging-wireless-10
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+    sensor.arrival_sensor_battery:
+      <<: *customize
+      icon: mdi:battery
+    sensor.bathroom_battery:
+      <<: *customize
+      icon: mdi:battery
+    sensor.guest_room_battery:
+      <<: *customize
+      icon: mdi:battery
+    sensor.living_room_battery:
+      <<: *customize
+      icon: mdi:battery
+    sensor.master_bedroom_battery:
+      <<: *customize
+      icon: mdi:battery
+    sensor.motion_sensor_battery:
+      <<: *customize
+      icon: mdi:battery
+      
+    ################################################
+    ## Thermostats
+    ################################################
+
+################################################
+## Automation
+################################################
+automation:
+  - id: notify_battery_dying_20
+    alias: notify_battery_dying_20
+    trigger:
+    - platform: numeric_state
+      entity_id: sensor.arrival_sensor_battery, sensor.bathroom_battery, sensor.guest_room_battery, sensor.living_room_battery, sensor.living_room_battery, sensor.master_bedroom_battery, sensor.motion_sensor_battery
+      below: 20
+      above: 10
+    action:
+    - service: notify.all
+      data_template:
+        message: >-
+          Battery '{{ trigger.entity_id }}' is below 20%.
+  - id: notify_battery_dying_10
+    alias: notify_battery_dying_10
+    trigger:
+    - platform: numeric_state
+      entity_id: sensor.arrival_sensor_battery, sensor.bathroom_battery, sensor.guest_room_battery, sensor.living_room_battery, sensor.living_room_battery, sensor.master_bedroom_battery, sensor.motion_sensor_battery
+      below: 10
+    action:
+    - service: notify.all
+      data_template:
+        message: >-
+          Battery '{{ trigger.entity_id }}' is below 10%.
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+
+########################
+# Input Booleans
+########################
+input_boolean:
+
+########################
+# Input Numbers
+########################
+input_number:
+
+########################
+# Groups
+########################
+group:
+  battery_status:
+    name: Battery Status
+    entities:
+      - sensor.living_room_battery 
+      - sensor.bathroom_battery
+      - sensor.guest_room_battery
+      - sensor.master_bedroom_battery
+      - sensor.arrival_sensor_battery
+      - sensor.motion_sensor_battery
+########################
+# Scenes
+########################
+scene:
+
+########################
+# Scripts
+########################
+script:
+
+################################################
+## Sensors
+################################################
+sensor:
+  - platform: mqtt
+    state_topic: "smartthings/Arrival Sensor/battery"
+    name: "Arrival Sensor Battery"
+    retain: true
+    force_update: true
+    unit_of_measurement: "%"
+    
+  - platform: mqtt
+    state_topic: "smartthings/Bathroom/battery"
+    name: "Bathroom Battery"
+    retain: true
+    force_update: true
+    unit_of_measurement: "%"
+    
+    
+  - platform: mqtt
+    state_topic: "smartthings/Guest/battery"
+    name: "Guest Room Battery"
+    retain: true
+    force_update: true
+    unit_of_measurement: "%"
+    
+  - platform: mqtt
+    state_topic: "smartthings/Livingroom/battery"
+    name: "Living Room Battery"
+    retain: true
+    force_update: true
+    unit_of_measurement: "%"
+    
+  - platform: mqtt
+    state_topic: "smartthings/Master/battery"
+    name: "Master Bedroom Battery"
+    retain: true
+    force_update: true
+    unit_of_measurement: "%"
+  
+  - platform: template
+    sensors:
+      motion_sensor_battery:
+        value_template: '{{ states.binary_sensor.motion_sensor_motion.attributes.battery_level |int}}'
+        friendly_name: 'Motion Sensor Battery'
+        entity_id: binary_sensor.motion_sensor_motion
+        unit_of_measurement: '%'
