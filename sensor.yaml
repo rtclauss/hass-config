@@ -1,141 +1,3 @@
-- platform: mqtt
-  state_topic: "sensor/temperature"
-  name: "Garage Temperature"
-  unit_of_measurement: "°F"
-  force_update: true
-  retain: true
-#  value_template: '{{ value_json.temp }}'
-
-- platform: mqtt
-  state_topic: "sensor/humidity"
-  name: "Garage Humidity"
-  unit_of_measurement: "%"
-  force_update: true
-  retain: true
-#  value_template: '{{ value_json.humidity }}'
-
-- platform: mqtt
-  state_topic: "sensor/basement_temperature"
-  name: "Basement Temperature"
-  unit_of_measurement: "°F"
-  force_update: true
-  retain: true
-#  value_template: '{{ value_json.temp }}'
-
-- platform: mqtt
-  state_topic: "sensor/basement_humidity"
-  name: "Basement Humidity"
-  unit_of_measurement: "%"
-  force_update: true
-  retain: true
-#  value_template: '{{ value_json.humidity }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Livingroom/humidity"
-  name: "Living Room Humidity"
-  retain: true
-  unit_of_measurement: "%"
-  force_update: true
-#  value_template: '{{ value_json.humidity }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Livingroom/temperature"
-  name: "Living Room Temperature"
-  retain: true
-  unit_of_measurement: "°F"
-  force_update: true
-#  value_template: '{{ value_json.temp }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Livingroom/battery"
-  name: "Living Room Battery"
-  retain: true
-  force_update: true
-  unit_of_measurement: "%"
-
-- platform: mqtt
-  state_topic: "smartthings/Bathroom/humidity"
-  name: "Bathroom Humidity"
-  retain: true
-  unit_of_measurement: "%"
-  force_update: true
-#  value_template: '{{ value_json.humidity }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Bathroom/temperature"
-  name: "Bathroom Temperature"
-  unit_of_measurement: "°F"
-  retain: true
-  force_update: true
-#  value_template: '{{ value_json.temp }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Bathroom/battery"
-  name: "Bathroom Battery"
-  retain: true
-  force_update: true
-  unit_of_measurement: "%"
-
-- platform: mqtt
-  state_topic: "smartthings/Guest/humidity"
-  name: "Guest Room Humidity"
-  retain: true
-  unit_of_measurement: "%"
-  force_update: true
-#  value_template: '{{ value_json.humidity }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Guest/temperature"
-  name: "Guest Room Temperature"
-  retain: true
-  unit_of_measurement: "°F"
-  force_update: true
-#  value_template: '{{ value_json.temp }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Guest/battery"
-  name: "Guest Room Battery"
-  retain: true
-  force_update: true
-  unit_of_measurement: "%"
-
-- platform: mqtt
-  state_topic: "smartthings/Master/humidity"
-  name: "Master Bedroom Humidity"
-  retain: true
-  unit_of_measurement: "%"
-  force_update: true
-#  value_template: '{{ value_json.humidity }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Master/temperature"
-  name: "Master Bedroom Temperature"
-  unit_of_measurement: "°F"
-  retain: true
-  force_update: true
-#  value_template: '{{ value_json.temp }}'
-
-- platform: mqtt
-  state_topic: "smartthings/Master/battery"
-  name: "Master Bedroom Battery"
-  retain: true
-  force_update: true
-  unit_of_measurement: "%"
-
-- platform: mqtt
-  state_topic: "smartthings/Arrival Sensor/battery"
-  name: "Arrival Sensor Battery"
-  retain: true
-  force_update: true
-  unit_of_measurement: "%"
-
-
-#- platform: nest
-#  monitored_conditions:
-#    - 'temperature'
-#    - 'target'
-#    - 'humidity'
-
 - platform: time_date
   display_options:
     - time
@@ -144,16 +6,6 @@
 ##Since sensors have a last changed timestamp.
 - platform: template
   sensors:
-    fail2ban_total_sshd:
-      friendly_name: "Total sshd bans"
-      icon_template: mdi:cancel
-      entity_id: sensor.fail2ban_sshd
-      value_template: "{{states.sensor.fail2ban_sshd.attributes.current_bans|length}}"
-    fail2ban_recidive_sshd:
-      friendly_name: "Recidive bans"
-      icon_template: mdi:cancel
-      entity_id: sensor.fail2ban_recidive
-      value_template: "{{states.sensor.fail2ban_recidive.attributes.current_bans|length}}"
     home_distance:
       value_template: '{{ states.proximity.home.state }}'
       friendly_name: "Distance to Home"
@@ -170,11 +22,6 @@
     heading_home:
       value_template: '{{ states.proximity.home.attributes.dir_of_travel |default("unknown") }}'
       friendly_name: 'Direction of Home'
-    motion_sensor_battery:
-      value_template: '{{ states.binary_sensor.motion_sensor_motion.attributes.battery_level |int}}'
-      friendly_name: 'Motion Sensor Battery'
-      entity_id: binary_sensor.motion_sensor_motion
-      unit_of_measurement: '%'
     test_homeward:
       value_template: >-
         {% if
@@ -185,11 +32,4 @@
         {% endif %}
       friendly_name: "Test Homeward bound"
       entity_id: sensor.time
-
-#- platform: fail2ban
-#  jails:
-#    - sshd
-#    - recidive
-  #file_path: /var/log/fail2ban.log
-#  file_path: /fail2ban/fail2ban.log
-#  scan_interval: 120
+      

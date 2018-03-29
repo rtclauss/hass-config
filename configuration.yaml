@@ -1,14 +1,14 @@
 homeassistant:
-  # Name of the location where Home Assistant is running
   name: The Brewery
   unit_system: imperial
-  # Pick yours from here: http://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   time_zone: America/Chicago
   latitude: !secret home_latitude
   longitude: !secret home_longitude
   elevation: !secret home_elevation
   customize: !include customize.yaml
   packages: !include_dir_named packages
+
+hassio:
 
 map:
 
@@ -60,10 +60,6 @@ hue:
     - host: !secret hue_host
 
 wink:
-#  email: !secret wink_email
-#  password: !secret wink_password
-#  access_token: !secret wink_access_t
-#  refresh_token: !secret wink_refresh_t
 
 climate:
   platform: nest
@@ -75,9 +71,6 @@ tts:
 nest:
   client_id: !secret nest_client_id
   client_secret: !secret nest_client_secret
-#  username:  !secret email_address
-#  password:  !secret nest_password
-#  measurement_scale: 'F'
 
 device_tracker:
   - platform: luci
@@ -88,16 +81,9 @@ device_tracker:
     consider_home: 180
     track_new_devices: no
     interval_seconds: 30
-#  - platform: icloud
-#    username: !secret email_address
-#    password: !secret icloud_password
-
-#  - platform: automatic
-#    client_id: !secret automatic_client_id
-#    secret: !secret automatic_secret
-#    username: !secret email_address
-#    password: !secret automatic_password
+    
   - platform: bluetooth_tracker
+  
   - platform: mqtt
     devices:
       arrival_sensor: 'smartthings/Arrival Sensor/presence'
@@ -115,7 +101,6 @@ zone: !include_dir_list zone
 group: !include_dir_merge_named group
 
 proximity: !include proximity.yaml
-#proximity: !include_dir_list proximity
 
 script: !include script.yaml
 
@@ -126,12 +111,11 @@ light: !include light.yaml
 mqtt:
   broker: !secret mqtt_host
   port: 1883
-  client_id: home-assistant-1
+  client_id: hassio
   keepalive: 60
   username: !secret mqtt_user
   password: !secret mqtt_password
   protocol: 3.1.1
-#  certificate: /etc/ssl/certs/ca-certificates.crt
 
 telegram_bot:
   platform: polling
@@ -166,10 +150,14 @@ recorder:
 
 
 influxdb:
-  host: 127.0.0.1
-  #username: home-assistant
-  #password: !secret influx_db_pass
+  host: !secret influx_db_host
 
 google:
   client_id: !secret google_client_id
   client_secret: !secret google_client_secret
+  
+panel_iframe:
+  ide:
+    title: IDE
+    icon: mdi:code-braces
+    url: https://ide.rtclauss.org
