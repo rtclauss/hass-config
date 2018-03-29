@@ -1,0 +1,275 @@
+################################################################
+## Packages / Zone
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: 'zone'
+
+      tracked_devices: &tracked_devices
+        <<: *customize
+        devices:
+          - device_tracker.wethop
+          
+      track_ios: &track_ios
+        <<: *customize
+        track_ios: true
+          
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+    binary_sensor.test_homeward:
+      <<: *customize
+      friendly_name: "Returning from long road trip"
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Proximity
+    ################################################
+    proximity.home:
+      <<: *tracked_devices
+      friendly_name: Proximity to Home
+    proximity.occ:
+      <<: *tracked_devices
+      friendly_name: Proximity to Owatonna Curling Club
+    proximity.spcc:
+      <<: *tracked_devices
+      friendly_name: Proximity to St Paul Curling Club
+    proximity.twincities:
+      <<: *tracked_devices
+      friendly_name: Proximity to Twin Cities
+    proximity.work:
+      <<: *tracked_devices
+      friendly_name: Proximity to Work
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+    sensor.home_distance:
+      <<: *customize
+      friendly_name: "Distance to Home"
+    sensor.home_time:
+      <<: *customize
+      friendly_name: "Last Change in Home Dir"
+    sensor.twincities:
+      <<: *customize
+      friendly_name: 'Direction of Twin Cities'
+    sensor.heading_home:
+      <<: *customize
+      friendly_name: 'Direction of Home'
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+    zone.home:
+      <<: *track_ios
+      friendly_name: "The Brewery"
+      icon: mdi:home
+    zone.occ:
+      <<: *track_ios
+      friendly_name: "Owatonna Curling Club"
+      icon: mdi:curling
+    zone.spcc:
+      <<: *track_ios
+      friendly_name: "St Paul Curling Club"
+      icon: mdi:curling
+    zone.twincities:
+      <<: *track_ios
+      friendly_name: "Twin Cities"
+      icon: mdi:city
+    zone.work:
+      <<: *track_ios
+      friendly_name: "Work"
+      icon: mdi:domain
+
+################################################
+## Automation
+################################################
+automation:
+  - id: return_from_road_trip
+    alias: return_from_road_trip
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.test_homeward
+      to: 'true'
+    action:
+    - service: climate.set_away_mode
+      data:
+        entity_id: climate.hallway_glycol
+        away_mode: false
+    - service: notify.all
+      data:
+        message: Turn off Nest Away while you drive home from a road trip.
+########################
+# Binary Sensors
+########################
+binary_sensor:
+  - platform: template
+    sensors:
+      test_homeward:
+        entity_id: sensor.time
+        value_template: >-
+          {% if
+             (((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed))//60) > 95) and (states.sensor.heading_home.state=="towards")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+
+########################
+# Input Booleans
+########################
+input_boolean:
+
+########################
+# Input Numbers
+########################
+input_number:
+
+########################
+# Groups
+########################
+group:
+
+########################
+# Proximity
+########################
+proximity:
+  home:
+    zone: home
+    ignored_zones:
+      - OCC
+      - SPCC
+      - Work
+      - home
+      - twincities
+    tolerance: 50
+    unit_of_measurement: mi
+  occ:
+    zone: occ
+    ignored_zones:
+      - SPCC
+      - Work
+      - home
+    tolerance: 20
+    unit_of_measurement: mi
+  spcc:
+    zone: spcc
+    ignored_zones:
+      - OCC
+      - Work
+      - home
+    tolerance: 50
+    unit_of_measurement: mi
+  work:
+    zone: work
+    ignored_zones:
+      - OCC
+      - SPCC
+  #    - home
+    tolerance: 50
+    unit_of_measurement: mi
+  twincities:
+    zone: twincities
+    ignored_zones:
+      - Work
+      - OCC
+    tolerance: 50
+    unit_of_measurement: mi
+
+########################
+# Scenes
+########################
+scene:
+
+########################
+# Scripts
+########################
+script:
+
+########################
+# Sensor
+########################
+sensor:
+##Turn the direction of travel into a sensor which I can use in my automations
+##Since sensors have a last changed timestamp.
+  - platform: template
+    sensors:
+      heading_home:
+        value_template: '{{ states.proximity.home.attributes.dir_of_travel |default("unknown") }}'
+      home_distance:
+        entity_id: sensor.time
+        value_template: '{{ states.proximity.home.state }}'
+        unit_of_measurement: 'mi'
+      home_time:
+        entity_id: sensor.time
+        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed)) | int //60 }}'
+        unit_of_measurement: 'minutes'
+      twincities:
+        value_template: '{{ states.proximity.twincities.attributes.dir_of_travel |default("unknown") }}'
+        
+########################
+# Zone
+########################
+zone:
+  - name: Home
+    latitude: !secret home_latitude
+    longitude: !secret home_longitude
+    radius: 250
+    
+  - name: OCC
+    latitude: 44.068651
+    longitude: -93.224584
+    radius: 500
+  
+  - name: SPCC
+    latitude: 44.946332
+    longitude: -93.119860
+    radius: 250
+  
+  - name: TwinCities
+    latitude: 44.937904
+    longitude: -93.200830
+    radius: 32187 
+    icon: mdi:city
+
+    -name: Work
+    latitude: !secret work_latitude
+    longitude: !secret work_longitude
+    radius: 400
+    icon: mdi:domain
