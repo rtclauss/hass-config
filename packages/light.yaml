@@ -24,6 +24,40 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
+    automation.bedroom_light_auto_on_mornings:
+      <<: *customize
+      friendly_name: "Fade in bedroom lights in the morning"
+      icon: mdi:hotel
+
+    automation.deck_light_auto_off:
+      <<: *customize
+      friendly_name: "Turn off deck light automatically"
+      icon: mdi:nature-people
+
+    automation.deck_light_auto_on:
+      <<: *customize
+      friendly_name: "Turn on deck light automatically"
+      icon: mdi:nature-people
+
+    automation.front_door_light_auto_off:
+      <<: *customize
+      friendly_name: "Turn off front door light automatically"
+      icon: mdi:home
+
+    automation.front_door_light_auto_on:
+      <<: *customize
+      friendly_name: "Turn on front door light automatically"
+      icon: mdi:home
+
+    automation.office_light_auto_on_mornings:
+      <<: *customize
+      friendly_name: "Fade in office lights in the morning"
+      icon: mdi:desktop-tower
+      
+    automation.turn_off_all_lights_when_bed_off:
+      <<: *customize
+      friendly_name: "Turn off all lights when bedroom lights turn off"
+      icon: mdi:hotel
 
     ################################################
     ## Binary Sensors
@@ -40,6 +74,17 @@ homeassistant:
     ################################################
     ## Input Boolean
     ################################################
+    input_boolean.deck_auto_on:
+      <<: *customize
+      friendly_name: "Deck Light Automatically Turned on"
+      icon: mdi:nature-people
+      hidden: true
+
+    input_boolean.front_door_auto_on:
+      <<: *customize
+      friendly_name: "Front Door LightAutomatically Turned on"
+      icon: mdi:home
+      hidden: true
 
     ################################################
     ## Input Numbers
@@ -50,66 +95,66 @@ homeassistant:
     ################################################
     light.all_living_room:
       <<: *customize
-      friendly_name: All Living Room
+      friendly_name: "Living Room Lights"
       icon: mdi:television
 
     light.bedroom_lamp:
       <<: *customize
-      friendly_name: Bedroom Lamp
+      friendly_name: "Bedroom Lamp"
       icon: mdi:hotel
 
     light.bedroom_lamp_2:
       <<: *customize
-      friendly_name: Bedroom Lamp
+      friendly_name: "Bedroom Lamp"
 
     light.christmas_lights:
       <<: *customize
-      friendly_name: Christmas Lights
+      friendly_name: "Christmas Lights"
       icon: mdi:led-on
 
     light.front_door:
       <<: *customize
-      friendly_name: Front Door
+      friendly_name: "Front Door"
       icon: mdi:home
 
     light.kitchen_table:
       <<: *customize
-      friendly_name: Kitchen Table
+      friendly_name: "Kitchen Table"
       icon: mdi:ceiling-light
 
     light.left_lamp:
       <<: *customize
-      friendly_name: Living Room Left
+      friendly_name: "Living Room Left"
       icon: mdi:lamp
 
     light.master_bedroom:
       <<: *customize
-      friendly_name: Master Bedroom
+      friendly_name: "Master Bedroom"
       icon: mdi:hotel
 
     light.office:
       <<: *customize
-      friendly_name: Office
+      friendly_name: "Office"
       icon: mdi:desktop-tower
 
     light.office_lamp:
       <<: *customize
-      friendly_name: Office Lamp
+      friendly_name: "Office Lamp"
       icon: mdi:desktop-tower
 
     light.pendant_lamp:
       <<: *customize
-      friendly_name: Pendant Lamp
+      friendly_name: "Pendant Lamp"
       icon: mdi:ceiling-light
 
     light.right_lamp:
       <<: *customize
-      friendly_name: Living Room Right
+      friendly_name: "Living Room Right"
       icon: mdi:lamp
 
     light.tv:
       <<: *customize
-      friendly_name: TV Backlight
+      friendly_name: "TV Bias"
       icon: mdi:television
 
     ################################################
@@ -119,6 +164,10 @@ homeassistant:
     ################################################
     ## Scripts
     ################################################
+    script.fade_in:
+      <<: *customize
+      friendly_name: "Fade In Light"
+      icon: mdi:lamp
 
     ################################################
     ## Sensors
@@ -136,6 +185,135 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: bedroom_light_auto_on_mornings
+    alias: bedroom_light_auto_on_mornings
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: "on"
+    condition: 
+      condition: time
+      after: "06:50:00"
+      before: "09:30:00"
+    action:
+      - service: script.fade_in
+        data: 
+          entity_id: light.master_bedroom
+          minutes: 5
+
+  - id: deck_light_auto_off
+    alias: deck_light_auto_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.deck_door_contact
+        to: "off"
+        for:
+          seconds: 30
+    condition:
+      condition: state
+      entity_id: input_boolean.deck_auto_on
+      state: "on"
+    action:
+      - service: homeassistant.turn_off
+        data:
+          entity_id: switch.deck
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.deck_auto_on
+
+  - id: deck_light_auto_on
+    alias: deck_light_auto_on
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.deck_door_contact
+        to: "on"
+    condition:
+      condition: and
+      conditions:
+        - condition: sun
+          after: sunset
+        - condition: state
+          entity_id: switch.deck
+          state: "off"
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id: switch.deck
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.deck_auto_on
+
+  - id: front_door_light_auto_off
+    alias: front_door_light_auto_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.front_door_contact
+        to: "off"
+        for:
+          seconds: 30
+    condition:
+      condition: state
+      entity_id: input_boolean.front_door_auto_on
+      state: "on"
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id: switch.front_door
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.front_door_auto_on
+
+  - id: front_door_light_auto_on
+    alias: front_door_light_auto_on
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.front_door_contact
+        to: "on"
+    condition:
+      condition: and
+      conditions:
+        - condition: sun
+          after: sunset
+        - condition: state
+          entity_id: switch.front_door
+          state: "off"
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id: switch.front_door
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.front_door_auto_on
+
+  - id: office_light_auto_on_mornings
+    alias: office_light_auto_on_mornings
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.office_motion
+        to: "on"
+    condition:
+      condition: time
+      after: "06:50:00"
+      before: "09:30:00"
+    action:
+      - service: script.fade_in
+        data: 
+          entity_id: light.office_lamp
+          minutes: 3
+
+  - id: turn_off_all_lights_when_bed_off
+    alias: turn_off_all_lights_when_bed_off
+    trigger:
+    - platform: state
+      entity_id: light.master_bedroom
+      to: 'off'
+    condition:
+      condition: time
+      after: '22:00:00'
+      before: '06:00:00'
+    action:
+    - service: scene.turn_on
+      entity_id: scene.leave_home
 
 ########################
 # Binary Sensors
@@ -156,6 +334,8 @@ group:
 # Input Booleans
 ########################
 input_boolean:
+  deck_auto_on:
+  front_door_auto_on:
 
 ########################
 # Input Numbers
@@ -194,6 +374,76 @@ scene:
 # Scripts
 ########################
 script:
+  fade_in:
+    sequence:
+      - alias: Step 1
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "10"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 2
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "20"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 3
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "30"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 4
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "40"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 5
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "50"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 6
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "60"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 7
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "70"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 8
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "80"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 9
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "90"
+      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
+
+      - alias: Step 10
+        service: light.turn_on
+        data_template:
+          entity_id: "{{ entity_id }}"
+          brightness_pct: "100"
 
 ########################
 # Sensor
