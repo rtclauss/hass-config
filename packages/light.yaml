@@ -24,11 +24,6 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
-    automation.bedroom_light_auto_on_mornings:
-      <<: *customize
-      friendly_name: "Fade in bedroom lights in the morning"
-      icon: mdi:hotel
-
     automation.deck_light_auto_off:
       <<: *customize
       friendly_name: "Turn off deck light automatically"
@@ -49,11 +44,16 @@ homeassistant:
       friendly_name: "Turn on front door light automatically"
       icon: mdi:home
 
-    automation.office_light_auto_on_mornings:
+    automatically.hallway_light_on_at_night:
       <<: *customize
-      friendly_name: "Fade in office lights in the morning"
-      icon: mdi:desktop-tower
-      
+      friendly_name: "Turn on hallway light automatically"
+      icon: mdi:ceiling
+
+    automatically.hallway_light_off_at_night:
+      <<: *customize
+      friendly_name: "Turn off hallway light automatically"
+      icon: mdi:ceiling
+
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
       friendly_name: "Turn off all lights when bedroom lights turn off"
@@ -116,6 +116,11 @@ homeassistant:
       <<: *customize
       friendly_name: "Front Door"
       icon: mdi:home
+    
+    light.hallway:
+      <<: *customize
+      friendly_name: "Hallway"
+      icon: mdi:ceiling-light
 
     light.kitchen_table:
       <<: *customize
@@ -185,22 +190,6 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-  - id: bedroom_light_auto_on_mornings
-    alias: bedroom_light_auto_on_mornings
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
-        to: "on"
-    condition: 
-      condition: time
-      after: "06:50:00"
-      before: "09:30:00"
-    action:
-      - service: script.fade_in
-        data: 
-          entity_id: light.master_bedroom
-          minutes: 5
-
   - id: deck_light_auto_off
     alias: deck_light_auto_off
     trigger:
@@ -285,21 +274,39 @@ automation:
         data:
           entity_id: input_boolean.front_door_auto_on
 
-  - id: office_light_auto_on_mornings
-    alias: office_light_auto_on_mornings
+  - id: hallway_light_on_at_night
+    alias: hallway_light_on_at_night
     trigger:
       - platform: state
-        entity_id: binary_sensor.office_motion
+        entity_id: binary_sensor.hallway_motion
         to: "on"
     condition:
-      condition: time
-      after: "06:50:00"
-      before: "09:30:00"
+      condition: sun
+      before: sunrise
     action:
-      - service: script.fade_in
-        data: 
-          entity_id: light.office_lamp
-          minutes: 3
+      - service: homeassistant.turn_on
+        data:
+          entity_id: light.hallway
+          brightness_pct: 5
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.deck_auto_on
+
+  - id: hallway_light_off_at_night
+    alias: hallway_light_off_at_night
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.hallway_motion
+        to: "off"
+        for:
+          seconds: 10
+    condition:
+      condition: sun
+      before: sunrise
+    action:
+      - service: homeassistant.turn_off
+        data:
+          entity_id: light.hallway
 
   - id: turn_off_all_lights_when_bed_off
     alias: turn_off_all_lights_when_bed_off
@@ -374,76 +381,6 @@ scene:
 # Scripts
 ########################
 script:
-  fade_in:
-    sequence:
-      - alias: Step 1
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "10"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 2
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "20"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 3
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "30"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 4
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "40"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 5
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "50"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 6
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "60"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 7
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "70"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 8
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "80"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 9
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "90"
-      - wait_template:  "{{ as_timestamp(now()) - as_timestamp(states.entity_id.last_updated) > ((minutes *60) // 10) }}"
-
-      - alias: Step 10
-        service: light.turn_on
-        data_template:
-          entity_id: "{{ entity_id }}"
-          brightness_pct: "100"
 
 ########################
 # Sensor
