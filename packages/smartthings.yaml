@@ -68,6 +68,11 @@ homeassistant:
       device_class: opening
       friendly_name: "Front Door"
 
+    binary_sensor.hallway_motion:
+      <<: *customize
+      device_class: motion
+      friendly_name: "Hallway Motion"
+
     binary_sensor.master_bedroom_motion:
       <<: *customize
       device_class: motion
@@ -207,6 +212,16 @@ homeassistant:
     sensor.guest_room_temperature:
       <<: *customize
       friendly_name: "Guest Room Temperature"
+
+    sensor.hallway_motion_battery:
+      <<: *customize
+      friendly_name: "Hallway Motion Sensor Battery"
+      icon: mdi:battery
+
+    sensor.hallway_illumination:
+      <<: *customize
+      friendly_name: "Hallway Illumination"
+      icon: mdi:brightness-6
 
     sensor.living_room_battery:
       <<: *customize
@@ -376,6 +391,14 @@ binary_sensor:
     state_topic: "smartthings/Guest Room Button/button/state"
     payload_on: "pushed"
     payload_off: "released"
+    retain: true
+    force_update: true
+
+  - platform: mqtt
+    name: hallway_motion
+    state_topic: "smartthings/Hall Motion Sensor/motion/state"
+    payload_on: "active"
+    payload_off: "inactive"
     retain: true
     force_update: true
 
@@ -612,6 +635,20 @@ sensor:
     name: guest_room_temperature
     retain: true
     unit_of_measurement: "°F"
+    force_update: true
+
+  - platform: mqtt
+    name: hallway_illumination
+    state_topic: "smartthings/Hall Motion Sensor/illumination/state"
+    unit_of_measurement: "lux"
+    retain: true
+    force_update: true
+
+  - platform: mqtt
+    name: hallway_motion_battery
+    state_topic: "smartthings/Hall Motion Sensor/battery/state"
+    retain: true
+    unit_of_measurement: "%"
     force_update: true
 
   - platform: mqtt
