@@ -49,6 +49,15 @@ homeassistant:
     ################################################
     ## Groups
     ################################################
+    group.all_cameras:
+      <<: *customize
+      friendly_name: All Camera Info
+    group.basement_camera_status:
+      <<: *customize
+      friendly_name: Basement Camera Status
+    group.livingroom_camera_status:
+      <<: *customize
+      friendly_name: Living Room Camera Status
 
     ################################################
     ## Input Boolean
@@ -73,7 +82,42 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    
+
+    ################################################
+    ## Switches
+    ################################################
+    switch.basement_cam_blue_led:
+      <<: *customize
+      friendly_name: "Basement Blue LED"
+      
+    switch.basement_cam_yellow_led:
+      <<: *customize
+      friendly_name: "Basement Yellow LED"
+      
+    switch.basement_cam_RTSP_H264:
+      <<: *customize
+      friendly_name: "Basement RTSP H264"
+      
+    switch.basement_cam_RTSP_MJPEG:
+      <<: *customize
+      friendly_name: "Basement RTSP MJPEG"
+      
+    switch.livingroom_cam_blue_led:
+      <<: *customize
+      friendly_name: "Living Room Blue LED"
+      
+    switch.livingroom_cam_yellow_led:
+      <<: *customize
+      friendly_name: "Living Room Yellow LED"
+      
+    switch.livingroom_cam_RTSP_H264:
+      <<: *customize
+      friendly_name: "Living Room RTSP H264"
+      
+    switch.livingroom_cam_RTSP_MJPEG:
+      <<: *customize
+      friendly_name: "Living Room RTSP MJPEG"
+
     ################################################
     ## Thermostats
     ################################################
@@ -117,8 +161,24 @@ device_tracker:
 group:
   all_cameras:
     entities:
+      - group.livingroom_camera_status
       - camera.livingroom_cam
+      - group.basement_camera_status
       - camera.basement_cam
+      
+  basement_camera_status:
+    entities:
+      - switch.basement_cam_blue_led
+      - switch.basement_cam_yellow_led
+      - switch.basement_cam_RTSP_H264
+      - switch.basement_cam_RTSP_MJPEG
+      
+  livingroom_camera_status:
+    entities:
+      - switch.basement_cam_blue_led
+      - switch.basement_cam_yellow_led
+      - switch.basement_cam_RTSP_H264
+      - switch.basement_cam_RTSP_MJPEG
 
 ########################
 # Input Booleans
@@ -155,6 +215,82 @@ script:
 ########################
 sensor:
 
+########################
+# Switches
+########################
+switch:
+  - platform: mqtt
+    name: basement_cam_blue_led
+    state_topic: "topic/basement_cam/status"
+    value_template: '{{ value_json["LEDs"]["Blue"] }}'
+    command_topic: "topic/basement_cam/Blue_LED/set"
+    payload_on: "on"
+    payload_off: "off"
+    optimistic: false
+    
+  - platform: mqtt
+    name: basement_cam_yellow_led
+    state_topic: "topic/basement_cam/status"
+    value_template: '{{ value_json["LEDs"]["Yellow"] }}'
+    command_topic: "topic/basement_cam/Yellow_LED/set"
+    payload_on: "on"
+    payload_off: "off"
+    optimistic: false
+
+  - platform: mqtt
+    name: basement_cam_RTSP_H264
+    state_topic: "topic/basement_cam/status"
+    value_template: "{% if value_json[\"RTSP-Server\"] == 'running' %}h264_start{% else %}rtsp_stop{% endif %}"
+    command_topic: "topic/basement_cam/set"
+    payload_on: "h264_start"
+    payload_off: "rtsp_stop"
+    optimistic: false
+
+  - platform: mqtt
+    name: basement_cam_RTSP_MJPEG
+    state_topic: "topic/basement_cam/status"
+    value_template: "{% if value_json[\"RTSP-Server\"] == 'running' %}mjpeg_start{% else %}rtsp_stop{% endif %}"
+    command_topic: "topic/basement_cam/set"
+    payload_on: "mjpeg_start"
+    payload_off: "rtsp_stop"
+    optimistic: false
+    
+  - platform: mqtt
+    name: livingroom_cam_blue_led
+    state_topic: "topic/livingroom_cam/status"
+    value_template: '{{ value_json["LEDs"]["Blue"] }}'
+    command_topic: "topic/basement_cam/Blue_LED/set"
+    payload_on: "on"
+    payload_off: "off"
+    optimistic: false
+    
+  - platform: mqtt
+    name: livingroom_cam_yellow_led
+    state_topic: "topic/livingroom_cam/status"
+    value_template: '{{ value_json["LEDs"]["Yellow"] }}'
+    command_topic: "topic/basement_cam/Yellow_LED/set"
+    payload_on: "on"
+    payload_off: "off"
+    optimistic: false
+
+  - platform: mqtt
+    name: livingroom_cam_RTSP_H264
+    state_topic: "topic/livingroom_cam/status"
+    value_template: "{% if value_json[\"RTSP-Server\"] == 'running' %}h264_start{% else %}rtsp_stop{% endif %}"
+    command_topic: "topic/livingroom_cam/set"
+    payload_on: "h264_start"
+    payload_off: "rtsp_stop"
+    optimistic: false
+
+  - platform: mqtt
+    name: livingroom_cam_RTSP_MJPEG
+    state_topic: "topic/livingroom_cam/status"
+    value_template: "{% if value_json[\"RTSP-Server\"] == 'running' %}mjpeg_start{% else %}rtsp_stop{% endif %}"
+    command_topic: "topic/livingroom_cam/set"
+    payload_on: "mjpeg_start"
+    payload_off: "rtsp_stop"
+    optimistic: false
+    
 ########################
 # Zone
 ########################
