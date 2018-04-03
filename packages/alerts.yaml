@@ -121,9 +121,9 @@ automation:
   - alias: send_notification_when_alarm_triggered
     id: send_notification_when_alarm_triggered
     trigger:
-      - platform: state
-        entity_id: alarm_control_panel.home_alarm
-        to: 'triggered'
+    - platform: state
+      entity_id: alarm_control_panel.home_alarm
+      to: 'triggered'
     action:
     - service: notify.all
       data_template:
@@ -133,32 +133,45 @@ automation:
   - alias: arm_alarm
     id: arm_alarm
     trigger:
-      - platform: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: 'on'
-        to: 'off'
+    - platform: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      from: 'on'
+      to: 'off'
     action:
-      - service: alarm_control_panel.alarm_arm_away
-        entity_id: alarm_control_panel.house_alarm
-      - service: switch.turn_on
-        entity_id:
-          - switch.livingroom_cam_motion_detection
-          - switch.basement_cam_motion_detection
+    - service: notify.all
+      data_template:
+        message: >
+          Enabled alarm and turned on motion detection
+    - service: alarm_control_panel.alarm_arm_away
+      entity_id: alarm_control_panel.home_alarm
+      data:
+        code: !secret alarm_code
+    - service: switch.turn_on
+      entity_id:
+        - switch.livingroom_cam_motion_detection
+        - switch.basement_cam_motion_detection
+
 
   - alias: disarm_alarm
     id: disarm_alarm
     trigger:
-      - platform: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: 'off'
-        to: 'on'
+    - platform: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      from: 'off'
+      to: 'on'
     action:
-      - service: alarm_control_panel.alarm_disarm
-        entity_id: alarm_control_panel.house_alarm
-      - service: switch.turn_off
-        entity_id:
-          - switch.livingroom_cam_motion_detection
-          - switch.basement_cam_motion_detection
+    - service: alarm_control_panel.alarm_disarm
+      entity_id: alarm_control_panel.home_alarm
+      data:
+         code: !secret alarm_code
+    - service: switch.turn_off
+      entity_id:
+        - switch.livingroom_cam_motion_detection
+        - switch.basement_cam_motion_detection
+    - service: notify.all
+      data_template:
+        message: >
+          Disabled alarm and turned off motion detection
 
 ########################
 # Binary Sensors
