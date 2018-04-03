@@ -45,6 +45,22 @@ homeassistant:
       friendly_name: "Flash lights"
 
 ########################
+# Alarm Panel
+########################
+alarm_control_panel:
+  - platform: manual
+    name: home_alarm
+    code: !secret alarm_code
+    pending_time: 30
+    delay_time: 30
+    trigger_time: 4
+    disarmed:
+      trigger_time: 0
+    armed_home:
+      pending_time: 0
+      delay_time: 0
+
+########################
 # Automations
 ########################
 automation:
@@ -57,27 +73,29 @@ automation:
         - binary_sensor.se_basement_window_contact
         - binary_sensor.sw_basement_window_contact
         - binary_sensor.deck_door_contact
-        - binary_sensor.downstairs_motion
+#        - binary_sensor.downstairs_motion
         - binary_sensor.ene_window_contact
         - binary_sensor.ese_window_contact
         - binary_sensor.front_door_contact
-        - binary_sensor.hallway_motion
-        - binary_sensor.master_bedroom_motion
+#        - binary_sensor.hallway_motion
+#        - binary_sensor.master_bedroom_motion
         - binary_sensor.nne_window_contact
         - binary_sensor.north_kitchen_sink_window_contact
         - binary_sensor.north_master_bedroom_window_contact
         - binary_sensor.nw_basement_window_contact
-        - binary_sensor.office_motion
+#        - binary_sensor.office_motion
         - binary_sensor.office_north_window_contact
-        - binary_sensor.motion_sensor_motion
+#        - binary_sensor.motion_sensor_motion
         - binary_sensor.sse_window_contact
       from: 'off'
       to: 'on'
     condition:
     - condition: state
-      entity_id: binary_sensor.bayesian_zeke_home
-      state: 'off'
+      entity_id: alarm_control_panel.home_alarm
+      state: armed_away
     action:
+    - service: alarm_control_panel.alarm_trigger
+      entity_id: alarm_control_panel.home_alarm
     - service: notify.all
       data_template:
         message: >
@@ -100,6 +118,48 @@ automation:
         entity_id: light.all_living_room
         flash: long
 
+  - alias: send_notification_when_alarm_triggered
+    id: send_notification_when_alarm_triggered
+    trigger:
+      - platform: state
+        entity_id: alarm_control_panel.home_alarm
+        to: 'triggered'
+    action:
+    - service: notify.all
+      data_template:
+        message: >
+          Alarm triggered while you're away
+          
+  - alias: arm_alarm
+    id: arm_alarm
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: 'on'
+        to: 'off'
+    action:
+      - service: alarm_control_panel.alarm_arm_away
+        entity_id: alarm_control_panel.house_alarm
+      - service: switch.turn_on
+        entity_id:
+          - switch.livingroom_cam_motion_detection
+          - switch.basement_cam_motion_detection
+
+  - alias: disarm_alarm
+    id: disarm_alarm
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: 'off'
+        to: 'on'
+    action:
+      - service: alarm_control_panel.alarm_disarm
+        entity_id: alarm_control_panel.house_alarm
+      - service: switch.turn_off
+        entity_id:
+          - switch.livingroom_cam_motion_detection
+          - switch.basement_cam_motion_detection
+
 ########################
 # Binary Sensors
 ########################
@@ -116,6 +176,9 @@ group:
       - binary_sensor.office_motion
       - binary_sensor.master_bedroom_motion
       - binary_sensor.downstairs_motion
+      - binary_sensor.motion_sensor_motion
+      - binary_sensor.livingroom_cam_motion
+      - binary_sensor.basement_cam_motion
 
 
 ########################
