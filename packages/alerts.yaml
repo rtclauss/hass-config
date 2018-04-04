@@ -117,7 +117,7 @@ automation:
     - service: notify.all
       data_template:
         message: >
-          Motion detected at {{ trigger.entity_id }} while you're away!
+          Motion detected at {{ trigger.to_state.attributes.friendly_name }} while you're away!
 #    - service: tts.google_say
 #      data:
 #        message: "Intruder Alert! Intruder Alert! You are detected and recorded."
@@ -147,6 +147,32 @@ automation:
       data_template:
         message: >
           Alarm triggered while you're away
+          
+  - alias: send_pic_from_camera
+    id: send_pic_from_camera
+    trigger:
+    - platform: state
+      entity_id:
+        - binary_sensor.basement_cam_motion
+        - binary_sensor.livingroom_cam_motion
+      from: 'off'
+      to: 'on'
+      for:
+        seconds: 3
+    action:
+    - service: notify.ios_wethop
+      data_template:
+        message: > 
+          Stream from {{ trigger.to_state.attributes.friendly_name }}
+        data:
+          push:
+            category: camera
+          entity_id: >-
+            {% if trigger.entity_id == "binary_sensor.basement_cam_motion" %}
+              camera.basement_cam
+            {% else %}
+              camera.livingroom_cam
+            {% endif %}
           
   - alias: arm_alarm
     id: arm_alarm
@@ -191,6 +217,24 @@ automation:
         message: >
           Disabled alarm and turned off motion detection
 
+  - alias: Notify iOS app
+    trigger:
+    - platform: state
+      entity_id: alarm_control_panel.home_alarm
+      to: 'triggered'
+    action:
+    - service: notify.ios_wethop
+      data:
+        message: "Something happened at home!"
+        data:
+          push:
+            badge: 5
+            #sound: <SOUND FILE HERE>
+            category: "alarm" # Needs to match the top level identifier you used in the ios configuration
+          action_data: # Anything passed in action_data will get echoed back to Home Assistant.
+            entity_id: light.test
+            my_custom_data: foo_bar
+
 ########################
 # Binary Sensors
 ########################
@@ -211,6 +255,54 @@ group:
       - binary_sensor.livingroom_cam_motion
       - binary_sensor.basement_cam_motion
 
+########################
+# Input Booleans
+########################
+input_boolean:
+
+########################
+# Input Numbers
+########################
+input_number:
+
+########################
+# iOS
+########################
+ios:
+  push:
+    categories:
+      - name: alarm
+        identifier: 'alarm'
+        actions:
+          - identifier: 'SOUND_ALARM'
+            title: 'Sound Alarm'
+            activationMode: 'background'
+            authenticationRequired: yes
+            destructive: yes
+            behavior: 'default'
+          - identifier: 'SILENCE_ALARM'
+            title: 'Silence Alarm'
+            activationMode: 'background'
+            authenticationRequired: yes
+            destructive: no
+            behavior: 'textInput'
+            textInputButtonTitle: 'Silencio!'
+            textInputPlaceholder: 'Placeholder'
+
+########################
+# Light
+########################
+light:
+
+########################
+# Proximity
+########################
+proximity:
+
+########################
+# Scenes
+########################
+scene:
 
 ########################
 # Scripts
