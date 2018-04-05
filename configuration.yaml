@@ -114,17 +114,20 @@ media_player:
 #    access_token: !secret vizio_tv_token
 
 recorder:
-##  db_url: postgresql://@/hass
-#  db_url: !secret recorder_db_url
-  purge_interval: 30
+#  db_url: postgresql://@/hass
+  db_url: !secret recorder_db_url
+  purge_interval: 1
+  purge_keep_days: 2
   exclude:
     domains:
       - media_player
       - updater
       - sun
+      - zone
     entities:
       - sensor.time
-
+      - sensor.date
+      - sensor.last_boot
 
 influxdb:
   host: !secret influx_db_host
