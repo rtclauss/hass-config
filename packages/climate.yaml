@@ -28,7 +28,7 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
-    sensor.nest_home:
+    binary_sensor.nest_home:
       <<: *customize
       friendly_name: 'Nest Home/Away Mode'
       device_class: presence
@@ -74,7 +74,91 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: turn_off_nest_when_windows_open
+    alias: turn_off_nest_when_windows_open
+    trigger: 
+    - platform: state
+      entity_id: 
+        - binary_sensor.ene_window_contact
+        - binary_sensor.ese_window_contact
+        - binary_sensor.nne_window_contact
+        - binary_sensor.north_kitchen_sink_window_contact
+        - binary_sensor.north_master_bedroom_window_contact
+        - binary_sensor.office_north_window_contact
+        - binary_sensor.se_basement_window_contact
+        - binary_sensor.sse_window_contact
+        - binary_sensor.sw_basement_window_contact
+      from: 'off'
+      to: 'on'
+      for:
+        minutes:  1
+    condition:
+    - condition: state
+      entity_id: binary_sensor.bayesian_zeke_home
+      state: 'on'
+    action: 
+    - service: climate.turn_off
+      data:
+        entity_id: climate.hallway_glycol
 
+  - id: turn_on_nest_when_windows_closed
+    alias: turn_on_nest_when_windows_closed
+    trigger: 
+    - platform: state
+      entity_id: 
+        - binary_sensor.ene_window_contact
+        - binary_sensor.ese_window_contact
+        - binary_sensor.nne_window_contact
+        - binary_sensor.north_kitchen_sink_window_contact
+        - binary_sensor.north_master_bedroom_window_contact
+        - binary_sensor.office_north_window_contact
+        - binary_sensor.se_basement_window_contact
+        - binary_sensor.sse_window_contact
+        - binary_sensor.sw_basement_window_contact
+      from: 'on'
+      to: 'off'
+      for:
+        minutes: 30
+    condition:
+      condition: and
+      conditions:
+      - condition: state
+        entity_id: binary_sensor.ene_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.ese_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.nne_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.north_kitchen_sink_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.north_master_bedroom_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.office_north_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.se_basement_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.sse_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.sw_basement_window_contact
+        state: 'off'
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: 'on'
+    action: 
+    - service: climate.turn_on
+      data:
+        entity_id: climate.hallway_glycol
+        
+        
+        
 ########################
 # Binary Sensors
 ########################
