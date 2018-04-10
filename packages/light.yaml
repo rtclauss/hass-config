@@ -46,7 +46,7 @@ homeassistant:
 
     automation.hallway_light_on_at_night:
       <<: *customize
-      friendly_name: "Turn on hallway light automatically"
+      friendly_name: "Turn on hallway light automatically at night"
       icon: mdi:ceiling-light
 
     automation.hallway_light_off_at_night:
@@ -57,6 +57,11 @@ homeassistant:
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
       friendly_name: "Turn off all lights when bedroom lights turn off"
+      icon: mdi:hotel
+    
+    automation.turn_on_bedroom_light_at_night:
+      <<: *customize
+      friendly_name: "Turn on bedroom lights at night"
       icon: mdi:hotel
 
     ################################################
@@ -288,9 +293,6 @@ automation:
         data:
           entity_id: light.hallway_light
           brightness_pct: 5
-      - service: homeassistant.turn_off
-        data:
-          entity_id: input_boolean.deck_auto_on
 
   - id: hallway_light_off_at_night
     alias: hallway_light_off_at_night
@@ -299,7 +301,7 @@ automation:
         entity_id: binary_sensor.hallway_motion
         to: "off"
         for:
-          seconds: 10
+          seconds: 30
     condition:
       condition: sun
       before: sunrise
@@ -321,6 +323,22 @@ automation:
     action:
     - service: scene.turn_on
       entity_id: scene.leave_home
+
+  - id: turn_on_bedroom_light_at_night
+    alias: turn_on_bedroom_light_at_night
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.master_bedroom_motion
+      to: 'on'
+    condition:
+      condition: time
+      after: '22:00:00'
+      before: '01:00:00'
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id: light.master_bedroom
+          brightness_pct: 5
 
 ########################
 # Binary Sensors
