@@ -38,13 +38,16 @@ class BrightenLights(hass.Hass):
       if int(float(brightness)) == 255:
         return
 
-      self.run_in(self.brighten, delay = self.args["transition_time_sec"], entity_id = entity, last_increase = 0)
+      self.run_in(self.brighten, seconds = self.args["transition_time_sec"], delay=self.args["transition_time_sec"], entity_id = entity, last_increase = 0)
 
     else:
       return
 
   # Increase the local brightness if the sensor is still on
   def brighten(self, kwargs):
+    # Debug
+    #self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
+
     # If the motion sensor is still on, increase the brightness
     if self.get_state(kwargs["entity_id"]) == 'on':
       current_brightness = int(float(self.get_state(self.args["light"], attribute="brightness")))
@@ -62,4 +65,4 @@ class BrightenLights(hass.Hass):
       self.log("Increasing brightness from {} to {}".format(current_brightness, new_brightness))
       self.turn_on(self.args["light"], brightness = new_brightness)
       # Check again in 20 seconds
-      self.run_in(self.brighten, delay = kwargs["delay"], entity_id = kwargs["entity_id"], last_increase = current_increase)
+      self.run_in(self.brighten, seconds = kwargs["delay"], delay = kwargs["delay"], entity_id = kwargs["entity_id"], last_increase = current_increase)
