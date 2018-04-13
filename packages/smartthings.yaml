@@ -333,6 +333,18 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  # - alias: xiaomi_mqtt_button_pressed
+  #   id: xiaomi_mqtt_button_pressed
+  #   trigger:
+  #   - platform: state
+  #     entity_id: 
+  #       - binary_sensor.living_room_button
+  #       - binary_sensor.guest_room_button
+  #   action:
+  #   - service: notify.all
+  #     data_template:
+  #       message: >
+  #         {{ trigger.entity_id }}
 
 ########################
 # Binary Sensors
@@ -386,6 +398,10 @@ binary_sensor:
     retain: true
     force_update: true
 
+  ### If using this button you cannot use the `from: off` or `to: on` stanzas in an automation, you must use them
+  ### as-is since the SmartThing->MQTT bridge does not utilize payload_off.  Without a `from` or `to` any state or
+  ### attribute change (including time of last MQTT message) will trigger an automation.
+  ### An example automation is in the commented section at the top of this package in the `auotmation` section.
   - platform: mqtt
     name: guest_room_button
     state_topic: "smartthings/Guest Room Button/button/state"
@@ -402,6 +418,10 @@ binary_sensor:
     retain: true
     force_update: true
 
+  ### If using this button you cannot use the `from: off` or `to: on` stanzas in an automation, you must use them
+  ### as-is since the SmartThing->MQTT bridge does not utilize payload_off.  Without a `from` or `to` any state or
+  ### attribute change (including time of last MQTT message) will trigger an automation.
+  ### An example automation is in the commented section at the top of this package in the `auotmation` section.
   - platform: mqtt
     name: living_room_button
     state_topic: "smartthings/Living Room Button/button/state"
