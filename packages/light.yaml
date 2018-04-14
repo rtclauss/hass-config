@@ -292,7 +292,7 @@ automation:
       - service: homeassistant.turn_on
         data:
           entity_id: light.hallway_light
-          brightness_pct: 5
+          brightness: 1
 
   - id: hallway_light_off_at_night
     alias: hallway_light_off_at_night
@@ -300,8 +300,6 @@ automation:
       - platform: state
         entity_id: binary_sensor.hallway_motion
         to: "off"
-        for:
-          seconds: 30
     condition:
       condition: sun
       before: sunrise
@@ -321,6 +319,8 @@ automation:
       after: '22:00:00'
       before: '06:00:00'
     action:
+    - service: scene.turn_on
+      entity_id: scene.reset_living_room
     - service: scene.turn_on
       entity_id: scene.leave_home
 
