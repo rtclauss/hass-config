@@ -96,10 +96,15 @@ automation:
       below: 20
       above: 10
     action:
+    - service: persistent_notification.create
+      data_template:
+        title: Low Battery
+        message: "Battery {{  trigger.from_state.attributes.friendly_name }} is below 20%"
+        notification_id: low-battery-alert
     - service: notify.all
       data_template:
         message: >-
-          Battery '{{ trigger.entity_id }}' is below 20%.
+          Battery '{{ trigger.from_state.attributes.friendly_name }}' is below 20%.
 
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
@@ -131,10 +136,15 @@ automation:
         - sensor.sw_basement_window_battery
       below: 10
     action:
-    - service: notify.all
+      - service: persistent_notification.create
+      data_template:
+        title: Low Battery
+        message: "Battery {{  trigger.from_state.attributes.friendly_name }} is below 10%"
+        notification_id: low-battery-alert
+      - service: notify.all
       data_template:
         message: >-
-          Battery '{{ trigger.entity_id }}' is below 10%.
+          Battery '{{ trigger.from_state.attributes.friendly_name }}' is below 10%.
 
 ########################
 # Binary Sensors
