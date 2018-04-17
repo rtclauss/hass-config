@@ -54,6 +54,14 @@ homeassistant:
       friendly_name: "Turn off hallway light automatically"
       icon: mdi:ceiling-light
 
+    automation.toggle_living_room:
+      <<: *customize
+      friendly_name: "Toggle Living Room"
+      
+    automation.reset_living_room:
+      <<: *customize
+      friendly_name: "Reset Living Room"
+
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
       friendly_name: "Turn off all lights when bedroom lights turn off"
@@ -306,12 +314,40 @@ automation:
         entity_id: binary_sensor.hallway_motion
         to: "off"
     condition:
-      condition: sun
-      before: sunrise
+      condition: or
+      conditions:
+        - condition: sun
+          before: sunrise
+          before_offset: "-0:30:00"
+        - condition: sun
+          after: sunset
+          after_offset: "-0:30:00"
     action:
       - service: homeassistant.turn_off
         data:
           entity_id: light.hallway_light
+
+  - alias: toggle_living_room
+    id: toggle_living_room
+    trigger:
+    - platform: state
+      entity_id: 
+        - binary_sensor.living_room_button_push
+    action:
+    - service: light.toggle
+      entity_id: light.living_room
+
+  - alias: reset_living_room
+    id: reset_living_room
+    trigger:
+    - platform: state
+      entity_id: 
+        - binary_sensor.living_room_button_hold
+    action:
+    - service: scene.turn_on
+      entity_id: scene.reset_living_room
+    - service: switch.turn_off
+      entity_id: switch.flux
 
   - id: turn_off_all_lights_when_bed_off
     alias: turn_off_all_lights_when_bed_off
