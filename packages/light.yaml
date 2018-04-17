@@ -98,11 +98,6 @@ homeassistant:
     ################################################
     ## Light
     ################################################
-    light.all_living_room:
-      <<: *customize
-      friendly_name: "Living Room Lights"
-      icon: mdi:television
-
     light.bedroom_lamp:
       <<: *customize
       friendly_name: "Bedroom Lamp"
@@ -136,6 +131,16 @@ homeassistant:
       <<: *customize
       friendly_name: "Living Room Left"
       icon: mdi:lamp
+
+    light.living_room_all:
+      <<: *customize
+      friendly_name: "Living Room Lights"
+      icon: mdi:television
+      
+    light.living_room_all_except_tv:
+      <<: *customize
+      friendly_name: "Living Room Lights except TV Bias"
+      icon: mdi:television
 
     light.master_bedroom:
       <<: *customize
@@ -373,13 +378,21 @@ input_number:
 ########################
 light:
   - platform: group
-    name: all_living_room
+    name: living_room_all
     entities:
       - light.right_lamp
       - light.left_lamp
       - light.tv
       - light.pendant_lamp
-  
+
+  - platform: group
+    name: living_room_all_except_tv
+    entities:
+      - light.right_lamp
+      - light.left_lamp
+      - light.tv
+      - light.pendant_lamp
+
   - platform: group
     name: master_bedroom
     entities:
@@ -406,6 +419,14 @@ script:
 ########################
 sensor:
 
+########################
+# Switch
+########################
+switch:
+  - platform: flux
+    lights:
+    - light.living_room_all_except_tv
+  
 ########################
 # Zone
 ########################
