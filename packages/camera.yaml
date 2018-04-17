@@ -33,7 +33,7 @@ homeassistant:
       device_class: motion
       friendly_name: "Basement Camera Motion"
 
-    binary_sensor.livingroom_cam_motion:
+    binary_sensor.living_room_cam_motion:
       <<: *customize
       device_class: motion
       friendly_name: "Living Room Camera Motion"
@@ -46,12 +46,12 @@ homeassistant:
       friendly_name: "Basement Camera"
       icon: mdi:cctv
 
-    camera.livingroom_cam:
+    camera.living_room_cam:
       <<: *customize
       friendly_name: "Living Room Camera"
       icon: mdi:cctv
       
-    camera.livingroom_cam_motion_detection_image:
+    camera.living_room_cam_motion_detection_image:
       <<: *customize
       friendly_name: "Living Room Motion"
       icon: mdi:cctv
@@ -69,7 +69,7 @@ homeassistant:
     group.basement_camera_status:
       <<: *customize
       friendly_name: Basement Camera Status
-    group.livingroom_camera_status:
+    group.living_room_camera_status:
       <<: *customize
       friendly_name: Living Room Camera Status
 
@@ -120,23 +120,23 @@ homeassistant:
       <<: *customize
       friendly_name: "Basement RTSP MJPEG"
       
-    switch.livingroom_cam_blue_led:
+    switch.living_room_cam_blue_led:
       <<: *customize
       friendly_name: "Living Room Blue LED"
       
-    switch.livingroom_cam_motion_detection:
+    switch.living_room_cam_motion_detection:
       <<: *customize
       friendly_name: "Living Room Motion Detection"
     
-    switch.livingroom_cam_yellow_led:
+    switch.living_room_cam_yellow_led:
       <<: *customize
       friendly_name: "Living Room Yellow LED"
       
-    switch.livingroom_cam_RTSP_H264:
+    switch.living_room_cam_RTSP_H264:
       <<: *customize
       friendly_name: "Living Room RTSP H264"
       
-    switch.livingroom_cam_RTSP_MJPEG:
+    switch.living_room_cam_RTSP_MJPEG:
       <<: *customize
       friendly_name: "Living Room RTSP MJPEG"
 
@@ -164,7 +164,7 @@ binary_sensor:
     payload_off: "off"
     
   - platform: mqtt
-    name: livingroom_cam_motion
+    name: living_room_cam_motion
     state_topic: "topic/livingroom_cam/motion"
     payload_on: "ON"
     payload_off: "OFF"
@@ -180,12 +180,12 @@ camera:
     ffmpeg_bin: /usr/local/bin/ffmpeg
     
   - platform: ffmpeg
-    name: livingroom_cam
+    name: living_room_cam
     input: -rtsp_transport tcp -i rtsp://livingroom_cam.lan:8554/unicast
     ffmpeg_bin: /usr/local/bin/ffmpeg
     
   - platform: mqtt
-    name: livingroom_cam_motion_detection_image
+    name: living_room_cam_motion_detection_image
     topic: "topic/livingroom_cam/motion_snapshots"
 
 
@@ -200,11 +200,11 @@ device_tracker:
 group:
   all_cameras:
     entities:
-      - group.livingroom_camera_status
-      - camera.livingroom_cam
+      - group.living_room_camera_status
+      - camera.living_room_cam
       - group.basement_camera_status
       - camera.basement_cam
-      - camera.livingroom_cam_motion_detection_image
+      - camera.living_room_cam_motion_detection_image
       
   basement_camera_status:
     entities:
@@ -214,13 +214,13 @@ group:
       - switch.basement_cam_RTSP_H264
       - switch.basement_cam_RTSP_MJPEG
       
-  livingroom_camera_status:
+  living_room_camera_status:
     entities:
-      - switch.livingroom_cam_blue_led
-      - switch.livingroom_cam_yellow_led
-      - switch.livingroom_cam_motion_detection
-      - switch.livingroom_cam_RTSP_H264
-      - switch.livingroom_cam_RTSP_MJPEG
+      - switch.living_room_cam_blue_led
+      - switch.living_room_cam_yellow_led
+      - switch.living_room_cam_motion_detection
+      - switch.living_room_cam_RTSP_H264
+      - switch.living_room_cam_RTSP_MJPEG
 
 ########################
 # Input Booleans
@@ -307,7 +307,7 @@ switch:
     optimistic: false
     
   - platform: mqtt
-    name: livingroom_cam_blue_led
+    name: living_room_cam_blue_led
     state_topic: "topic/livingroom_cam/leds/blue"
     command_topic: "topic/livingroom_cam/leds/blue/set"
     payload_on: "ON"
@@ -316,7 +316,7 @@ switch:
     
 
   - platform: mqtt
-    name: livingroom_cam_motion_detection
+    name: living_room_cam_motion_detection
     state_topic: "topic/livingroom_cam/motion/detection"
     command_topic: "topic/livingroom_cam/motion/detection/set"
     payload_on: "ON"
@@ -324,7 +324,7 @@ switch:
     optimistic: false
 
   - platform: mqtt
-    name: livingroom_cam_yellow_led
+    name: living_room_cam_yellow_led
     state_topic: "topic/livingroom_cam/leds/yellow"
     command_topic: "topic/livingroom_cam/leds/yellow/set"
     payload_on: "ON"
@@ -332,7 +332,7 @@ switch:
     optimistic: false
 
   - platform: mqtt
-    name: livingroom_cam_RTSP_H264
+    name: living_room_cam_RTSP_H264
     state_topic: "topic/livingroom_cam/rtsp_server"
     command_topic: "topic/livingroom_cam/rtsp_server/set"
     payload_on: "ON"
@@ -340,7 +340,7 @@ switch:
     optimistic: false
 
   - platform: mqtt
-    name: livingroom_cam_RTSP_MJPEG
+    name: living_room_cam_RTSP_MJPEG
     state_topic: "topic/livingroom_cam/rtsp_server"
     command_topic: "topic/livingroom_cam/rtsp_server/set"
     payload_on: "ON"
