@@ -28,10 +28,12 @@ homeassistant:
     automation.initialize_vacation_items:
       <<: *customize
       friendly_name: "Initialize Vacation Items"
+      icon: mdi:beach
 
     automation.on_vacation_trigger:
       <<: *customize
       friendly_name: "On Vacation trigger"
+      icon: mdi:beach
 
     automation.off_trip_trigger:
       <<: *customize
@@ -78,7 +80,7 @@ homeassistant:
     binary_sensor.flying_home_today:
       <<: *customize
       friendly_name: "Flying Home Now"
-      icon: mdi:airplane-takeoff
+      icon: mdi:airplane-landing
 
     ################################################
     ## Group
@@ -87,6 +89,7 @@ homeassistant:
     group.trip_status_card:
       <<: *customize
       friendly_name: "Trip Status"
+      icon: mdi:beach
 
     group.vacation_climate:
       <<: *customize
@@ -152,6 +155,10 @@ homeassistant:
       friendly_name: "Average House Humidity"
       icon_template: mdi:water-percent
 
+    sensor.average_house_pressure:
+      <<: *customize
+      friendly_name: "Average House Pressure"
+      icon_template: mdi:gauge
 
 ########################
 # Automations
@@ -551,11 +558,12 @@ sensor:
           states("sensor.bathroom_temperature")|float +
           states("sensor.motion_sensor_temperature")|float )
           / 5.0) |round(2)}}
+
       average_house_humidity:
         unit_of_measurement: "%"
         entity_id:
           - sensor.living_room_humidity
-          - sensor.master_bedroom_temperature
+          - sensor.master_bedroom_humidity
           - sensor.guest_room_humidity
           - sensor.bathroom_humidity
           - sensor.hallway_thermostat_glycol_humidity
@@ -566,3 +574,17 @@ sensor:
           states("sensor.bathroom_humidity")|float +
           states("sensor.hallway_thermostat_glycol_humidity")|float )
           / 5.0 |round}}
+
+      average_house_pressure:
+        unit_of_measurement: "inHg"
+        entity_id:
+          - sensor.living_room_pressure
+          - sensor.master_bedroom_pressure
+          - sensor.guest_room_pressure
+          - sensor.bathroom_pressure
+        value_template: >-
+          {{ ( states("sensor.living_room_humidity")|float +
+          states("sensor.master_bedroom_humidity")|float +
+          states("sensor.guest_room_humidity")|float +
+          states("sensor.bathroom_humidity")|float )
+          / 4.0 |round}}
