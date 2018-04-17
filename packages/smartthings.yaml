@@ -24,6 +24,13 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
+    automation.toggle_living_room:
+      <<: *customize
+      friendly_name: "Toggle Living Room"
+    automation.reset_living_room:
+      <<: *customize
+      friendly_name: "Reset Living Room"
+
 
     ################################################
     ## Binary Sensors
@@ -72,6 +79,16 @@ homeassistant:
       <<: *customize
       device_class: motion
       friendly_name: "Hallway Motion"
+      
+    binary_sensor.living_room_button_hold:
+      <<: *customize
+      device_class: motion
+      friendly_name: "Living Room Button hold"
+      
+    binary_sensor.living_room_button_push:
+      <<: *customize
+      device_class: motion
+      friendly_name: "Living Room Button push"
 
     binary_sensor.master_bedroom_motion:
       <<: *customize
@@ -349,6 +366,27 @@ automation:
   #       message: >
   #         {{ trigger.entity_id }}
 
+  - alias: toggle_living_room
+    id: toggle_living_room
+    trigger:
+    - platform: state
+      entity_id: 
+        - binary_sensor.living_room_button_push
+    action:
+    - service: light.toggle
+      entity_id: light.living_room
+
+  - alias: reset_living_room
+    id: reset_living_room
+    trigger:
+    - platform: state
+      entity_id: 
+        - binary_sensor.living_room_button_hold
+    action:
+    - service: scene.turn_on
+      entity_id: scene.reset_living_room
+
+
 ########################
 # Binary Sensors
 ########################
@@ -426,7 +464,15 @@ binary_sensor:
   ### attribute change (including time of last MQTT message) will trigger an automation.
   ### An example automation is in the commented section at the top of this package in the `auotmation` section.
   - platform: mqtt
-    name: living_room_button
+    name: living_room_button_hold
+    state_topic: "smartthings/Living Room Button/button/state"
+    payload_on: "held"
+    payload_off: "released"
+    retain: true
+    force_update: true
+  
+  - platform: mqtt
+    name: living_room_button_push
     state_topic: "smartthings/Living Room Button/button/state"
     payload_on: "pushed"
     payload_off: "released"
