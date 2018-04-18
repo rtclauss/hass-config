@@ -85,15 +85,10 @@ homeassistant:
     ################################################
     ## Group
     ################################################
-
     group.trip_status_card:
       <<: *customize
       friendly_name: "Trip Status"
       icon: mdi:beach
-
-    group.vacation_climate:
-      <<: *customize
-      friendly_name: "Climate"
 
     group.vacation_group_card_1:
       <<: *customize
@@ -139,26 +134,10 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-
     sensor.turn_off_time:
       <<: *customize
       friendly_name: "Turn off time"
       icon_template: mdi:clock
-
-    sensor.average_house_temp:
-      <<: *customize
-      friendly_name: "Average House Temperature"
-      icon_template: mdi:thermometer
-
-    sensor.average_house_humidity:
-      <<: *customize
-      friendly_name: "Average House Humidity"
-      icon_template: mdi:water-percent
-
-    sensor.average_house_pressure:
-      <<: *customize
-      friendly_name: "Average House Pressure"
-      icon_template: mdi:gauge
 
 ########################
 # Automations
@@ -378,26 +357,31 @@ group:
     - binary_sensor.sensed_trip
     - binary_sensor.flying_home_today
     - sensor.turn_off_time
+    
   vacation_climate:
     entities:
     - group.average_house_climate
+    
   vacation_group_card_1:
     entities:
     - light.living_room_all
     - switch.front_door
     - scene.vacation_group_1
+    
   vacation_group_card_2:
     entities:
     - light.living_room_all
     - light.master_bedroom
     - switch.stairs
     - scene.vacation_group_2
+    
   vacation_group_card_3:
     entities:
     - light.living_room_all
     - light.master_bedroom
     - light.kitchen_table
     - scene.vacation_group_3
+    
   vacation_group_card_4:
     entities:
     - light.living_room_all
@@ -438,6 +422,7 @@ input_number:
 # Scenes
 ########################
 scene:
+
   - name: Vacation Group 1
     entities:
       light.living_room_all:
@@ -446,6 +431,7 @@ scene:
         color_temp: 500
       switch.front_door:
         state: on
+        
   - name: Vacation Group 2
     entities:
       light.pendant_lamp:
@@ -464,6 +450,7 @@ scene:
         brightness: 255
       switch.stairs:
         state: on
+        
   - name: Vacation Group 3
     entities:
       light.pendant_lamp:
@@ -475,6 +462,7 @@ scene:
         brightness: 255
       light.kitchen_table:
         state: on
+        
   - name: Vacation Group 4
     entities:
       light.pendant_lamp:
@@ -532,59 +520,4 @@ script:
 ########################
 # Sensors
 ########################
-# Maybe these trip sensors should be input boolean with automations on restart to trigger
 sensor:
-  - platform: template
-    sensors:
-      turn_off_time:
-        entity_id:
-          - input_number.random_hour
-          - input_number.random_minute
-        value_template: >-
-          {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
-      average_house_temp:
-        unit_of_measurement: "°F"
-        entity_id:
-          - sensor.living_room_temperature
-          - sensor.master_bedroom_temperature
-          - sensor.guest_room_temperature
-          - sensor.bathroom_temperature
-          - sensor.motion_sensor_temperature
-          - sensor.hallway_thermostat_glycol_temperature
-        value_template: >-
-          {{ (( states("sensor.living_room_temperature")|float +
-          states("sensor.master_bedroom_temperature")|float +
-          states("sensor.guest_room_temperature")|float +
-          states("sensor.bathroom_temperature")|float +
-          states("sensor.motion_sensor_temperature")|float )
-          / 5.0) |round(2)}}
-
-      average_house_humidity:
-        unit_of_measurement: "%"
-        entity_id:
-          - sensor.living_room_humidity
-          - sensor.master_bedroom_humidity
-          - sensor.guest_room_humidity
-          - sensor.bathroom_humidity
-          - sensor.hallway_thermostat_glycol_humidity
-        value_template: >-
-          {{ ( states("sensor.living_room_humidity")|float +
-          states("sensor.master_bedroom_humidity")|float +
-          states("sensor.guest_room_humidity")|float +
-          states("sensor.bathroom_humidity")|float +
-          states("sensor.hallway_thermostat_glycol_humidity")|float )
-          / 5.0 |round}}
-
-      average_house_pressure:
-        unit_of_measurement: "inHg"
-        entity_id:
-          - sensor.living_room_pressure
-          - sensor.master_bedroom_pressure
-          - sensor.guest_room_pressure
-          - sensor.bathroom_pressure
-        value_template: >-
-          {{ ( states("sensor.living_room_humidity")|float +
-          states("sensor.master_bedroom_humidity")|float +
-          states("sensor.guest_room_humidity")|float +
-          states("sensor.bathroom_humidity")|float )
-          / 4.0 |round}}
