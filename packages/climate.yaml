@@ -32,7 +32,46 @@ homeassistant:
       <<: *customize
       friendly_name: 'Nest Home/Away Mode'
       device_class: presence
+      
+    binary_sensor.pressure_falling:
+      <<: *customize
+      friendly_name: "Pressure Falling"
+      icon_template: mdi:gauge
 
+    binary_sensor.pressure_falling_quickly:
+      <<: *customize
+      friendly_name: "Pressure Falling Quickly"
+      icon_template: mdi:gauge
+      
+    binary_sensor.pressure_falling_slowly:
+      <<: *customize
+      friendly_name: "Pressure Falling Slowly"
+      icon_template: mdi:gauge
+      
+    binary_sensor.pressure_falling_v_rapidly:
+      <<: *customize
+      friendly_name: "Pressure Falling Very Rapidly"
+      icon_template: mdi:gauge
+      
+    binary_sensor.pressure_rising:
+      <<: *customize
+      friendly_name: "Pressure Rising"
+      icon_template: mdi:gauge
+      
+    binary_sensor.pressure_rising_quickly:
+      <<: *customize
+      friendly_name: "Pressure Rising Quickly"
+      icon_template: mdi:gauge
+      
+    binary_sensor.pressure_rising_slowly:
+      <<: *customize
+      friendly_name: "Pressure Rising Slowly"
+      icon_template: mdi:gauge
+      
+    binary_sensor.pressure_rising_v_rapidly:
+      <<: *customize
+      friendly_name: "Pressure Rising Very Rapidly"
+      icon_template: mdi:gauge
     ################################################
     ## Groups
     ################################################
@@ -160,6 +199,48 @@ binary_sensor:
           {% else %} 
              True  
           {% endif %}
+  
+  - platform: trend
+    sensors:
+      pressure_falling_v_rapidly:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: -0.00055
+
+      pressure_rising_v_rapidly:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: 0.00055
+
+      pressure_falling_quickly:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: -0.00033
+
+      pressure_rising_quickly:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: 0.00033
+
+      pressure_falling:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: -0.00015
+
+      pressure_rising:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: 0.00015
+        
+      pressure_falling_slowly:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: -0.000009
+
+      pressure_rising_slowly:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 10800
+        min_gradient: 0.000009
 
 ########################
 # Groups
@@ -171,7 +252,28 @@ group:
       - sensor.average_house_temp
       - sensor.average_house_humidity
       - sensor.average_house_pressure
-      
+  
+  pressure_trends:
+    name: Pressure Trends
+    entities:
+      - binary_sensor.pressure_rising_v_rapidly
+      - binary_sensor.pressure_rising_quickly
+      - binary_sensor.pressure_rising_slowly
+      - binary_sensor.pressure_rising
+      - binary_sensor.pressure_falling
+      - binary_sensor.pressure_falling_slowly
+      - binary_sensor.pressure_falling_quickly
+      - binary_sensor.pressure_falling_v_rapidly
+
+  climate:
+    name: Cliamte at a Glance
+    entities:
+      - climate.hallway_glycol
+      - sensor.hallway_thermostat_glycol_temperature
+      - sensor.hallway_thermostat_glycol_humidity
+      - sensor.hallway_thermostat_glycol_target
+      - sensor.hallway_thermostat_glycol_operation_mode
+
 ########################
 # Input Booleans
 ########################
@@ -181,18 +283,6 @@ input_boolean:
 # Input Numbers
 ########################
 input_number:
-
-########################
-# Groups
-########################
-group:
-  Climate:
-    entities:
-      - climate.hallway_glycol
-      - sensor.hallway_thermostat_glycol_temperature
-      - sensor.hallway_thermostat_glycol_humidity
-      - sensor.hallway_thermostat_glycol_target
-      - sensor.hallway_thermostat_glycol_operation_mode
 
 ########################
 # Scenes
@@ -278,7 +368,7 @@ sensor:
           / 5.0 |round}}
 
       average_house_pressure:
-        unit_of_measurement: "inHg"
+        unit_of_measurement: "mbar"
         entity_id:
           - sensor.living_room_pressure
           - sensor.master_bedroom_pressure
