@@ -266,7 +266,7 @@ group:
       - binary_sensor.pressure_falling_v_rapidly
 
   climate:
-    name: Cliamte at a Glance
+    name: Climate at a Glance
     entities:
       - climate.hallway_glycol
       - sensor.hallway_thermostat_glycol_temperature
@@ -344,12 +344,13 @@ sensor:
           - sensor.motion_sensor_temperature
           - sensor.hallway_thermostat_glycol_temperature
         value_template: >-
-          {{ (( states("sensor.living_room_temperature")|float +
+          {{ ( ( states("sensor.living_room_temperature")|float +
           states("sensor.master_bedroom_temperature")|float +
           states("sensor.guest_room_temperature")|float +
+          states("sensor.kitchen_temperature")|float +
           states("sensor.bathroom_temperature")|float +
           states("sensor.motion_sensor_temperature")|float )
-          / 5.0) |round(2)}}
+          / 6.0 ) |round(2) }}
 
       average_house_humidity:
         unit_of_measurement: "%"
@@ -360,12 +361,13 @@ sensor:
           - sensor.bathroom_humidity
           - sensor.hallway_thermostat_glycol_humidity
         value_template: >-
-          {{ ( states("sensor.living_room_humidity")|float +
+          {{ ( ( states("sensor.living_room_humidity")|float +
           states("sensor.master_bedroom_humidity")|float +
           states("sensor.guest_room_humidity")|float +
+          states("sensor.kitchen_humidity")|float +
           states("sensor.bathroom_humidity")|float +
           states("sensor.hallway_thermostat_glycol_humidity")|float )
-          / 5.0 |round}}
+          / 6.0 ) |round(2) }}
 
       average_house_pressure:
         unit_of_measurement: "mbar"
@@ -374,9 +376,11 @@ sensor:
           - sensor.master_bedroom_pressure
           - sensor.guest_room_pressure
           - sensor.bathroom_pressure
+          - sensor.kitchen_pressure
         value_template: >-
-          {{ ( states("sensor.living_room_humidity")|float +
-          states("sensor.master_bedroom_humidity")|float +
-          states("sensor.guest_room_humidity")|float +
-          states("sensor.bathroom_humidity")|float )
-          / 4.0 |round}}
+          {{ ( ( states("sensor.living_room_pressure")|float +
+          states("sensor.master_bedroom_pressure")|float +
+          states("sensor.guest_room_pressure")|float +
+          states("sensor.kitchen_pressure")|float +
+          states("sensor.bathroom_pressure")|float )
+          / 5.0 ) |round(2) }}
