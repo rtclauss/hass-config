@@ -182,8 +182,80 @@ automation:
     - service: climate.turn_on
       data:
         entity_id: climate.hallway_glycol
-        
-        
+
+  - id: alert_car_windows_open_pressure_dropping
+    alias: alert_car_windows_open_pressure_dropping
+    trigger: 
+    - platform: state
+      entity_id: 
+        - binary_sensor.pressure_falling
+        - binary_sensor.pressure_falling_quickly
+        - binary_sensor.pressure_falling_v_rapidly
+      from: 'off'
+      to: 'on'
+      for:
+        minutes: 5
+    condition:
+    - condition: template
+      value_template: >-
+        {{ not is_state('sensor.season', 'winter') }}
+    action: 
+    - service: notify.all
+      data:
+        message: "It will rain soon.  Are your car windows closed?"
+
+  - id: alert_house_windows_open_pressure_dropping
+    alias: alert_house_windows_open_pressure_dropping
+    trigger: 
+    - platform: state
+      entity_id: 
+        - binary_sensor.pressure_falling
+        - binary_sensor.pressure_falling_quickly
+        - binary_sensor.pressure_falling_v_rapidly
+      from: 'off'
+      to: 'on'
+    condition:
+      condition: and
+      conditions:
+      - condition: state
+        entity_id: group.egress_points
+        state: 'on'
+      - condition: template
+        value_template: >-
+          {{ not is_state('sensor.season', 'winter') }}
+    action: 
+    - service: persistent_notification.create
+      data_template:
+        title:  "Uh Oh"
+        message: >
+          ![image]({{ [
+          "https://media1.tenor.com/images/2c7e865ab2e4d8084356b9f306011a1d/tenor.gif?itemid=5043009",
+          "https://i.imgur.com/0Y9CfFt.gif",
+          "https://media0.giphy.com/media/3orieNWYPMcSvsbL9e/giphy.gif",
+          "https://media.giphy.com/media/3orieZMmRdBlKk5nY4/giphy.gif",
+          "https://media3.giphy.com/media/c1izstLXX1nxu/giphy.gif",
+          "https://media2.giphy.com/media/xT5LMq3JLEak50YXHG/giphy.gif",
+          "http://s2.quickmeme.com/img/2b/2bacb9823bbf1efd53d3e8f5c9133814bfad9fd59c53c13f793d6fe9292ba1be.jpg"
+            ] | random }})
+          You left a window open at home. Dumbass.
+    - service: notify.ios_wethop
+      data_template:
+        title: "Open Window"
+        message: "It's going to rain and you left a window open at home"
+        data:
+          attachment: 
+            url: >-
+              {{ [
+              "https://media1.tenor.com/images/2c7e865ab2e4d8084356b9f306011a1d/tenor.gif?itemid=5043009",
+              "https://i.imgur.com/0Y9CfFt.gif",
+              "https://media0.giphy.com/media/3orieNWYPMcSvsbL9e/giphy.gif",
+              "https://media.giphy.com/media/3orieZMmRdBlKk5nY4/giphy.gif",
+              "https://media3.giphy.com/media/c1izstLXX1nxu/giphy.gif",
+              "https://media2.giphy.com/media/xT5LMq3JLEak50YXHG/giphy.gif",
+              ] | random }}
+            content-type: gif
+            hide-thumbnail: false
+
         
 ########################
 # Binary Sensors
@@ -325,6 +397,9 @@ sensor:
     unit_of_measurement: "°F"
     force_update: true
     retain: true
+
+  - platform: season
+    type: meteorological
 
   - platform: template
     sensors:
