@@ -54,6 +54,16 @@ homeassistant:
       friendly_name: "Turn off hallway light automatically"
       icon: mdi:ceiling-light
 
+    automation.master_bedroom_light_auto_on:
+      <<: *customize
+      friendly_name: "Turn off master bedroom lights automatically"
+      icon: mdi:ceiling-light
+      
+    automation.master_bedroom_light_auto_off:
+      <<: *customize
+      friendly_name: "Turn off master bedroom lights automatically"
+      icon: mdi:ceiling-light
+      
     automation.toggle_living_room:
       <<: *customize
       friendly_name: "Toggle Living Room"
@@ -98,6 +108,12 @@ homeassistant:
       friendly_name: "Front Door Light Automatically Turned on"
       icon: mdi:home
       hidden: true
+      
+    input_boolean.master_bedroom_auto_on:
+      <<: *customize
+      friendly_name: "Master Bedroom Light Automatically Turned on"
+      icon: mdi:hotel
+      hidden: true
 
     ################################################
     ## Input Numbers
@@ -114,6 +130,7 @@ homeassistant:
     light.bedroom_lamp_2:
       <<: *customize
       friendly_name: "Bedroom Lamp"
+      icon: mdi:hotel
 
     light.christmas_lights:
       <<: *customize
@@ -327,6 +344,46 @@ automation:
         data:
           entity_id: light.hallway_light
 
+  - id: master_bedroom_light_auto_off
+    alias: master_bedroom_light_auto_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: "off"
+    condition:
+      condition: state
+      entity_id: input_boolean.master_bedroom_auto_on
+      state: "on"
+    action:
+      - service: homeassistant.turn_off
+        data:
+          entity_id: light.master_bedroom
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.master_bedroom_auto_on
+
+  - id: master_bedroom_light_auto_on
+    alias: master_bedroom_light_auto_on
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: "on"
+    condition:
+      condition: and
+      conditions:
+        - condition: sun
+          after: sunset
+        - condition: state
+          entity_id: light.master_bedroom
+          state: "off"
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id: light.master_bedroom
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.master_bedroom_auto_on
+
   - alias: toggle_living_room
     id: toggle_living_room
     trigger:
@@ -400,7 +457,7 @@ group:
 input_boolean:
   deck_auto_on:
   front_door_auto_on:
-
+  master_bedroom_auto_on:
 ########################
 # Input Numbers
 ########################
