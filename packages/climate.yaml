@@ -195,17 +195,20 @@ automation:
     trigger: 
     - platform: state
       entity_id: 
-        - binary_sensor.pressure_falling
-        - binary_sensor.pressure_falling_quickly
         - binary_sensor.pressure_falling_v_rapidly
       from: 'off'
       to: 'on'
       for:
-        minutes: 5
+        minutes: 30
     condition:
-    - condition: template
-      value_template: >-
-        {{ not is_state('sensor.season', 'winter') }}
+      condition: and
+      conditions:
+      - condition: template
+        value_template: >-
+          {{ states.sensor.pws_weather_1h.attributes.precip_prop > 50 }}
+      - condition: template
+        value_template: >-
+          {{ not is_state('sensor.season', 'winter') }}
     action: 
     - service: notify.all
       data:
@@ -227,6 +230,9 @@ automation:
       - condition: state
         entity_id: group.egress_points
         state: 'on'
+      - condition: template
+        value_template: >-
+          {{ states.sensor.pws_weather_1h.attributes.precip_prop > 50 }}
       - condition: template
         value_template: >-
           {{ not is_state('sensor.season', 'winter') }}
