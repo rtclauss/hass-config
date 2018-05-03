@@ -216,7 +216,7 @@ automation:
       event: start
     condition: []
     action:
-    - delay: '00:00:{{ (range(1,30)|random|int) }}'
+    - delay: '00:00:{{ (range(1,60)|random|int) }}'
     - service: script.toggle_view
       data_template:
         view_id: curling
@@ -232,7 +232,7 @@ binary_sensor:
       curling_season:
         entity_id: sensor.time
         value_template: >-
-          {{ now().strftime("%m") |int in [1,2,3,4,5,10,11,12] }}
+          {{ now().strftime("%m") |int in [1,2,3,4,10,11,12] }}
       away_from_curling:
         value_template: >
           {% if
@@ -283,7 +283,7 @@ script:
   toggle_curling_automation_on_curling_season:
     sequence:
       - service_template: >-
-          {% if is_state("binary_sensor.curling_season", "on") %}
+          {% if is_state("trigger.to_state.state", "on") %}
             automation.turn_on
           {% else %}
             automation.turn_off
