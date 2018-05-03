@@ -316,8 +316,12 @@ automation:
         entity_id: binary_sensor.hallway_motion
         to: "on"
     condition:
-      condition: sun
-      before: sunrise
+        - condition: sun
+          before: sunrise
+          before_offset: "-0:30:00"
+        - condition: sun
+          after: sunset
+          after_offset: "-0:30:00"
     action:
       - service: homeassistant.turn_on
         data:
@@ -351,9 +355,12 @@ automation:
         entity_id: binary_sensor.master_bedroom_motion
         to: "off"
     condition:
-      condition: state
-      entity_id: input_boolean.master_bedroom_auto_on
-      state: "on"
+        - condition: sun
+          after: sunset
+          after_offset: "-0:30:00"
+        - condition: state
+          entity_id: input_boolean.master_bedroom_auto_on
+          state: "on"
     action:
       - service: homeassistant.turn_off
         data:
@@ -372,7 +379,11 @@ automation:
       condition: and
       conditions:
         - condition: sun
+          before: sunrise
+          before_offset: "-0:30:00"
+        - condition: sun
           after: sunset
+          after_offset: "-0:30:00"
         - condition: state
           entity_id: light.master_bedroom
           state: "off"
