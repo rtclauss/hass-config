@@ -56,6 +56,11 @@ homeassistant:
       friendly_name: "Living Room Motion"
       icon: mdi:cctv
 
+    camera.basement_cam_motion_detection_image:
+      <<: *customize
+      friendly_name: "Basement Motion"
+      icon: mdi:cctv
+
     ################################################
     ## Device Trackers
     ################################################
@@ -160,8 +165,8 @@ binary_sensor:
   - platform: mqtt
     name: basement_cam_motion
     state_topic: "topic/basement_cam/motion"
-    payload_on: "on"
-    payload_off: "off"
+    payload_on: "ON"
+    payload_off: "OFF"
     
   - platform: mqtt
     name: living_room_cam_motion
@@ -188,6 +193,10 @@ camera:
     name: living_room_cam_motion_detection_image
     topic: "topic/livingroom_cam/motion_snapshots"
 
+  - platform: mqtt
+    name: basement_cam_motion_detection_image
+    topic: "topic/basement_cam/motion_snapshots"
+
 
 ########################
 # Device Trackers
@@ -205,6 +214,7 @@ group:
       - group.basement_camera_status
       - camera.basement_cam
       - camera.living_room_cam_motion_detection_image
+      - camera.basement_cam_motion_detection_image
       
   basement_camera_status:
     entities:
@@ -263,47 +273,42 @@ sensor:
 switch:
   - platform: mqtt
     name: basement_cam_blue_led
-    state_topic: "topic/basement_cam/status"
-    value_template: '{{ value_json["LEDs"]["Blue"] }}'
-    command_topic: "topic/basement_cam/Blue_LED/set"
-    payload_on: "on"
-    payload_off: "off"
+    state_topic: "topic/basement_cam/leds/blue"
+    command_topic: "topic/basement_cam/leds/blue/set"
+    payload_on: "ON"
+    payload_off: "OFF"
     optimistic: false
 
   - platform: mqtt
     name: basement_cam_motion_detection
-    state_topic: "topic/basement_cam/status"
-    value_template: '{{ value_json["motion_detection"] }}'
-    command_topic: "topic/basement_cam/motion_detection/set"
-    payload_on: "on"
-    payload_off: "off"
+    state_topic: "topic/basement_cam/motion/detection"
+    command_topic: "topic/basement_cam/motion/detection/set"
+    payload_on: "ON"
+    payload_off: "OFF"
     optimistic: false
     
   - platform: mqtt
     name: basement_cam_yellow_led
-    state_topic: "topic/basement_cam/status"
-    value_template: '{{ value_json["LEDs"]["Yellow"] }}'
-    command_topic: "topic/basement_cam/Yellow_LED/set"
-    payload_on: "on"
-    payload_off: "off"
+    state_topic: "topic/basement_cam/leds/yellow"
+    command_topic: "topic/basement_cam/leds/yellow/set"
+    payload_on: "ON"
+    payload_off: "OFF"
     optimistic: false
 
   - platform: mqtt
     name: basement_cam_RTSP_H264
-    state_topic: "topic/basement_cam/status"
-    value_template: "{% if value_json[\"RTSP-Server\"] == 'running' %}h264_start{% else %}rtsp_stop{% endif %}"
-    command_topic: "topic/basement_cam/set"
-    payload_on: "h264_start"
-    payload_off: "rtsp_stop"
+    state_topic: "topic/basement_cam/rtsp_server"
+    command_topic: "topic/basement_cam/rtsp_server/set"
+    payload_on: "ON"
+    payload_off: "OFF"
     optimistic: false
 
   - platform: mqtt
     name: basement_cam_RTSP_MJPEG
-    state_topic: "topic/basement_cam/status"
-    value_template: "{% if value_json[\"RTSP-Server\"] == 'running' %}mjpeg_start{% else %}rtsp_stop{% endif %}"
-    command_topic: "topic/basement_cam/set"
-    payload_on: "mjpeg_start"
-    payload_off: "rtsp_stop"
+    state_topic: "topic/basement_cam/rtsp_server"
+    command_topic: "topic/basement_cam/rtsp_server/set"
+    payload_on: "ON"
+    payload_off: "OFF"
     optimistic: false
     
   - platform: mqtt
