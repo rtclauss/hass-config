@@ -196,6 +196,8 @@ automation:
     trigger:
     - platform: state
       entity_id: binary_sensor.curling_season
+    - platform: homeassistant
+      event: start
     action:
     - service: script.toggle_curling_automation_on_curling_season
       data:
@@ -283,7 +285,7 @@ script:
   toggle_curling_automation_on_curling_season:
     sequence:
       - service_template: >-
-          {% if is_state("trigger.to_state.state", "on") %}
+          {% if is_state("binary_sensor.curling_season", "on") %}
             automation.turn_on
           {% else %}
             automation.turn_off
