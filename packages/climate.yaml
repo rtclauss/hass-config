@@ -105,25 +105,25 @@ homeassistant:
     ################################################
     sensor.basement_humidity:
       <<: *customize
-      icon: mdi:water-percent
+      device_class: humidity
       
     sensor.garage_humidity:
       <<: *customize
-      icon: mdi:water-percent
+      device_class: humidity
       
     sensor.hallway_thermostat_glycol_humidity:
       <<: *customize
-      icon: mdi:water-percent
+      device_class: humidity
 
     sensor.average_house_temp:
       <<: *customize
       friendly_name: "Average House Temperature"
-      icon: mdi:thermometer
+      device_class: temperature
 
     sensor.average_house_humidity:
       <<: *customize
       friendly_name: "Average House Humidity"
-      icon: mdi:water-percent
+      device_class: humidity
 
     sensor.average_house_pressure:
       <<: *customize
@@ -308,28 +308,24 @@ sensor:
   - platform: mqtt
     state_topic: "sensor/basement_humidity"
     name: "Basement Humidity"
-    unit_of_measurement: "%"
     force_update: true
     retain: true
   
   - platform: mqtt
     state_topic: "sensor/basement_temperature"
     name: "Basement Temperature"
-    unit_of_measurement: "°F"
     force_update: true
     retain: true
   
   - platform: mqtt
     state_topic: "sensor/humidity"
     name: "Garage Humidity"
-    unit_of_measurement: "%"
     force_update: true
     retain: true
     
   - platform: mqtt
     state_topic: "sensor/temperature"
     name: "Garage Temperature"
-    unit_of_measurement: "°F"
     force_update: true
     retain: true
 
@@ -345,7 +341,6 @@ sensor:
         value_template: >-
           {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
       average_house_temp:
-        unit_of_measurement: "°F"
         entity_id:
           - sensor.living_room_temperature
           - sensor.master_bedroom_temperature
@@ -363,7 +358,6 @@ sensor:
           / 6.0 ) |round(2) }}
 
       average_house_humidity:
-        unit_of_measurement: "%"
         entity_id:
           - sensor.living_room_humidity
           - sensor.master_bedroom_humidity
