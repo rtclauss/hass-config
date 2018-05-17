@@ -159,8 +159,8 @@ automation:
     trigger:
     - platform: state
       entity_id:
-        - binary_sensor.basement_cam_motion
-        - binary_sensor.living_room_cam_motion
+        - binary_sensor.basement_cam_motion_sensor
+        - binary_sensor.livingroom_cam_motion_sensor
       from: 'off'
       to: 'on'
       for:
@@ -175,10 +175,10 @@ automation:
           push:
             category: camera
           entity_id: >-
-            {% if trigger.entity_id == "binary_sensor.basement_cam_motion" %}
+            {% if trigger.entity_id == "binary_sensor.basement_cam_motion_sensor" %}
               camera.basement_cam
             {% else %}
-              camera.living_room_cam
+              camera.livingroom_cam
             {% endif %}
           
   - alias: arm_alarm
@@ -199,7 +199,7 @@ automation:
         code: !secret alarm_code
     - service: switch.turn_on
       entity_id:
-        - switch.living_room_cam_motion_detection
+        - switch.livingroom_cam_motion_detection
         - switch.basement_cam_motion_detection
 
 
@@ -217,7 +217,7 @@ automation:
          code: !secret alarm_code
     - service: switch.turn_off
       entity_id:
-        - switch.living_room_cam_motion_detection
+        - switch.livingroom_cam_motion_detection
         - switch.basement_cam_motion_detection
     - service: notify.all
       data_template:
@@ -260,8 +260,8 @@ group:
       - binary_sensor.master_bedroom_motion
       - binary_sensor.downstairs_motion
       - binary_sensor.motion_sensor_motion
-      - binary_sensor.living_room_cam_motion
-      - binary_sensor.basement_cam_motion
+      - binary_sensor.livingroom_cam_motion_sensor
+      - binary_sensor.basement_cam_motion_sensor
 
 ########################
 # Input Booleans
