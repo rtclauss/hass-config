@@ -28,12 +28,12 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
-    binary_sensor.basement_cam_motion:
+    binary_sensor.basement_cam_motion_sensor:
       <<: *customize
       device_class: motion
       friendly_name: "Basement Camera Motion"
 
-    binary_sensor.living_room_cam_motion:
+    binary_sensor.livingroom_cam_motion_sensor:
       <<: *customize
       device_class: motion
       friendly_name: "Living Room Camera Motion"
@@ -46,19 +46,19 @@ homeassistant:
       friendly_name: "Basement Camera"
       icon: mdi:cctv
 
-    camera.living_room_cam:
+    camera.livingroom_cam:
       <<: *customize
       friendly_name: "Living Room Camera"
       icon: mdi:cctv
       
-    camera.living_room_cam_motion_detection_image:
+    camera.livingroom_cam_motion_snapshot:
       <<: *customize
-      friendly_name: "Living Room Motion"
+      friendly_name: "Living Room Motion Snapshot"
       icon: mdi:cctv
 
-    camera.basement_cam_motion_detection_image:
+    camera.basement_cam_motion_snapshot:
       <<: *customize
-      friendly_name: "Basement Motion"
+      friendly_name: "Basement Motion Snapshot"
       icon: mdi:cctv
 
     ################################################
@@ -71,10 +71,12 @@ homeassistant:
     group.all_cameras:
       <<: *customize
       friendly_name: All Camera Info
+    
     group.basement_camera_status:
       <<: *customize
       friendly_name: Basement Camera Status
-    group.living_room_camera_status:
+      
+    group.livingroom_camera_status:
       <<: *customize
       friendly_name: Living Room Camera Status
 
@@ -109,41 +111,82 @@ homeassistant:
       <<: *customize
       friendly_name: "Basement Blue LED"
 
+    switch.basement_cam_h264_rtsp_server:
+      <<: *customize
+      friendly_name: "Basement RTSP H264"
+
+    switch.basement_cam_ir_filter:
+      <<: *customize
+      friendly_name: "Basement IR Filter"
+      
+    switch.basement_cam_ir_led:
+      <<: *customize
+      friendly_name: "Basement IR LED"
+
+    switch.basement_cam_mjpeg_rtsp_server:
+      <<: *customize
+      friendly_name: "Basement RTSP MJPEG"
+    
     switch.basement_cam_motion_detection:
       <<: *customize
       friendly_name: "Basement Motion Detection"
+      
+    switch.basement_cam_motion_tracking:
+      <<: *customize
+      friendly_name: "Basement Motion Tracking"
+      
+    switch.basement_cam_night_mode:
+      <<: *customize
+      friendly_name: "Basement Night Mode"
+      
+    switch.basement_cam_night_mode_auto:
+      <<: *customize
+      friendly_name: "Basement Auto Night Mode"
 
     switch.basement_cam_yellow_led:
       <<: *customize
       friendly_name: "Basement Yellow LED"
       
-    switch.basement_cam_RTSP_H264:
-      <<: *customize
-      friendly_name: "Basement RTSP H264"
-      
-    switch.basement_cam_RTSP_MJPEG:
-      <<: *customize
-      friendly_name: "Basement RTSP MJPEG"
-      
-    switch.living_room_cam_blue_led:
+    switch.livingroom_cam_blue_led:
       <<: *customize
       friendly_name: "Living Room Blue LED"
-      
-    switch.living_room_cam_motion_detection:
-      <<: *customize
-      friendly_name: "Living Room Motion Detection"
     
-    switch.living_room_cam_yellow_led:
-      <<: *customize
-      friendly_name: "Living Room Yellow LED"
-      
-    switch.living_room_cam_RTSP_H264:
+    switch.livingroom_cam_h264_rtsp_server:
       <<: *customize
       friendly_name: "Living Room RTSP H264"
       
-    switch.living_room_cam_RTSP_MJPEG:
+    switch.livingroom_cam_mjpeg_rtsp_server:
       <<: *customize
       friendly_name: "Living Room RTSP MJPEG"
+      
+    switch.livingroom_cam_ir_filter:
+      <<: *customize
+      friendly_name: "Living Room IR Filter"
+      
+    switch.livingroom_cam_ir_led:
+      <<: *customize
+      friendly_name: "Living Room IR LED"
+      
+    switch.livingroom_cam_motion_detection:
+      <<: *customize
+      friendly_name: "Living Room Motion Detection"
+      
+    switch.livingroom_cam_motion_tracking:
+      <<: *customize
+      friendly_name: "Living Room Motion Tracking"
+      
+    switch.livingroom_cam_night_mode:
+      <<: *customize
+      friendly_name: "Living Room Night Mode"
+      
+    switch.livingroom_cam_night_mode_auto:
+      <<: *customize
+      friendly_name: "Living Room Auto Night Mode"
+
+    switch.livingroom_cam_yellow_led:
+      <<: *customize
+      friendly_name: "Living Room Yellow LED"
+
 
     ################################################
     ## Thermostats
@@ -162,18 +205,6 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: mqtt
-    name: basement_cam_motion
-    state_topic: "topic/basement_cam/motion"
-    payload_on: "ON"
-    payload_off: "OFF"
-    
-  - platform: mqtt
-    name: living_room_cam_motion
-    state_topic: "topic/livingroom_cam/motion"
-    payload_on: "ON"
-    payload_off: "OFF"
-
 
 ########################
 # Cameras
@@ -185,18 +216,10 @@ camera:
     ffmpeg_bin: /usr/local/bin/ffmpeg
     
   - platform: ffmpeg
-    name: living_room_cam
+    name: livingroom_cam
     input: -rtsp_transport tcp -i rtsp://livingroom_cam.lan:8554/unicast
     ffmpeg_bin: /usr/local/bin/ffmpeg
     
-  - platform: mqtt
-    name: living_room_cam_motion_detection_image
-    topic: "topic/livingroom_cam/motion_snapshots"
-
-  - platform: mqtt
-    name: basement_cam_motion_detection_image
-    topic: "topic/basement_cam/motion_snapshots"
-
 
 ########################
 # Device Trackers
@@ -209,28 +232,42 @@ device_tracker:
 group:
   all_cameras:
     entities:
-      - group.living_room_camera_status
-      - camera.living_room_cam
+      - group.livingroom_camera_status
+      - camera.livingroom_cam
       - group.basement_camera_status
       - camera.basement_cam
-      - camera.living_room_cam_motion_detection_image
-      - camera.basement_cam_motion_detection_image
+      - camera.livingroom_cam_motion_snapshot
+      - camera.basement_cam_motion_snapshot
       
   basement_camera_status:
     entities:
+      - switch.basement_cam_motion_detection
+      - switch.basement_cam_motion_tracking
+      - switch.basement_cam_night_mode
+      - switch.basement_cam_night_mode_auto
+      - switch.basement_cam_ir_filter
+      - switch.basement_cam_ir_led
+      - switch.basement_cam_mjpeg_rtsp_server
+      - switch.basement_cam_h264_rtsp_server
       - switch.basement_cam_blue_led
       - switch.basement_cam_yellow_led
-      - switch.basement_cam_motion_detection
-      - switch.basement_cam_RTSP_H264
-      - switch.basement_cam_RTSP_MJPEG
+      - cover.basement_cam_move_leftright
+      - cover.basement_cam_move_updown
       
-  living_room_camera_status:
+  livingroom_camera_status:
     entities:
-      - switch.living_room_cam_blue_led
-      - switch.living_room_cam_yellow_led
-      - switch.living_room_cam_motion_detection
-      - switch.living_room_cam_RTSP_H264
-      - switch.living_room_cam_RTSP_MJPEG
+      - switch.livingroom_cam_motion_detection
+      - switch.livingroom_cam_motion_tracking
+      - switch.livingroom_cam_night_mode
+      - switch.livingroom_cam_night_mode_auto
+      - switch.livingroom_cam_ir_filter
+      - switch.livingroom_cam_ir_led
+      - switch.livingroom_cam_mjpeg_rtsp_server
+      - switch.livingroom_cam_h264_rtsp_server
+      - switch.livingroom_cam_blue_led
+      - switch.livingroom_cam_yellow_led
+      - cover.livingroom_cam_move_leftright
+      - cover.livingroom_cam_move_updown
 
 ########################
 # Input Booleans
@@ -271,86 +308,6 @@ sensor:
 # Switches
 ########################
 switch:
-  - platform: mqtt
-    name: basement_cam_blue_led
-    state_topic: "topic/basement_cam/leds/blue"
-    command_topic: "topic/basement_cam/leds/blue/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-
-  - platform: mqtt
-    name: basement_cam_motion_detection
-    state_topic: "topic/basement_cam/motion/detection"
-    command_topic: "topic/basement_cam/motion/detection/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-    
-  - platform: mqtt
-    name: basement_cam_yellow_led
-    state_topic: "topic/basement_cam/leds/yellow"
-    command_topic: "topic/basement_cam/leds/yellow/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-
-  - platform: mqtt
-    name: basement_cam_RTSP_H264
-    state_topic: "topic/basement_cam/rtsp_server"
-    command_topic: "topic/basement_cam/rtsp_server/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-
-  - platform: mqtt
-    name: basement_cam_RTSP_MJPEG
-    state_topic: "topic/basement_cam/rtsp_server"
-    command_topic: "topic/basement_cam/rtsp_server/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-    
-  - platform: mqtt
-    name: living_room_cam_blue_led
-    state_topic: "topic/livingroom_cam/leds/blue"
-    command_topic: "topic/livingroom_cam/leds/blue/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-    
-
-  - platform: mqtt
-    name: living_room_cam_motion_detection
-    state_topic: "topic/livingroom_cam/motion/detection"
-    command_topic: "topic/livingroom_cam/motion/detection/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-
-  - platform: mqtt
-    name: living_room_cam_yellow_led
-    state_topic: "topic/livingroom_cam/leds/yellow"
-    command_topic: "topic/livingroom_cam/leds/yellow/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-
-  - platform: mqtt
-    name: living_room_cam_RTSP_H264
-    state_topic: "topic/livingroom_cam/rtsp_server"
-    command_topic: "topic/livingroom_cam/rtsp_server/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
-
-  - platform: mqtt
-    name: living_room_cam_RTSP_MJPEG
-    state_topic: "topic/livingroom_cam/rtsp_server"
-    command_topic: "topic/livingroom_cam/rtsp_server/set"
-    payload_on: "ON"
-    payload_off: "OFF"
-    optimistic: false
     
 ########################
 # Zone
