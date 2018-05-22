@@ -154,7 +154,7 @@ automation:
     - service: device_tracker.see
       data:
         dev_id: wethop
-    - delay: '00:00:{{ (range(1,30)|random|int) }}'
+    - delay: '00:00:{{ (range(1,90)|random|int) }}'
     - service: script.vacation_group_visibility
 
   - id: on_vacation_trigger
@@ -168,6 +168,12 @@ automation:
     - platform: state
       entity_id: binary_sensor.bayesian_zeke_home
       to: 'off'
+    - platform: state
+      entity_id: binary_sensor.planned_work_trip_calendar
+      to: 'on'
+    - platform: state
+      entity_id: binary_sensor.planned_vacation_calendar
+      to: 'on'
     condition:
       condition: or
       conditions:
