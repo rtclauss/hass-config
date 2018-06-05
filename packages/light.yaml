@@ -26,12 +26,12 @@ homeassistant:
     ################################################
     automation.deck_light_auto_off:
       <<: *customize
-      friendly_name: "Turn off deck light automatically"
+      friendly_name: "Turn off deck lights automatically"
       icon: mdi:nature-people
 
     automation.deck_light_auto_on:
       <<: *customize
-      friendly_name: "Turn on deck light automatically"
+      friendly_name: "Turn on deck lights automatically"
       icon: mdi:nature-people
 
     automation.front_door_light_auto_off:
@@ -240,7 +240,9 @@ automation:
     action:
       - service: homeassistant.turn_off
         data:
-          entity_id: switch.deck
+          entity_id: 
+            - switch.deck
+            - switch.deck_led_lights
       - service: homeassistant.turn_off
         data:
           entity_id: input_boolean.deck_auto_on
@@ -259,10 +261,15 @@ automation:
         - condition: state
           entity_id: switch.deck
           state: "off"
+        - condition: state
+          entity_id: switch.deck_led_lights
+          state: "off"
     action:
       - service: homeassistant.turn_on
         data:
-          entity_id: switch.deck
+          entity_id: 
+            - switch.deck
+            - switch.deck_led_lights
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.deck_auto_on
