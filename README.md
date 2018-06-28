@@ -38,6 +38,10 @@ Software on the pi:
 * Leviton Switch Vizia RF+
 * Leviton Vizia + Digital Coordinating Remote Switch
 * GE Z-Wave Wireless Smart Lighting Control Outdoor Module
+* Lutron Pico LZL-4B-WH-L01 Connected Bulb Remote
+* GE Link Smart LED Bulbs
+* GE ZigBee Wireless Smart Lighting Control Appliance Switch
+* [GoControl Z-Wavbe Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
 
 **AppDaemon Apps:**
 * [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give a ground-truth location information.
