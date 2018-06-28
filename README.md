@@ -6,8 +6,8 @@
 I have Home Assistant running on a [Raspberry Pi 3]().
 
 Software on the pi:
-* [Home Assistant](https://home-assistant.io/) via hass.io
-* Running in hass.io
+* [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
+* Running in Hass.io
   * [AppDaemon](https://community.home-assistant.io/t/community-hass-io-add-on-appdaemon3/41261?u=frenck)
   * [Bluetooth BCM43xx](https://home-assistant.io/addons/bluetooth_bcm43xx/)
   * [IDE](https://community.home-assistant.io/t/community-hass-io-add-on-ide-based-on-cloud9/33810?u=frenck)
