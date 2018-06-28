@@ -1,0 +1,332 @@
+name: The Brewery
+views:
+- name: Home
+  cards:
+  - type: glance
+    entities:
+      - alarm_control_panel.home_alarm
+      - device_tracker.bayesian_zeke_home
+  - type: entity-filter
+# Broken in 0.72.1
+#    card: glance
+    filter:
+      - entity_id: 'sensor.average_house_*'
+    card_config:
+      title: Average Climate
+      
+  - type: entities
+    title: External
+    entities:
+      - switch.deck
+      - switch.deck_led_lights
+      - switch.front_door
+    
+  - type: entities
+    title: Living Room
+    entities:
+      - light.living_room_all
+      - light.tv
+      - light.pendant_lamp
+      - light.left_lamp
+      - light.right_lamp
+      - switch.flux
+      - switch.christmas_tree
+      - light.christmas_lights
+      - sensor.living_room_temperature
+      - sensor.living_room_humidity
+      
+  - type: entities
+    title: Master Bedroom
+    entities:
+      - light.master_bedroom
+      - sensor.master_bedroom_temperature
+      - sensor.master_bedroom_humidity
+    
+  - type: entities
+    title: Kitchen
+    entities:
+    - light.kitchen_table
+    - sensor.kitchen_temperature
+    - sensor.kitchen_humidity
+    
+  - type: entities
+    title: Other Lights
+    entities:
+    - switch.stairs
+    - light.hallway_light
+    - light.office_lamp
+  
+  - type: entities
+    title: Scenes
+    entities:
+      - scene.bedroom_prep
+      - scene.chill
+      - scene.the_walking_dead
+      - scene.reset_living_room
+  
+  - type: media-control
+    entity: media_player.living_room
+    
+  - type: media-control
+    entity: media_player.amazon_fire_tv
+    
+  - type: media-control
+    entity: media_player.vizio_smartcast
+
+##################################################
+
+- name: Weather
+  cards: 
+  - type: glance
+    entities:
+      - sensor.pws_alerts
+
+  - type: entities
+    title: Current Conditions
+    entities:
+      - sun.sun
+      - sensor.pws_weather
+      - sensor.pws_temp_f
+      - sensor.pws_feelslike_f
+      - sensor.pws_dewpoint_f
+      - sensor.pws_relative_humidity
+      - sensor.pws_heat_index_f
+      - sensor.pws_pressure_mb
+      - sensor.pws_pressure_trend
+      - sensor.dark_sky_cloud_coverage
+      - sensor.dark_sky_precip_intensity
+      - sensor.dark_sky_precip
+      - sensor.precip_next_6h
+      - sensor.pws_observation_time
+
+  - type: entities
+    title: Daily Forecast
+    entities:
+      - sensor.pws_weather_1d
+      - sensor.pws_weather_1n
+      - sensor.pws_weather_2d
+      - sensor.pws_weather_2n
+      - sensor.pws_weather_3d
+      - sensor.pws_weather_3n
+
+  - type: entity-filter
+    card_config:
+      title: Four-hour Forecast
+    filter:
+      - domain: sensor
+        entity_id: '*weather'
+      - domain: sensor
+        entity_id: '*weather_*h'
+
+##################################################
+
+- name: Cameras
+  cards: 
+  - type: entity-filter
+    card_config:
+      title: Living Room Controls
+    filter:
+      - domain: switch
+        entity_id: '*livingroom_*'
+      - domain: cover
+        entity_id: '*livingroom_move_*'
+
+  - type: camera-preview
+    entity: camera.livingroom
+
+  - type: entity-filter
+    card_config:
+      title: Basement Controls
+    filter:
+      - domain: switch
+        entity_id: '*basement_*'
+      - domain: cover
+        entity_id: '*basement_*'
+
+  - type: camera-preview
+    entity: camera.basement
+
+  - type: camera-preview
+    entity: camera.livingroom_motion_snapshot
+
+  - type: camera-preview
+    entity: camera.basement_motion_snapshot
+
+##################################################
+
+- name: Climate
+  cards:
+  - type: entities
+    title: Current Conditions
+    entities:
+      - sun.sun
+      - sensor.pws_weather
+      - sensor.pws_temp_f
+      - sensor.pws_feelslike_f
+      - sensor.pws_dewpoint_f
+      - sensor.pws_relative_humidity
+      - sensor.pws_heat_index_f
+      - sensor.pws_pressure_mb
+      - sensor.pws_pressure_trend
+      - sensor.dark_sky_cloud_coverage
+      - sensor.dark_sky_precip_intensity
+      - sensor.dark_sky_precip
+      - sensor.precip_next_6h
+      - sensor.pws_observation_time
+
+  - type: entity-filter
+    card_config:
+      title: Nest at a Glance
+    filter:
+      - domain: climate
+        entity_id: '*hallway_glycol'
+      - domain: sensor
+        entity_id: '*hallway_thermostat*'
+
+  - type: entities
+    title: Living Room
+    entities:
+    - sensor.living_room_temperature
+    - sensor.living_room_humidity
+    - sensor.living_room_pressure
+    - sensor.living_room_battery
+    - sensor.motion_sensor_temperature
+  - type: entities
+    title: Master Bedroom
+    entities:
+    - sensor.master_bedroom_temperature
+    - sensor.master_bedroom_humidity
+    - sensor.master_bedroom_pressure
+    - sensor.master_bedroom_battery
+  - type: entities
+    title: Guest Bedroom
+    entities:
+    - sensor.guest_room_temperature
+    - sensor.guest_room_humidity
+    - sensor.guest_room_pressure
+    - sensor.guest_room_battery
+  - type: entities
+    title: Kitchen
+    entities:
+    - sensor.kitchen_temperature
+    - sensor.kitchen_humidity
+    - sensor.kitchen_pressure
+    - sensor.kitchen_battery
+  - type: entities
+    title: Bathroom
+    entities:
+    - sensor.bathroom_temperature
+    - sensor.bathroom_humidity
+    - sensor.bathroom_pressure
+    - sensor.bathroom_battery
+  - type: entities
+    title: Basement
+    entities:
+    - sensor.basement_temperature
+    - sensor.basement_humidity
+  - type: entities
+    title: Garage
+    entities:
+    - sensor.garage_temperature
+    - sensor.garage_humidity
+
+##################################################
+
+- name: Plants
+  tab_icon: mdi:tree
+  cards:
+  - type: plant-status
+    entity: plant.east_hanging_nepenthes
+  - type: plant-status
+    entity: plant.west_hanging_nepenthes
+  - type: plant-status
+    entity: plant.four_inch_nepenthes
+
+##################################################
+
+- name: Automations
+  cards:
+  - type: entity-filter
+    card_config:
+      title: Motion Sensors
+    filter:
+      - domain: binary_sensor
+        entity_id: '*motion*'
+
+  - type: glance
+    title: Travel Sensors
+    entities:
+      - sensor.home_distance
+      - sensor.home_time
+      - sensor.heading_home
+      - sensor.twincities
+      - binary_sensor.test_homeward
+
+  - type: entity-filter
+# Broken in 0.72.1
+#    card: glance
+    card_config:
+      title: Proximity
+    filter:
+      - domain: proximity
+
+  - type: entities
+    title: Bayesian Presence
+    entities:
+      - binary_sensor.bayesian_zeke_home
+      - device_tracker.bayesian_zeke_home
+      - device_tracker.wethop
+      - device_tracker.4098ad3265d4
+      - device_tracker.arrival_sensor
+      - device_tracker.iphone_bt
+      - sensor.iphone_battery_state
+      - binary_sensor.nest_home
+
+  - type: entities
+    title: Logging Level
+    entities:
+      - input_select.log_level
+
+  - type: entities
+    title: Vacation Light Settings
+    entities:
+    - input_number.random_vacation_light_group
+    - input_number.random_hour
+    - input_number.random_minute
+
+  - type: entity-filter
+    card_config:
+      title: All Automations
+    filter:
+      - domain: automation
+
+##################################################
+
+- name: Batteries
+  tab_icon: mdi:battery
+  cards:
+  - type: entity-filter
+    filter:
+      - domain: sensor
+        entity_id: '*battery'
+
+##################################################
+
+- name: Blocked Domains
+  cards:
+  - type: entity-filter
+    filter:
+      - domain: sensor
+        entity_id: '*pihole*'
+
+##################################################
+
+- cards:
+  - card_config:
+      title: All Entities
+    filter:
+    - {}
+    type: entity-filter
+  name: All Entities
+  tab_icon: mdi:settings
+
