@@ -159,8 +159,8 @@ automation:
     trigger:
     - platform: state
       entity_id:
-        - binary_sensor.basement_cam_motion_sensor
-        - binary_sensor.livingroom_cam_motion_sensor
+        - binary_sensor.basement_motion_sensor
+        - binary_sensor.livingroom_motion_sensor
       from: 'off'
       to: 'on'
       for:
@@ -175,10 +175,10 @@ automation:
           push:
             category: camera
           entity_id: >-
-            {% if trigger.entity_id == "binary_sensor.basement_cam_motion_sensor" %}
-              camera.basement_cam
+            {% if trigger.entity_id == "binary_sensor.basement_motion_sensor" %}
+              camera.basement
             {% else %}
-              camera.livingroom_cam
+              camera.livingroom
             {% endif %}
           
   - alias: arm_alarm
@@ -199,8 +199,8 @@ automation:
         code: !secret alarm_code
     - service: switch.turn_on
       entity_id:
-        - switch.livingroom_cam_motion_detection
-        - switch.basement_cam_motion_detection
+        - switch.livingroom_motion_detection
+        - switch.basement_motion_detection
 
 
   - alias: disarm_alarm
@@ -217,8 +217,8 @@ automation:
          code: !secret alarm_code
     - service: switch.turn_off
       entity_id:
-        - switch.livingroom_cam_motion_detection
-        - switch.basement_cam_motion_detection
+        - switch.livingroom_motion_detection
+        - switch.basement_motion_detection
     - service: notify.all
       data_template:
         message: >
@@ -260,8 +260,8 @@ group:
       - binary_sensor.master_bedroom_motion
       - binary_sensor.downstairs_motion
       - binary_sensor.motion_sensor_motion
-      - binary_sensor.livingroom_cam_motion_sensor
-      - binary_sensor.basement_cam_motion_sensor
+      - binary_sensor.livingroom_motion_sensor
+      - binary_sensor.basement_motion_sensor
 
 ########################
 # Input Booleans
