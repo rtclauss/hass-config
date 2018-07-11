@@ -209,10 +209,16 @@ automation:
     - service: notify.all
       data:
         message: "Back from trip. \uD83D\uDEEC"
+    - service: input_number.set_value
+      data_template:
+        entity_id: input_number.random_vacation_light_group
+        value: '{{ (0|int) }}'
 
   - id: random_off_time
     alias: random_off_time
     trigger:
+    - platform: homeassistant
+      event: start
     - platform: time
       at: '12:00:00'
     condition:
@@ -416,7 +422,7 @@ input_number:
     step: 1
     mode: box
   random_vacation_light_group:
-    min: 1
+    min: 0
     max: 4
     step: 1
     mode: box
