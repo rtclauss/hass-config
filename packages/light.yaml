@@ -63,7 +63,17 @@ homeassistant:
       <<: *customize
       friendly_name: "Turn off master bedroom lights automatically"
       icon: mdi:ceiling-light
-      
+
+    automation.office_light_on_at_night:
+      <<: *customize
+      friendly_name: "Turn on office light automatically at night"
+      icon: mdi:ceiling-light
+
+    automation.office_light_off_at_night:
+      <<: *customize
+      friendly_name: "Turn off office light automatically"
+      icon: mdi:ceiling-light
+
     automation.toggle_living_room:
       <<: *customize
       friendly_name: "Toggle Living Room"
@@ -398,6 +408,37 @@ automation:
         data:
           entity_id: input_boolean.master_bedroom_auto_on
           brightness: 1
+
+  - id: office_light_on_at_night
+    alias: office_light_on_at_night
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.office_motion
+        to: "on"
+    condition:
+      condition: sun
+      before: sunrise
+      after_offset: "-0:30:00"
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id: light.office_light
+          brightness: 1
+
+  - id: office_light_off_at_night
+    alias: office_light_off_at_night
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.office_motion
+        to: "off"
+    condition:
+      condition: sun
+      before: sunrise
+      after_offset: "-0:30:00"
+    action:
+      - service: homeassistant.turn_off
+        data:
+          entity_id: light.office_light
 
   - alias: toggle_living_room
     id: toggle_living_room
