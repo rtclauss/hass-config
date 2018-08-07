@@ -224,7 +224,8 @@ automation:
 #    - service: notify.all
 #      data:
 #        message: Home again, home again, jiggity jig.
-    - service: vacuum.return_to_home
+    - service: vacuum.return_to_base
+      entity_id: vacuum.pbw
   
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
@@ -300,7 +301,8 @@ automation:
       from: 'off'
       to: 'on'
     action:
-    - service: vacuum.return_to_home
+    - service: vacuum.return_to_base
+      entity_id: vacuum.pbw
 
 ########################
 # Binary Sensors
@@ -330,13 +332,13 @@ binary_sensor:
       platform: 'state'
       to_state: 'home'
     - entity_id: device_tracker.wethop
-      prob_given_true: 0.95
+      prob_given_true: 0.97
       prob_given_false: 0.1
       platform: 'state'
       to_state: 'home'
     - entity_id: device_tracker.iphone_bt
       prob_given_true: 0.80
-      prob_given_false: 0.4
+      prob_given_false: 0.40
       platform: 'state'
       to_state: 'home'
     - entity_id: device_tracker.arrival_sensor
@@ -369,6 +371,7 @@ device_tracker:
     interval_seconds: 30
     
   - platform: bluetooth_tracker
+    consider_home: 240
 
 ########################
 # Input Booleans
