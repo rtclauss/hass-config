@@ -15,7 +15,7 @@ class add_gps(hass.Hass):
     
     self.log("registering callback {} {}".format(self.location_update, self.gps_sensor))
     self.listen_state(self.location_update, entity = self.gps_sensor)
-    self.listen_state(self.location_update, entity =  self.bayesian)
+    self.listen_state(self.location_update, entity = self.bayesian)
     
     
   def setup_location(self):
@@ -31,12 +31,12 @@ class add_gps(hass.Hass):
     
   def location_update(self, entity, attribute, old, new, kwargs):
     self.log("in location_update")
-    self.log("{} {} {} {} {}".format(entity, attribute, old, new, kwargs))
+    self.log("triggered by: {} {} {} {} {}".format(entity, attribute, old, new, kwargs))
     bayesian_state = self.get_state(self.bayesian, attribute="all")
     self.log("here is the current bayesian state: {}".format(bayesian_state))
-    sensor_state = self.get_state(entity, attribute="all")
-    self.log("here is the GPS state: {}".format(sensor_state))
-    self.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
+    gps_sensor_state = self.get_state(self.gps_sensor, attribute="all")
+    self.log("here is the GPS state: {}".format(gps_sensor_state))
+    self.run_update(bayesian_state=bayesian_state, sensor_state=gps_sensor_state)
     
     
   def run_update(self, bayesian_state, sensor_state):
