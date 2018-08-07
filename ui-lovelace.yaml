@@ -4,17 +4,20 @@ resources:
     type: js
   - url: /local/custom-lovelace/entity-attributes-card/entity-attributes-card.js
     type: js
+  - url: /local/tracker-card.js?v=0.1.4
+    type: js
 views:
 - title: Home
   id: home
   icon: mdi:beer
+  badges:
+    - alarm_control_panel.home_alarm
   cards:
-    - type: glance
+    - type: map
+      aspect_ratio: 66%
       entities:
-        - entity: alarm_control_panel.home_alarm
-          name: Alarm
         - entity: device_tracker.bayesian_zeke_home
-          name: Where?
+        - zone.home
 
     - type: entities
       title: Average Climate
@@ -87,97 +90,22 @@ views:
 
 ##################################################
 
-- title: Vacation
-  id: vacation
-  icon: mdi:airport
-  cards:
-    - type: horizontal-stack
-      cards:
-      - type: entities
-        title: Trip Status
-        entities:
-          - binary_sensor.planned_vacation_calendar
-          - binary_sensor.planned_work_trip_calendar
-          - binary_sensor.sensed_trip
-          - binary_sensor.flying_home_today
-          - sensor.turn_off_time
-
-    - type: horizontal-stack
-      cards:
-      - type: "custom:monster-card"
-        card:
-          type: entities
-          title: "Lighting Override"
-        filter:
-          include:
-            - entity_id: light.living_room_all
-            - entity_id: switch.front_door
-            - entity_id: scene.vacation_group_1
-        when:
-          entity: input_number.random_vacation_light_group
-          state: "1.0"
-  
-      - type: "custom:monster-card"
-        card:
-          type: entities
-          title: "Lighting Override"
-        filter:
-          include:
-            - entity_id: light.living_room_all
-            - entity_id: light.master_bedroom
-            - entity_id: switch.stairs
-            - entity_id: scene.vacation_group_2
-        when:
-          entity: input_number.random_vacation_light_group
-          state: "2.0"
-  
-      - type: "custom:monster-card"
-        card:
-          type: entities
-          title: "Lighting Override"
-        filter:
-          include:
-            - entity_id: light.living_room_all
-            - entity_id: light.master_bedroom
-            - entity_id: light.kitchen_table
-            - entity_id: scene.vacation_group_3
-        when:
-          entity: input_number.random_vacation_light_group
-          state: "3.0"
-  
-      - type: "custom:monster-card"
-        card:
-          type: entities
-          title: "Lighting Override"
-        filter:
-          include:
-            - entity_id: light.living_room_all
-            - entity_id: light.kitchen_table
-            - entity_id: light.office_lamp
-            - entity_id: switch.stairs
-            - entity_id: switch.front_door
-            - entity_id: scene.vacation_group_4
-        when:
-          entity: input_number.random_vacation_light_group
-          state: "4.0"
-
-
-##################################################
-
 - title: Weather
   id: weather
   icon: mdi:weather-lightning
   cards: 
     - type: iframe
       url: https://radblast.wunderground.com/cgi-bin/radar/WUNIDS_map?station=MPX&brand=wui&num=10&delay=15&type=N0Z&frame=0&scale=1.000&noclutter=0&showstorms=0&mapx=400&mapy=240&centerx=400&centery=240&transx=0&transy=0&showlabels=1&severe=0&rainsnow=0&lightning=0&smooth=0&rand=25525140&lat=0&lon=0&label=you
-      aspect_ration: 25%
+      aspect_ratio: 100%
+
     - type: "custom:entity-attributes-card"
       title: Weather Alerts
-      attributes:
-        - key: sensor.pws_alerts.Description
-          name: Type
-        - key: sensor.pws_alerts.Message
-          name: Details
+      filter:
+        include:
+          - key: sensor.pws_alerts.Description
+            name: Type
+          - key: sensor.pws_alerts.Message
+            name: Details
   
     - type: entities
       title: Current Conditions
@@ -372,6 +300,24 @@ views:
   icon: mdi:robot
   cards:
     - type: entities
+      title: Bayesian Presence
+      entities:
+        - binary_sensor.bayesian_zeke_home
+        - device_tracker.bayesian_zeke_home
+        - device_tracker.wethop
+        - device_tracker.4098ad3265d4
+        - device_tracker.arrival_sensor
+        - device_tracker.iphone_bt
+        - sensor.iphone_battery_state
+        - binary_sensor.nest_home
+
+    - type: entities
+      title: Vacuum
+      show_header_toggle: false
+      entities:
+        - vacuum.pbw
+
+    - type: entities
       title: Motion Sensors
       entities:
         - binary_sensor.hallway_motion
@@ -392,18 +338,6 @@ views:
         - binary_sensor.test_homeward
   
     - type: entities
-      title: Bayesian Presence
-      entities:
-        - binary_sensor.bayesian_zeke_home
-        - device_tracker.bayesian_zeke_home
-        - device_tracker.wethop
-        - device_tracker.4098ad3265d4
-        - device_tracker.arrival_sensor
-        - device_tracker.iphone_bt
-        - sensor.iphone_battery_state
-        - binary_sensor.nest_home
-  
-    - type: entities
       title: Logging Level
       entities:
         - input_select.log_level
@@ -415,11 +349,13 @@ views:
       - input_number.random_hour
       - input_number.random_minute
   
-    - type: entity-filter
-      card_config:
+    - type: "custom:monster-card"
+      card:
+        type: entities
         title: All Automations
       filter:
-        - domain: automation
+        include:
+          - domain: automation
 
 ##################################################
 
@@ -427,34 +363,13 @@ views:
   id: batteries
   icon: mdi:battery
   cards:
-    - type: entities
-      title: Status
-      entities:
-          - sensor.arrival_sensor_battery
-          - sensor.basement_door_battery
-          - sensor.bathroom_battery
-          - sensor.deck_door_battery
-          - sensor.downstairs_motion_battery
-          - sensor.ene_window_battery
-          - sensor.ese_window_battery
-          - sensor.front_door_battery
-          - sensor.guest_room_button_battery
-          - sensor.guest_room_battery
-          - sensor.hallway_motion_battery
-          - sensor.kitchen_battery
-          - sensor.living_room_battery
-          - sensor.living_room_button_battery
-          - sensor.master_bedroom_battery
-          - sensor.master_bedroom_motion_battery
-          - sensor.motion_sensor_battery
-          - sensor.north_kitchen_sink_window_battery
-          - sensor.north_master_bedroom_window_battery
-          - sensor.nne_window_battery
-          - sensor.nw_basement_window_battery
-          - sensor.office_motion_battery
-          - sensor.office_north_window_battery
-          - sensor.se_basement_window_battery
-          - sensor.sw_basement_window_battery
+    - type: "custom:monster-card"
+      card:
+        type: entities
+        title: "Status"
+      filter:
+        include:
+          - entity_id: sensor.*battery*
 
 ##################################################
 
@@ -472,12 +387,85 @@ views:
 
 ##################################################
 
-- cards:
-  - card_config:
-      title: All Entities
-    filter:
-    - {}
-    type: entity-filter
-  title: All Entities
+- title: Vacation
+  id: vacation
+  icon: mdi:airport
+  cards:
+    - type: horizontal-stack
+      cards:
+      - type: entities
+        title: Trip Status
+        entities:
+          - binary_sensor.planned_vacation_calendar
+          - binary_sensor.planned_work_trip_calendar
+          - binary_sensor.sensed_trip
+          - binary_sensor.flying_home_today
+          - sensor.turn_off_time
+
+    - type: horizontal-stack
+      cards:
+        - type: "conditional"
+          conditions:
+            - entity: input_number.random_vacation_light_group
+              state: "1.0"
+          card:
+            type: entities
+            title: "Lighting Override"
+            entities:
+              - light.living_room_all
+              - switch.front_door
+              - scene.vacation_group_1
+
+        - type: "conditional"
+          conditions:
+            - entity: input_number.random_vacation_light_group
+              state: "2.0"
+          card:
+            type: entities
+            title: "Lighting Override"
+            entities:
+              - light.living_room_all
+              - light.master_bedroom
+              - switch.stairs
+              - scene.vacation_group_2
+
+        - type: "conditional"
+          conditions:
+            - entity: input_number.random_vacation_light_group
+              state: "3.0"
+          card:
+            type: entities
+            title: "Lighting Override"
+            entities:
+              - light.living_room_all
+              - light.master_bedroom
+              - light.kitchen_table
+              - scene.vacation_group_3
+
+        - type: "conditional"
+          conditions:
+            - entity: input_number.random_vacation_light_group
+              state: "4.0"
+          card:
+            type: entities
+            title: "Lighting Override"
+            entities:
+              - light.living_room_all
+              - light.kitchen_table
+              - light.office_lamp
+              - switch.stairs
+              - switch.front_door
+              - scene.vacation_group_4
+
+##################################################
+
+- title: Other items
   icon: mdi:settings
+  cards:
+  - type: custom:tracker-card
+    title:
+    trackers:
+      - sensor.custom_card_tracker
+      - sensor.custom_component_tracker
+
 
