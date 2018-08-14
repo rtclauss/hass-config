@@ -8,6 +8,8 @@ homeassistant:
   customize: !include customize.yaml
   packages: !include_dir_named packages
 
+custom_updater:
+
 hassio:
 
 ffmpeg:
@@ -20,9 +22,10 @@ config:
 
 logger:
 #  default: info
-  default: warn
+  default: critical
 #  default: debug
   logs:
+#    homeassistant.components.device_tracker: debug
     custom_components.device: debug
     homeassistant.components.zha_new: debug
     homeassistant.custom_components.zha_new: debug
@@ -40,6 +43,8 @@ http:
     - 192.168.1.99
     - 2602:100:602a:5df5::82c 
   ip_ban_enabled: true 
+  trusted_networks:
+    - 172.16.0.0/12
   login_attempts_threshold: 5
 
 # Enables support for tracking state changes over time.
@@ -65,9 +70,9 @@ logbook:
 #  ignore:
 #    - hue
 
-hue:
-  bridges:
-    - host: !secret hue_host
+#hue:
+#  bridges:
+#    - host: !secret hue_host
 
 wink:
 
