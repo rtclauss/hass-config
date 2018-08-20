@@ -4,10 +4,31 @@
 # Original Repo : https://github.com/CCOSTAN/Home-AssistantConfig
 #-------------------------------------------
 homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: 'logger'
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+    automation.log_level:
+      <<: *customize
+      friendly_name: "Log Level"
+      icon: mdi:bug
+
   customize_glob:
     "input_select.log_*":
       icon: mdi:bug
-
       hidden: False
 
 ########################
@@ -32,7 +53,8 @@ input_select:
 #- Thanks @VDRainer
 ###################################
 automation:
-  - alias: Log Level
+  - id: log_level
+    alias: log_level
     trigger:
       platform: state
       entity_id:
