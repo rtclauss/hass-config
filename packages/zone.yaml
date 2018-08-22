@@ -68,6 +68,7 @@ homeassistant:
     binary_sensor.bayesian_zeke_home:
       <<: *customize
       friendly_name: "Home"
+
     binary_sensor.test_homeward:
       <<: *customize
       friendly_name: "Returning from long road trip (95 minutes)"
@@ -286,6 +287,10 @@ automation:
       entity_id: binary_sensor.bayesian_zeke_home
       from: 'on'
       to: 'off'
+    condition:
+    - condition: state
+      entity_id: input_boolean.guest_mode
+      state: false
     action:
     - service: scene.turn_on
       entity_id: scene.leave_home
