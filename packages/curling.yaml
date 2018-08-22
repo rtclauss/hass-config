@@ -134,12 +134,16 @@ automation:
       platform: state
       to: 'off'
     condition:
-    - after: '17:00:00'
-      before: '19:45:00'
-      condition: time
-      weekday:
-      - tue
-      - wed
+      conditions: and
+      - after: '17:00:00'
+        before: '19:45:00'
+        condition: time
+        weekday:
+        - tue
+        - wed
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: false
     action:
     - data:
         away_mode: true
