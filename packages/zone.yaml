@@ -197,23 +197,24 @@ automation:
   - id: doors_open_when_leaving_home
     alias: doors_open_when_leaving_home
     trigger:
-      - entity_id: binary_sensor.bayesian_zeke_home
-        platform: state
-        from: home
-        to: away
+    - entity_id: binary_sensor.bayesian_zeke_home
+      platform: state
+      from: home
+      to: away
     condition:
       condition: or
       conditions:
-        - condition: state
-          entity_id: binary_sensor.deck_door_contact
-          state: open
-        - condition: state
-          entity_id: binary_sensor.front_door_contact
-          state: open
+      - condition: state
+        entity_id: binary_sensor.deck_door_contact
+        state: open
+      - condition: state
+        entity_id: binary_sensor.front_door_contact
+        state: open
     action:
-      - data:
+    - service: notify.all
+      data:
         message: Door left open!
-        service: notify.all
+      
 
   - id: garage_door_open_when_leaving_home
     alias: garage_door_open_when_leaving_home
@@ -227,9 +228,9 @@ automation:
       entity_id: cover.garage_door_opener
       state: open
     action:
-    - data:
+    - service: notify.all
+      data:
         message: Garage door is still open!
-      service: notify.all
 
   - id: turn_on_lights_at_night_when_i_get_home
     alias: turn_on_lights_at_night_when_i_get_home
