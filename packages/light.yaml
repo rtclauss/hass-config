@@ -152,6 +152,21 @@ homeassistant:
       friendly_name: "Front Door"
       icon: mdi:home
     
+    light.guest_ceiling:
+      <<: *customize
+      friendly_name: "Guest Ceiling Light"
+      icon: mdi:home
+      
+    light.guest_left_lamp:
+      <<: *customize
+      friendly_name: "Guest Left Lamp"
+      icon: mdi:home
+      
+    light.guest_right_lamp:
+      <<: *customize
+      friendly_name: "Guest Right Lamp"
+      icon: mdi:home
+    
     light.hallway_light:
       <<: *customize
       friendly_name: "Hallway"
@@ -330,6 +345,20 @@ automation:
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.front_door_auto_on
+
+  - id: guest_room_lights_off
+    alias: guest_room_lights_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.guest_room_button
+        to: "on"
+    action:
+      - service: homeassistant.toggle
+        data:
+          entity_id: 
+            - light.guest_ceiling
+            - light.guest_left_lamp
+            - light.guest_right_lamp
 
   - id: hallway_light_on_at_night
     alias: hallway_light_on_at_night
