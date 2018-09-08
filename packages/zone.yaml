@@ -37,6 +37,10 @@ homeassistant:
       <<: *customize
       friendly_name: Cloudy Day Arrival
       icon: mdi:weather-cloudy
+    automation.doors_open_when_leaving_home:
+      <<: *customize
+      friendly_name: Doors Left Open When Leaving
+      icon: mdi:door-open
     automation.garage_door_open_when_leaving_home:
       <<: *customize
       friendly_name: Garage Door Left Open When Leaving
@@ -190,6 +194,27 @@ automation:
 #      data:
 #        message: Cloudy day arrival.
 
+  - id: doors_open_when_leaving_home
+    alias: doors_open_when_leaving_home
+    trigger:
+      - entity_id: binary_sensor.bayesian_zeke_home
+        platform: state
+        from: home
+        to: away
+    condition:
+      condition: or
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.deck_door_contact
+          state: open
+        - condition: state
+          entity_id: binary_sensor.front_door_contact
+          state: open
+    action:
+      - data:
+        message: Door left open!
+        service: notify.all
+
   - id: garage_door_open_when_leaving_home
     alias: garage_door_open_when_leaving_home
     trigger:
@@ -214,11 +239,13 @@ automation:
       from: 'off'
       to: 'on'
     condition:
-      condition: and
+      condition: or
       conditions:
       - condition: sun
         after: sunset
         after_offset: "-1:00:00"
+      - condition: sun
+        before: sunrise
     action:
     - service: scene.turn_on
       entity_id: scene.arrive_home
