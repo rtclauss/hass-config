@@ -29,7 +29,7 @@ class BrightenLights(hass.Hass):
     self.log("Detected Motion in {}".format(self.args["sensors"]))
     workday = self.get_state("binary_sensor.workday_sensor")
     self.log("is it a work day? {}".format(workday))
-    if self.now_is_between(self.args["start_window"], self.args["end_window"]) and new == 'on' and workday:
+    if self.now_is_between(self.args["start_window"], self.args["end_window"]) and new == 'on' and workday == 'on':
       if self.get_state(self.args["light"], attribute="brightness") == None:
         brightness = 1
         self.turn_on(self.args["light"], brightness = brightness)
