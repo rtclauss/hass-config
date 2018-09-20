@@ -189,6 +189,172 @@ scene:
 # Scripts
 ########################
 script:
+  spotify_arrival:
+    alias: 'Spotify Arrive Home'
+    sequence:
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+#      - service: media_player.shuffle_set
+#        data_template:
+#          shuffle: >-
+#            {%- set shuffle = [true, false] -%}
+#              {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+#              {{ shuffle[sindex] }}
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+          source: "Everywhere"
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.40
+      - service: media_player.play_media
+        data: 
+          entity_id: media_player.spotify
+          media_content_type: playlist
+        data_template:
+          media_content_id: >-
+            {# 
+            ## Synthetic music note 
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Discover Weekly: spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Synthetic music note
+            ## This is The Mountain Goats : spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+            ## Synthetic music note
+            ## The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
+            ## Synthetic music note
+            ## Synthetic music note
+            ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Conway Twitty: The #1 Hits Collection : spotify:album:1cE3wPf9E328RukGpUp38O
+            ## Synthetic music note
+            #}
+            {%- set plists = ["spotify:album:synthetic008", 
+              "spotify:user:example:playlist:synthetic068",
+              "spotify:user:example:playlist:synthetic060",
+              "spotify:user:example:playlist:synthetic057",
+              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:user:example:playlist:synthetic067",
+              "spotify:user:example:playlist:synthetic070",
+              "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
+              "spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+              "spotify:user:example:playlist:synthetic065",
+              "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
+              "spotify:artist:synthetic009",
+              "spotify:user:example:playlist:synthetic052",
+              "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
+              "spotify:album:synthetic005",
+              "spotify:album:1cE3wPf9E328RukGpUp38O",
+              "spotify:user:example:playlist:synthetic054"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
+  spotify_wake_up:
+    alias: 'Spotify Wake Up'
+    sequence:
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+#      - service: media_player.shuffle_set
+#        data_template:
+#          shuffle: >-
+#            {%- set shuffle = [true, false] -%}
+#              {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+#              {{ shuffle[sindex] }}
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+        data_template: 
+          source: >-
+            {% if is_state('input_boolean.guest_mode', 'on') %}
+              Bedroom
+            {% else %}
+              Everywhere
+            {% endif %}
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.10
+      - service: media_player.play_media
+        data: 
+          entity_id: media_player.spotify
+          media_content_type: playlist
+        data_template:
+          media_content_id: >-
+            {#
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Synthetic music note
+            ## MGMT Kids Playlsit: spotify:user:example:playlist:synthetic059
+            ## Guardians of the Galaxy Vols 1 & 2 : spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU
+            ## Synthetic music note
+            ## This is Fall Out Boy: spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek
+            ## This is Panic! at the Disco : spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7
+            ## Coheed & Cambria Good Apollo: spotify:track:4Dc5crLrKYIIqf6sk0PvQm
+            ## Synthetic music note
+            ## Matt and Kim : Lightning : spotify:album:2MbpbHn31Luzr8G3uDsSUH
+            ## Synthetic music note
+            ## Synthetic music note
+            ## Conway Twitty - 25 Number Ones spotify:album:4GeLWE7lG3Ur3SaYaolhkh
+            #}
+            {%- set plists = ["spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW", 
+              "spotify:user:example:playlist:synthetic061",
+              "spotify:user:example:playlist:synthetic062",
+              "spotify:user:example:playlist:synthetic071",
+              "spotify:user:example:playlist:synthetic058",
+              "spotify:user:example:playlist:synthetic059",
+              "spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU",
+              "spotify:album:synthetic004",
+              "spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek",
+              "spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7",
+              "spotify:track:4Dc5crLrKYIIqf6sk0PvQm",
+              "spotify:album:synthetic002",
+              "spotify:album:2MbpbHn31Luzr8G3uDsSUH",
+              "spotify:user:example:playlist:synthetic066",
+              "spotify:user:example:playlist:synthetic064",
+              "spotify:album:4GeLWE7lG3Ur3SaYaolhkh"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.15
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.20
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.25
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.30
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.40
 
 ########################
 # Sensor
