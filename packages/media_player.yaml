@@ -189,6 +189,172 @@ scene:
 # Scripts
 ########################
 script:
+  spotify_arrival:
+    alias: 'Spotify Arrive Home'
+    sequence:
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+#      - service: media_player.shuffle_set
+#        data_template:
+#          shuffle: >-
+#            {%- set shuffle = [true, false] -%}
+#              {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+#              {{ shuffle[sindex] }}
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+          source: "Everywhere"
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.40
+      - service: media_player.play_media
+        data: 
+          entity_id: media_player.spotify
+          media_content_type: playlist
+        data_template:
+          media_content_id: >-
+            {# 
+            ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
+            ## All Out 90s : spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
+            ## 2000s Smash Hits : spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw
+            ## 2019 Sealand Invitiational : spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5
+            ## Discover Weekly: spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
+            ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+            ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
+            ## This is The Mountain Goats : spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+            ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
+            ## The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
+            ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
+            ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
+            ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
+            ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
+            ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
+            ## Conway Twitty: The #1 Hits Collection : spotify:album:1cE3wPf9E328RukGpUp38O
+            ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
+            #}
+            {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
+              "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
+              "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
+              "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
+              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
+              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+              "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
+              "spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+              "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
+              "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
+              "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
+              "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
+              "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
+              "spotify:album:4JEgSaokMH5mMRClx9wp3S",
+              "spotify:album:1cE3wPf9E328RukGpUp38O",
+              "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
+  spotify_wake_up:
+    alias: 'Spotify Wake Up'
+    sequence:
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+#      - service: media_player.shuffle_set
+#        data_template:
+#          shuffle: >-
+#            {%- set shuffle = [true, false] -%}
+#              {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+#              {{ shuffle[sindex] }}
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+        data_template: 
+          source: >-
+            {% if is_state('input_boolean.guest_mode', 'on') %}
+              Bedroom
+            {% else %}
+              Everywhere
+            {% endif %}
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.10
+      - service: media_player.play_media
+        data: 
+          entity_id: media_player.spotify
+          media_content_type: playlist
+        data_template:
+          media_content_id: >-
+            {#
+            ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
+            ## Have a Great Day! : spotify:user:spotify:playlist:37i9dQZF1DX7KNKjOK0o75
+            ## 90s Greatest Guilty Pleasures: spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs
+            ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
+            ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
+            ## MGMT Kids Playlsit: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
+            ## Guardians of the Galaxy Vols 1 & 2 : spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU
+            ## Walk the Moon Talking is Hard: spotify:album:3mNoFlD1wsoXfkljfFzExT
+            ## This is Fall Out Boy: spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek
+            ## This is Panic! at the Disco : spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7
+            ## Coheed & Cambria Good Apollo: spotify:track:4Dc5crLrKYIIqf6sk0PvQm
+            ## APC Mer De Noms: spotify:album:0GeWd0yUKXHbCXVag1mJvO
+            ## Matt and Kim : Lightning : spotify:album:2MbpbHn31Luzr8G3uDsSUH
+            ## '90s Pop Rock Essentials : spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
+            ## 90s Rock Anthems: spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F
+            ## Conway Twitty - 25 Number Ones spotify:album:4GeLWE7lG3Ur3SaYaolhkh
+            #}
+            {%- set plists = ["spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW", 
+              "spotify:user:myplay.com:playlist:3hoI0s5TLdpPMcimSRmQpj",
+              "spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs",
+              "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
+              "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
+              "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
+              "spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU",
+              "spotify:album:3mNoFlD1wsoXfkljfFzExT",
+              "spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek",
+              "spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7",
+              "spotify:track:4Dc5crLrKYIIqf6sk0PvQm",
+              "spotify:album:0GeWd0yUKXHbCXVag1mJvO",
+              "spotify:album:2MbpbHn31Luzr8G3uDsSUH",
+              "spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
+              "spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F",
+              "spotify:album:4GeLWE7lG3Ur3SaYaolhkh"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.15
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.20
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.25
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.30
+      - delay:
+          seconds: 15
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.spotify
+          volume_level: 0.40
 
 ########################
 # Sensor
