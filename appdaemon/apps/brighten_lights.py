@@ -29,10 +29,16 @@ class BrightenLights(hass.Hass):
     self.log("Detected Motion in {}".format(self.args["sensors"]))
     workday = self.get_state("binary_sensor.workday_sensor")
     self.log("is it a work day? {}".format(workday))
+    guest_mode = self.get_state(self.args["guest_mode"])
+    self.log("is guest_mode on? {}".format(guest_mode))
     if self.now_is_between(self.args["start_window"], self.args["end_window"]) and new == 'on' and workday == 'on':
       if self.get_state(self.args["light"], attribute="brightness") == None:
         brightness = 1
         self.turn_on(self.args["light"], brightness = brightness)
+        # Play wake up music if bedroom lights turn on.
+        # Maybe I should wake up if a guest is up?  If so, uncomment the next if statement and fix indent
+        if self.args["sensors"] == "binary_sensor.master_bedroom_motion": 
+          self.call_service("script/turn_on", "script.spotify_wake_up")
       else:
         brightness = self.get_state(self.args["light"], attribute="brightness")
       
