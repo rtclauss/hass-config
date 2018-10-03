@@ -38,7 +38,7 @@ class BrightenLights(hass.Hass):
         # Play wake up music if bedroom lights turn on.
         # Maybe I should wake up if a guest is up?  If so, uncomment the next if statement and fix indent
         if self.args["sensors"] == "binary_sensor.master_bedroom_motion": 
-          self.call_service("script/turn_on", "script.spotify_wake_up")
+          self.turn_on("script.spotify_wake_up")
       else:
         brightness = self.get_state(self.args["light"], attribute="brightness")
       
