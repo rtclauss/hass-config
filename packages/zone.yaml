@@ -187,6 +187,9 @@ automation:
       - condition: numeric_state
         entity_id: sensor.dark_sky_cloud_coverage
         above: 50
+      - condition: state
+        entity_id: binary_sensor.master_bed_occupancy
+        state: 'off'
     action:
     - service: scene.turn_on
       entity_id: scene.cloudy_arrive_home
@@ -242,6 +245,9 @@ automation:
     - condition: state
       entity_id: input_boolean.guest_mode
       state: 'off'
+    - condition: state
+      entity_id: binary_sensor.master_bed_occupancy
+      state: 'off'
     action:
     - service: script.turn_on
       entity_id: script.spotify_arrival
@@ -261,6 +267,9 @@ automation:
         after_offset: "-1:00:00"
       - condition: sun
         before: sunrise
+      - condition: state
+        entity_id: binary_sensor.master_bed_occupancy
+        state: 'off'
     action:
     - service: scene.turn_on
       entity_id: scene.arrive_home
@@ -284,6 +293,9 @@ automation:
         after: '22:00:00'
       - condition: sun
         before: sunrise
+      - condition: state
+        entity_id: binary_sensor.master_bed_occupancy
+        state: 'off'
     action:
     - service: scene.turn_on
       entity_id: scene.bedroom_prep
@@ -336,6 +348,9 @@ automation:
     action:
     - service: scene.turn_on
       entity_id: scene.leave_home
+    - delay: 25
+    - service: scene.turn_on
+      entity_id: scene.leave_home
 #    - service: notify.all
 #      data:
 #        message: Auf weidersehen!
@@ -373,19 +388,14 @@ binary_sensor:
     device_class: occupancy
     probability_threshold: 0.85
     observations:
-    - entity_id: device_tracker.4098ad3265d4
-      prob_given_true: 0.90
-      prob_given_false: 0.15
-      platform: 'state'
-      to_state: 'home'
     - entity_id: device_tracker.wethop
       prob_given_true: 0.97
       prob_given_false: 0.1
       platform: 'state'
       to_state: 'home'
     - entity_id: device_tracker.iphone_bt
-      prob_given_true: 0.88
-      prob_given_false: 0.30
+      prob_given_true: 0.97
+      prob_given_false: 0.10
       platform: 'state'
       to_state: 'home'
     - entity_id: device_tracker.arrival_sensor
@@ -442,9 +452,10 @@ group:
   bayesian_inputs:
     entities:
       - device_tracker.bayesian_zeke_home
-      - device_tracker.4098ad3265d4
+      - device_tracker.wethop
+#      - device_tracker.e0338e39ea8c
       - device_tracker.arrival_sensor
-      - device_tracker.iphone_bt
+#      - device_tracker.iphone_bt
       - sensor.iphone_battery_state
       - binary_sensor.nest_home
 
