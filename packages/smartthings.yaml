@@ -85,6 +85,12 @@ homeassistant:
       <<: *customize
       friendly_name: "Living Room Button push"
 
+    binary_sensor.master_bed_occupancy:
+      <<: *customize
+      device_class: occupancy
+      friendly_name: "Master Bed Occupancy"
+      icon: mdi:bed-empty
+
     binary_sensor.master_bedroom_motion:
       <<: *customize
       device_class: motion
@@ -301,6 +307,11 @@ homeassistant:
       <<: *customize
       friendly_name: "Living Room Temperature"
       device_class: temperature
+
+    sensor.master_bed_occupancy_battery:
+      <<: *customize
+      friendly_name: "Master Bed Occupancy Sensor Battery"
+      device_class: battery
 
     sensor.master_bedroom_battery:
       <<: *customize
@@ -523,6 +534,14 @@ binary_sensor:
     state_topic: "smartthings/Living Room Button/button/state"
     payload_on: "pushed"
     payload_off: "released"
+    retain: true
+    force_update: true
+
+  - platform: mqtt
+    name: master_bed_occupancy
+    state_topic: "smartthings/Master Bed Occupancy Sensor/contact/state"
+    payload_on: "closed"
+    payload_off: "open"
     retain: true
     force_update: true
 
@@ -869,6 +888,13 @@ sensor:
     state_topic: "smartthings/Livingroom/temperature/state"
     name: living_room_temperature
     unit_of_measurement: "°F"
+    retain: true
+    force_update: true
+
+  - platform: mqtt
+    state_topic: "smartthings/Master Bedroom Motion Sensor/battery/state"
+    name: master_bed_occupancy_battery
+    unit_of_measurement: "%"
     retain: true
     force_update: true
 
