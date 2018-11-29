@@ -280,6 +280,9 @@ automation:
     - service: notify.all
       data:
         message: Lights off while you're away.
+    - delay: 25
+    - service: scene.turn_on
+      entity_id: scene.leave_home
 
   - id: vacuum_flying_home
     alias: vacuum_flying_home
@@ -529,3 +532,8 @@ script:
 # Sensors
 ########################
 sensor:
+  - platform: waze_travel_time
+    name: "Me to Home"
+    origin: device_tracker.bayesian_zeke_home
+    destination: zone.home
+    region: 'US'
