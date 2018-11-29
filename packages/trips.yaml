@@ -44,6 +44,11 @@ homeassistant:
       <<: *customize
       friendly_name: "Set random turn off time"
 
+    automation.send_nest_airport_home_eta:
+      <<: *customize
+      friendly_name: "Send Nest ETA from MSP airport to home"
+      icon: mdi:airplane-landing
+
     automation.vacation_lights_on:
       <<: *customize
       friendly_name: "Turn on lights when I am away"
@@ -139,6 +144,10 @@ homeassistant:
       <<: *customize
       friendly_name: "Turn off time"
       icon_template: mdi:clock
+      
+    sensor.me_to_home:
+      <<: *customize
+      friendly_name: "Time to Home"
 
 ########################
 # Automations
@@ -242,6 +251,27 @@ automation:
       data:
         message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
     - service: script.vacation_group_visibility
+
+  - id: send_nest_airport_home_eta
+    alias: send_nest_airport_home_eta
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.msp
+      event: leave
+    condition: 
+    - condition: state
+      entity_id: binary_sensor.flying_home_today
+      state: 'on'
+    action:
+    - service: nest.set_eta
+      data_template:
+        eta: >-
+          {% set to_home = states.sensor.me_to_home.state | int %}
+          {% set minutes = ((to_home % 60) / 1) | int %} 
+          {% set hours = ((to_home % 1440) / 60) | int %}
+          {{hours}}:{{minutes}}:00
+        trip_id: Leave MSP
 
   - id: vacation_lights_on
     alias: vacation_lights_on
