@@ -165,15 +165,20 @@ automation:
       condition: time
       weekday:
       - sun
+      - mon
       - tue
     action:
-    - service: climate.set_away_mode
-      data:
-        entity_id: climate.hallway_glycol
-        away_mode: false
+    - service: nest.set_eta
+      data_template:
+        eta: >-
+          {% set to_home = states.sensor.me_to_home.state | int %}
+          {% set minutes = ((to_home % 60) / 1) | int %} 
+          {% set hours = ((to_home % 1440) / 60) | int %}
+          {{hours}}:{{minutes}}:00
+        trip_id: Leave OCC
     - service: notify.all
       data:
-        message: Turn off Nest Away while you drive home from OCC.
+        message: Sent ETA to Nest, driving home from OCC
 
   - id: return_home_from_spcc
     alias: return_home_from_spcc
@@ -188,13 +193,17 @@ automation:
       - sun
       - wed
     action:
-    - service: climate.set_away_mode
-      data:
-        entity_id: climate.hallway_glycol
-        away_mode: false
+    - service: nest.set_eta
+      data_template:
+        eta: >-
+          {% set to_home = states.sensor.me_to_home.state | int %}
+          {% set minutes = ((to_home % 60) / 1) | int %} 
+          {% set hours = ((to_home % 1440) / 60) | int %}
+          {{hours}}:{{minutes}}:00
+        trip_id: Leave SPCC
     - service: notify.all
       data:
-        message: Turn off Nest Away while you drive home from SPCC.
+        message: Sent ETA to Nest, driving home from OCC
 
   - id: toggle_curling_automations_on_season_change
     alias: toggle_curling_automations_on_season_change
@@ -280,7 +289,7 @@ group:
   curling_automations:
     entities:
       - automation.leave_home_for_curling
-      - automation.return_home_from_OCC
+      - automation.return_home_from_occ
       - automation.return_home_from_spcc
 
 ########################
