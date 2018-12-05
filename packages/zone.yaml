@@ -61,6 +61,9 @@ homeassistant:
     automation.turn_off_lights_when_i_leave:
       <<: *customize
       friendly_name: Lights Off on Departure
+    automation.update_nest_eta:
+      <<: *customize
+      friendly_name: Update Nest ETA as Approach Home
     automation.vacuum_return_home:
       <<: *customize
       friendly_name: Stop Vacuuming on Arrival
@@ -157,6 +160,10 @@ homeassistant:
     zone.occ:
       <<: *track_ios
       friendly_name: "Owatonna Curling Club"
+      icon: mdi:curling
+    zone.rochester:
+      <<: *track_ios
+      friendly_name: "Rochester"
       icon: mdi:curling
     zone.spcc:
       <<: *track_ios
@@ -311,13 +318,17 @@ automation:
       entity_id: binary_sensor.test_homeward
       to: 'true'
     action:
+    - service: nest.set_eta
+      data:
+        eta:  sensor.time_to_home
+        trip_id: Roadtrip return
     - service: climate.set_away_mode
       data:
         entity_id: climate.hallway_glycol
         away_mode: false
     - service: notify.all
       data:
-        message: Turn off Nest Away while you drive home from a road trip.
+        message: Turn off Nest Away and send ETA of {{sensor.time_to_home}} while you drive home from a road trip.
         
   - id: return_home_from_twin_cities
     alias: return_home_from_twin_cities
@@ -330,13 +341,17 @@ automation:
       condition: template
       value_template: '{{ states.binary_sensor.test_homeward.state == "on" }}'
     action:
+    - service: nest.set_eta
+      data:
+        eta:  sensor.time_to_home
+        trip_id: Leave Twin Cities
     - service: climate.set_away_mode
       data:
         entity_id: climate.hallway_glycol
         away_mode: false
     - service: notify.all
-      data:
-        message: Turn off Nest Away while you drive home from the Cities.
+      data_template:
+        message: Turn off Nest Away and send ETA of {{sensor.time_to_home}} while you drive home from the Cities.
 
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
@@ -358,6 +373,22 @@ automation:
 #    - service: notify.all
 #      data:
 #        message: Auf weidersehen!
+
+  - id: update_nest_eta
+    alias: update_nest_eta
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.rochester
+      event: enter
+    action:
+    - service: nest.set_eta
+      data:
+        eta:  sensor.time_to_home
+        trip_id: Returning home
+    - service: notify.all
+      data_template:
+        message: Updating ETA to {{sensor.time_to_home}}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
@@ -572,7 +603,13 @@ zone:
     latitude: 44.068651
     longitude: -93.224584
     radius: 500
-  
+    
+  - name: Rochester
+    latitude: !secret home_latitude
+    longitude: !secret home_longitude
+    passive: true
+    radius: 56327
+    
   - name: SPCC
     latitude: 44.946332
     longitude: -93.119860
