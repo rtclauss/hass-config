@@ -567,3 +567,13 @@ sensor:
     origin: device_tracker.bayesian_zeke_home
     destination: zone.home
     region: 'US'
+    
+  - platform: template
+    sensors:
+      time_to_home:
+        friendly_name: "Time to Home"
+        value_template: >-
+          {% set to_home = states.sensor.me_to_home.state | int %}
+          {% set minutes = ((to_home % 60) / 1) | int %} 
+          {% set hours = ((to_home % 1440) / 60) | int %}
+          {{hours}}:{{minutes}}:00
