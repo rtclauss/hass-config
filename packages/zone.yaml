@@ -126,7 +126,10 @@ homeassistant:
     ################################################
     ## Scripts
     ################################################
-
+    script.update_nest_eta:
+      <<: *customize
+      friendly_name: "Distance to Home"
+    
     ################################################
     ## Sensors
     ################################################
@@ -319,8 +322,8 @@ automation:
       to: 'true'
     action:
     - service: nest.set_eta
-      data:
-        eta:  sensor.time_to_home
+      data_template:
+        eta: '{{states.sensor.time_to_home.state}}'
         trip_id: Roadtrip return
     - service: climate.set_away_mode
       data:
@@ -342,8 +345,8 @@ automation:
       value_template: '{{ states.binary_sensor.test_homeward.state == "on" }}'
     action:
     - service: nest.set_eta
-      data:
-        eta:  sensor.time_to_home
+      data_template:
+        eta: '{{states.sensor.time_to_home.state}}'
         trip_id: Leave Twin Cities
     - service: climate.set_away_mode
       data:
@@ -383,8 +386,8 @@ automation:
       event: enter
     action:
     - service: nest.set_eta
-      data:
-        eta:  sensor.time_to_home
+      data_template:
+        eta: '{{states.sensor.time_to_home.state}}'
         trip_id: Returning home
     - service: notify.all
       data_template:
@@ -563,6 +566,11 @@ scene:
 # Scripts
 ########################
 script:
+  update_nest_eta:
+    sequence:
+      - service: nest.set_eta
+        data_template:
+          eta: '{{states.sensor.time_to_home.state}}'
 
 ########################
 # Sensor
