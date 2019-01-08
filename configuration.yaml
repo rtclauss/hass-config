@@ -24,12 +24,25 @@ logger:
   default: warn
 #  default: warn 
 #  default: debug
-#  logs:
+  logs:
 #    homeassistant.components.device_tracker: debug
 #    custom_components.device: debug
+#    custom_components.zha_new: debug
+#    custom_components.device.lumi_sensor_magnet_aq2: debug
+#    custom_components.binary_sensor.zha_new: debug
+#    custom_components.device.lumi_sensor_switch_aq2: debug
+    custom_compoents.sensor.zha_new: debug
+    custom_compoents.light.zha_new: debug
+    bellows: debug
+    bellows.zigbee.application: debug
+    homeassistant.components.zha: debug
+    zigpy: debug
 #    homeassistant.components.zha_new: debug
 #    homeassistant.custom_components.zha_new: debug
+#    homeassistant.custom_components.binary_sensor.zha_new: debug
+#    homeassistant.custom_components.sensor.zha_new: debug
 #    homeassistant.components.sensor.zha_new: debug
+#    homeassistant.components.binary_sensor.zha_new: debug
 #    homeassistant.components.alarm_control_panel: debug
 #    homeassistant.components.wink: debug
 #    homeassistant.components.hue: debug
@@ -118,9 +131,10 @@ vacuum: !include vacuum.yaml
 
 notify: !include notify.yaml
 
-#  - platform: vizio
-#    host: 192.168.1.114
-#    access_token: !secret vizio_tv_token
+media_player:
+  - platform: vizio
+    host: 192.168.1.114
+    access_token: !secret vizio_tv_token
 
 recorder:
 #  db_url: postgresql://@/hass
@@ -183,9 +197,48 @@ cloud:
     filter:
       include_entities:
         - input_boolean.guest_mode
-        - switch.flux
         - scene.reset_living_room
-        - switch.deck_led_string
+        - scene.bedroom_prep
+        - scene.chill
+      include_domains:
+        - light
+        - switch
+      exclude_entities:
+        - switch.livingroom_motion_tracking
+        - switch.basement_night_mode
+        - switch.livingroom_yellow_led
+        - switch.basementcam_ir_led
+        - switch.livingroom_motion_send_mail
+        - switch.livingroom_night_mode_auto
+        - switch.basementcam_ir_filter
+        - switch.basement_motion_send_mail
+        - switch.basement_ir_led
+        - switch.basement_mjpeg_rtsp_server
+        - switch.livingroom_ir_filter
+        - switch.basementcam_motion_tracking
+        - switch.basementcam_blue_led
+        - switch.livingroom_blue_led
+        - switch.hass
+        - switch.basementcam_yellow_led
+        - switch.basement_motion_tracking
+        - switch.livingroom_mjpeg_rtsp_server
+        - switch.basement_h264_rtsp_server
+        - switch.livingroom_motion_detection
+        - switch.basement_ir_filter
+        - switch.basement_motion_detection
+        - switch.basementcam_mjpeg_rtsp_server
+        - switch.basement_blue_led
+        - switch.basementcam_night_mode_auto
+        - switch.basementcam_motion_detection
+        - switch.livingroom_h264_rtsp_server
+        - switch.livingroom_ir_led
+        - switch.basement_yellow_led
+        - switch.basement_night_mode_auto
+        - switch.livingroom_motion_tracking
+        - switch.basement_night_mode
+        - switch.livingroom_yellow_led
+        - switch.basementcam_h264_rtsp_server
+        - switch.basementcam_night_mode
     entity_config:
       input_boolean.guest_mode:
         name: Guest Mode
@@ -206,3 +259,18 @@ weather:
     
 lovelace:
   mode: yaml
+
+cover:
+  - platform: myq
+    username: !secret myq_user
+    password: !secret myq_password
+    type: chamberlain
+
+
+#zha_new:
+#  usb_path: /dev/ttyUSB1
+#  database_path: /config/zigbee.db
+  
+zwave:
+  usb_path: /dev/ttyUSB0
+  network_key: !secret zwave_network_key
