@@ -72,9 +72,15 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
+    binary_sensor.arrival_sensor:
+      <<: *customize
+      friendly_name: "Zigbee Arrival Sensor"
+      device_class: occupancy
+      
     binary_sensor.bayesian_zeke_home:
       <<: *customize
       friendly_name: "Home"
+      device_class: occupancy
 
     binary_sensor.test_homeward:
       <<: *customize
@@ -85,7 +91,7 @@ homeassistant:
     ################################################
     device_tracker.arrival_sensor:
       <<: *customize
-      friendly_name: Zwave Arrival Sensor
+      friendly_name: Zigbee Arrival Sensor
     ################################################
     ## Groups
     ################################################
@@ -436,7 +442,7 @@ binary_sensor:
       prob_given_false: 0.10
       platform: 'state'
       to_state: 'home'
-    - entity_id: device_tracker.arrival_sensor
+    - entity_id: binary_sensor.arrival_sensor
       prob_given_true: 0.97
       prob_given_false: 0.21
       platform: 'state'
@@ -492,7 +498,7 @@ group:
       - device_tracker.bayesian_zeke_home
       - device_tracker.wethop
 #      - device_tracker.e0338e39ea8c
-      - device_tracker.arrival_sensor
+      - binary_sensor.arrival_sensor
 #      - device_tracker.iphone_bt
       - sensor.iphone_battery_state
       - binary_sensor.nest_home
