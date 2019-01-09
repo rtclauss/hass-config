@@ -388,6 +388,14 @@ automation:
     trigger:
     - platform: state
       entity_id: device_tracker.bayesian_zeke_home
+    condition:
+    - condition: template
+      value_template: >- 
+        {{ 
+          as_timestamp(now()) -as_timestamp(states.device_tracker.bayesian_zeke_home.last_changed) |int > 72000
+          or 
+          not is_state('device_tracker.bayesian_zeke_home', 'not_home')
+        }}
     action:
     - service: input_select.select_option
       data_template:
@@ -655,6 +663,11 @@ zone:
     latitude: 44.068651
     longitude: -93.224584
     radius: 500
+    
+  - name: Parents
+    latitude: !secret parents_latitude
+    longitude: !secret parents_longitude
+    radius: 9500
     
   - name: Rochester
     latitude: !secret home_latitude
