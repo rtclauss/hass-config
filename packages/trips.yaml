@@ -252,6 +252,26 @@ automation:
         message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
     - service: script.vacation_group_visibility
 
+  - id: return_home_from_parents
+    alias: return_home_from_parents
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.parents
+      event: leave
+    condition:
+      condition: time
+      weekday:
+      - sun
+    action:
+    - service: nest.set_eta
+      data_template:
+        eta: '{{states.sensor.time_to_home.state}}'
+        trip_id: "{{ states.input_select.trip_origin.state }}"
+    - service: notify.all
+      data_template:
+        message: Sent ETA of {{sensor.time_to_home}} to Nest, driving home from parents
+
   - id: send_nest_airport_home_eta
     alias: send_nest_airport_home_eta
     trigger:
