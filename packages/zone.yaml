@@ -388,6 +388,14 @@ automation:
     trigger:
     - platform: state
       entity_id: device_tracker.bayesian_resident_home
+    condition:
+    - condition: template
+      value_template: >- 
+        {{ 
+          as_timestamp(now()) -as_timestamp(states.device_tracker.bayesian_resident_home.last_changed) |int > 72000
+          or 
+          not is_state('device_tracker.bayesian_resident_home', 'not_home')
+        }}
     action:
     - service: input_select.select_option
       data_template:
@@ -655,6 +663,11 @@ zone:
     latitude: REDACTED
     longitude: REDACTED
     radius: 500
+    
+  - name: Parents
+    latitude: !secret private_zone_06_latitude
+    longitude: !secret private_zone_06_longitude
+    radius: 9500
     
   - name: Example Zone 07
     latitude: !secret home_latitude
