@@ -49,3 +49,4 @@ Software on the pi:
 * [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location information.
 * [Lighting Fade-In](appdaemon/apps/brighten_lights.py) - Fades in lights from `off` over a pre-defined interval on a work (non-weekend, non-holiday) day.
 * [deConz button events](appdaemon/apps/deconz_helper.py) - Translates Xiaomi button events into a generic sensor.
+* [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates Automatic events into a generic sensor.
