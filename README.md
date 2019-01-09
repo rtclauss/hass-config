@@ -22,16 +22,14 @@ Software on the pi:
 * [Amazon Echo](http://amzn.to/2i6mShX)
 * [Amazon Echo Dot Gen 2](http://amzn.to/2hvCexj)
 * [Amazon Fire TV](http://amzn.to/2iD9uPx)
-* [Philips Hue (Gen 2)](http://amzn.to/2hvyzzK)
-* [Philips Hue Motion](http://amzn.to/2iD7jLX)
-* [SmartThings Hub (Gen 1)]()
-* [Wink Hub (Gen 1)]()
+* [deConz Conbee](https://www.amazon.com/NEW-gateway-compact-certified-operating/dp/B01FDWOIHK)
+* Philips Hue (bulbs and light strip)
 * Xiaomi Aqara Motion Sensors
 * Xiaomi Aqara Button
 * Xiaomi Aqara Temperature Sensors
 * Xiaomi Window/Door Sensors
 * Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
-* HUSBZB-1 ZigBee/Z-Wave Stick
+* HUSBZB-1 ZigBee/Z-Wave Stick (for Z-Wave)
 * Xiaomi MiFlora
 * SmartThings Presense Sensor
 * SmartThings Motion Sensor
@@ -41,8 +39,11 @@ Software on the pi:
 * Lutron Pico LZL-4B-WH-L01 Connected Bulb Remote
 * GE Link Smart LED Bulbs
 * GE ZigBee Wireless Smart Lighting Control Appliance Switch
-* [GoControl Z-Wavbe Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
+* Automatic Connected Car adapter (bluetooth)
+* Bed presense sensor: [Ecolink Z-Wave door/window sensor](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU) mated with [Ideal pressure mat](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU)
+* [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
 
 **AppDaemon Apps:**
-* [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give a ground-truth location information.
+* [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location information.
 * [Lighting Fade-In](appdaemon/apps/brighten_lights.py) - Fades in lights from `off` over a pre-defined interval on a work (non-weekend, non-holiday) day.
+* [deConz button events](appdaemon/apps/deconz_helper.py) - Translates Xiaomi button events into a generic sensor.
