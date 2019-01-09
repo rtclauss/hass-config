@@ -330,7 +330,7 @@ automation:
     - service: nest.set_eta
       data_template:
         eta: '{{states.sensor.time_to_home.state}}'
-        trip_id: Roadtrip return
+        trip_id: "{{ states.input_select.trip_origin.state }}"
     - service: climate.set_away_mode
       data:
         entity_id: climate.hallway_glycol
@@ -353,7 +353,7 @@ automation:
     - service: nest.set_eta
       data_template:
         eta: '{{states.sensor.time_to_home.state}}'
-        trip_id: Leave Twin Cities
+        trip_id: "{{ states.input_select.trip_origin.state }}"
     - service: climate.set_away_mode
       data:
         entity_id: climate.hallway_glycol
@@ -383,6 +383,17 @@ automation:
 #      data:
 #        message: Auf weidersehen!
 
+  - id: update_trip_origin
+    alias: update_trip_origin
+    trigger:
+    - platform: state
+      entity_id: device_tracker.bayesian_zeke_home
+    action:
+    - service: input_select.select_option
+      data_template:
+        entity_id: input_select.trip_origin
+        option: "{{ trigger.to_state.state }}"
+
   - id: update_nest_eta
     alias: update_nest_eta
     trigger:
@@ -394,7 +405,7 @@ automation:
     - service: nest.set_eta
       data_template:
         eta: '{{states.sensor.time_to_home.state}}'
-        trip_id: Returning home
+        trip_id: "{{ states.input_select.trip_origin.state }}"
     - service: notify.all
       data_template:
         message: Updating ETA to {{sensor.time_to_home}}.
@@ -490,6 +501,22 @@ input_boolean:
 input_number:
 
 ########################
+# Input Select
+########################
+input_select:
+  trip_origin:
+    name: "Trip Origin"
+    options:
+      - "MSP Airport"
+      - "Owatonna Curling Club"
+      - "St Paul Curling Club"
+      - "Twin Cities"
+      - "Work"
+      - "Home"
+      - "Not_home"
+    initial: "Work"
+
+########################
 # Groups
 ########################
 group:
@@ -563,6 +590,16 @@ proximity:
     devices:
       - device_tracker.bayesian_zeke_home
 
+  msp:
+    zone: msp
+    ignored_zones:
+      # - Work
+      # - OCC
+    tolerance: 50
+    unit_of_measurement: mi
+    devices:
+      - device_tracker.bayesian_zeke_home
+
 ########################
 # Scenes
 ########################
@@ -577,6 +614,7 @@ script:
       - service: nest.set_eta
         data_template:
           eta: '{{states.sensor.time_to_home.state}}'
+          trip_id: "{{ states.input_select.trip_origin.state }}"
 
 ########################
 # Sensor
