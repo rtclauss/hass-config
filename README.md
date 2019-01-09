@@ -39,6 +39,8 @@ Software on the pi:
 * Lutron Pico LZL-4B-WH-L01 Connected Bulb Remote
 * GE Link Smart LED Bulbs
 * GE ZigBee Wireless Smart Lighting Control Appliance Switch
+* Unifi nanoHD-AP
+* Unifi USG
 * Automatic Connected Car adapter (bluetooth)
 * Bed presense sensor: [Ecolink Z-Wave door/window sensor](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU) mated with [Ideal pressure mat](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU)
 * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
