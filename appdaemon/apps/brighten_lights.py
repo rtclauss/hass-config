@@ -25,12 +25,12 @@ class BrightenLights(hass.Hass):
   # On motion brighten the lights in 20 seconds 
   def motion(self, entity, attribute, old, new, kwargs):
     # Debug
-    self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
-    self.log("Detected Motion in {}".format(self.args["sensors"]))
+    #self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
+    #self.log("Detected Motion in {}".format(self.args["sensors"]))
     workday = self.get_state("binary_sensor.workday_sensor")
-    self.log("is it a work day? {}".format(workday))
+    #self.log("is it a work day? {}".format(workday))
     guest_mode = self.get_state(self.args["guest_mode"])
-    self.log("is guest_mode on? {}".format(guest_mode))
+    #self.log("is guest_mode on? {}".format(guest_mode))
     if self.now_is_between(self.args["start_window"], self.args["end_window"]) and new == 'on' and workday == 'on':
       if self.get_state(self.args["light"], attribute="brightness") == None:
         brightness = 1
@@ -55,7 +55,7 @@ class BrightenLights(hass.Hass):
   # Increase the local brightness if the sensor is still on
   def brighten(self, kwargs):
     # Debug
-    self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
+    #self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
 
     # If the motion sensor is still on, increase the brightness
     if self.get_state(kwargs["entity_id"]) == 'on':
@@ -79,11 +79,11 @@ class BrightenLights(hass.Hass):
       if new_brightness > max_brightness:
         new_brightness = int(max_brightness)
         at_max_brightness = True
-      self.log("Increasing brightness from {} to {}".format(current_brightness, new_brightness))
+      #self.log("Increasing brightness from {} to {}".format(current_brightness, new_brightness))
       self.turn_on(self.args["light"], brightness = new_brightness)
       # check if we're done.
       if at_max_brightness:
-        self.log("Done phasing in {}".format(self.args["light"]))
+        #self.log("Done fading in {}".format(self.args["light"]))
         return
       # Check again in 20 seconds
       self.run_in(self.brighten, seconds = kwargs["delay"], delay = kwargs["delay"], entity_id = kwargs["entity_id"], last_increase = current_increase)
