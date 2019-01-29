@@ -27,7 +27,7 @@ class add_gps(hass.Hass):
     #self.log("calling get_state on {}".format(self.bayesian))
     bayesian_state = self.get_state(self.bayesian, attribute="all")
     #self.log("got state data {}".format(bayesian_state, ))
-    #self.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
+    self.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
     
   def location_update(self, entity, attribute, old, new, kwargs):
     #self.log("in location_update")
@@ -36,7 +36,7 @@ class add_gps(hass.Hass):
     #self.log("here is the current bayesian state: {}".format(bayesian_state))
     gps_sensor_state = self.get_state(self.gps_sensor, attribute="all")
     #self.log("here is the GPS state: {}".format(gps_sensor_state))
-    #self.run_update(bayesian_state=bayesian_state, sensor_state=gps_sensor_state)
+    self.run_update(bayesian_state=bayesian_state, sensor_state=gps_sensor_state)
     
     
   def run_update(self, bayesian_state, sensor_state):
@@ -49,7 +49,7 @@ class add_gps(hass.Hass):
       #self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
       #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
-      #self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]], battery=gps_attributes.get("battery", 100)) 
+      self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]], battery=gps_attributes.get("battery", 100)) 
     else:
       #self.log("bayes says I am away")
       if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy", "battery"}:
