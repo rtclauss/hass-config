@@ -56,7 +56,19 @@ class add_gps(hass.Hass):
         try:
           #self.log("My current position is {}(Lat), {}(Long)".format(gps_attributes["latitude"], gps_attributes["longitude"]))
           #self.log("here we go setting {} to away with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, gps_attributes["gps_accuracy"], gps_attributes["latitude"], gps_attributes["longitude"]))
-          self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]}, gps_accuracy=gps_attributes["gps_accuracy"], gps=[gps_attributes["latitude"], gps_attributes["longitude"]], battery = gps_attributes["battery"])
+          self.call_service("device_tracker/see", dev_id=self.device_id, 
+          attributes = {"home_probability": bayesian_state["attributes"]["probability"],
+            "course": gps_attributes["course"],
+            "floor":  gps_attributes["floor"],
+            "source_type":  "gps",
+            "speed":  gps_attributes["speed"],
+            "timestamp": gps_attributes["timestamp"],
+            "trigger": gps_attributes["trigger"],
+            "vertical_accuracy": gps_attributes["vertical_accuracy"]
+          }, 
+          gps_accuracy = gps_attributes["gps_accuracy"], 
+          gps = [gps_attributes["latitude"], gps_attributes["longitude"]], 
+          battery = gps_attributes["battery"])
         except KeyError as e:
           #self.log("KeyError: missing information from bayes sensor, defaulting back to bayesian state")
           self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})

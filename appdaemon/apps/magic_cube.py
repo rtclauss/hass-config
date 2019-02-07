@@ -20,7 +20,7 @@ class RemoteControl(hass.Hass):
                 self.log('Button dim down')
             elif data['event'] == 4002:
                 self.log('Button off')
-            elif '00' not in str(data['event']):
+            elif str(data['event'])[-3:-1] != '00':
                 #self.log('Rotation of ' + str(data['event']/100.0))
                 rotation = data['event']
                 currentBrightness = self.get_state(self.args['light'], attribute="brightness")
