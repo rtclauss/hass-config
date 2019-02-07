@@ -1,5 +1,5 @@
 ################################################################
-## Packages / Automatic
+## Packages / Workday
 ################################################################
 
 ################################################
@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'automatic'
+        package: 'cleaning'
 
       expose: &expose
         <<: *customize
@@ -32,6 +32,12 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
+    binary_sensor.washer_door:
+      <<: *customize
+      icon: mdi:washer
+      device_class: door
+      friendly_name: "Washer Door"
+
 
     ################################################
     ## Cameras
@@ -39,6 +45,10 @@ homeassistant:
 
     ################################################
     ## Device Trackers
+    ################################################
+    
+    ################################################
+    ## Frontend
     ################################################
     
     ################################################
@@ -66,6 +76,14 @@ homeassistant:
     ################################################
 
     ################################################
+    ## Media Player
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+
+    ################################################
     ## Proximity
     ################################################
 
@@ -76,10 +94,21 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    sensor.honda_fit_gas_level:
+    sensor.dishwasher:
       <<: *customize
-      icon: mdi:gas-station
-      unit_of_measurement: '%'
+      icon: mdi:dishwasher
+      friendly_name: "Dishwasher Vibration"
+
+    sensor.washer:
+      <<: *customize
+      icon: mdi:washer
+      friendly_name: "Washer Vibration"
+
+    sensor.dryer:
+      <<: *customize
+      icon: mdi:tumble-dryer
+      friendly_name: "Dryer Vibration"
+      
     ################################################
     ## Thermostats
     ################################################
@@ -97,23 +126,18 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
-  - id: send_notification_gas_level
-    alias: send_notification_gas_level
-    trigger: 
-      - platform: numeric_state
-        entity_id: sensor.honda_fit_gas_level
-        below: 25
+  - id: washer_reminder
+    alias: washer_reminder
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.washer_door
+      to: 'off'
+      for:
+        hours: 18
     action:
-      - service: persistent_notification.create
-        data_template:
-          title: Gas Low
-          message: "Honda Fit gas at {{ trigger.to_state.state }}% full"
-          notification_id: low-battery-alert
-      - service: notify.all
-        data_template:
-          message: >-
-            "Honda Fit gas at {{ trigger.to_state.state }}% full"
-
+    - service: notify.all
+      data:
+        message: "Clothes still in washing machine.  Get them out before they turn musty! \U0001F9FA"
 
 ########################
 # Binary Sensors
@@ -129,11 +153,11 @@ camera:
 # Device Trackers
 ########################
 device_tracker:
-  - platform: automatic
-    client_id: !secret automatic_client_id
-    secret: !secret automatic_secret
-    current_location: true
-  
+
+########################
+# Frontend
+########################
+frontend:
 
 ########################
 # Groups
@@ -166,6 +190,17 @@ ios:
 light:
 
 ########################
+# Media Player
+########################
+media_player:
+
+
+########################
+# Plant
+########################
+plant:
+
+########################
 # Proximity
 ########################
 proximity:
@@ -184,11 +219,11 @@ script:
 # Sensor
 ########################
 sensor:
-  - platform: template
-    sensors:
-      honda_fit_gas_level:
-        value_template: >-
-          {{ state_attr('device_tracker.honda_fit', 'fuel_level') }}
+
+########################
+# Switch
+########################
+switch:
 
 ########################
 # Zone
