@@ -35,7 +35,7 @@ class AutomaticHelper(hass.Hass):
             if location == "Work":
                 #if not self.now_is_between(driving_time, calendar_start_time) and now > fourpm:
                 ## need another statement in case I leave for a baseball game
-                if not (driving_time < now < calendar_start_time):
+                if now > fourpm not (driving_time < now < calendar_start_time):
                     self.log("Looks like you're going home right away. Turning on Nest")
                     self.call_service(self.notify_target, message="Looks like you're going home right away. Turning on Nest")
                     self.call_service("climate/set_away_mode", away_mode="false")
