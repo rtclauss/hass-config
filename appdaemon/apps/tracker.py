@@ -45,7 +45,8 @@ class add_gps(hass.Hass):
     #self.log("do we have everything: {}".format(gps_attributes.viewKeys() & {"latitude", "longitude"})
     
     if bayesian_state['state'] == "on":
-      config = self.get_hass_config()
+      config = self.get_plugin_config()
+      
       self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
       #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
