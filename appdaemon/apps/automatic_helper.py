@@ -19,6 +19,10 @@ class AutomaticHelper(hass.Hass):
 
         self.log("Automatic event received from {}. Event was: {}".format(event_type, event_location))
         self.set_state("sensor.automatic_event", state = event_type, attributes = {"event_data": event_location, "event_received": str(event_received)})
+        if event_type == "ignition:on":
+            self.set_state("input_boolean.car_in_motion", state="on")
+        elif event_type == "ignition:off" or event_type == "trip:finished":
+            self.set_state("input_boolean.car_in_motion", state="off")
         
         location = self.get_state(self.tracked_device)
         calendar_start_time = parser.parse(self.get_state(self.calendar, attribute="start_time"))
@@ -35,7 +39,7 @@ class AutomaticHelper(hass.Hass):
             if location == "Work":
                 #if not self.now_is_between(driving_time, calendar_start_time) and now > fourpm:
                 ## need another statement in case I leave for a baseball game
-                if now > fourpm not (driving_time < now < calendar_start_time):
+                if now > fourpm and not (driving_time < now < calendar_start_time):
                     self.log("Looks like you're going home right away. Turning on Nest")
                     self.call_service(self.notify_target, message="Looks like you're going home right away. Turning on Nest")
                     self.call_service("climate/set_away_mode", away_mode="false")
