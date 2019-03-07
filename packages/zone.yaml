@@ -151,6 +151,9 @@ homeassistant:
     sensor.heading_home:
       <<: *customize
       friendly_name: 'Direction of Home'
+    sensor.zeke_direction:
+      <<: *customize
+      friendly_name: 'Zeke Direction'
     ################################################
     ## Thermostats
     ################################################
@@ -353,7 +356,7 @@ automation:
       event: leave
     condition:
       condition: template
-      value_template: '{{ states.binary_sensor.test_homeward.state == "on" }}'
+      value_template: '{{ 110 <= sensor.zeke_direction <= 260 }}'
     action:
     # - service: nest.set_eta
     #   data_template:
@@ -370,7 +373,7 @@ automation:
     - service: notify.all
       data_template:
         message: >-
-          Turn off Nest Away and send ETA of {{ states.sensor.time_to_home.state }} while you drive home from the Cities.
+          Turn off Nest Away and send ETA of {{ states.sensor.time_to_home.state }} you left TC and {{ sensor.zeke_direction }} while you drive home from the Cities.
 
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
@@ -659,6 +662,8 @@ sensor:
         unit_of_measurement: 'minutes'
       twincities:
         value_template: '{{ states.proximity.twincities.attributes.dir_of_travel |default("unknown") }}'
+      zeke_direction:
+        value_template: "{{state_attr('device_tracker.bayesian_zeke_home', 'course') | int}}"
         
 ########################
 # Zone
