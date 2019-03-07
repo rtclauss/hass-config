@@ -1,4 +1,5 @@
 import appdaemon.plugins.hass.hassapi as hass
+from random import randint
 import datetime
 
 # From https://github.com/mmmmmtasty/HomeAssistantConfig/blob/master/appdaemon-apps/brighten_lights.py
@@ -39,6 +40,13 @@ class BrightenLights(hass.Hass):
         # Maybe I should wake up if a guest is up?  If so, uncomment the next if statement and fix indent
         if self.args["sensors"] == "binary_sensor.master_bedroom_motion": 
           self.turn_on("script.spotify_wake_up")
+          step = 0.05
+          current_volume = 0.05
+          i = 1
+          while (current_volume < 0.55):
+            current_volume = current_volume + step
+            self.run_in(self.increase_volume, i*randint(1, 10), new_volume = current_volume)
+            i += 1
       else:
         brightness = self.get_state(self.args["light"], attribute="brightness")
       
@@ -87,3 +95,8 @@ class BrightenLights(hass.Hass):
         return
       # Check again in 20 seconds
       self.run_in(self.brighten, seconds = kwargs["delay"], delay = kwargs["delay"], entity_id = kwargs["entity_id"], last_increase = current_increase)
+      
+  def increase_volume(self, kwargs):
+    new_volume = kwargs['new_volume']
+    self.call_service("media_player/volume_set", entity_id="media_player.spotify", volume_level=new_volume)
+      
