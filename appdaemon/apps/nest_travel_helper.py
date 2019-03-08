@@ -19,7 +19,7 @@ class NestTravelHelper(hass.Hass):
         
         driving_state = self.get_state(self.driving_sensor)
         
-        outside_temp = int(self.get_state(self.outside_temp_feels_like))
+        outside_temp = float(self.get_state(self.outside_temp_feels_like))
         if outside_temp < 45:
             operation_mode = 'heat'
         elif 45 <= outside_temp < 67:
