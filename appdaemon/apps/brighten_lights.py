@@ -17,6 +17,7 @@ class BrightenLights(hass.Hass):
   def initialize(self):
     # Define a handle to be used for all timers
     self.handle = None
+    self.am_i_home = self.args['am_i_home']
 
     # Register callbacks for all sensors we were passed
     for sensor in self.args["sensors"].split(","):
@@ -32,7 +33,7 @@ class BrightenLights(hass.Hass):
     #self.log("is it a work day? {}".format(workday))
     guest_mode = self.get_state(self.args["guest_mode"])
     #self.log("is guest_mode on? {}".format(guest_mode))
-    if self.now_is_between(self.args["start_window"], self.args["end_window"]) and new == 'on' and workday == 'on':
+    if self.now_is_between(self.args["start_window"], self.args["end_window"]) and new == 'on' and workday == 'on' and self.get_state(self.am_i_home) == 'on':
       if self.get_state(self.args["light"], attribute="brightness") == None:
         brightness = 1
         self.turn_on(self.args["light"], brightness = brightness)
