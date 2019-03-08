@@ -68,6 +68,7 @@ sun:
 # Enables the frontend
 frontend:
   javascript_version: latest
+
 # Checks for available updates
 updater:
 
@@ -79,18 +80,9 @@ logbook:
 
 # Discover some devices automatically
 discovery:
-#  ignore:
-#    - hue
-
-#hue:
-#  bridges:
-#    - host: !secret hue_host
-
-#wink:
 
 climate:
   platform: nest
-#  measurement_scale: 'F'
 
 tts:
   - platform: google
@@ -110,18 +102,6 @@ group: !include_dir_merge_named group
 script: !include script.yaml
 
 vacuum: !include vacuum.yaml
-
-#mqtt:
-#  broker: !secret mqtt_host
-#  port: !secret mqtt_port
-#  client_id: hassio
-#  keepalive: 60
-#  username: !secret mqtt_user
-#  password: !secret mqtt_password
-#  protocol: 3.1.1
-#  discovery: true
-#  discovery_prefix: homeassistant
-#
 
 #telegram_bot:
 #  platform: polling
@@ -147,7 +127,6 @@ recorder:
       - updater
       - sun
       - zone
-      - automation
       - camera
       - group
       - clients
@@ -155,10 +134,17 @@ recorder:
       - scene
       - script
       - vacuum
+      - weather
     entities:
       - sensor.time
       - sensor.date
       - sensor.last_boot
+      - sensor.dark_sky_precip_probability_1
+      - sensor.dark_sky_precip_probability_2
+      - sensor.dark_sky_precip_probability_3
+      - sensor.dark_sky_precip_probability_4
+      - sensor.dark_sky_precip_probability_5
+      - sensor.dark_sky_precip_probability_6
 
 influxdb:
   host: !secret influx_db_host
@@ -177,6 +163,7 @@ influxdb:
       - scene
       - script
       - vacuum
+      - weather
     entities:
       - sensor.time
       - sensor.date
@@ -256,6 +243,8 @@ cloud:
 weather:
   - platform: openweathermap
     api_key: !secret openweathermap_api_key
+  - platform: darksky
+    api_key: !secret darksky_api_key
     
 lovelace:
   mode: yaml
