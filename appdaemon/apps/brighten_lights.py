@@ -44,7 +44,7 @@ class BrightenLights(hass.Hass):
           step = 0.05
           current_volume = 0.05
           i = 1
-          while (current_volume < 0.55):
+          while (current_volume < 0.4):
             current_volume = current_volume + step
             self.run_in(self.increase_volume, i*randint(1, 10), new_volume = current_volume)
             i += 1
@@ -100,4 +100,5 @@ class BrightenLights(hass.Hass):
   def increase_volume(self, kwargs):
     new_volume = kwargs['new_volume']
     self.call_service("media_player/volume_set", entity_id="media_player.spotify", volume_level=new_volume)
+      
       
