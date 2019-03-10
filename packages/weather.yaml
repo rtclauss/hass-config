@@ -51,18 +51,6 @@ homeassistant:
     ################################################
     ## Groups
     ################################################
-    group.weather_alert_card:
-      <<: *customize
-      friendly_name: Weather Alerts
-    group.weather_current_conditions_card:
-      <<: *customize
-      friendly_name: Current Conditions
-    group.weather_daily_forecast_card:
-      <<: *customize
-      friendly_name: Four-day Forecast
-    group.weather_hourly_forecast_card:
-      <<: *customize
-      friendly_name: Four-hour Forecast
 
     ################################################
     ## Input Boolean
@@ -122,7 +110,7 @@ automation:
       conditions:
       - condition: template
         value_template: >-
-          {{ states.sensor.pws_weather_1h.attributes.precip_prop > 50 }}
+          {{ states.dark_sky_precip_probability_1p > 50 }}
       - condition: template
         value_template: >-
           {{ not is_state('sensor.season', 'winter') }}
@@ -149,7 +137,7 @@ automation:
         state: 'on'
       - condition: template
         value_template: >-
-          {{ states.sensor.pws_weather_1h.attributes.precip_prop > 50 }}
+          {{ states.dark_sky_precip_probability_1 > 50 }}
       - condition: template
         value_template: >-
           {{ not is_state('sensor.season', 'winter') }}
@@ -197,7 +185,7 @@ automation:
       value_template: >-
         {{ ((states.sensor.pws_alerts.attributes.TYPE == "TOR") or
         (states.sensor.pws_alerts.attributes.Description == "Tornado Warning"))
-        and (is_state("binary_sensor.bayesian_zeke_home", "on")) }}
+        and (is_state("binary_sensor.bayesian_zeke_home", 'on')) }}
     action:
     - service: light.turn_on
       data:
@@ -242,42 +230,7 @@ input_number:
 # Groups
 ########################
 group:
-  weather_daily_forecast_card:
-    entities:
-      - sensor.pws_weather_1d
-      - sensor.pws_weather_1n
-      - sensor.pws_weather_2d
-      - sensor.pws_weather_2n
-      - sensor.pws_weather_3d
-      - sensor.pws_weather_3n
-  weather_hourly_forecast_card:
-    entities:
-      - sensor.pws_weather
-      - sensor.pws_weather_1h
-      - sensor.pws_weather_2h
-      - sensor.pws_weather_3h
-      - sensor.pws_weather_4h
-      - sensor.pws_weather_5h
-      - sensor.pws_weather_6h
-  weather_alert_card:
-    entities:
-      - sensor.pws_alerts
-  weather_current_conditions_card:
-    entities:
-      - sun.sun
-      - sensor.pws_weather
-      - sensor.pws_temp_f
-      - sensor.pws_feelslike_f
-      - sensor.pws_dewpoint_f
-      - sensor.pws_relative_humidity
-      - sensor.pws_heat_index_f
-      - sensor.pws_pressure_mb
-      - sensor.pws_pressure_trend
-      - sensor.dark_sky_cloud_coverage
-      - sensor.dark_sky_precip_intensity
-      - sensor.dark_sky_precip
-      - sensor.precip_next_6h
-      - sensor.pws_observation_time
+
 ########################
 # Scenes
 ########################
@@ -292,64 +245,84 @@ script:
 ## Sensors
 ################################################
 sensor:
-  - platform: wunderground
-    api_key: !secret wunderground_api_key
-    monitored_conditions:
-      - alerts
-      - dewpoint_f
-      - feelslike_f
-      - heat_index_f
-      - observation_time
-      - precip_today_in
-      - precip_1d_in
-      - precip_1d
-      - pressure_mb
-      - pressure_trend
-      - relative_humidity
-      - temp_f
-      - temp_high_1d_f
-      - temp_low_1d_f
-      - weather
-      - weather_1d
-      - weather_1n
-      - weather_2d
-      - weather_2n
-      - weather_3d
-      - weather_3n
-      - weather_1h
-      - weather_2h
-      - weather_3h
-      - weather_4h
-      - weather_5h
-      - weather_6h
-      - wind_mph
-      - wind_dir
-      - wind_1d_mph
+  # - platform: wunderground
+  #   api_key: !secret wunderground_api_key
+  #   monitored_conditions:
+  #     - alerts
+  #     - dewpoint_f
+  #     - feelslike_f
+  #     - heat_index_f
+  #     - observation_time
+  #     - precip_today_in
+  #     - precip_1d_in
+  #     - precip_1d
+  #     - pressure_mb
+  #     - pressure_trend
+  #     - relative_humidity
+  #     - temp_f
+  #     - temp_high_1d_f
+  #     - temp_low_1d_f
+  #     - weather
+  #     - weather_1d
+  #     - weather_1n
+  #     - weather_2d
+  #     - weather_2n
+  #     - weather_3d
+  #     - weather_3n
+  #     - weather_1h
+  #     - weather_2h
+  #     - weather_3h
+  #     - weather_4h
+  #     - weather_5h
+  #     - weather_6h
+  #     - wind_mph
+  #     - wind_dir
+  #     - wind_1d_mph
 
   - platform: darksky
     api_key: !secret darksky_api_key
+    forecast:
+      - 0
+      - 1
+      - 2
+      - 4
+    hourly_forecast:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
     monitored_conditions:
+      - alerts
       - summary
       - precip_type
       - precip_intensity
+      - precip_probability
+      - precip_accumulation
       - temperature
       - apparent_temperature
-   #  - dew_point
-   #  - wind_speed
-   #  - wind_bearing
+      - dew_point
+      - wind_speed
+      - wind_bearing
       - cloud_cover
       - humidity
-   #  - pressure
+      - pressure
+      - daily_summary
+      - temperature_high
+      - temperature_low
+      - hourly_summary
    #  - visibility
    #  - ozone
+
   - platform: template
     sensors:
       precip_next_6h:
         unit_of_measurement: "%"
         value_template: >-
-          {{ [ (states.sensor.pws_weather_1h.attributes.precip_prop|int),
-               (states.sensor.pws_weather_2h.attributes.precip_prop|int),
-               (states.sensor.pws_weather_3h.attributes.precip_prop|int),
-               (states.sensor.pws_weather_4h.attributes.precip_prop|int),
-               (states.sensor.pws_weather_5h.attributes.precip_prop|int),
-               (states.sensor.pws_weather_6h.attributes.precip_prop|int), ] |max }}
+          {{ [ (states.sensor.dark_sky_precip_probability_1h|float),
+               (states.sensor.dark_sky_precip_probability_2h|float),
+               (states.sensor.dark_sky_precip_probability_3h|float),
+               (states.sensor.dark_sky_precip_probability_4h|float),
+               (states.sensor.dark_sky_precip_probability_5h|float),
+               (states.sensor.dark_sky_precip_probability_6h|float), ] |max }}
