@@ -4,8 +4,16 @@ resources:
     type: js
   - url: /local/custom-lovelace/entity-attributes-card/entity-attributes-card.js?v=0.1.1
     type: js
-  - url: /local/tracker-card.js?v=0.1.4
+  - url: /customcards/github/custom-cards/tracker-card.js?track=true
+    type: module
+  - url: /local/mini-media-player-bundle.js?v=1.0.3
+    type: module
+  - url: /local/mini-graph-card-bundle.js?v=0.3.0
+    type: module
+  - url: /local/vertical-stack-in-card.js?v=0.0.9
     type: js
+  - url: /customcards/github/custom-cards/button-card.js?track=true
+    type: module
 views:
   - title: Home
     path: home
@@ -13,102 +21,305 @@ views:
     badges:
       - alarm_control_panel.home_alarm
     cards:
-#    - type: map
-#      aspect_ratio: 66%
-#      entities:
-#        - entity: device_tracker.bayesian_zeke_home
-#        - zone.home
       - id: f077a7073da44af5828c5bfe6a9f0981  # Automatically created id
         type: vertical-stack
         cards:
-          - type: entities
-            title: Scenes and Activities
-            show_header_toggle: false
-            entities:
-              - scene.reset_living_room
-              - script.update_nest_eta
-              - scene.chill
-              - scene.the_walking_dead
-              - scene.bedroom_prep
-
-          - type: entities
-            title: Average Climate
-            show_header_toggle: false
-            entities:
-              - sensor.average_house_temp
-              - sensor.average_house_humidity
-              - sensor.average_house_pressure
-
-          - type: media-control
-            entity: media_player.spotify
-
-      - id: 4b9e6c9b4e094afa99f8b6f137fa4dc8  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: entities
-            title: Living Room
-            show_header_toggle: false
-            entities:
-              - light.living_room_all
-              - light.tv
-              - light.pendant_lamp
-              - switch.flux
-              - switch.christmas_tree
-              - light.christmas_lights
-              - sensor.living_room_temperature
-              - sensor.living_room_humidity
-
-          - type: entities
-            title: External
-            entities:
-              - switch.deck
-              - switch.deck_led_string
-              - switch.front_door
-
-
-      - id: e75eb2badf864ae8b76e9a14fde8b60a  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: entities
+          - type: horizontal-stack
+            cards:
+              - type: custom:mini-graph-card
+                name: Temp
+                entities: 
+                  - sensor.average_house_temp
+                color_thresholds:
+                  - value: 68
+                    color: "red"
+                  - value: 65
+                    color: "orange"
+                  - value: 62
+                    color: "yellow"
+                  - value: 55
+                    color: "blue"
+                graph: line
+              - type: custom:mini-graph-card
+                name: Humdity
+                entities: 
+                  - sensor.average_house_humidity
+              - type: custom:mini-graph-card
+                name: Pressure
+                entities: 
+                  - sensor.average_house_pressure
+          - id: e75eb2badf864ae8b76e9a14fde8b60a  # Automatically created id
+            type: custom:vertical-stack-in-card
             title: Master Bedroom
-            show_header_toggle: false
-            entities:
-              - light.master_bedroom
-              - sensor.master_bedroom_temperature
-              - sensor.master_bedroom_humidity
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Master Bedroom
+                    entity: light.master_bedroom
+              - type: horizontal-stack
+                cards:
+                  - type: custom:mini-graph-card
+                    name: Temp
+                    group: false
+                    align_state: center
+                    entities: 
+                      - sensor.master_bedroom_temperature
+                    color_thresholds:
+                      - value: 68
+                        color: "red"
+                      - value: 65
+                        color: "orange"
+                      - value: 62
+                        color: "yellow"
+                      - value: 55
+                        color: "blue"
+                    graph: line
+                    show:
+                      name: false
+                  - type: custom:mini-graph-card
+                    name: Humidity
+                    align_state: center
+                    entities: 
+                      - sensor.master_bedroom_humidity
+                    graph: line
+                    show:
+                      name: false
 
-          - type: entities
+
+
+      - id: f077a7073da44af5828c5bfe6a9f0982  # Automatically created id
+        type: vertical-stack
+        cards:
+          - type: custom:vertical-stack-in-card
+            title: Living Room
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: "custom:button-card"
+                    icon: mdi:sofa
+                    color: auto
+                    name: Living Room
+                    entity: light.living_room_all_except_tv
+                  - type: "custom:button-card"
+                    icon: attribute
+                    color: auto
+                    name: TV
+                    entity: light.tv
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Pendant
+                    entity: light.pendant_lamp
+                  - type: "custom:button-card"
+                    icon: mdi:flash
+                    name: f.lux
+                    entity: switch.flux
+              - type: horizontal-stack
+                title: Scenes and Activities
+                show_header_toggle: false
+                cards:
+                  - type: "custom:button-card"
+                    color: auto
+                    name: Reset Living Room
+                    action: service
+                    service:
+                      domain: scene
+                      action: turn_on
+                      data:
+                        entity_id: scene.reset_living_room
+                  - type: "custom:button-card"
+                    icon: attributes
+                    color: auto
+                    name: Chill
+                    action: service
+                    service:
+                      domain: scene
+                      action: turn_on
+                      data:
+                        entity_id: scene.chill
+                  - type: "custom:button-card"
+                    icon: attributes
+                    color: auto
+                    name: TWD
+                    action: service
+                    service:
+                      domain: scene
+                      action: turn_on
+                      data:
+                        entity_id: scene.the_walking_dead
+              - type: horizontal-stack
+                cards:
+                  - type: custom:mini-graph-card
+                    name: Temp
+                    group: false
+                    #align_state: center
+                    entities: 
+                      - sensor.living_room_temperature
+                    color_thresholds:
+                      - value: 68
+                        color: "red"
+                      - value: 65
+                        color: "orange"
+                      - value: 62
+                        color: "yellow"
+                      - value: 55
+                        color: "blue"
+                    graph: line
+                    show:
+                      name: false
+                  - type: custom:mini-graph-card
+                    name: Humidity
+                    #align_state: center
+                    entities: 
+                      - sensor.living_room_humidity
+                    graph: line
+                    show:
+                      name: false
+              - type: custom:mini-media-player
+                entity: media_player.living_room_firetv
+                hide:
+                  volume: true
+
+          - id: e75eb2badf864ae8b76e9a14fde8b60b  # Automatically created id
+            type: custom:vertical-stack-in-card
+            title: External
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Front Door
+                    entity: switch.front_door
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Deck
+                    entity: switch.deck
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Deck String
+                    entity: switch.deck_led_string
+
+      - id: f077a7073da44af5828c1bfe6a9f0921  # Automatically created id
+        type: vertical-stack
+        cards:
+          - id: e75eb2badf864ae8b76e9a14fde8b60c  # Automatically created id
+            type: custom:vertical-stack-in-card
             title: Kitchen
-            show_header_toggle: false
-            entities:
-              - light.kitchen_table
-              - light.kitchen_sink
-              - sensor.kitchen_temperature
-              - sensor.kitchen_humidity
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: "custom:button-card"
+                    icon: mdi:window-closed
+                    name: Sink
+                    entity: light.kitchen_sink
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Table
+                    entity: light.kitchen_table
+              - type: horizontal-stack
+                cards:
+                  - type: custom:mini-graph-card
+                    name: Temp
+                    group: false
+                    align_state: center
+                    entities: 
+                      - sensor.kitchen_temperature
+                    color_thresholds:
+                      - value: 68
+                        color: "red"
+                      - value: 65
+                        color: "orange"
+                      - value: 62
+                        color: "yellow"
+                      - value: 55
+                        color: "blue"
+                    graph: line
+                    show:
+                      name: false
+                  - type: custom:mini-graph-card
+                    name: Humidity
+                    align_state: center
+                    entities: 
+                      - sensor.kitchen_humidity
+                    graph: line
+                    show:
+                      name: false
+          - id: e75eb2badf864ae8b76e9a14fde8b60e  # Automatically created id
+            type: custom:vertical-stack-in-card
+            title: Other
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Stairs
+                    entity: switch.stairs
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Office
+                    entity: light.office_lamp
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Hallway
+                    entity: light.hallway_light
+              - type: custom:mini-media-player
+                entity: media_player.spotify
+                icon: mdi:spotify
+                hide:
+                  #volume: true
+                  source: true
 
-          - type: entities
+      - id: f077a7073da44af5828c2bfe6a9f0921  # Automatically created id
+        type: vertical-stack
+        cards:
+          - id: e75eb2badf864ae8b76e9a14fde8b60d  # Automatically created id
+            type: custom:vertical-stack-in-card
             title: Guest Room
-            show_header_toggle: false
-            entities:
-              - light.guest_ceiling
-              - light.guest_left_lamp
-              - light.guest_right_lamp
-              - sensor.guest_room_temperature
-              - sensor.guest_room_humidity
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Ceiling
+                    entity: light.guest_ceiling
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Left
+                    entity: light.guest_left_lamp
+                  - type: "custom:button-card"
+                    icon: attribute
+                    name: Right
+                    entity: light.guest_right_lamp
+              - type: horizontal-stack
+                cards:
+                  - type: custom:mini-graph-card
+                    name: Temp
+                    group: false
+                    align_state: center
+                    entities: 
+                      - sensor.guest_room_temperature
+                    color_thresholds:
+                      - value: 68
+                        color: "red"
+                      - value: 65
+                        color: "orange"
+                      - value: 62
+                        color: "yellow"
+                      - value: 55
+                        color: "blue"
+                    graph: line
+                    show:
+                      name: false
+                  - type: custom:mini-graph-card
+                    #name: Humidity
+                    align_state: center
+                    entities: 
+                      - sensor.guest_room_humidity
+                    graph: line
+                    show:
+                      name: false
 
-          - type: entities
-            title: Other Lights
-            entities:
-              - switch.stairs
-              - light.hallway_light
-              - light.office_lamp
-
-#    - type: media-control
-#      entity: media_player.living_room
-#    - type: media-control
-#      entity: media_player.amazon_fire_tv
-#    - type: media-control
-#      entity: media_player.vizio_smartcast
 
 ##################################################
 
@@ -129,55 +340,27 @@ views:
         title: Weather Alerts
         filter:
           include:
-            - key: sensor.pws_alerts.Description
+            - key: sensor.dark_sky_alerts.title*
               name: Type
-            - key: sensor.pws_alerts.Message
+            - key: sensor.dark_sky_alerts.description*
               name: Details
+
+      - id: forecast
+        type: weather-forecast
+        entity: weather.dark_sky
 
       - id: 49fc7b86605c4633b705dca150c91adc  # Automatically created id
         type: entities
         title: Current Conditions
         show_header_toggle: false
         entities:
-          - sun.sun
-          - sensor.pws_weather
-          - sensor.pws_temp_f
-          - sensor.pws_feelslike_f
-          #- sensor.pws_dewpoint_f
-          #- sensor.pws_relative_humidity
-          - sensor.pws_heat_index_f
-          #- sensor.pws_pressure_mb
-          #- sensor.pws_pressure_trend
+          - sensor.dark_sky_summary
+          - sensor.dark_sky_temperature
+          - sensor.dark_sky_apparent_temperature
+          - sensor.dark_sky_pressure
           - sensor.dark_sky_cloud_coverage
           - sensor.dark_sky_precip_intensity
           - sensor.dark_sky_precip
-          - sensor.precip_next_6h
-          #- sensor.pws_observation_time
-
-      - id: 51cdff0381fb4c8697ad22fc0056e2f6  # Automatically created id
-        type: entities
-        title: Daily Forecast
-        show_header_toggle: false
-        entities:
-          - sensor.pws_weather_1d
-          - sensor.pws_weather_1n
-          - sensor.pws_weather_2d
-          - sensor.pws_weather_2n
-          - sensor.pws_weather_3d
-          - sensor.pws_weather_3n
-
-      - id: 19ec14bdbcf7405d8b337f84aec30f74  # Automatically created id
-        type: entities
-        title: Six-hour Forecast
-        show_header_toggle: false
-        entities:
-          - sensor.pws_weather
-          - sensor.pws_weather_1h
-          - sensor.pws_weather_2h
-          - sensor.pws_weather_3h
-          - sensor.pws_weather_4h
-          - sensor.pws_weather_5h
-          - sensor.pws_weather_6h
 
       - id: ab8111c18a2c4e2db997ee4a29336b17  # Automatically created id
         type: entities
@@ -242,20 +425,13 @@ views:
         title: Current Conditions
         show_header_toggle: false
         entities:
-          # - sun.sun
-          - sensor.pws_weather
-          - sensor.pws_temp_f
-          - sensor.pws_feelslike_f
-          #- sensor.pws_dewpoint_f
-          #- sensor.pws_relative_humidity
-          - sensor.pws_heat_index_f
-          #- sensor.pws_pressure_mb
-          #- sensor.pws_pressure_trend
+          - sensor.dark_sky_summary
+          - sensor.dark_sky_temperature
+          - sensor.dark_sky_apparent_temperature
+          - sensor.dark_sky_pressure
           - sensor.dark_sky_cloud_coverage
           - sensor.dark_sky_precip_intensity
           - sensor.dark_sky_precip
-          - sensor.precip_next_6h
-          #- sensor.pws_observation_time
 
       - id: 94a59971fe914b669bcf5967f8f8619e  # Automatically created id
         type: thermostat
@@ -273,6 +449,7 @@ views:
           - sensor.living_room_pressure
           - sensor.living_room_temperature_battery
           - sensor.living_room_motion_sensor_temperature
+
       - id: fb769407d8ab494896cfb32b88435881  # Automatically created id
         type: entities
         title: Master Bedroom
@@ -282,6 +459,7 @@ views:
           - sensor.master_bedroom_humidity
           - sensor.master_bedroom_pressure
           - sensor.master_bedroom_humidity_battery
+
       - id: 15cee4ae7bca4484bf102cbfb8cb1369  # Automatically created id
         type: entities
         title: Guest Bedroom
@@ -291,6 +469,7 @@ views:
           - sensor.guest_room_humidity
           - sensor.guest_room_pressure
           - sensor.guest_room_temperature_battery
+
       - id: 5994ce7bb4264b2b92e398bdda4fc8cd  # Automatically created id
         type: entities
         title: Kitchen
@@ -300,6 +479,7 @@ views:
           - sensor.kitchen_humidity
           - sensor.kitchen_pressure
           - sensor.kitchen_temperature_battery
+
       - id: 11404d547dae4a7b9e50997fee3fa983  # Automatically created id
         type: entities
         title: Bathroom
@@ -309,22 +489,30 @@ views:
           - sensor.bathroom_humidity
           - sensor.bathroom_pressure
           - sensor.bathroom_temperature_battery
-      - id: c503250cd25e4fba95480cdf78c1848a  # Automatically created id
-        type: entities
-        title: Basement
-        show_header_toggle: false
-        entities:
-          - sensor.basement_temperature
-          - sensor.basement_humidity
-          - sensor.basement_battery_4
-      - id: 8b425c0bd4ab42949c4a6968d46954ae  # Automatically created id
-        type: entities
-        title: Garage
-        show_header_toggle: false
-        entities:
-          - sensor.garage_temperature
-          - sensor.garage_humidity
-          - sensor.garage_battery_4
+
+      - id: 11404d547dae4a7b9e50997fee3fa982
+        type: horizontal-stack
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: sensor
+                entity: sensor.basement_temperature
+                graph: line
+              - type: sensor
+                entity: sensor.basement_humidity
+                graph: line
+              - type: sensor
+                entity: sensor.basement_battery_4
+          - type: vertical-stack
+            cards:
+              - type: sensor
+                entity: sensor.garage_temperature
+                graph: line
+              - type: sensor
+                entity: sensor.garage_humidity
+                graph: line
+              - type: sensor
+                entity: sensor.garage_battery_4
 
 ##################################################
 
@@ -367,6 +555,7 @@ views:
           - binary_sensor.arrival_sensor
           - sensor.iphone_battery_state
           - binary_sensor.nest_home
+          - sensor.zeke_direction
 
       - id: 1ed69694b5244ca59bbdb9339a083865  # Automatically created id
         type: entities
@@ -408,6 +597,7 @@ views:
           - sensor.me_to_home
           - sensor.the_brewery_eta
           - input_select.trip_origin
+          - sensor.zeke_direction
 
       - id: 528d0d75ddc449a4ba94d3c4f146b66d  # Automatically created id
         type: entities
@@ -440,29 +630,31 @@ views:
     path: batteries
     icon: mdi:battery
     cards:
-      - id: 4291f0758ffa4e57b68c00a487c2f796  # Automatically created id
-        type: custom:monster-card
-        card:
-          type: entities
-          title: Status
-          show_header_toggle: false
-        filter:
-          include:
-            - entity_id: sensor.*battery*
-            #- entity_id: group.*battery*
-      - id: 
-        type: entities
-        title: Battery Alert Config
-        show_header_toggle: false
-        entities:
-          - input_number.battery_alert_threshold_min
-          - input_number.battery_alert_threshold_max
-          - input_text.delete_battery_sensor
-          - automation.battery_persistent_notification
-          - automation.battery_persistent_notification_clear
-          - automation.battery_sensor_from_attributes
-          - automation.update_battery_status_group_members
-          - automation.delete_battery_sensor
+      - type: horizontal-stack
+        cards:
+          - id: 4291f0758ffa4e57b68c00a487c2f796  # Automatically created id
+            type: custom:monster-card
+            card:
+              type: entities
+              title: Status
+              show_header_toggle: false
+            filter:
+              include:
+                - entity_id: sensor.*battery*
+                #- entity_id: group.*battery*
+#          - id: 
+#            type: entities
+#            title: Battery Alert Config
+#            show_header_toggle: false
+#            entities:
+#              - input_number.battery_alert_threshold_min
+#              - input_number.battery_alert_threshold_max
+#              - input_text.delete_battery_sensor
+#              - automation.battery_persistent_notification
+#              - automation.battery_persistent_notification_clear
+#              - automation.battery_sensor_from_attributes
+#              - automation.update_battery_status_group_members
+#              - automation.delete_battery_sensor
 
 ##################################################
 
