@@ -284,13 +284,13 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.deck_door_contact
-        to: "off"
+        to: 'off'
         for:
           seconds: 30
     condition:
       condition: state
       entity_id: input_boolean.deck_auto_on
-      state: "on"
+      state: 'on'
     action:
       - service: homeassistant.turn_off
         data:
@@ -306,7 +306,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.deck_door_contact
-        to: "on"
+        to: 'on'
     condition:
       condition: and
       conditions:
@@ -314,10 +314,10 @@ automation:
           after: sunset
         - condition: state
           entity_id: switch.deck
-          state: "off"
+          state: 'off'
         - condition: state
           entity_id: switch.deck_led_string
-          state: "off"
+          state: 'off'
     action:
       - service: homeassistant.turn_on
         data:
@@ -333,13 +333,13 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.front_door_contact
-        to: "off"
+        to: 'off'
         for:
           seconds: 30
     condition:
       condition: state
       entity_id: input_boolean.front_door_auto_on
-      state: "on"
+      state: 'on'
     action:
       - service: homeassistant.turn_off
         data:
@@ -353,7 +353,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.front_door_contact
-        to: "on"
+        to: 'on'
     condition:
       condition: and
       conditions:
@@ -361,7 +361,7 @@ automation:
           after: sunset
         - condition: state
           entity_id: switch.front_door
-          state: "off"
+          state: 'off'
     action:
       - service: homeassistant.turn_on
         data:
@@ -375,7 +375,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.guest_room_button
-        to: "on"
+        to: 'on'
     action:
       - service: homeassistant.toggle
         data:
@@ -389,7 +389,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.hallway_motion
-        to: "on"
+        to: 'on'
     condition:
       condition: sun
       before: sunrise
@@ -398,6 +398,7 @@ automation:
       - service: homeassistant.turn_on
         data:
           entity_id: light.hallway_light
+          transition: 2
           brightness: 1
 
   - id: hallway_light_off_at_night
@@ -405,7 +406,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.hallway_motion
-        to: "off"
+        to: 'off'
     condition:
       condition: sun
       before: sunrise
@@ -420,7 +421,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bedroom_motion
-        to: "off"
+        to: 'off'
     condition:
       condition: and
       conditions:
@@ -429,7 +430,7 @@ automation:
           before_offset: "0:30:00"
         - condition: state
           entity_id: input_boolean.master_bedroom_auto_on
-          state: "on"
+          state: 'on'
     action:
       - service: homeassistant.turn_off
         data:
@@ -443,7 +444,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bedroom_motion
-        to: "on"
+        to: 'on'
     condition:
       condition: and
       conditions:
@@ -452,21 +453,23 @@ automation:
           before_offset: "0:30:00"
         - condition: state
           entity_id: light.master_bedroom
-          state: "off"
+          state: 'off'
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
-          state: "off"
+          state: 'off'
         - condition: state
           entity_id: binary_sensor.bayesian_zeke_home
-          state: "on"
+          state: 'on'
     action:
       - service: homeassistant.turn_on
         data:
           entity_id: light.master_bedroom
+          transition: 2
           brightness: 1
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.master_bedroom_auto_on
+          transition: 2
           brightness: 1
 
   - id: office_light_on_at_night
@@ -474,7 +477,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.office_motion
-        to: "on"
+        to: 'on'
     condition:
       condition: sun
       before: sunrise
@@ -483,6 +486,7 @@ automation:
       - service: homeassistant.turn_on
         data:
           entity_id: light.office_light
+          transition: 2
           brightness: 1
 
   - id: office_light_off_at_night
@@ -490,7 +494,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.office_motion
-        to: "off"
+        to: 'off'
     condition:
       condition: sun
       before: sunrise
@@ -499,6 +503,24 @@ automation:
       - service: homeassistant.turn_off
         data:
           entity_id: light.office_light
+
+  - id: reset_office_light_at_night
+    alias: reset_office_light_at_night
+    trigger:
+      - platform: time
+        at: '03:48:00'
+    action:
+      - service: light.turn_on
+        data:
+          entity_id: light.office_light
+          brightness: 1
+      - wait_template: "{{ is_state('light.office_light', 'on') }}"
+        timeout: '00:00:10'
+        continue_on_timeout: 'true'
+      - service: light.turn_off
+        data:
+          entity_id: light.office_light
+          brightness: 1
 
   - alias: toggle_living_room
     id: toggle_living_room
@@ -575,6 +597,7 @@ automation:
       - service: homeassistant.turn_on
         data:
           entity_id: light.master_bedroom
+          transition: 2
           brightness: 1
 
 ########################
@@ -628,7 +651,14 @@ light:
     entities:
       - light.bedroom_lamp
       - light.bedroom_lamp_2
-      
+
+  - platform: group
+    name: guest_bedroom
+    entities:
+      - light.guest_ceiling
+      - light.guest_left_lamp
+      - light.guest_right_lamp
+
 ########################
 # Proximity
 ########################
