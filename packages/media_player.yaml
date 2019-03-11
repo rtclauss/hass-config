@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'TO_CHANGE'
+        package: 'media_player'
 
       expose: &expose
         <<: *customize
@@ -117,8 +117,14 @@ automation:
         to: paused
       - platform: state
         entity_id: media_player.vizio_smartcast
-        from: playing
-        to: paused
+        #TODO Temporary hack: ADB showing wrong values
+        from: paused
+        to: playing
+      - platform: state
+        entity_id: media_player.living_room_firetv
+        #TODO Temporary hack: ADB showing wrong values
+        from: paused
+        to: standby
     condition:
       condition: and
       conditions:
@@ -139,7 +145,14 @@ automation:
     trigger:
       - platform: state
         entity_id: media_player.living_room_firetv
-        to: playing
+        #TODO Temporary hack: ADB showing wrong values
+        from: playing
+        to: paused
+      - platform: state
+        entity_id: media_player.living_room_firetv
+        #TODO Temporary hack: ADB showing wrong values
+        from: standby
+        to: paused
       - platform: state
         entity_id: media_player.vizio_smartcast
         to: playing
@@ -240,25 +253,25 @@ scene:
     entities:
       light.living_room_all_except_tv:
         state: 'off'
-        transition: 30
+        transition: 60
       light.kitchen_sink:
         state: 'off'
       light.kitchen_table:
         state: 'off'
-        transition: 30
+        transition: 60
       light.office_lamp:
         state: 'off'
-        transition: 30
+        transition: 60
       light.hallway_light:
         state: 'off'
-        transition: 30
+        transition: 60
       light.tv:
         state: 'on'
         brightness_pct: 75
-        transition: 30
+        transition: 60
       light.guest_bedroom:
         state: 'off'
-        transition: 30
+        transition: 60
       switch.christmas_tree: 'off'
       switch.deck: 'off'
       switch.deck_led_string: 'off'
@@ -268,9 +281,11 @@ scene:
   - name: tv_paused
     entities: 
       light.living_room_all_except_tv:
+        state: 'on'
         transition: 5
         brightness_pct: 50
       light.kitchen_sink:
+        state: 'on'
         transition: 5
         brightness_pct: 100
       switch.stairs: 'on'
@@ -279,25 +294,25 @@ scene:
     entities:
       light.living_room_all_except_tv:
         state: 'off'
-        transition: 30
+        transition: 60
       light.kitchen_sink:
         state: 'off'
       light.kitchen_table:
         state: 'off'
-        transition: 30
+        transition: 60
       light.office_lamp:
         state: 'off'
-        transition: 30
+        transition: 60
       light.hallway_light:
         state: 'off'
-        transition: 30
+        transition: 60
       light.tv:
         state: 'on'
         brightness_pct: 75
-        transition: 30
+        transition: 60
       light.guest_bedroom:
         state: 'off'
-        transition: 30
+        transition: 60
       switch.christmas_tree: 'off'
       switch.deck: 'off'
       switch.deck_led_string: 'off'
