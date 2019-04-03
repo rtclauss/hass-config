@@ -17,33 +17,35 @@ Software on the pi:
   * [esphomeyaml](https://esphomelib.com/esphomeyaml/index.html)
 
 **Devices in Use:**
-* Apple/iOS Devices - [iPhone X](), [iPad Pro]()
+* Apple/iOS Devices - [iPhone XS](), [iPad Pro]()
 * [Nest Thermostat]()
 * [Amazon Echo](http://amzn.to/2i6mShX)
 * [Amazon Echo Dot Gen 2](http://amzn.to/2hvCexj)
 * [Amazon Fire TV](http://amzn.to/2iD9uPx)
 * [deConz Conbee](https://www.amazon.com/NEW-gateway-compact-certified-operating/dp/B01FDWOIHK)
-* Philips Hue (bulbs and light strip)
-* Xiaomi Aqara Motion Sensors
-* Xiaomi Aqara Button
-* Xiaomi Aqara Temperature Sensors
-* Xiaomi Window/Door Sensors
-* Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
-* HUSBZB-1 ZigBee/Z-Wave Stick (for Z-Wave)
-* Xiaomi MiFlora
-* SmartThings Presense Sensor
-* SmartThings Motion Sensor
-* Leviton Switch Vizia RF+
-* Leviton Vizia + Digital Coordinating Remote Switch
-* GE Z-Wave Wireless Smart Lighting Control Outdoor Module
+  * Philips Hue (bulbs and light strip)
+  * GE Link Smart LED Bulbs
+  * Xiaomi Aqara Motion Sensors
+  * Xiaomi Aqara Button
+  * Xiaomi Aqara Temperature Sensors
+  * Xiaomi Window/Door Sensors
+  * Xiaomi Vibration Sensor
+  * SmartThings Presense Sensor
+  * SmartThings Motion Sensor
 * Lutron Pico LZL-4B-WH-L01 Connected Bulb Remote
-* GE Link Smart LED Bulbs
-* GE ZigBee Wireless Smart Lighting Control Appliance Switch
+* Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
+* Xiaomi MiFlora
+* HUSBZB-1 ZigBee/Z-Wave Stick (for Z-Wave)
+  * Leviton Switch Vizia RF+
+  * Leviton Vizia + Digital Coordinating Remote Switch
+  * GE Z-Wave Wireless Smart Lighting Control Outdoor Module
+  * GE Z-Wave Wireless Smart Lighting Control Appliance Switch
+  * Bed presense sensor: [Ecolink Z-Wave door/window sensor](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU) mated with [Ideal pressure mat](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU)
+  * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
 * Unifi nanoHD-AP
 * Unifi USG
 * Automatic Connected Car adapter (bluetooth)
-* Bed presense sensor: [Ecolink Z-Wave door/window sensor](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU) mated with [Ideal pressure mat](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU)
-* [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
+
 
 **AppDaemon Apps:**
 * [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location information.
