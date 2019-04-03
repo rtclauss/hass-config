@@ -74,9 +74,9 @@ homeassistant:
     ################################################
     binary_sensor.arrival_sensor:
       <<: *customize
-      friendly_name: "Zigbee Arrival Sensor"
+      friendly_name: Zigbee Arrival Sensor
       device_class: occupancy
-      
+
     binary_sensor.bayesian_zeke_home:
       <<: *customize
       friendly_name: "Home"
@@ -89,9 +89,7 @@ homeassistant:
     ################################################
     ## Device Trackers
     ################################################
-    device_tracker.arrival_sensor:
-      <<: *customize
-      friendly_name: Zigbee Arrival Sensor
+
     ################################################
     ## Groups
     ################################################
@@ -135,7 +133,6 @@ homeassistant:
     script.update_nest_eta:
       <<: *customize
       friendly_name: "Distance to Home"
-    
     ################################################
     ## Sensors
     ################################################
@@ -206,7 +203,7 @@ automation:
       conditions:
       - condition: sun
         before: sunset
-        before_offset: 02:00:00
+        before_offset: 01:00:00
       - condition: numeric_state
         entity_id: sensor.dark_sky_cloud_coverage
         above: 50
@@ -283,16 +280,18 @@ automation:
       from: 'off'
       to: 'on'
     condition:
-      condition: or
+      condition: and
       conditions:
-      - condition: sun
-        after: sunset
-        after_offset: "-1:00:00"
-      - condition: sun
-        before: sunrise
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: 'off'
+      - condition: or
+        conditions:
+        - condition: sun
+          after: sunset
+          after_offset: "-1:00:00"
+        - condition: sun
+          before: sunrise
     action:
     - service: scene.turn_on
       entity_id: scene.arrive_home
@@ -310,15 +309,17 @@ automation:
       from: 'off'
       to: 'on'
     condition:
-      condition: or
+      condition: and
       conditions:
-      - condition: time
-        after: '22:00:00'
-      - condition: sun
-        before: sunrise
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: 'off'
+      - condition: or
+        conditions:
+        - condition: time
+          after: '22:00:00'
+        - condition: sun
+          before: sunrise
     action:
     - service: scene.turn_on
       entity_id: scene.bedroom_prep
@@ -483,7 +484,7 @@ binary_sensor:
       prob_given_true: 0.97
       prob_given_false: 0.21
       platform: 'state'
-      to_state: 'present'
+      to_state: 'on'
     - entity_id: sensor.iphone_battery_state
       prob_given_true: 0.65
       prob_given_false: 0.43
@@ -663,9 +664,35 @@ sensor:
       twincities:
         value_template: '{{ states.proximity.twincities.attributes.dir_of_travel |default("unknown") }}'
       zeke_direction:
-        entity_id: device_tracker.wethop
-        value_template: "{{state_attr('device_tracker.bayesian_zeke_home', 'course') | int}}"
-        
+        entity_id: 
+          - device_tracker.bayesian_zeke_home
+          - device_tracker.wethop
+          - device_tracker.android
+        value_template: >-
+          {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
+            {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int }}
+          {%- else -%}
+            {{ state_attr('device_tracker.android', 'dirOfTravel') | int }}
+          {%- endif %}
+
+  - platform: places
+    name: android
+    devicetracker_id: device_tracker.android
+    options: place
+    map_provider: google
+    map_zoom: 17
+    home_zone: zone.home
+    api_key: !secret email_address
+
+  - platform: places
+    name: wethop
+    devicetracker_id: device_tracker.bayesian_zeke_home
+    options: place
+    map_provider: google
+    map_zoom: 17
+    home_zone: zone.home
+    api_key: !secret email_address
+
 ########################
 # Zone
 ########################
