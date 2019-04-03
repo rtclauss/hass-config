@@ -48,5 +48,8 @@ Software on the pi:
 **AppDaemon Apps:**
 * [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location information.
 * [Lighting Fade-In](appdaemon/apps/brighten_lights.py) - Fades in lights from `off` over a pre-defined interval on a work (non-weekend, non-holiday) day.
+* [Music Fade-in](appdaemon/apps/fade_in_music.py) - Fades in music when I wake up in the morning
 * [deConz button events](appdaemon/apps/deconz_helper.py) - Translates Xiaomi button events into a generic sensor.
+* [Magic Cube](appdaemon/apps/magic_cube.py) - Translates Xiaomi Magic Cube events into actions controlling my living room Hue lights
 * [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates Automatic events into a generic sensor.
+* [Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.
