@@ -1,29 +1,33 @@
 Brighten Office Lights:
   class: BrightenLights
-  light: light.office_lamp
   module: brighten_lights
+  light: light.office_lamp
   sensors: binary_sensor.office_motion
-  start_window: "06:50:00"
-  end_window: "10:30:00"
-  transition_time_sec: 20
-  guest_mode: input_boolean.guest_mode
-  am_i_home: binary_sensor.bayesian_zeke_home
+  transition_time_sec: 500
+  constrain_input_boolean: input_boolean.guest_mode,off
+  constrain_input_boolean: binary_sensor.bayesian_zeke_home
+  constrain_input_boolean: binary_sensor.master_bed_occupancy,off
+  constrain_start_time: "06:50:00"
+  constrain_end_time: "10:30:00"
 
 Brighten Master Bedroom Lights in the Morning:
   class: BrightenLights
-  light: light.master_bedroom
   module: brighten_lights
+  light: light.master_bedroom
   sensors: binary_sensor.master_bedroom_motion
-  start_window: "06:50:00"
-  end_window: "10:30:00"
-  transition_time_sec: 30
-  guest_mode: input_boolean.guest_mode
-  am_i_home: binary_sensor.bayesian_zeke_home
-  
+  transition_time_sec: 600
+  constrain_input_boolean: input_boolean.guest_mode,off
+  constrain_input_boolean: binary_sensor.bayesian_zeke_home
+  constrain_input_boolean: binary_sensor.master_bed_occupancy,off
+  constrain_start_time: "06:50:00"
+  constrain_end_time: "10:30:00"
+
 Add GPS to Binary Sensor:
   class: add_gps
   module: tracker
-  gps_location_sources: device_tracker.wethop
+  gps_location_sources: 
+    - device_tracker.wethop
+    - device_tracker.android
   bayesian_input: binary_sensor.bayesian_zeke_home
   
   
@@ -55,9 +59,23 @@ nest_travel_helper:
   module: nest_travel_helper
   class: NestTravelHelper
   outside_temp_feels_like: sensor.dark_sky_apparent_temperature
+  outside_temp: sensor.dark_sky_temperature
   driving_sensor: binary_sensor.car_in_motion
   phone: device_tracker.bayesian_zeke_home
   thermostat: climate.hallway_glycol
+
+Fade-in music:
+  class: FadeInMusic
+  module: fade_in_music
+  sensors: binary_sensor.master_bedroom_motion
+  transition_time_sec: 120
+  constrain_input_boolean: input_boolean.guest_mode,off
+  constrain_input_boolean: binary_sensor.bayesian_zeke_home
+  constrain_input_boolean: binary_sensor.master_bed_occupancy,off
+  constrain_start_time: "06:50:00"
+  constrain_end_time: "10:30:00"
+  #should this be a constraint?
+  already_fading_in_spotify: input_boolean.morning_routine
 
 #living_room_group:
 #  module: group
