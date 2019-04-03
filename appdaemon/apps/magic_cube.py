@@ -12,10 +12,10 @@ class RemoteControl(hass.Hass):
             self.log(data['event'])
             if data['event'] == 1006:
                 self.log('Cube flip bottom to top. Turn on ' + self.args['light'])
-                self.turn_on(self.args['light'])
+                self.turn_on(self.args['light'], transition = 10)
             elif data['event'] == 6001:
                 self.log('Cube flip top to bottom. Turn off ' + self.args['light'])
-                self.turn_off(self.args['light'])
+                self.turn_off(self.args['light'], transition = 10)
             elif data['event'] == 3002:
                 self.log('Button dim down')
             elif data['event'] == 4002:
@@ -33,9 +33,9 @@ class RemoteControl(hass.Hass):
                     newLevel = 255
                 elif newLevel < 0:
                     #self.log("turning off light "+ self.args['light'])
-                    self.turn_off(self.args['light'])
+                    self.turn_off(self.args['light'], transition = 10)
                     return
                 
                 #self.log('Setting brightness to ' + str(newLevel))
-                self.turn_on(self.args['light'], brightness = newLevel)
+                self.turn_on(self.args['light'], brightness = newLevel, transition = 2)
                 #self.args['light']
