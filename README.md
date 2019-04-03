@@ -3,18 +3,18 @@
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
-I have Home Assistant running on a [Raspberry Pi 3]().
+I have Home Assistant running on a [Raspberry Pi 3]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
 Software on the pi:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
 * Running in Hass.io
+  * [ADB](https://github.com/hassio-addons/addon-adb)
   * [AppDaemon](https://community.home-assistant.io/t/community-hass-io-add-on-appdaemon3/41261?u=frenck)
-  * [Bluetooth BCM43xx](https://home-assistant.io/addons/bluetooth_bcm43xx/)
   * [IDE](https://community.home-assistant.io/t/community-hass-io-add-on-ide-based-on-cloud9/33810?u=frenck)
   * [Mosquitto Broker](https://home-assistant.io/addons/mosquitto/)
-  * [Pi-hole](https://community.home-assistant.io/t/community-hass-io-add-on-pi-hole/33817?u=frenck)
-  * [SmartThings MQTT Bridge](https://github.com/stjohnjohnson/smartthings-mqtt-bridge)
-  * [esphomeyaml](https://esphomelib.com/esphomeyaml/index.html)
+  * [Traccar](https://github.com/hassio-addons/addon-traccar)
+  * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
+  * [esphomeyaml](https://esphomelib.com/esphomeyaml/index.html) - Not used anymore
 
 **Devices in Use:**
 * Apple/iOS Devices - [iPhone XS](), [iPad Pro]()
@@ -48,7 +48,7 @@ Software on the pi:
 
 
 **AppDaemon Apps:**
-* [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location information.
+* [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location tracking.  Uses bayesian data to eliminate red-herrings when arriving at home.  Could be extended to other zones if you have multiple `device_tracker`s 
 * [Lighting Fade-In](appdaemon/apps/brighten_lights.py) - Fades in lights from `off` over a pre-defined interval on a work (non-weekend, non-holiday) day.
 * [Music Fade-in](appdaemon/apps/fade_in_music.py) - Fades in music when I wake up in the morning
 * [deConz button events](appdaemon/apps/deconz_helper.py) - Translates Xiaomi button events into a generic sensor.
