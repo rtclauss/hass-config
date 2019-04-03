@@ -50,12 +50,18 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         event: enter
         zone: zone.work
-    condition: []
+    condition:
+      condition: state
+      entity_id: 'binary_sensor.workday_sensor'
+      state: 'on'
     action:
       - service: climate.set_away_mode
         data:
           away_mode: true
           entity_id: all
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.morning_routine
       - service: notify.all
         data:
           message: 'Arriving at work. Setting Nest Away.'
@@ -78,6 +84,12 @@ binary_sensor:
   - platform: workday
     country: US
     province: !secret home_state
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  morning_routine:
 
 ################################################
 ## Sensor
