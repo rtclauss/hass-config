@@ -55,3 +55,6 @@ Software on the pi:
 * [Magic Cube](appdaemon/apps/magic_cube.py) - Translates Xiaomi Magic Cube events into actions controlling my living room Hue lights
 * [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates Automatic events into a generic sensor.
 * [Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.
+
+**Apple Shortcuts**
+* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - Slowly turn on bedroom lights in the morning before a meeting

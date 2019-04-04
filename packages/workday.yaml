@@ -33,11 +33,23 @@ homeassistant:
       <<: *customize
       friendly_name: "Vacuum while at work"
       icon: mdi:robot-vacuum
-      
+
+    automation.wake_up_lights:
+      <<: *customize
+      friendly_name: "Wake up lights"
+      icon: mdi:briefcase
 
     ################################################
     ## Binary Sensors
     ################################################
+
+    ################################################
+    ## Input Datetime
+    ################################################
+    input_datetime.next_work_meeting:
+      <<: *customize
+      friendly_name: "Next work meeting"
+      icon: mdi:briefcase
 
 ################################################
 ## Automation
@@ -77,6 +89,25 @@ automation:
     action:
       - service: vacuum.start
 
+  - id: 'wake_up_lights'
+    alias: wake_up_lights
+    trigger:
+      - platform: template
+        value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[11:-3]}}"
+    condition:
+      - condition: state
+        entity_id: 'binary_sensor.workday_sensor'
+        state: 'on'
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: 'home'
+    action:
+      - service: light.turn_on
+        data:
+          entity_id: light.master_bedroom
+          transition: 300
+          brightness_pct: 100
+
 ########################
 # Binary Sensors
 ########################
@@ -90,6 +121,14 @@ binary_sensor:
 ########################
 input_boolean:
   morning_routine:
+
+################################################
+## Input Datetime
+################################################
+input_datetime:
+  next_work_meeting:
+    has_date: false
+    has_time: true
 
 ################################################
 ## Sensor
