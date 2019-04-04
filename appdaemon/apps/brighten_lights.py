@@ -34,4 +34,5 @@ class BrightenLights(hass.Hass):
     
     if new == 'on' and workday == 'on':
       if self.get_state(self.args["light"], attribute="brightness") == None:
+        #self.turn_on(self.args["light"], brightness = 1)
         self.turn_on(self.args["light"], brightness_pct = 100, transition = self.transition)
