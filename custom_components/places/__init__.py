@@ -1,1 +1,0 @@
-"""The places component."""

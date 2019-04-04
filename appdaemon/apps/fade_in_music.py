@@ -22,10 +22,10 @@ class FadeInMusic(hass.Hass):
     # Debug
     #self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
     #self.log("Detected Motion in {}".format(self.args["sensors"]))
-    workday = self.get_state("binary_sensor.workday_sensor")
+    #workday = self.get_state("binary_sensor.workday_sensor")
     #self.log("is it a work day? {}".format(workday))
     
-    if new == 'on' and workday == 'on':
+    if new == 'on': # and workday == 'on':
       # Play wake up music
       FadeInMusic.am_i_already_fading_in_spotify  = self.get_state(self.already_fading_in_spotify)
       if not FadeInMusic.am_i_already_fading_in_spotify == 'on': 
