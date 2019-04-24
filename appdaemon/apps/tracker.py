@@ -8,22 +8,33 @@ class add_gps(hass.Hass):
     self.device_id = "bayesian_zeke_home"
     self.bayesian = self.args["bayesian_input"]
     self.gps_sensors = self.args["gps_location_sources"]
-
+    
     #self.log("registering callback {} {}".format(self.location_update, self.gps_sensors))
+    self.listen_state(self.bayes_updated, entity = self.bayesian)
     for tracker in self.gps_sensors:
       self.listen_state(self.location_update, entity = tracker)
-      self.setup_location(tracker)
 
-    
-  def setup_location(self, tracker):
-    #self.log("in setup_location")
-    #self.log("calling get_state on {}".format(tracker))
-    sensor_state = self.get_state(tracker, attribute="all")
-    #self.log("got gps data {}".format(sensor_state))
-    #self.log("calling get_state on {}".format(self.bayesian))
-    bayesian_state = self.get_state(self.bayesian, attribute="all")
-    #self.log("got state data {}".format(bayesian_state, ))
-    self.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
+  
+  def bayes_updated(self, entity, attribute, old, new, kwargs):
+    sensor_state = self.get_state(entity, attribute="all")
+    if sensor_state['state'] == 'home':
+      config = self.get_plugin_config()
+      #self.log("bayes says I am home")
+      #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
+      #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
+      self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"course": 0.0, "home_probability": sensor_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
+    else:
+      return
+  
+  # def setup_location(self, tracker):
+  #   #self.log("in setup_location")
+  #   #self.log("calling get_state on {}".format(tracker))
+  #   sensor_state = self.get_state(tracker, attribute="all")
+  #   #self.log("got gps data {}".format(sensor_state))
+  #   #self.log("calling get_state on {}".format(self.bayesian))
+  #   bayesian_state = self.get_state(self.bayesian, attribute="all")
+  #   #self.log("got state data {}".format(bayesian_state, ))
+  #   self.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
 
 
   def location_update(self, entity, attribute, old, new, kwargs):
@@ -54,7 +65,7 @@ class add_gps(hass.Hass):
       if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
         #self.log("{} {} {}".format(gps_attributes.get("tracker"), gps_attributes.get("motion"), type(gps_attributes.get("motion"))))
         if gps_attributes.get("tracker") == "traccar" and gps_attributes.get("motion", False) == False:
-          self.log("Traccar not moving. Returning and using existing location data.")
+          #self.log("Traccar not moving. Returning and using existing location data.")
           return
         else:
           try:
