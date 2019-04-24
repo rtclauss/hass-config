@@ -154,7 +154,7 @@
 ##   - Renamed MQTT Topic to Clear input text box to Delete a Battery Sensor
 ##   Added
 ##   - Battery attributes containing strings now have dynamic icons that change with battery status
-##   - Added Notifier Name input text box to store name of the notifier to use for notifications (defaults to notify.notify)
+##   - Added Notifier Name input text box to store name of the notifier to use for notifications (defaults to notify)
 ##   - Added Notifier Format input select to allow selection of notification format.  Options are Default and Slack.
 ##   - Added input_boolean.low_batteries to help with automations.  True means there are low batteries.
 ##
@@ -168,7 +168,7 @@
 ##   Removed
 ##   - Removed startup trigger from automation.update_battery_status_group_members
 ##   Changed
-##   - Default to notify.notify if input_text.notifier_name doesn't contain "notify."
+##   - Default to notify if input_text.notifier_name doesn't contain "notify."
 ##
 ## 1.2.3 (2019-03-02)
 ##   Changed
@@ -218,7 +218,7 @@
 ##     un-remarking `initial` and setting the preferred default.
 ##
 ##  8. Setup notifications by entering the notifier name in the `Notifier Name` input text box.
-##     E.g. `notify.slack`.  If no value is entered, it defaults to `notify.notify`.
+##     E.g. `notify.slack`.  If no value is entered, it defaults to `notify`.
 ##
 ##  9. Set the notifier format by selecting either `Default` or `Slack.  Note: most notifiers
 ##     are compatible with the `Default` format.
@@ -552,7 +552,7 @@ automation:
         {% if "notify." in states.input_text.notifier_name.state %}
           {{ states.input_text.notifier_name.state }}
         {% else %}
-          notify.notify
+          notify
         {% endif %}
       data_template:
         title: "Low Battery Levels"
@@ -578,7 +578,7 @@ automation:
         {% if states.input_text.notifier_name.state != "" %}
           {{ states.input_text.notifier_name.state }}
         {% else %}
-          notify.notify
+          notify
         {% endif %}
       data_template:
         message: "Low Battery Levels"
