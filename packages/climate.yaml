@@ -1,5 +1,5 @@
 ################################################################
-## Packages / Workday
+## Packages / Climate
 ################################################################
 
 ################################################
@@ -41,7 +41,7 @@ homeassistant:
       <<: *customize
       friendly_name: 'Nest Home/Away Mode'
       device_class: presence
-      
+
     binary_sensor.pressure_falling:
       <<: *customize
       friendly_name: "Pressure Falling"
@@ -51,32 +51,32 @@ homeassistant:
       <<: *customize
       friendly_name: "Pressure Falling Quickly"
       icon_template: mdi:gauge
-      
+
     binary_sensor.pressure_falling_slowly:
       <<: *customize
       friendly_name: "Pressure Falling Slowly"
       icon_template: mdi:gauge
-      
+
     binary_sensor.pressure_falling_v_rapidly:
       <<: *customize
       friendly_name: "Pressure Falling Very Rapidly"
       icon_template: mdi:gauge
-      
+
     binary_sensor.pressure_rising:
       <<: *customize
       friendly_name: "Pressure Rising"
       icon_template: mdi:gauge
-      
+
     binary_sensor.pressure_rising_quickly:
       <<: *customize
       friendly_name: "Pressure Rising Quickly"
       icon_template: mdi:gauge
-      
+
     binary_sensor.pressure_rising_slowly:
       <<: *customize
       friendly_name: "Pressure Rising Slowly"
       icon_template: mdi:gauge
-      
+
     binary_sensor.pressure_rising_v_rapidly:
       <<: *customize
       friendly_name: "Pressure Rising Very Rapidly"
@@ -87,7 +87,7 @@ homeassistant:
     group.vacation_climate:
       <<: *customize
       friendly_name: "Overall Climate"
-      
+
     ################################################
     ## Input Boolean
     ################################################
@@ -106,11 +106,11 @@ homeassistant:
     sensor.basement_humidity:
       <<: *customize
       device_class: humidity
-      
+
     sensor.garage_humidity:
       <<: *customize
       device_class: humidity
-      
+
     sensor.hallway_thermostat_glycol_humidity:
       <<: *customize
       device_class: humidity
@@ -119,17 +119,20 @@ homeassistant:
       <<: *customize
       friendly_name: "Average House Temperature"
       device_class: temperature
+      icon: mdi:thermometer
 
     sensor.average_house_humidity:
       <<: *customize
       friendly_name: "Average House Humidity"
       device_class: humidity
+      icon: mdi:water-percent
 
     sensor.average_house_pressure:
       <<: *customize
       friendly_name: "Average House Pressure"
+      device_class: pressure
       icon: mdi:gauge
-      
+
     ################################################
     ## Thermostats
     ################################################
@@ -137,16 +140,16 @@ homeassistant:
       <<: *customize
       friendly_name: "Nest Thermostat"
       icon: mdi:air-conditioner
-      
+
 ################################################
 ## Automation
 ################################################
 automation:
   - id: turn_off_nest_when_windows_open
     alias: turn_off_nest_when_windows_open
-    trigger: 
+    trigger:
     - platform: state
-      entity_id: 
+      entity_id:
         - binary_sensor.ene_window_contact
         - binary_sensor.ese_window_contact
         - binary_sensor.nne_window_contact
@@ -164,14 +167,14 @@ automation:
     - condition: state
       entity_id: binary_sensor.bayesian_zeke_home
       state: 'on'
-    action: 
+    action:
     - service: climate.turn_off
       data:
         entity_id: climate.hallway_glycol
 
   - id: turn_on_nest_when_windows_closed
     alias: turn_on_nest_when_windows_closed
-    trigger: 
+    trigger:
     - platform: state
       entity_id: group.egress_points
       from: 'on'
@@ -187,7 +190,7 @@ automation:
       - condition: state
         entity_id: binary_sensor.bayesian_zeke_home
         state: 'on'
-    action: 
+    action:
     - service: climate.turn_on
       data:
         entity_id: climate.hallway_glycol
@@ -200,13 +203,13 @@ binary_sensor:
     sensors:
       nest_home:
         value_template: >-
-          {% if 
-              is_state_attr('climate.hallway_glycol', 'away_mode', 'on') 
-          %} False 
-          {% else %} 
-             True  
+          {% if
+              is_state_attr('climate.hallway_glycol', 'away_mode', 'on')
+          %} False
+          {% else %}
+             True
           {% endif %}
-  
+
   - platform: trend
     sensors:
       pressure_falling_v_rapidly:
@@ -238,7 +241,7 @@ binary_sensor:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
         min_gradient: 0.00015
-        
+
       pressure_falling_slowly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
@@ -259,7 +262,7 @@ group:
       - sensor.average_house_temp
       - sensor.average_house_humidity
       - sensor.average_house_pressure
-  
+
   pressure_trends:
     name: Pressure Trends
     entities:
@@ -308,6 +311,39 @@ sensor:
   - platform: season
     type: meteorological
 
+  - platform: min_max
+    name: average_house_temp
+    type: mean
+    entity_ids:
+      - sensor.living_room_temperature
+      - sensor.master_bedroom_temperature
+      - sensor.guest_room_temperature
+      - sensor.bathroom_temperature
+      #- sensor.motion_sensor_temperature
+      - sensor.hallway_thermostat_glycol_temperature
+
+  - platform: min_max
+    name: average_house_humidity
+    #unit_of_measurement: "%"
+    type: mean
+    entity_ids:
+      - sensor.living_room_humidity
+      - sensor.master_bedroom_humidity
+      - sensor.guest_room_humidity
+      - sensor.bathroom_humidity
+      - sensor.hallway_thermostat_glycol_humidity
+
+  - platform: min_max
+    name: average_house_pressure
+    #unit_of_measurement: "mbar"
+    type: mean
+    entity_ids:
+      - sensor.living_room_pressure
+      - sensor.master_bedroom_pressure
+      - sensor.guest_room_pressure
+      - sensor.bathroom_pressure
+      - sensor.kitchen_pressure
+
   - platform: template
     sensors:
       turn_off_time:
@@ -316,52 +352,3 @@ sensor:
           - input_number.random_minute
         value_template: >-
           {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
-      average_house_temp:
-        unit_of_measurement: "°F"
-        entity_id:
-          - sensor.living_room_temperature
-          - sensor.master_bedroom_temperature
-          - sensor.guest_room_temperature
-          - sensor.bathroom_temperature
-          #- sensor.motion_sensor_temperature
-          - sensor.hallway_thermostat_glycol_temperature
-        value_template: >-
-          {{ ( ( states("sensor.living_room_temperature")|float +
-          states("sensor.master_bedroom_temperature")|float +
-          states("sensor.guest_room_temperature")|float +
-          states("sensor.kitchen_temperature")|float +
-          states("sensor.bathroom_temperature")|float )
-          / 5.0 ) |round(2) }}
-
-      average_house_humidity:
-        unit_of_measurement: "%"
-        entity_id:
-          - sensor.living_room_humidity
-          - sensor.master_bedroom_humidity
-          - sensor.guest_room_humidity
-          - sensor.bathroom_humidity
-          - sensor.hallway_thermostat_glycol_humidity
-        value_template: >-
-          {{ ( ( states("sensor.living_room_humidity")|float +
-          states("sensor.master_bedroom_humidity")|float +
-          states("sensor.guest_room_humidity")|float +
-          states("sensor.kitchen_humidity")|float +
-          states("sensor.bathroom_humidity")|float +
-          states("sensor.hallway_thermostat_glycol_humidity")|float )
-          / 6.0 ) |round(2) }}
-
-      average_house_pressure:
-        unit_of_measurement: "mbar"
-        entity_id:
-          - sensor.living_room_pressure
-          - sensor.master_bedroom_pressure
-          - sensor.guest_room_pressure
-          - sensor.bathroom_pressure
-          - sensor.kitchen_pressure
-        value_template: >-
-          {{ ( ( states("sensor.living_room_pressure")|float +
-          states("sensor.master_bedroom_pressure")|float +
-          states("sensor.guest_room_pressure")|float +
-          states("sensor.kitchen_pressure")|float +
-          states("sensor.bathroom_pressure")|float )
-          / 5.0 ) |round(2) }}
