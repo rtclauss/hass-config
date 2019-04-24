@@ -58,10 +58,13 @@ automation:
   - id: arrive_at_work
     alias: arrive_at_work
     trigger:
-      - platform: zone
+      - platform: state
         entity_id: device_tracker.bayesian_zeke_home
-        event: enter
-        zone: zone.work
+        to: 'Work'
+      # - platform: zone
+      #   entity_id: device_tracker.bayesian_zeke_home
+      #   event: enter
+      #   zone: zone.work
     condition:
       condition: state
       entity_id: 'binary_sensor.workday_sensor'
@@ -78,22 +81,25 @@ automation:
         data:
           message: 'Arriving at work. Setting Nest Away.'
 
-  - id: 'vacuum_while_working'
+  - id: vacuum_while_working
     alias: vacuum_while_working
     trigger:
-      - entity_id: device_tracker.bayesian_zeke_home
-        event: enter
-        platform: zone
-        zone: zone.work
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'Work'
+      # - entity_id: device_tracker.bayesian_zeke_home
+      #   event: enter
+      #   platform: zone
+      #   zone: zone.work
     condition: []
     action:
       - service: vacuum.start
 
-  - id: 'wake_up_lights'
+  - id: wake_up_lights
     alias: wake_up_lights
     trigger:
       - platform: template
-        value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[11:-3]}}"
+        value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[0:5]}}"
     condition:
       - condition: state
         entity_id: 'binary_sensor.workday_sensor'
@@ -101,6 +107,7 @@ automation:
       - condition: state
         entity_id: device_tracker.bayesian_zeke_home
         state: 'home'
+        ## TODO Need to add condition that checks that I'm still in bed
     action:
       - service: light.turn_on
         data:

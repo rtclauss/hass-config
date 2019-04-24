@@ -255,10 +255,13 @@ automation:
   - id: return_home_from_parents
     alias: return_home_from_parents
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.parents
-      event: leave
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.parents
+    #   event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'Parents'
     condition:
       condition: time
       weekday:
@@ -280,10 +283,13 @@ automation:
   - id: send_nest_airport_home_eta
     alias: send_nest_airport_home_eta
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.msp
-      event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'MSP Airport'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.msp
+    #   event: leave
     condition: 
     - condition: state
       entity_id: binary_sensor.flying_home_today
