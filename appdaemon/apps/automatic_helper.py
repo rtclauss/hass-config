@@ -10,7 +10,7 @@ class AutomaticHelper(hass.Hass):
         self.calendar = self.args['calendar']
         self.driving_time = self.args["driving_time"]
         self.notify_target = self.args["notify_target"]
-        self.listen_event(self.event_received, "automatic_update")
+        self.listen_event(self.event_received, "traccar_ignition_on")
 
     def event_received(self, event_name, data, kwargs):
         event_type = data["type"]
