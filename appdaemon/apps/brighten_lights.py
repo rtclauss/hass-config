@@ -27,12 +27,13 @@ class BrightenLights(hass.Hass):
   # On motion brighten the lights in 20 seconds 
   def motion(self, entity, attribute, old, new, kwargs):
     # Debug
-    #self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
-    #self.log("Detected Motion in {}".format(self.args["sensors"]))
+    self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
+    self.log("Detected Motion in {}".format(self.args["sensors"]))
     workday = self.get_state("binary_sensor.workday_sensor")
-    #self.log("is it a work day? {}".format(workday))
+    self.log("is it a work day? {}".format(workday))
     
     if new == 'on' and workday == 'on':
+      self.log("current brightness for light is: {}".format(self.get_state(self.args["light"], attribute="brightness")))
       if self.get_state(self.args["light"], attribute="brightness") == None:
-        #self.turn_on(self.args["light"], brightness = 1)
+        self.turn_on(self.args["light"], brightness = 1)
         self.turn_on(self.args["light"], brightness_pct = 100, transition = self.transition)
