@@ -1,5 +1,5 @@
 ################################################################
-## Packages / Workday
+## Packages / Cleaning
 ################################################################
 
 ################################################
@@ -32,12 +32,47 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
+    binary_sensor.dishwasher:
+      <<: *customize
+      icon: mdi:dishwasher
+      device_class: vibration
+      friendly_name: "Dishwasher Vibration"
+
+    binary_sensor.dishwasher_running:
+      <<: *customize
+      icon: mdi:dishwasher
+      device_class: vibration
+      friendly_name: "Dishwasher Running"
+
+    binary_sensor.dryer:
+      <<: *customize
+      icon: mdi:tumble-dryer
+      device_class: vibration
+      friendly_name: "Dryer Vibration"
+
+    binary_sensor.dryer_running:
+      <<: *customize
+      icon: mdi:tumble-dryer
+      device_class: vibration
+      friendly_name: "Dryer Running"
+
+    binary_sensor.washer:
+      <<: *customize
+      icon: mdi:washing-machine
+      device_class: vibration
+      friendly_name: "Washer Vibration"
+ 
     binary_sensor.washer_door:
       <<: *customize
-      icon: mdi:washer
+      icon: mdi:washing-machine
       device_class: door
       friendly_name: "Washer Door"
 
+    binary_sensor.washing_machine_running:
+      <<: *customize
+      icon: mdi:washing-machine
+      device_class: vibration
+      friendly_name: "Washer Running"
 
     ################################################
     ## Cameras
@@ -109,6 +144,11 @@ homeassistant:
       icon: mdi:tumble-dryer
       friendly_name: "Dryer Vibration"
       
+    sensor.washer_state:
+      <<: *customize
+      icon: mdi:washer
+      friendly_name: "Washing Machine"
+      
     ################################################
     ## Thermostats
     ################################################
@@ -143,6 +183,40 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
+  - platform: template
+    sensors:
+      dishwasher_running:
+        #friendly_name: "Washing Machine"
+        delay_off:
+          minutes: 10
+        delay_on:
+          minutes: 5
+        value_template: >-
+          {{ is_state('binary_sensor.dishwasher', 'on') }}
+
+  - platform: template
+    sensors:
+      dryer_running:
+        #friendly_name: "Washing Machine"
+        delay_off:
+          minutes: 10
+        delay_on:
+          minutes: 5
+        value_template: >-
+          {{ is_state('binary_sensor.dryer', 'on') }}
+
+  - platform: template
+    sensors:
+      washing_machine_running:
+        #friendly_name: "Washing Machine"
+        delay_off:
+          minutes: 10
+        delay_on:
+          minutes: 5
+        value_template: >-
+          {{ is_state('binary_sensor.washer', 'on') }}
+
+
 
 ########################
 # Cameras
@@ -178,7 +252,14 @@ input_number:
 # Input Select
 ########################
 input_select:
-
+  washer_state:
+    name: Washer State
+    options:
+      - IDLE
+      - CLEANING
+      - CLEAN
+      - MUSTY
+    icon: mdi:washing-machine
 ########################
 # iOS
 ########################
