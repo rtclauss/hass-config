@@ -194,10 +194,13 @@ automation:
   - id: cloudy_home_arrival
     alias: cloudy_home_arrival
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: enter
     condition:
       condition: and
       conditions:
@@ -220,10 +223,13 @@ automation:
   - id: doors_open_when_leaving_home
     alias: doors_open_when_leaving_home
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: leave
     condition:
       condition: or
       conditions:
@@ -241,10 +247,13 @@ automation:
   - id: garage_door_open_when_leaving_home
     alias: garage_door_open_when_leaving_home
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: leave
     condition:
     - condition: state
       entity_id: cover.garage_door_opener
@@ -257,10 +266,13 @@ automation:
   - id: play_spotify_when_i_get_home
     alias: play_spotify_when_i_get_home
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: enter
     condition:
     - condition: state
       entity_id: input_boolean.guest_mode
@@ -275,10 +287,13 @@ automation:
   - id: turn_on_lights_at_night_when_i_get_home
     alias: turn_on_lights_at_night_when_i_get_home
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: enter
     condition:
       condition: and
       conditions:
@@ -304,10 +319,13 @@ automation:
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: enter
     condition:
       condition: and
       conditions:
@@ -351,10 +369,13 @@ automation:
   - id: return_home_from_twin_cities
     alias: return_home_from_twin_cities
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.twincities
-      event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'Twin Cities'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.twincities
+    #   event: leave
     condition:
       condition: template
       value_template: '{{ 110 <= sensor.zeke_direction <= 260 }}'
@@ -383,10 +404,13 @@ automation:
     #   entity_id: binary_sensor.bayesian_zeke_home
     #   from: 'on'
     #   to: 'off'
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: leave
     condition:
     - condition: state
       entity_id: input_boolean.guest_mode
@@ -423,10 +447,13 @@ automation:
   - id: update_nest_eta
     alias: update_nest_eta
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.rochester
-      event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'Rochester'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.rochester
+    #   event: enter
     action:
     # - service: nest.set_eta
     #   data_template:
@@ -444,10 +471,13 @@ automation:
   - id: vacuum_return_home
     alias: vacuum_return_home
     trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
+    # - platform: zone
+    #   entity_id: device_tracker.bayesian_zeke_home
+    #   zone: zone.home
+    #   event: enter
     action:
     - service: vacuum.return_to_base
       entity_id: vacuum.pbw
@@ -671,12 +701,13 @@ sensor:
         entity_id: 
           - device_tracker.bayesian_zeke_home
           - device_tracker.wethop
-          - device_tracker.android
+          #- device_tracker.android
+          - device_tracker.honda
         value_template: >-
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
             {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int }}
           {%- else -%}
-            {{ state_attr('device_tracker.android', 'dirOfTravel') | int }}
+            {{ state_attr('device_tracker.honda', 'dirOfTravel') | int }}
           {%- endif %}
 
   - platform: places
@@ -691,6 +722,15 @@ sensor:
   - platform: places
     name: wethop
     devicetracker_id: device_tracker.bayesian_zeke_home
+    options: place
+    map_provider: google
+    map_zoom: 17
+    home_zone: zone.home
+    api_key: !secret email_address
+
+  - platform: places
+    name: honda
+    devicetracker_id: device_tracker.honda
     options: place
     map_provider: google
     map_zoom: 17
@@ -719,7 +759,7 @@ zone:
   - name: Parents
     latitude: !secret parents_latitude
     longitude: !secret parents_longitude
-    radius: 9500
+    radius: 20000
     
   - name: Rochester
     latitude: !secret home_latitude
