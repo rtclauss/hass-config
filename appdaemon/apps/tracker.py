@@ -2,24 +2,27 @@
 import appdaemon.plugins.hass.hassapi as hass
 import copy
 
+from geopy.distance import great_circle
+
 class add_gps(hass.Hass):
 
   def initialize(self):
     self.device_id = "bayesian_zeke_home"
     self.bayesian = self.args["bayesian_input"]
     self.gps_sensors = self.args["gps_location_sources"]
+    self.minimum_update_distance = self.args["minimum_update_distance"]
     
     #self.log("registering callback {} {}".format(self.location_update, self.gps_sensors))
     self.listen_state(self.bayes_updated, entity = self.bayesian)
     for tracker in self.gps_sensors:
-      self.listen_state(self.location_update, entity = tracker)
+      self.listen_state(self.location_update, entity = tracker, attribute="all")
 
   
   def bayes_updated(self, entity, attribute, old, new, kwargs):
     sensor_state = self.get_state(entity, attribute="all")
     if sensor_state['state'] == 'home':
       config = self.get_plugin_config()
-      #self.log("bayes says I am home")
+      self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
       #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
       self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"course": 0.0, "home_probability": sensor_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
@@ -44,6 +47,16 @@ class add_gps(hass.Hass):
     #self.log("here is the current bayesian state: {}".format(bayesian_state))
     gps_sensors_state = self.get_state(entity, attribute="all")
     #self.log("here is the GPS state: {}".format(gps_sensors_state))
+    #qbayes_location = self.get_state("device_tracker."+self.device_id, attribute="all")
+    old_lat_long = (old["attributes"].get("latitude"), old["attributes"].get("longitude"))
+    #self.log("old location is: {}".format(old_lat_long))
+    new_lat_long = (new["attributes"].get("latitude"), new["attributes"].get("longitude"))
+    #self.log("new location is: {}".format(new_lat_long))
+    distance = great_circle(old_lat_long, new_lat_long).meters
+    self.log("distance between updates is: {}".format(distance))
+    if distance <= self.minimum_update_distance:
+      self.log("Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
+      return
     self.run_update(bayesian_state=bayesian_state, sensor_state=gps_sensors_state)
     
 
@@ -56,7 +69,7 @@ class add_gps(hass.Hass):
     
     if bayesian_state['state'] == "on":
       config = self.get_plugin_config()
-      #self.log("bayes says I am home")
+      self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
       #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
       self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"course": 0.0, "home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
@@ -70,7 +83,7 @@ class add_gps(hass.Hass):
         else:
           try:
             #self.log("My current position is {}(Lat), {}(Long)".format(gps_attributes["latitude"], gps_attributes["longitude"]))
-            self.log("here we go setting {} to somewhere with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, gps_attributes["gps_accuracy"], gps_attributes["latitude"], gps_attributes["longitude"]))
+            #self.log("here we go setting {} to somewhere with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, gps_attributes["gps_accuracy"], gps_attributes["latitude"], gps_attributes["longitude"]))
             attributes = copy.deepcopy(gps_attributes)
             #self.log("{}".format(attributes['battery']))
             probability = bayesian_state["attributes"]["probability"]
