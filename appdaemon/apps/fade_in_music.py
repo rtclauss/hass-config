@@ -35,7 +35,7 @@ class FadeInMusic(hass.Hass):
         step = 0.01
         current_volume = 0.01
         i = 1
-        while (current_volume <= 0.4):
+        while (current_volume <= 0.3):
           current_volume = current_volume + step
           self.run_in(self.increase_volume, i*6, new_volume = current_volume)
           i += 1
