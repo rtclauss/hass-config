@@ -99,7 +99,9 @@ homeassistant:
     ################################################
     ## Input Boolean
     ################################################
-
+    input_boolean.bayesian_zeke_home:
+      <<: *customize
+      friendly_name: Bayesian Presence Constraint
     ################################################
     ## Input Numbers
     ################################################
@@ -197,10 +199,10 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: enter
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
     condition:
       condition: and
       conditions:
@@ -216,9 +218,9 @@ automation:
     action:
     - service: scene.turn_on
       entity_id: scene.cloudy_arrive_home
-#    - service: notify.all
-#      data:
-#        message: Cloudy day arrival.
+    - service: notify.all
+      data:
+        message: Cloudy day arrival.
 
   - id: doors_open_when_leaving_home
     alias: doors_open_when_leaving_home
@@ -226,10 +228,10 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         from: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: leave
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
     condition:
       condition: or
       conditions:
@@ -250,10 +252,10 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         from: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: leave
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
     condition:
     - condition: state
       entity_id: cover.garage_door_opener
@@ -263,16 +265,38 @@ automation:
       data:
         message: Garage door is still open!
 
+  - alias: input_boolean_tracker_on
+    id: input_boolean_tracker_on
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: 'on'
+    action:
+      - service: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.bayesian_zeke_home
+
+  - alias: input_boolean_tracker_off
+    id: input_boolean_tracker_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: 'off'
+    action:
+      - service: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.bayesian_zeke_home
+
   - id: play_spotify_when_i_get_home
     alias: play_spotify_when_i_get_home
     trigger:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: enter
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
     condition:
     - condition: state
       entity_id: input_boolean.guest_mode
@@ -281,8 +305,14 @@ automation:
       entity_id: binary_sensor.master_bed_occupancy
       state: 'off'
     action:
-    - service: script.turn_on
-      entity_id: script.spotify_arrival
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.morning_routine
+      - service: script.turn_on
+        entity_id: script.spotify_arrival
+      - service: notify.all
+        data:
+          message: "Welcome Home"
 
   - id: turn_on_lights_at_night_when_i_get_home
     alias: turn_on_lights_at_night_when_i_get_home
@@ -290,10 +320,10 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: enter
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
     condition:
       condition: and
       conditions:
@@ -310,9 +340,9 @@ automation:
     action:
     - service: scene.turn_on
       entity_id: scene.arrive_home
-#    - service: notify.all
-#      data:
-#        message: Home again, home again, jiggity jig.
+    - service: notify.all
+      data:
+        message: Home again, home again, jiggity jig.
     - service: vacuum.return_to_base
       entity_id: vacuum.pbw
   
@@ -322,10 +352,10 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: enter
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
     condition:
       condition: and
       conditions:
@@ -341,6 +371,9 @@ automation:
     action:
     - service: scene.turn_on
       entity_id: scene.bedroom_prep
+    - service: notify.all
+      data:
+        message: "Bedroom Prep Activated"
   
   - id: return_from_road_trip
     alias: return_from_road_trip
@@ -369,13 +402,13 @@ automation:
   - id: return_home_from_twin_cities
     alias: return_home_from_twin_cities
     trigger:
-      - platform: state
+      # - platform: state
+      #   entity_id: device_tracker.bayesian_zeke_home
+      #   from: 'Twin Cities'
+      - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
-        from: 'Twin Cities'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.twincities
-    #   event: leave
+        zone: zone.twincities
+        event: leave
     condition:
       condition: template
       value_template: '{{ 110 <= sensor.zeke_direction <= 260 }}'
@@ -397,20 +430,175 @@ automation:
         message: >-
           Turn off Nest Away. You left TC in direction {{ sensor.zeke_direction }} while you drive home from the Cities.
 
+
+  - id: test_arrive_work
+    alias: test_arrive_work
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.work
+      event: enter
+    action:
+    - service: notify.all
+      data:
+        message: "Arriving Work via zone enter trigger on bayesian device_tracker"
+
+
+  - id: test_leave_work
+    alias: test_leave_work
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.work
+      event: leave
+    action:
+    - service: notify.all
+      data:
+        message: "Leaving Work via zone leave trigger on bayesian device_tracker"
+
+  - id: test_leave_home
+    alias: test_leave_home
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.home
+      event: leave
+    action:
+    - service: notify.all
+      data:
+        message: "Leaving Home via zone leave trigger on bayesian device_tracker"
+        
+  - id: test_arrive_home
+    alias: test_arrive_home
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.home
+      event: enter
+    action:
+    - service: notify.all
+      data:
+        message: "Arriving Home via zone enter trigger on bayesian device_tracker"
+
+
+  - id: test_leave_occ
+    alias: test_leave_occ
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.occ
+      event: leave
+    action:
+    - service: notify.all
+      data:
+        message: "Leaving OCC via zone leave trigger on bayesian device_tracker"
+        
+  - id: test_arrive_occ
+    alias: test_arrive_occ
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.occ
+      event: enter
+    action:
+    - service: notify.all
+      data:
+        message: "Arriving OCC via zone enter trigger on bayesian device_tracker"
+
+
+  - id: test_leave_parents
+    alias: test_leave_parents
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.parents
+      event: leave
+    action:
+    - service: notify.all
+      data:
+        message: "Leaving Parents via zone leave trigger on bayesian device_tracker"
+        
+  - id: test_arrive_parents
+    alias: test_arrive_parents
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.parents
+      event: enter
+    action:
+    - service: notify.all
+      data:
+        message: "Arriving Parents via zone enter trigger on bayesian device_tracker"
+
+
+  - id: test_leave_rochester
+    alias: test_leave_rochester
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.rochester
+      event: leave
+    action:
+    - service: notify.all
+      data:
+        message: "Leaving Rochester via zone leave trigger on bayesian device_tracker"
+        
+  - id: test_arrive_rochester
+    alias: test_arrive_rochester
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.rochester
+      event: enter
+    action:
+    - service: notify.all
+      data:
+        message: "Arriving Rochester via zone enter trigger on bayesian device_tracker"
+
+
+  - id: test_leave_twincities
+    alias: test_leave_twincities
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.twincities
+      event: leave
+    action:
+    - service: notify.all
+      data:
+        message: "Leaving TC via zone leave trigger on bayesian device_tracker"
+        
+  - id: test_arrive_twincities
+    alias: test_arrive_twincities
+    trigger:
+    - platform: zone
+      entity_id: device_tracker.bayesian_zeke_home
+      zone: zone.twincities
+      event: enter
+    action:
+    - service: notify.all
+      data:
+        message: "Arriving TC via zone enter trigger on bayesian device_tracker"
+
+
+
+
+
+
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
     trigger:
-    # - platform: state
-    #   entity_id: binary_sensor.bayesian_zeke_home
-    #   from: 'on'
-    #   to: 'off'
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: 'on'
+        to: 'off'
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         from: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: leave
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
     condition:
     - condition: state
       entity_id: input_boolean.guest_mode
@@ -447,13 +635,13 @@ automation:
   - id: update_nest_eta
     alias: update_nest_eta
     trigger:
-      - platform: state
+      # - platform: state
+      #   entity_id: device_tracker.bayesian_zeke_home
+      #   to: 'Rochester'
+      - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
-        to: 'Rochester'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.rochester
-    #   event: enter
+        zone: zone.rochester
+        event: enter
     action:
     # - service: nest.set_eta
     #   data_template:
@@ -474,10 +662,10 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: 'home'
-    # - platform: zone
-    #   entity_id: device_tracker.bayesian_zeke_home
-    #   zone: zone.home
-    #   event: enter
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
     action:
     - service: vacuum.return_to_base
       entity_id: vacuum.pbw
@@ -555,6 +743,7 @@ device_tracker:
 # Input Booleans
 ########################
 input_boolean:
+  bayesian_zeke_home:
 
 ########################
 # Input Numbers

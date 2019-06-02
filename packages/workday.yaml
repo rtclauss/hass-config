@@ -58,13 +58,13 @@ automation:
   - id: arrive_at_work
     alias: arrive_at_work
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: 'Work'
-      # - platform: zone
+      # - platform: state
       #   entity_id: device_tracker.bayesian_zeke_home
-      #   event: enter
-      #   zone: zone.work
+      #   to: 'Work'
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        event: enter
+        zone: zone.work
     condition:
       condition: state
       entity_id: 'binary_sensor.workday_sensor'
@@ -74,9 +74,6 @@ automation:
         data:
           away_mode: true
           entity_id: all
-      - service: homeassistant.turn_off
-        data:
-          entity_id: input_boolean.morning_routine
       - service: notify.all
         data:
           message: 'Arriving at work. Setting Nest Away.'
@@ -84,13 +81,13 @@ automation:
   - id: vacuum_while_working
     alias: vacuum_while_working
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: 'Work'
-      # - entity_id: device_tracker.bayesian_zeke_home
-      #   event: enter
-      #   platform: zone
-      #   zone: zone.work
+      # - platform: state
+      #   entity_id: device_tracker.bayesian_zeke_home
+      #   to: 'Work'
+      - entity_id: device_tracker.bayesian_zeke_home
+        event: enter
+        platform: zone
+        zone: zone.work
     condition: []
     action:
       - service: vacuum.start

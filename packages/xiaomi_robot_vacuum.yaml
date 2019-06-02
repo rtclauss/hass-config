@@ -1,0 +1,278 @@
+################################################################
+## Packages / Xiaomi Vacuum
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: 'vacuum'
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Alarm Panels
+    ################################################
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Cameras
+    ################################################
+
+    ################################################
+    ## Device Trackers
+    ################################################
+    
+    ################################################
+    ## Frontend
+    ################################################
+    
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Input Select
+    ################################################
+
+    ################################################
+    ## iOS
+    ################################################
+
+    ################################################
+    ## Light
+    ################################################
+
+    ################################################
+    ## Media Player
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+
+    ################################################
+    ## Proximity
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+    
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+
+########################
+# Alarm Panel
+########################
+alarm_control_panel:
+
+########################
+## Automation
+########################
+automation:
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+
+########################
+# Cameras
+########################
+camera:
+
+########################
+# Device Trackers
+########################
+device_tracker:
+
+########################
+# Frontend
+########################
+frontend:
+
+########################
+# Groups
+########################
+group:
+
+########################
+# Input Booleans
+########################
+input_boolean:
+
+########################
+# Input Numbers
+########################
+input_number:
+
+########################
+# Input Select
+########################
+input_select:
+  vacuum_room:
+    name: Choose a room to clean
+    options:
+      - Select Input
+      - Master Bedroom
+      - Guest Room
+      - Living Room
+      - Bathroom
+      - Hallway
+      - Kitchen
+      - Office
+    initial: Select Input
+
+########################
+# iOS
+########################
+ios:
+
+########################
+# Light
+########################
+light:
+
+########################
+# Media Player
+########################
+media_player:
+
+
+########################
+# Plant
+########################
+plant:
+
+########################
+# Proximity
+########################
+proximity:
+
+########################
+# Scenes
+########################
+scene:
+
+########################
+# Scripts
+########################
+script:
+  vacuum_master_bedroom:
+        alias: "Vacuum Master Bedroom"
+        sequence:
+          - service: vacuum.send_command
+            data:
+              entity_id: vacuum.pbw
+              command: app_zoned_clean
+              params: [[21039,24096,26189,27446,1]]
+  vacuum_guest_room:
+        alias: "Vacuum Guest Room"
+        sequence:
+          - service: vacuum.send_command
+            data:
+              entity_id: vacuum.pbw
+              command: app_zoned_clean
+              params: [[21966,28227,26216,31527,1]]
+  vacuum_bathroom:
+        alias: "Vacuum Bathroom"
+        sequence:
+          - service: vacuum.send_command
+            data:
+              entity_id: vacuum.pbw
+              command: app_zoned_clean
+              params: [[19454,28899,22354,31499,1]]
+  # Entryway not working correctly
+  vacuum_hallway:
+        alias: "Vacuum Hallway"
+        sequence:
+          - service: vacuum.send_command
+            data:
+              entity_id: vacuum.pbw
+              command: app_zoned_clean
+              params: [[19402,27663,22102,29213,1]]
+  vacuum_kitchen:
+        alias: "Vacuum Kitchen"
+        sequence:
+          - service: vacuum.send_command
+            data:
+              entity_id: vacuum.pbw
+              command: app_zoned_clean
+              params: [[12367,23534,17767,28084,1]]
+  vacuum_living_room:
+        alias: "Vacuum Living Room"
+        sequence:
+          - service: vacuum.send_command
+            data:
+              entity_id: vacuum.pbw
+              command: app_zoned_clean
+              params: [[12383,27798,19333,31498,1]]
+  vacuum_office:
+        alias: "Vacuum Office"
+        sequence:
+          - service: vacuum.send_command
+            data:
+              entity_id: vacuum.pbw
+              command: app_zoned_clean
+              params: [[17729,24149,21029,27749,1]]
+
+
+########################
+# Sensor
+########################
+sensor:
+
+########################
+# Switch
+########################
+switch:
+
+########################
+# Vacuum
+########################
+vacuum:
+  - platform: xiaomi_miio
+    name: pbw
+    host: !secret miio_host
+    token: !secret miio_token
+
+########################
+# Zone
+########################
+zone:

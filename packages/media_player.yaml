@@ -115,19 +115,19 @@ automation:
         entity_id: media_player.living_room_firetv
         from: playing
         to: paused
-        for: '00:00:10'
+        for: '00:00:20'
       - platform: state
         entity_id: media_player.vizio_smartcast
         #TODO Temporary hack: ADB showing wrong values
         from: paused
         to: playing
-        for: '00:00:10'
+        for: '00:00:20'
       - platform: state
         entity_id: media_player.living_room_firetv
         #TODO Temporary hack: ADB showing wrong values
         from: paused
         to: standby
-        for: '00:00:10'
+        for: '00:00:20'
     condition:
       condition: and
       conditions:
@@ -151,17 +151,17 @@ automation:
         #TODO Temporary hack: ADB showing wrong values
         from: playing
         to: paused
-        for: '00:00:10'
+        for: '00:00:20'
       - platform: state
         entity_id: media_player.living_room_firetv
         #TODO Temporary hack: ADB showing wrong values
         from: standby
         to: paused
-        for: '00:00:10'
+        for: '00:00:20'
       - platform: state
         entity_id: media_player.vizio_smartcast
         to: playing
-        for: '00:00:10'
+        for: '00:00:20'
     condition:
       condition: and
       conditions:
@@ -236,7 +236,7 @@ media_player:
     name: Living Room FireTV
     host: 192.168.1.38
     adb_server_ip: 192.168.1.11
-    adb_server_port: 6037
+    adb_server_port: 7037
 
   - platform: spotify
     client_id: !secret spotify_client_id
@@ -336,12 +336,14 @@ script:
       - service: media_player.media_pause
         data:
           entity_id: media_player.spotify
-#      - service: media_player.shuffle_set
-#        data_template:
-#          shuffle: >-
-#            {%- set shuffle = [true, false] -%}
-#              {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-#              {{ shuffle[sindex] }}
+      - service: media_player.shuffle_set
+        data:
+          entity_id: media_player.spotify
+        data_template:
+          shuffle: >-
+            {%- set shuffle = [true, false] -%}
+               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+               {{ shuffle[sindex] }}
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -439,12 +441,14 @@ script:
       - service: media_player.media_pause
         data:
           entity_id: media_player.spotify
-#      - service: media_player.shuffle_set
-#        data_template:
-#          shuffle: >-
-#            {%- set shuffle = [true, false] -%}
-#              {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-#              {{ shuffle[sindex] }}
+      - service: media_player.shuffle_set
+        data:
+          entity_id: media_player.spotify
+        data_template:
+          shuffle: >-
+            {%- set shuffle = [true, false] -%}
+               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+               {{ shuffle[sindex] }}
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
