@@ -26,10 +26,10 @@ config:
 logger:
   default: warn
   #default: info
-  logs:
+  #logs:
     #homeassistant.components.device_tracker: debug
     #homeassistant.components.media_player: debug
-    pytraccar: debug 
+    #pytraccar: debug 
     #zha-quirks: debug
 #  default: warn 
 #  default: debug
@@ -86,6 +86,12 @@ conversation:
 
 # View all events in a logbook
 logbook:
+  exclude:
+    entities:
+      - automation.battery_sensor_from_attributes
+      - automation.update_battery_status_group_members
+      - automation.battery_persistent_notification
+      - automation.battery_persistent_notification_clear
 
 # Discover some devices automatically
 discovery:
@@ -94,7 +100,8 @@ climate:
   platform: nest
 
 tts:
-  - platform: google
+  - platform: google_translate
+    service_name: google_say
 
 nest:
   client_id: !secret nest_client_id
@@ -109,8 +116,6 @@ sensor: !include sensor.yaml
 group: !include_dir_merge_named group
 
 script: !include script.yaml
-
-vacuum: !include vacuum.yaml
 
 #telegram_bot:
 #  platform: polling
@@ -203,6 +208,8 @@ cloud:
       include_domains:
         - light
         - switch
+        - script
+        - fan
       exclude_entities:
         - switch.livingroom_motion_tracking
         - switch.basement_night_mode
@@ -293,3 +300,13 @@ mobile_app:
 # Stream
 ########################
 stream:
+
+##temporary for fans
+wink:
+
+mqtt_eventstream:
+  publish_topic: master/topic
+  subscribe_topic: slaves/#
+  ignore_event:
+    - call_service
+    - state_changed
