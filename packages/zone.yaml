@@ -80,7 +80,7 @@ homeassistant:
     binary_sensor.bayesian_zeke_home:
       <<: *customize
       friendly_name: "Home"
-      device_class: occupancy
+      device_class: presence
 
     binary_sensor.test_homeward:
       <<: *customize
@@ -430,161 +430,6 @@ automation:
         message: >-
           Turn off Nest Away. You left TC in direction {{ sensor.zeke_direction }} while you drive home from the Cities.
 
-
-  - id: test_arrive_work
-    alias: test_arrive_work
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.work
-      event: enter
-    action:
-    - service: notify.all
-      data:
-        message: "Arriving Work via zone enter trigger on bayesian device_tracker"
-
-
-  - id: test_leave_work
-    alias: test_leave_work
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.work
-      event: leave
-    action:
-    - service: notify.all
-      data:
-        message: "Leaving Work via zone leave trigger on bayesian device_tracker"
-
-  - id: test_leave_home
-    alias: test_leave_home
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: leave
-    action:
-    - service: notify.all
-      data:
-        message: "Leaving Home via zone leave trigger on bayesian device_tracker"
-        
-  - id: test_arrive_home
-    alias: test_arrive_home
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.home
-      event: enter
-    action:
-    - service: notify.all
-      data:
-        message: "Arriving Home via zone enter trigger on bayesian device_tracker"
-
-
-  - id: test_leave_occ
-    alias: test_leave_occ
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.occ
-      event: leave
-    action:
-    - service: notify.all
-      data:
-        message: "Leaving OCC via zone leave trigger on bayesian device_tracker"
-        
-  - id: test_arrive_occ
-    alias: test_arrive_occ
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.occ
-      event: enter
-    action:
-    - service: notify.all
-      data:
-        message: "Arriving OCC via zone enter trigger on bayesian device_tracker"
-
-
-  - id: test_leave_parents
-    alias: test_leave_parents
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.parents
-      event: leave
-    action:
-    - service: notify.all
-      data:
-        message: "Leaving Parents via zone leave trigger on bayesian device_tracker"
-        
-  - id: test_arrive_parents
-    alias: test_arrive_parents
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.parents
-      event: enter
-    action:
-    - service: notify.all
-      data:
-        message: "Arriving Parents via zone enter trigger on bayesian device_tracker"
-
-
-  - id: test_leave_rochester
-    alias: test_leave_rochester
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.rochester
-      event: leave
-    action:
-    - service: notify.all
-      data:
-        message: "Leaving Rochester via zone leave trigger on bayesian device_tracker"
-        
-  - id: test_arrive_rochester
-    alias: test_arrive_rochester
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.rochester
-      event: enter
-    action:
-    - service: notify.all
-      data:
-        message: "Arriving Rochester via zone enter trigger on bayesian device_tracker"
-
-
-  - id: test_leave_twincities
-    alias: test_leave_twincities
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.twincities
-      event: leave
-    action:
-    - service: notify.all
-      data:
-        message: "Leaving TC via zone leave trigger on bayesian device_tracker"
-        
-  - id: test_arrive_twincities
-    alias: test_arrive_twincities
-    trigger:
-    - platform: zone
-      entity_id: device_tracker.bayesian_zeke_home
-      zone: zone.twincities
-      event: enter
-    action:
-    - service: notify.all
-      data:
-        message: "Arriving TC via zone enter trigger on bayesian device_tracker"
-
-
-
-
-
-
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
     trigger:
@@ -680,7 +525,7 @@ binary_sensor:
         entity_id: sensor.time
         value_template: >-
           {% if
-             (((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed))//60) > 95) and (states.sensor.heading_home.state=="towards")
+             (((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed))//60) | int > 95) and (states.sensor.heading_home.state=="towards")
           %} true
           {% else %}
             false
@@ -689,17 +534,26 @@ binary_sensor:
   - platform: bayesian
     prior: 0.1
     name: bayesian_zeke_home
-    device_class: occupancy
-    probability_threshold: 0.85
+    probability_threshold: 0.80
     observations:
     - entity_id: device_tracker.wethop
       prob_given_true: 0.97
       prob_given_false: 0.1
       platform: 'state'
       to_state: 'home'
-    - entity_id: device_tracker.iphone_bt
+    - entity_id: device_tracker.honda
       prob_given_true: 0.97
-      prob_given_false: 0.10
+      prob_given_false: 0.1
+      platform: 'state'
+      to_state: 'home'
+    - entity_id: device_tracker.android
+      prob_given_true: 0.97
+      prob_given_false: 0.1
+      platform: 'state'
+      to_state: 'home'
+    - entity_id: device_tracker.iphone_bt
+      prob_given_true: 0.80
+      prob_given_false: 0.20
       platform: 'state'
       to_state: 'home'
     - entity_id: binary_sensor.arrival_sensor
@@ -707,11 +561,6 @@ binary_sensor:
       prob_given_false: 0.21
       platform: 'state'
       to_state: 'on'
-    - entity_id: sensor.iphone_battery_state
-      prob_given_true: 0.65
-      prob_given_false: 0.43
-      platform: 'state'
-      to_state: 'Charging'
     - entity_id: binary_sensor.nest_home
       prob_given_true: 0.75
       prob_given_false: 0.4
@@ -936,9 +785,9 @@ zone:
     radius: 250
 
   - name: MSP
-    latitude: 44.881071
-    longitude: -93.205173
-    radius: 900
+    latitude: 44.880271
+    longitude: -93.221663
+    radius: 1770
 
   - name: OCC
     latitude: 44.068651
