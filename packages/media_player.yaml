@@ -236,7 +236,7 @@ media_player:
     name: Living Room FireTV
     host: 192.168.1.38
     adb_server_ip: 192.168.1.11
-    adb_server_port: 7037
+    adb_server_port: 8037
 
   - platform: spotify
     client_id: !secret spotify_client_id
@@ -333,9 +333,17 @@ script:
   spotify_arrival:
     alias: 'Spotify Arrive Home'
     sequence:
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+          source: "Everywhere"
+      - delay:
+          seconds: 2
       - service: media_player.media_pause
         data:
           entity_id: media_player.spotify
+      - delay:
+          seconds: 2
       - service: media_player.shuffle_set
         data:
           entity_id: media_player.spotify
@@ -344,14 +352,14 @@ script:
             {%- set shuffle = [true, false] -%}
                {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
                {{ shuffle[sindex] }}
-      - service: media_player.select_source
-        data:
-          entity_id: media_player.spotify
-          source: "Everywhere"
+      - delay:
+          seconds: 2
       - service: media_player.volume_set
         data:
           entity_id: media_player.spotify
           volume_level: 0.30
+      - delay:
+          seconds: 2
       - service: media_player.play_media
         data: 
           entity_id: media_player.spotify
@@ -438,17 +446,6 @@ script:
   spotify_wake_up:
     alias: 'Spotify Wake Up'
     sequence:
-      - service: media_player.media_pause
-        data:
-          entity_id: media_player.spotify
-      - service: media_player.shuffle_set
-        data:
-          entity_id: media_player.spotify
-        data_template:
-          shuffle: >-
-            {%- set shuffle = [true, false] -%}
-               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-               {{ shuffle[sindex] }}
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -459,10 +456,29 @@ script:
             {% else %}
               Everywhere
             {% endif %}
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+      - delay:
+          seconds: 2
+      - service: media_player.shuffle_set
+        data:
+          entity_id: media_player.spotify
+        data_template:
+          shuffle: >-
+            {%- set shuffle = [true, false] -%}
+               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+               {{ shuffle[sindex] }}
+      - delay:
+          seconds: 2
       - service: media_player.volume_set
         data:
           entity_id: media_player.spotify
           volume_level: 0.01
+      - delay:
+          seconds: 2
       - service: media_player.play_media
         data: 
           entity_id: media_player.spotify
