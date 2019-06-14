@@ -12,15 +12,19 @@ class add_gps(hass.Hass):
     self.gps_sensors = self.args["gps_location_sources"]
     self.minimum_update_distance = self.args["minimum_update_distance"]
     
+    #self.log("preparing to system on init")
+    self.bayes_updated(entity=self.bayesian, attribute={}, old={}, new={}, kwargs={})
+    #self.log('done with init')
+    
     #self.log("registering callback {} {}".format(self.location_update, self.gps_sensors))
     self.listen_state(self.bayes_updated, entity = self.bayesian)
     for tracker in self.gps_sensors:
       self.listen_state(self.location_update, entity = tracker, attribute="all")
-
+    
   
   def bayes_updated(self, entity, attribute, old, new, kwargs):
     sensor_state = self.get_state(entity, attribute="all")
-    if sensor_state['state'] == 'home':
+    if sensor_state['state'] == 'on':
       config = self.get_plugin_config()
       self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
