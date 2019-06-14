@@ -37,6 +37,12 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
+    binary_sensor.fresh_air_open:
+      <<: *customize
+      friendly_name: 'Window open'
+      device_class: opening
+      #icon: mdi:window-open
+      
     binary_sensor.nest_home:
       <<: *customize
       friendly_name: 'Nest Home/Away Mode'
@@ -209,6 +215,19 @@ binary_sensor:
           {% else %}
              True
           {% endif %}
+      fresh_air_open:
+        value_template: >-
+          {{
+            is_state('binary_sensor.ene_window_contact', 'on')
+            or is_state('binary_sensor.ese_window_contact', 'on')
+            or is_state('binary_sensor.nne_window_contact', 'on')
+            or is_state('binary_sensor.north_kitchen_sink_window_contact', 'on')
+            or is_state('binary_sensor.north_master_bedroom_window_contact', 'on')
+            or is_state('binary_sensor.office_north_window_contact', 'on')
+            or is_state('binary_sensor.se_basement_window_contact', 'on')
+            or is_state('binary_sensor.sse_window_contact', 'on')
+            or is_state('binary_sensor.sw_basement_window_contact', 'on')
+          }}
 
   - platform: trend
     sensors:
