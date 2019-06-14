@@ -14,6 +14,9 @@ resources:
     type: js
   - url: /customcards/github/custom-cards/button-card.js?track=true
     type: module
+  - url: /local/custom-lovelace/weather-card/weather-card.js
+  #- url: https://cdn.jsdelivr.net/gh/bramkragten/custom-ui@master/weather-card/weather-card.min.js
+    type: module
 views:
   - title: Home
     path: home
@@ -127,6 +130,13 @@ views:
                 - type: entity-button
                   entity: switch.flux
                   name: ' '
+                  tap_action:
+                    action: toggle
+                  hold_action: 
+                - type: entity-button
+                  entity: fan.living_room_fan
+                  name: ' '
+                  icon: mdi:fan
                   tap_action:
                     action: toggle
                   hold_action: 
@@ -369,14 +379,17 @@ views:
   - title: Weather
     path: weather
     icon: mdi:weather-lightning
+    badges:
+      - binary_sensor.fresh_air_open
     cards:
       - type: iframe
         aspect_ratio: 90%
-        url: https://embed.windy.com/embed2.html?lat=44.308&lon=-94.614&zoom=5&level=surface&overlay=rain&menu=&message=&marker=&calendar=&pressure=&type=map&location=coordinates&detail=&detailLat=44.245&detailLon=-95.416&metricWind=default&metricTemp=%C2%B0F&radarRange=-1
+        url: https://embed.windy.com/embed2.html?lat=44.308&lon=-94.614&zoom=5&level=surface&overlay=rain&menu=&message=true&marker=&calendar=&pressure=true&type=map&location=coordinates&detail=&detailLat=44.245&detailLon=-95.416&metricWind=mph&metricTemp=%C2%B0F&radarRange=-1
 
 
       - id: forecast
-        type: weather-forecast
+        #type: weather-forecast
+        type: custom:weather-card
         entity: weather.dark_sky
 
       - id: b1dfcb1f57cc428184dde82853ecd065  # Automatically created id
@@ -592,10 +605,17 @@ views:
           - device_tracker.wethop
           - device_tracker.iphone_bt
           - binary_sensor.arrival_sensor
-          - sensor.iphone_battery_state
           - binary_sensor.nest_home
           - device_tracker.android
           - device_tracker.honda
+          - sensor.zeke_direction
+
+      - id: 1ed69694b5244ca59bbdb9339a183865  # Automatically created id
+        type: entities
+        title: Return from Cities Check
+        show_header_toggle: false
+        entities:
+          - device_tracker.bayesian_zeke_home
           - sensor.zeke_direction
 
       - id: 1ed69694b5244ca59bbdb9339a083865  # Automatically created id
