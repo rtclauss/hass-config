@@ -21,16 +21,16 @@ class BrightenLights(hass.Hass):
 
     # Register callbacks for all sensors we were passed
     for sensor in self.args["sensors"].split(","):
-      self.log(sensor)
+      #self.log(sensor)
       self.listen_state(self.motion, sensor)
 
   # On motion brighten the lights in 20 seconds 
   def motion(self, entity, attribute, old, new, kwargs):
     # Debug
-    self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
+    #self.log(', '.join(['{}={!r}'.format(k, v) for k, v in kwargs.items()]))
     self.log("Detected Motion in {}".format(self.args["sensors"]))
     workday = self.get_state("binary_sensor.workday_sensor")
-    self.log("is it a work day? {}".format(workday))
+    #self.log("is it a work day? {}".format(workday))
     
     if new == 'on' and workday == 'on':
       self.log("current brightness for light is: {}".format(self.get_state(self.args["light"], attribute="brightness")))
