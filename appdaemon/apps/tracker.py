@@ -1,6 +1,8 @@
 ## Blend the data from the bayesian binary home/away sensor with device tracker
 import appdaemon.plugins.hass.hassapi as hass
 import copy
+from datetime import datetime, timedelta, timezone
+
 
 from geopy.distance import great_circle
 
@@ -11,6 +13,7 @@ class add_gps(hass.Hass):
     self.bayesian = self.args["bayesian_input"]
     self.gps_sensors = self.args["gps_location_sources"]
     self.minimum_update_distance = self.args["minimum_update_distance"]
+    self.minimum_update_window = self.args["minimum_update_window"]
     
     #self.log("preparing to system on init")
     self.bayes_updated(entity=self.bayesian, attribute={}, old={}, new={}, kwargs={})
@@ -49,6 +52,12 @@ class add_gps(hass.Hass):
     #self.log("triggered by: {} {} {} {} {}".format(entity, attribute, old, new, kwargs))
     bayesian_state = self.get_state(self.bayesian, attribute="all")
     #self.log("here is the current bayesian state: {}".format(bayesian_state))
+    last_changed = self.convert_utc(bayesian_state.get("last_updated"))
+    difference = datetime.now(timezone.utc) - last_changed
+    if difference.total_seconds() > self.minimum_update_window:
+      self.log("State last changed {} seconds ago.  Time for an update".format(difference.total_seconds()))
+    else:
+      return
     gps_sensors_state = self.get_state(entity, attribute="all")
     #self.log("here is the GPS state: {}".format(gps_sensors_state))
     #qbayes_location = self.get_state("device_tracker."+self.device_id, attribute="all")
