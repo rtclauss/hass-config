@@ -9,7 +9,7 @@ from geopy.distance import great_circle
 class add_gps(hass.Hass):
 
   def initialize(self):
-    self.device_id = "bayesian_zeke_home"
+    self.device_id = self.args["bayesian_device_tracker_name"]
     self.bayesian = self.args["bayesian_input"]
     self.gps_sensors = self.args["gps_location_sources"]
     self.minimum_update_distance = self.args["minimum_update_distance"]
