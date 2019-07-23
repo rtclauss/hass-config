@@ -4,7 +4,6 @@ from datetime import datetime, time
 from datetime import timedelta
 from dateutil import parser
 
-class AutomaticHelper(hass.Hass):
     def initialize(self) -> None:
         self.tracked_device = self.args['tracker_input']
         self.calendar = self.args['calendar']
@@ -17,8 +16,6 @@ class AutomaticHelper(hass.Hass):
         event_location = data["location"]
         event_received = datetime.now()
 
-        self.log("Automatic event received from {}. Event was: {}".format(event_type, event_location))
-        self.set_state("sensor.automatic_event", state = event_type, attributes = {"event_data": event_location, "event_received": str(event_received)})
         if event_type == "ignition:on":
             self.set_state("input_boolean.car_in_motion", state="on")
         elif event_type == "ignition:off" or event_type == "trip:finished":
