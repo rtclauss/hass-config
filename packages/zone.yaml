@@ -196,9 +196,6 @@ automation:
   - id: cloudy_home_arrival
     alias: cloudy_home_arrival
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -222,12 +219,32 @@ automation:
       data:
         message: Cloudy day arrival.
 
+  - id: default_arrive_home
+    alias: default_arrive_home
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
+    condition: 
+    action:
+      - service: scene.turn_on
+        entity_id: scene.arrive_home
+
+  - id: doorbell_ring
+    alias: doorbell_ring
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.doorbell
+      to: 'on'
+    action:
+    - service: notify.all
+      data:
+        message: Doorbell rang!
+
   - id: doors_open_when_leaving_home
     alias: doors_open_when_leaving_home
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        from: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -249,9 +266,6 @@ automation:
   - id: garage_door_open_when_leaving_home
     alias: garage_door_open_when_leaving_home
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        from: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -290,9 +304,6 @@ automation:
   - id: play_spotify_when_i_get_home
     alias: play_spotify_when_i_get_home
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -317,9 +328,6 @@ automation:
   - id: turn_on_lights_at_night_when_i_get_home
     alias: turn_on_lights_at_night_when_i_get_home
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -339,7 +347,7 @@ automation:
           before: sunrise
     action:
     - service: scene.turn_on
-      entity_id: scene.arrive_home
+      entity_id: scene.night_arrive_home
     - service: notify.all
       data:
         message: Home again, home again, jiggity jig.
@@ -349,9 +357,6 @@ automation:
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -386,14 +391,10 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_away_mode
+    - service: climate.set_preset_mode
       data:
-        away_mode: 'off'
+        away_mode: 'none'
         entity_id: all
-    - service: climate.set_away_mode
-      data:
-        entity_id: all
-        away_mode: false
     - service: notify.all
       data:
         message: >-
@@ -417,14 +418,14 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_away_mode
+    - service: climate.set_preset_mode
       data:
-        away_mode: 'off'
+        preset_mode: 'none'
         entity_id: all
-    - service: climate.set_away_mode
+    - service: climate.set_preset_mode
       data:
         entity_id: all
-        away_mode: false
+        preset_mode: 'none'
     - service: notify.all
       data_template:
         message: >-
@@ -433,13 +434,6 @@ automation:
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
     trigger:
-      - platform: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: 'on'
-        to: 'off'
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        from: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -457,6 +451,8 @@ automation:
     - service: notify.all
       data:
         message: Auf weidersehen!
+    - service: scene.turn_on
+      entity_id: scene.turn_on_cameras
 
   - id: update_trip_origin
     alias: update_trip_origin
@@ -492,21 +488,18 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_away_mode
+    - service: climate.set_preset_mode
       data:
-        away_mode: 'off'
+        preset_mode: 'none'
         entity_id: all
     - service: notify.all
       data_template:
         message: >-
-          Updating ETA to {{ states.sensor.time_to_home.state }}.
+          Entering Rochester. Turning off Nest. ETA to home {{ states.sensor.time_to_home.state }}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
     trigger:
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: 'home'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
@@ -514,6 +507,10 @@ automation:
     action:
     - service: vacuum.return_to_base
       entity_id: vacuum.pbw
+    - service: switch.turn_off
+      entity_id: switch.livingroom_camera_power
+    - service: switch.turn_off
+      entity_id: switch.basement_camera_power
 
 ########################
 # Binary Sensors
@@ -724,7 +721,7 @@ script:
 # Sensor
 ########################
 sensor:
-##Turn the direction of travel into a sensor which I can use in my automations
+##Turn the direction of travel into a sensor which I can use in my s
 ##Since sensors have a last changed timestamp.
   - platform: template
     sensors:
@@ -753,32 +750,32 @@ sensor:
             {{ state_attr('device_tracker.honda', 'dirOfTravel') | int }}
           {%- endif %}
 
-  - platform: places
-    name: android
-    devicetracker_id: device_tracker.android
-    options: place
-    map_provider: google
-    map_zoom: 17
-    home_zone: zone.home
-    api_key: !secret email_address
+  # - platform: places
+  #   name: android
+  #   devicetracker_id: device_tracker.android
+  #   options: place
+  #   map_provider: google
+  #   map_zoom: 17
+  #   home_zone: zone.home
+  #   api_key: !secret email_address
 
-  - platform: places
-    name: wethop
-    devicetracker_id: device_tracker.bayesian_zeke_home
-    options: place
-    map_provider: google
-    map_zoom: 17
-    home_zone: zone.home
-    api_key: !secret email_address
+  # - platform: places
+  #   name: wethop
+  #   devicetracker_id: device_tracker.bayesian_zeke_home
+  #   options: place
+  #   map_provider: google
+  #   map_zoom: 17
+  #   home_zone: zone.home
+  #   api_key: !secret email_address
 
-  - platform: places
-    name: honda
-    devicetracker_id: device_tracker.honda
-    options: place
-    map_provider: google
-    map_zoom: 17
-    home_zone: zone.home
-    api_key: !secret email_address
+  # - platform: places
+  #   name: honda
+  #   devicetracker_id: device_tracker.honda
+  #   options: place
+  #   map_provider: google
+  #   map_zoom: 17
+  #   home_zone: zone.home
+  #   api_key: !secret email_address
 
 ########################
 # Zone
