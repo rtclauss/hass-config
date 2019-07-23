@@ -44,7 +44,7 @@ Software on the pi:
   * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
 * Unifi nanoHD-AP
 * Unifi USG
-* Automatic Connected Car adapter (bluetooth)
+* matic Connected Car adapter (bluetooth)
 
 
 **AppDaemon Apps:**
@@ -53,7 +53,7 @@ Software on the pi:
 * [Music Fade-in](appdaemon/apps/fade_in_music.py) - Fades in music when I wake up in the morning
 * [deConz button events](appdaemon/apps/deconz_helper.py) - Translates Xiaomi button events into a generic sensor.
 * [Magic Cube](appdaemon/apps/magic_cube.py) - Translates Xiaomi Magic Cube events into actions controlling my living room Hue lights
-* [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates Automatic events into a generic sensor.
+* [matic event helper](appdaemon/apps/matic_helper.py) - Similar to deCONZ helper this translates matic events into a generic sensor.
 * [Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.
 
 **Apple Shortcuts**
