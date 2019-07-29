@@ -39,16 +39,16 @@ from dateutil import parser
                 if now > fourpm and not (driving_time < now < calendar_start_time):
                     self.log("Looks like you're going home right away. Turning on Nest")
                     self.call_service(self.notify_target, message="Looks like you're going home right away. Turning on Nest")
-                    self.call_service("climate/set_away_mode", away_mode="false")
+                    self.call_service("climate/set_preset_mode", preset_mode="none")
             elif location == "OCC":
                 if datetime.today().weekday() in (0,1,6):
                     self.log("Leaving OCC. Turning on Nest")
                     self.call_service(self.notify_target, message="Leaving OCC. Turning on Nest")
-                    self.call_service("climate/set_away_mode", away_mode="false")
+                    self.call_service("climate/set_preset_mode", preset_mode="none")
             elif location == "SPCC":
                 if datetime.today().weekday() in (2,6):
                     self.log("Leaving SPCC. Turning on Nest")
                     self.call_service(self.notify_target, message="Leaving SPCC. Turning on Nest")
-                    self.call_service("climate/set_away_mode", away_mode="false")
+                    self.call_service("climate/set_preset_mode", preset_mode="none")
             
         
