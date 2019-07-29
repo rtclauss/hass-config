@@ -16,18 +16,22 @@ resources:
     type: module
   - url: /community_plugin/weather-card/weather-card.js
     type: module
-    
+  - url: /community_plugin/zha-network-card/zha-network-card.js
+    type: js
+  - url: /community_plugin/lovelace-card-mod/card-mod.js
+    type: js
+
 cch:
   #hide_tabs: '9'
   swipe: true
   conditional_styles:
-    - entity: input_boolean.trip
+    - entity: binary_sensor.sensed_trip
       condition:
         state: 'off'
       tab:
         9:
           hide: true
-    - entity:  input_boolean.bayesian_zeke_home
+    - entity: binary_sensor.bayesian_zeke_home
       condition:
         state: 'on'
       tab:
@@ -84,6 +88,14 @@ views:
                     - type: entity-button
                       entity: light.master_bedroom
                       name: ' '
+                      tap_action:
+                        action: toggle
+                      hold_action: 
+                        action: more-info
+                    - type: entity-button
+                      entity: fan.master_bedroom_fan
+                      name: ' '
+                      icon: mdi:fan
                       tap_action:
                         action: toggle
                       hold_action: 
@@ -434,6 +446,7 @@ views:
           - sensor.dark_sky_summary
           - sensor.dark_sky_temperature
           - sensor.dark_sky_apparent_temperature
+          - sensor.dark_sky_humidity
           - sensor.dark_sky_pressure
           - sensor.dark_sky_cloud_coverage
           - sensor.dark_sky_precip_intensity
@@ -468,10 +481,12 @@ views:
             title: Living Room Controls
             show_header_toggle: false
             entities:
-              - cover.livingroom_move_leftright
-              - cover.livingroom_move_updown
+              - cover.livingroom_move_left_right
+              - cover.livingroom_move_up_down
               - switch.livingroom_motion_detection
               - switch.livingroom_motion_tracking
+              - switch.livingroom_ir_led
+              - switch.livingroom_ir_filter
           - type: picture-entity
             entity: camera.livingroom_motion_snapshot
 
@@ -484,10 +499,12 @@ views:
             title: Basement Controls
             show_header_toggle: false
             entities:
-              - cover.basement_move_leftright
-              - cover.basement_move_updown
+              - cover.basement_move_left_right
+              - cover.basement_move_up_down
               - switch.basement_motion_detection
               - switch.basement_motion_tracking
+              - switch.basement_ir_led
+              - switch.basement_ir_filter
           - type: picture-entity
             entity: camera.basement_motion_snapshot
 
@@ -505,6 +522,7 @@ views:
           - sensor.dark_sky_summary
           - sensor.dark_sky_temperature
           - sensor.dark_sky_apparent_temperature
+          - sensor.dark_sky_humidity
           - sensor.dark_sky_pressure
           - sensor.dark_sky_cloud_coverage
           - sensor.dark_sky_precip_intensity
@@ -524,7 +542,7 @@ views:
           - sensor.living_room_temperature
           - sensor.living_room_humidity
           - sensor.living_room_pressure
-          - sensor.living_room_temperature_battery
+          - sensor.living_room_tph_battery
           - sensor.living_room_motion_sensor_temperature
 
       - id: fb769407d8ab494896cfb32b88435881  # Automatically created id
@@ -535,7 +553,7 @@ views:
           - sensor.master_bedroom_temperature
           - sensor.master_bedroom_humidity
           - sensor.master_bedroom_pressure
-          - sensor.master_bedroom_humidity_battery
+          - sensor.master_bedroom_tph_battery
 
       - id: 15cee4ae7bca4484bf102cbfb8cb1369  # Automatically created id
         type: entities
@@ -545,7 +563,7 @@ views:
           - sensor.guest_room_temperature
           - sensor.guest_room_humidity
           - sensor.guest_room_pressure
-          - sensor.guest_room_temperature_battery
+          - sensor.guest_room_tph_battery
 
       - id: 5994ce7bb4264b2b92e398bdda4fc8cd  # Automatically created id
         type: entities
@@ -555,7 +573,7 @@ views:
           - sensor.kitchen_temperature
           - sensor.kitchen_humidity
           - sensor.kitchen_pressure
-          - sensor.kitchen_temperature_battery
+          - sensor.kitchen_tph_battery
 
       - id: 11404d547dae4a7b9e50997fee3fa983  # Automatically created id
         type: entities
@@ -565,7 +583,7 @@ views:
           - sensor.bathroom_temperature
           - sensor.bathroom_humidity
           - sensor.bathroom_pressure
-          - sensor.bathroom_temperature_battery
+          - sensor.bathroom_tph_battery
 
       - id: 11404d547dae4a7b9e50997fee3fa982
         type: horizontal-stack
@@ -579,7 +597,7 @@ views:
                 entity: sensor.basement_humidity
                 graph: line
               - type: sensor
-                entity: sensor.basement_battery_4
+                entity: sensor.basement_tph_battery
           - type: vertical-stack
             cards:
               - type: sensor
@@ -589,7 +607,7 @@ views:
                 entity: sensor.garage_humidity
                 graph: line
               - type: sensor
-                entity: sensor.garage_battery_4
+                entity: sensor.garage_tph_battery
 
 ##################################################
 
@@ -627,8 +645,8 @@ views:
           - binary_sensor.bayesian_zeke_home
           - device_tracker.bayesian_zeke_home
           - device_tracker.wethop
-          - device_tracker.iphone_bt
-          - binary_sensor.arrival_sensor
+          - device_tracker.wethop_2
+          - device_tracker.arrival_sensor
           - binary_sensor.nest_home
           - device_tracker.android
           - device_tracker.honda
@@ -864,6 +882,38 @@ views:
                 - scene.vacation_group_4
 
 ##################################################
+
+  - title: ZHA
+    path: zha
+    panel: true
+    cards:
+      - id: 42b1dabdbcc4461480b17d6f1a862363  # Automatically created id
+        type: 'custom:zha-network-card'
+        columns:
+          # - prop: area_id
+          #   name: Area
+          - prop: name
+            name: Name
+          - attr: manufacturer
+            name: Manufacturer
+          - attr: model
+            name: Model
+          - attr: ieee
+            name: IEEE
+          - prop: nwk
+            name: NWK
+          - attr: rssi
+            name: RSSI
+          - attr: lqi
+            name: LQI
+          - attr: last_seen
+            name: Last Seen
+          - attr: power_source
+            name: Power Source
+          - attr: quirk_class
+            name: Quirk
+
+
 
   # - path: other # Automatically created id
   #   title: Other items
