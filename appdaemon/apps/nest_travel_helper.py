@@ -18,6 +18,7 @@ class NestTravelHelper(hass.Hass):
         #old_away_mode = old['attributes']['away_mode']
         
         driving_state = self.get_state(self.driving_sensor)
+        self.log("Am I driving? {}".format(driving_state))
         
         outside_temp_feels = self.get_state(self.outside_temp_feels_like)
         outside_temp_is = self.get_state(self.outside_temp_is)
@@ -36,12 +37,17 @@ class NestTravelHelper(hass.Hass):
             operation_mode = 'auto'
         elif outside_temp >= 67:
             operation_mode = 'cool'
-        
-        ## Not sure if I need to check if windows are open or not.  Nest should be turned off so no change in state should happen.
-        
+
+## Not sure if I need to check if windows are open or not.  Nest should be turned off so no change in state should happen.
+        if driving_state == 'off' or driving_state is None:
+            self.log("Returning without doing anything")
+            return
+
+
         if driving_state == 'on' and new == "eco":
             self.log("Calling set_operation_mode with values: {} {}".format(entity, operation_mode))
-            self.call_service(self, 'climate/set_operation_mode', entity_id = entity, operation_mode = operation_mode)
+            self.call_service(self, 'climate.set_hvac_mode', entity_id = entity, operation_mode = operation_mode)
+            self.call_service("climate/set_preset_mode", preset_mode="none")
         
         ## not sure if I need this next if statement
         #if driving_sensor == 'on' and new_away_mode = "on":
