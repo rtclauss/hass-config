@@ -72,11 +72,6 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
-    binary_sensor.arrival_sensor:
-      <<: *customize
-      friendly_name: Zigbee Arrival Sensor
-      device_class: occupancy
-
     binary_sensor.bayesian_zeke_home:
       <<: *customize
       friendly_name: "Home"
@@ -89,6 +84,10 @@ homeassistant:
     ################################################
     ## Device Trackers
     ################################################
+    device_tracker.arrival_sensor:
+      <<: *customize
+      friendly_name: Zigbee Arrival Sensor
+      #device_class: occupancy
 
     ################################################
     ## Groups
@@ -200,6 +199,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
     condition:
       condition: and
       conditions:
@@ -226,10 +228,48 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
     condition: 
     action:
       - service: scene.turn_on
         entity_id: scene.arrive_home
+
+  - id: notify_home_zone
+    alias: notify_home_zone
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
+    action:
+      - service: notify.all
+        data:
+          message: Home via zone enter.
+
+  - id: notify_home_state
+    alias: notify_home_state
+    trigger:
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
+    action:
+      - service: notify.all
+        data:
+          message: "Home via state equal 'home'."
+
+  - id: notify_Leave_home_zone
+    alias: notify_leave_home_zone
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
+    action:
+      - service: notify.all
+        data:
+          message: Not Home via zone Leave.
 
   - id: doorbell_ring
     alias: doorbell_ring
@@ -249,6 +289,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'home'
     condition:
       condition: or
       conditions:
@@ -270,6 +313,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'home'
     condition:
     - condition: state
       entity_id: cover.garage_door_opener
@@ -308,6 +354,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
     condition:
     - condition: state
       entity_id: input_boolean.guest_mode
@@ -332,6 +381,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
     condition:
       condition: and
       conditions:
@@ -361,6 +413,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
     condition:
       condition: and
       conditions:
@@ -410,6 +465,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.twincities
         event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'Twin Cities'
     condition:
       condition: template
       value_template: '{{ 110 <= sensor.zeke_direction <= 260 }}'
@@ -438,6 +496,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        from: 'home'
     condition:
     - condition: state
       entity_id: input_boolean.guest_mode
@@ -483,6 +544,10 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.rochester
         event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'Rochester'
+        from: 'Away'
     action:
     # - service: nest.set_eta
     #   data_template:
@@ -504,6 +569,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: device_tracker.bayesian_zeke_home
+        to: 'home'
     action:
     - service: vacuum.return_to_base
       entity_id: vacuum.pbw
@@ -544,7 +612,7 @@ binary_sensor:
       platform: 'state'
       to_state: 'home'
     - entity_id: device_tracker.honda
-      prob_given_true: 0.97
+      prob_given_true: 0.80
       prob_given_false: 0.1
       platform: 'state'
       to_state: 'home'
@@ -553,18 +621,13 @@ binary_sensor:
       prob_given_false: 0.1
       platform: 'state'
       to_state: 'home'
-    - entity_id: device_tracker.iphone_bt
+    - entity_id: device_tracker.arrival_sensor
       prob_given_true: 0.80
-      prob_given_false: 0.20
-      platform: 'state'
-      to_state: 'home'
-    - entity_id: binary_sensor.arrival_sensor
-      prob_given_true: 0.97
       prob_given_false: 0.21
       platform: 'state'
-      to_state: 'on'
+      to_state: 'home'
     - entity_id: binary_sensor.nest_home
-      prob_given_true: 0.75
+      prob_given_true: 0.60
       prob_given_false: 0.4
       platform: 'state'
       to_state: 'on'
@@ -587,8 +650,8 @@ device_tracker:
     username: !secret unifi_nanohd_user
     password: !secret unifi_nanohd_password
     
-  - platform: bluetooth_tracker
-    consider_home: 120
+  # - platform: bluetooth_tracker
+  #   consider_home: 120
 
 ########################
 # Input Booleans
@@ -626,7 +689,7 @@ group:
       - device_tracker.bayesian_zeke_home
       - device_tracker.wethop
 #      - device_tracker.e0338e39ea8c
-      - binary_sensor.arrival_sensor
+      - device_tracker.arrival_sensor
 #      - device_tracker.iphone_bt
       - sensor.iphone_battery_state
       - binary_sensor.nest_home
