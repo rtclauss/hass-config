@@ -235,8 +235,9 @@ media_player:
   - platform: androidtv
     name: Living Room FireTV
     host: 192.168.1.38
-    adb_server_ip: 192.168.1.11
-    adb_server_port: 4037
+    adb_server_ip: "192.168.1.11"
+    adb_server_port: 6137
+    #adbkey: "/config/androidtv/adbkey"
     apps:
       com.amazon.tv.launcher: "Fire TV"
 
@@ -580,7 +581,7 @@ script:
           source: 'com.snei.vue.firetv'
 
   watch_hbo_now:
-    alias: 'HBO Now'
+    alias: 'Watch HBO'
     sequence:
       - service: media_player.turn_on
         data:
@@ -618,6 +619,15 @@ script:
         data:
           entity_id: media_player.living_room_firetv
           source: 'com.netflix.ninja'
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+          source: "Everywhere"
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
 
   watch_plex:
     alias: 'Watch Plex'
@@ -638,7 +648,16 @@ script:
         data:
           entity_id: media_player.living_room_firetv
           source: 'com.plexapp.android'
-
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+          source: "Everywhere"
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+          
   watch_letterkenny:
     alias: 'Watch Letterkenny'
     sequence:
@@ -658,7 +677,16 @@ script:
         data:
           entity_id: media_player.living_room_firetv
           source: 'com.plexapp.android'
-
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+          source: "Everywhere"
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+          
   watch_popcorn_time:
     alias: 'Watch Popcorn Time'
     sequence:
@@ -678,7 +706,16 @@ script:
         data:
           entity_id: media_player.living_room_firetv
           source: 'pct.droid.tv'
-
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify
+          source: "Everywhere"
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify
+          
 ########################
 # Sensor
 ########################
