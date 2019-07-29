@@ -7,11 +7,13 @@ homeassistant:
   elevation: !secret home_elevation
   customize: !include customize.yaml
   packages: !include_dir_named packages
-
-custom_updater:
-  card_urls:
-    - https://raw.githubusercontent.com/kalkih/mini-media-player/master/tracker.json
-    - https://raw.githubusercontent.com/kalkih/mini-graph-card/master/tracker.json
+  auth_providers:
+    - type: homeassistant
+    - type: legacy_api_password
+      api_password: !secret http_password
+    - type: trusted_networks
+      trusted_networks:
+        - 172.16.0.0/12
 
 hassio:
 
@@ -26,14 +28,13 @@ config:
 logger:
   default: warn
   #default: info
-  #logs:
     #homeassistant.components.device_tracker: debug
     #homeassistant.components.media_player: debug
     #pytraccar: debug 
     #zha-quirks: debug
 #  default: warn 
 #  default: debug
-  #logs:
+#  logs:
     #homeassistant.helpers: debug
     #homeassistant.helpers.condition: debug
 #    homeassistant.components.device_tracker: debug
@@ -59,15 +60,15 @@ logger:
 #    homeassistant.components.hue: debug
 
 http:
-  api_password: !secret http_password
+  #api_password: !secret http_password
   base_url: !secret public_url
   use_x_forwarded_for: true
   trusted_proxies: 
     - 192.168.1.99
     - 2602:100:602a:5df5::82c 
   ip_ban_enabled: true 
-  trusted_networks:
-    - 172.16.0.0/12
+  # trusted_networks:
+  #   - 172.16.0.0/12
   login_attempts_threshold: 5
 
 # Enables support for tracking state changes over time.
@@ -283,9 +284,18 @@ cover:
 #  usb_path: /dev/ttyUSB1
 #  database_path: /config/zigbee.db
 
-# zha:
-  # usb_path: /dev/ttyUSB1
-  # database_path: /config/zigbee.db
+zha:
+  usb_path: /dev/ttyUSB1
+  #radio_type: deconz
+  radio_type: ezsp
+  database_path: /config/zigbee.db
+  enable_quirks: true
+  device_config:
+  ##Allow dimming of KoF bedroom light
+    00:22:a3:00:00:27:8b:81-1:
+      type: 'light'
+    00:22:a3:00:00:27:88:08-1:
+      type: 'light'
 
 zwave:
   usb_path: /dev/ttyUSB0
@@ -305,7 +315,7 @@ mobile_app:
 stream:
 
 ##temporary for fans
-wink:
+#wink:
 
 mqtt_eventstream:
   publish_topic: master/topic
@@ -332,3 +342,6 @@ mqtt_eventstream:
 #     source:
 #       - entity_id: camera.livingroom
 #         name: face_counter
+
+hacs:
+  token: !secret hacs_token
