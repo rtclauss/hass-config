@@ -420,13 +420,25 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-  - alias: in_bed_update
-    id: in_bed_update
+  - alias: in_bed_on
+    id: in_bed_on
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
+        to: 'on'
     action:
-      - service: input_boolean.toggle
+      - service: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.master_bed_occupancy
+
+  - alias: in_bed_off
+    id: in_bed_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bed_occupancy
+        to: 'off'
+    action:
+      - service: input_boolean.turn_off
         data:
           entity_id: input_boolean.master_bed_occupancy
   # - alias: xiaomi_mqtt_button_pressed
@@ -448,17 +460,38 @@ automation:
 binary_sensor:
   - platform: template
     sensors:
-      master_bed_occupancy:
-        entity_id: binary_sensor.zwave_master_bed_occupancy
+      right_master_bed_occupancy:
+        entity_id: binary_sensor.zwave_right_master_bed_occupancy
         value_template: >-
           {% if
-            states.binary_sensor.zwave_master_bed_occupancy != None and
-            not is_state('binary_sensor.zwave_master_bed_occupancy', 'on') %}
-              {{ not is_state('binary_sensor.zwave_master_bed_occupancy', 'on') }}
+            states.binary_sensor.zwave_right_master_bed_occupancy != None and
+            not is_state('binary_sensor.zwave_right_master_bed_occupancy', 'on') %}
+              {{ not is_state('binary_sensor.zwave_right_master_bed_occupancy', 'on') }}
           {% else %}
             off
           {% endif %}
-          
+
+      left_master_bed_occupancy:
+        entity_id: binary_sensor.zwave_left_master_bed_occupancy
+        value_template: >-
+          {% if
+            states.binary_sensor.zwave_left_master_bed_occupancy != None and
+            not is_state('binary_sensor.zwave_left_master_bed_occupancy', 'on') %}
+              {{ not is_state('binary_sensor.zwave_left_master_bed_occupancy', 'on') }}
+          {% else %}
+            off
+          {% endif %}
+
+      master_bed_occupancy:
+        entity_id: 
+          - binary_sensor.right_master_bed_occupancy
+          - binary_sensor.left_master_bed_occupancy
+        value_template: >-
+          {{
+            is_state('binary_sensor.left_master_bed_occupancy', 'on') 
+              or
+            is_state('binary_sensor.right_master_bed_occupancy', 'on')
+          }}
 #  - platform: mqtt
 #    name: basement_door_contact
 #    state_topic: "smartthings/Basement Door Sensor/contact/state"
