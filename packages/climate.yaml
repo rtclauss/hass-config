@@ -51,42 +51,42 @@ homeassistant:
     binary_sensor.pressure_falling:
       <<: *customize
       friendly_name: "Pressure Falling"
-      icon_template: mdi:gauge
+      device_class: pressure
 
     binary_sensor.pressure_falling_quickly:
       <<: *customize
       friendly_name: "Pressure Falling Quickly"
-      icon_template: mdi:gauge
+      device_class: pressure
 
     binary_sensor.pressure_falling_slowly:
       <<: *customize
       friendly_name: "Pressure Falling Slowly"
-      icon_template: mdi:gauge
+      device_class: pressure
 
     binary_sensor.pressure_falling_v_rapidly:
       <<: *customize
       friendly_name: "Pressure Falling Very Rapidly"
-      icon_template: mdi:gauge
+      device_class: pressure
 
     binary_sensor.pressure_rising:
       <<: *customize
       friendly_name: "Pressure Rising"
-      icon_template: mdi:gauge
+      device_class: pressure
 
     binary_sensor.pressure_rising_quickly:
       <<: *customize
       friendly_name: "Pressure Rising Quickly"
-      icon_template: mdi:gauge
+      device_class: pressure
 
     binary_sensor.pressure_rising_slowly:
       <<: *customize
       friendly_name: "Pressure Rising Slowly"
-      icon_template: mdi:gauge
+      device_class: pressure
 
     binary_sensor.pressure_rising_v_rapidly:
       <<: *customize
       friendly_name: "Pressure Rising Very Rapidly"
-      icon_template: mdi:gauge
+      device_class: pressure
     ################################################
     ## Groups
     ################################################
@@ -197,7 +197,7 @@ automation:
         entity_id: binary_sensor.bayesian_zeke_home
         state: 'on'
     action:
-    - service: climate.set_operation_mode
+    - service: climate.set_hvac_mode
       data:
         entity_id: climate.hallway_glycol
         operation_mode: eco
@@ -211,7 +211,7 @@ binary_sensor:
       nest_home:
         value_template: >-
           {% if
-              is_state_attr('climate.hallway_glycol', 'away_mode', 'on')
+              is_state_attr('climate.hallway_glycol', 'preset_mode', 'away')
           %} False
           {% else %}
              True
@@ -372,3 +372,51 @@ sensor:
           - input_number.random_minute
         value_template: >-
           {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
+
+      rate_of_house_temp_change_10m:
+        entity_id:
+          - sensor.house_temperature_stats_10m_mean
+        value_template: >-
+          {{ state_attr('sensor.house_temperature_stats_10m_mean', 'change_rate') * 100000000.0 |float}}
+
+      rate_of_house_temp_change_1h:
+        entity_id:
+          - sensor.house_temperature_stats_1h_mean
+        value_template: >-
+          {{ state_attr('sensor.house_temperature_stats_1h_mean', 'change_rate') * 100000000.0 |float}}
+
+      rate_of_house_temp_change_30m:
+        entity_id:
+          - sensor.house_temperature_stats_30m_mean
+        value_template: >-
+          {{ state_attr('sensor.house_temperature_stats_30m_mean', 'change_rate') * 100000000.0 |float}}
+
+  - platform: statistics
+    name: min_rate_of_house_temp_change_10m
+    entity_id: sensor.rate_of_house_temp_change_10m
+
+  - platform: statistics
+    name: min_rate_of_house_temp_change_1h
+    entity_id: sensor.rate_of_house_temp_change_1h
+
+  - platform: statistics
+    name: house_temperature_stats_10m
+    entity_id: sensor.average_house_temp
+    max_age:
+      minutes: 10
+    precision: 8
+
+  - platform: statistics
+    name: house_temperature_stats_30m
+    entity_id: sensor.average_house_temp
+    max_age:
+      minutes: 30
+    precision: 8
+
+  - platform: statistics
+    name: house_temperature_stats_1h
+    entity_id: sensor.average_house_temp
+    max_age:
+      minutes: 60
+    precision: 8
+
