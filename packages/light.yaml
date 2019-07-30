@@ -450,6 +450,9 @@ automation:
     condition:
       condition: and
       conditions:
+        - condition: zone
+          entity_id: device_tracker.bayesian_zeke_home
+          zone: zone.home
         - condition: sun
           before: sunrise
           before_offset: "0:30:00"
@@ -549,10 +552,10 @@ automation:
     id: toggle_office
     trigger:
     - platform: event
-      event_type: deconz_event
+      event_type: zha_event
       event_data:
-        id: office_button
-        event: 1002
+        device_ieee: "00:15:8d:00:02:13:90:e9"
+        command: "attribute_updated"
     action:
     - service: light.toggle
       entity_id: light.office_lamp
@@ -587,6 +590,10 @@ automation:
     - delay: 25
     - service: scene.turn_on
       entity_id: scene.leave_home
+    - service: fan.turn_on
+      data:
+        entity_id: fan.master_bedroom_fan
+        speed: "smart"
 
   - id: turn_on_bedroom_light_at_night
     alias: turn_on_bedroom_light_at_night
@@ -604,6 +611,153 @@ automation:
           entity_id: light.master_bedroom
           transition: 5
           brightness: 1
+
+  - id: turn_off_bedroom_light_when_dark_in_room
+    alias: turn_off_bedroom_light_when_dark_in_room
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'off'
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          before: '22:00:00'
+        - condition: state
+          entity_id: input_boolean.master_bedroom_auto_on
+          state: 'on'
+    action:
+      - service: light.turn_off
+        data:
+          entity_id: light.master_bedroom
+          transition: 10
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.master_bedroom_auto_on
+
+  - id: turn_on_bedroom_light_when_dark_in_room
+    alias: turn_on_bedroom_light_when_dark_in_room
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+    condition:
+      condition: and
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.bayesian_zeke_home
+          zone: zone.home
+        - condition: numeric_state
+          entity_id: sensor.master_bedroom_illumination
+          below: 5
+        - condition: time
+          before: '22:00:00'
+        - condition: time
+          after: '09:00:00'
+        - condition: state
+          entity_id: light.master_bedroom
+          state: 'off'
+    action:
+      - service: light.turn_on
+        data:
+          entity_id: light.master_bedroom
+          transition: 5
+          brightness_pct: 100
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.master_bedroom_auto_on
+
+  - id: turn_off_basement_light_when_dark_in_room
+    alias: turn_off_basement_light_when_dark_in_room
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.downstairs_motion
+        to: 'off'
+    condition:
+      condition: and
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.bayesian_zeke_home
+          zone: zone.home
+        - condition: time
+          before: '23:30:00'
+        - condition: state
+          entity_id: input_boolean.basement_auto_on
+          state: 'on'
+    action:
+      - service: switch.turn_off
+        data:
+          entity_id: switch.stairs
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.basement_auto_on
+
+  - id: turn_off_office_light_when_not_occupied
+    alias: turn_off_office_light_when_not_occupied
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.office_motion
+        to: 'off'
+        for:
+          minutes: 10
+    condition:
+      condition: state
+      entity_id: input_boolean.trip
+      state: 'off'
+    action:
+      - service: light.turn_off
+        data:
+          entity_id: light.office_lamp
+          transition: 5
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.basement_auto_on
+
+  - id: turn_on_basement_light_when_dark_in_room
+    alias: turn_on_basement_light_when_dark_in_room
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.downstairs_motion
+        to: 'on'
+    condition:
+      condition: and
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.bayesian_zeke_home
+          zone: zone.home
+        - condition: numeric_state
+          entity_id: sensor.downstairs_motion_illumination
+          below: 4
+        - condition: time
+          before: '22:00:00'
+        - condition: time
+          after: '09:00:00'
+        - condition: state
+          entity_id: switch.stairs
+          state: 'off'
+        - condition: state
+          entity_id: switch.stairs
+          state: 'off'
+    action:
+      - service: switch.turn_on
+        data:
+          entity_id: switch.stairs
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.basement_auto_on
+
+
+  - alias: "Dresser Ani Speed"
+    initial_state: True
+    hide_entity: False
+    trigger:
+      - platform: state
+        entity_id: input_number.dresser_ani_speed
+    action:
+      - service: mqtt.publish
+        data_template:
+          topic: "leds/masterdresser/set"
+          payload: '{"transition":{{ trigger.to_state.state | int }}}'
 
 ########################
 # Binary Sensors
@@ -627,11 +781,17 @@ input_boolean:
   deck_auto_on:
   front_door_auto_on:
   master_bedroom_auto_on:
+  basement_auto_on:
 ########################
 # Input Numbers
 ########################
 input_number:
-
+  dresser_ani_speed:
+    name: Dresser Ani Speed
+    initial: 150
+    min: 1
+    max: 150
+    step: 10
 ########################
 # Light
 ########################
@@ -663,6 +823,37 @@ light:
       - light.guest_ceiling
       - light.guest_left_lamp
       - light.guest_right_lamp
+
+  - platform: mqtt
+    schema: json
+    name: "Dresser Strip"
+    state_topic: "leds/masterdresser"
+    command_topic: "leds/masterdresser/set"
+    effect: true
+    effect_list:
+      - bpm
+      - candy cane  
+      - confetti  
+      - cyclon rainbow  
+      - dots  
+      - fire  
+      - glitter  
+      - juggle  
+      - lightning
+      - noise  
+      - police all  
+      - police one  
+      - rainbow  
+      - rainbow with glitter  
+      - ripple  
+      - sinelon  
+      - solid  
+      - twinkle  
+    brightness: true
+    #flash: true
+    rgb: true
+    optimistic: false
+    qos: 0
 
 ########################
 # Proximity
