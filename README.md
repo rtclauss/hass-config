@@ -3,7 +3,7 @@
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
-I have Home Assistant running on a [Raspberry Pi 3]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
+I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
 Software on the pi:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
@@ -56,7 +56,7 @@ Software on the pi:
 * [Music Fade-in](appdaemon/apps/fade_in_music.py) - Fades in music when I wake up in the morning
 * [deConz button events](appdaemon/apps/deconz_helper.py) - Translates Xiaomi button events into a generic sensor.
 * [Magic Cube](appdaemon/apps/magic_cube.py) - Translates Xiaomi Magic Cube events into actions controlling my living room Hue lights
-* [matic event helper](appdaemon/apps/matic_helper.py) - Similar to deCONZ helper this translates matic events into a generic sensor.
+* [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates matic events into a generic sensor.
 * [Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.
 
 **Apple Shortcuts**
