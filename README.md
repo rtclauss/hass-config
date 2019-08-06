@@ -5,7 +5,7 @@
 
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
-Software on the pi:
+Software on the NUC:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
 * Running in Hass.io
   * [ADB](https://github.com/hassio-addons/addon-adb)
@@ -25,7 +25,7 @@ Software on the pi:
 * Lutron Pico LZL-4B-WH-L01 Connected Bulb Remote
 * Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
 * Xiaomi MiFlora
-* HUSBZB-1 ZigBee/Z-Wave Stick (for Z-Wave and ZigBee)
+* HUSBZB-1 Zigbee/Z-Wave Stick (for Z-Wave and Zigbee)
   * Z-Wave 
     * Leviton Switch Vizia RF+
     * Leviton Vizia + Digital Coordinating Remote Switch
@@ -33,7 +33,7 @@ Software on the pi:
     * GE Z-Wave Wireless Smart Lighting Control Appliance Switch
     * Bed presense sensor: [Ecolink Z-Wave door/window sensor](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU) mated with [Ideal pressure mat](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU)
     * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
-  * ZigBee
+  * Zigbee
     * Philips Hue (bulbs and light strip)
     * GE Link Smart LED Bulbs
     * Xiaomi Aqara Motion Sensors
@@ -43,7 +43,7 @@ Software on the pi:
     * Xiaomi Vibration Sensor
     * SmartThings Presence Sensor
     * SmartThings Motion Sensor
-    * [Hampton Bay (King of Fans)](https://www.homedepot.com/p/Hampton-Bay-Universal-Wink-Enabled-White-Ceiling-Fan-Premier-Remote-Control-99432/206591100)
+    * [Hampton Bay (King of Fans)](https://www.homedepot.com/p/Hampton-Bay-Universal-Wink-Enabled-White-Ceiling-Fan-Premier-Remote-Control-99432/206591100) - These devices are very particular about what they will initially pair with.  I moved the NUC to the same room as the fans for the initial pairing.  After they were on the network they communicate over the Zigbee mesh proper.
 
 * Unifi nanoHD-AP
 * Unifi USG
