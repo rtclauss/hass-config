@@ -44,6 +44,7 @@ Software on the NUC:
     * SmartThings Presence Sensor
     * SmartThings Motion Sensor
     * [Hampton Bay (King of Fans)](https://www.homedepot.com/p/Hampton-Bay-Universal-Wink-Enabled-White-Ceiling-Fan-Premier-Remote-Control-99432/206591100) - These devices are very particular about what they will initially pair with.  I moved the NUC to the same room as the fans for the initial pairing.  After they were on the network they communicate over the Zigbee mesh proper.
+    * Peanut Zigbee Smart Plug - Used to control the lava lamp in my office. Does not require Almond hub and does pair via ZHA.
 
 * Unifi nanoHD-AP
 * Unifi USG
