@@ -1,1 +1,0 @@
-"""The Dark Sky component."""
