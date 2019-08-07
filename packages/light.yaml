@@ -182,6 +182,11 @@ homeassistant:
       friendly_name: "Kitchen Table"
       icon: mdi:ceiling-light
 
+    light.lava_lamp:
+      <<: *customize
+      friendly_name: "Lava Lamp"
+      icon: mdi:lava-lamp
+
     light.left_lamp:
       <<: *customize
       friendly_name: "Living Room Left"
@@ -558,7 +563,7 @@ automation:
         command: "attribute_updated"
     action:
     - service: light.toggle
-      entity_id: light.office_lamp
+      entity_id: light.office
       data:
         transition: 5
 
@@ -711,7 +716,7 @@ automation:
           transition: 5
       - service: homeassistant.turn_off
         data:
-          entity_id: input_boolean.basement_auto_on
+          entity_id: input_boolean.office_auto_on
 
   - id: turn_on_basement_light_when_dark_in_room
     alias: turn_on_basement_light_when_dark_in_room
@@ -818,12 +823,22 @@ light:
       - light.bedroom_lamp_2
 
   - platform: group
+    name: office
+    entities:
+      - light.lava_lamp
+      - light.office_lamp
+
+  - platform: group
     name: guest_bedroom
     entities:
       - light.guest_ceiling
       - light.guest_left_lamp
       - light.guest_right_lamp
 
+  - platform: switch
+    name: Lava Lamp
+    entity_id: switch.lava_lamp
+    
   - platform: mqtt
     schema: json
     name: "Dresser Strip"
