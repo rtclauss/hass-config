@@ -202,6 +202,7 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: 'home'
+        from: 'away'
     condition:
       condition: and
       conditions:
@@ -231,6 +232,7 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: 'home'
+        from: 'away'
     condition: 
     action:
       - service: scene.turn_on
@@ -606,11 +608,11 @@ binary_sensor:
       prob_given_false: 0.1
       platform: 'state'
       to_state: 'home'
-    - entity_id: device_tracker.wethop_2
-      prob_given_true: 0.97
-      prob_given_false: 0.1
-      platform: 'state'
-      to_state: 'home'
+    # - entity_id: device_tracker.wethop_2
+    #   prob_given_true: 0.97
+    #   prob_given_false: 0.1
+    #   platform: 'state'
+    #   to_state: 'home'
     - entity_id: device_tracker.honda
       prob_given_true: 0.80
       prob_given_false: 0.1
@@ -631,6 +633,13 @@ binary_sensor:
       prob_given_false: 0.4
       platform: 'state'
       to_state: 'on'
+    ### Try out the speed sensor
+    - entity_id: sensor.zeke_speed
+      platform: 'numeric_state'
+      below: 35
+      prob_given_true: 0.90
+      
+
 
 ########################
 # Device Trackers
@@ -644,11 +653,6 @@ device_tracker:
 #    consider_home: 120
 #    track_new_devices: no
 #    interval_seconds: 30
-    
-  - platform: unifi_direct
-    host: !secret unifi_nanohd_ip
-    username: !secret unifi_nanohd_user
-    password: !secret unifi_nanohd_password
     
   # - platform: bluetooth_tracker
   #   consider_home: 120
@@ -798,6 +802,11 @@ sensor:
         entity_id: sensor.time
         value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed)) | int //60 }}'
         unit_of_measurement: 'minutes'
+      zeke_speed:
+        entity_id: 
+          - device_tracker.bayesian_zeke_home
+        value_template: >-
+          {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int }}
       twincities:
         value_template: '{{ states.proximity.twincities.attributes.dir_of_travel |default("unknown") }}'
       zeke_direction:
@@ -810,8 +819,9 @@ sensor:
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
             {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int }}
           {%- else -%}
-            {{ state_attr('device_tracker.honda', 'dirOfTravel') | int }}
+           
           {%- endif %}
+
 
   # - platform: places
   #   name: android
