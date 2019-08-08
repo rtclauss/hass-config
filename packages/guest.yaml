@@ -107,11 +107,44 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
+  - id: turn_off_guest_mode_when_guest_wifi_active
+    alias: turn_off_guest_mode_when_guest_wifi_active
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.guest_on_wifi
+        to: 'off'
+        for: "16:00:00"
+    condition:
+    action:
+    - service: input_boolean.turn_off
+      entity_id: input_boolean.guest_mode
+    - service: notify.all
+      data:
+        message: Guest Mode Deactivated
+
+  - id: turn_on_guest_mode_when_guest_wifi_active
+    alias: turn_on_guest_mode_when_guest_wifi_active
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.guest_on_wifi
+        to: 'on'
+    condition:
+    action:
+    - service: input_boolean.turn_on
+      entity_id: input_boolean.guest_mode
+    - service: notify.all
+      data:
+        message: Guest Mode Activated
 
 ########################
 # Binary Sensors
 ########################
 binary_sensor:
+  - platform: template
+    sensors:
+      guest_on_wifi:
+        value_template: >-
+          {{ (states.device_tracker | selectattr('attributes.is_guest', 'eq', true) | list | count ) > 0 }}
 
 ########################
 # Cameras
