@@ -55,7 +55,7 @@ class add_gps(hass.Hass):
     last_changed = self.convert_utc(bayesian_state.get("last_updated"))
     difference = datetime.now(timezone.utc) - last_changed
     if difference.total_seconds() > self.minimum_update_window:
-      self.log("State last changed {} seconds ago.  Time for an update".format(difference.total_seconds()))
+      self.log("Binary Bayesian Sensor State last changed {} seconds ago.  Time for an update".format(difference.total_seconds()))
     else:
       return
     gps_sensors_state = self.get_state(entity, attribute="all")
@@ -85,7 +85,7 @@ class add_gps(hass.Hass):
       self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
       #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
-      self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"course": 0.0, "home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
+      self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
     else:
       #self.log("bayes says I am away")
       if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
@@ -101,10 +101,21 @@ class add_gps(hass.Hass):
             #self.log("{}".format(attributes['battery']))
             probability = bayesian_state["attributes"]["probability"]
             attributes['home_probability'] = probability
+            
+            ## iOS apps use m/s as the speed, not mph.  Need to convert.
+            if 'speed' in attributes.keys() and 'wethop' in sensor_state['entity_id']:
+              if attributes['speed'] == -1:
+                attributes['speed'] = 0
+              else:
+                attributes['speed'] = attribtes['speed'] / 0.44704
+              self.log("new speed is: {}".format(attributes['speed']))
+              
             # We can get false positives, like WetHop flashing home on a geofence exit.
             # Use the attributes of the bayesian sensor to determine if the transition is correct
             if probability <= bayesian_state["attributes"]["probability_threshold"] and sensor_state['state'] == "home":
               self.error("False positive jump to home zone.  Not updating Bayesian Sensor")
+              self.error("Bayesian state: {}".format(bayesian_state))
+              self.error("Sensor state: {}".format(sensor_state))
               return
             
             try:
@@ -143,9 +154,9 @@ class add_gps(hass.Hass):
             gps_accuracy = gps_attributes["gps_accuracy"], 
             gps = [gps_attributes["latitude"], gps_attributes["longitude"]])
           except KeyError as e:
-            self.error("KeyError {}: missing information from bayes sensor, defaulting back to bayesian state".format(e))
-            self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
+            self.error("KeyError {}: missing information from sensor. Returning with no action.".format(e))
+            #self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
       else:
-        self.error("missing information from gps sensor, defaulting back to bayesian state")
-        self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
+        self.error("missing information from gps sensor. Returning with no action.")
+        #self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
         
