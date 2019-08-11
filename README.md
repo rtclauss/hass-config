@@ -25,6 +25,7 @@ Software on the NUC:
 * Lutron Pico LZL-4B-WH-L01 Connected Bulb Remote
 * Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
 * Xiaomi MiFlora
+* ESP8266 with [VL53L0X](https://www.amazon.com/gp/product/B07F3RH7TC/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1) to measure salt level in water softener. See [this commit](https://github.com/rtclauss/hass-config/commit/85b1eade336c0fc94031241b494203fb55b3a7d8) for more info. 
 * HUSBZB-1 Zigbee/Z-Wave Stick (for Z-Wave and Zigbee)
   * Z-Wave 
     * Leviton Switch Vizia RF+
