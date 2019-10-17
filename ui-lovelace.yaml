@@ -27,18 +27,25 @@ cch:
   #hide_tabs: '9'
   swipe: true
   conditional_styles:
-    - entity: binary_sensor.sensed_trip
+    - tab:
+        'vacation':
+          hide: true
+      entity: binary_sensor.sensed_trip
       condition:
         state: 'off'
-      tab:
-        9:
+    - tab:
+        'cameras':
           hide: true
-    - entity: binary_sensor.bayesian_zeke_home
+      entity: binary_sensor.bayesian_zeke_home
       condition:
         state: 'on'
-      tab:
-        2:
+    - tab:
+        'curling':
           hide: true
+      entity: binary_sensor.curling_season
+      condition:
+        state: 'off'
+
     # - entity: input_boolean.trip
     #   condition:
     #     state: off
@@ -840,6 +847,37 @@ views:
           - sensor.pi_hole_ads_blocked_today
           - sensor.pi_hole_ads_percentage_blocked_today
 
+##################################################
+
+  - title: Curling
+    path: curling
+    icon: mdi:curling
+    cards:
+      - id: 42b1dabdbcc4161480b27d6f1a862363  # Automatically created id
+        type: horizontal-stack
+        cards:
+          - type: entities
+            title: Curling Sensors
+            show_header_toggle: false
+            entities:
+              - binary_sensor.curling_season
+              - sensor.occ_time
+              - sensor.heading_occ
+              - sensor.spcc_time
+              - sensor.spcc_distance
+              - sensor.heading_spcc
+              - binary_sensor.away_from_curling
+              - binary_sensor.test_home
+      - id: 42b1dabdbcc4421480b27d6f1a862363  # Automatically created id
+        type: horizontal-stack
+        cards:
+          - type: entities
+            title: Curling Automations
+            show_header_toggle: true
+            entities:
+              - automation.leave_home_for_curling
+              - automation.return_home_from_occ
+              - automation.return_home_from_spcc
 ##################################################
 
   - title: Vacation
