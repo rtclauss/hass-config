@@ -22,6 +22,8 @@ resources:
     type: js
   - url: /community_plugin/gauge-card/gauge-card.js
     type: js
+  - url: /community_plugin/lovelace-auto-entities/auto-entities.js
+    type: js
 
 cch:
   #hide_tabs: '9'
@@ -265,6 +267,8 @@ views:
                 entity: media_player.living_room_firetv
                 hide:
                   volume: true
+              - type: custom:mini-media-player
+                entity: media_player.vizio_smartcast
 
           - id: e75eb2badf864ae8b76e9a14fde8b60b  # Automatically created id
             type: custom:vertical-stack-in-card
@@ -562,9 +566,15 @@ views:
 
       - id: 94a59971fe914b669bcf5967f8f8619e  # Automatically created id
         type: thermostat
-        title: Climate at a Glance
+        title: Upstairs
         show_header_toggle: false
         entity: climate.hallway_glycol
+
+      - id: 94a59971fe911b669bcf5967f8f8619e  # Automatically created id
+        type: thermostat
+        title: Basement
+        show_header_toggle: false
+        entity: climate.basement
 
       - id: d8d0c5ecc646453bb9caf9e7adc7df77  # Automatically created id
         type: entities
@@ -714,12 +724,24 @@ views:
           - binary_sensor.basement_motion_sensor
           - binary_sensor.master_bed_occupancy
 
-      - id:
+      - id: 23452
         type: entities
         title: Meetings
         show_header_toggle: false
         entities:
           - input_datetime.next_work_meeting
+
+      - id: 345635634
+        type: entities
+        title: Proximities
+        show_header_toggle: false
+        entities:
+          - proximity.home
+          - proximity.msp
+          - proximity.occ
+          - proximity.spcc
+          - proximity.twincities
+          - proximity.work
 
       - id: 143924bcb6924b7e86ec03ee0830cad0  # Automatically created id
         type: entities
@@ -759,7 +781,7 @@ views:
           - input_number.random_minute
 
       - id: bb98e6ee50f247c88f017f8402091874  # Automatically created id
-        type: custom:monster-card
+        type: custom:auto-entities
         card:
           type: entities
           title: All Automations
@@ -808,7 +830,7 @@ views:
       - type: horizontal-stack
         cards:
           - id: 4291f0758ffa4e57b68c00a487c2f796  # Automatically created id
-            type: custom:monster-card
+            type: custom:auto-entities
             card:
               type: entities
               title: Status
