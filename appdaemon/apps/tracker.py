@@ -107,7 +107,7 @@ class add_gps(hass.Hass):
               if attributes['speed'] == -1:
                 attributes['speed'] = 0
               else:
-                attributes['speed'] = attribtes['speed'] / 0.44704
+                attributes['speed'] = attributes['speed'] / 0.44704
               self.log("new speed is: {}".format(attributes['speed']))
               
             # We can get false positives, like WetHop flashing home on a geofence exit.
