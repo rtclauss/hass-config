@@ -14,7 +14,9 @@ Brighten Master Bedroom Lights in the Morning:
   class: BrightenLights
   module: brighten_lights
   light: light.master_bedroom
-  sensors: binary_sensor.master_bedroom_motion
+  sensors: 
+    - binary_sensor.master_bedroom_motion
+    - binary_sensor.hallway_motion
   transition_time_sec: 600
   constrain_input_boolean: input_boolean.guest_mode,off
   constrain_input_boolean: input_boolean.bayesian_zeke_home
@@ -33,7 +35,7 @@ Add GPS to Binary Sensor:
     - device_tracker.honda
   bayesian_input: binary_sensor.bayesian_zeke_home
   bayesian_device_tracker_name: "bayesian_zeke_home"
-  minimum_update_distance: 10
+  minimum_update_distance: .1
   minimum_update_window: 60
   
   
@@ -42,15 +44,15 @@ Restart HA if network down:
   module: reboot
   host_to_ping: "8.8.8.8"
 
-deconz_helper:
-  module: deconz_helper
-  class: DeconzHelper
+# deconz_helper:
+#   module: deconz_helper
+#   class: DeconzHelper
 
 living_room_magic_cube:
   module: magic_cube
   class: RemoteControl
-  event: deconz_event
-  id: living_room_cube
+  event: zha_event
+  id: "00:15:8d:00:02:8a:f0:5f"
   light: light.living_room_all_except_tv
 
 automatic_helper:
@@ -72,7 +74,9 @@ nest_travel_helper:
 Fade-in music:
   class: FadeInMusic
   module: fade_in_music
-  sensors: binary_sensor.master_bedroom_motion
+  sensors: 
+    - binary_sensor.master_bedroom_motion
+    - binary_sensor.hallway_motion
   transition_time_sec: 120
   constrain_input_boolean: input_boolean.guest_mode,off
   constrain_input_boolean: input_boolean.bayesian_zeke_home
