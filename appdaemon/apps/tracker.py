@@ -55,6 +55,7 @@ class add_gps(hass.Hass):
     
     #qbayes_location = self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
     old_lat_log = ellipsoidalNvector.LatLon(lat=old["attributes"].get("latitude"), lon=old["attributes"].get("longitude"))
+    
     new_lat_log = ellipsoidalNvector.LatLon(lat=new["attributes"].get("latitude"), lon=new["attributes"].get("longitude"))
     
     mean_of_points = ellipsoidalNvector.meanOf([old_lat_log,new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
@@ -147,10 +148,22 @@ class add_gps(hass.Hass):
             ## To try and eliminate flashes backward in location from older/stale data, let's find the mean of the old location
             ## and the new sensor data and use that mean as the location.  
             dev_tracker_state= self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
-            old_lat_log_p = ellipsoidalNvector.LatLon(lat=dev_tracker_state["attributes"]["latitude"], lon=dev_tracker_state["attributes"]["longitude"])
-            self.log("old location is: {}".format(old_lat_log_p))
+            ##todo the old state may not have a latitude or longitude when hass restart
+            #self.log("here is the previous device_tracker state: {}".format(dev_tracker_state))
+            
             new_lat_log_p = ellipsoidalNvector.LatLon(lat=gps_attributes.get("latitude"), lon=gps_attributes.get("longitude"))
             self.log("new location is: {}".format(new_lat_log_p))
+            
+            try:
+              old_lat_log_p = ellipsoidalNvector.LatLon(lat=dev_tracker_state["attributes"]["latitude"], lon=dev_tracker_state["attributes"]["longitude"])
+            except KeyError as ke:
+              # Home Assistant has restarted so we have no previous state for the device tracker. Let's use the new location state
+              # for the old value.
+              old_lat_log_p = new_lat_log_p
+              #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
+              pass
+            
+            self.log("old location is: {}".format(old_lat_log_p))
             
             mean_of_points = ellipsoidalNvector.meanOf([old_lat_log_p,new_lat_log_p], LatLon=ellipsoidalVincenty.LatLon)
             self.log("Mean of location between old and new is {}".format(mean_of_points))
