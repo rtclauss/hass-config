@@ -13,7 +13,7 @@ class FadeInMusic(hass.Hass):
     self.already_fading_in_spotify = self.args["already_fading_in_spotify"]
 
     # Register callbacks for all sensors we were passed
-    for sensor in self.args["sensors"].split(","):
+    for sensor in self.args["sensors"]:
       self.log(sensor)
       self.listen_state(self.motion, sensor)
 

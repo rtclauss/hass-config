@@ -20,7 +20,7 @@ class BrightenLights(hass.Hass):
     self.transition = self.args['transition_time_sec']
 
     # Register callbacks for all sensors we were passed
-    for sensor in self.args["sensors"].split(","):
+    for sensor in self.args["sensors"]:
       #self.log(sensor)
       self.listen_state(self.motion, sensor)
 
