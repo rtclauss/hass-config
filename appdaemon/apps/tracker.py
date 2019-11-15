@@ -3,15 +3,17 @@ import appdaemon.plugins.hass.hassapi as hass
 import copy
 from datetime import datetime, timedelta, timezone
 
-
 from geopy.distance import great_circle
+
+from pygeodesy import ellipsoidalNvector
+from pygeodesy import ellipsoidalVincenty
 
 class add_gps(hass.Hass):
 
   def initialize(self):
-    self.device_id = self.args["bayesian_device_tracker_name"]
+    self.bayesian_device_tracker_id = self.args["bayesian_device_tracker_name"]
     self.bayesian = self.args["bayesian_input"]
-    self.gps_sensors = self.args["gps_location_sources"]
+    self.gps_sensor_sources = self.args["gps_location_sources"]
     self.minimum_update_distance = self.args["minimum_update_distance"]
     self.minimum_update_window = self.args["minimum_update_window"]
     
@@ -19,32 +21,22 @@ class add_gps(hass.Hass):
     self.bayes_updated(entity=self.bayesian, attribute={}, old={}, new={}, kwargs={})
     #self.log('done with init')
     
-    #self.log("registering callback {} {}".format(self.location_update, self.gps_sensors))
+    #self.log("registering callback {} {}".format(self.location_update, self.gps_sensor_sources))
     self.listen_state(self.bayes_updated, entity = self.bayesian)
-    for tracker in self.gps_sensors:
+    for tracker in self.gps_sensor_sources:
       self.listen_state(self.location_update, entity = tracker, attribute="all")
-    
-  
+
+
   def bayes_updated(self, entity, attribute, old, new, kwargs):
     sensor_state = self.get_state(entity, attribute="all")
     if sensor_state['state'] == 'on':
       config = self.get_plugin_config()
       self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
-      #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
-      self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"course": 0.0, "home_probability": sensor_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
+      #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
+      self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"course": 0.0, "home_probability": sensor_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
     else:
       return
-  
-  # def setup_location(self, tracker):
-  #   #self.log("in setup_location")
-  #   #self.log("calling get_state on {}".format(tracker))
-  #   sensor_state = self.get_state(tracker, attribute="all")
-  #   #self.log("got gps data {}".format(sensor_state))
-  #   #self.log("calling get_state on {}".format(self.bayesian))
-  #   bayesian_state = self.get_state(self.bayesian, attribute="all")
-  #   #self.log("got state data {}".format(bayesian_state, ))
-  #   self.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
 
 
   def location_update(self, entity, attribute, old, new, kwargs):
@@ -60,18 +52,22 @@ class add_gps(hass.Hass):
       return
     gps_sensors_state = self.get_state(entity, attribute="all")
     #self.log("here is the GPS state: {}".format(gps_sensors_state))
-    #qbayes_location = self.get_state("device_tracker."+self.device_id, attribute="all")
-    old_lat_long = (old["attributes"].get("latitude"), old["attributes"].get("longitude"))
-    #self.log("old location is: {}".format(old_lat_long))
-    new_lat_long = (new["attributes"].get("latitude"), new["attributes"].get("longitude"))
-    #self.log("new location is: {}".format(new_lat_long))
-    distance = great_circle(old_lat_long, new_lat_long).meters
-    self.log("distance between updates is: {}".format(distance))
+    
+    #qbayes_location = self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
+    old_lat_log = ellipsoidalNvector.LatLon(lat=old["attributes"].get("latitude"), lon=old["attributes"].get("longitude"))
+    new_lat_log = ellipsoidalNvector.LatLon(lat=new["attributes"].get("latitude"), lon=new["attributes"].get("longitude"))
+    
+    mean_of_points = ellipsoidalNvector.meanOf([old_lat_log,new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
+    #self.log("Mean of old and new location is {}".format(mean_of_points))
+    
+    # Get Vincenty distance between old and new points
+    distance=new_lat_log.distanceTo(old_lat_log)
+    self.log("Vincenty Distance between updates is: {}".format(distance))
     if distance <= self.minimum_update_distance:
       self.log("Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
       return
     self.run_update(bayesian_state=bayesian_state, sensor_state=gps_sensors_state)
-    
+
 
   def run_update(self, bayesian_state, sensor_state):
     #self.log("in run_update")
@@ -84,8 +80,8 @@ class add_gps(hass.Hass):
       config = self.get_plugin_config()
       self.log("bayes says I am home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
-      #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, 0, config["latitude"], config["longitude"]))
-      self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
+      #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
+      self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
     else:
       #self.log("bayes says I am away")
       if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
@@ -96,7 +92,7 @@ class add_gps(hass.Hass):
         else:
           try:
             #self.log("My current position is {}(Lat), {}(Long)".format(gps_attributes["latitude"], gps_attributes["longitude"]))
-            #self.log("here we go setting {} to somewhere with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.device_id, gps_attributes["gps_accuracy"], gps_attributes["latitude"], gps_attributes["longitude"]))
+            #self.log("here we go setting {} to somewhere with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, gps_attributes["gps_accuracy"], gps_attributes["latitude"], gps_attributes["longitude"]))
             attributes = copy.deepcopy(gps_attributes)
             #self.log("{}".format(attributes['battery']))
             probability = bayesian_state["attributes"]["probability"]
@@ -148,15 +144,30 @@ class add_gps(hass.Hass):
               #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
               pass
             
+            ## To try and eliminate flashes backward in location from older/stale data, let's find the mean of the old location
+            ## and the new sensor data and use that mean as the location.  
+            dev_tracker_state= self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
+            old_lat_log_p = ellipsoidalNvector.LatLon(lat=dev_tracker_state["attributes"]["latitude"], lon=dev_tracker_state["attributes"]["longitude"])
+            self.log("old location is: {}".format(old_lat_log_p))
+            new_lat_log_p = ellipsoidalNvector.LatLon(lat=gps_attributes.get("latitude"), lon=gps_attributes.get("longitude"))
+            self.log("new location is: {}".format(new_lat_log_p))
+            
+            mean_of_points = ellipsoidalNvector.meanOf([old_lat_log_p,new_lat_log_p], LatLon=ellipsoidalVincenty.LatLon)
+            self.log("Mean of location between old and new is {}".format(mean_of_points))
+            
             #self.log("{}".format(attributes))
-            self.call_service("device_tracker/see", dev_id=self.device_id, 
-            attributes = attributes, 
-            gps_accuracy = gps_attributes["gps_accuracy"], 
-            gps = [gps_attributes["latitude"], gps_attributes["longitude"]])
+            #For some reason setting attributes of gps coordinates overrides the gps data in device_tracker/see
+            attributes['latitude']=mean_of_points.lat
+            attributes['longitude']=mean_of_points.lon
+            self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, 
+              attributes = attributes, 
+              gps_accuracy = gps_attributes["gps_accuracy"], 
+              ##rtclauss 11/15/18 - use mean location
+              gps = [mean_of_points.lat, mean_of_points.lon])
           except KeyError as e:
             self.error("KeyError {}: missing information from sensor. Returning with no action.".format(e))
-            #self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
+            #self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
       else:
         self.error("missing information from gps sensor. Returning with no action.")
-        #self.call_service("device_tracker/see", dev_id=self.device_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
+        #self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
         
