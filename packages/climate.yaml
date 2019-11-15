@@ -275,6 +275,25 @@ binary_sensor:
         min_gradient: 0.000009
 
 ########################
+# Climate
+########################
+
+climate:
+  - platform: generic_thermostat
+    name: Basement
+    heater: switch.basement_heater
+    target_sensor: sensor.basement_temperature
+    min_temp: 45
+    max_temp: 90
+    ac_mode: false
+    target_temp: 60
+    cold_tolerance: 3
+    hot_tolerance: 1
+    min_cycle_duration:
+      minutes: 15
+    away_temp: 45
+    precision: 1
+########################
 # Groups
 ########################
 group:
@@ -377,19 +396,19 @@ sensor:
 
       rate_of_house_temp_change_10m:
         entity_id:
-          - sensor.house_temperature_stats_10m_mean
+          - sensor.house_temperature_stats_10m
         value_template: >-
           {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate') * 100000000.0 |float}}
 
       rate_of_house_temp_change_1h:
         entity_id:
-          - sensor.house_temperature_stats_1h_mean
+          - sensor.house_temperature_stats_1h
         value_template: >-
           {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 100000000.0 |float}}
 
       rate_of_house_temp_change_30m:
         entity_id:
-          - sensor.house_temperature_stats_30m_mean
+          - sensor.house_temperature_stats_30m
         value_template: >-
           {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 100000000.0 |float}}
 
