@@ -71,7 +71,7 @@ class add_gps(hass.Hass):
     new_lat_log = ellipsoidalNvector.LatLon(lat=new["attributes"].get("latitude"), lon=new["attributes"].get("longitude"))
     try:
       old_lat_log = ellipsoidalNvector.LatLon(lat=old["attributes"].get("latitude"), lon=old["attributes"].get("longitude"))
-    except KeyError as ke:
+    except:
       # Home Assistant has restarted so we have no previous state for the device tracker. Let's use the new location state
       # for the old value.
       old_lat_log = new_lat_log
