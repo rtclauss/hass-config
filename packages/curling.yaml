@@ -323,6 +323,10 @@ script:
 sensor:
   - platform: template
     sensors:
+      occ_distance:
+        value_template: '{{ states.proximity.occ.state }}'
+        entity_id: sensor.time
+        unit_of_measurement: 'm'
       occ_time:
         value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
         entity_id: sensor.time
