@@ -53,6 +53,6 @@ class VL53L0XSensor : public PollingComponent, public Sensor {
     // int averageReading = ((reading1+reading2+reading3)/3);
     publish_state(reading1);
     ESP_LOGD("vl53l0x", "Salt level is: %f mm", this->state);
-    if (sensor.timeoutOccurred()) { ESP_LOGD(" TIMEOUT"); }
+    if (sensor.timeoutOccurred()) { ESP_LOGD("vl53l0x", " TIMEOUT"); }
   }
 };
