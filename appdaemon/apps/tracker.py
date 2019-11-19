@@ -16,6 +16,7 @@ class add_gps(hass.Hass):
     self.gps_sensor_sources = self.args["gps_location_sources"]
     self.minimum_update_distance = self.args["minimum_update_distance"]
     self.minimum_update_window = self.args["minimum_update_window"]
+    self.gps_accuracy_tolerance = self.args["gps_accuracy_tolerance"]
     
     #self.log("preparing to system on init")
     self.bayes_updated(entity=self.bayesian, attribute={}, old={}, new={}, kwargs={})
@@ -41,22 +42,42 @@ class add_gps(hass.Hass):
 
   def location_update(self, entity, attribute, old, new, kwargs):
     #self.log("in location_update")
-    #self.log("triggered by: {} {} {} {} {}".format(entity, attribute, old, new, kwargs))
+    self.log("triggered by: {} {} {} {} {}".format(entity, attribute, old, new, kwargs))
     bayesian_state = self.get_state(self.bayesian, attribute="all")
-    #self.log("here is the current bayesian state: {}".format(bayesian_state))
-    last_changed = self.convert_utc(bayesian_state.get("last_updated"))
-    difference = datetime.now(timezone.utc) - last_changed
-    if difference.total_seconds() > self.minimum_update_window:
-      self.log("Binary Bayesian Sensor State last changed {} seconds ago.  Time for an update".format(difference.total_seconds()))
-    else:
-      return
+    #self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
+    
+    try:
+      if new["attributes"].get("gps_accuracy") > self.gps_accuracy_tolerance:
+        self.log("New GPS coordinates not accurate at {} m. Not updating.".format(new["attributes"].get("gps_accuracy")))
+        return
+    except TypeError as te:
+      self.log("No new GPS Coordinates.  Continuing")
+
+    qbayes_location = self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
+    try:
+      last_changed = self.convert_utc(qbayes_location['attributes']['gps_updated'])#get("last_updated"))
+      difference = datetime.now(timezone.utc) - last_changed
+      if difference.total_seconds() > self.minimum_update_window:
+        self.log("Bayesian Device Tracker GPS Location last changed {} seconds ago.  Time for an update".format(difference.total_seconds()))
+      else:
+        self.log("Bayesian Device Tracker GPS Location last changed less than {} seconds ago.  Not Updating.".format(self.minimum_update_window))
+        return
+    except KeyError as ke:
+      self.log("Newly restarted HASS so there is no gps_updated attribute.  Updating location")
     gps_sensors_state = self.get_state(entity, attribute="all")
     #self.log("here is the GPS state: {}".format(gps_sensors_state))
-    
+
     #qbayes_location = self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
-    old_lat_log = ellipsoidalNvector.LatLon(lat=old["attributes"].get("latitude"), lon=old["attributes"].get("longitude"))
-    
     new_lat_log = ellipsoidalNvector.LatLon(lat=new["attributes"].get("latitude"), lon=new["attributes"].get("longitude"))
+    try:
+      old_lat_log = ellipsoidalNvector.LatLon(lat=old["attributes"].get("latitude"), lon=old["attributes"].get("longitude"))
+    except KeyError as ke:
+      # Home Assistant has restarted so we have no previous state for the device tracker. Let's use the new location state
+      # for the old value.
+      old_lat_log = new_lat_log
+      #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
+      pass
+    
     
     mean_of_points = ellipsoidalNvector.meanOf([old_lat_log,new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
     #self.log("Mean of old and new location is {}".format(mean_of_points))
@@ -172,11 +193,15 @@ class add_gps(hass.Hass):
             #For some reason setting attributes of gps coordinates overrides the gps data in device_tracker/see
             attributes['latitude']=mean_of_points.lat
             attributes['longitude']=mean_of_points.lon
+            
+            ## rtclauss add gps_update_time_attribute
+            attributes['gps_updated'] = datetime.now(timezone.utc).isoformat()
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, 
               attributes = attributes, 
               gps_accuracy = gps_attributes["gps_accuracy"], 
               ##rtclauss 11/15/18 - use mean location
-              gps = [mean_of_points.lat, mean_of_points.lon])
+              gps = [mean_of_points.lat, mean_of_points.lon]
+              )
           except KeyError as e:
             self.error("KeyError {}: missing information from sensor. Returning with no action.".format(e))
             #self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
