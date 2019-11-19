@@ -235,11 +235,10 @@ automation:
         from: 'away'
     condition: 
     action:
-      - service: scene.turn_on
-        entity_id: scene.arrive_home
       - service: cover.open_cover
         entity_id: cover.garage_door_opener
-
+      - service: scene.turn_on
+        entity_id: scene.arrive_home
 
   - id: notify_home_zone
     alias: notify_home_zone
@@ -509,6 +508,8 @@ automation:
       entity_id: input_boolean.guest_mode
       state: 'off'
     action:
+    - service: cover.close_cover
+      entity_id: cover.garage_door_opener
     - service: scene.turn_on
       entity_id: scene.leave_home
     - delay: 25
@@ -621,7 +622,7 @@ binary_sensor:
       prob_given_false: 0.1
       platform: 'state'
       to_state: 'home'
-    - entity_id: device_tracker.android
+    - entity_id: device_tracker.android_1
       prob_given_true: 0.60
       prob_given_false: 0.1
       platform: 'state'
@@ -713,7 +714,7 @@ proximity:
       # - Work
       # - home
       # - twincities
-    tolerance: 300
+    tolerance: 50
     unit_of_measurement: m
     devices:
       - device_tracker.bayesian_zeke_home
@@ -724,7 +725,7 @@ proximity:
     #   - SPCC
     #   - Work
     #   - home
-    tolerance: 300
+    tolerance: 50
     unit_of_measurement: m
     devices:
       - device_tracker.bayesian_zeke_home
@@ -735,7 +736,7 @@ proximity:
       # - OCC
       # - Work
       # - home
-    tolerance: 300
+    tolerance: 50
     unit_of_measurement: m
     devices:
       - device_tracker.bayesian_zeke_home
@@ -746,7 +747,7 @@ proximity:
   #     - OCC
   #     - SPCC
   #     - home
-    tolerance: 300
+    tolerance: 50
     unit_of_measurement: m
     devices:
       - device_tracker.bayesian_zeke_home
@@ -756,7 +757,7 @@ proximity:
     ignored_zones:
       # - Work
       # - OCC
-    tolerance: 300
+    tolerance: 50
     unit_of_measurement: m
     devices:
       - device_tracker.bayesian_zeke_home
@@ -766,7 +767,7 @@ proximity:
     ignored_zones:
       # - Work
       # - OCC
-    tolerance: 300
+    tolerance: 50
     unit_of_measurement: m
     devices:
       - device_tracker.bayesian_zeke_home
@@ -816,7 +817,7 @@ sensor:
         entity_id: 
           - device_tracker.bayesian_zeke_home
           - device_tracker.wethop
-          #- device_tracker.android
+          #- device_tracker.android_1
           - device_tracker.honda
         value_template: >-
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
@@ -828,7 +829,7 @@ sensor:
 
   # - platform: places
   #   name: android
-  #   devicetracker_id: device_tracker.android
+  #   devicetracker_id: device_tracker.android_1
   #   options: place
   #   map_provider: google
   #   map_zoom: 17
