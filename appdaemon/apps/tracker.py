@@ -38,7 +38,9 @@ class add_gps(hass.Hass):
             #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
-                              "course": 0.0, "home_probability": sensor_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]])
+                              "course": 0.0, "home_probability": sensor_state["attributes"]["probability"], "latitude": config["latitude"], "longitude": config["longitude"]},
+                              gps=[config["latitude"], config["longitude"]]
+                              )
         else:
             return
 
@@ -117,7 +119,8 @@ class add_gps(hass.Hass):
             #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
-                              "course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"], "latitude": config["latitude"], "longitude": config["longitude"]})
+                              "course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"], "latitude": config["latitude"], "longitude": config["longitude"]},
+                              gps=[config["latitude"], config["longitude"]])
         else:
             #self.log("bayes says I am away")
             if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
