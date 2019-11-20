@@ -100,10 +100,10 @@ class add_gps(hass.Hass):
     
     if bayesian_state['state'] == "on":
       config = self.get_plugin_config()
-      self.log("bayes says I am home")
+      self.log("Bayesian sensor says I am home. Setting device_tracker to home")
       #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
       #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
-      self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"]}, gps=[config["latitude"], config["longitude"]]) 
+      self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"], "latitude":config["latitude"], "longitude": config["longitude"]}) 
     else:
       #self.log("bayes says I am away")
       if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
@@ -186,7 +186,9 @@ class add_gps(hass.Hass):
             
             self.log("old location is: {}".format(old_lat_log_p))
             
-            mean_of_points = ellipsoidalNvector.meanOf([old_lat_log_p,new_lat_log_p], LatLon=ellipsoidalVincenty.LatLon)
+            #Let's try the intermediate calculation
+            #mean_of_points = ellipsoidalNvector.meanOf([old_lat_log_p,new_lat_log_p], LatLon=ellipsoidalVincenty.LatLon)
+            mean_of_points = new_lat_log_p.intermediateTo(old_lat_log_p, 0.75)
             self.log("Mean of location between old and new is {}".format(mean_of_points))
             
             #self.log("{}".format(attributes))
