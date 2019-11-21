@@ -72,7 +72,9 @@ class add_gps(hass.Hass):
                 self.log("Bayesian Device Tracker GPS Location last changed less than {} seconds ago.  Not Updating.".format(
                     self.minimum_update_window))
                 return
+            fresh_restart = False
         except KeyError as ke:
+            fresh_restart = True
             self.log(
                 "Newly restarted HASS so there is no gps_updated attribute.  Updating location")
         gps_sensors_state = self.get_state(entity, attribute="all")
@@ -94,11 +96,11 @@ class add_gps(hass.Hass):
         mean_of_points = ellipsoidalNvector.meanOf(
             [old_lat_log, new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
         #self.log("Mean of old and new location is {}".format(mean_of_points))
-
+        
         # Get Vincenty distance between old and new points
         distance = new_lat_log.distanceTo(old_lat_log)
         self.log("Vincenty Distance between updates is: {}".format(distance))
-        if distance <= self.minimum_update_distance:
+        if distance <= self.minimum_update_distance and not fresh_restart:
             self.log(
                 "Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
             return
@@ -214,7 +216,7 @@ class add_gps(hass.Hass):
                         # Let's try the intermediate calculation
                         #mean_of_points = ellipsoidalNvector.meanOf([old_lat_log_p,new_lat_log_p], LatLon=ellipsoidalVincenty.LatLon)
                         mean_of_points = new_lat_log_p.intermediateTo(
-                            old_lat_log_p, 0.75)
+                            old_lat_log_p, 0.25)
                         self.log("Mean of location between old and new is {}".format(
                             mean_of_points))
 
