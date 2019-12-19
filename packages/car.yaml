@@ -118,6 +118,19 @@ automation:
           message: >-
             "Honda Fit gas at {{ trigger.to_state.state }}% full"
 
+  - id: garage_door_reminder
+    alias: Close forgotten garage door
+    trigger:
+    - platform: state
+      entity_id: cover.garage_door_opener
+      to: open
+    condition:
+    - condition: time
+      after: '23:30:00'
+    action:
+    - service: notify.all
+      data:
+        message: Close the garage door.
 
 ########################
 # Binary Sensors
