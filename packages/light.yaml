@@ -597,9 +597,6 @@ automation:
     action:
     - service: scene.turn_on
       entity_id: scene.leave_home
-    - delay: 25
-    - service: scene.turn_on
-      entity_id: scene.leave_home
     - service: fan.turn_on
       data:
         entity_id: fan.master_bedroom_fan
@@ -636,6 +633,11 @@ automation:
         - condition: state
           entity_id: input_boolean.master_bedroom_auto_on
           state: 'on'
+        - condition: state
+          entity_id: binary_sensor.master_bed_occupancy
+          state: 'off'
+          for: 
+            minutes: 5
     action:
       - service: light.turn_off
         data:
@@ -755,7 +757,7 @@ automation:
           entity_id: input_boolean.basement_auto_on
 
 
-  - alias: "Dresser Ani Speed"
+  - alias: "Dresser Animation Speed"
     initial_state: True
     hide_entity: False
     trigger:
