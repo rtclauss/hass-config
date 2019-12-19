@@ -93,8 +93,8 @@ class add_gps(hass.Hass):
             #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
             pass
 
-        mean_of_points = ellipsoidalNvector.meanOf(
-            [old_lat_log, new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
+        #mean_of_points = ellipsoidalNvector.meanOf(
+        #    [old_lat_log, new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
         #self.log("Mean of old and new location is {}".format(mean_of_points))
         
         # Get Vincenty distance between old and new points
@@ -147,15 +147,20 @@ class add_gps(hass.Hass):
                                 attributes['speed'] = attributes['speed'] / 0.44704
                             self.log("new speed is: {}".format(
                                 attributes['speed']))
+                        else:
+                            #Traccar reports speed in knots
+                             attributes['speed'] = attributes['speed'] *1.151
+                             self.log("new speed is: {}".format(
+                                attributes['speed']))
 
-                        # We can get false positives, like WetHop flashing home on a geofence exit.
+                        # We can get false positives, like WetHop flashing home on a geofence enter/exit.
                         # Use the attributes of the bayesian sensor to determine if the transition is correct
                         if probability <= bayesian_state["attributes"]["probability_threshold"] and sensor_state['state'] == "home":
-                            self.error(
-                                "False positive jump to home zone.  Not updating Bayesian Sensor")
-                            self.error(
-                                "Bayesian state: {}".format(bayesian_state))
-                            self.error("Sensor state: {}".format(sensor_state))
+                            #self.error(
+                            #    "False positive jump to home zone.  Not updating Bayesian Sensor")
+                            #self.error(
+                            #    "Bayesian state: {}".format(bayesian_state))
+                            #self.error("Sensor state: {}".format(sensor_state))
                             return
 
                         try:
@@ -170,9 +175,14 @@ class add_gps(hass.Hass):
                             #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
                             pass
                         attributes['course'] = gps_attributes.get(
-                            'dirOfTravel', gps_attributes.get("course", -1))
+                            'dirOfTravel', gps_attributes.get("course", gps_attributes.get('bearing',-1)))
                         try:
                             del attributes['dirOfTravel']
+                        except KeyError as ke:
+                            #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
+                            pass
+                        try:
+                            del attributes['bearing']
                         except KeyError as ke:
                             #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
                             pass
@@ -213,10 +223,14 @@ class add_gps(hass.Hass):
 
                         self.log("old location is: {}".format(old_lat_log_p))
 
-                        # Let's try the intermediate calculation
-                        #mean_of_points = ellipsoidalNvector.meanOf([old_lat_log_p,new_lat_log_p], LatLon=ellipsoidalVincenty.LatLon)
+                        # Let's try the intermediate calculation and change the mean depending on the speed.
+                        speed = attributes['speed']
+                        if speed > 35:
+                            update_ratio=0.3
+                        else:
+                            update_ratio=0.1
                         mean_of_points = new_lat_log_p.intermediateTo(
-                            old_lat_log_p, 0.25)
+                            old_lat_log_p, update_ratio)
                         self.log("Mean of location between old and new is {}".format(
                             mean_of_points))
 
