@@ -151,6 +151,33 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+
+  - id: turn_on_bathroom_fan_when_humidity_high
+    alias: turn_on_bathroom_fan_when_humidity_high
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bathroom_humidity_high
+        to: 'on'
+        for: 
+          seconds: 20
+    action:
+      - service: switch.turn_on
+        data:
+          entity_id: switch.bathroom_light_fan_switch
+
+
+  - id: turn_off_bathroom_fan_when_humidity_normal
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.bathroom_humidity_high
+        to: 'off'
+        for: 
+          minutes: 10
+    action:
+      - service: switch.turn_off
+        data:
+          entity_id: switch.bathroom_light_fan_switch
+
   - id: turn_off_nest_when_windows_open
     alias: turn_off_nest_when_windows_open
     trigger:
@@ -208,6 +235,15 @@ automation:
 binary_sensor:
   - platform: template
     sensors:
+      bathroom_humidity_high:
+        value_template: >-
+          {% if
+              (states('sensor.bathroom_humidity')|float) > (states('sensor.average_house_humidity')|float + 5)
+          %} True
+          {% else %}
+             False
+          {% endif %}
+
       nest_home:
         value_template: >-
           {% if
@@ -218,6 +254,7 @@ binary_sensor:
           {% else %}
              True
           {% endif %}
+      
       fresh_air_open:
         value_template: >-
           {{
