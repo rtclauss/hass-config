@@ -1,6 +1,6 @@
 title: The Brewery
 resources:
-  - url: /community_plugin/compact-custom-header/compact-custom-header.js
+  - url: /community_plugin/custom-header/custom-header.js
     type: module
   - url: /community_plugin/entity-attributes-card/entity-attributes-card.js
     type: js
@@ -23,29 +23,33 @@ resources:
   - url: /community_plugin/lovelace-auto-entities/auto-entities.js
     type: js
 
-cch:
+custom_header:
+  compact_mode: true
   #hide_tabs: '9'
   voice: hide
   swipe: true
-  conditional_styles:
-    - tab:
-        'vacation':
-          hide: true
-      entity: binary_sensor.sensed_trip
-      condition:
-        state: 'off'
-    - tab:
-        'cameras':
-          hide: true
-      entity: binary_sensor.bayesian_zeke_home
-      condition:
-        state: 'on'
-    - tab:
-        'curling':
-          hide: true
-      entity: binary_sensor.curling_season
-      condition:
-        state: 'off'
+  hide_config: true
+  #test_template: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
+  hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
+  # conditional_styles:
+  #   - tab:
+  #       'vacation':
+  #         hide: true
+  #     entity: binary_sensor.sensed_trip
+  #     condition:
+  #       state: 'off'
+  #   - tab:
+  #       'cameras':
+  #         hide: true
+  #     entity: binary_sensor.bayesian_zeke_home
+  #     condition:
+  #       state: 'on'
+  #   - tab:
+  #       'curling':
+  #         hide: true
+  #     entity: binary_sensor.curling_season
+  #     condition:
+  #       state: 'off'
 
     # - entity: input_boolean.trip
     #   condition:
@@ -781,6 +785,7 @@ views:
         title: Vacation Light Settings
         show_header_toggle: false
         entities:
+          - input_boolean.trip
           - input_number.random_vacation_light_group
           - input_number.random_hour
           - input_number.random_minute
