@@ -28,12 +28,13 @@ Software on the NUC:
 * ESP8266 with [VL53L0X](https://www.amazon.com/gp/product/B07F3RH7TC/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1) to measure salt level in water softener. See [this commit](https://github.com/rtclauss/hass-config/commit/85b1eade336c0fc94031241b494203fb55b3a7d8) for more info. 
 * HUSBZB-1 Zigbee/Z-Wave Stick (for Z-Wave and Zigbee)
   * Z-Wave 
-    * Leviton Switch Vizia RF+
-    * Leviton Vizia + Digital Coordinating Remote Switch
+    * [Leviton Switch Vizia RF+ VRS05-1LZ](https://www.amazon.com/gp/product/B001HT6NKO/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1) - 3 wire 3-way switch.
+    * [Leviton Vizia + Digital Coordinating Remote Switch](https://www.amazon.com/gp/product/B001HT4M70/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1)
     * GE Z-Wave Wireless Smart Lighting Control Outdoor Module
     * GE Z-Wave Wireless Smart Lighting Control Appliance Switch
     * Bed presense sensor: [Ecolink Z-Wave door/window sensor](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU) mated with [Ideal pressure mat](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU)
     * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
+    * [Zooz Z-Wave Plus S2/ZEN26](https://www.amazon.com/gp/product/B07K1T8Z74/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1)
   * Zigbee
     * Philips Hue (bulbs and light strip)
     * GE Link Smart LED Bulbs
