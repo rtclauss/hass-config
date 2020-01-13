@@ -818,7 +818,8 @@ sensor:
   - platform: template
     sensors:
       heading_home:
-        value_template: '{{ states.proximity.home.attributes.dir_of_travel |default("unknown") }}'
+        value_template: >-
+          {{ state_attr('proximity.home','dir_of_travel') |default("unknown") }}
       home_distance:
         entity_id: sensor.time
         value_template: '{{ states.proximity.home.state }}'
@@ -833,7 +834,8 @@ sensor:
         value_template: >-
           {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int }}
       twincities:
-        value_template: '{{ states.proximity.twincities.attributes.dir_of_travel |default("unknown") }}'
+        value_template: >-
+          {{ state_attr('proximity.twincities','dir_of_travel') |default("unknown") }}
       zeke_direction:
         entity_id: 
           - device_tracker.bayesian_zeke_home
