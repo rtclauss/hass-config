@@ -818,7 +818,8 @@ sensor:
   - platform: template
     sensors:
       heading_home:
-        value_template: '{{ states.proximity.home.attributes.dir_of_travel |default("unknown") }}'
+        value_template: >-
+          {{ state_attr('proximity.home','dir_of_travel') |default("unknown") }}
       home_distance:
         entity_id: sensor.time
         value_template: '{{ states.proximity.home.state }}'
@@ -833,7 +834,8 @@ sensor:
         value_template: >-
           {{ state_attr('device_tracker.bayesian_resident_home', 'speed') | int }}
       example_zone_10:
-        value_template: '{{ states.proximity.example_zone_10.attributes.dir_of_travel |default("unknown") }}'
+        value_template: >-
+          {{ state_attr('proximity.example_zone_10','dir_of_travel') |default("unknown") }}
       resident_direction:
         entity_id: 
           - device_tracker.bayesian_resident_home
