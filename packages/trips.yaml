@@ -153,14 +153,14 @@ homeassistant:
 # Automations
 ########################
 automation:
-  - id: init_vacation
-    alias: initialize_vacation_items
-    trigger:
-    - platform: homeassistant
-      event: start
-    action:
-    - delay: '00:00:{{ (range(1,90)|random|int) }}'
-    - service: script.vacation_group_visibility
+  # - id: init_vacation
+  #   alias: initialize_vacation_items
+  #   trigger:
+  #   - platform: homeassistant
+  #     event: start
+  #   action:
+  #   - delay: '00:00:{{ (range(1,90)|random|int) }}'
+  #   - service: script.vacation_group_visibility
 
   - id: on_vacation_trigger
     alias: on_vacation_trigger
@@ -250,7 +250,7 @@ automation:
     - service: notify.all
       data:
         message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
-    - service: script.vacation_group_visibility
+    #- service: script.vacation_group_visibility
 
   - id: return_home_from_parents
     alias: return_home_from_parents
@@ -361,21 +361,21 @@ automation:
       data:
         message: "Vacuuming the house while you fly home \U0001F4BA"
 
-  - id: toggle_vacation_tab
-    alias: toggle_vacation_tab
-    trigger:
-    - platform: state
-      entity_id: binary_sensor.sensed_trip
-    - platform: homeassistant
-      event: start
-    condition: []
-    action:
-    - delay: '00:00:{{ (range(1,30)|random|int) }}'
-    - service: script.toggle_view
-      data_template:
-        view_id: vacation
-        visible: >-
-          {{ is_state("binary_sensor.sensed_trip", 'on') | lower }}
+  # - id: toggle_vacation_tab
+  #   alias: toggle_vacation_tab
+  #   trigger:
+  #   - platform: state
+  #     entity_id: binary_sensor.sensed_trip
+  #   - platform: homeassistant
+  #     event: start
+  #   condition: []
+  #   action:
+  #   - delay: '00:00:{{ (range(1,30)|random|int) }}'
+  #   - service: script.toggle_view
+  #     data_template:
+  #       view_id: vacation
+  #       visible: >-
+  #         {{ is_state("binary_sensor.sensed_trip", 'on') | lower }}
 
 ########################
 # Binary Sensors
@@ -568,28 +568,28 @@ scene:
 # Scripts
 ########################
 script:
-  vacation_group_visibility:
-    sequence:
-      - service: script.group_visibility
-        data:
-          entity_id: group.vacation_group_card_1
-          cond: input_number.random_vacation_light_group
-          visible_state: '1.0'
-      - service: script.group_visibility
-        data:
-          entity_id: group.vacation_group_card_2
-          cond: input_number.random_vacation_light_group
-          visible_state: '2.0'
-      - service: script.group_visibility
-        data:
-          entity_id: group.vacation_group_card_3
-          cond: input_number.random_vacation_light_group
-          visible_state: '3.0'
-      - service: script.group_visibility
-        data:
-          entity_id: group.vacation_group_card_4
-          cond: input_number.random_vacation_light_group
-          visible_state: '4.0'
+  # vacation_group_visibility:
+  #   sequence:
+  #     - service: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_1
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '1.0'
+  #     - service: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_2
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '2.0'
+  #     - service: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_3
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '3.0'
+  #     - service: script.group_visibility
+  #       data:
+  #         entity_id: group.vacation_group_card_4
+  #         cond: input_number.random_vacation_light_group
+  #         visible_state: '4.0'
 
 ########################
 # Sensors
