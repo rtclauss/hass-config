@@ -187,8 +187,8 @@ automation:
     condition:
       condition: template
       value_template: >-
-        {{ ((states.sensor.pws_alerts.attributes.TYPE == "TOR") or
-        (states.sensor.pws_alerts.attributes.Description == "Tornado Warning"))
+        {{ ((state_attr('sensor.pws_alerts','TYPE') == "TOR") or
+        (state_attr('pws_alerts', 'Description') == "Tornado Warning"))
         and (is_state("binary_sensor.bayesian_zeke_home", 'on')) }}
     action:
     - service: light.turn_on
@@ -210,7 +210,7 @@ automation:
     - service: notify.all
       data_template:
         message: >-
-          {{ states.sensor.pws_alerts.attributes.Description }}
+          {{ state_attr('pws_alerts', 'Description') }}
 
 ########################
 # Binary Sensors

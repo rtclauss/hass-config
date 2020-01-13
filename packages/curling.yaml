@@ -324,7 +324,8 @@ sensor:
   - platform: template
     sensors:
       occ_distance:
-        value_template: '{{ states.proximity.occ.state }}'
+        value_template: >-
+          {{ states('proximity.occ') }}
         entity_id: sensor.time
         unit_of_measurement: 'm'
       occ_time:
@@ -336,10 +337,13 @@ sensor:
         entity_id: sensor.time
         unit_of_measurement: 'minutes'
       spcc_distance:
-        value_template: '{{ states.proximity.spcc.state }}'
+        value_template: >-
+          {{ states('proximity.spcc') }}
         entity_id: sensor.time
         unit_of_measurement: 'm'
       heading_spcc:
-        value_template: '{{ states.proximity.spcc.attributes.dir_of_travel |default("unknown") }}'
+        value_template: >-
+          {{ state_attr('proximity.spcc','dir_of_travel') |default("unknown") }}
       heading_occ:
-        value_template: '{{ states.proximity.occ.attributes.dir_of_travel |default("unknown") }}'
+        value_template: >-
+          {{ state_attr('proximity.occ','dir_of_travel') |default("unknown") }}
