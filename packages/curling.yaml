@@ -64,16 +64,6 @@ homeassistant:
       friendly_name: "Curling Season"
       icon: mdi:calendar
 
-    binary_sensor.away_from_curling:
-      <<: *customize
-      friendly_name: "Leaving Curling"
-      icon: mdi:curling
-
-    binary_sensor.test_home:
-      <<: *customize
-      friendly_name: "Test for heading home from curling"
-      icon: mdi:curling
-
     ################################################
     ## Group
     ################################################
@@ -259,28 +249,6 @@ binary_sensor:
         entity_id: sensor.time
         value_template: >-
           {{ now().strftime("%m") |int in [1,2,3,4,10,11,12] }}
-      away_from_curling:
-        value_template: >
-          {% if
-            (((as_timestamp(now()) | int - as_timestamp(states.sensor.twincities.last_changed))//60) | int > 10) and (states.sensor.twincities.state=="away_from")
-            or
-            (((as_timestamp(now()) | int - as_timestamp(states.sensor.heading_occ.last_changed))//60) | int > 5) and (states.sensor.heading_occ.state=="away_from")
-          %} true
-          {% else %}
-            false
-          {% endif %}
-        entity_id: sensor.time
-        device_class: moving
-      test_home:
-        value_template: >
-          {% if
-            (((as_timestamp(now()) | int - as_timestamp(states.sensor.heading_spcc.last_changed)) | int > 1200) and states.sensor.heading_spcc.state=="away_from")
-            or
-            (((as_timestamp(now())| int - as_timestamp(states.sensor.heading_occ.last_changed)) | int > 600) and states.sensor.heading_occ.state=="away_from")
-          %} true
-          {% else %}
-            false
-          {% endif %}
 
 ########################
 # Groups
@@ -294,8 +262,6 @@ group:
       - sensor.spcc_time
       - sensor.spcc_distance
       - sensor.heading_spcc
-      - binary_sensor.away_from_curling
-      - binary_sensor.test_home
   curling_automations:
     entities:
       - automation.leave_home_for_curling
