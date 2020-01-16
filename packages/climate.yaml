@@ -433,23 +433,33 @@ sensor:
         value_template: >-
           {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
 
+      rate_of_house_temp_change_5m:
+        entity_id:
+          - sensor.house_temperature_stats_5m
+        unit_of_measurement: '°F/5 minute'
+        value_template: >-
+          {{ state_attr('sensor.house_temperature_stats_5m', 'change_rate') * 60.0 * 5.0 |float}}
+
       rate_of_house_temp_change_10m:
         entity_id:
           - sensor.house_temperature_stats_10m
+        unit_of_measurement: '°F/5 minute'
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate') * 100000000.0 |float}}
+          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate') * 60.0 * 5.0 |float}}
 
       rate_of_house_temp_change_1h:
         entity_id:
           - sensor.house_temperature_stats_1h
+        unit_of_measurement: '°F/5 minute'
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 100000000.0 |float}}
+          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 60.0 * 5.0 |float}}
 
       rate_of_house_temp_change_30m:
         entity_id:
           - sensor.house_temperature_stats_30m
+        unit_of_measurement: '°F/5 minute'
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 100000000.0 |float}}
+          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float}}
 
   - platform: statistics
     name: min_rate_of_house_temp_change_10m
@@ -462,6 +472,13 @@ sensor:
   - platform: statistics
     name: min_rate_of_house_temp_change_30m
     entity_id: sensor.rate_of_house_temp_change_30m
+
+  - platform: statistics
+    name: house_temperature_stats_5m
+    entity_id: sensor.average_house_temp
+    max_age:
+      minutes: 5
+    precision: 8
 
   - platform: statistics
     name: house_temperature_stats_10m
