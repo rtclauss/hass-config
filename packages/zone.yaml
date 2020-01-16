@@ -829,7 +829,7 @@ sensor:
       home_distance:
         entity_id: sensor.time
         value_template: '{{ states.proximity.home.state }}'
-        unit_of_measurement: 'mi'
+        unit_of_measurement: 'm'
       home_time:
         entity_id: sensor.time
         value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed)) | int //60 }}'
@@ -837,6 +837,7 @@ sensor:
       zeke_speed:
         entity_id: 
           - device_tracker.bayesian_zeke_home
+        unit_of_measurement: 'mph'
         value_template: >-
           {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int }}
       twincities:
@@ -845,9 +846,9 @@ sensor:
       zeke_direction:
         entity_id: 
           - device_tracker.bayesian_zeke_home
-          - device_tracker.wethop
+          #- device_tracker.wethop
           #- device_tracker.android_1
-          - device_tracker.honda
+          #- device_tracker.honda
         value_template: >-
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
             {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int }}
