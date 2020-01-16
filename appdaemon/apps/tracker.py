@@ -142,7 +142,7 @@ class add_gps(hass.Hass):
                         # iOS apps use m/s as the speed, not mph.  Need to convert.
                         if 'speed' in attributes.keys() and 'wethop' in sensor_state['entity_id']:
                             if attributes['speed'] == -1:
-                                attributes['speed'] = 0
+                                attributes['speed'] = 0.0
                             else:
                                 attributes['speed'] = attributes['speed'] / 0.44704
                             self.log("new speed is: {}".format(
@@ -226,7 +226,7 @@ class add_gps(hass.Hass):
                         # Let's try the intermediate calculation and change the mean depending on the speed.
                         speed = attributes['speed']
                         if speed > 35:
-                            update_ratio=0.3
+                            update_ratio=0.7
                         else:
                             update_ratio=0.1
                         mean_of_points = new_lat_log_p.intermediateTo(
