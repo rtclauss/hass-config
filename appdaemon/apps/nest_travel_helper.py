@@ -45,7 +45,7 @@ class NestTravelHelper(hass.Hass):
 
 
         if driving_state == 'on' and new == "eco":
-            self.log("Calling set_operation_mode with values: {} {}".format(entity, operation_mode))
+            self.log("Calling set_hvac_mode with values: {} {}".format(entity, operation_mode))
             self.call_service(self, 'climate.set_hvac_mode', entity_id = entity, operation_mode = operation_mode)
             self.call_service("climate/set_preset_mode", preset_mode="none")
         
