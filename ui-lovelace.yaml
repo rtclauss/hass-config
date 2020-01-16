@@ -27,40 +27,12 @@ resources:
 
 custom_header:
   compact_mode: true
-  #hide_tabs: '9'
   voice: hide
   swipe: true
   hide_config: true
   #test_template: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
   hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
-  # conditional_styles:
-  #   - tab:
-  #       'vacation':
-  #         hide: true
-  #     entity: binary_sensor.sensed_trip
-  #     condition:
-  #       state: 'off'
-  #   - tab:
-  #       'cameras':
-  #         hide: true
-  #     entity: binary_sensor.bayesian_zeke_home
-  #     condition:
-  #       state: 'on'
-  #   - tab:
-  #       'curling':
-  #         hide: true
-  #     entity: binary_sensor.curling_season
-  #     condition:
-  #       state: 'off'
 
-    # - entity: input_boolean.trip
-    #   condition:
-    #     state: off
-    #   tab:
-    #     9:
-    #       hide: true
-
-    
 views:
   - title: Home
     path: home
@@ -690,124 +662,6 @@ views:
 
 ##################################################
 
-  - title: Automations
-    path: automations
-    icon: mdi:robot
-    cards:
-      - id: 5734813fa25a4be8be66c92c4673fa2d  # Automatically created id
-        type: entities
-        title: Bayesian Presence
-        show_header_toggle: false
-        entities:
-          - person.ryan
-          - binary_sensor.bayesian_zeke_home
-          - device_tracker.bayesian_zeke_home
-          - sensor.zeke_speed
-          - device_tracker.wethop
-          - device_tracker.wethop_2
-          - device_tracker.arrival_sensor
-          - binary_sensor.nest_home
-          - device_tracker.android_1
-          - device_tracker.honda
-          - sensor.zeke_direction
-
-      - id: 1ed69694b5244ca59bbdb9339a183865  # Automatically created id
-        type: entities
-        title: Return from Cities Check
-        show_header_toggle: false
-        entities:
-          - device_tracker.bayesian_zeke_home
-          - sensor.zeke_direction
-
-      - id: 1ed69694b5244ca59bbdb9339a083865  # Automatically created id
-        type: entities
-        title: Vacuum
-        show_header_toggle: false
-        entities:
-          - vacuum.rockrobo
-
-      - id: d02d7c7c79b74a0387fceda16b11acc3  # Automatically created id
-        type: entities
-        title: Motion Sensors
-        show_header_toggle: false
-        entities:
-          - binary_sensor.hallway_motion
-          - binary_sensor.office_motion
-          - binary_sensor.master_bedroom_motion
-          - binary_sensor.downstairs_motion
-          - binary_sensor.living_room_motion_sensor
-          - binary_sensor.livingroom_motion_sensor
-          - binary_sensor.basement_motion_sensor
-          - binary_sensor.master_bed_occupancy
-
-      - id: 234a52
-        type: entities
-        title: Meetings
-        show_header_toggle: false
-        entities:
-          - input_datetime.next_work_meeting
-
-      - id: 34563563a4
-        type: entities
-        title: Proximities
-        show_header_toggle: false
-        entities:
-          - proximity.home
-          - proximity.msp
-          - proximity.occ
-          - proximity.spcc
-          - proximity.twincities
-          - proximity.work
-
-      - id: 143924bcb6924b7e86ec03ee0830cad0  # Automatically created id
-        type: entities
-        title: Guest Mode
-        show_header_toggle: false
-        entities:
-          - input_boolean.guest_mode
-
-      - id: 2be0072ce5cd47c3b341d309e38d782b  # Automatically created id
-        type: glance
-        title: Travel Sensors
-        entities:
-          - sensor.home_distance
-          - sensor.home_time
-          - sensor.heading_home
-          - sensor.twincities
-          - binary_sensor.test_homeward
-          - sensor.me_to_home
-          - sensor.the_brewery_eta
-          - input_select.trip_origin
-          - sensor.zeke_direction
-
-      - id: 528d0d75ddc449a4ba94d3c4f146b66d  # Automatically created id
-        type: entities
-        title: Logging Level
-        show_header_toggle: false
-        entities:
-          - input_select.log_level
-
-      - id: 774ca4f2a22a41689bec9cd409fe8515  # Automatically created id
-        type: entities
-        title: Vacation Light Settings
-        show_header_toggle: false
-        entities:
-          - input_boolean.trip
-          - input_number.random_vacation_light_group
-          - input_number.random_hour
-          - input_number.random_minute
-
-      - id: bb98e6ee50f247c88f017f8402091874  # Automatically created id
-        type: custom:auto-entities
-        card:
-          type: entities
-          title: All Automations
-        filter:
-          include:
-            - domain: automation
-
-##################################################
-
   - title: Clean
     path: cleaning
     icon: mdi:washing-machine
@@ -836,9 +690,15 @@ views:
               green: 100
               amber: 750
               red: 820
-          - type: picture-entity
-            entity: camera.rockrobo_map
-            name: Vacuum Map
+      - id: 1ed69694b5244ca59bbdb9339a083865  # Automatically created id
+        type: entities
+        title: Vacuum
+        show_header_toggle: false
+        entities:
+          - vacuum.rockrobo
+      - type: picture-entity
+        entity: camera.rockrobo_map
+        name: Vacuum Map
 
 
 ##################################################
@@ -895,14 +755,6 @@ views:
     path: curling
     icon: mdi:curling
     cards:
-      - id: 142132234abbd3333
-        title: Trackers
-        type: map
-        entities:
-          - device_tracker.android_1
-          - device_tracker.honda
-          - device_tracker.wethop
-          - device_tracker.bayesian_zeke_home
       - id: 42b1dabdbcc4161480b27d6f1a862363  # Automatically created id
         type: horizontal-stack
         cards:
@@ -917,8 +769,6 @@ views:
               - sensor.spcc_time
               - sensor.spcc_distance
               - sensor.heading_spcc
-              - binary_sensor.away_from_curling
-              - binary_sensor.test_home
       - id: 42b1dabdbcc4421480b27d6f1a862363  # Automatically created id
         type: horizontal-stack
         cards:
@@ -1004,6 +854,142 @@ views:
                 - switch.stairs
                 - switch.front_door
                 - scene.vacation_group_4
+
+##################################################
+
+  - title: Automations
+    path: automations
+    icon: mdi:robot
+    cards:
+
+      - id: d02d7c7c79b74a0387fceda16b11acc3  # Automatically created id
+        type: entities
+        title: Motion Sensors
+        show_header_toggle: false
+        entities:
+          - binary_sensor.hallway_motion
+          - binary_sensor.office_motion
+          - binary_sensor.master_bedroom_motion
+          - binary_sensor.downstairs_motion
+          - binary_sensor.living_room_motion_sensor
+          - binary_sensor.livingroom_motion_sensor
+          - binary_sensor.basement_motion_sensor
+          - binary_sensor.master_bed_occupancy
+
+      - id: 234a52
+        type: entities
+        title: Meetings
+        show_header_toggle: false
+        entities:
+          - input_datetime.next_work_meeting
+
+      - id: 34563563a4
+        type: entities
+        title: Proximities
+        show_header_toggle: false
+        entities:
+          - proximity.home
+          - proximity.msp
+          - proximity.occ
+          - proximity.spcc
+          - proximity.twincities
+          - proximity.work
+
+      - id: 143924bcb6924b7e86ec03ee0830cad0  # Automatically created id
+        type: entities
+        title: Guest Mode
+        show_header_toggle: false
+        entities:
+          - input_boolean.guest_mode
+
+      - id: 2be0072ce5cd47c3b341d309e38d782b  # Automatically created id
+        type: glance
+        title: Travel Sensors
+        entities:
+          - sensor.home_distance
+          - sensor.home_time
+          - sensor.heading_home
+          - sensor.twincities
+          - binary_sensor.test_homeward
+          - sensor.me_to_home
+          - sensor.the_brewery_eta
+          - input_select.trip_origin
+          - sensor.zeke_direction
+
+      - id: 528d0d75ddc449a4ba94d3c4f146b66d  # Automatically created id
+        type: entities
+        title: Logging Level
+        show_header_toggle: false
+        entities:
+          - input_select.log_level
+
+      - id: 774ca4f2a22a41689bec9cd409fe8515  # Automatically created id
+        type: entities
+        title: Vacation Light Settings
+        show_header_toggle: false
+        entities:
+          - input_boolean.trip
+          - input_number.random_vacation_light_group
+          - input_number.random_hour
+          - input_number.random_minute
+
+      - id: bb98e6ee50f247c88f017f8402091874  # Automatically created id
+        type: custom:auto-entities
+        card:
+          type: entities
+          title: All Automations
+        filter:
+          include:
+            - domain: automation
+
+##################################################
+  
+  - title: Testing
+    path: testing
+    icon: mdi:test-tube
+    cards:
+      - id: 5734813fa25a4be8be66c92c4673fa2d  # Automatically created id
+        type: entities
+        title: Bayesian Presence
+        show_header_toggle: false
+        entities:
+          - person.ryan
+          - binary_sensor.bayesian_zeke_home
+          - device_tracker.bayesian_zeke_home
+          - sensor.zeke_speed
+          - device_tracker.wethop
+          - device_tracker.wethop_2
+          - device_tracker.arrival_sensor
+          - binary_sensor.nest_home
+          - device_tracker.android_1
+          - device_tracker.honda
+          - sensor.zeke_direction
+      - id: 1ed69694b5244ca59bbdb9339a183865  # Automatically created id
+        type: entities
+        title: Return from Cities Check
+        show_header_toggle: false
+        entities:
+          - device_tracker.bayesian_zeke_home
+          - sensor.zeke_direction
+      - id: 142132234abbd3333
+        title: Trackers
+        type: map
+        entities:
+          - device_tracker.android_1
+          - device_tracker.honda
+          - device_tracker.wethop
+          - device_tracker.bayesian_zeke_home
+      - type: entities
+        title: Curling Sensors
+        show_header_toggle: false
+        entities:
+          - binary_sensor.curling_season
+          - sensor.occ_time
+          - sensor.occ_distance
+          - sensor.heading_occ
+          - sensor.spcc_time
+          - sensor.spcc_distance
+          - sensor.heading_spcc
 
 ##################################################
 
