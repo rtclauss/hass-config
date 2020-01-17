@@ -1,5 +1,5 @@
 # Blend the data from the bayesian binary home/away sensor with device tracker
-import appdaemon.plugins.hass.hassapi as hass
+import hassapi as hass
 import copy
 from datetime import datetime, timedelta, timezone
 
@@ -9,8 +9,7 @@ from pygeodesy import ellipsoidalNvector
 from pygeodesy import ellipsoidalVincenty
 
 
-class add_gps(hass.Hass):
-
+class BayesianDeviceTracker(hass.Hass):
     def initialize(self):
         self.bayesian_device_tracker_id = self.args["bayesian_device_tracker_name"]
         self.bayesian = self.args["bayesian_input"]
