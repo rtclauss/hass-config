@@ -1,5 +1,7 @@
-import appdaemon.plugins.hass.hassapi as hass
+import hassapi as hass
 import os
+
+from datetime import datetime, timedelta
 
 class restart_ha(hass.Hass):
 
@@ -9,7 +11,7 @@ class restart_ha(hass.Hass):
     
     self.host_to_ping = self.args["host_to_ping"]
     
-    self.handle = self.run_every(self.ping_server, self.datetime(), 33*60 )
+    self.handle = self.run_every(self.ping_server, datetime.now()+timedelta(seconds=15), 33*60 )
     
     
   def ping_server(self, kwargs):

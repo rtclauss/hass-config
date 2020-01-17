@@ -1,4 +1,4 @@
-import appdaemon.plugins.hass.hassapi as hass
+import hassapi as hass
 from datetime import date
 from datetime import datetime, time
 from datetime import timedelta
