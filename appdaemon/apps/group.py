@@ -19,7 +19,7 @@
 #                                                                                         #
 ###########################################################################################
 
-import appdaemon.plugins.hass.hassapi as hass
+import hassapi as hass
 
 class create_group(hass.Hass):
 

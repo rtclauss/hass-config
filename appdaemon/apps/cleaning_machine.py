@@ -1,4 +1,4 @@
-import appdaemon.plugins.hass.hassapi as hass
+import hassapi as hass
 from enum import Enum
 from machine import Machine, ANY, StateOn, StateOff, Timeout
 
