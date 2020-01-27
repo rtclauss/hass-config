@@ -37,7 +37,8 @@ Software on the NUC:
     * [Zooz Z-Wave Plus S2/ZEN26](https://www.amazon.com/gp/product/B07K1T8Z74/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1)
   * Zigbee
     * Philips Hue (bulbs and light strip)
-    * GE Link Smart LED Bulbs
+    * ~~GE Link Smart LED Bulbs~~ Replaced due to poor antenna quality and humidity forming in the bulb
+    * [EcoSmart 60-Watt Equivalent A19 Dimmable SMART LED Light Bulb Tunable White](https://www.homedepot.com/p/EcoSmart-60-Watt-Equivalent-A19-Dimmable-SMART-LED-Light-Bulb-Tunable-White-2-Pack-A9A19A60WESDZ02/309683612). Replaced the GE Link LED Bulb in most cases.
     * Xiaomi Aqara Motion Sensors
     * Xiaomi Aqara Button
     * Xiaomi Aqara Temperature Sensors
@@ -47,6 +48,9 @@ Software on the NUC:
     * SmartThings Motion Sensor
     * [Hampton Bay (King of Fans)](https://www.homedepot.com/p/Hampton-Bay-Universal-Wink-Enabled-White-Ceiling-Fan-Premier-Remote-Control-99432/206591100) - These devices are very particular about what they will initially pair with.  I moved the NUC to the same room as the fans for the initial pairing.  After they were on the network they communicate over the Zigbee mesh proper.
     * Peanut Zigbee Smart Plug - Used to control the lava lamp in my office. Does not require Almond hub and does pair via ZHA.  Also act as more reliable repeaters for the Hampton Bay/KoF fans.  See [this blog post](http://diysoldier.com/hampton-bay-smart-ceiling-fan-and-light-control/), [this SmartThings Community thread](https://community.smartthings.com/t/hampton-bay-zigbee-fan-controller/47463/476) and [this reddit thread](https://www.reddit.com/r/SmartThings/comments/a3pbnz/peanut_smartplug_best_smart_plug_ive_found_for_10/) for more information.
+      * [Humidifier](https://www.amazon.com/dp/B002QAYJPO/) for the bedroom
+      * Lava Lamp
+      * Christmas Lights
 
 * Unifi nanoHD-AP
 * Unifi USG
