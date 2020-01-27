@@ -38,7 +38,7 @@ Software on the NUC:
   * Zigbee
     * Philips Hue (bulbs and light strip)
     * ~~GE Link Smart LED Bulbs~~ Replaced due to poor antenna quality and humidity forming in the bulb
-    * [EcoSmart 60-Watt Equivalent A19 Dimmable SMART LED Light Bulb Tunable White](https://www.homedepot.com/p/EcoSmart-60-Watt-Equivalent-A19-Dimmable-SMART-LED-Light-Bulb-Tunable-White-2-Pack-A9A19A60WESDZ02/309683612). Replaced the GE Link LED Bulb in most cases.
+    * [EcoSmart 60-Watt Equivalent A19 Dimmable SMART LED Light Bulb Tunable White](https://www.homedepot.com/p/EcoSmart-60-Watt-Equivalent-A19-Dimmable-SMART-LED-Light-Bulb-Tunable-White-2-Pack-A9A19A60WESDZ02/309683612). Replaced the GE Link LED Bulb in most cases. Used with [Flux component](https://github.com/rtclauss/hass-config/blob/9cf8c34b5b5fd0d8c2fe982fc8e80d43fc623540/packages/light.yaml#L1059).
     * Xiaomi Aqara Motion Sensors
     * Xiaomi Aqara Button
     * Xiaomi Aqara Temperature Sensors
