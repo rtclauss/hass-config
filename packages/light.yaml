@@ -431,8 +431,8 @@ automation:
       - service: light.turn_on
         data:
           entity_id: light.hallway_light
-          transition: 2
-          brightness: 1
+          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          brightness_pct: 2
 
   - id: hallway_light_off_at_night
     alias: hallway_light_off_at_night
@@ -502,8 +502,8 @@ automation:
       - service: light.turn_on
         data:
           entity_id: light.master_bedroom
-          transition: 5
-          brightness: 1
+          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          brightness_pct: "{{ state_attr('switch.circadian_lighting_[...]', 'brightness') | int }}"
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.master_bedroom_auto_on
@@ -522,8 +522,8 @@ automation:
       - service: light.turn_on
         data:
           entity_id: light.office_lamp
-          transition: 2
-          brightness: 1
+          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          brightness_pct: "{{ state_attr('switch.circadian_lighting_[...]', 'brightness') | int }}"
 
   - id: office_light_off_at_night
     alias: office_light_off_at_night
@@ -648,8 +648,9 @@ automation:
       - service: light.turn_on
         data:
           entity_id: light.master_bedroom
+          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          brightness_pct: "{{ state_attr('switch.circadian_lighting_[...]', 'brightness') | int }}"
           transition: 5
-          brightness: 1
 
   - id: turn_off_bedroom_light_when_dark_in_room
     alias: turn_off_bedroom_light_when_dark_in_room
@@ -704,7 +705,8 @@ automation:
         data:
           entity_id: light.master_bedroom
           transition: 5
-          brightness_pct: 100
+          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          brightness_pct: "{{ state_attr('switch.circadian_lighting_[...]', 'brightness') | int }}"
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.master_bedroom_auto_on
@@ -1056,12 +1058,17 @@ sensor:
 # Switch
 ########################
 switch:
-  - platform: flux
-    lights:
-    #- light.living_room_all_except_tv
+  - platform: circadian_lighting
+    lights_ct:
       - light.master_bedroom
-    mode: mired
-    transition: 120
+      - light.hallway_light
+      - light.office
+  # - platform: flux
+  #   lights:
+  #   #- light.living_room_all_except_tv
+  #     - light.master_bedroom
+  #   mode: mired
+  #   transition: 120
   
 ########################
 # Zone
