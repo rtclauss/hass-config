@@ -32,7 +32,6 @@ bayesian_device_tracker:
   module: tracker
   gps_location_sources: 
     - device_tracker.wethop
-#    - device_tracker.wethop_2
     - device_tracker.android_1
     - device_tracker.honda
   bayesian_input: binary_sensor.bayesian_zeke_home
@@ -40,8 +39,72 @@ bayesian_device_tracker:
   gps_accuracy_tolerance: 100
   minimum_update_distance: 3
   minimum_update_window: 10
+
+
+Occupancy Simulator:
+  module: occusim
+  class: OccuSim
+  log: 1
+  notify: 1
+  enable: input_boolean.trip,on
+  #test: 1
+  dump_times: 1
+  #reset_time: 02:00:00
+
+  step_afternoon_end: sunset - 00:45:00
+  step_afternoon_name: Afternoon
+  step_afternoon_start: '12:00:00'
+
+
+  step_evening_name: Evening
+  step_evening_start: sunset - 00:45:00
+
+  step_morning_name: Morning
+  step_morning_start: sunrise - 00:13:00
+  step_morning_end: '12:00:00'
+
+  step_night_end: '22:45:00'
+  step_night_name: Night
+  step_night_start: '21:30:00'
+
+  random_evening_bathroom_end: Night
+  random_evening_bathroom_maxduration: 00:15:00
+  random_evening_bathroom_minduration: 00:01:30
+  random_evening_bathroom_name: Evening Bathroom Random On
+  random_evening_bathroom_number: '3'
+  random_evening_bathroom_off_1: switch.bathroom_light_fan_switch
+  random_evening_bathroom_on_1: switch.bathroom_light_fan_switch
+  random_evening_bathroom_start: Evening
+
+  random_evening_kitchen_end: Night
+  random_evening_kitchen_maxduration: 00:35:00
+  random_evening_kitchen_minduration: 00:04:00
+  random_evening_kitchen_name: Evening Kitchen Random On
+  random_evening_kitchen_number: '4'
+  random_evening_kitchen_off_1: light.kitchen_sink
+  random_evening_kitchen_on_1: light.kitchen_sink
+  random_evening_kitchen_start: Evening
   
-  
+  random_evening_guest_days: mon,thu,fri
+  random_evening_guest_end: Night
+  random_evening_guest_maxduration: 00:17:12
+  random_evening_guest_minduration: 00:01:00
+  random_evening_guest_name: Evening Guest Random On
+  random_evening_guest_number: '1'
+  random_evening_guest_off_1: light.guest_ceiling
+  random_evening_guest_on_1: light.guest_ceiling
+  random_evening_guest_start: Evening
+
+  random_morning_bathroom_end: Afternoon
+  random_morning_bathroom_maxduration: 00:45:00
+  random_morning_bathroom_minduration: 00:03:00
+  random_morning_bathroom_name: Morning Bathroom Random On
+  random_morning_bathroom_number: '2'
+  random_morning_bathroom_off_1: switch.bathroom_light_fan_switch
+  random_morning_bathroom_on_1: switch.bathroom_light_fan_switch
+  random_morning_bathroom_start: Morning
+
+
 Restart HA if network down:
   class: restart_ha
   module: reboot
