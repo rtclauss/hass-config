@@ -33,7 +33,7 @@ class BayesianDeviceTracker(hass.Hass):
         sensor_state = self.get_state(entity, attribute="all")
         if sensor_state['state'] == 'on':
             config = self.get_plugin_config()
-            self.log("bayes says I am home")
+            #self.log("bayes says I am home")
             #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
@@ -45,15 +45,15 @@ class BayesianDeviceTracker(hass.Hass):
 
     def location_update(self, entity, attribute, old, new, kwargs):
         #self.log("in location_update")
-        self.log("triggered by: {} {} {} {} {}".format(
-            entity, attribute, old, new, kwargs))
+        #self.log("triggered by: {} {} {} {} {}".format(
+        #    entity, attribute, old, new, kwargs))
         bayesian_state = self.get_state(self.bayesian, attribute="all")
         #self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
 
         try:
             if new["attributes"].get("gps_accuracy") > self.gps_accuracy_tolerance:
-                self.log("New GPS coordinates not accurate at {} m. Not updating.".format(
-                    new["attributes"].get("gps_accuracy")))
+                #self.log("New GPS coordinates not accurate at {} m. Not updating.".format(
+                #    new["attributes"].get("gps_accuracy")))
                 return
         except TypeError as te:
             self.log("No new GPS Coordinates.  Continuing")
@@ -65,11 +65,12 @@ class BayesianDeviceTracker(hass.Hass):
                 qbayes_location['attributes']['gps_updated'])  # get("last_updated"))
             difference = datetime.now(timezone.utc) - last_changed
             if difference.total_seconds() > self.minimum_update_window:
-                self.log("Bayesian Device Tracker GPS Location last changed {} seconds ago.  Time for an update".format(
-                    difference.total_seconds()))
+                pass
+                #self.log("Bayesian Device Tracker GPS Location last changed {} seconds ago.  Time for an update".format(
+                #    difference.total_seconds()))
             else:
-                self.log("Bayesian Device Tracker GPS Location last changed less than {} seconds ago.  Not Updating.".format(
-                    self.minimum_update_window))
+                #self.log("Bayesian Device Tracker GPS Location last changed less than {} seconds ago.  Not Updating.".format(
+                #    self.minimum_update_window))
                 return
             fresh_restart = False
         except KeyError as ke:
@@ -98,10 +99,10 @@ class BayesianDeviceTracker(hass.Hass):
         
         # Get Vincenty distance between old and new points
         distance = new_lat_log.distanceTo(old_lat_log)
-        self.log("Vincenty Distance between updates is: {}".format(distance))
+        #self.log("Vincenty Distance between updates is: {}".format(distance))
         if distance <= self.minimum_update_distance and not fresh_restart:
-            self.log(
-                "Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
+            #self.log(
+            #    "Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
             return
         self.run_update(bayesian_state=bayesian_state,
                         sensor_state=gps_sensors_state)
@@ -115,8 +116,8 @@ class BayesianDeviceTracker(hass.Hass):
 
         if bayesian_state['state'] == "on":
             config = self.get_plugin_config()
-            self.log(
-                "Bayesian sensor says I am home. Setting device_tracker to home")
+            #self.log(
+            #    "Bayesian sensor says I am home. Setting device_tracker to home")
             #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
@@ -208,7 +209,7 @@ class BayesianDeviceTracker(hass.Hass):
 
                         new_lat_log_p = ellipsoidalNvector.LatLon(lat=gps_attributes.get(
                             "latitude"), lon=gps_attributes.get("longitude"))
-                        self.log("new location is: {}".format(new_lat_log_p))
+                        #self.log("new location is: {}".format(new_lat_log_p))
 
                         try:
                             old_lat_log_p = ellipsoidalNvector.LatLon(
@@ -220,7 +221,7 @@ class BayesianDeviceTracker(hass.Hass):
                             #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
                             pass
 
-                        self.log("old location is: {}".format(old_lat_log_p))
+                        #self.log("old location is: {}".format(old_lat_log_p))
 
                         # Let's try the intermediate calculation and change the mean depending on the speed.
                         speed = attributes['speed']
@@ -230,8 +231,8 @@ class BayesianDeviceTracker(hass.Hass):
                             update_ratio=0.1
                         mean_of_points = new_lat_log_p.intermediateTo(
                             old_lat_log_p, update_ratio)
-                        self.log("Mean of location between old and new is {}".format(
-                            mean_of_points))
+                        #self.log("Mean of location between old and new is {}".format(
+                        #    mean_of_points))
 
                         # self.log("{}".format(attributes))
                         # For some reason setting attributes of gps coordinates overrides the gps data in device_tracker/see
