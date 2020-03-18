@@ -34,9 +34,9 @@ homeassistant:
       friendly_name: "Vacuum while at work"
       icon: mdi:robot-vacuum
 
-    automation.wake_up_lights:
+    automation.wake_up:
       <<: *customize
-      friendly_name: "Wake up lights"
+      friendly_name: "Wake up"
       icon: mdi:briefcase
 
     ################################################
@@ -78,6 +78,16 @@ automation:
         data:
           message: 'Arriving at work. Setting Nest Away.'
 
+  - id: turn_off_morning_routine
+    alias: turn_off_morning_routine
+    trigger:
+    - platform: time
+      at: '13:00:00'
+    action:
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.morning_routine
+
   - id: vacuum_while_working
     alias: vacuum_while_working
     trigger:
@@ -94,8 +104,8 @@ automation:
         data:
           entity_id: all
 
-  - id: wake_up_lights
-    alias: wake_up_lights
+  - id: wake_up
+    alias: wake_up
     trigger:
       - platform: template
         value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[0:5]}}"
@@ -114,6 +124,9 @@ automation:
           kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
           transition: 300
+      - service: switch.turn_off
+        data:
+          entity_id: switch.humidifier
 
 ########################
 # Binary Sensors
