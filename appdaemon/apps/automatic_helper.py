@@ -4,12 +4,24 @@ from datetime import datetime, time
 from datetime import timedelta
 from dateutil import parser
 
+class AutomaticHelper(hass.Hass):
     def initialize(self) -> None:
         self.tracked_device = self.args['tracker_input']
         self.calendar = self.args['calendar']
         self.driving_time = self.args["driving_time"]
         self.notify_target = self.args["notify_target"]
-        self.listen_event(self.event_received, "traccar_ignition_on")
+        # TODO change this listen_event to leaving work
+        #More text
+        #self.listen_event(self.event_received, "traccar_ignition_on")
+        self.listen_state(self.location_update, entity=self.tracked_device, old="Work", new="Away")
+        self.listen_state(self.location_update, entity=self.tracked_device, old="OCC", new="Away")
+        self.listen_state(self.location_update, entity=self.tracked_device, old="SPCC", new="TwinCities")
+
+    def location_update(self, entity, attribute, old, new, kwargs):
+        self.log(entity)
+        self.log(attribute)
+        self.log(old)
+        self.log(new)
 
     def event_received(self, event_name, data, kwargs):
         event_type = data["type"]
