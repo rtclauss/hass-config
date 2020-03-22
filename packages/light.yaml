@@ -747,9 +747,18 @@ automation:
         for:
           minutes: 10
     condition:
-      condition: state
-      entity_id: input_boolean.trip
-      state: 'off'
+      condition: and
+      conditions:
+      # Turn off auto-off when on a trip so it looks like I'm working
+        - condition: state
+          entity_id: input_boolean.trip
+          state: 'off'
+        - condition: state
+          entity_id: binary_sensor.workday_sensor
+          state: 'off'
+        - condition: time
+          after: '07:00:00'
+          before: '17:00:00'
     action:
       - service: light.turn_off
         data:
