@@ -13,6 +13,8 @@ homeassistant:
     - type: trusted_networks
       trusted_networks:
         - 172.16.0.0/12
+        - !secret private_subnet
+        - !secret iot_subnet
 
 hassio:
 
@@ -96,6 +98,7 @@ logbook:
       - automation.update_battery_status_group_members
       - automation.battery_persistent_notification
       - automation.battery_persistent_notification_clear
+      - sensor.xiaomi_map
 
 # Discover some devices automatically
 discovery:
@@ -104,9 +107,10 @@ tts:
   - platform: google_translate
     service_name: google_say
 
-nest:
-  client_id: !secret nest_client_id
-  client_secret: !secret nest_client_secret
+# rtclauss - disable with move to zwave-thermostat
+# nest:
+#   client_id: !secret nest_client_id
+#   client_secret: !secret nest_client_secret
 
 recorder:
 #  db_url: postgresql://@/hass
@@ -130,6 +134,7 @@ recorder:
     entities:
       - sensor.time
       - sensor.date
+      - sensor.xiaomi_map
       - sensor.last_boot
       - sensor.dark_sky_precip_probability_1
       - sensor.dark_sky_precip_probability_2
@@ -158,22 +163,11 @@ influxdb:
       - sensor.time
       - sensor.date
       - sensor.last_boot
+      - sensor.xiaomi_map
 
 google:
   client_id: !secret google_client_id
   client_secret: !secret google_client_secret
-
-# panel_iframe:
-#   ide:
-#     title: IDE
-#     icon: mdi:code-braces
-#     url: https://ide.rtclauss.org
-
-# panel_iframe:
-#   tautulli:
-#     title: Tautulli
-#     icon: mdi:filmstrip
-#     url: http://tautulli.rtclauss.org
 
 panel_custom:
   - name: zwavegraph2
@@ -194,6 +188,7 @@ cloud:
         - switch
         - script
         - fan
+        - climate
       exclude_entities:
         - switch.livingroom_motion_tracking
         - switch.basement_night_mode
@@ -246,6 +241,33 @@ cloud:
 
 lovelace:
   mode: yaml
+  resources:
+    - url: /community_plugin/custom-header/custom-header.js
+      type: module
+    - url: /community_plugin/entity-attributes-card/entity-attributes-card.js
+      type: js
+    - url: /community_plugin/mini-media-player/mini-media-player.js
+      type: module
+    - url: /community_plugin/mini-graph-card/mini-graph-card-bundle.js
+      type: module
+    - url: /community_plugin/vertical-stack-in-card/vertical-stack-in-card.js
+      type: js
+    - url: /community_plugin/button-card/button-card.js
+      type: module
+    - url: /community_plugin/weather-card/weather-card.js
+      type: module
+    - url: /community_plugin/zha-network-card/zha-network-card.js
+      type: js
+    - url: /community_plugin/lovelace-card-mod/card-mod.js
+      type: js
+    - url: /community_plugin/gauge-card/gauge-card.js
+      type: js
+    - url: /community_plugin/lovelace-auto-entities/auto-entities.js
+      type: js
+    - url: /community_plugin/lovelace-valetudo-map-card/valetudo-map-card.js
+      type: js
+    - url: /local/zha-network-visualization-card/zha-network-visualization-card.js
+      type: module
 
 
 #zha_new:
