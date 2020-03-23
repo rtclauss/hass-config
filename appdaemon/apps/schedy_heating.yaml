@@ -1,0 +1,65 @@
+schedy_heating:  # This is our app instance name.
+  module: hass_apps_loader
+  class: SchedyApp
+
+  actor_type: thermostat
+
+  expression_environment: | 
+    def hvac_mode():
+      return state("climate.glycol_thermostat")
+    
+    def ryan_location():
+      return state("person.ryan")
+
+  schedule_snippets:
+    cooling_season:
+      - v: 72
+        rules:
+          - {start: "20:30", end: "07:00", weekdays: 1-5}
+          - {start: "20:30", end: "08:30", weekdays: 6-7}
+      - v: 75
+    heating_season:
+      - weekdays: 1-5
+        rules:
+          - {start: "23:30", end: "07:00", v: 60}
+          - x: "72 if (time >= (datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S') - datetime.timedelta(hours=1, minutes=0)).time() and is_off('input_boolean.trip') and is_on('binary_sensor.workday_sensor') and ryan_location() == 'home') and is_off('input_boolean.morning_routine') else Next()"
+          - x: "72 if ryan_location() == 'home' else Next()"
+          - x: "59 if ryan_location() != 'home' else Next()"
+      - weekdays: 6-7
+        rules:
+          - {v: 60, start: "00:00", end: "06:00"}
+          - {v: 62, start: "06:00", end: "07:00"}
+          - {v: 64, start: "07:00", end: "08:00"}
+          - {v: 66, start: "08:00", end: "09:00"}
+          - {v: 68, start: "09:00", end: "10:00"}
+          - x: "72 if ryan_location() == 'home' else Next()"
+          - x: "61 if ryan_location() != 'home' else Next()"
+
+  # schedule_append:
+  #   - v: 'OFF'
+
+
+  rooms:
+
+    whole_house:
+      actors:
+        climate.glycol_thermostat:
+          supports_hvac_modes: false
+          max_temp: 90
+          min_temp: 45
+      rescheduling_delay: 120
+      schedule:
+        - x: "IncludeSchedule(schedule_snippets['cooling_season']) if hvac_mode() == 'cool' else Next()"
+        - x: "IncludeSchedule(schedule_snippets['heating_season']) if hvac_mode() == 'heat' else Next()"
+  
+  statistics:
+    whole_house_temp_delta:
+      type: temp_delta
+  
+  watched_entities:
+    - climate.glycol_thermostat
+    - input_datetime.next_work_meeting
+    - input_boolean.trip
+    - person.ryan
+    - binary_sensor.workday_sensor
+    - input_boolean.morning_routine
