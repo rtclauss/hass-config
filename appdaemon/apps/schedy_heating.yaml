@@ -38,13 +38,14 @@ schedy_heating:  # This is our app instance name.
   # schedule_append:
   #   - v: 'OFF'
 
+  schedule_prepend:
+    - x: "Mark(OFF, Mark.OVERLAY) if is_on('group.egress_points') else Next()"
 
   rooms:
-
     whole_house:
       actors:
         climate.glycol_thermostat:
-          supports_hvac_modes: false
+          #supports_hvac_modes: false
           max_temp: 90
           min_temp: 45
       rescheduling_delay: 120
@@ -63,3 +64,4 @@ schedy_heating:  # This is our app instance name.
     - person.ryan
     - binary_sensor.workday_sensor
     - input_boolean.morning_routine
+    - group.egress_points
