@@ -75,8 +75,8 @@ class BayesianDeviceTracker(hass.Hass):
             fresh_restart = False
         except KeyError as ke:
             fresh_restart = True
-            self.log(
-                "Newly restarted HASS so there is no gps_updated attribute.  Updating location")
+            # self.log(
+            #     "Newly restarted HASS so there is no gps_updated attribute.  Updating location")
         gps_sensors_state = self.get_state(entity, attribute="all")
         #self.log("here is the GPS state: {}".format(gps_sensors_state))
 
