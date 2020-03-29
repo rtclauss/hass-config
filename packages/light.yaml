@@ -595,6 +595,27 @@ automation:
       data:
         transition: 5
 
+  - alias: transition_on_lights_when_home_near_sunset
+    id: transition_on_lights_when_home_near_sunset
+    trigger:
+      platform: sun
+      event: sunset
+      offset: "-01:00:00"
+    condition:
+      condition: and
+      conditions:
+        - condition: zone
+          entity_id: person
+          zone: zone.home
+    action:
+      - service: light.turn_on
+        entity_id: 
+          - light.kitchen_sink
+          - light.living_room_all
+        data:
+          # Hour-long transition before sunset.
+          transition: 3600
+
   - alias: reset_living_room
     id: reset_living_room
     trigger:
