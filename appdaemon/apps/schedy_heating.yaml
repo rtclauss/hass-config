@@ -21,9 +21,10 @@ schedy_heating:  # This is our app instance name.
     heating_season:
       - weekdays: 1-5
         rules:
-          - {start: "23:30", end: "07:00", v: 60}
+          - {start: "23:30-1d", end: "07:00+1d", v: 60}
           - x: "71 if (time >= (datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S') - datetime.timedelta(hours=1, minutes=0)).time() and is_off('input_boolean.trip') and is_on('binary_sensor.workday_sensor') and ryan_location() == 'home') and is_off('input_boolean.morning_routine') else Next()"
-          - x: "71 if ryan_location() == 'home' else Next()"
+          - {start: "07:00", end: "10:00", v: 65}
+          - x: "72 if ryan_location() == 'home' else Next()"
           - x: "59 if ryan_location() != 'home' else Next()"
       - weekdays: 6-7
         rules:
