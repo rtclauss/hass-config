@@ -104,6 +104,26 @@ automation:
         data:
           entity_id: all
 
+  - id: turn_on_lava_lamp_workday
+    alias: turn_on_lava_lamp_workday
+    trigger:
+      - platform: template
+        value_template: >-
+          {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -2 %}
+          {% set two_hoursback = back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5] %}
+          {{states.sensor.time.state == two_hoursback}}
+    condition:
+      - condition: state
+        entity_id: 'binary_sensor.workday_sensor'
+        state: 'on'
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: 'home'
+    action:
+      - service: switch.turn_on
+        data:
+          entity_id: switch.lava_lamp
+
   - id: wake_up
     alias: wake_up
     trigger:
