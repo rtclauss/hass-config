@@ -29,9 +29,10 @@ schedy_heating:  # This is our app instance name.
           - x: | 
               current_time = datetime.datetime.strptime(state('sensor.time'), '%H:%M').time()
               wakeup_time = datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S')
-
+            
               wakeup_prep = (wakeup_time - datetime.timedelta(hours=1, minutes=30)).time()
-              if current_time >= wakeup_prep and is_off('input_boolean.trip') and ryan_location() == 'home'and is_on('binary_sensor.workday_sensor') and is_off('input_boolean.morning_routine'):
+              print("rtclauss: {} >= {} is {}".format(current_time, wakeup_prep, (current_time >= wakeup_prep)))
+              if current_time >= wakeup_prep and is_off('input_boolean.trip') and ryan_location() == 'home' and is_on('binary_sensor.workday_sensor'):
                 result = 71
               else:
                 result = Next()
@@ -77,6 +78,5 @@ schedy_heating:  # This is our app instance name.
     - input_boolean.trip
     - person.ryan
     - binary_sensor.workday_sensor
-    - input_boolean.morning_routine
     - group.egress_points
     - sensor.time
