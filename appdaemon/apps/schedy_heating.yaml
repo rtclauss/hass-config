@@ -2,6 +2,8 @@ schedy_heating:  # This is our app instance name.
   module: hass_apps_loader
   class: SchedyApp
 
+  debug: true
+
   actor_type: thermostat
 
   expression_environment: | 
@@ -21,11 +23,22 @@ schedy_heating:  # This is our app instance name.
     heating_season:
       - weekdays: 1-5
         rules:
-          - {start: "23:30-1d", end: "07:00+1d", v: 60}
-          - x: "71 if (time >= (datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S') - datetime.timedelta(hours=1, minutes=0)).time() and is_off('input_boolean.trip') and is_on('binary_sensor.workday_sensor') and ryan_location() == 'home') and is_off('input_boolean.morning_routine') else Next()"
+          - x: "60 if ryan_location() != 'home' else Next()"
+            ## This expression isn't working
+          #- x: "71 if (datetime.datetime.strptime(state('sensor.time'), '%H:%M') >= (datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S') - datetime.timedelta(hours=1, minutes=0)).time() and is_off('input_boolean.trip') and is_on('binary_sensor.workday_sensor') and ryan_location() == 'home') and is_off('input_boolean.morning_routine') else Next()"
+          - x: | 
+              current_time = datetime.datetime.strptime(state('sensor.time'), '%H:%M').time()
+              wakeup_time = datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S')
+
+              wakeup_prep = (wakeup_time - datetime.timedelta(hours=1, minutes=30)).time()
+              if current_time >= wakeup_prep and is_off('input_boolean.trip') and ryan_location() == 'home'and is_on('binary_sensor.workday_sensor') and is_off('input_boolean.morning_routine'):
+                result = 71
+              else:
+                result = Next()
           - {start: "07:00", end: "10:00", v: 65}
+          - {start: "22:30-1d", end: "07:00+1d", v: 60}
           - x: "72 if ryan_location() == 'home' else Next()"
-          - x: "59 if ryan_location() != 'home' else Next()"
+
       - weekdays: 6-7
         rules:
           - {v: 60, start: "00:00", end: "06:00"}
@@ -66,3 +79,4 @@ schedy_heating:  # This is our app instance name.
     - binary_sensor.workday_sensor
     - input_boolean.morning_routine
     - group.egress_points
+    - sensor.time
