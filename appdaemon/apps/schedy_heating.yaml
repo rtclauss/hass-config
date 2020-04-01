@@ -2,7 +2,7 @@ schedy_heating:  # This is our app instance name.
   module: hass_apps_loader
   class: SchedyApp
 
-  debug: true
+  #debug: true
 
   actor_type: thermostat
 
@@ -10,7 +10,7 @@ schedy_heating:  # This is our app instance name.
     def hvac_mode():
       return state("climate.glycol_thermostat")
     
-    def ryan_location():
+    def zeke_location():
       return state("person.ryan")
 
   schedule_snippets:
@@ -23,22 +23,20 @@ schedy_heating:  # This is our app instance name.
     heating_season:
       - weekdays: 1-5
         rules:
-          - x: "60 if ryan_location() != 'home' else Next()"
-            ## This expression isn't working
-          #- x: "71 if (datetime.datetime.strptime(state('sensor.time'), '%H:%M') >= (datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S') - datetime.timedelta(hours=1, minutes=0)).time() and is_off('input_boolean.trip') and is_on('binary_sensor.workday_sensor') and ryan_location() == 'home') and is_off('input_boolean.morning_routine') else Next()"
+          - x: "60 if zeke_location() != 'home' else Next()"
           - x: | 
               current_time = datetime.datetime.strptime(state('sensor.time'), '%H:%M').time()
               wakeup_time = datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S')
             
               wakeup_prep = (wakeup_time - datetime.timedelta(hours=1, minutes=30)).time()
               print("rtclauss: {} >= {} is {}".format(current_time, wakeup_prep, (current_time >= wakeup_prep)))
-              if current_time >= wakeup_prep and is_off('input_boolean.trip') and ryan_location() == 'home' and is_on('binary_sensor.workday_sensor'):
-                result = 71
+              if current_time >= wakeup_prep and is_off('input_boolean.trip') and zeke_location() == 'home' and is_on('binary_sensor.workday_sensor'):
+                result = 70
               else:
                 result = Next()
           - {start: "07:00", end: "10:00", v: 65}
           - {start: "22:30-1d", end: "07:00+1d", v: 60}
-          - x: "72 if ryan_location() == 'home' else Next()"
+          - x: "70 if zeke_location() == 'home' else Next()"
 
       - weekdays: 6-7
         rules:
@@ -47,8 +45,8 @@ schedy_heating:  # This is our app instance name.
           - {v: 64, start: "07:00", end: "08:00"}
           - {v: 66, start: "08:00", end: "09:00"}
           - {v: 68, start: "10:00", end: "17:00"}
-          - x: "70 if ryan_location() == 'home' else Next()"
-          - x: "60 if ryan_location() != 'home' else Next()"
+          - x: "70 if zeke_location() == 'home' else Next()"
+          - x: "60 if zeke_location() != 'home' else Next()"
 
   # schedule_append:
   #   - v: 'OFF'
