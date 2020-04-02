@@ -110,8 +110,9 @@ automation:
       - platform: template
         value_template: >-
           {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -2 %}
-          {% set two_hoursback = back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5] %}
-          {{states.sensor.time.state == two_hoursback}}
+          {% set two_hoursback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
+          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
+          {{ formatted_time == two_hoursback }}
     condition:
       - condition: state
         entity_id: 'binary_sensor.workday_sensor'
