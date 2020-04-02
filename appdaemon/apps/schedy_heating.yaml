@@ -26,7 +26,7 @@ schedy_heating: # This is our app instance name.
     heating_season:
       - weekdays: 1-5
         rules:
-          - x: "60 if zeke_location() != 'home' else Next()"
+          - x: "60 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
           - x: |
               current_time = datetime.datetime.strptime(state('sensor.time'), '%H:%M').time()
               wakeup_time = datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S')

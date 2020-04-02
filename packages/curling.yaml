@@ -116,33 +116,34 @@ homeassistant:
 # Automations
 ########################
 automation:
-  - id: leave_home_for_curling
-    alias: leave_home_for_curling
-    trigger:
-    - entity_id: binary_sensor.bayesian_zeke_home
-      from: 'on'
-      platform: state
-      to: 'off'
-    condition:
-      condition: and
-      conditions:
-        - condition: time
-          after: '17:00:00'
-          before: '19:45:00'
-          weekday:
-          - tue
-          - wed
-        - condition: state
-          entity_id: input_boolean.guest_mode
-          state: 'off'
-    action:
-    - data:
-        preset_mode: 'Away and Eco'
-        entity_id: all
-      service: climate.set_preset_mode
-    - data:
-        message: Good Curling!
-      service: notify.all
+# Implemented in schedy
+  # - id: leave_home_for_curling
+  #   alias: leave_home_for_curling
+  #   trigger:
+  #   - entity_id: binary_sensor.bayesian_zeke_home
+  #     from: 'on'
+  #     platform: state
+  #     to: 'off'
+  #   condition:
+  #     condition: and
+  #     conditions:
+  #       - condition: time
+  #         after: '17:00:00'
+  #         before: '19:45:00'
+  #         weekday:
+  #         - tue
+  #         - wed
+  #       - condition: state
+  #         entity_id: input_boolean.guest_mode
+  #         state: 'off'
+  #   action:
+  #   - data:
+  #       preset_mode: 'Away and Eco'
+  #       entity_id: all
+  #     service: climate.set_preset_mode
+  #   - data:
+  #       message: Good Curling!
+  #     service: notify.all
 
   - id: return_home_from_occ
     alias: return_home_from_occ
@@ -165,14 +166,15 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_preset_mode
+    - service: climate.set_temperature
       data:
-        preset_mode: 'none'
-        entity_id: all
+        temperature: 70
+        hvac_mode: heat
+        entity_id: climate.glycol_thermostat
     - service: notify.all
       data_template:
         message: >-
-          Sent ETA of {{ states.sensor.time_to_home.state }} to Nest, driving home from OCC
+          Turning on heat while driving home from OCC
 
   - id: return_home_from_spcc
     alias: return_home_from_spcc
@@ -196,14 +198,15 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_preset_mode
+    - service: climate.set_temperature
       data:
-        preset_mode: 'none'
-        entity_id: all
+        temperature: 70
+        hvac_mode: heat
+        entity_id: climate.glycol_thermostat
     - service: notify.all
       data_template:
         message: >-
-          Sent ETA of {{ states.sensor.time_to_home.state }} to Nest, driving home from SPCC
+          Turning on heat while driving home from SPCC
 
   - id: toggle_curling_automations_on_season_change
     alias: toggle_curling_automations_on_season_change

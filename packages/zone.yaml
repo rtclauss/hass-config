@@ -451,14 +451,14 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_preset_mode
+    - service: climate.set_temperature
       data:
-        away_mode: 'none'
-        entity_id: all
+        temperature: 70
+        entity_id: climate.glycol_thermostat
     - service: notify.all
-      data:
+      data_template:
         message: >-
-          Turn off Nest Away and send ETA of {{ states.sensor.time_to_home.state }} while you drive home from a road trip.
+          Turning on HVAC while you drive home from a road trip
         
   - id: return_home_from_twin_cities
     alias: return_home_from_twin_cities
@@ -481,18 +481,14 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_preset_mode
+    - service: climate.set_temperature
       data:
-        preset_mode: 'none'
-        entity_id: all
-    - service: climate.set_preset_mode
-      data:
-        entity_id: all
-        preset_mode: 'none'
+        temperature: 70
+        entity_id: climate.glycol_thermostat
     - service: notify.all
       data_template:
         message: >-
-          Turn off Nest Away. You left TC in direction {{ sensor.zeke_direction }} while you drive home from the Cities.
+          Turn off Away Mode. You left TC in direction {{ sensor.zeke_direction }} while you drive home from the Cities.
 
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
@@ -568,14 +564,14 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_preset_mode
+    - service: climate.set_temperature
       data:
-        preset_mode: 'none'
-        entity_id: all
+        temperature: 70
+        entity_id: climate.glycol_thermostat
     - service: notify.all
       data_template:
         message: >-
-          Entering Rochester. Turning off Nest. ETA to home {{ states.sensor.time_to_home.state }}.
+          Entering Rochester. Turning off Away Mode. ETA to home {{ states.sensor.time_to_home.state }}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
@@ -641,11 +637,11 @@ binary_sensor:
       prob_given_false: 0.21
       platform: 'state'
       to_state: 'home'
-    - entity_id: binary_sensor.nest_home
-      prob_given_true: 0.30
-      prob_given_false: 0.4
-      platform: 'state'
-      to_state: 'on'
+    # - entity_id: binary_sensor.nest_home
+    #   prob_given_true: 0.30
+    #   prob_given_false: 0.4
+    #   platform: 'state'
+    #   to_state: 'on'
     ### Try out the speed sensor
     - entity_id: sensor.zeke_speed
       platform: 'numeric_state'
@@ -709,7 +705,7 @@ group:
       - device_tracker.arrival_sensor
       - sensor.zeke_speed
       - sensor.iphone_battery_state
-      - binary_sensor.nest_home
+      # - binary_sensor.nest_home
 
 ########################
 # Proximity

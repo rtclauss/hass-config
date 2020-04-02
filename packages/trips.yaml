@@ -271,14 +271,14 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_preset_mode
+    - service: climate.set_temperature
       data:
-        preset_mode: 'none'
-        entity_id: all
+        temperature: 70
+        entity_id: climate.glycol_thermostat
     - service: notify.all
       data_template:
         message: >-
-          Sent ETA of {{ states.sensor.time_to_home.state }} to Nest, driving home from parents
+          Turning on HVAC while driving home from parents
 
   - id: send_nest_airport_home_eta
     alias: send_nest_airport_home_eta
@@ -299,10 +299,14 @@ automation:
     #   data_template:
     #     eta: '{{states.sensor.time_to_home.state}}'
     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_preset_mode
+    - service: climate.set_temperature
       data:
-        away_mode: 'none'
-        entity_id: all
+        temperature: 70
+        entity_id: climate.glycol_thermostat
+    - service: notify.all
+      data_template:
+        message: >-
+          Turning on HVAC while driving home from MSP
 
   - id: vacation_lights_on
     alias: vacation_lights_on
