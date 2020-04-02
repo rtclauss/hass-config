@@ -27,10 +27,11 @@ schedy_heating:  # This is our app instance name.
           - x: | 
               current_time = datetime.datetime.strptime(state('sensor.time'), '%H:%M').time()
               wakeup_time = datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S')
-            
+              revert_schedule_time = datetime.datetime.strptime("10:00:00", '%H:%M:%S').time()
               wakeup_prep = (wakeup_time - datetime.timedelta(hours=1, minutes=30)).time()
+              
               print("rtclauss: {} >= {} is {}".format(current_time, wakeup_prep, (current_time >= wakeup_prep)))
-              if current_time >= wakeup_prep and is_off('input_boolean.trip') and zeke_location() == 'home' and is_on('binary_sensor.workday_sensor'):
+              if current_time >= wakeup_prep and current_time <= revert_schedule_time and is_off('input_boolean.trip') and zeke_location() == 'home' and is_on('binary_sensor.workday_sensor'):
                 result = 70
               else:
                 result = Next()
