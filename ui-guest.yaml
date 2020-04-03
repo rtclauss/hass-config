@@ -5,181 +5,77 @@ custom_header:
   voice: hide
   swipe: true
   hide_config: true
-  #test_template: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
-  hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
+  hide_raw: true
+  hide_unused: true
+  hide_help: true
 
 views:
   - title: Home
     path: home
-    icon: mdi:beer
+    icon: mdi:lightbulb
+    ## Add ETA to Home if I'm out and about?
     badges:
-      - alarm_control_panel.home_alarm
+      - name: Time until Ryan's home
+        entity: sensor.me_to_home
     cards:
-      - id: f077a7073da44af5828c5bfe6a9f0981  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: horizontal-stack
-            cards:
-              - type: custom:mini-graph-card
-                name: Temp
-                entities: 
-                  - sensor.average_house_temp
-                color_thresholds:
-                  - value: 68
-                    color: "red"
-                  - value: 65
-                    color: "orange"
-                  - value: 62
-                    color: "yellow"
-                  - value: 55
-                    color: "blue"
-                graph: line
-              - type: custom:mini-graph-card
-                name: Humdity
-                entities: 
-                  - sensor.average_house_humidity
-              - type: custom:mini-graph-card
-                name: Pressure
-                entities: 
-                  - sensor.average_house_pressure
-          - id: e75eb2badf864ae8b76e9a14fde8b60a  # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: Master Bedroom
-            cards:
-              - type: horizontal-stack
-                cards:
-                    - type: entity-button
-                      entity: light.master_bedroom
-                      state_color: true
-                      name: ' '
-                      tap_action:
-                        action: toggle
-                      hold_action: 
-                        action: more-info
-                    - type: entity-button
-                      entity: fan.master_bedroom_fan
-                      state_color: true
-                      name: ' '
-                      icon: mdi:fan
-                      tap_action:
-                        action: toggle
-                      hold_action: 
-                        action: more-info
-                    - type: entity-button
-                      entity: light.master_bedroom_fan_light
-                      name: 'Light'
-                      icon: mdi:fan
-                      tap_action:
-                        action: toggle
-                      hold_action: 
-                        action: more-info
-                    - type: entity-button
-                      entity: switch.circadian_lighting_circadian_lighting
-                      state_color: true
-                      name: ' '
-                      tap_action:
-                        action: toggle
-                      hold_action: 
-                        action: more-info
-                    - type: entity-button
-                      entity: switch.humidifier
-                      state_color: true
-                      name: ' '
-                      tap_action:
-                        action: toggle
-                      hold_action: 
-                        action: more-info
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Master Bedroom
-                #     entity: light.master_bedroom
-              - type: horizontal-stack
-                cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    align_state: center
-                    entities: 
-                      - sensor.master_bedroom_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    name: Humidity
-                    align_state: center
-                    entities: 
-                      - sensor.master_bedroom_humidity
-                    graph: line
-                    show:
-                      name: false
-
-      - id: f077a7073da44af5828c5bfe6a9f0982  # Automatically created id
+      - id: f077a7073da44af5828c5bfe6a9f0982 # Automatically created id
         type: vertical-stack
         cards:
           - type: custom:vertical-stack-in-card
-            title: Living Room
+            title: Living Room Lights
             cards:
               - type: horizontal-stack
                 cards:
-                - type: entity-button
-                  entity: light.living_room_all_except_tv
-                  state_color: true
-                  name: ' '
-                  icon: mdi:sofa
-                  tap_action:
-                    action: toggle
-                  hold_action: 
-                    action: more-info
-                - type: entity-button
-                  entity: light.tv
-                  state_color: true
-                  name: ' '
-                  tap_action:
-                    action: toggle
-                  hold_action: 
-                    action: more-info
-                - type: entity-button
-                  entity: light.pendant_lamp
-                  state_color: true
-                  name: ' '
-                  tap_action:
-                    action: toggle
-                  hold_action: 
-                    action: more-info
-                - type: entity-button
-                  entity: fan.living_room_fan
-                  state_color: true
-                  name: ' '
-                  icon: mdi:fan
-                  tap_action:
-                    action: toggle
-                  hold_action: 
-                    action: more-info
-                - type: entity-button
-                  entity: light.living_room_fan_light
-                  state_color: true
-                  name: 'Light'
-                  icon: mdi:fan
-                  tap_action:
-                    action: toggle
-                  hold_action: 
-                    action: more-info
+                  - type: entity-button
+                    entity: light.living_room_all_except_tv
+                    state_color: true
+                    name: "All but TV Bias"
+                    icon: mdi:sofa
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.tv
+                    state_color: true
+                    name: "TV Bias"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.pendant_lamp
+                    state_color: true
+                    name: "Couch Lamp"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: fan.living_room_fan
+                    state_color: true
+                    name: "Fan"
+                    icon: mdi:fan
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.living_room_fan_light
+                    state_color: true
+                    name: "Fan Light"
+                    icon: mdi:fan
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
               - type: horizontal-stack
                 title: Scenes and Activities
                 show_header_toggle: false
                 cards:
                   - type: entity-button
                     entity: scene.reset_living_room
-                    name: ' '
+                    name: "Reset Living Room"
                     icon: mdi:backup-restore
                     tap_action:
                       action: call-service
@@ -188,7 +84,7 @@ views:
                         entity_id: scene.reset_living_room
                   - type: entity-button
                     entity: scene.chill
-                    name: ' '
+                    name: "Dim Lights"
                     icon: mdi:emoticon-cool-outline
                     tap_action:
                       action: call-service
@@ -197,190 +93,17 @@ views:
                         entity_id: scene.chill
                   - type: entity-button
                     entity: scene.the_walking_dead
-                    name: ' '
+                    name: "Red"
                     icon: mdi:emoticon-dead-outline
                     tap_action:
                       action: call-service
                       service: scene.turn_on
                       service_data:
                         entity_id: scene.the_walking_dead
-              - type: horizontal-stack
-                cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    #align_state: center
-                    entities: 
-                      - sensor.living_room_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    name: Humidity
-                    #align_state: center
-                    entities: 
-                      - sensor.living_room_humidity
-                    graph: line
-                    show:
-                      name: false
-              - type: custom:mini-media-player
-                entity: media_player.living_room_firetv_2
-                hide:
-                  volume: true
-              - type: custom:mini-media-player
-                entity: media_player.vizio_smartcast
-
-          - id: e75eb2badf864ae8b76e9a14fde8b60b  # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: External
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: switch.front_door
-                    state_color: true
-                    name: 'Front Door'
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: switch.deck
-                    state_color: true
-                    name: 'Deck'
-                    tap_action:
-                      action: toggle
-                    hold_action: 
-                      action: more-info
-                  - type: entity-button
-                    entity: switch.deck_led_string
-                    state_color: true
-                    icon: mdi:led-strip
-                    name: 'Deck String'
-                    tap_action:
-                      action: toggle
-                    hold_action: 
-                      action: more-info
-
-      - id: f077a7073da44af5828c1bfe6a9f0921  # Automatically created id
+      - id: f077a7073da44af5828c2bfe6a9f0921 # Automatically created id
         type: vertical-stack
         cards:
-          - id: e75eb2badf864ae8b76e9a14fde8b60c  # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: Kitchen
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: light.kitchen_sink
-                    state_color: true
-                    name: ' '
-                    tap_action:
-                      action: toggle
-                    hold_action: 
-                      action: more-info
-                  - type: entity-button
-                    entity: light.kitchen_table
-                    state_color: true
-                    name: ' '
-                    tap_action:
-                      action: toggle
-                    hold_action: 
-                      action: more-info
-              - type: horizontal-stack
-                cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    align_state: center
-                    entities: 
-                      - sensor.kitchen_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    name: Humidity
-                    align_state: center
-                    entities: 
-                      - sensor.kitchen_humidity
-                    graph: line
-                    show:
-                      name: false
-          - id: e75eb2badf864ae8b76e9a14fde8b60e  # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: Other
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: switch.bathroom_light_fan_switch
-                    state_color: true
-                    name: ' '
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: switch.stairs
-                    state_color: true
-                    name: ' '
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: light.basement_lamp
-                    state_color: true
-                    name: 'Basement Lamp'
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: light.office_lamp
-                    state_color: true
-                    name: 'Office'
-                    tap_action:
-                      action: toggle
-                    hold_action: 
-                      action: more-info
-                  - type: entity-button
-                    entity: light.lava_lamp
-                    state_color: true
-                    name: 'Lava Lamp'
-                    tap_action:
-                      action: toggle
-                    hold_action: 
-                      action: more-info
-                  - type: entity-button
-                    entity: light.hallway_light
-                    state_color: true
-                    name: 'Hallway'
-                    tap_action:
-                      action: toggle
-                    hold_action: 
-                      action: more-info
-              - type: custom:mini-media-player
-                entity: media_player.spotify
-                icon: mdi:spotify
-                hide:
-                  #volume: true
-                  source: true
-
-      - id: f077a7073da44af5828c2bfe6a9f0921  # Automatically created id
-        type: vertical-stack
-        cards:
-          - id: e75eb2badf864ae8b76e9a14fde8b60d  # Automatically created id
+          - id: e75eb2badf864ae8b76e9a14fde8b60d # Automatically created id
             type: custom:vertical-stack-in-card
             title: Guest Room
             cards:
@@ -390,158 +113,213 @@ views:
                     entity: light.guest_bedroom
                     state_color: true
                     icon: mdi:bed-empty
-                    name: ' '
+                    name: "All Guest Room Lights"
                     tap_action:
                       action: toggle
-                    hold_action: 
+                    hold_action:
                       action: more-info
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Ceiling
-                #     entity: light.guest_ceiling
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Left
-                #     entity: light.guest_left_lamp
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Right
-                #     entity: light.guest_right_lamp
+                  - type: "custom:button-card"
+                    icon: mdi:fan
+                    name: Ceiling  Bulb
+                    entity: light.guest_ceiling
+                  - type: "custom:button-card"
+                    icon: mdi:lamp
+                    name: Left Lamp
+                    entity: light.guest_left_lamp
+                  - type: "custom:button-card"
+                    icon: mdi:lamp
+                    name: Right Lamp
+                    entity: light.guest_right_lamp
+      - id: f077a7073da44af5828c1bfe6a9f0921 # Automatically created id
+        type: vertical-stack
+        cards:
+          - id: e75eb2badf864ae8b76e9a14fde8b60c # Automatically created id
+            type: custom:vertical-stack-in-card
+            title: Kitchen Lights
+            cards:
               - type: horizontal-stack
                 cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    align_state: center
-                    entities: 
-                      - sensor.guest_room_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    #name: Humidity
-                    align_state: center
-                    entities: 
-                      - sensor.guest_room_humidity
-                    graph: line
-                    show:
-                      name: false
+                  - type: entity-button
+                    entity: light.kitchen_sink
+                    state_color: true
+                    name: "Kitchen Sink"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.kitchen_table
+                    state_color: true
+                    name: "Kitchen Table"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+          - id: e75eb2badf864ae8b76e9a14fde8b60e # Automatically created id
+            type: custom:vertical-stack-in-card
+            title: Lights in Other Rooms
+            cards:
+              - type: horizontal-stack
+                cards:
+                  - type: entity-button
+                    entity: switch.bathroom_light_fan_switch
+                    state_color: true
+                    name: "Bathroom"
+                    tap_action:
+                      action: toggle
+                  - type: entity-button
+                    entity: switch.stairs
+                    state_color: true
+                    name: "Stairs"
+                    tap_action:
+                      action: toggle
+                  - type: entity-button
+                    entity: light.basement_lamp
+                    state_color: true
+                    name: "Basement Lamp"
+                    tap_action:
+                      action: toggle
+                  - type: entity-button
+                    entity: light.office_lamp
+                    state_color: true
+                    name: "Office"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
+                  - type: entity-button
+                    entity: light.hallway_light
+                    state_color: true
+                    name: "Hallway"
+                    tap_action:
+                      action: toggle
+                    hold_action:
+                      action: more-info
 
-
-##################################################
-
-  - title: Weather
-    path: weather
-    icon: mdi:weather-lightning
-    badges:
-      - binary_sensor.fresh_air_open
+  ##################################################
+  - title: Media
+    path: media
+    icon: mdi:television
     cards:
-      - type: iframe
-        aspect_ratio: 90%
-        url: https://embed.windy.com/embed2.html?lat=44.308&lon=-94.614&zoom=5&level=surface&overlay=rain&menu=&message=true&marker=&calendar=&pressure=true&type=map&location=coordinates&detail=&detailLat=44.245&detailLon=-95.416&metricWind=mph&metricTemp=%C2%B0F&radarRange=-1
-
-
-      - id: forecast
-        #type: weather-forecast
-        type: custom:weather-card
-        entity: weather.dark_sky
-
-      - id: b1dfcb1f57cc428184dde82853ecd065  # Automatically created id
-        type: custom:entity-attributes-card
-        title: Weather Alerts
-        filter:
-          include:
-            - key: sensor.dark_sky_alerts.title*
-              name: Type
-            - key: sensor.dark_sky_alerts.description*
-              name: Details
-
-      - id: 49fc7b86605c4633b705dca150c91adc  # Automatically created id
-        type: entities
-        title: Current Conditions
-        show_header_toggle: false
-        entities:
-          - sensor.dark_sky_summary
-          - sensor.dark_sky_temperature
-          - sensor.dark_sky_apparent_temperature
-          - sensor.dark_sky_humidity
-          - sensor.dark_sky_pressure
-          - sensor.dark_sky_cloud_coverage
-          - sensor.dark_sky_precip_intensity
-          - sensor.dark_sky_precip
-
-      - id: ab8111c18a2c4e2db997ee4a29336b17  # Automatically created id
-        type: entities
-        title: Pressure Trends
-        show_header_toggle: false
-        entities:
-          - binary_sensor.pressure_rising_v_rapidly
-          - binary_sensor.pressure_rising_quickly
-          - binary_sensor.pressure_rising
-          - binary_sensor.pressure_rising_slowly
-          - binary_sensor.pressure_falling_slowly
-          - binary_sensor.pressure_falling
-          - binary_sensor.pressure_falling_quickly
-          - binary_sensor.pressure_falling_v_rapidly
-
-##################################################
-
-  - title: Cameras
-    path: cameras
-    icon: mdi:cctv
-    cards:
-      - id: 8dc5a17e8df94b378903e8bdd7a23639  # Automatically created id
+      - id: f077a7073da44af5818c5bfe6a9f0981 # Automatically created id
         type: vertical-stack
         cards:
-          - type: picture-entity
-            entity: camera.livingroom
-          - type: entities
-            title: Living Room Controls
-            show_header_toggle: false
-            entities:
-              - cover.livingroom_move_left_right
-              - cover.livingroom_move_up_down
-              - switch.livingroom_motion_detection
-              - switch.livingroom_motion_tracking
-              - switch.livingroom_ir_led
-              - switch.livingroom_ir_filter
-          - type: picture-entity
-            entity: camera.livingroom_motion_snapshot
-
-      - id: 5503f8eb035e450880c89ac3b24fdb57  # Automatically created id
+          - type: entity-button
+            name: "Watch TV"
+            icon: mdi:television
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              service_data:
+                entity_id: script.watch_tv
+          - type: entity-button
+            name: "Watch Netflix"
+            icon: mdi:netflix
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              service_data:
+                entity_id: script.watch_netflix
+          - type: entity-button
+            name: "Watch Plex"
+            icon: mdi:plex
+            tap_action:
+              action: call-service
+              service: script.turn_on
+              service_data:
+                entity_id: script.watch_plex
+          # - type: entity-button
+          #   name: "Watch Popcorn Time"
+          #   icon: mdi:popcorn
+          #   tap_action:
+          #     action: call-service
+          #     service: script.turn_on
+          #     service_data:
+          #       entity_id: script.watch_popcorn_time
+          - type: entity-button
+            name: "Turn off TV"
+            icon: mdi:television-off
+            tap_action:
+              action: call-service
+              service: media_player.turn_off
+              service_data:
+                entity_id: media_player.vizio_smartcast
+      - id: f077a7073da44af5828c5bfe6a9f0981 # Automatically created id
         type: vertical-stack
         cards:
-          - type: picture-entity
-            entity: camera.basement
-          - type: entities
-            title: Basement Controls
-            show_header_toggle: false
-            entities:
-              - cover.basement_move_left_right
-              - cover.basement_move_up_down
-              - switch.basement_motion_detection
-              - switch.basement_motion_tracking
-              - switch.basement_ir_led
-              - switch.basement_ir_filter
-          - type: picture-entity
-            entity: camera.basement_motion_snapshot
-
-##################################################
+          - type: horizontal-stack
+            cards:
+              - type: custom:firetv-card
+                entity: media_player.living_room_firetv_2
+                name: TV Remote
+                tv: true
+                power:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: "input keyevent 26"
+                    entity_id: media_player.living_room_firetv_2
+                back:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: BACK
+                    entity_id: media_player.living_room_firetv_2
+                home:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: HOME
+                    entity_id: media_player.living_room_firetv_2
+                down:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: DOWN
+                    entity_id: media_player.living_room_firetv_2
+                up:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: UP
+                    entity_id: media_player.living_room_firetv_2
+                left:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: LEFT
+                    entity_id: media_player.living_room_firetv_2
+                select:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: "input keyevent 23"
+                    entity_id: media_player.living_room_firetv_2
+                right:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: RIGHT
+                    entity_id: media_player.living_room_firetv_2
+                reverse:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: input keyevent 89
+                    entity_id: media_player.living_room_firetv_2
+                pauseplay:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: input keyevent 85
+                    entity_id: media_player.living_room_firetv_2
+                forward:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: input keyevent 90
+                    entity_id: media_player.living_room_firetv_2
+                menu:
+                  service: androidtv.adb_command
+                  service_data:
+                    command: MENU
+                    entity_id: media_player.living_room_firetv_2
+  ##################################################
 
   - title: Climate
     path: climate
     icon: mdi:gauge
     cards:
-      - id: 6a88e04c67024e6ca1952d68c40f4ad9  # Automatically created id
+      - id: 6a88e04c67024e6ca1952d68c40f4ad9 # Automatically created id
         type: entities
         title: Current Conditions
         show_header_toggle: false
@@ -549,53 +327,34 @@ views:
           - sensor.dark_sky_summary
           - sensor.dark_sky_temperature
           - sensor.dark_sky_apparent_temperature
-          - sensor.dark_sky_humidity
-          - sensor.dark_sky_pressure
-          - sensor.dark_sky_cloud_coverage
           - sensor.dark_sky_precip_intensity
           - sensor.dark_sky_precip
 
-      - id: 94a59971fe914b669bcf5967f8f8619e  # Automatically created id
+      # - id: b1dfcb1f57cc428184dde82853ecd065 # Automatically created id
+      #   type: custom:entity-attributes-card
+      #   title: Current Weather Alerts
+      #   filter:
+      #     include:
+      #       - key: sensor.dark_sky_alerts.title*
+      #         name: Type
+      #       - key: sensor.dark_sky_alerts.description*
+      #         name: Details
+
+      - id: 94a59971fe914b669bcf5967f8f8619e # Automatically created id
         type: thermostat
         title: Upstairs
         show_header_toggle: false
         entity: climate.glycol_thermostat
         #entity: climate.hallway_glycol
-      - id: 23254aaa3  # Automatically created id
-        type: entities
-        title: Schedy
-        show_header_toggle: false
-        entities:
-          - schedy_room.schedy_heating_whole_house
 
-      - id: 94a59971fe911b669bcf5967f8f8619e  # Automatically created id
+      - id: 94a59971fe911b669bcf5967f8f8619e # Automatically created id
         type: thermostat
         title: Basement
         show_header_toggle: false
         entity: climate.basement
 
-      - id: d8d0c5ecc646453bb9caf9e7adc7df77  # Automatically created id
-        type: entities
-        title: Living Room
-        show_header_toggle: false
-        entities:
-          - sensor.living_room_temperature
-          - sensor.living_room_humidity
-          - sensor.living_room_pressure
-          - sensor.living_room_tph_battery
-          - sensor.living_room_motion_sensor_temperature
 
-      - id: fb769407d8ab494896cfb32b88435881  # Automatically created id
-        type: entities
-        title: Master Bedroom
-        show_header_toggle: false
-        entities:
-          - sensor.master_bedroom_temperature
-          - sensor.master_bedroom_humidity
-          - sensor.master_bedroom_pressure
-          - sensor.master_bedroom_tph_battery
-
-      - id: 15cee4ae7bca4484bf102cbfb8cb1369  # Automatically created id
+      - id: 15cee4ae7bca4484bf102cbfb8cb1369 # Automatically created id
         type: entities
         title: Guest Bedroom
         show_header_toggle: false
@@ -604,510 +363,3 @@ views:
           - sensor.guest_room_humidity
           - sensor.guest_room_pressure
           - sensor.guest_room_tph_battery
-
-      - id: 5994ce7bb4264b2b92e398bdda4fc8cd  # Automatically created id
-        type: entities
-        title: Kitchen
-        show_header_toggle: false
-        entities:
-          - sensor.kitchen_temperature
-          - sensor.kitchen_humidity
-          - sensor.kitchen_pressure
-          - sensor.kitchen_tph_battery
-
-      - id: 11404d547dae4a7b9e50997fee3fa983  # Automatically created id
-        type: entities
-        title: Bathroom
-        show_header_toggle: false
-        entities:
-          - sensor.bathroom_temperature
-          - sensor.bathroom_humidity
-          - sensor.bathroom_pressure
-          - sensor.bathroom_tph_battery
-
-      - id: 11404d547dae4a7b9e50997fee3fa982
-        type: horizontal-stack
-        cards:
-          - type: vertical-stack
-            cards:
-              - type: sensor
-                entity: sensor.basement_temperature
-                graph: line
-              - type: sensor
-                entity: sensor.basement_humidity
-                graph: line
-              - type: sensor
-                entity: sensor.basement_tph_battery
-          - type: vertical-stack
-            cards:
-              - type: sensor
-                entity: sensor.garage_temperature
-                graph: line
-              - type: sensor
-                entity: sensor.garage_humidity
-                graph: line
-              - type: sensor
-                entity: sensor.garage_tph_battery
-
-##################################################
-
-  - title: Plants
-    path: plants
-    icon: mdi:tree
-    cards:
-      - id: 0ed0e3ae844d4a74a304d86fa6064f60  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: plant-status
-            entity: plant.east_hanging_nepenthes
-          - type: plant-status
-            entity: plant.west_hanging_nepenthes
-          - type: plant-status
-            entity: plant.four_inch_nepenthes
-      - id: a3319591821a40969039b78d93f13e6f  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: plant-status
-            entity: plant.orchid
-
-##################################################
-
-  - title: Clean
-    path: cleaning
-    icon: mdi:washing-machine
-    badges:
-      - input_select.washer_state
-    cards:
-      - id: 0ed0e3ae844d4a74a304d86fa6064f60  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: glance
-            title: Cleaning Sensors
-            entities:
-              - binary_sensor.dishwasher
-              - binary_sensor.dishwasher_running
-              - binary_sensor.washer
-              - binary_sensor.washing_machine_running
-              - binary_sensor.washer_door
-              - binary_sensor.dryer
-              - binary_sensor.dryer_running
-          - type: custom:gauge-card
-            title: Water Softener Salt Level
-            entity: sensor.water_softener_salt_level
-            min: 100
-            max: 900
-            severity:
-              green: 100
-              amber: 750
-              red: 820
-      - id: 1ed69694b5244ca59bbdb9339a083865  # Automatically created id
-        type: entities
-        title: Vacuum
-        show_header_toggle: false
-        entities:
-          - vacuum.rockrobo
-      - type: 'custom:valetudo-map-card'
-        entity: sensor.xiaomi_map
-        rotate: 0
-        crop:
-          top: 0
-          bottom: 0
-          left: 0
-          right: 0
-        min_height: 0
-      # - type: picture-entity
-      #   entity: camera.rockrobo_map
-      #   name: Vacuum Map
-
-
-##################################################
-
-  - title: Batteries
-    path: batteries
-    icon: mdi:battery
-    cards:
-      - type: horizontal-stack
-        cards:
-          - id: 4291f0758ffa4e57b68c00a487c2f796  # Automatically created id
-            type: custom:auto-entities
-            card:
-              type: entities
-              title: Status
-              show_header_toggle: false
-            filter:
-              include:
-                - entity_id: sensor.*battery*
-                #- entity_id: group.*battery*
-#          - id: 
-#            type: entities
-#            title: Battery Alert Config
-#            show_header_toggle: false
-#            entities:
-#              - input_number.battery_alert_threshold_min
-#              - input_number.battery_alert_threshold_max
-#              - input_text.delete_battery_sensor
-#              - automation.battery_persistent_notification
-#              - automation.battery_persistent_notification_clear
-#              - automation.battery_sensor_from_attributes
-#              - automation.update_battery_status_group_members
-#              - automation.delete_battery_sensor
-
-##################################################
-
-  # - title: Blocked Domains
-  #   path: adblock
-  #   icon: mdi:close-circle-outline
-  #   cards:
-  #     - id: 595f22fe1e124639949d79b6b9423f73  # Automatically created id
-  #       type: entities
-  #       title: PiHole Data
-  #       show_header_toggle: false
-  #       entities:
-  #         - sensor.pi_hole_dns_unique_clients
-  #         - sensor.pi_hole_dns_queries_today
-  #         - sensor.pi_hole_ads_blocked_today
-  #         - sensor.pi_hole_ads_percentage_blocked_today
-  #         - sensor.iot_pihole_dns_unique_clients
-  #         - sensor.iot_pihole_dns_queries_today
-  #         - sensor.iot_pihole_ads_blocked_today
-  #         - sensor.iot_pihole_ads_percentage_blocked_today
-
-##################################################
-
-  - title: Curling
-    path: curling
-    icon: mdi:curling
-    cards:
-      - id: 42b1dabdbcc4161480b27d6f1a862363  # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: entities
-            title: Curling Sensors
-            show_header_toggle: false
-            entities:
-              - binary_sensor.curling_season
-              - sensor.occ_time
-              - sensor.occ_distance
-              - sensor.heading_occ
-              - sensor.spcc_time
-              - sensor.spcc_distance
-              - sensor.heading_spcc
-      - id: 42b1dabdbcc4421480b27d6f1a862363  # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: entities
-            title: Curling Automations
-            show_header_toggle: true
-            entities:
-              - automation.leave_home_for_curling
-              - automation.return_home_from_occ
-              - automation.return_home_from_spcc
-##################################################
-
-  - title: Vacation
-    path: vacation
-    icon: mdi:airport
-    cards:
-      - id: 42b1dabdbcc4461480b17d6f1a862363  # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: entities
-            title: Trip Status
-            show_header_toggle: false
-            entities:
-              - input_boolean.trip
-              - binary_sensor.planned_vacation_calendar
-              - binary_sensor.planned_work_trip_calendar
-              - binary_sensor.sensed_trip
-              - binary_sensor.flying_home_today
-              - sensor.turn_off_time
-
-      - id: dd07fd1cdecc4cae8116eb6fe12f52f4  # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: '1.0'
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - switch.front_door
-                - scene.vacation_group_1
-
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: '2.0'
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - light.master_bedroom
-                - switch.stairs
-                - scene.vacation_group_2
-
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: '3.0'
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - light.master_bedroom
-                - light.kitchen_table
-                - scene.vacation_group_3
-
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: '4.0'
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - light.kitchen_table
-                - light.office_lamp
-                - switch.stairs
-                - switch.front_door
-                - scene.vacation_group_4
-
-##################################################
-
-  - title: Automations
-    path: automations
-    icon: mdi:robot
-    cards:
-
-      - id: d02d7c7c79b74a0387fceda16b11acc3  # Automatically created id
-        type: entities
-        title: Motion Sensors
-        show_header_toggle: false
-        entities:
-          - binary_sensor.hallway_motion
-          - binary_sensor.office_motion
-          - binary_sensor.master_bedroom_motion
-          - binary_sensor.downstairs_motion
-          - binary_sensor.living_room_motion_sensor
-          - binary_sensor.livingroom_motion_sensor
-          - binary_sensor.basement_motion_sensor
-          - binary_sensor.master_bed_occupancy
-
-      - id: 234a52
-        type: entities
-        title: Meetings
-        show_header_toggle: false
-        entities:
-          - input_datetime.next_work_meeting
-
-      - id: 34563563a4
-        type: entities
-        title: Proximities
-        show_header_toggle: false
-        entities:
-          - proximity.home
-          - proximity.msp
-          - proximity.occ
-          - proximity.spcc
-          - proximity.twincities
-          - proximity.work
-
-      - id: 143924bcb6924b7e86ec03ee0830cad0  # Automatically created id
-        type: entities
-        title: Guest Mode
-        show_header_toggle: false
-        entities:
-          - input_boolean.guest_mode
-
-      - id: 2be0072ce5cd47c3b341d309e38d782b  # Automatically created id
-        type: glance
-        title: Travel Sensors
-        entities:
-          - sensor.home_distance
-          - sensor.home_time
-          - sensor.heading_home
-          - sensor.twincities
-          - binary_sensor.test_homeward
-          - sensor.me_to_home
-          - sensor.the_brewery_eta
-          - input_select.trip_origin
-          - sensor.zeke_direction
-
-      - id: 528d0d75ddc449a4ba94d3c4f146b66d  # Automatically created id
-        type: entities
-        title: Logging Level
-        show_header_toggle: false
-        entities:
-          - input_select.log_level
-
-      - id: 774ca4f2a22a41689bec9cd409fe8515  # Automatically created id
-        type: entities
-        title: Vacation Light Settings
-        show_header_toggle: false
-        entities:
-          - input_boolean.trip
-          - input_number.random_vacation_light_group
-          - input_number.random_hour
-          - input_number.random_minute
-
-      - id: bb98e6ee50f247c88f017f8402091874  # Automatically created id
-        type: custom:auto-entities
-        card:
-          type: entities
-          title: All Automations
-        filter:
-          include:
-            - domain: automation
-
-##################################################
-  
-  - title: Testing
-    path: testing
-    icon: mdi:test-tube
-    cards:
-      - type: history-graph
-        title: Rate of Temp Change
-        entities:
-          - sensor.rate_of_house_temp_change_5m
-          - sensor.rate_of_house_temp_change_30m
-          - sensor.rate_of_house_temp_change_1h
-      - type: history-graph
-        title: Default Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_default_house_temp_change
-      - type: history-graph
-        title: Default 2.5-5 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_2_5_5_minutes_house_temp_change
-      - type: history-graph
-        title: Default 5-5 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_5_5_minutes_house_temp_change
-      - type: history-graph
-        title: Default 5-10 minDerivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_5_10_minutes_house_temp_change
-      - type: history-graph
-        title: Default 10-10 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_10_10_minutes_house_temp_change
-      - type: history-graph
-        title: Default 30 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_30_minutes_house_temp_change
-      - type: history-graph
-        title: Default 60 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_60_minutes_house_temp_change
-      - id: 5734813fa25a4be8be66c92c4673fa2d  # Automatically created id
-        type: entities
-        title: Bayesian Presence Status and Sensors
-        show_header_toggle: false
-        entities:
-          - person.ryan
-          - binary_sensor.bayesian_zeke_home
-          - device_tracker.bayesian_zeke_home
-          - sensor.zeke_speed
-          - device_tracker.wethop
-          - device_tracker.wethop_wifi
-          - device_tracker.arrival_sensor
-          # - binary_sensor.nest_home
-          - device_tracker.android_1
-          - device_tracker.honda
-      - id: 142132234abbd3333
-        title: Trackers
-        type: map
-        entities:
-          - device_tracker.android_1
-          - device_tracker.honda
-          - device_tracker.wethop
-          - device_tracker.bayesian_zeke_home
-      - type: entities
-        title: Curling Sensors
-        show_header_toggle: false
-        entities:
-          - binary_sensor.curling_season
-          - sensor.occ_time
-          - sensor.occ_distance
-          - sensor.heading_occ
-          - sensor.spcc_time
-          - sensor.spcc_distance
-          - sensor.heading_spcc
-      - type: history-graph
-        title: Circadian Brightness
-        hours_to_show: 72
-        entities:
-          - sensor.circadian_brightness
-          - sensor.circadian_temperature
-
-##################################################
-
-  - title: ZHA
-    path: zha
-    panel: true
-    cards:
-      - id: 42b1dabdbcc4461480b17d6f1a862363  # Automatically created id
-        type: 'custom:zha-network-card'
-        clickable: true
-        columns:
-          # - prop: area_id
-          #   name: Area
-          - prop: name
-            name: Name
-          - attr: available
-            id: available
-            modify: x || "false"
-            name: Online
-          - attr: manufacturer
-            name: Manufacturer
-          - attr: model
-            name: Model
-          - attr: ieee
-            name: IEEE
-          - prop: nwk
-            name: NWK
-          - attr: rssi
-            name: RSSI
-          - attr: lqi
-            name: LQI
-          - attr: last_seen
-            name: Last Seen
-          - attr: power_source
-            name: Power Source
-          - attr: quirk_class
-            name: Quirk
-
-##################################################
-
-  - title: ZHA Network Viz
-    path: zha-net
-    panel: true
-    cards:
-      - id: 42b1dabdbcc4465680b17d6f1a862263  # Automatically created id
-        type: 'custom:zha-network-visualization-card'
-
-  # - path: other # Automatically created id
-  #   title: Other items
-  #   icon: mdi:settings
-  #   cards:
-  #     - id: d24b28e65a0947e5ae5a5cf71ebd79fa  # Automatically created id
-  #       type: custom:tracker-card
-  #       title:
-  #       trackers:
-  #         - sensor.custom_card_tracker
-  #         - sensor.custom_component_tracker
-
-
