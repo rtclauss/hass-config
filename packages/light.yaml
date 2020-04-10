@@ -607,6 +607,33 @@ automation:
         - condition: zone
           entity_id: person.ryan
           zone: zone.home
+        - condition: numeric_state
+          entity_id: sensor.dark_sky_cloud_coverage
+          below: 20
+    action:
+      - service: light.turn_on
+        entity_id: 
+          - light.kitchen_sink
+          - light.living_room_all
+        data:
+          # Hour-long transition before sunset.
+          transition: 5400
+
+  - alias: transition_on_lights_early_when_cloudy_when_home_near_sunset
+    id: transition_on_lights_early_when_cloudy_when_home_near_sunset
+    trigger:
+      platform: sun
+      event: sunset
+      offset: "-04:00:00"
+    condition:
+      condition: and
+      conditions:
+        - condition: zone
+          entity_id: person.ryan
+          zone: zone.home
+        - condition: numeric_state
+          entity_id: sensor.dark_sky_cloud_coverage
+          above: 20
     action:
       - service: light.turn_on
         entity_id: 
@@ -916,16 +943,14 @@ light:
   - platform: group
     name: living_room_all
     entities:
-      - light.right_lamp
-      - light.left_lamp
+      - light.living_room_flanking_tv
       - light.tv
       - light.pendant_lamp
 
   - platform: group
     name: living_room_all_except_tv
     entities:
-      - light.right_lamp
-      - light.left_lamp
+      - light.living_room_flanking_tv
       - light.pendant_lamp
 
   # Switch to ZHA Group
