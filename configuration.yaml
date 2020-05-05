@@ -71,8 +71,8 @@ http:
   trusted_proxies:
     - !secret fermentor_ipv4
     - !secret fermentor_ipv6
-  ip_ban_enabled: true
-  login_attempts_threshold: 5
+  #ip_ban_enabled: true
+  #login_attempts_threshold: 5
 
 # Enables support for tracking state changes over time.
 history:
@@ -178,54 +178,6 @@ panel_custom:
 
 cloud:
   alexa:
-    filter:
-      include_entities:
-        - input_boolean.guest_mode
-        - scene.reset_living_room
-        - scene.bedroom_prep
-        - scene.chill
-      include_domains:
-        - light
-        - switch
-        - script
-        - fan
-        - climate
-      exclude_entities:
-        - switch.livingroom_motion_tracking
-        - switch.basement_night_mode
-        - switch.livingroom_yellow_led
-        - switch.basementcam_ir_led
-        - switch.livingroom_motion_send_mail
-        - switch.livingroom_night_mode_auto
-        - switch.basementcam_ir_filter
-        - switch.basement_motion_send_mail
-        - switch.basement_ir_led
-        - switch.basement_mjpeg_rtsp_server
-        - switch.livingroom_ir_filter
-        - switch.basementcam_motion_tracking
-        - switch.basementcam_blue_led
-        - switch.livingroom_blue_led
-        - switch.hass
-        - switch.basementcam_yellow_led
-        - switch.basement_motion_tracking
-        - switch.livingroom_mjpeg_rtsp_server
-        - switch.basement_h264_rtsp_server
-        - switch.livingroom_motion_detection
-        - switch.basement_ir_filter
-        - switch.basement_motion_detection
-        - switch.basementcam_mjpeg_rtsp_server
-        - switch.basement_blue_led
-        - switch.basementcam_night_mode_auto
-        - switch.basementcam_motion_detection
-        - switch.livingroom_h264_rtsp_server
-        - switch.livingroom_ir_led
-        - switch.basement_yellow_led
-        - switch.basement_night_mode_auto
-        - switch.livingroom_motion_tracking
-        - switch.basement_night_mode
-        - switch.livingroom_yellow_led
-        - switch.basementcam_h264_rtsp_server
-        - switch.basementcam_night_mode
     entity_config:
       input_boolean.guest_mode:
         name: Guest Mode
@@ -236,6 +188,9 @@ cloud:
       scene.reset_living_room:
         name: Reset Living Room
         description: Reset Living Room lights
+      scene.reset_bedroom:
+        name: Reset Bedroom
+        description: Reset bedroom Lights
       switch.deck_led_string:
         name: Deck Lights
         description: Deck LED String of lights
@@ -271,6 +226,10 @@ lovelace:
       type: module
     - url: /hacsfiles/firetv-card/firetv-card.js
       type: js
+    - type: module
+      url: /hacsfiles/flex-table-card/flex-table-card.js
+    - url: /hacsfiles/lovelace-battery-entity/battery-entity.js?v=1
+      type: module
   dashboards:
     db-pc:
       mode: yaml
@@ -320,6 +279,9 @@ zha:
 zwave:
   usb_path: /dev/ttyUSB0
   network_key: !secret zwave_network_key
+  device_config:
+    switch.stairs:
+      polling_intensity: 2
 
 system_health:
 
@@ -375,3 +337,4 @@ circadian_lighting:
 
   #positive makes later sunset
   sunset_offset: "+01:00:00"
+
