@@ -255,6 +255,10 @@ homeassistant:
     scene.bedroom_prep:
       <<: *customize
       friendly_name: Bedroom Prep
+
+    scene.reset_bedroom:
+      <<: *customize
+      friendly_name: Reset Bedroom
     
     scene.reset_living_room:
       <<: *customize
@@ -702,6 +706,40 @@ automation:
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
           transition: 5
 
+
+## off is handled by other automations
+  - id: turn_on_bedroom_light_when_leave_bathroom
+    alias: turn_on_bedroom_light_when_leave_bathroom
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: 'on'
+      - platform: state
+        entity_id: binary_sensor.hallway_motion
+        to: 'on'
+    condition:
+      condition: and
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.bayesian_zeke_home
+          zone: zone.home
+        - condition: state
+          entity_id: switch.bathroom_light_fan_switch
+          state: 'on'
+        - condition: state
+          entity_id: light.master_bedroom
+          state: 'off'
+    action:
+      - service: light.turn_on
+        data_template:
+          entity_id: light.master_bedroom
+          transition: 5
+          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.master_bedroom_auto_on
+
   - id: turn_off_bedroom_light_when_dark_in_room
     alias: turn_off_bedroom_light_when_dark_in_room
     trigger:
@@ -1018,12 +1056,22 @@ proximity:
 # Scenes
 ########################
 scene:
+  - name: reset_bedroom
+    entities:
+      light.master_bedroom_fan_light:
+        state: "off"
+      light.master_bedroom:
+        state: "on"
+        brightness_pct: 75
+        color_temp: 500
+        transition: 10
+
   - name: reset_living_room
     entities:
       light.living_room_all_except_tv:
         state: "on"
         brightness_pct: 100
-        color_temp: 500
+        color_temp: 386
         transition: 10
       light.tv:
         state: "on"
@@ -1096,6 +1144,8 @@ scene:
         transition: 10
         brightness: 5
       switch.humidifier: "on"
+      light.master_bedroom_fan_light:
+        state: "off"
       # fan.master_bedroom_fan:
       #   state: "on"
       #   speed: "smart"
@@ -1126,10 +1176,21 @@ sensor:
 ########################
 switch:
   - platform: circadian_lighting
+    name: rest_of_house
     lights_ct:
       - light.master_bedroom
       - light.hallway_light
       - light.office_lamp
+    initial_transition: 30 #seconds
+
+  - platform: circadian_lighting
+    name: living_room
+    initial_transition: 30 #seconds
+    disable_brightness_adjust: true
+    min_brightness: 10
+    lights_ct:
+      - light.living_room_all_except_tv
+
   # - platform: flux
   #   lights:
   #   #- light.living_room_all_except_tv
