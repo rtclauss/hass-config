@@ -85,12 +85,12 @@ homeassistant:
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
       friendly_name: "Turn off all lights when bedroom lights turn off"
-      icon: mdi:hotel
+      icon: mdi:bed
     
     automation.turn_on_bedroom_light_at_night:
       <<: *customize
       friendly_name: "Turn on bedroom lights at night"
-      icon: mdi:hotel
+      icon: mdi:bed
 
     ################################################
     ## Binary Sensors
@@ -122,7 +122,7 @@ homeassistant:
     input_boolean.master_bedroom_auto_on:
       <<: *customize
       friendly_name: "Master Bedroom Light Automatically Turned on"
-      icon: mdi:hotel
+      icon: mdi:bed
       hidden: true
 
     ################################################
@@ -135,12 +135,12 @@ homeassistant:
     light.bedroom_lamp:
       <<: *customize
       friendly_name: "Bedroom Lamp"
-      icon: mdi:hotel
+      icon: mdi:bed
 
     light.bedroom_lamp_2:
       <<: *customize
       friendly_name: "Bedroom Lamp"
-      icon: mdi:hotel
+      icon: mdi:bed
 
     light.christmas_lights:
       <<: *customize
@@ -205,7 +205,7 @@ homeassistant:
     light.master_bedroom:
       <<: *customize
       friendly_name: "Master Bedroom"
-      icon: mdi:hotel
+      icon: mdi:bed
 
     light.office:
       <<: *customize
@@ -435,7 +435,7 @@ automation:
       - service: light.turn_on
         data_template:
           entity_id: light.hallway_light
-          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: 2
 
   - id: hallway_light_off_at_night
@@ -506,7 +506,7 @@ automation:
       - service: light.turn_on
         data_template:
           entity_id: light.master_bedroom
-          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
       - service: homeassistant.turn_on
         data:
@@ -526,7 +526,7 @@ automation:
       - service: light.turn_on
         data_template:
           entity_id: light.office_lamp
-          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
 
   - id: office_light_off_at_night
@@ -680,9 +680,15 @@ automation:
     - service: light.turn_off
       entity_id: 'all'
     - service: fan.turn_off
-      entity_id: 'all'
+      entity_id: fan.living_room_fan
     - service: switch.turn_on
       entity_id: switch.humidifier
+    - service: switch.turn_off
+      entity_id:
+        - switch.stairs
+        - switch.front_door
+        - switch.deck
+        - switch.lava_lamp
     # - service: fan.turn_on
     #   data:
     #     entity_id: fan.master_bedroom_fan
@@ -696,13 +702,13 @@ automation:
         to: 'on'
     condition:
       condition: time
-      after: '22:00:00'
+      after: '20:00:00'
       before: '01:00:00'
     action:
       - service: light.turn_on
         data_template:
           entity_id: light.master_bedroom
-          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
           transition: 5
 
@@ -734,7 +740,7 @@ automation:
         data_template:
           entity_id: light.master_bedroom
           transition: 5
-          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
       - service: homeassistant.turn_on
         data:
@@ -780,9 +786,9 @@ automation:
         - condition: zone
           entity_id: device_tracker.bayesian_zeke_home
           zone: zone.home
-        - condition: sun
-          after: sunset
-          after_offset: "-01:00:00"
+        # - condition: sun
+        #   after: sunset
+        #   after_offset: "-01:00:00"
         - condition: time
           after: '09:00:00'
         - condition: state
@@ -793,7 +799,7 @@ automation:
         data_template:
           entity_id: light.master_bedroom
           transition: 5
-          kelvin: "{{ state_attr('sensor.circadian_values', 'colortemp') | int }}"
+          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
       - service: homeassistant.turn_on
         data:
@@ -1100,14 +1106,10 @@ scene:
 
   - name: chill
     entities:
-      light.right_lamp:
+      light.living_room_flanking_tv:
         state: "on"
         brightness_pct: 25
-        transition: 10
-      light.left_lamp:
-        state: "on"
-        brightness_pct: 25
-        transition: 10
+        transition: 120
 
   - name: cloudy_arrive_home
     entities:
@@ -1164,11 +1166,11 @@ sensor:
       circadian_brightness:
         friendly_name: "Circadian Brightness"
         unit_of_measurement: '%'
-        value_template: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') }}"
+        value_template: "{{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') |int }}"
       circadian_temperature:
         friendly_name: "Circadian Color Temp"
         unit_of_measurement: '°K'
-        value_template: "{{ state_attr('sensor.circadian_values', 'colortemp') }}"        
+        value_template: "{{ state_attr('sensor.circadian_values', 'colortemp') }}"
 
 
 ########################
