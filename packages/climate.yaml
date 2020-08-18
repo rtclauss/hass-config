@@ -478,12 +478,13 @@ sensor:
 
   - platform: template
     sensors:
-      turn_off_time:
-        entity_id:
-          - input_number.random_hour
-          - input_number.random_minute
-        value_template: >-
-          {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
+      # I don't think this is actually used for anything except to display the vacation off time in the UI...
+      # turn_off_time:
+      #   entity_id:
+      #     - input_number.random_hour
+      #     - input_number.random_minute
+      #   value_template: >-
+      #     {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
 
       rate_of_house_temp_change_5m:
         entity_id:
@@ -497,7 +498,7 @@ sensor:
           - sensor.house_temperature_stats_10m
         unit_of_measurement: '°F/5 minute'
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate') * 60.0 * 5.0 |float}}
+          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate')|float * 60.0 * 5.0 |float}}
 
       rate_of_house_temp_change_1h:
         entity_id:
@@ -537,7 +538,7 @@ sensor:
     entity_id: sensor.average_house_temp
     max_age:
       minutes: 10
-    precision: 8
+    precision: 10
 
   - platform: statistics
     name: house_temperature_stats_30m
