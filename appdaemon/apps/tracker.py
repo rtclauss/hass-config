@@ -33,7 +33,7 @@ class BayesianDeviceTracker(hass.Hass):
         sensor_state = self.get_state(entity, attribute="all")
         if sensor_state['state'] == 'on':
             config = self.get_plugin_config()
-            #self.log("bayes says I am home")
+            self.log("bayes_updated and bayes sensor says I am home")
             #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
@@ -110,9 +110,30 @@ class BayesianDeviceTracker(hass.Hass):
     def run_update(self, bayesian_state, sensor_state):
         #self.log("in run_update")
         gps_attributes = sensor_state["attributes"]
-        #self.log("sensor state: {}".format(sensor_state))
+        attributes = copy.deepcopy(gps_attributes)
+        self.log("sensor state: {}".format(sensor_state))
         #self.log("here is the gps attribute data: {}".format(gps_attributes))
         # self.log("do we have everything: {}".format(gps_attributes.viewKeys() & {"latitude", "longitude"})
+
+        # iOS apps use m/s as the speed, not mph.  Need to convert.
+        if 'speed' in attributes.keys() and 'wethop' in sensor_state['entity_id']:
+            if attributes['speed'] == -1:
+                self.log("ios says speed is -1, setting speed to 0")
+                attributes['speed'] = 0.0
+            else:
+                attributes['speed'] = attributes['speed'] / 0.44704
+            self.log("new ios speed is: {}".format(
+                attributes['speed']))
+        elif 'speed' in attributes.keys():
+            #Traccar reports speed in knots
+            attributes['speed'] = attributes['speed'] *1.151
+            self.log("traccar entity {} says new speed is: {}".format(
+                sensor_state['entity_id'],
+                attributes['speed']))
+        else:
+            attributes['speed'] = 0.0
+            self.log("No 'speed' in attributes in update from sensor data: {}".format(sensor_state))
+
 
         if bayesian_state['state'] == "on":
             config = self.get_plugin_config()
@@ -121,7 +142,7 @@ class BayesianDeviceTracker(hass.Hass):
             #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
-                              "course": 0.0, "speed": 0.0, "home_probability": bayesian_state["attributes"]["probability"], "latitude": config["latitude"], "longitude": config["longitude"]},
+                              "course": 0.0, "speed": attributes['speed'], "home_probability": bayesian_state["attributes"]["probability"], "latitude": config["latitude"], "longitude": config["longitude"]},
                               gps=[config["latitude"], config["longitude"]])
         else:
             #self.log("bayes says I am away")
@@ -138,20 +159,6 @@ class BayesianDeviceTracker(hass.Hass):
                         # self.log("{}".format(attributes['battery']))
                         probability = bayesian_state["attributes"]["probability"]
                         attributes['home_probability'] = probability
-
-                        # iOS apps use m/s as the speed, not mph.  Need to convert.
-                        if 'speed' in attributes.keys() and 'wethop' in sensor_state['entity_id']:
-                            if attributes['speed'] == -1:
-                                attributes['speed'] = 0.0
-                            else:
-                                attributes['speed'] = attributes['speed'] / 0.44704
-                            self.log("new speed is: {}".format(
-                                attributes['speed']))
-                        else:
-                            #Traccar reports speed in knots
-                             attributes['speed'] = attributes['speed'] *1.151
-                             self.log("new speed is: {}".format(
-                                attributes['speed']))
 
                         # We can get false positives, like WetHop flashing home on a geofence enter/exit.
                         # Use the attributes of the bayesian sensor to determine if the transition is correct
