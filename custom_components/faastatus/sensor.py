@@ -16,7 +16,9 @@ _LOGGER = logging.getLogger(__name__)
 available_airports = ["BOS", "LGA", "TEB", "EWR", "JFK", "PHL", "PIT", "IAD", "BWI", "DCA", "RDU", "CLT", "ATL", "MCO", "TPA", "MCO", "FLL", "MIA", "DTW", "CLE", "MDW", "ORD", "IND", "CVG", "BNA", "MEM", "STL", "MCI", "MSP", "DFW", "IAH", "DEN", "SLC", "PHX", "LAS", "SAN", "LAX", "SJC", "SFO", "PDX", "SEA"]
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
-    {vol.Required(CONF_ID): vol.In(available_airports)}
+    {
+        vol.Required(CONF_ID): cv.string
+    }
 )
 
 URL = "https://soa.smext.faa.gov/asws/api/airport/status/{}"
@@ -38,13 +40,15 @@ async def async_setup_platform(
             response = await session.get(URL.format(airport))
             data = await response.json()
 
-            if "status" in data:
-                if data["status"] == 404:
-                    _LOGGER.critical("Airport '%s' is not valid", airport)
-                    return False
-
             _LOGGER.debug(data)
-            name = data["Name"]
+            try:
+                name = data["Name"]
+            except KeyError:
+                _LOGGER.error("Airport '%s' is not valid", airport)
+                return False
+            supported = data["SupportedAirport"]
+            if not supported:
+                _LOGGER.warn("Caution: '%s' is not a supported airport. Data retrieved may not be correct.", airport)
 
     except Exception as exception:  # pylint: disable=broad-except
         _LOGGER.error("[%s] %s", sys.exc_info()[0].__name__, exception)
