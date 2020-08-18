@@ -75,14 +75,12 @@ alarm_control_panel:
   - platform: manual
     name: home_alarm
     code: !secret alarm_code
-    pending_time: 30
     delay_time: 30
     trigger_time: 4
     disarmed:
       trigger_time: 0
     armed_home:
-      pending_time: 0
-      delay_time: 0
+      delay_time: 30
 
 ########################
 # Automations
@@ -172,6 +170,8 @@ automation:
         message: > 
           Stream from {{ trigger.to_state.attributes.friendly_name }}
         data:
+          attachment:
+            content-type: jpeg
           push:
             category: camera
           entity_id: >-
@@ -239,7 +239,7 @@ automation:
         message: "Something happened at home!"
         data:
           push:
-            badge: 5
+            badge: 1
             #sound: <SOUND FILE HERE>
             category: "alarm" # Needs to match the top level identifier you used in the ios configuration
           action_data: # Anything passed in action_data will get echoed back to Home Assistant.
