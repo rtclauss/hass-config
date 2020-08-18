@@ -6,6 +6,8 @@ homeassistant:
   longitude: !secret home_longitude
   elevation: !secret home_elevation
   packages: !include_dir_named packages
+  external_url: !secret public_url
+  internal_url: !secret public_url
   auth_providers:
     - type: homeassistant
     - type: legacy_api_password
@@ -28,15 +30,16 @@ ios:
 config:
 
 logger:
-  default: warn
-  #default: info
+  #default: warn
+  default: info
   #homeassistant.components.device_tracker: debug
   #homeassistant.components.media_player: debug
   #pytraccar: debug
   #zha-quirks: debug
 #  default: warn
 #  default: debug
-# logs:
+#  logs:
+#    hass_nabucasa.iot: debug
 #   custom_components.circadian_lighting: debug
 #   custom_components.circadian_lighting.sensor: debug
 #   custom_components.circadian_lighting.switch: debug
@@ -66,7 +69,6 @@ logger:
 #    homeassistant.components.flux: debug
 
 http:
-  base_url: !secret public_url
   use_x_forwarded_for: true
   trusted_proxies:
     - !secret fermentor_ipv4
@@ -100,6 +102,7 @@ logbook:
       - automation.battery_persistent_notification
       - automation.battery_persistent_notification_clear
       - sensor.xiaomi_map
+      - binary_sensor.esp32_whole_bed_pressure
 
 # Discover some devices automatically
 discovery:
@@ -116,8 +119,6 @@ tts:
 recorder:
   #  db_url: postgresql://@/hass
   db_url: !secret recorder_db_url
-  purge_interval: 1
-  purge_keep_days: 30
   exclude:
     domains:
       - media_player
@@ -143,6 +144,7 @@ recorder:
       - sensor.dark_sky_precip_probability_4
       - sensor.dark_sky_precip_probability_5
       - sensor.dark_sky_precip_probability_6
+      - binary_sensor.esp32_whole_bed_pressure
 
 influxdb:
   host: !secret influx_db_host
@@ -155,6 +157,7 @@ influxdb:
       - camera
       - group
       - clients
+      - input_datetime
       - input_number
       - persistent_notification
       - scene
@@ -165,6 +168,7 @@ influxdb:
       - sensor.date
       - sensor.last_boot
       - sensor.xiaomi_map
+      - binary_sensor.esp32_whole_bed_pressure
 
 google:
   client_id: !secret google_client_id
@@ -202,7 +206,7 @@ lovelace:
       type: module
     - url: /hacsfiles/entity-attributes-card/entity-attributes-card.js
       type: js
-    - url: /hacsfiles/mini-media-player/mini-media-player.js
+    - url: /hacsfiles/mini-media-player/mini-media-player-bundle.js
       type: module
     - url: /hacsfiles/mini-graph-card/mini-graph-card-bundle.js
       type: module
@@ -228,7 +232,7 @@ lovelace:
       type: js
     - type: module
       url: /hacsfiles/flex-table-card/flex-table-card.js
-    - url: /hacsfiles/lovelace-battery-entity/battery-entity.js?v=1
+    - url: /hacsfiles/lovelace-battery-entity/battery-entity.js
       type: module
   dashboards:
     db-pc:
@@ -264,9 +268,9 @@ lovelace:
 #  database_path: /config/zigbee.db
 
 zha:
-  usb_path: /dev/ttyUSB1
+  #usb_path: /dev/ttyUSB1
   #radio_type: deconz
-  radio_type: ezsp
+  #radio_type: ezsp
   database_path: /config/zigbee.db
   enable_quirks: true
   device_config:
