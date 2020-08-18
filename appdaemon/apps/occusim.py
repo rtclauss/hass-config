@@ -65,6 +65,7 @@ class OccuSim(hass.Hass):
 
                 start_p = self.args[step + "start"]
                 start = self.parse_time(start_p)
+                #self.log("start parsed_time is {}".format(start))
                 end_p = self.args.get(step + "end")
                 if end_p != None:
                     end = self.parse_time(end_p)
