@@ -608,7 +608,7 @@ binary_sensor:
           {% endif %}
           
   - platform: bayesian
-    prior: 0.1
+    prior: 0.8
     name: bayesian_zeke_home
     probability_threshold: 0.80
     observations:
@@ -633,8 +633,8 @@ binary_sensor:
       platform: 'state'
       to_state: 'home'
     - entity_id: device_tracker.arrival_sensor
-      prob_given_true: 0.80
-      prob_given_false: 0.21
+      prob_given_true: 0.99
+      prob_given_false: 0.01
       platform: 'state'
       to_state: 'home'
     # - entity_id: binary_sensor.nest_home
@@ -645,8 +645,18 @@ binary_sensor:
     ### Try out the speed sensor
     - entity_id: sensor.zeke_speed
       platform: 'numeric_state'
-      below: 35
+      below: 25
       prob_given_true: 0.60
+    - platform: template
+      prob_given_true: 0.95
+      prob_given_false: 0.05
+      value_template: >-
+        {{ (is_state('sensor.wethop_activity', 'Walking') == True) and (states('sensor.zeke_speed')|float <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
+    - platform: template
+      prob_given_true: 0.95
+      prob_given_false: 0.05
+      value_template: >-
+        {{ (is_state('sensor.wethop_activity', 'Biking') == True) and (states('sensor.zeke_speed')|float <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
       
 
 
@@ -920,7 +930,6 @@ zone:
   - name: Rochester
     latitude: !secret home_latitude
     longitude: !secret home_longitude
-    passive: true
     radius: 56327
     
   - name: SPCC
