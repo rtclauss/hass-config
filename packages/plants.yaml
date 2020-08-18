@@ -217,7 +217,23 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
+  - id: carnivorous_plants_off
+    alias: carnivorous_plants_off
+    trigger:
+      - platform: time
+        at: "20:30:00"
+    action:
+      - service: switch.turn_off
+        entity_id: switch.carnivorous_plants_light
 
+  - id: carnivorous_plants_on
+    alias: carnivorous_plants_on
+    trigger:
+      - platform: time
+        at: "06:30:00"
+    action:
+      - service: switch.turn_on
+        entity_id: switch.carnivorous_plants_light
 ########################
 # Binary Sensors
 ########################
@@ -309,6 +325,14 @@ plant:
       brightness: sensor.orchid_light_intensity
       moisture: sensor.orchid_moisture
       temperature: sensor.orchid_temperature
+
+  terrarium:
+    sensors:
+      battery: sensor.terrarium_battery
+      conductivity: sensor.terrarium_conductivity
+      brightness: sensor.terrarium_light_intensity
+      moisture: sensor.terrarium_moisture
+      temperature: sensor.terrarium_temperature
 
   west_hanging_nepenthes:
     sensors:
@@ -439,7 +463,38 @@ sensor:
     state_topic: haplants/sensor/west_hanging_nepenthes_battery/state
     unit_of_measurement: "%"
     device_class: battery
+
     
+  - platform: mqtt
+    name: terrarium_battery
+    state_topic: haplants/sensor/terrarium_battery/state
+    unit_of_measurement: "%"
+    device_class: battery
+
+  - platform: mqtt
+    name: terrarium_conductivity
+    state_topic: haplants/sensor/terrarium_conductivity/state
+    unit_of_measurement: "\u00b5S/cm"
+    icon: mdi:flash-circle
+
+  - platform: mqtt
+    name: terrarium_light_intensity
+    state_topic: haplants/sensor/terrarium_light_intensity/state
+    unit_of_measurement: "lx"
+    device_class: illuminance
+
+  - platform: mqtt
+    name: terrarium_moisture
+    state_topic: haplants/sensor/terrarium_moisture/state
+    unit_of_measurement: "%"
+    icon: mdi:water-percent
+
+  - platform: mqtt
+    name: terrarium_temperature
+    state_topic: haplants/sensor/terrarium_temperature/state
+    unit_of_measurement: "\u00b0F"
+    device_class: temperature
+
   - platform: mqtt
     name: west_hanging_nepenthes_conductivity
     state_topic: haplants/sensor/west_hanging_nepenthes_conductivity/state
