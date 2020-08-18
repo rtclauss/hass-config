@@ -16,39 +16,54 @@ schedy_heating: # This is our app instance name.
     def guest_mode_on():
       return is_on("input_boolean.guest_mode")
 
+    def egress_open():
+      return is_on("group.egress_points")
+
   schedule_snippets:
     cooling_season:
-      - v: 72
+      - weekdays: 1-5
+        v: 72
         rules:
-          - { start: "20:30", end: "07:00", weekdays: 1-5 }
-          - { start: "20:30", end: "08:30", weekdays: 6-7 }
-      - v: 75
+          - x: "77 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
+          - { start: "20:30", end: "07:00", weekdays: 1-5, v: 72 }
+          - { start: "20:30", end: "08:30", weekdays: 6-7, v: 72 }
+          - x: "74 if zeke_location() == 'home' else Next()"
+      - weekdays: 6-7
+        v: 72
+        rules:
+          - { v: 71, start: "00:00", end: "06:00" }
+          - x: "72 if zeke_location() == 'home' else Next()"
+          - x: "75 if zeke_location() != 'home' else Next()"
+
     heating_season:
       - weekdays: 1-5
+        v: 70
         rules:
-          - x: "60 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
+          - x: "63 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
           - x: |
               current_time = datetime.datetime.strptime(state('sensor.time'), '%H:%M').time()
               wakeup_time = datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S')
               revert_schedule_time = datetime.datetime.strptime("10:00:00", '%H:%M:%S').time()
               wakeup_prep = (wakeup_time - datetime.timedelta(hours=1, minutes=30)).time()
-
-              print("rtclauss: {} >= {} is {}".format(current_time, wakeup_prep, (current_time >= wakeup_prep)))
+              
+              # Following line prints to AppDaemon Log (In the Hassio Add-on Page)
+              #print("rtclauss: {} >= {} is {}".format(current_time, wakeup_prep, (current_time >= wakeup_prep)))
               if current_time >= wakeup_prep and current_time <= revert_schedule_time and is_off('input_boolean.trip') and zeke_location() == 'home' and is_on('binary_sensor.workday_sensor'):
                 result = 70
               else:
                 result = Next()
           - { start: "07:00", end: "10:00", v: 65 }
-          - { start: "22:30-1d", end: "07:00+1d", v: 60 }
+          - { start: "22:30-1d", end: "07:00+1d", v: 61 }
           - x: "70 if zeke_location() == 'home' else Next()"
 
       - weekdays: 6-7
+        v: 70
         rules:
           - { v: 60, start: "00:00", end: "06:00" }
-          - { v: 62, start: "06:00", end: "07:00" }
-          - { v: 64, start: "07:00", end: "08:00" }
-          - { v: 66, start: "08:00", end: "09:00" }
-          - { v: 68, start: "10:00", end: "17:00" }
+          - { v: 61, start: "06:00", end: "07:00" }
+          - { v: 62, start: "08:00", end: "09:00" }
+          - { v: 65, start: "09:00", end: "10:00" }
+          - { v: 70, start: "10:30", end: "17:00" }
           - x: "70 if zeke_location() == 'home' else Next()"
           - x: "60 if zeke_location() != 'home' else Next()"
 
@@ -62,19 +77,19 @@ schedy_heating: # This is our app instance name.
     whole_house:
       actors:
         climate.glycol_thermostat:
-          #supports_hvac_modes: false
+          supports_hvac_modes: false
           max_temp: 90
-          min_temp: 45
-      rescheduling_delay: 120
+          min_temp: 60
+      rescheduling_delay: 240
       schedule:
         - x: "IncludeSchedule(schedule_snippets['cooling_season']) if hvac_mode() == 'cool' else Next()"
-        - x: "IncludeSchedule(schedule_snippets['heating_season']) if hvac_mode() == 'heat' else Next()"
+        - x: "IncludeSchedule(schedule_snippets['heating_season']) if hvac_mode() == 'heat' else Break()"
     basement:
       actors:
         climate.basement:
           max_temp: 90
           min_temp: 60
-      rescheduling_delay: 120
+      rescheduling_delay: 240
       schedule:
         - v: "OFF"
           rules:
