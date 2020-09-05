@@ -18,6 +18,7 @@ Software on the NUC:
   * [Traccar](https://github.com/hassio-addons/addon-traccar)
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
   * [esphomeyaml](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml)
+  * [OpenZwave Beta]()
 
 **Devices in Use:**
 * Apple/iOS Devices - [iPhone 11](), [iPad Pro]()
@@ -39,6 +40,7 @@ Software on the NUC:
     * Bed presense sensor (2x): [Ecolink Z-Wave door/window sensor](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU) mated with [Ideal pressure mat](https://www.amazon.com/Ecolink-Intelligent-Technology-Operated-DWZWAVE2-ECO/dp/B00HPIYJWU)
     * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
     * [Zooz Z-Wave Plus S2/ZEN26](https://www.amazon.com/gp/product/B07K1T8Z74/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1)
+    * [Inovelli ZSW31-SN Dimmer Switches](https://support.inovelli.com/portal/en/kb/articles/products-switches-dimmer-lzw31-sn-spec-sheet): These are great multifunctional dimmers which have disableable relays so you can control smart bulbs which are plugged in to the controlled socket. To disable the relay, click the Control button 8 times.  Then you use Z-Wave events to control the lights as you see fit.  I use this in my guest room to control the ceiling fan light (ceiling fan is controllable by chain) which is on the circuit and to control the two side lamps (separate control). [See here for how I control these lights in HA](https://github.com/rtclauss/hass-config/blob/master/packages/zigbee_zwave.yaml)
   * Zigbee
     * Philips Hue (bulbs and light strip)
     * ~~GE Link Smart LED Bulbs~~ Replaced due to poor antenna quality and humidity forming in the bulb
