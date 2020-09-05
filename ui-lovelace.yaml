@@ -74,7 +74,7 @@ views:
                       hold_action: 
                         action: more-info
                     - type: entity-button
-                      entity: switch.circadian_lighting_circadian_lighting
+                      entity: switch.circadian_lighting_rest_of_house
                       state_color: true
                       name: ' '
                       tap_action:
@@ -347,13 +347,22 @@ views:
                     tap_action:
                       action: toggle
                   - type: entity-button
-                    entity: light.office_lamp
+                    entity: light.office_ceiling
                     state_color: true
                     name: 'Office'
                     tap_action:
                       action: toggle
                     hold_action: 
                       action: more-info
+                  - type: entity-button
+                    entity: light.office_lamp
+                    state_color: true
+                    name: 'Office Lamp'
+                    tap_action:
+                      action: toggle
+                    hold_action: 
+                      action: more-info
+
                   - type: entity-button
                     entity: light.lava_lamp
                     state_color: true
@@ -456,14 +465,21 @@ views:
         entity: weather.dark_sky
 
       - id: b1dfcb1f57cc428184dde82853ecd065  # Automatically created id
-        type: custom:entity-attributes-card
+        type: custom:flex-table-card
         title: Weather Alerts
-        filter:
-          include:
-            - key: sensor.dark_sky_alerts.title*
-              name: Type
-            - key: sensor.dark_sky_alerts.description*
-              name: Details
+        entities:
+          include: sensor.dark_sky_alerts*
+        clickable: true
+        columns:
+          - attr: title
+            name: Type
+          - attr: severity
+            name: Severity
+          - attr: description
+            name: Details
+          - attr: expires
+            name: Expires
+            modify: new Date(x*1000)
 
       - id: 49fc7b86605c4633b705dca150c91adc  # Automatically created id
         type: entities
@@ -669,6 +685,16 @@ views:
         cards:
           - type: plant-status
             entity: plant.orchid
+          - type: plant-status
+            entity: plant.terrarium
+          - type: entity-button
+            entity: switch.carnivorous_plants_light
+            state_color: true
+            name: 'Terrarium'
+            tap_action:
+              action: toggle
+            hold_action: 
+              action: more-info
 
 ##################################################
 
@@ -799,7 +825,7 @@ views:
             title: Curling Automations
             show_header_toggle: true
             entities:
-              - automation.leave_home_for_curling
+              # - automation.leave_home_for_curling
               - automation.return_home_from_occ
               - automation.return_home_from_spcc
 ##################################################
@@ -820,7 +846,8 @@ views:
               - binary_sensor.planned_work_trip_calendar
               - binary_sensor.sensed_trip
               - binary_sensor.flying_home_today
-              - sensor.turn_off_time
+              - input_datetime.random_vacation_lights_on
+              #- sensor.turn_off_time
 
       - id: dd07fd1cdecc4cae8116eb6fe12f52f4  # Automatically created id
         type: horizontal-stack
@@ -953,6 +980,7 @@ views:
         entities:
           - input_boolean.trip
           - input_number.random_vacation_light_group
+          - input_datetime.random_vacation_lights_on
           - input_number.random_hour
           - input_number.random_minute
 
@@ -1027,6 +1055,15 @@ views:
           # - binary_sensor.nest_home
           - device_tracker.android_1
           - device_tracker.honda
+          - sensor.wethop_activity
+      - id: 1332a
+        title: Bed Sensors
+        type: entities
+        show_header_toggle: false
+        entities:
+          - binary_sensor.master_bed_occupancy
+          - binary_sensor.esp32_bed_occupancy
+          - binary_sensor.esp32_whole_bed_pressure
       - id: 142132234abbd3333
         title: Trackers
         type: map
