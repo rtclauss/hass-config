@@ -438,6 +438,12 @@ automation:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
         to: 'on'
+    condition:
+      condition: state
+      entity_id: binary_sensor.master_bed_occupancy
+      state: 'on'
+      for: 
+        minutes: 2
     action:
       - service: input_boolean.turn_on
         data:
@@ -449,11 +455,78 @@ automation:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
         to: 'off'
+    condition:
+      condition: state
+      entity_id: binary_sensor.master_bed_occupancy
+      state: 'off'
+      for: 
+        seconds: 45
     action:
       - service: input_boolean.turn_off
         data:
           entity_id: input_boolean.master_bed_occupancy
-  # - alias: xiaomi_mqtt_button_pressed
+  
+
+  - id: turn_on_guest_bedroom_fan_light_zwave_switch
+    alias: turn_on_guest_bedroom_fan_light_zwave_switch
+    trigger:
+      - platform: event
+        event_type: ozw.scene_activated
+        event_data:
+          # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
+          node_id: 13  # Switch in guest room
+          scene_id: 2  # Top/on button press
+          scene_value_id: 1 # pressed once?
+    action:
+      - service: light.turn_on
+        data_template:
+          entity_id: light.guest_ceiling
+
+  - id: turn_on_guest_bedroom_side_lamps_zwave_switch
+    alias: turn_on_guest_bedroom_fan_lamps_zwave_switch
+    trigger:
+      - platform: event
+        event_type: ozw.scene_activated
+        event_data:
+          # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
+          node_id: 13  # Switch in guest room
+          scene_id: 2  # Top/on button press
+          scene_value_id: 4 # pressed once?
+    action:
+      - service: light.turn_on
+        data_template:
+          entity_id: light.guest_side_lamps
+
+  - id: turn_off_guest_bedroom_side_lamps_zwave_switch
+    alias: turn_off_guest_bedroom_side_lamps_zwave_switch
+    trigger:
+      - platform: event
+        event_type: ozw.scene_activated
+        event_data:
+          # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
+          node_id: 13  # Switch in guest room
+          scene_id: 1  # Bottom/off button press
+          scene_value_id: 4 # pressed once?
+    action:
+      - service: light.turn_off
+        data_template:
+          entity_id: light.guest_side_lamps
+
+  - id: turn_off_guest_bedroom_fan_light_zwave_switch
+    alias: turn_off_guest_bedroom_fan_light_zwave_switch
+    trigger:
+      - platform: event
+        event_type: ozw.scene_activated
+        event_data:
+          # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
+          node_id: 13  # Switch in guest room
+          scene_id: 1  # Bottom/off button press
+          scene_value_id: 1 # pressed once?
+    action:
+      - service: light.turn_off
+        data_template:
+          entity_id: light.guest_ceiling
+          # - alias: xiaomi_mqtt_button_pressed
   #   id: xiaomi_mqtt_button_pressed
   #   trigger:
   #   - platform: state
@@ -494,15 +567,34 @@ binary_sensor:
             off
           {% endif %}
 
+      esp32_bed_occupancy:
+        entity_id: binary_sensor.esp32_whole_bed_pressure
+        delay_on:
+          seconds: 2
+        delay_off:
+          seconds: 2
+        value_template: >-
+          {{
+            is_state('binary_sensor.esp32_whole_bed_pressure', 'on')
+          }}
+
+
       master_bed_occupancy:
         entity_id: 
           - binary_sensor.right_master_bed_occupancy
           - binary_sensor.left_master_bed_occupancy
+          - binary_sensor.esp32_bed_occupancy
+        # value_template: >-
+        #   {{
+        #     is_state('binary_sensor.left_master_bed_occupancy', 'on') 
+        #       or
+        #     is_state('binary_sensor.right_master_bed_occupancy', 'on')
+        #       or
+        #     is_state('binary_sensor.esp32_bed_occupancy', 'on')
+        #   }}
         value_template: >-
           {{
-            is_state('binary_sensor.left_master_bed_occupancy', 'on') 
-              or
-            is_state('binary_sensor.right_master_bed_occupancy', 'on')
+            is_state('binary_sensor.esp32_bed_occupancy', 'on')
           }}
 
 ########################

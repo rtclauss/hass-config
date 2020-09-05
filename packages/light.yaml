@@ -525,7 +525,9 @@ automation:
     action:
       - service: light.turn_on
         data_template:
-          entity_id: light.office_lamp
+          entity_id: 
+            - light.office_lamp
+            - light.office_ceiling
           kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
 
@@ -542,7 +544,9 @@ automation:
     action:
       - service: homeassistant.turn_off
         data:
-          entity_id: light.office_lamp
+          entity_id: 
+            - light.office_lamp
+            - light.office_ceiling
 
   - id: reset_office_light_at_night
     alias: reset_office_light_at_night
@@ -552,13 +556,17 @@ automation:
     action:
       - service: light.turn_on
         data:
-          entity_id: light.office_lamp
+          entity_id: 
+            - light.office_lamp
+            - light.office_ceiling
           brightness: 1
       - delay:
           seconds: 10
       - service: light.turn_off
         data:
-          entity_id: light.office_lamp
+          entity_id: 
+            - light.office_lamp
+            - light.office_ceiling
 
 
   - alias: toggle_living_room
@@ -854,7 +862,9 @@ automation:
     action:
       - service: light.turn_off
         data:
-          entity_id: light.office_lamp
+          entity_id: 
+            - light.office_lamp
+            - light.office_ceiling
           transition: 5
       - service: homeassistant.turn_off
         data:
@@ -960,6 +970,7 @@ group:
       - switch.stairs
       - light.hallway_light
       - light.office_lamp
+      - light.office_ceiling
 
 ########################
 # Input Booleans
@@ -1010,6 +1021,7 @@ light:
     entities:
       - light.lava_lamp
       - light.office_lamp
+      - light.office_ceiling
 
   - platform: group
     name: guest_bedroom
@@ -1183,6 +1195,7 @@ switch:
       - light.master_bedroom
       - light.hallway_light
       - light.office_lamp
+      - light.office_ceiling
     initial_transition: 30 #seconds
 
   - platform: circadian_lighting
