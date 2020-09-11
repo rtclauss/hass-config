@@ -1,0 +1,36 @@
+esphome:
+  name: wholebedpressure
+  platform: ESP32
+  board: esp-wrover-kit
+
+wifi:
+  ssid: !secret wifi_ap
+  password: !secret wifi_password
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+esp32_touch:
+  setup_mode: True
+  iir_filter: 10ms
+  sleep_duration: 1ms
+
+binary_sensor:
+  - platform: esp32_touch
+    name: "ESP32 Whole Bed GPIO4"
+    pin: GPIO4
+    # threshold: 190
+    #threshold: 142
+    threshold: 4
+    ## binary sensor items
+    filters:
+      #- delayed_on_off: 200ms
+      #- delayed_on_off: 225ms
+      #- delayed_on: 20ms
+      - delayed_off: 2500ms
+      
