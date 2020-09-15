@@ -6,7 +6,7 @@ custom_header:
   swipe: true
   hide_config: true
   #test_template: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
-  hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
+  hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}weather,{% endif %}{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
 
 views:
   - title: Home
@@ -74,7 +74,7 @@ views:
                       hold_action: 
                         action: more-info
                     - type: entity-button
-                      entity: switch.circadian_lighting_circadian_lighting
+                      entity: switch.circadian_lighting_rest_of_house
                       state_color: true
                       name: ' '
                       tap_action:
@@ -347,13 +347,22 @@ views:
                     tap_action:
                       action: toggle
                   - type: entity-button
-                    entity: light.office_lamp
+                    entity: light.office_ceiling
                     state_color: true
                     name: 'Office'
                     tap_action:
                       action: toggle
                     hold_action: 
                       action: more-info
+                  - type: entity-button
+                    entity: light.office_lamp
+                    state_color: true
+                    name: 'Office Lamp'
+                    tap_action:
+                      action: toggle
+                    hold_action: 
+                      action: more-info
+
                   - type: entity-button
                     entity: light.lava_lamp
                     state_color: true
@@ -449,21 +458,27 @@ views:
         aspect_ratio: 90%
         url: https://embed.windy.com/embed2.html?lat=44.308&lon=-94.614&zoom=5&level=surface&overlay=rain&menu=&message=true&marker=&calendar=&pressure=true&type=map&location=coordinates&detail=&detailLat=44.245&detailLon=-95.416&metricWind=mph&metricTemp=%C2%B0F&radarRange=-1
 
-
       - id: forecast
         #type: weather-forecast
         type: custom:weather-card
         entity: weather.dark_sky
 
       - id: b1dfcb1f57cc428184dde82853ecd065  # Automatically created id
-        type: custom:entity-attributes-card
+        type: custom:flex-table-card
         title: Weather Alerts
-        filter:
-          include:
-            - key: sensor.dark_sky_alerts.title*
-              name: Type
-            - key: sensor.dark_sky_alerts.description*
-              name: Details
+        entities:
+          include: sensor.dark_sky_alerts*
+        clickable: true
+        columns:
+          - attr: title
+            name: Type
+          - attr: severity
+            name: Severity
+          - attr: description
+            name: Details
+          - attr: expires
+            name: Expires
+            modify: new Date(x*1000)
 
       - id: 49fc7b86605c4633b705dca150c91adc  # Automatically created id
         type: entities
@@ -651,55 +666,12 @@ views:
 
 ##################################################
 
-  - title: Plants
-    path: plants
-    icon: mdi:tree
-    cards:
-      - id: 0ed0e3ae844d4a74a304d86fa6064f60  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: plant-status
-            entity: plant.east_hanging_nepenthes
-          - type: plant-status
-            entity: plant.west_hanging_nepenthes
-          - type: plant-status
-            entity: plant.four_inch_nepenthes
-      - id: a3319591821a40969039b78d93f13e6f  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: plant-status
-            entity: plant.orchid
-
-##################################################
-
   - title: Clean
     path: cleaning
     icon: mdi:washing-machine
     badges:
       - input_select.washer_state
     cards:
-      - id: 0ed0e3ae844d4a74a304d86fa6064f60  # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: glance
-            title: Cleaning Sensors
-            entities:
-              - binary_sensor.dishwasher
-              - binary_sensor.dishwasher_running
-              - binary_sensor.washer
-              - binary_sensor.washing_machine_running
-              - binary_sensor.washer_door
-              - binary_sensor.dryer
-              - binary_sensor.dryer_running
-          - type: custom:gauge-card
-            title: Water Softener Salt Level
-            entity: sensor.water_softener_salt_level
-            min: 100
-            max: 900
-            severity:
-              green: 100
-              amber: 750
-              red: 820
       - id: 1ed69694b5244ca59bbdb9339a083865  # Automatically created id
         type: entities
         title: Vacuum
@@ -715,62 +687,20 @@ views:
           left: 0
           right: 0
         min_height: 0
-      # - type: picture-entity
-      #   entity: camera.rockrobo_map
-      #   name: Vacuum Map
-
-
-##################################################
-
-  - title: Batteries
-    path: batteries
-    icon: mdi:battery
-    cards:
-      - type: horizontal-stack
+      - id: 0ed0e3ae844d4a74a304d86fa6064f60  # Automatically created id
+        type: vertical-stack
         cards:
-          - id: 4291f0758ffa4e57b68c00a487c2f796  # Automatically created id
-            type: custom:auto-entities
-            card:
-              type: entities
-              title: Status
-              show_header_toggle: false
-            filter:
-              include:
-                - entity_id: sensor.*battery*
-                #- entity_id: group.*battery*
-#          - id: 
-#            type: entities
-#            title: Battery Alert Config
-#            show_header_toggle: false
-#            entities:
-#              - input_number.battery_alert_threshold_min
-#              - input_number.battery_alert_threshold_max
-#              - input_text.delete_battery_sensor
-#              - automation.battery_persistent_notification
-#              - automation.battery_persistent_notification_clear
-#              - automation.battery_sensor_from_attributes
-#              - automation.update_battery_status_group_members
-#              - automation.delete_battery_sensor
+          - type: glance
+            title: Cleaning Sensors
+            entities:
+              - binary_sensor.dishwasher
+              - binary_sensor.dishwasher_running
+              - binary_sensor.washer
+              - binary_sensor.washing_machine_running
+              - binary_sensor.washer_door
+              - binary_sensor.dryer
+              - binary_sensor.dryer_running
 
-##################################################
-
-  # - title: Blocked Domains
-  #   path: adblock
-  #   icon: mdi:close-circle-outline
-  #   cards:
-  #     - id: 595f22fe1e124639949d79b6b9423f73  # Automatically created id
-  #       type: entities
-  #       title: PiHole Data
-  #       show_header_toggle: false
-  #       entities:
-  #         - sensor.pi_hole_dns_unique_clients
-  #         - sensor.pi_hole_dns_queries_today
-  #         - sensor.pi_hole_ads_blocked_today
-  #         - sensor.pi_hole_ads_percentage_blocked_today
-  #         - sensor.iot_pihole_dns_unique_clients
-  #         - sensor.iot_pihole_dns_queries_today
-  #         - sensor.iot_pihole_ads_blocked_today
-  #         - sensor.iot_pihole_ads_percentage_blocked_today
 
 ##################################################
 
@@ -799,7 +729,7 @@ views:
             title: Curling Automations
             show_header_toggle: true
             entities:
-              - automation.leave_home_for_curling
+              # - automation.leave_home_for_curling
               - automation.return_home_from_occ
               - automation.return_home_from_spcc
 ##################################################
@@ -820,7 +750,8 @@ views:
               - binary_sensor.planned_work_trip_calendar
               - binary_sensor.sensed_trip
               - binary_sensor.flying_home_today
-              - sensor.turn_off_time
+              - input_datetime.random_vacation_lights_on
+              #- sensor.turn_off_time
 
       - id: dd07fd1cdecc4cae8116eb6fe12f52f4  # Automatically created id
         type: horizontal-stack
@@ -885,20 +816,6 @@ views:
     icon: mdi:robot
     cards:
 
-      - id: d02d7c7c79b74a0387fceda16b11acc3  # Automatically created id
-        type: entities
-        title: Motion Sensors
-        show_header_toggle: false
-        entities:
-          - binary_sensor.hallway_motion
-          - binary_sensor.office_motion
-          - binary_sensor.master_bedroom_motion
-          - binary_sensor.downstairs_motion
-          - binary_sensor.living_room_motion_sensor
-          - binary_sensor.livingroom_motion_sensor
-          - binary_sensor.basement_motion_sensor
-          - binary_sensor.master_bed_occupancy
-
       - id: 234a52
         type: entities
         title: Meetings
@@ -935,16 +852,8 @@ views:
           - sensor.twincities
           - binary_sensor.test_homeward
           - sensor.me_to_home
-          - sensor.the_brewery_eta
           - input_select.trip_origin
           - sensor.zeke_direction
-
-      - id: 528d0d75ddc449a4ba94d3c4f146b66d  # Automatically created id
-        type: entities
-        title: Logging Level
-        show_header_toggle: false
-        entities:
-          - input_select.log_level
 
       - id: 774ca4f2a22a41689bec9cd409fe8515  # Automatically created id
         type: entities
@@ -953,17 +862,10 @@ views:
         entities:
           - input_boolean.trip
           - input_number.random_vacation_light_group
+          - input_datetime.random_vacation_lights_on
           - input_number.random_hour
           - input_number.random_minute
 
-      - id: bb98e6ee50f247c88f017f8402091874  # Automatically created id
-        type: custom:auto-entities
-        card:
-          type: entities
-          title: All Automations
-        filter:
-          include:
-            - domain: automation
 
 ##################################################
   
@@ -971,47 +873,6 @@ views:
     path: testing
     icon: mdi:test-tube
     cards:
-      - type: history-graph
-        title: Rate of Temp Change
-        entities:
-          - sensor.rate_of_house_temp_change_5m
-          - sensor.rate_of_house_temp_change_30m
-          - sensor.rate_of_house_temp_change_1h
-      - type: history-graph
-        title: Default Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_default_house_temp_change
-      - type: history-graph
-        title: Default 2.5-5 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_2_5_5_minutes_house_temp_change
-      - type: history-graph
-        title: Default 5-5 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_5_5_minutes_house_temp_change
-      - type: history-graph
-        title: Default 5-10 minDerivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_5_10_minutes_house_temp_change
-      - type: history-graph
-        title: Default 10-10 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_10_10_minutes_house_temp_change
-      - type: history-graph
-        title: Default 30 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_30_minutes_house_temp_change
-      - type: history-graph
-        title: Default 60 min Derivative of Temp Change
-        entities:
-          - sensor.glycol_thermostat_temperature
-          - sensor.derivative_60_minutes_house_temp_change
       - id: 5734813fa25a4be8be66c92c4673fa2d  # Automatically created id
         type: entities
         title: Bayesian Presence Status and Sensors
@@ -1027,6 +888,7 @@ views:
           # - binary_sensor.nest_home
           - device_tracker.android_1
           - device_tracker.honda
+          - sensor.wethop_activity
       - id: 142132234abbd3333
         title: Trackers
         type: map
@@ -1046,68 +908,8 @@ views:
           - sensor.spcc_time
           - sensor.spcc_distance
           - sensor.heading_spcc
-      - type: history-graph
-        title: Circadian Brightness
-        hours_to_show: 72
-        entities:
-          - sensor.circadian_brightness
-          - sensor.circadian_temperature
 
 ##################################################
 
-  - title: ZHA
-    path: zha
-    panel: true
-    cards:
-      - id: 42b1dabdbcc4461480b17d6f1a862363  # Automatically created id
-        type: 'custom:zha-network-card'
-        clickable: true
-        columns:
-          # - prop: area_id
-          #   name: Area
-          - prop: name
-            name: Name
-          - attr: available
-            id: available
-            modify: x || "false"
-            name: Online
-          - attr: manufacturer
-            name: Manufacturer
-          - attr: model
-            name: Model
-          - attr: ieee
-            name: IEEE
-          - prop: nwk
-            name: NWK
-          - attr: rssi
-            name: RSSI
-          - attr: lqi
-            name: LQI
-          - attr: last_seen
-            name: Last Seen
-          - attr: power_source
-            name: Power Source
-          - attr: quirk_class
-            name: Quirk
-
 ##################################################
-
-  - title: ZHA Network Viz
-    path: zha-net
-    panel: true
-    cards:
-      - id: 42b1dabdbcc4465680b17d6f1a862263  # Automatically created id
-        type: 'custom:zha-network-visualization-card'
-
-  # - path: other # Automatically created id
-  #   title: Other items
-  #   icon: mdi:settings
-  #   cards:
-  #     - id: d24b28e65a0947e5ae5a5cf71ebd79fa  # Automatically created id
-  #       type: custom:tracker-card
-  #       title:
-  #       trackers:
-  #         - sensor.custom_card_tracker
-  #         - sensor.custom_component_tracker
-
 
