@@ -240,7 +240,7 @@ automation:
     action:
     - service: input_datetime.set_datetime
       data_template:
-        entity_id: input_datetime.random_vacation_lights_on
+        entity_id: input_datetime.random_vacation_lights_off
         time: "{{ (range(22, 24)|random|int ~ ':' ~ range(0, 59)|random|int ~ ':' ~ range(0, 59)|random|int) }}"
     - service: input_number.set_value
       data_template:
@@ -256,7 +256,7 @@ automation:
         value: '{{ (range(1, 4)|random|int) }}'
     - service: notify.all
       data:
-        message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_datetime.random_vacation_lights_on") }}}}
+        message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_datetime.random_vacation_lights_off") }}
         #message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
     #- service: script.vacation_group_visibility
 
@@ -338,10 +338,10 @@ automation:
   - id: vacation_lights_off
     alias: vacation_lights_off
     trigger:
-    - platform: template
-      # value_template: '{{ is_state(''sensor.time'', states(''input_number.random_hour'')|int
-      #   ~ '':'' ~ states(''input_number.random_minute'')|int) }}'
-      value_template: "{{ states('sensor.time') == (state_attr('input_datetime.random_vacation_lights_on', 'timestamp') | int | timestamp_custom('%H:%M', True)) }}"
+    - platform: time
+      at: input_datetime.random_vacation_lights_off
+    #- platform: template
+      #value_template: "{{ states('sensor.time') == (state_attr('input_datetime.random_vacation_lights_off', 'timestamp') | int | timestamp_custom('%H:%M', True)) }}"
     condition:
       condition: and
       conditions:
@@ -495,7 +495,7 @@ input_boolean:
 # Input DateTimes
 ########################
 input_datetime:
-  random_vacation_lights_on:
+  random_vacation_lights_off:
     name: Turn On Lights at a Random Time
     has_date: false
     has_time: true
