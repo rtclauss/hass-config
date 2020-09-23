@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'workday'
+        package: "workday"
 
       expose: &expose
         <<: *customize
@@ -55,7 +55,7 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-# Implemented in Schedy
+  # Implemented in Schedy
   # - id: arrive_at_work
   #   alias: arrive_at_work
   #   trigger:
@@ -82,8 +82,8 @@ automation:
   - id: turn_off_morning_routine
     alias: turn_off_morning_routine
     trigger:
-    - platform: time
-      at: '00:00:01'
+      - platform: time
+        at: "00:00:01"
     action:
       - service: homeassistant.turn_off
         data:
@@ -116,11 +116,11 @@ automation:
           {{ formatted_time == two_hoursback }}
     condition:
       - condition: state
-        entity_id: 'binary_sensor.workday_sensor'
-        state: 'on'
+        entity_id: "binary_sensor.workday_sensor"
+        state: "on"
       - condition: state
         entity_id: device_tracker.bayesian_zeke_home
-        state: 'home'
+        state: "home"
     action:
       - service: switch.turn_on
         data:
@@ -135,11 +135,11 @@ automation:
       #   value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[0:5]}}"
     condition:
       - condition: state
-        entity_id: 'binary_sensor.workday_sensor'
-        state: 'on'
+        entity_id: "binary_sensor.workday_sensor"
+        state: "on"
       - condition: state
         entity_id: device_tracker.bayesian_zeke_home
-        state: 'home'
+        state: "home"
         ## TODO Need to add condition that checks that I'm still in bed
     action:
       - service: light.turn_on
@@ -181,4 +181,3 @@ sensor:
   - platform: time_date
     display_options:
       - time
-

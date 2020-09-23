@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'cleaning'
+        package: "cleaning"
 
       expose: &expose
         <<: *customize
@@ -61,7 +61,7 @@ homeassistant:
       icon: mdi:washing-machine
       device_class: vibration
       friendly_name: "Washer Vibration"
- 
+
     binary_sensor.washer_door:
       <<: *customize
       icon: mdi:washing-machine
@@ -81,11 +81,11 @@ homeassistant:
     ################################################
     ## Device Trackers
     ################################################
-    
+
     ################################################
     ## Frontend
     ################################################
-    
+
     ################################################
     ## Groups
     ################################################
@@ -143,12 +143,13 @@ homeassistant:
       <<: *customize
       icon: mdi:tumble-dryer
       friendly_name: "Dryer Vibration"
-      
+
     sensor.washer_state:
       <<: *customize
       icon: mdi:washer
       friendly_name: "Washing Machine"
-      
+
+
     ################################################
     ## Thermostats
     ################################################
@@ -169,15 +170,15 @@ automation:
   - id: washer_reminder
     alias: washer_reminder
     trigger:
-    - platform: state
-      entity_id: binary_sensor.washer_door
-      to: 'off'
-      for:
-        hours: 18
+      - platform: state
+        entity_id: binary_sensor.washer_door
+        to: "off"
+        for:
+          hours: 18
     action:
-    - service: notify.all
-      data:
-        message: "Clothes still in washing machine.  Get them out before they turn musty! \U0001F9FA"
+      - service: notify.all
+        data:
+          message: "Clothes still in washing machine.  Get them out before they turn musty! \U0001F9FA"
 
   - id: empty_vacuum_on_thursday
     alias: empty_vacuum_on_thursday
@@ -188,20 +189,19 @@ automation:
         event: enter
       - platform: state
         entity_id: person.ryan
-        to: 'home'
+        to: "home"
     condition:
       condition: time
       weekday:
         - thu
     action:
-    - delay: 00:10:00
-    - service: vacuum.send_command
-      entity_id: vacuum.xiaomi_vacuum_cleaner
-      data:
-        command: 'go_to'
-        params:
-          spot_id: 'Garbage'
-
+      - delay: 00:10:00
+      - service: vacuum.send_command
+        entity_id: vacuum.xiaomi_vacuum_cleaner
+        data:
+          command: "go_to"
+          params:
+            spot_id: "Garbage"
 
 ########################
 # Binary Sensors
@@ -239,8 +239,6 @@ binary_sensor:
           minutes: 5
         value_template: >-
           {{ is_state('binary_sensor.washer', 'on') }}
-
-
 
 ########################
 # Cameras
@@ -299,7 +297,6 @@ light:
 ########################
 media_player:
 
-
 ########################
 # Plant
 ########################
@@ -328,9 +325,9 @@ sensor:
     state_topic: "valetudo/rockrobo/state"
     json_attributes_topic: "valetudo/rockrobo/map_data"
     name: xiaomi_map
-    value_template: 'OK'
+    value_template: "OK"
     scan_interval: 5
-    
+
 ########################
 # Switch
 ########################

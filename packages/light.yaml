@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'light'
+        package: "light"
 
       expose: &expose
         <<: *customize
@@ -58,7 +58,7 @@ homeassistant:
       <<: *customize
       friendly_name: "Turn on master bedroom lights automatically"
       icon: mdi:ceiling-light
-      
+
     automation.master_bedroom_light_auto_off:
       <<: *customize
       friendly_name: "Turn off master bedroom lights automatically"
@@ -86,7 +86,6 @@ homeassistant:
       <<: *customize
       friendly_name: "Turn off all lights when bedroom lights turn off"
       icon: mdi:bed
-    
 
     ################################################
     ## Binary Sensors
@@ -95,7 +94,7 @@ homeassistant:
     ################################################
     ## Device Trackers
     ################################################
-    
+
     ################################################
     ## Groups
     ################################################
@@ -114,7 +113,7 @@ homeassistant:
       friendly_name: "Front Door Light Automatically Turned on"
       icon: mdi:home
       hidden: true
-      
+
     input_boolean.master_bedroom_auto_on:
       <<: *customize
       friendly_name: "Master Bedroom Light Automatically Turned on"
@@ -147,22 +146,22 @@ homeassistant:
       <<: *customize
       friendly_name: "Front Door"
       icon: mdi:home
-    
+
     light.guest_ceiling:
       <<: *customize
       friendly_name: "Guest Ceiling Light"
       icon: mdi:home
-      
+
     light.guest_left_lamp:
       <<: *customize
       friendly_name: "Guest Left Lamp"
       icon: mdi:home
-      
+
     light.guest_right_lamp:
       <<: *customize
       friendly_name: "Guest Right Lamp"
       icon: mdi:home
-    
+
     light.hallway_light:
       <<: *customize
       friendly_name: "Hallway"
@@ -192,7 +191,7 @@ homeassistant:
       <<: *customize
       friendly_name: "Living Room Lights"
       icon: mdi:television
-      
+
     light.living_room_all_except_tv:
       <<: *customize
       friendly_name: "Living Room Lights except TV Bias"
@@ -243,11 +242,11 @@ homeassistant:
     scene.leave_home:
       <<: *customize
       hidden: true
-    
+
     scene.chill:
       <<: *customize
       friendly_name: Chill
-    
+
     scene.bedroom_prep:
       <<: *customize
       friendly_name: Bedroom Prep
@@ -255,11 +254,11 @@ homeassistant:
     scene.reset_bedroom:
       <<: *customize
       friendly_name: Reset Bedroom
-    
+
     scene.reset_living_room:
       <<: *customize
       friendly_name: Reset Living Room
-    
+
     scene.the_walking_dead:
       <<: *customize
       friendly_name: The Walking Dead
@@ -275,16 +274,16 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    
+
     ################################################
     ## Switches
     ################################################
-    
+
     switch.deck:
       <<: *customize
       friendly_name: "Deck"
       icon: mdi:nature-people
-    
+
     switch.deck_led_string:
       <<: *customize
       friendly_name: "Deck LED String"
@@ -299,7 +298,8 @@ homeassistant:
       <<: *customize
       friendly_name: "Stairs"
       icon: mdi:stairs
-      
+
+
     ################################################
     ## Thermostats
     ################################################
@@ -317,17 +317,17 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.deck_door_contact
-        to: 'off'
+        to: "off"
         for:
           seconds: 30
     condition:
       condition: state
       entity_id: input_boolean.deck_auto_on
-      state: 'on'
+      state: "on"
     action:
       - service: homeassistant.turn_off
         data:
-          entity_id: 
+          entity_id:
             - switch.deck
             - switch.deck_led_string
       - service: homeassistant.turn_off
@@ -339,7 +339,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.deck_door_contact
-        to: 'on'
+        to: "on"
     condition:
       condition: and
       conditions:
@@ -347,14 +347,14 @@ automation:
           after: sunset
         - condition: state
           entity_id: switch.deck
-          state: 'off'
+          state: "off"
         - condition: state
           entity_id: switch.deck_led_string
-          state: 'off'
+          state: "off"
     action:
       - service: homeassistant.turn_on
         data:
-          entity_id: 
+          entity_id:
             - switch.deck
             - switch.deck_led_string
       - service: homeassistant.turn_on
@@ -366,13 +366,13 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.front_door_contact
-        to: 'off'
+        to: "off"
         for:
           seconds: 30
     condition:
       condition: state
       entity_id: input_boolean.front_door_auto_on
-      state: 'on'
+      state: "on"
     action:
       - service: homeassistant.turn_off
         data:
@@ -386,7 +386,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.front_door_contact
-        to: 'on'
+        to: "on"
     condition:
       condition: and
       conditions:
@@ -394,7 +394,7 @@ automation:
           after: sunset
         - condition: state
           entity_id: switch.front_door
-          state: 'off'
+          state: "off"
     action:
       - service: homeassistant.turn_on
         data:
@@ -408,11 +408,11 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.guest_room_button
-        to: 'on'
+        to: "on"
     action:
       - service: homeassistant.toggle
         data:
-          entity_id: 
+          entity_id:
             - light.guest_ceiling
             - light.guest_left_lamp
             - light.guest_right_lamp
@@ -422,7 +422,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.hallway_motion
-        to: 'on'
+        to: "on"
     condition:
       condition: sun
       before: sunrise
@@ -439,7 +439,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.hallway_motion
-        to: 'off'
+        to: "off"
     condition:
       condition: sun
       before: sunrise
@@ -455,13 +455,13 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bedroom_motion
-        to: 'off'
+        to: "off"
     condition:
       condition: and
       conditions:
         - condition: state
           entity_id: input_boolean.master_bedroom_auto_on
-          state: 'on'
+          state: "on"
     action:
       - service: light.turn_off
         data:
@@ -476,7 +476,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bedroom_motion
-        to: 'on'
+        to: "on"
     condition:
       condition: and
       conditions:
@@ -485,10 +485,10 @@ automation:
           zone: zone.home
         - condition: state
           entity_id: light.master_bedroom
-          state: 'off'
+          state: "off"
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
-          state: 'off'
+          state: "off"
     action:
       - service: light.turn_on
         data_template:
@@ -504,7 +504,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.office_motion
-        to: 'on'
+        to: "on"
     condition:
       condition: sun
       before: sunrise
@@ -512,7 +512,7 @@ automation:
     action:
       - service: light.turn_on
         data_template:
-          entity_id: 
+          entity_id:
             - light.office_lamp
             - light.office_ceiling
           kelvin: "{{ states('sensor.circadian_temperature') | int }}"
@@ -523,7 +523,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.office_motion
-        to: 'off'
+        to: "off"
     condition:
       condition: sun
       before: sunrise
@@ -531,7 +531,7 @@ automation:
     action:
       - service: homeassistant.turn_off
         data:
-          entity_id: 
+          entity_id:
             - light.office_lamp
             - light.office_ceiling
 
@@ -539,11 +539,11 @@ automation:
     alias: reset_office_light_at_night
     trigger:
       - platform: time
-        at: '03:48:00'
+        at: "03:48:00"
     action:
       - service: light.turn_on
         data:
-          entity_id: 
+          entity_id:
             - light.office_lamp
             - light.office_ceiling
           brightness: 1
@@ -551,48 +551,47 @@ automation:
           seconds: 10
       - service: light.turn_off
         data:
-          entity_id: 
+          entity_id:
             - light.office_lamp
             - light.office_ceiling
-
 
   - alias: toggle_living_room
     id: toggle_living_room
     trigger:
-    - platform: state
-      entity_id: 
-        - binary_sensor.living_room_button_push
+      - platform: state
+        entity_id:
+          - binary_sensor.living_room_button_push
     action:
-    - service: light.toggle
-      entity_id: light.living_room_all
-      data:
-        transition: 5
+      - service: light.toggle
+        entity_id: light.living_room_all
+        data:
+          transition: 5
 
   - alias: toggle_kitchen
     id: toggle_kitchen
     trigger:
-    - platform: state
-      entity_id: 
-        - binary_sensor.kitchen_button
+      - platform: state
+        entity_id:
+          - binary_sensor.kitchen_button
     action:
-    - service: light.toggle
-      entity_id: light.kitchen_table
-      data:
-        transition: 5
-      
+      - service: light.toggle
+        entity_id: light.kitchen_table
+        data:
+          transition: 5
+
   - alias: toggle_office
     id: toggle_office
     trigger:
-    - platform: event
-      event_type: zha_event
-      event_data:
-        device_ieee: "00:15:8d:00:02:13:90:e9"
-        command: "attribute_updated"
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:13:90:e9"
+          command: "attribute_updated"
     action:
-    - service: light.toggle
-      entity_id: light.office
-      data:
-        transition: 5
+      - service: light.toggle
+        entity_id: light.office
+        data:
+          transition: 5
 
   - alias: transition_on_lights_when_home_near_sunset
     id: transition_on_lights_when_home_near_sunset
@@ -611,7 +610,7 @@ automation:
           below: 20
     action:
       - service: light.turn_on
-        entity_id: 
+        entity_id:
           - light.kitchen_sink
           - light.living_room_all
         data:
@@ -635,7 +634,7 @@ automation:
           above: 20
     action:
       - service: light.turn_on
-        entity_id: 
+        entity_id:
           - light.kitchen_sink
           - light.living_room_all
         data:
@@ -645,60 +644,60 @@ automation:
   - alias: reset_living_room
     id: reset_living_room
     trigger:
-    - platform: state
-      entity_id: 
-        - binary_sensor.living_room_button_hold
+      - platform: state
+        entity_id:
+          - binary_sensor.living_room_button_hold
     action:
-    - service: scene.turn_on
-      entity_id: scene.reset_living_room
-    - service: switch.turn_off
-      entity_id: switch.flux
+      - service: scene.turn_on
+        entity_id: scene.reset_living_room
+      - service: switch.turn_off
+        entity_id: switch.flux
 
   - id: turn_off_all_lights_when_bed_off
     alias: turn_off_all_lights_when_bed_off
     trigger:
-    - platform: state
-      entity_id: light.master_bedroom
-      to: 'off'
+      - platform: state
+        entity_id: light.master_bedroom
+        to: "off"
     condition:
       condition: and
       conditions:
         - condition: time
-          after: '22:00:00'
-          before: '06:00:00'
+          after: "22:00:00"
+          before: "06:00:00"
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
-          state: 'on'
+          state: "on"
     action:
-    - service: scene.turn_on
-      entity_id: scene.good_night
-    - service: light.turn_off
-      entity_id: 'all'
-    - service: fan.turn_off
-      entity_id: fan.living_room_fan
-    - service: switch.turn_on
-      entity_id: switch.humidifier
-    - service: switch.turn_off
-      entity_id:
-        - switch.stairs
-        - switch.front_door
-        - switch.deck
-        - switch.lava_lamp
+      - service: scene.turn_on
+        entity_id: scene.good_night
+      - service: light.turn_off
+        entity_id: "all"
+      - service: fan.turn_off
+        entity_id: fan.living_room_fan
+      - service: switch.turn_on
+        entity_id: switch.humidifier
+      - service: switch.turn_off
+        entity_id:
+          - switch.stairs
+          - switch.front_door
+          - switch.deck
+          - switch.lava_lamp
+
     # - service: fan.turn_on
     #   data:
     #     entity_id: fan.master_bedroom_fan
     #     speed: 'smart'
-
-## off is handled by other automations
+  ## off is handled by other automations
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bedroom_motion
-        to: 'on'
+        to: "on"
       - platform: state
         entity_id: binary_sensor.hallway_motion
-        to: 'on'
+        to: "on"
     condition:
       condition: and
       conditions:
@@ -707,10 +706,10 @@ automation:
           zone: zone.home
         - condition: state
           entity_id: switch.bathroom_light_fan_switch
-          state: 'on'
+          state: "on"
         - condition: state
           entity_id: light.master_bedroom
-          state: 'off'
+          state: "off"
     action:
       - service: light.turn_on
         data_template:
@@ -727,7 +726,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.downstairs_motion
-        to: 'off'
+        to: "off"
     condition:
       condition: and
       conditions:
@@ -735,10 +734,10 @@ automation:
           entity_id: device_tracker.bayesian_zeke_home
           zone: zone.home
         - condition: time
-          before: '23:30:00'
+          before: "23:30:00"
         - condition: state
           entity_id: input_boolean.basement_auto_on
-          state: 'on'
+          state: "on"
     action:
       - service: switch.turn_off
         data:
@@ -752,26 +751,26 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.office_motion
-        to: 'off'
+        to: "off"
         for:
           minutes: 10
     condition:
       condition: and
       conditions:
-      # Turn off auto-off when on a trip so it looks like I'm working
+        # Turn off auto-off when on a trip so it looks like I'm working
         - condition: state
           entity_id: input_boolean.trip
-          state: 'off'
+          state: "off"
         - condition: state
           entity_id: binary_sensor.workday_sensor
-          state: 'off'
+          state: "off"
         - condition: time
-          after: '07:00:00'
-          before: '17:00:00'
+          after: "07:00:00"
+          before: "17:00:00"
     action:
       - service: light.turn_off
         data:
-          entity_id: 
+          entity_id:
             - light.office_lamp
             - light.office_ceiling
           transition: 5
@@ -784,7 +783,7 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.downstairs_motion
-        to: 'on'
+        to: "on"
     condition:
       condition: and
       conditions:
@@ -795,15 +794,15 @@ automation:
           entity_id: sensor.downstairs_motion_illumination
           below: 4
         - condition: time
-          before: '22:00:00'
+          before: "22:00:00"
         - condition: time
-          after: '09:00:00'
+          after: "09:00:00"
         - condition: state
           entity_id: switch.stairs
-          state: 'off'
+          state: "off"
         - condition: state
           entity_id: switch.stairs
-          state: 'off'
+          state: "off"
     action:
       - service: switch.turn_on
         data:
@@ -854,7 +853,7 @@ group:
       - switch.flux
       - switch.christmas_tree
       - light.christmas_lights
-## TODO is this group needed anymore? or should I change it?
+  ## TODO is this group needed anymore? or should I change it?
   master_bedroom:
     name: Master Bedroom
     entities:
@@ -942,7 +941,7 @@ light:
   - platform: switch
     name: Lava Lamp
     entity_id: switch.lava_lamp
-    
+
   - platform: mqtt
     schema: json
     name: "Dresser Strip"
@@ -951,23 +950,23 @@ light:
     effect: true
     effect_list:
       - bpm
-      - candy cane  
-      - confetti  
-      - cyclon rainbow  
-      - dots  
-      - fire  
-      - glitter  
-      - juggle  
+      - candy cane
+      - confetti
+      - cyclon rainbow
+      - dots
+      - fire
+      - glitter
+      - juggle
       - lightning
-      - noise  
-      - police all  
-      - police one  
-      - rainbow  
-      - rainbow with glitter  
-      - ripple  
-      - sinelon  
-      - solid  
-      - twinkle  
+      - noise
+      - police all
+      - police one
+      - rainbow
+      - rainbow with glitter
+      - ripple
+      - sinelon
+      - solid
+      - twinkle
     brightness: true
     #flash: true
     rgb: true
@@ -1011,19 +1010,19 @@ scene:
       light.right_lamp:
         state: "on"
         brightness_pct: 25
-        rgb_color: [255,0,0]
+        rgb_color: [255, 0, 0]
       light.left_lamp:
         state: "on"
         brightness_pct: 25
-        rgb_color: [255,0,0]
+        rgb_color: [255, 0, 0]
       light.pendant_lamp:
         state: "on"
         brightness_pct: 25
-        rgb_color: [255,0,0]
+        rgb_color: [255, 0, 0]
       light.tv:
         state: "on"
         brightness_pct: 25
-        rgb_color: [255,0,0]
+        rgb_color: [255, 0, 0]
 
   - name: chill
     entities:
@@ -1035,7 +1034,7 @@ scene:
   - name: cloudy_arrive_home
     entities:
       switch.stairs: "on"
-      light.living_room_all: 
+      light.living_room_all:
         state: "on"
         transition: 30
         brightness_pct: 100
@@ -1051,7 +1050,7 @@ scene:
     entities:
       switch.front_door: "on"
       switch.stairs: "on"
-      light.living_room_all: 
+      light.living_room_all:
         state: "on"
         transition: 30
         brightness_pct: 100
@@ -1086,13 +1085,12 @@ sensor:
     sensors:
       circadian_brightness:
         friendly_name: "Circadian Brightness"
-        unit_of_measurement: '%'
+        unit_of_measurement: "%"
         value_template: "{{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') |int }}"
       circadian_temperature:
         friendly_name: "Circadian Color Temp"
-        unit_of_measurement: '°K'
+        unit_of_measurement: "°K"
         value_template: "{{ state_attr('sensor.circadian_values', 'colortemp') }}"
-
 
 ########################
 # Switch
@@ -1115,13 +1113,14 @@ switch:
     lights_ct:
       - light.living_room_all_except_tv
 
+
   # - platform: flux
   #   lights:
   #   #- light.living_room_all_except_tv
   #     - light.master_bedroom
   #   mode: mired
   #   transition: 120
-  
+
 ########################
 # Zone
 ########################

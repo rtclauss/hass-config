@@ -14,12 +14,13 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'media_player'
+        package: "media_player"
 
       expose: &expose
         <<: *customize
         haaska_hidden: false
         homebridge_hidden: false
+
 
     ################################################
     ## Alarm Panels
@@ -40,11 +41,11 @@ homeassistant:
     ################################################
     ## Device Trackers
     ################################################
-    
+
     ################################################
     ## Frontend
     ################################################
-    
+
     ################################################
     ## Groups
     ################################################
@@ -88,7 +89,7 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    
+
     ################################################
     ## Thermostats
     ################################################
@@ -126,18 +127,18 @@ automation:
       - platform: state
         entity_id: media_player.vizio_smartcast
         #TODO Temporary hack: ADB showing wrong values
-        from: 'on'
-        to: 'off'
-        for: '00:00:15'
+        from: "on"
+        to: "off"
+        for: "00:00:15"
     condition:
       condition: and
       conditions:
-      - condition: time
-        after: '20:00:00'
-        before: '04:00:00'
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: 'off'
+        - condition: time
+          after: "20:00:00"
+          before: "04:00:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
     action:
       - service: scene.turn_on
         entity_id: scene.bedroom_prep
@@ -152,28 +153,28 @@ automation:
         entity_id: media_player.living_room_firetv_2
         from: playing
         to: paused
-        for: '00:00:20'
+        for: "00:00:20"
       - platform: state
         entity_id: media_player.vizio_smartcast
         #TODO Temporary hack: ADB showing wrong values
         from: playing
         to: paused
-        for: '00:00:20'
+        for: "00:00:20"
       - platform: state
         entity_id: media_player.living_room_firetv_2
         #TODO Temporary hack: ADB showing wrong values
         from: paused
         to: standby
-        for: '00:00:20'
+        for: "00:00:20"
     condition:
       condition: and
       conditions:
-      - condition: time
-        after: '19:30:00'
-        before: '23:59:00'
-      - condition: state
-        entity_id: input_boolean.guest_mode
-        state: 'off'
+        - condition: time
+          after: "19:30:00"
+          before: "23:59:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
     action:
       - service: scene.turn_on
         entity_id: scene.tv_paused
@@ -187,26 +188,26 @@ automation:
         #TODO Temporary hack: ADB showing wrong values
         from: paused
         to: playing
-        for: '00:00:20'
+        for: "00:00:20"
       - platform: state
         entity_id: media_player.living_room_firetv_2
         #TODO Temporary hack: ADB showing wrong values
         from: standby
         to: paused
-        for: '00:00:20'
+        for: "00:00:20"
       - platform: state
         entity_id: media_player.vizio_smartcast
         to: playing
-        for: '00:00:20'
+        for: "00:00:20"
     condition:
       condition: and
       conditions:
         - condition: time
-          after: '19:30:00'
-          before: '23:59:00'
+          after: "19:30:00"
+          before: "23:59:00"
         - condition: state
           entity_id: input_boolean.guest_mode
-          state: 'off'
+          state: "off"
     action:
       - service: scene.turn_on
         entity_id: scene.tv_resumed
@@ -277,6 +278,7 @@ media_player:
     apps:
       com.amazon.tv.launcher: "Fire TV"
 
+
   # - platform: spotify
   #   client_id: !secret spotify_client_id
   #   client_secret: !secret spotify_client_secret
@@ -297,7 +299,7 @@ plant:
 #plex:
 #  token: !secret plex_token
 #  host: fermentor.lan
-  
+
 ########################
 # Proximity
 ########################
@@ -310,89 +312,89 @@ scene:
   - name: tv_playing_media
     entities:
       light.living_room_all_except_tv:
-        state: 'off'
+        state: "off"
         transition: 20
       light.kitchen_sink:
-        state: 'off'
+        state: "off"
       light.kitchen_table:
-        state: 'off'
+        state: "off"
         transition: 20
       light.lava_lamp:
-        state: 'off'
+        state: "off"
       light.office_ceiling:
-        state: 'off'
+        state: "off"
         transition: 20
       light.office_lamp:
-        state: 'off'
+        state: "off"
         transition: 20
       light.hallway_light:
-        state: 'off'
+        state: "off"
         transition: 20
       light.tv:
-        state: 'on'
+        state: "on"
         brightness_pct: 75
         transition: 20
       light.guest_bedroom:
-        state: 'off'
+        state: "off"
         transition: 20
-      switch.christmas_tree: 'off'
-      switch.deck: 'off'
-      switch.deck_led_string: 'off'
-      switch.front_door: 'off'
-      switch.stairs: 'off'
-      
+      switch.christmas_tree: "off"
+      switch.deck: "off"
+      switch.deck_led_string: "off"
+      switch.front_door: "off"
+      switch.stairs: "off"
+
   - name: tv_paused
-    entities: 
+    entities:
       light.living_room_all_except_tv:
-        state: 'on'
+        state: "on"
         transition: 5
         brightness_pct: 50
       light.kitchen_sink:
-        state: 'on'
+        state: "on"
         transition: 5
         brightness_pct: 100
-      switch.stairs: 'on'
-      
+      switch.stairs: "on"
+
   - name: tv_resumed
     entities:
       light.living_room_all_except_tv:
-        state: 'off'
+        state: "off"
         transition: 20
       light.kitchen_sink:
-        state: 'off'
+        state: "off"
       light.kitchen_table:
-        state: 'off'
+        state: "off"
         transition: 20
       light.lava_lamp:
-        state: 'off'
+        state: "off"
       light.office_ceiling:
-        state: 'off'
+        state: "off"
         transition: 20
       light.office_lamp:
-        state: 'off'
+        state: "off"
         transition: 20
       light.hallway_light:
-        state: 'off'
+        state: "off"
         transition: 20
       light.tv:
-        state: 'on'
+        state: "on"
         brightness_pct: 25
         transition: 20
       light.guest_bedroom:
-        state: 'off'
+        state: "off"
         transition: 20
-      switch.christmas_tree: 'off'
-      switch.deck: 'off'
-      switch.deck_led_string: 'off'
-      switch.front_door: 'off'
-      switch.stairs: 'off'
+      switch.christmas_tree: "off"
+      switch.deck: "off"
+      switch.deck_led_string: "off"
+      switch.front_door: "off"
+      switch.stairs: "off"
 
 ########################
 # Scripts
 ########################
 script:
   spotify_arrival:
-    alias: 'Spotify Arrive Home'
+    alias: "Spotify Arrive Home"
     sequence:
       - service: media_player.select_source
         data:
@@ -422,7 +424,7 @@ script:
       - delay:
           seconds: 2
       - service: media_player.play_media
-        data: 
+        data:
           entity_id: media_player.spotify
           media_content_type: playlist
         data_template:
@@ -529,7 +531,7 @@ script:
               {{ plists[pindex] }}
 
   spotify_bedtime:
-    alias: 'Spotify Bedtime'
+    alias: "Spotify Bedtime"
     sequence:
       - service: media_player.select_source
         data:
@@ -559,7 +561,7 @@ script:
       - delay:
           seconds: 2
       - service: media_player.play_media
-        data: 
+        data:
           entity_id: media_player.spotify
           media_content_type: playlist
         data_template:
@@ -666,12 +668,12 @@ script:
               {{ plists[pindex] }}
 
   spotify_wake_up:
-    alias: 'Spotify Wake Up'
+    alias: "Spotify Wake Up"
     sequence:
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
-        data_template: 
+        data_template:
           source: >-
             {% if is_state('input_boolean.guest_mode', 'on') %}
               Bedroom
@@ -702,7 +704,7 @@ script:
       - delay:
           seconds: 2
       - service: media_player.play_media
-        data: 
+        data:
           entity_id: media_player.spotify
           media_content_type: playlist
         data_template:
@@ -804,7 +806,7 @@ script:
               {{ plists[pindex] }}
 
   watch_tv:
-    alias: 'Watch TV'
+    alias: "Watch TV"
     sequence:
       - service: media_player.turn_on
         data:
@@ -817,16 +819,16 @@ script:
       - service: media_player.select_source
         data:
           entity_id: media_player.vizio_smartcast
-          source: 'HDMI-5'
+          source: "HDMI-5"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv_2
-          source: 'com.amazon.firetv.youtube.tv'
+          source: "com.amazon.firetv.youtube.tv"
           #TODO Change
           #source: 'YoutubeTV'
 
   watch_hbo_now:
-    alias: 'Watch HBO'
+    alias: "Watch HBO"
     sequence:
       - service: media_player.turn_on
         data:
@@ -839,14 +841,14 @@ script:
       - service: media_player.select_source
         data:
           entity_id: media_player.vizio_smartcast
-          source: 'HDMI-5'
+          source: "HDMI-5"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv_2
-          source: 'com.hbo.hbonow'
+          source: "com.hbo.hbonow"
 
   watch_netflix:
-    alias: 'Watch Netflix'
+    alias: "Watch Netflix"
     sequence:
       - service: media_player.turn_on
         data:
@@ -859,11 +861,11 @@ script:
       - service: media_player.select_source
         data:
           entity_id: media_player.vizio_smartcast
-          source: 'HDMI-5'
+          source: "HDMI-5"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv_2
-          source: 'Netflix'
+          source: "Netflix"
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -875,7 +877,7 @@ script:
           entity_id: media_player.spotify
 
   watch_plex:
-    alias: 'Watch Plex'
+    alias: "Watch Plex"
     sequence:
       - service: media_player.turn_on
         data:
@@ -888,11 +890,11 @@ script:
       - service: media_player.select_source
         data:
           entity_id: media_player.vizio_smartcast
-          source: 'HDMI-5'
+          source: "HDMI-5"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv_2
-          source: 'Plex'
+          source: "Plex"
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -902,9 +904,9 @@ script:
       - service: media_player.media_pause
         data:
           entity_id: media_player.spotify
-          
+
   watch_letterkenny:
-    alias: 'Watch Letterkenny'
+    alias: "Watch Letterkenny"
     sequence:
       - service: media_player.turn_on
         data:
@@ -917,11 +919,11 @@ script:
       - service: media_player.select_source
         data:
           entity_id: media_player.vizio_smartcast
-          source: 'HDMI-5'
+          source: "HDMI-5"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv_2
-          source: 'com.plexapp.android'
+          source: "com.plexapp.android"
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -931,9 +933,9 @@ script:
       - service: media_player.media_pause
         data:
           entity_id: media_player.spotify
-          
+
   watch_popcorn_time:
-    alias: 'Watch Popcorn Time'
+    alias: "Watch Popcorn Time"
     sequence:
       - service: media_player.turn_on
         data:
@@ -946,11 +948,11 @@ script:
       - service: media_player.select_source
         data:
           entity_id: media_player.vizio_smartcast
-          source: 'HDMI-5'
+          source: "HDMI-5"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv_2
-          source: 'pct.droid.tv'
+          source: "pct.droid.tv"
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -960,7 +962,7 @@ script:
       - service: media_player.media_pause
         data:
           entity_id: media_player.spotify
-          
+
 ########################
 # Sensor
 ########################

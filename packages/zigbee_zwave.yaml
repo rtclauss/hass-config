@@ -76,11 +76,11 @@ homeassistant:
     binary_sensor.kitchen_button:
       <<: *customize
       friendly_name: "Kitchen Button push"
-      
+
     binary_sensor.living_room_button_hold:
       <<: *customize
       friendly_name: "Living Room Button hold"
-      
+
     binary_sensor.living_room_button_push:
       <<: *customize
       friendly_name: "Living Room Button push"
@@ -149,7 +149,7 @@ homeassistant:
     ################################################
     group.egress_points:
       <<: *customize
-      friendly_name: Sensors on Doors and Windows 
+      friendly_name: Sensors on Doors and Windows
 
     ################################################
     ## Input Boolean
@@ -178,10 +178,10 @@ homeassistant:
       <<: *customize
       friendly_name: "Basement Door Battery"
 
-#    sensor.bathroom_battery:
-#      <<: *customize
-#      friendly_name: "Bathroom Battery"
-#      device_class: battery
+    #    sensor.bathroom_battery:
+    #      <<: *customize
+    #      friendly_name: "Bathroom Battery"
+    #      device_class: battery
 
     sensor.bathroom_humidity:
       <<: *customize
@@ -302,12 +302,12 @@ homeassistant:
       <<: *customize
       friendly_name: "Living Room Humidity"
       device_class: humidity
-      
+
     sensor.living_room_pressure:
       <<: *customize
       friendly_name: "Living Room Pressure"
       icon: mdi:gauge
-      
+
     sensor.living_room_temperature:
       <<: *customize
       friendly_name: "Living Room Temperature"
@@ -318,10 +318,10 @@ homeassistant:
       friendly_name: "Master Bed Occupancy Sensor Battery"
       device_class: battery
 
-#    sensor.master_bedroom_battery:
-#      <<: *customize
-#      friendly_name: "Master Bedroom Battery"
-#      device_class: battery
+    #    sensor.master_bedroom_battery:
+    #      <<: *customize
+    #      friendly_name: "Master Bedroom Battery"
+    #      device_class: battery
 
     sensor.master_bedroom_humidity:
       <<: *customize
@@ -373,10 +373,10 @@ homeassistant:
       friendly_name: "North West Basement Window Battery"
       device_class: battery
 
-#    sensor.office_button_battery:
-#      <<: *customize
-#      device_class: battery
-#      friendly_name: "Office Button Battery"
+    #    sensor.office_button_battery:
+    #      <<: *customize
+    #      device_class: battery
+    #      friendly_name: "Office Button Battery"
 
     sensor.office_motion_battery:
       <<: *customize
@@ -415,7 +415,7 @@ homeassistant:
       <<: *customize
       friendly_name: "Bathroom Light and Fan"
       icon: mdi:shower
-      
+
     switch.humidifier:
       <<: *customize
       friendly_name: Humidifier
@@ -437,12 +437,12 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
-        to: 'on'
+        to: "on"
     condition:
       condition: state
       entity_id: binary_sensor.master_bed_occupancy
-      state: 'on'
-      for: 
+      state: "on"
+      for:
         minutes: 2
     action:
       - service: input_boolean.turn_on
@@ -454,18 +454,17 @@ automation:
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
-        to: 'off'
+        to: "off"
     condition:
       condition: state
       entity_id: binary_sensor.master_bed_occupancy
-      state: 'off'
-      for: 
+      state: "off"
+      for:
         seconds: 45
     action:
       - service: input_boolean.turn_off
         data:
           entity_id: input_boolean.master_bed_occupancy
-  
 
   - id: turn_on_guest_bedroom_fan_light_zwave_switch
     alias: turn_on_guest_bedroom_fan_light_zwave_switch
@@ -476,8 +475,8 @@ automation:
           # The data on this page has the right idea but the events are wrong in OZW Beta
           # Use the event recorder for "ozw.scene_activated" to see what actually are the values triggered
           # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
-          node_id: 13  # Switch in guest room
-          scene_id: 2  # Top/on button press
+          node_id: 13 # Switch in guest room
+          scene_id: 2 # Top/on button press
           scene_value_id: 1 # pressed once
     action:
       - service: light.turn_on
@@ -493,8 +492,8 @@ automation:
           # The data on this page has the right idea but the events are wrong in OZW Beta
           # Use the event recorder for "ozw.scene_activated" to see what actually are the values triggered
           # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
-          node_id: 13  # Switch in guest room
-          scene_id: 2  # Top/on button press
+          node_id: 13 # Switch in guest room
+          scene_id: 2 # Top/on button press
           scene_value_id: 4 # pressed twice
     action:
       - service: light.turn_on
@@ -510,8 +509,8 @@ automation:
           # The data on this page has the right idea but the events are wrong in OZW Beta
           # Use the event recorder for "ozw.scene_activated" to see what actually are the values triggered
           # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
-          node_id: 13  # Switch in guest room
-          scene_id: 1  # Bottom/off button press
+          node_id: 13 # Switch in guest room
+          scene_id: 1 # Bottom/off button press
           scene_value_id: 4 # pressed twice
     action:
       - service: light.turn_off
@@ -527,8 +526,8 @@ automation:
           # The data on this page has the right idea but the events are wrong in OZW Beta
           # Use the event recorder for "ozw.scene_activated" to see what actually are the values triggered
           # https://www.home-assistant.io/docs/z-wave/device-specific/#inovelli-scene-capable-onoff-and-dimmer-wall-switches
-          node_id: 13  # Switch in guest room
-          scene_id: 1  # Bottom/off button press
+          node_id: 13 # Switch in guest room
+          scene_id: 1 # Bottom/off button press
           scene_value_id: 1 # pressed once
     action:
       - service: light.turn_off
@@ -538,7 +537,7 @@ automation:
   #   id: xiaomi_mqtt_button_pressed
   #   trigger:
   #   - platform: state
-  #     entity_id: 
+  #     entity_id:
   #       - binary_sensor.living_room_button
   #       - binary_sensor.guest_room_button
   #   action:
@@ -586,15 +585,14 @@ binary_sensor:
             is_state('binary_sensor.esp32_whole_bed_pressure', 'on')
           }}
 
-
       master_bed_occupancy:
-        entity_id: 
+        entity_id:
           - binary_sensor.right_master_bed_occupancy
           - binary_sensor.left_master_bed_occupancy
           - binary_sensor.esp32_bed_occupancy
         # value_template: >-
         #   {{
-        #     is_state('binary_sensor.left_master_bed_occupancy', 'on') 
+        #     is_state('binary_sensor.left_master_bed_occupancy', 'on')
         #       or
         #     is_state('binary_sensor.right_master_bed_occupancy', 'on')
         #       or
