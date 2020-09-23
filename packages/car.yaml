@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'car'
+        package: "car"
 
       expose: &expose
         <<: *customize
@@ -44,7 +44,7 @@ homeassistant:
     ################################################
     ## Device Trackers
     ################################################
-    
+
     ################################################
     ## Groups
     ################################################
@@ -56,6 +56,7 @@ homeassistant:
       <<: *customize
       icon: mdi:car
       class: motion
+
 
     ################################################
     ## Input Numbers
@@ -88,13 +89,13 @@ homeassistant:
 #      <<: *customize
 #      icon: mdi:gas-station
 #      unit_of_measurement: '%'
-    ################################################
-    ## Thermostats
-    ################################################
+################################################
+## Thermostats
+################################################
 
-    ################################################
-    ## Zone
-    ################################################
+################################################
+## Zone
+################################################
 
 ########################
 # Alarm Panel
@@ -107,7 +108,7 @@ alarm_control_panel:
 automation:
   - id: send_notification_gas_level
     alias: send_notification_gas_level
-    trigger: 
+    trigger:
       - platform: numeric_state
         entity_id: sensor.honda_fit_gas_level
         below: 25
@@ -125,16 +126,16 @@ automation:
   - id: garage_door_reminder
     alias: Close forgotten garage door
     trigger:
-    - platform: state
-      entity_id: cover.garage_door_opener
-      to: open
+      - platform: state
+        entity_id: cover.garage_door_opener
+        to: open
     condition:
-    - condition: time
-      after: '23:30:00'
+      - condition: time
+        after: "23:30:00"
     action:
-    - service: notify.all
-      data:
-        message: Close the garage door.
+      - service: notify.all
+        data:
+          message: Close the garage door.
 
 ########################
 # Binary Sensors
@@ -155,7 +156,6 @@ cover:
     password: !secret myq_password
     type: chamberlain
 
-
 ########################
 # Device Trackers
 ########################
@@ -164,9 +164,9 @@ device_tracker:
     host: !secret traccar_ip
     port: 80
     username: !secret traccar_user
-    password: !secret traccar_password 
-    monitored_conditions: ['dirOfTravel']
-    event: ['ignition_on', 'ignition_off']
+    password: !secret traccar_password
+    monitored_conditions: ["dirOfTravel"]
+    event: ["ignition_on", "ignition_off"]
     scan_interval: 10
 
 ########################

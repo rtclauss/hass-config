@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'curling'
+        package: "curling"
 
       expose: &expose
         <<: *customize
@@ -54,7 +54,7 @@ homeassistant:
       <<: *customize
       friendly_name: "Toggle Curling tab"
       icon: mdi:curling
-      
+
     ################################################
     ## Binary Sensor
     ################################################
@@ -116,7 +116,7 @@ homeassistant:
 # Automations
 ########################
 automation:
-# Implemented in schedy
+  # Implemented in schedy
   # - id: leave_home_for_curling
   #   alias: leave_home_for_curling
   #   trigger:
@@ -158,23 +158,23 @@ automation:
     condition:
       condition: time
       weekday:
-      - sun
-      - mon
-      - tue
+        - sun
+        - mon
+        - tue
     action:
-    # - service: nest.set_eta
-    #   data_template:
-    #     eta: '{{states.sensor.time_to_home.state}}'
-    #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_temperature
-      data:
-        temperature: 70
-        hvac_mode: heat
-        entity_id: climate.glycol_thermostat
-    - service: notify.all
-      data_template:
-        message: >-
-          Turning on heat while driving home from OCC
+      # - service: nest.set_eta
+      #   data_template:
+      #     eta: '{{states.sensor.time_to_home.state}}'
+      #     trip_id: "{{ states.input_select.trip_origin.state }}"
+      - service: climate.set_temperature
+        data:
+          temperature: 70
+          hvac_mode: heat
+          entity_id: climate.glycol_thermostat
+      - service: notify.all
+        data_template:
+          message: >-
+            Turning on heat while driving home from OCC
 
   - id: return_home_from_spcc
     alias: return_home_from_spcc
@@ -190,41 +190,42 @@ automation:
     condition:
       condition: time
       weekday:
-      - sun
-      - wed
-      - thu
+        - sun
+        - wed
+        - thu
     action:
-    # - service: nest.set_eta
-    #   data_template:
-    #     eta: '{{states.sensor.time_to_home.state}}'
-    #     trip_id: "{{ states.input_select.trip_origin.state }}"
-    - service: climate.set_temperature
-      data:
-        temperature: 70
-        hvac_mode: heat
-        entity_id: climate.glycol_thermostat
-    - service: notify.all
-      data_template:
-        message: >-
-          Turning on heat while driving home from SPCC
+      # - service: nest.set_eta
+      #   data_template:
+      #     eta: '{{states.sensor.time_to_home.state}}'
+      #     trip_id: "{{ states.input_select.trip_origin.state }}"
+      - service: climate.set_temperature
+        data:
+          temperature: 70
+          hvac_mode: heat
+          entity_id: climate.glycol_thermostat
+      - service: notify.all
+        data_template:
+          message: >-
+            Turning on heat while driving home from SPCC
 
   - id: toggle_curling_automations_on_season_change
     alias: toggle_curling_automations_on_season_change
     trigger:
-    - platform: state
-      entity_id: binary_sensor.curling_season
-    - platform: homeassistant
-      event: start
+      - platform: state
+        entity_id: binary_sensor.curling_season
+      - platform: homeassistant
+        event: start
     action:
-    - service: script.toggle_curling_automation_on_curling_season
-      data:
-        entity_id: automation.return_home_from_OCC
-    - service: script.toggle_curling_automation_on_curling_season
-      data:
-        entity_id: automation.leave_home_for_curling
-    - service: script.toggle_curling_automation_on_curling_season
-      data:
-        entity_id: automation.return_home_from_spcc
+      - service: script.toggle_curling_automation_on_curling_season
+        data:
+          entity_id: automation.return_home_from_OCC
+      - service: script.toggle_curling_automation_on_curling_season
+        data:
+          entity_id: automation.leave_home_for_curling
+      - service: script.toggle_curling_automation_on_curling_season
+        data:
+          entity_id: automation.return_home_from_spcc
+
 
   # - id: toggle_curling_tab
   #   alias: toggle_curling_tab
@@ -296,20 +297,20 @@ sensor:
         value_template: >-
           {{ states('proximity.occ') }}
         entity_id: sensor.time
-        unit_of_measurement: 'm'
+        unit_of_measurement: "m"
       occ_time:
-        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}'
+        value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}"
         entity_id: sensor.time
-        unit_of_measurement: 'minutes'
+        unit_of_measurement: "minutes"
       spcc_time:
-        value_template: '{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}'
+        value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}"
         entity_id: sensor.time
-        unit_of_measurement: 'minutes'
+        unit_of_measurement: "minutes"
       spcc_distance:
         value_template: >-
           {{ states('proximity.spcc') }}
         entity_id: sensor.time
-        unit_of_measurement: 'm'
+        unit_of_measurement: "m"
       heading_spcc:
         value_template: >-
           {{ state_attr('proximity.spcc','dir_of_travel') |default("unknown") }}
