@@ -87,10 +87,6 @@ homeassistant:
       friendly_name: "Turn off all lights when bedroom lights turn off"
       icon: mdi:bed
     
-    automation.turn_on_bedroom_light_at_night:
-      <<: *customize
-      friendly_name: "Turn on bedroom lights at night"
-      icon: mdi:bed
 
     ################################################
     ## Binary Sensors
@@ -463,9 +459,6 @@ automation:
     condition:
       condition: and
       conditions:
-        - condition: sun
-          before: sunrise
-          before_offset: "0:30:00"
         - condition: state
           entity_id: input_boolean.master_bedroom_auto_on
           state: 'on'
@@ -490,18 +483,12 @@ automation:
         - condition: zone
           entity_id: device_tracker.bayesian_zeke_home
           zone: zone.home
-        - condition: sun
-          before: sunrise
-          before_offset: "0:30:00"
         - condition: state
           entity_id: light.master_bedroom
           state: 'off'
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: 'off'
-        - condition: state
-          entity_id: binary_sensor.bayesian_zeke_home
-          state: 'on'
     action:
       - service: light.turn_on
         data_template:
@@ -702,25 +689,6 @@ automation:
     #     entity_id: fan.master_bedroom_fan
     #     speed: 'smart'
 
-  - id: turn_on_bedroom_light_at_night
-    alias: turn_on_bedroom_light_at_night
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
-        to: 'on'
-    condition:
-      condition: time
-      after: '20:00:00'
-      before: '01:00:00'
-    action:
-      - service: light.turn_on
-        data_template:
-          entity_id: light.master_bedroom
-          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
-          brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
-          transition: 5
-
-
 ## off is handled by other automations
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom
@@ -748,64 +716,6 @@ automation:
         data_template:
           entity_id: light.master_bedroom
           transition: 5
-          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
-          brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
-      - service: homeassistant.turn_on
-        data:
-          entity_id: input_boolean.master_bedroom_auto_on
-
-  - id: turn_off_bedroom_light_when_dark_in_room
-    alias: turn_off_bedroom_light_when_dark_in_room
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
-        to: 'off'
-    condition:
-      condition: and
-      conditions:
-        - condition: time
-          before: '22:00:00'
-        - condition: state
-          entity_id: input_boolean.master_bedroom_auto_on
-          state: 'on'
-        - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
-          state: 'off'
-          for: 
-            minutes: 5
-    action:
-      - service: light.turn_off
-        data:
-          entity_id: light.master_bedroom
-          transition: 10
-      - service: homeassistant.turn_off
-        data:
-          entity_id: input_boolean.master_bedroom_auto_on
-
-  - id: turn_on_bedroom_light_when_dark_in_room
-    alias: turn_on_bedroom_light_when_dark_in_room
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
-        to: 'on'
-    condition:
-      condition: and
-      conditions:
-        - condition: zone
-          entity_id: device_tracker.bayesian_zeke_home
-          zone: zone.home
-        # - condition: sun
-        #   after: sunset
-        #   after_offset: "-01:00:00"
-        - condition: time
-          after: '09:00:00'
-        - condition: state
-          entity_id: light.master_bedroom
-          state: 'off'
-    action:
-      - service: light.turn_on
-        data_template:
-          entity_id: light.master_bedroom
           kelvin: "{{ states('sensor.circadian_temperature') | int }}"
           brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
       - service: homeassistant.turn_on
