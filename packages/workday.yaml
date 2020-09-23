@@ -129,8 +129,10 @@ automation:
   - id: wake_up
     alias: wake_up
     trigger:
-      - platform: template
-        value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[0:5]}}"
+      - platform: time
+        at: input_datetime.next_work_meeting
+      # - platform: template
+      #   value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[0:5]}}"
     condition:
       - condition: state
         entity_id: 'binary_sensor.workday_sensor'
