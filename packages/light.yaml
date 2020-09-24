@@ -491,10 +491,12 @@ automation:
           state: "off"
     action:
       - service: light.turn_on
-        data_template:
+        data:
           entity_id: light.master_bedroom
-          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
-          brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
+          kelvin: >-
+            {{ states('sensor.circadian_temperature') | int }}
+          brightness_pct: >-
+            {{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') | int }}
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.master_bedroom_auto_on
@@ -515,8 +517,10 @@ automation:
           entity_id:
             - light.office_lamp
             - light.office_ceiling
-          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
-          brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
+          kelvin: >-
+            {{ states('sensor.circadian_temperature') | int }}
+          brightness_pct: >-
+            {{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') | int }}
 
   - id: office_light_off_at_night
     alias: office_light_off_at_night
@@ -684,6 +688,7 @@ automation:
           - switch.deck
           - switch.lava_lamp
 
+
     # - service: fan.turn_on
     #   data:
     #     entity_id: fan.master_bedroom_fan
@@ -712,11 +717,13 @@ automation:
           state: "off"
     action:
       - service: light.turn_on
-        data_template:
+        data:
           entity_id: light.master_bedroom
           transition: 5
-          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
-          brightness_pct: "{{ state_attr('switch.circadian_lighting_circadian_lighting', 'brightness') | int }}"
+          kelvin: >-
+            {{ states('sensor.circadian_temperature') | int }}
+          brightness_pct: >-
+            {{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') | int }}
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.master_bedroom_auto_on
