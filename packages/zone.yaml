@@ -571,7 +571,7 @@ automation:
       - service: notify.all
         data_template:
           message: >-
-            Entering Rochester. Turning off Away Mode. ETA to home {{ states.sensor.time_to_home.state }}.
+            Entering Rochester from direction {{ sensor.zeke_direction }}. Turning off Away Mode. ETA to home {{ states.sensor.time_to_home.state }}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
@@ -598,7 +598,6 @@ binary_sensor:
   - platform: template
     sensors:
       test_homeward:
-        entity_id: sensor.time
         value_template: >-
           {% if
              (((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed))//60) | int > 95) and (states.sensor.heading_home.state=="towards")
@@ -844,16 +843,12 @@ sensor:
         value_template: >-
           {{ state_attr('proximity.home','dir_of_travel') |default("unknown") }}
       home_distance:
-        entity_id: sensor.time
         value_template: "{{ states.proximity.home.state }}"
         unit_of_measurement: "m"
       home_time:
-        entity_id: sensor.time
         value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed)) | int //60 }}"
         unit_of_measurement: "minutes"
       zeke_speed:
-        entity_id:
-          - device_tracker.bayesian_zeke_home
         unit_of_measurement: "mph"
         value_template: >-
           {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int }}
@@ -861,18 +856,12 @@ sensor:
         value_template: >-
           {{ state_attr('proximity.twincities','dir_of_travel') |default("unknown") }}
       zeke_direction:
-        entity_id:
-          - device_tracker.bayesian_zeke_home
-          #- device_tracker.wethop
-          #- device_tracker.android_1
-          #- device_tracker.honda
         value_template: >-
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
             {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int }}
           {%- else -%}
-           
+           {{ -1 | int }}
           {%- endif %}
-
 
   # - platform: places
   #   name: android
