@@ -1,12 +1,12 @@
 title: The Brewery
 
-custom_header:
-  compact_mode: true
-  voice: hide
-  swipe: true
-  hide_config: true
-  #test_template: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
-  hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
+# custom_header:
+#   compact_mode: true
+#   voice: hide
+#   swipe: true
+#   hide_config: true
+#   #test_template: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
+#   hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
 
 views:
   - title: Home
@@ -509,45 +509,156 @@ views:
 
   ##################################################
 
-  - title: Cameras
-    path: cameras
-    icon: mdi:cctv
+  - title: Seasonal & Travel
+    path: travel
+    icon: mdi:island
     cards:
       - id: 8dc5a17e8df94b378903e8bdd7a23639 # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: picture-entity
-            entity: camera.livingroom
-          - type: entities
-            title: Living Room Controls
-            show_header_toggle: false
-            entities:
-              - cover.livingroom_move_left_right
-              - cover.livingroom_move_up_down
-              - switch.livingroom_motion_detection
-              - switch.livingroom_motion_tracking
-              - switch.livingroom_ir_led
-              - switch.livingroom_ir_filter
-          - type: picture-entity
-            entity: camera.livingroom_motion_snapshot
+        type: conditional
+        conditions:
+          - entity: person.ryan
+            state_not: "home"
+        card:
+          type: vertical-stack
+          cards:
+            - type: picture-entity
+              entity: camera.livingroom
+            - type: entities
+              title: Living Room Controls
+              show_header_toggle: false
+              entities:
+                - cover.livingroom_move_left_right
+                - cover.livingroom_move_up_down
+                - switch.livingroom_motion_detection
+                - switch.livingroom_motion_tracking
+                - switch.livingroom_ir_led
+                - switch.livingroom_ir_filter
+            - type: picture-entity
+              entity: camera.livingroom_motion_snapshot
 
-      - id: 5503f8eb035e450880c89ac3b24fdb57 # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: picture-entity
-            entity: camera.basement
-          - type: entities
-            title: Basement Controls
-            show_header_toggle: false
-            entities:
-              - cover.basement_move_left_right
-              - cover.basement_move_up_down
-              - switch.basement_motion_detection
-              - switch.basement_motion_tracking
-              - switch.basement_ir_led
-              - switch.basement_ir_filter
-          - type: picture-entity
-            entity: camera.basement_motion_snapshot
+      - id: 5503f8eb035e460880c89ac3b24fdb57 # Automatically created id
+        type: conditional
+        conditions:
+          - entity: person.ryan
+            state_not: "home"
+        card:
+          type: vertical-stack
+          cards:
+            - type: picture-entity
+              entity: camera.basement
+            - type: entities
+              title: Basement Controls
+              show_header_toggle: false
+              entities:
+                - cover.basement_move_left_right
+                - cover.basement_move_up_down
+                - switch.basement_motion_detection
+                - switch.basement_motion_tracking
+                - switch.basement_ir_led
+                - switch.basement_ir_filter
+            - type: picture-entity
+              entity: camera.basement_motion_snapshot
+
+      - id: 5503f8eb035e450880c89ec3b24fdb57 # Automatically created id
+        type: conditional
+        conditions:
+          - entity: binary_sensor.curling_season
+            state: "on"
+        card:
+          type: vertical-stack
+          cards:
+            - type: entities
+              title: Curling Sensors
+              show_header_toggle: false
+              entities:
+                - binary_sensor.curling_season
+                - sensor.occ_time
+                - sensor.occ_distance
+                - sensor.heading_occ
+                - sensor.spcc_time
+                - sensor.spcc_distance
+                - sensor.heading_spcc
+            - type: entities
+              title: Curling Automations
+              show_header_toggle: true
+              entities:
+                # - automation.leave_home_for_curling
+                - automation.return_home_from_occ
+                - automation.return_home_from_spcc
+
+      - id: 5503f8eb235e450880c89ec3b24fdb57 # Automatically created id
+        type: conditional
+        conditions:
+          - entity: input_boolean.trip
+            state: "true"
+        card:
+          type: horizontal-stack
+          cards:
+            - type: entities
+              title: Trip Status
+              show_header_toggle: false
+              entities:
+                - input_boolean.trip
+                - binary_sensor.planned_vacation_calendar
+                - binary_sensor.planned_work_trip_calendar
+                - binary_sensor.sensed_trip
+                - binary_sensor.flying_home_today
+                - input_datetime.random_vacation_lights_off
+                #- sensor.turn_off_time
+            - type: horizontal-stack
+              cards:
+                - type: conditional
+                  conditions:
+                    - entity: input_number.random_vacation_light_group
+                      state: "1.0"
+                  card:
+                    type: entities
+                    title: Lighting Override
+                    entities:
+                      - light.living_room_all
+                      - switch.front_door
+                      - scene.vacation_group_1
+
+                - type: conditional
+                  conditions:
+                    - entity: input_number.random_vacation_light_group
+                      state: "2.0"
+                  card:
+                    type: entities
+                    title: Lighting Override
+                    entities:
+                      - light.living_room_all
+                      - light.master_bedroom
+                      - switch.stairs
+                      - scene.vacation_group_2
+
+                - type: conditional
+                  conditions:
+                    - entity: input_number.random_vacation_light_group
+                      state: "3.0"
+                  card:
+                    type: entities
+                    title: Lighting Override
+                    entities:
+                      - light.living_room_all
+                      - light.master_bedroom
+                      - light.kitchen_table
+                      - scene.vacation_group_3
+
+                - type: conditional
+                  conditions:
+                    - entity: input_number.random_vacation_light_group
+                      state: "4.0"
+                  card:
+                    type: entities
+                    title: Lighting Override
+                    entities:
+                      - light.living_room_all
+                      - light.kitchen_table
+                      - light.office_lamp
+                      - switch.stairs
+                      - switch.front_door
+                      - scene.vacation_group_4
 
   ##################################################
 
@@ -797,110 +908,111 @@ views:
 
   ##################################################
 
-  - title: Curling
-    path: curling
-    icon: mdi:curling
-    cards:
-      - id: 42b1dabdbcc4161480b27d6f1a862363 # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: entities
-            title: Curling Sensors
-            show_header_toggle: false
-            entities:
-              - binary_sensor.curling_season
-              - sensor.occ_time
-              - sensor.occ_distance
-              - sensor.heading_occ
-              - sensor.spcc_time
-              - sensor.spcc_distance
-              - sensor.heading_spcc
-      - id: 42b1dabdbcc4421480b27d6f1a862363 # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: entities
-            title: Curling Automations
-            show_header_toggle: true
-            entities:
-              # - automation.leave_home_for_curling
-              - automation.return_home_from_occ
-              - automation.return_home_from_spcc
+  # - title: Curling
+  #   path: curling
+  #   icon: mdi:curling
+  #   cards:
+  #     - id: 42b1dabdbcc4161480b27d6f1a862363 # Automatically created id
+  #       type: horizontal-stack
+  #       cards:
+  #         - type: entities
+  #           title: Curling Sensors
+  #           show_header_toggle: false
+  #           entities:
+  #             - binary_sensor.curling_season
+  #             - sensor.occ_time
+  #             - sensor.occ_distance
+  #             - sensor.heading_occ
+  #             - sensor.spcc_time
+  #             - sensor.spcc_distance
+  #             - sensor.heading_spcc
+  #     - id: 42b1dabdbcc4421480b27d6f1a862363 # Automatically created id
+  #       type: horizontal-stack
+  #       cards:
+  #         - type: entities
+  #           title: Curling Automations
+  #           show_header_toggle: true
+  #           entities:
+  #             # - automation.leave_home_for_curling
+  #             - automation.return_home_from_occ
+  #             - automation.return_home_from_spcc
+
   ##################################################
 
-  - title: Vacation
-    path: vacation
-    icon: mdi:airport
-    cards:
-      - id: 42b1dabdbcc4461480b17d6f1a862363 # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: entities
-            title: Trip Status
-            show_header_toggle: false
-            entities:
-              - input_boolean.trip
-              - binary_sensor.planned_vacation_calendar
-              - binary_sensor.planned_work_trip_calendar
-              - binary_sensor.sensed_trip
-              - binary_sensor.flying_home_today
-              - input_datetime.random_vacation_lights_off
-              #- sensor.turn_off_time
+  # - title: Vacation
+  #   path: vacation
+  #   icon: mdi:airport
+  #   cards:
+  #     - id: 42b1dabdbcc4461480b17d6f1a862363 # Automatically created id
+  #       type: horizontal-stack
+  #       cards:
+  #         - type: entities
+  #           title: Trip Status
+  #           show_header_toggle: false
+  #           entities:
+  #             - input_boolean.trip
+  #             - binary_sensor.planned_vacation_calendar
+  #             - binary_sensor.planned_work_trip_calendar
+  #             - binary_sensor.sensed_trip
+  #             - binary_sensor.flying_home_today
+  #             - input_datetime.random_vacation_lights_off
+  #             #- sensor.turn_off_time
 
-      - id: dd07fd1cdecc4cae8116eb6fe12f52f4 # Automatically created id
-        type: horizontal-stack
-        cards:
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: "1.0"
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - switch.front_door
-                - scene.vacation_group_1
+  #     - id: dd07fd1cdecc4cae8116eb6fe12f52f4 # Automatically created id
+  #       type: horizontal-stack
+  #       cards:
+  #         - type: conditional
+  #           conditions:
+  #             - entity: input_number.random_vacation_light_group
+  #               state: "1.0"
+  #           card:
+  #             type: entities
+  #             title: Lighting Override
+  #             entities:
+  #               - light.living_room_all
+  #               - switch.front_door
+  #               - scene.vacation_group_1
 
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: "2.0"
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - light.master_bedroom
-                - switch.stairs
-                - scene.vacation_group_2
+  #         - type: conditional
+  #           conditions:
+  #             - entity: input_number.random_vacation_light_group
+  #               state: "2.0"
+  #           card:
+  #             type: entities
+  #             title: Lighting Override
+  #             entities:
+  #               - light.living_room_all
+  #               - light.master_bedroom
+  #               - switch.stairs
+  #               - scene.vacation_group_2
 
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: "3.0"
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - light.master_bedroom
-                - light.kitchen_table
-                - scene.vacation_group_3
+  #         - type: conditional
+  #           conditions:
+  #             - entity: input_number.random_vacation_light_group
+  #               state: "3.0"
+  #           card:
+  #             type: entities
+  #             title: Lighting Override
+  #             entities:
+  #               - light.living_room_all
+  #               - light.master_bedroom
+  #               - light.kitchen_table
+  #               - scene.vacation_group_3
 
-          - type: conditional
-            conditions:
-              - entity: input_number.random_vacation_light_group
-                state: "4.0"
-            card:
-              type: entities
-              title: Lighting Override
-              entities:
-                - light.living_room_all
-                - light.kitchen_table
-                - light.office_lamp
-                - switch.stairs
-                - switch.front_door
-                - scene.vacation_group_4
+  #         - type: conditional
+  #           conditions:
+  #             - entity: input_number.random_vacation_light_group
+  #               state: "4.0"
+  #           card:
+  #             type: entities
+  #             title: Lighting Override
+  #             entities:
+  #               - light.living_room_all
+  #               - light.kitchen_table
+  #               - light.office_lamp
+  #               - switch.stairs
+  #               - switch.front_door
+  #               - scene.vacation_group_4
 
   ##################################################
 
