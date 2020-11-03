@@ -250,7 +250,6 @@ binary_sensor:
   - platform: template
     sensors:
       curling_season:
-        entity_id: sensor.time
         value_template: >-
           {{ now().strftime("%m") |int in [1,2,3,4,10,11,12] }}
 
@@ -296,20 +295,16 @@ sensor:
       occ_distance:
         value_template: >-
           {{ states('proximity.occ') }}
-        entity_id: sensor.time
         unit_of_measurement: "m"
       occ_time:
         value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}"
-        entity_id: sensor.time
         unit_of_measurement: "minutes"
       spcc_time:
         value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}"
-        entity_id: sensor.time
         unit_of_measurement: "minutes"
       spcc_distance:
         value_template: >-
           {{ states('proximity.spcc') }}
-        entity_id: sensor.time
         unit_of_measurement: "m"
       heading_spcc:
         value_template: >-

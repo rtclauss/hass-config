@@ -162,7 +162,6 @@ binary_sensor:
   - platform: template
     sensors:
       christmas_season:
-        entity_id: sensor.time
         value_template: >-
           {{ now().strftime("%m") |int in [1,11,12] }}
 
@@ -193,7 +192,7 @@ light:
 script:
   toggle_christmas_automation_during_christmas_season:
     sequence:
-      - service_template: >-
+      - service: >-
           {% if is_state("binary_sensor.christmas_season", 'on') %}
             automation.turn_on
           {% else %}
