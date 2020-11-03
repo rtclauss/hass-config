@@ -129,6 +129,7 @@ automation:
       - platform: state
         entity_id: binary_sensor.guest_on_wifi
         to: "on"
+        for: "00:45:00"
     condition:
     action:
       - service: input_boolean.turn_on
@@ -144,7 +145,6 @@ binary_sensor:
   - platform: template
     sensors:
       guest_on_wifi:
-        entity_id: sensor.time
         value_template: >-
           {{ (states.device_tracker | selectattr('state','eq','home') | selectattr('attributes.is_guest', 'eq', true) | list| count) > 0 }}
 
@@ -218,7 +218,11 @@ script:
 # Sensor
 ########################
 sensor:
-
+  - platform: template
+    sensors:
+      guests_on_wifi:
+        value_template: >-
+          {{ (states.device_tracker | selectattr('state','eq','home') | selectattr('attributes.is_guest', 'eq', true) | list) }}
 ########################
 # Switch
 ########################
