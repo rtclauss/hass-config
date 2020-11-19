@@ -206,9 +206,6 @@ automation:
     condition:
       condition: and
       conditions:
-        - condition: sun
-          before: sunset
-          before_offset: 02:00:00
         - condition: numeric_state
           entity_id: sensor.dark_sky_cloud_coverage
           above: 50
@@ -520,9 +517,16 @@ automation:
         entity_id: "all"
       - service: fan.turn_off
         entity_id: "all"
-      - service: notify.all
+      # - service: notify.all
+      #   data:
+      #     message: Auf weidersehen!
+      - service: notify.mobile_app_wethop
         data:
-          message: Auf weidersehen!
+          title: "Auf weidersehen"
+          message: "Vacuum the house?"
+          data:
+            push:
+              category: VACUUM_ON_LEAVE
       - service: scene.turn_on
         entity_id: scene.turn_on_cameras
 
