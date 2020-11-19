@@ -29,6 +29,10 @@ class ThermostatChanges(Base):
 
     time = Column(DateTime)
 
+    def __str__(self):
+        return "changed item: %s, old temp: %s, new temp: %s, old_target: %s, new_target: %s, old_state: %s, new_state: %s, house_average_humidity: %s, house_average_temp: %s, outside_temp: %s, outside_humidity: %s, outside_cloud_cover: %s" % (self.changed_item, self.old_temp, self.new_temp, self.old_target, self.new_target, self.old_state, self.new_state, self.house_average_humidity, self.house_average_temp, self.outside_temp, self.outside_humidity, self.outside_cloud_cover)
+        
+
 class ThermostatStats(hass.Hass):
     def initialize(self) -> None:
         self.house_average_temp_sensor = self.args['house_average_temp']
@@ -95,16 +99,16 @@ class ThermostatStats(hass.Hass):
         #new_away_mode = new['attributes']["away_mode"]
         #old_away_mode = old['attributes']['away_mode']
 
-        avg_house_temp = self.get_state(self.house_average_temp_sensor)
-        avg_house_humidty = self.get_state(self.house_average_humidity_sensor)
+        avg_house_temp = float(self.get_state(self.house_average_temp_sensor))
+        avg_house_humidity = float(self.get_state(self.house_average_humidity_sensor))
 
-        outside_temp = self.get_state(self.outside_temp_sensor)
-        outside_cloud_cover = self.get_state(self.outside_cloud_cover_sensor)
-        outside_humidity = self.get_state(self.outside_humidity_sensor)
+        outside_temp = float(self.get_state(self.outside_temp_sensor))
+        outside_cloud_cover = float(self.get_state(self.outside_cloud_cover_sensor))
+        outside_humidity = float(self.get_state(self.outside_humidity_sensor))
 
 
-        tempInfo = ThermostatChanges(changed_item=changed_item, old_temp = old_temp, new_temp = new_temp, old_target = old_target_temp, new_target = new_target_temp, new_state = new_hvac_action, old_state=old_hvac_action, time = datetime.datetime.now(), house_average_humidity=avg_house_humidty, house_average_temp=avg_house_temp, outside_temp=outside_temp, outside_humidity=outside_humidity, outside_cloud_cover=outside_cloud_cover)
-        # self.log("Writing to thermostat.db: {}".format(tempInfo))
+        tempInfo = ThermostatChanges(changed_item=changed_item, old_temp = old_temp, new_temp = new_temp, old_target = old_target_temp, new_target = new_target_temp, new_state = new_hvac_action, old_state=old_hvac_action, time = datetime.datetime.now(), house_average_humidity=avg_house_humidity, house_average_temp=avg_house_temp, outside_temp=outside_temp, outside_humidity=outside_humidity, outside_cloud_cover=outside_cloud_cover)
+        self.log("Writing to thermostat.db: {}".format(tempInfo))
         self.session.add(tempInfo)
         self.session.commit()
         self.log("DB Update Done")
