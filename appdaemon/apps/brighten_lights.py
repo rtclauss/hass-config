@@ -33,7 +33,8 @@ class BrightenLights(hass.Hass):
     #self.log("is it a work day? {}".format(workday))
     
     if new == 'on' and workday == 'on':
-      self.log("current brightness for light is: {}".format(self.get_state(self.args["light"], attribute="brightness")))
-      if self.get_state(self.args["light"], attribute="brightness") == None:
-        self.turn_on(self.args["light"], brightness = 1)
-        self.turn_on(self.args["light"], brightness_pct = 100, transition = self.transition)
+      for light in self.args["lights"]:
+        self.log("current brightness for light is: {}".format(self.get_state(light, attribute="brightness")))
+        if self.get_state(light, attribute="brightness") == None:
+          self.turn_on(light, brightness = 1)
+          self.turn_on(light, brightness_pct = 100, transition = self.transition)
