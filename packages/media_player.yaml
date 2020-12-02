@@ -21,7 +21,6 @@ homeassistant:
         haaska_hidden: false
         homebridge_hidden: false
 
-
     ################################################
     ## Alarm Panels
     ################################################
@@ -120,6 +119,33 @@ automation:
         data:
           entity_id: media_player.spotify
           source: Bathroom
+
+  - id: tv_off
+    alias: tv_off
+    trigger:
+      - platform: state
+        entity_id: media_player.vizio_smartcast
+        from: "on"
+        to: "off"
+        for: "00:01:00"
+      - platform: state
+        entity_id: media_player.vizio_smartcast
+        from: "on"
+        to: "unavailable"
+        for: "00:01:00"
+    action:
+      - service: switch.turn_off
+        entity_id: switch.4k_hdmi
+
+  - id: tv_on
+    alias: tv_on
+    trigger:
+      - platform: state
+        entity_id: media_player.vizio_smartcast
+        to: "on"
+    action:
+      - service: switch.turn_on
+        entity_id: switch.4k_hdmi
 
   - id: tv_off_at_night_bed_prep
     alias: tv_off_at_night_bed_prep
@@ -277,7 +303,6 @@ media_player:
     #adbkey: "/config/androidtv/adbkey"
     apps:
       com.amazon.tv.launcher: "Fire TV"
-
 
   # - platform: spotify
   #   client_id: !secret spotify_client_id
@@ -808,6 +833,8 @@ script:
   watch_tv:
     alias: "Watch TV"
     sequence:
+      - service: switch.turn_on
+        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
@@ -830,6 +857,8 @@ script:
   watch_hbo_now:
     alias: "Watch HBO"
     sequence:
+      - service: switch.turn_on
+        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
@@ -850,6 +879,8 @@ script:
   watch_netflix:
     alias: "Watch Netflix"
     sequence:
+      - service: switch.turn_on
+        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
@@ -879,6 +910,8 @@ script:
   watch_plex:
     alias: "Watch Plex"
     sequence:
+      - service: switch.turn_on
+        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
@@ -908,6 +941,8 @@ script:
   watch_letterkenny:
     alias: "Watch Letterkenny"
     sequence:
+      - service: switch.turn_on
+        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
@@ -937,6 +972,8 @@ script:
   watch_popcorn_time:
     alias: "Watch Popcorn Time"
     sequence:
+      - service: switch.turn_on
+        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
