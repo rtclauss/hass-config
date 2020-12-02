@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'christmas'
+        package: "christmas"
 
       expose: &expose
         <<: *customize
@@ -72,7 +72,7 @@ homeassistant:
     script.toggle_christmas_automation_during_christmas_season:
       <<: *customize
       friendly_name: "Toggle Christmas Automation Based on Boolean Sensor"
-      
+
     ################################################
     ## Switches
     ################################################
@@ -89,55 +89,55 @@ automation:
     alias: christmas_tree_on
     initial_state: false
     trigger:
-    - platform: sun
-      event: sunset
-      offset: -00:45:00
+      - platform: sun
+        event: sunset
+        offset: -00:45:00
     action:
-    - service: homeassistant.turn_on
-      entity_id: switch.christmas_tree, light.christmas_lights
-    - service: notify.all
-      data:
-        message: Turning on Christmas Tree.
+      - service: homeassistant.turn_on
+        entity_id: switch.christmas_tree, light.christmas_lights
+      - service: notify.all
+        data:
+          message: Turning on Christmas Tree.
 
   - id: christmas_tree_off_midnight
     alias: christmas_tree_off_midnight
     initial_state: false
     trigger:
-    - platform: time
-      at: 00:00:00
+      - platform: time
+        at: 00:00:00
     action:
-    - service: homeassistant.turn_off
-      entity_id: switch.christmas_tree, light.christmas_lights
-    - service: notify.all
-      data:
-        message: Turning off Christmas Tree.
+      - service: homeassistant.turn_off
+        entity_id: switch.christmas_tree, light.christmas_lights
+      - service: notify.all
+        data:
+          message: Turning off Christmas Tree.
 
   - id: christmas_lights_off_bedroom_off
     alias: christmas_lights_off_bedroom_off
     initial_state: false
     trigger:
-    - platform: state
-      entity_id: light.bedroom_lamp, light.bedroom_lamp_2
-      to: 'off'
+      - platform: state
+        entity_id: light.bedroom_lamp, light.bedroom_lamp_2
+        to: "off"
     action:
-    - service: homeassistant.turn_off
-      entity_id: switch.christmas_tree, light.christmas_lights
+      - service: homeassistant.turn_off
+        entity_id: switch.christmas_tree, light.christmas_lights
 
   - id: toggle_christmas_automations_on_season_change
     alias: toggle_christmas_automations_on_season_change
     trigger:
-    - platform: state
-      entity_id: binary_sensor.christmas_season
+      - platform: state
+        entity_id: binary_sensor.christmas_season
     action:
-    - service: script.toggle_christmas_automation_during_christmas_season
-      data:
-        entity_id: automation.christmas_tree_on
-    - service: script.toggle_christmas_automation_during_christmas_season
-      data:
-        entity_id: automation.christmas_tree_off_midnight
-    - service: script.toggle_christmas_automation_during_christmas_season
-      data:
-        entity_id: automation.christmas_lights_off_bedroom_off
+      - service: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_tree_on
+      - service: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_tree_off_midnight
+      - service: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_lights_off_bedroom_off
 
   # - id: toggle_christmas_tab
   #   alias: toggle_christmas_tab
@@ -183,9 +183,9 @@ group:
 # Light
 ########################
 light:
-  - platform: switch
-    name: Christmas Lights
-    entity_id: switch.christmas_lights
+  # - platform: switch
+  #   name: Christmas Lights
+  #   entity_id: switch.christmas_lights
 ########################
 # Scripts
 ########################
