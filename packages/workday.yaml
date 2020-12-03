@@ -34,11 +34,6 @@ homeassistant:
       friendly_name: "Vacuum while at work"
       icon: mdi:robot-vacuum
 
-    automation.wake_up:
-      <<: *customize
-      friendly_name: "Wake up"
-      icon: mdi:briefcase
-
     ################################################
     ## Binary Sensors
     ################################################
@@ -46,10 +41,6 @@ homeassistant:
     ################################################
     ## Input Datetime
     ################################################
-    input_datetime.next_work_meeting:
-      <<: *customize
-      friendly_name: "Next work meeting"
-      icon: mdi:briefcase
 
 ################################################
 ## Automation
@@ -109,53 +100,6 @@ automation:
         data:
           entity_id: all
 
-  - id: turn_on_lava_lamp_workday
-    alias: turn_on_lava_lamp_workday
-    trigger:
-      - platform: template
-        value_template: >-
-          {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -2 %}
-          {% set two_hoursback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
-          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
-          {{ formatted_time == two_hoursback }}
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.workday_sensor"
-        state: "on"
-      - condition: state
-        entity_id: device_tracker.bayesian_zeke_home
-        state: "home"
-    action:
-      - service: switch.turn_on
-        data:
-          entity_id: switch.lava_lamp
-
-  - id: wake_up
-    alias: wake_up
-    trigger:
-      - platform: time
-        at: input_datetime.next_work_meeting
-      # - platform: template
-      #   value_template: "{{states.sensor.time.state == states.input_datetime.next_work_meeting.state[0:5]}}"
-    condition:
-      - condition: state
-        entity_id: "binary_sensor.workday_sensor"
-        state: "on"
-      - condition: state
-        entity_id: device_tracker.bayesian_zeke_home
-        state: "home"
-        ## TODO Need to add condition that checks that I'm still in bed
-    action:
-      - service: light.turn_on
-        data_template:
-          entity_id: light.master_bedroom
-          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
-          brightness_pct: "{{ states('sensor.circadian_brightness') | int }}"
-          transition: 300
-      - service: switch.turn_off
-        data:
-          entity_id: switch.humidifier
-
 ########################
 # Binary Sensors
 ########################
@@ -174,9 +118,6 @@ input_boolean:
 ## Input Datetime
 ################################################
 input_datetime:
-  next_work_meeting:
-    has_date: false
-    has_time: true
 
 ################################################
 ## Sensor
