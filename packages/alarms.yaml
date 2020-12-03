@@ -1,0 +1,532 @@
+################################################################
+## Packages / Alarms
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "alarms"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Alarm Panels
+    ################################################
+
+    ################################################
+    ## Automations
+    ################################################
+    automation.meeting_wake_up:
+      <<: *customize
+      friendly_name: "Wake up for meeting"
+      icon: mdi:briefcase
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Cameras
+    ################################################
+
+    ################################################
+    ## Climate
+    ################################################
+
+    ################################################
+    ## Covers
+    ################################################
+
+    ################################################
+    ## Device Trackers
+    ################################################
+
+    ################################################
+    ## Fans
+    ############
+
+    ################################################
+    ## Frontend
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Datetime
+    ################################################
+    input_datetime.next_work_meeting:
+      <<: *customize
+      friendly_name: "Next work meeting"
+      icon: mdi:briefcase
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Input Select
+    ################################################
+
+    ################################################
+    ## iOS
+    ################################################
+
+    ################################################
+    ## Light
+    ################################################
+
+    ################################################
+    ## Media Player
+    ################################################
+
+    ################################################
+    ##  Notify
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+
+    ################################################
+    ## Proximity
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+
+    ################################################
+    ## Switches
+    ################################################
+
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Weather
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+
+########################
+# Alarm Panel
+########################
+alarm_control_panel:
+
+########################
+## Automation
+########################
+automation:
+  - id: meeting_wake_up
+    alias: meeting_wake_up
+    trigger:
+      - platform: time
+        at: input_datetime.next_work_meeting
+    condition:
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: "home"
+      - condition: state
+        entity_id: input_boolean.morning_routine
+        ##TODO this could be on if guests are here...
+        state: "off"
+    ## TODO Need to add condition that checks that I'm still in bed
+    # - condition: state
+    #   entity_id: input_boolean.master_bed_occupancy
+    #   state: "on"
+    action:
+      - service: script.turn_on
+        entity_id: script.wake_up_script
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.bedroom
+      - delay:
+          seconds: 2
+      - service: media_player.shuffle_set
+        data:
+          entity_id: media_player.bedroom
+          shuffle: false
+      - delay:
+          seconds: 2
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.4
+      - delay:
+          seconds: 2
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: music
+          media_content_id: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ" # Surfin' Bird
+
+  - id: alarm_snooze
+    alias: alarm_snooze
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:01:f2:a7:0a"
+          command: "click"
+          args:
+            click_type: "single"
+    condition:
+      - condition: state
+        entity_id: input_boolean.wakeup_alarm_firing
+        state: "true"
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: "home"
+      - condition: state
+        entity_id: input_boolean.morning_routine
+        ##TODO this could be on if guests are here...
+        state: "off"
+    ## TODO Need to add condition that checks that I'm still in bed
+    # - condition: state
+    #   entity_id: input_boolean.master_bed_occupancy
+    #   state: "on"
+    action:
+      - service: script.turn_on
+        entity_id: script.snooze_script
+
+  - id: weekday_alarm_wake_up
+    alias: weekday_alarm_wake_up
+    trigger:
+      - platform: time
+        at: input_datetime.weekday_alarm
+    condition:
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: "home"
+      - condition: state
+        entity_id: input_boolean.weekday_alarm_on
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.morning_routine
+        ##TODO this could be on if guests are here...
+        state: "off"
+    ## TODO Need to add condition that checks that I'm still in bed
+    # - condition: state
+    #   entity_id: input_boolean.master_bed_occupancy
+    #   state: "on"
+    action:
+      - service: script.turn_on
+        entity_id: script.wake_up_script
+      - service: script.turn_on
+        entity_id: script.sonos_mpr_news_wake_up
+
+  - id: weekend_alarm_wake_up
+    alias: weekend_alarm_wake_up
+    trigger:
+      - platform: time
+        at: input_datetime.weekend_alarm
+    condition:
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "off"
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: "home"
+      - condition: state
+        entity_id: input_boolean.weekend_alarm_on
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.morning_routine
+        state: "off"
+    ## TODO Need to add condition that checks that I'm still in bed
+    # - condition: state
+    #   entity_id: input_boolean.master_bed_occupancy
+    #   state: "on"
+    action:
+      - service: script.turn_on
+        entity_id: script.wake_up_script
+      - service: script.turn_on
+        entity_id: script.sonos_the_current_wake_up
+
+  - id: turn_on_lava_lamp_workday
+    alias: turn_on_lava_lamp_workday
+    trigger:
+      - platform: template
+        value_template: >-
+          {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -2 %}
+          {% set two_hoursback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
+          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
+          {{ formatted_time == two_hoursback }}
+    condition:
+      - condition: state
+        entity_id: "binary_sensor.workday_sensor"
+        state: "on"
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: "home"
+    action:
+      - service: switch.turn_on
+        data:
+          entity_id: switch.lava_lamp
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+
+########################
+# Cameras
+########################
+camera:
+
+########################
+# Climate
+########################
+climate:
+
+########################
+# Covers
+########################
+cover:
+
+########################
+# Device Trackers
+########################
+device_tracker:
+
+########################
+# Fans
+########################
+fan:
+
+########################
+# Frontend
+########################
+frontend:
+
+########################
+# Groups
+########################
+group:
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  weekday_alarm_on:
+    initial: true
+  weekend_alarm_on:
+    initial: false
+  wakeup_alarm_firing:
+    initial: false
+  snooze_status:
+    initial: false
+
+########################
+# Input DateTime
+########################
+input_datetime:
+  weekday_alarm:
+    has_date: false
+    has_time: true
+  weekend_alarm:
+    has_date: false
+    has_time: true
+  next_work_meeting:
+    has_date: false
+    has_time: true
+
+########################
+# Input Numbers
+########################
+input_number:
+
+########################
+# Input Select
+########################
+input_select:
+
+########################
+# iOS
+########################
+ios:
+
+########################
+# Light
+########################
+light:
+
+########################
+# Media Player
+########################
+media_player:
+
+########################
+# Notify
+########################
+notify:
+
+########################
+# Plant
+########################
+plant:
+
+########################
+# Proximity
+########################
+proximity:
+
+########################
+# Scenes
+########################
+scene:
+
+########################
+# Scripts
+########################
+script:
+  sonos_ksdj_wake_up:
+    alias: Sonos KSDJ Wake Up
+    sequence:
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.3
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_id: "x-rincon-mp3radio://ksdj.stream.creek.fm/stream"
+          media_content_type: music
+
+  sonos_mpr_news_wake_up:
+    alias: Sonos MPR News Wake Up
+    sequence:
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.3
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.bedroom
+          source: "MPR News"
+
+  sonos_the_current_wake_up:
+    alias: Sonos The Current Wake Up
+    sequence:
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.3
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.bedroom
+          media_content_id: "The Current"
+
+  # sonos_update_alarm:
+  #   alias: Update Sonos Alarm
+  #   variables:
+  #     work_meeting_alarm: 0 # This is a Chime
+  #     daily_wakeup_alarm: 1 # This is MPR News
+  #   sequence:
+  #     - service: sonos.update_alarm
+  #       data:
+  #         entity_id: media_player.bedroom
+  #         alarm_id: "{{ work_meeting_alarm }}" # This is a Chime
+  #         time: "{{ states('input_datetime.next_work_meeting') }}"
+  #         enabled: true
+
+  # sonos_disable_alarms:
+  #   alias: Disable Sonos Alarm
+  #   variables:
+  #     work_meeting_alarm: 0 # This is a Chime
+  #     daily_wakeup_alarm: 1 # This is MPR News
+  #   sequence:
+  #     - service: sonos.update_alarm
+  #       data:
+  #         entity_id: media_player.bedroom
+  #         alarm_id: "{{ daily_wakeup_alarm }}" # This is MPR News
+  #         enabled: false
+  #     - service: sonos.update_alarm
+  #       data:
+  #         entity_id: media_player.bedroom
+  #         alarm_id: "{{ work_meeting_alarm }}" # This is a Chime
+  #         enabled: false
+
+  snooze_script:
+    alias: Snooze Tasks
+    sequence:
+      - service: light.turn_off
+        data:
+          entity_id: light.master_bedroom
+      - service: media_player.media_stop
+        data:
+          entity_id: media_player.bedroom
+      - delay:
+          minutes: 8
+      - service: script.turn_on
+        entity_id: script.wake_up_script
+      - service: media_player.media_play
+        data:
+          entity_id: media_player.bedroom
+
+  wake_up_script:
+    alias: Common Wake Up Tasks
+    sequence:
+      - service: light.turn_on
+        data_template:
+          entity_id: light.master_bedroom
+          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
+          brightness_pct: "{{ states('sensor.circadian_brightness') | int }}"
+          transition: 300
+      - service: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.wakeup_alarm_firing
+      - service: switch.turn_off
+        data:
+          entity_id: switch.humidifier
+
+########################
+# Sensor
+########################
+sensor:
+
+########################
+# Switch
+########################
+switch:
+
+########################
+# Weather
+########################
+weather:
+
+########################
+# Zone
+########################
+zone:
