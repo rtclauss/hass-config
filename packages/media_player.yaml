@@ -155,7 +155,13 @@ automation:
         #TODO Temporary hack: ADB showing wrong values
         from: "on"
         to: "off"
-        for: "00:00:15"
+        for: "00:00:60"
+      - platform: state
+        entity_id: media_player.vizio_smartcast
+        # With power save mode off tv is off all the way.
+        from: "on"
+        to: "unavailable"
+        for: "00:00:60"
     condition:
       condition: and
       conditions:
@@ -166,6 +172,10 @@ automation:
           entity_id: input_boolean.guest_mode
           state: "off"
     action:
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.01
       - service: scene.turn_on
         entity_id: scene.bedroom_prep
       - service: script.turn_on
@@ -450,7 +460,7 @@ script:
           seconds: 2
       - service: media_player.play_media
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.bedroom
           media_content_type: playlist
         data_template:
           media_content_id: >-
@@ -558,20 +568,9 @@ script:
   spotify_bedtime:
     alias: "Spotify Bedtime"
     sequence:
-      - service: media_player.select_source
-        data:
-          entity_id: media_player.spotify
-          source: "Not Bedroom"
-      - delay:
-          seconds: 2
-      - service: media_player.media_pause
-        data:
-          entity_id: media_player.spotify
-      - delay:
-          seconds: 2
       - service: media_player.shuffle_set
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.bedroom
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -581,14 +580,14 @@ script:
           seconds: 2
       - service: media_player.volume_set
         data:
-          entity_id: media_player.spotify
-          volume_level: 0.25
+          entity_id: media_player.bedroom
+          volume_level: 0.35
       - delay:
           seconds: 2
       - service: media_player.play_media
         data:
-          entity_id: media_player.spotify
-          media_content_type: playlist
+          entity_id: media_player.bedroom
+          media_content_type: music
         data_template:
           media_content_id: >-
             {# 
@@ -641,6 +640,10 @@ script:
             ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
             ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
             ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
+            ## 90s Pop Rock Essentials: spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
+            ## Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+            ## RetroWave Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
+            ## Simpsons Wave: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
             #}
             {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
               "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
@@ -687,10 +690,33 @@ script:
               "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
               "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
               "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
-              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb"
+              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
+              "spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
+              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
+              "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
+              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8"
                ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
+      - delay:
+          minutes: 2
+          seconds: 30
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.2
+      - delay:
+          minutes: 1
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.1
+      - delay:
+          minutes: 1
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.01
 
   spotify_wake_up:
     alias: "Spotify Wake Up"
