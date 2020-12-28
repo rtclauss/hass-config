@@ -106,6 +106,81 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
+  - id: bedroom_music_volume
+    alias: bedroom_music_volume
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:8f:66:12"
+          command: "rotate_left"
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:8f:66:12"
+          command: "rotate_right"
+    action:
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: >-
+            {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float }}
+
+  - id: bedroom_music_play_pause
+    alias: bedroom_music_play_pause
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:8f:66:12"
+          command: "knock"
+    action:
+      - service: media_player.media_play_pause
+        data:
+          entity_id: media_player.bedroom
+
+  - id: bedroom_music_select_playlist
+    alias: bedroom_music_select_playlist
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:8f:66:12"
+          command: "flip"
+    action:
+      - service: script.turn_on
+        data_template:
+          entity_id: >-
+            {{ "script.bedroom_playlist_" + (trigger.event.data["args"]["activated_face"] | int | string) }}
+
+  - id: bedroom_music_skip_track
+    alias: bedroom_music_skip_track
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:8f:66:12"
+          command: "slide"
+    action:
+      - service: media_player.media_next_track
+        data:
+          entity_id: media_player.bedroom
+
+  - id: bedroom_music_shuffle
+    alias: bedroom_music_shuffle
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:8f:66:12"
+          command: "shake"
+    action:
+      - service: media_player.shuffle_set
+        data:
+          entity_id: media_player.bedroom
+          shuffle: >-
+            {{ not (state_attr('media_player.bedroom', 'shuffle')) }}
+
   - id: play_music_in_bathroom
     alias: play_music_in_bathroom
     trigger:
@@ -143,6 +218,19 @@ automation:
       - platform: state
         entity_id: media_player.vizio_smartcast
         to: "on"
+    condition:
+      condition: and
+      conditions:
+        ### Prevent false positives in the middle of the night
+        - condition: state
+          entity_id: media_player.vizio_smartcast
+          state: "on"
+          for:
+            seconds: 10
+        ### Prevent false positives in the middle of the night
+        - condition: state
+          entity_id: binary_sensor.master_bed_occupancy
+          state: "off"
     action:
       - service: switch.turn_on
         entity_id: switch.4k_hdmi
@@ -171,11 +259,14 @@ automation:
         - condition: state
           entity_id: input_boolean.guest_mode
           state: "off"
+        - condition: state
+          entity_id: binary_sensor.master_bed_occupancy
+          state: "off"
     action:
       - service: media_player.volume_set
         data:
           entity_id: media_player.bedroom
-          volume_level: 0.01
+          volume_level: 0.02
       - service: scene.turn_on
         entity_id: scene.bedroom_prep
       - service: script.turn_on
@@ -428,6 +519,174 @@ scene:
 # Scripts
 ########################
 script:
+  bedroom_playlist_1:
+    alias: "Play LoFi"
+    sequence:
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: music
+        data_template:
+          media_content_id: >-
+            {# 
+            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
+            ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
+            ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
+            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
+            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+            ##  Deep Sleep: spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY
+            #}
+            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
+              "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
+              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
+              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
+              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
+              "spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
+  bedroom_playlist_2:
+    alias: "Play Guster"
+    sequence:
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: music
+        data_template:
+          media_content_id: >-
+            {# 
+            ## Showbox Seattle 2/16/19: spotify:playlist:65fTj3YJl4jvFmXxru7BfO
+            ## MN Zoo 7/22/19: spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl
+            ## First Ave 2/9/19: spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq
+            ## w/Oregon Orchestra: spotify:playlist:6al92r67tCsIrZygrIr6d6
+            ## Almost every song, ever: spotify:playlist:4z7avZTuCTdFD2uGfG6GvL
+            ## Guster Radio: spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
+            ## Guster Accoustic: spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL
+            ## OMAGAH: spotify:album:33dmmZ0Zg1yvFor6pCuYGm
+            ## Lost and Gone Forever: Live: spotify:album:5DDNife8S8H4uSYRFkYUNw
+            #}
+            {%- set plists = ["spotify:playlist:65fTj3YJl4jvFmXxru7BfO",
+            "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
+            "spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq",
+            "spotify:playlist:6al92r67tCsIrZygrIr6d6",
+            "spotify:playlist:4z7avZTuCTdFD2uGfG6GvL",
+            "spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
+            "spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL",
+            "spotify:album:33dmmZ0Zg1yvFor6pCuYGm",
+            "spotify:album:5DDNife8S8H4uSYRFkYUNw"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
+  bedroom_playlist_3:
+    alias: "Play Joe Pera"
+    sequence:
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: music
+        data_template:
+          media_content_id: >-
+            {# 
+            ## Sweater Weather Instrumentals: spotify:playlist:37i9dQZF1DWUvZBXGjNCU4
+            ## Joe Pera Talks You to Sleep: spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ
+            ## Joe Pera Listens to all of Joe Pera: spotify:playlist:6z6y5fEt0QIUuC64w1VOw4
+            ## Holland Patent Public Radio: spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr
+            #}
+            {%- set plists = ["spotify:playlist:37i9dQZF1DWUvZBXGjNCU4",
+              "spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ",
+              "spotify:playlist:6z6y5fEt0QIUuC64w1VOw4",
+              "spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
+  bedroom_playlist_4:
+    alias: "Play VaporWave and Retro"
+    sequence:
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: music
+        data_template:
+          media_content_id: >-
+            {# 
+            ##  Vaporwave Aesthetic Mix: spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5
+            ##  RetroWave/Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
+            ##  REtrowave/Synthwave: spotify:playlist:3ebHKSjHujS4Tyt2KKP97R
+            ##  Synthwave from Space: spotify:playlist:4sgUux9hmykyWYmVoe4W6p
+            #}
+            {%- set plists = ["spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5",
+              "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
+              "spotify:playlist:3ebHKSjHujS4Tyt2KKP97R",
+              "spotify:playlist:4sgUux9hmykyWYmVoe4W6p"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
+  bedroom_playlist_5:
+    alias: "Play Alt/Independent"
+    sequence:
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: music
+        data_template:
+          media_content_id: >-
+            {# 
+            ##  This is The Wombats: spotify:playlist:37i9dQZF1DWVK4jhlkcOzu
+            ##  This is Passion Pit: spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+            ##  Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
+            ##  This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+            ##  The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
+            ##  This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
+            ##  Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
+            ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
+            ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
+            ## MGMT Kids Playlsit: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
+            ## This is Walk the Moon: spotify:playlist:37i9dQZF1DZ06evO3VghcA
+            #}
+            {%- set plists = ["spotify:playlist:37i9dQZF1DWVK4jhlkcOzu",
+              "spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+              "spotify:album:78bpIziExqiI9qztvNFlQu",
+              "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+              "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
+              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw",
+              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
+              "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
+              "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
+              "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
+              "spotify:playlist:37i9dQZF1DZ06evO3VghcA"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
+  bedroom_playlist_6:
+    alias: "Play LoFi"
+    sequence:
+      - service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: music
+        data_template:
+          media_content_id: >-
+            {# 
+            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
+            ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
+            ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
+            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
+            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+            #}
+            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
+              "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
+              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
+              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
+              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"
+               ] -%}
+              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+              {{ plists[pindex] }}
+
   spotify_arrival:
     alias: "Spotify Arrive Home"
     sequence:
@@ -473,7 +732,7 @@ script:
             ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
             ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
             ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
-            ## This is The Mountain Goats : spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+            ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
             ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
             ## The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
             ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
@@ -523,7 +782,7 @@ script:
               "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
-              "spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+              "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
               "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
               "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
               "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
@@ -592,14 +851,14 @@ script:
           media_content_id: >-
             {# 
             ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
-            ## All Out 90s : spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
-            ## 2000s Smash Hits : spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw
-            ## 2019 Sealand Invitiational : spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5
+            ## All Out 90s : spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
+            ## 2000s Smash Hits : spotify:playlist:2f6tXtN0XesjONxicAzMIw
+            ## 2019 Sealand Invitiational : spotify:playlist:6uNCXLheVaTbfE1HRCIsQ5
             ## Discover Weekly: spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
             ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
             ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
-            ## This is The Mountain Goats : spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+            ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
             ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
             ## The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
             ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
@@ -621,7 +880,7 @@ script:
             ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
             ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decembersits Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
+            ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
             ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
             ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
             ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
@@ -653,7 +912,7 @@ script:
               "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
-              "spotify:user:spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+              "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
               "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
               "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
               "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
@@ -788,7 +1047,7 @@ script:
             ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
             ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decembersits Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
+            ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
             ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
             ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
             ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
