@@ -33,6 +33,10 @@ homeassistant:
       friendly_name: "Wake up for meeting"
       icon: mdi:briefcase
 
+    automation.alarm_snooze:
+      <<: *customize
+      friendly_name: "Snooze"
+      icon: mdi:alarm-snooze
     ################################################
     ## Binary Sensors
     ################################################
@@ -155,14 +159,19 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         state: "home"
       - condition: state
-        entity_id: input_boolean.morning_routine
-        ##TODO this could be on if guests are here...
-        state: "off"
+        entity_id: input_datetime.special_meeting
+        state: "on"
+      # - condition: state
+      #   entity_id: input_boolean.morning_routine
+      #   ##TODO this could be on if guests are here...
+      #   state: "off"
     ## TODO Need to add condition that checks that I'm still in bed
     # - condition: state
     #   entity_id: input_boolean.master_bed_occupancy
     #   state: "on"
     action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.special_meeting
       - service: script.turn_on
         entity_id: script.wake_up_script
       - service: media_player.media_pause
@@ -179,7 +188,7 @@ automation:
       - service: media_player.volume_set
         data:
           entity_id: media_player.bedroom
-          volume_level: 0.4
+          volume_level: 0.2
       - delay:
           seconds: 2
       - service: media_player.play_media
@@ -205,10 +214,10 @@ automation:
       - condition: state
         entity_id: device_tracker.bayesian_zeke_home
         state: "home"
-      - condition: state
-        entity_id: input_boolean.morning_routine
-        ##TODO this could be on if guests are here...
-        state: "off"
+      # - condition: state
+      #   entity_id: input_boolean.morning_routine
+      #   ##TODO this could be on if guests are here...
+      #   state: "off"
     ## TODO Need to add condition that checks that I'm still in bed
     # - condition: state
     #   entity_id: input_boolean.master_bed_occupancy
@@ -216,6 +225,36 @@ automation:
     action:
       - service: script.turn_on
         entity_id: script.snooze_script
+
+  - id: cancel_alarms
+    alias: cancel_alarms
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:01:f2:a7:0a"
+          command: "click"
+          args:
+            click_type: "double"
+    action:
+      - service: media_player.media_stop
+        data:
+          entity_id: media_player.bedroom
+
+  - id: toggle_master_bedroom_light_automation
+    alias: toggle_master_bedroom_light_automation
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:01:f2:a7:0a"
+          command: "click"
+          args:
+            click_type: "triple"
+    action:
+      - service: automation.toggle
+        data:
+          entity_id: automation.master_bedroom_light_auto_on
 
   - id: weekday_alarm_wake_up
     alias: weekday_alarm_wake_up
@@ -230,16 +269,20 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         state: "home"
       - condition: state
+        entity_id: binary_sensor.planned_vacation_calendar
+        state: "off"
+        ## TODO, maybe this should be another automation to toggle
+        ## weekday_alarm_on on and off depending on the calendar
+      - condition: state
         entity_id: input_boolean.weekday_alarm_on
         state: "on"
+      # - condition: state
+      #   entity_id: input_boolean.morning_routine
+      #   ##TODO this could be on if guests are here...
+      #   state: "off"
       - condition: state
-        entity_id: input_boolean.morning_routine
-        ##TODO this could be on if guests are here...
-        state: "off"
-    ## TODO Need to add condition that checks that I'm still in bed
-    # - condition: state
-    #   entity_id: input_boolean.master_bed_occupancy
-    #   state: "on"
+        entity_id: input_boolean.master_bed_occupancy
+        state: "on"
     action:
       - service: script.turn_on
         entity_id: script.wake_up_script
@@ -261,9 +304,9 @@ automation:
       - condition: state
         entity_id: input_boolean.weekend_alarm_on
         state: "on"
-      - condition: state
-        entity_id: input_boolean.morning_routine
-        state: "off"
+      # - condition: state
+      #   entity_id: input_boolean.morning_routine
+      #   state: "off"
     ## TODO Need to add condition that checks that I'm still in bed
     # - condition: state
     #   entity_id: input_boolean.master_bed_occupancy
@@ -340,13 +383,11 @@ group:
 ########################
 input_boolean:
   weekday_alarm_on:
-    initial: true
   weekend_alarm_on:
-    initial: false
   wakeup_alarm_firing:
-    initial: false
   snooze_status:
     initial: false
+  special_meeting:
 
 ########################
 # Input DateTime
@@ -417,12 +458,24 @@ script:
       - service: media_player.volume_set
         data:
           entity_id: media_player.bedroom
-          volume_level: 0.3
+          volume_level: 0.01
       - service: media_player.play_media
         data:
           entity_id: media_player.bedroom
           media_content_id: "x-rincon-mp3radio://ksdj.stream.creek.fm/stream"
           media_content_type: music
+      - delay:
+          minutes: 3
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.1
+      - delay:
+          minutes: 3
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.2
 
   sonos_mpr_news_wake_up:
     alias: Sonos MPR News Wake Up
@@ -430,11 +483,37 @@ script:
       - service: media_player.volume_set
         data:
           entity_id: media_player.bedroom
-          volume_level: 0.3
+          volume_level: 0.02
+      - delay:
+          seconds: 5
       - service: media_player.select_source
         data:
           entity_id: media_player.bedroom
           source: "MPR News"
+      - delay:
+          minutes: 5
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.05
+      - delay:
+          minutes: 5
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.1
+      - delay:
+          minutes: 5
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.15
+      - delay:
+          minutes: 5
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.2
 
   sonos_the_current_wake_up:
     alias: Sonos The Current Wake Up
@@ -442,11 +521,23 @@ script:
       - service: media_player.volume_set
         data:
           entity_id: media_player.bedroom
-          volume_level: 0.3
+          volume_level: 0.02
       - service: media_player.select_source
         data:
           entity_id: media_player.bedroom
           media_content_id: "The Current"
+      - delay:
+          minutes: 3
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.1
+      - delay:
+          minutes: 3
+      - service: media_player.volume_set
+        data:
+          entity_id: media_player.bedroom
+          volume_level: 0.2
 
   # sonos_update_alarm:
   #   alias: Update Sonos Alarm
