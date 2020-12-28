@@ -16,7 +16,7 @@ Software on the NUC:
   * [Mosquitto Broker](https://home-assistant.io/addons/mosquitto/)
   * [Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
-  * [esphomeyaml](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml) and [Bed Occupancy](https://github.com/rtclauss/hass-config/blob/master/esphome/wholebedpressure.yaml)
+  * [esphomeyaml](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml) and [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/master/esphome/bedloadcell1.yaml)
   * [OpenZwave Beta]()
 
 **Devices in Use:**
