@@ -180,19 +180,24 @@ automation:
         entity_id: binary_sensor.planned_vacation_calendar
         to: "on"
     condition:
-      condition: or
+      condition: and
       conditions:
-        - condition: state
-          entity_id: binary_sensor.planned_vacation_calendar
-          state: "on"
-        - condition: state
-          entity_id: binary_sensor.planned_work_trip_calendar
-          state: "on"
         - condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
-          for:
-            hours: 20
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.planned_vacation_calendar
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.planned_work_trip_calendar
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.bayesian_zeke_home
+              state: "off"
+              for:
+                hours: 20
     action:
       - service: input_boolean.turn_on
         data:
@@ -378,7 +383,6 @@ automation:
         data:
           message: "Vacuuming the house while you fly home \U0001F4BA"
 
-
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab
   #   trigger:
@@ -488,7 +492,7 @@ input_boolean:
 ########################
 input_datetime:
   random_vacation_lights_off:
-    name: Turn On Lights at a Random Time
+    name: Turn Off Lights at a Random Time
     has_date: false
     has_time: true
 
