@@ -11,25 +11,27 @@ brighten_office_lights:
   constrain_input_boolean: input_boolean.guest_mode,off
   constrain_input_boolean: input_boolean.bayesian_zeke_home
   constrain_input_boolean: input_boolean.master_bed_occupancy,off
-  constrain_start_time: "06:50:00"
-  constrain_end_time: "11:30:00"
-
-brighten_master_bedroom_lights_in_the_morning:
-  module: brighten_lights
-  class: BrightenLights
-  lights: 
-    - light.master_bedroom
-  sensors: 
-    - binary_sensor.master_bedroom_motion
-    - binary_sensor.hallway_motion
-  transition_time_sec: 600
-  constrain_input_boolean: input_boolean.guest_mode,off
-  constrain_input_boolean: input_boolean.bayesian_zeke_home
-  constrain_input_boolean: input_boolean.master_bed_occupancy,off
   constrain_input_boolean: input_boolean.morning_routine,off
   constrain_input_boolean: binary_sensor.workday_sensor
   constrain_start_time: "06:50:00"
   constrain_end_time: "11:30:00"
+
+# brighten_master_bedroom_lights_in_the_morning:
+#   module: brighten_lights
+#   class: BrightenLights
+#   lights: 
+#     - light.master_bedroom
+#   sensors: 
+#     - binary_sensor.master_bedroom_motion
+#     - binary_sensor.hallway_motion
+#   transition_time_sec: 600
+#   constrain_input_boolean: input_boolean.master_bed_occupancy,off
+#   constrain_input_boolean: input_boolean.guest_mode,off
+#   constrain_input_boolean: input_boolean.bayesian_zeke_home
+#   constrain_input_boolean: input_boolean.morning_routine,off
+#   constrain_input_boolean: binary_sensor.workday_sensor
+#   constrain_start_time: "06:50:00"
+#   constrain_end_time: "11:30:00"
 
 bayesian_device_tracker:
   class: BayesianDeviceTracker
@@ -48,72 +50,89 @@ bayesian_device_tracker:
 Occupancy Simulator:
   module: occusim
   class: OccuSim
-  log_msg: '1'
-  notify: '0'
+  log_msg: "1"
+  notify: "0"
   enable: input_boolean.trip,on
-  #test: '1'
-  dump_times: '1'
+  #test: "1"
+  dump_times: "1"
   #reset_time: 02:00:00
 
   step_morning_name: Morning
-  step_morning_start: sunrise - 00:10:00
-  step_morning_end: '12:00:00'
+  step_morning_start: "06:00:00"
+  step_morning_end: "12:00:00"
 
-  step_afternoon_end: "17:30:00"
   step_afternoon_name: Afternoon
-  step_afternoon_start: '12:00:01'
-
+  step_afternoon_start: "12:00:01"
+  step_afternoon_end: "16:00:00"
+  
   step_evening_name: Evening
-  step_evening_start: sunset - 00:40:00
-  step_evening_end: '21:30:00'
+  step_evening_start: "16:00:01"
+  step_evening_end: "21:30:00"
 
-
-  step_night_end: '23:59:00'
+  step_night_end: "23:59:00"
   step_night_name: Night
-  step_night_start: '21:30:01'
+  step_night_start: "21:30:01"
 
   random_morning_bathroom_end: Afternoon
-  random_morning_bathroom_maxduration: 00:45:00
-  random_morning_bathroom_minduration: 00:03:00
+  random_morning_bathroom_maxduration: "00:45:00"
+  random_morning_bathroom_minduration: "00:03:00"
   random_morning_bathroom_name: Morning Bathroom
-  random_morning_bathroom_number: '2'
+  random_morning_bathroom_number: "2"
   random_morning_bathroom_off_1: switch.bathroom_light_fan_switch
   random_morning_bathroom_on_1: switch.bathroom_light_fan_switch
   random_morning_bathroom_start: Morning
 
   random_morning_office_end: Afternoon
-  random_morning_office_maxduration: 04:00:00
-  random_morning_office_minduration: 00:15:00
+  random_morning_office_maxduration: "04:00:00"
+  random_morning_office_minduration: "00:15:00"
   random_morning_office_name: Morning office
-  random_morning_office_number: '1'
+  random_morning_office_number: "1"
   random_morning_office_off_1: light.office_ceiling
   random_morning_office_on_1: light.office_ceiling
   random_morning_office_start: Morning
 
+  random_afternoon_office_end: Evening
+  random_afternoon_office_maxduration: "04:00:00"
+  random_afternoon_office_minduration: "00:15:00"
+  random_afternoon_office_name: Afternoon office
+  random_afternoon_office_number: "1"
+  random_afternoon_office_office_off_1: light.office_ceiling
+  random_afternoon_office_office_on_1: light.office_ceiling
+  random_afternoon_office_start: Afternoon
+
+  random_afternoon_livingroom_end: Evening
+  random_afternoon_livingroom_maxduration: "04:00:00"
+  random_afternoon_livingroom_minduration: "00:15:00"
+  random_afternoon_livingroom_name: Afternoon Living Room
+  random_afternoon_livingroom_number: "1"
+  random_afternoon_livingroom_livingroom_off_1: light.living_room_all
+  random_afternoon_livingroom_livingroom_on_1: light.living_room_all
+  random_afternoon_livingroom_start: Afternoon
+
   random_evening_bathroom_end: Night
-  random_evening_bathroom_maxduration: 00:15:00
-  random_evening_bathroom_minduration: 00:01:30
+  random_evening_bathroom_maxduration: "00:15:00"
+  random_evening_bathroom_minduration: "00:01:30"
   random_evening_bathroom_name: Evening Bathroom
-  random_evening_bathroom_number: '3'
+  random_evening_bathroom_number: "3"
   random_evening_bathroom_off_1: switch.bathroom_light_fan_switch
   random_evening_bathroom_on_1: switch.bathroom_light_fan_switch
   random_evening_bathroom_start: Evening
 
   random_evening_kitchen_end: Night
-  random_evening_kitchen_maxduration: 00:35:00
-  random_evening_kitchen_minduration: 00:04:00
+  random_evening_kitchen_maxduration: "00:35:00"
+  random_evening_kitchen_minduration: "00:04:00"
   random_evening_kitchen_name: Evening Kitchen
-  random_evening_kitchen_number: '4'
+  random_evening_kitchen_number: "4"
   random_evening_kitchen_off_1: light.kitchen_sink
   random_evening_kitchen_on_1: light.kitchen_sink
   random_evening_kitchen_start: Evening
   
   random_evening_guest_days: mon,thu,fri
   random_evening_guest_end: Night
-  random_evening_guest_maxduration: 00:17:12
-  random_evening_guest_minduration: 00:01:00
+  random_evening_guest_maxduration: "00:17:12"
+  random_evening_guest_minduration: "00:01:00"
   random_evening_guest_name: Evening Guest
-  random_evening_guest_number: '1'
+  random_evening_guest_number: "1"
   random_evening_guest_off_1: light.guest_ceiling
   random_evening_guest_on_1: light.guest_ceiling
   random_evening_guest_start: Evening
