@@ -80,6 +80,27 @@ automation:
         data:
           entity_id: input_boolean.morning_routine
 
+  - id: up_enable_bedroom_light_auto_off
+    alias: up_enable_bedroom_light_auto_off
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.hallway_motion
+    condition:
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+      - condition: state
+        entity_id: light.master_bedroom
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.master_bed_occupancy
+        state:  "off"
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.master_bedroom_auto_on
+
   - id: vacuum_while_working
     alias: vacuum_while_working
     trigger:
