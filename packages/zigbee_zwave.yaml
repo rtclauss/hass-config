@@ -438,12 +438,12 @@ automation:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
         to: "on"
-    condition:
-      condition: state
-      entity_id: binary_sensor.master_bed_occupancy
-      state: "on"
-      for:
-        minutes: 2
+    # condition:
+    #   condition: state
+    #   entity_id: binary_sensor.master_bed_occupancy
+    #   state: "on"
+    #   for:
+    #     seconds: 5
     action:
       - service: input_boolean.turn_on
         data:
@@ -455,12 +455,12 @@ automation:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
         to: "off"
-    condition:
-      condition: state
-      entity_id: binary_sensor.master_bed_occupancy
-      state: "off"
-      for:
-        seconds: 45
+    # condition:
+    #   condition: state
+    #   entity_id: binary_sensor.master_bed_occupancy
+    #   state: "off"
+    #   for:
+    #     seconds: 5
     action:
       - service: input_boolean.turn_off
         data:
@@ -552,49 +552,17 @@ automation:
 binary_sensor:
   - platform: template
     sensors:
-      right_master_bed_occupancy:
-        value_template: >-
-          {% if
-            states.binary_sensor.zwave_right_master_bed_occupancy != None and
-            not is_state('binary_sensor.zwave_right_master_bed_occupancy', 'on') %}
-              {{ not is_state('binary_sensor.zwave_right_master_bed_occupancy', 'on') }}
-          {% else %}
-            off
-          {% endif %}
-
-      left_master_bed_occupancy:
-        value_template: >-
-          {% if
-            states.binary_sensor.zwave_left_master_bed_occupancy != None and
-            not is_state('binary_sensor.zwave_left_master_bed_occupancy', 'on') %}
-              {{ not is_state('binary_sensor.zwave_left_master_bed_occupancy', 'on') }}
-          {% else %}
-            off
-          {% endif %}
-
-      esp32_bed_occupancy:
-        delay_on:
-          seconds: 2
-        delay_off:
-          seconds: 2
+      master_bed_occupancy:
         value_template: >-
           {{
-            is_state('binary_sensor.esp32_whole_bed_pressure', 'on')
+            states('sensor.bed_load_cell_1') | int > 15
+              or
+            states('sensor.bed_load_cell_2') | int > 15
           }}
-
-      master_bed_occupancy:
         # value_template: >-
         #   {{
-        #     is_state('binary_sensor.left_master_bed_occupancy', 'on')
-        #       or
-        #     is_state('binary_sensor.right_master_bed_occupancy', 'on')
-        #       or
         #     is_state('binary_sensor.esp32_bed_occupancy', 'on')
         #   }}
-        value_template: >-
-          {{
-            is_state('binary_sensor.esp32_bed_occupancy', 'on')
-          }}
 
 ########################
 # Device Trackers
