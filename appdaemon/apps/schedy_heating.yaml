@@ -39,7 +39,7 @@ schedy_heating: # This is our app instance name.
       - weekdays: 1-5
         v: 70
         rules:
-          - x: "63 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
+          - x: "55 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
           - x: |
               current_time = datetime.datetime.strptime(state('sensor.time'), '%H:%M').time()
               wakeup_time = datetime.datetime.strptime(state('input_datetime.next_work_meeting'), '%H:%M:%S')
@@ -54,20 +54,23 @@ schedy_heating: # This is our app instance name.
                 result = 70
               else:
                 result = Next()
-          - { start: "07:00", end: "10:00", v: 65 }
-          - { start: "22:30-1d", end: "07:00+1d", v: 61 }
+          - { start: "06:00", end: "07:00", v: 61 }
+          - { start: "08:00", end: "10:00", v: 64 }
+          - { start: "10:00", end: "17:00", v: 68 }
+          - { start: "17:00", end: "22:30", v: 70 }
+          - { start: "22:30-1d", end: "07:00+1d", v: 58 }
           - x: "70 if zeke_location() == 'home' else Next()"
 
       - weekdays: 6-7
         v: 70
         rules:
-          - { v: 60, start: "00:00", end: "06:00" }
-          - { v: 61, start: "06:00", end: "07:00" }
-          - { v: 62, start: "08:00", end: "09:00" }
-          - { v: 65, start: "09:00", end: "10:00" }
-          - { v: 70, start: "10:30", end: "17:00" }
+          - { v: 60, start: "00:00", end: "09:00" }
+          - { v: 61, start: "09:00", end: "10:00" }
+          - { v: 62, start: "10:00", end: "11:00" }
+          - { v: 65, start: "11:00", end: "12:00" }
+          #- { v: 70, start: "12:00", end: "17:00" }
           - x: "70 if zeke_location() == 'home' else Next()"
-          - x: "60 if zeke_location() != 'home' else Next()"
+          - x: "55 if zeke_location() != 'home' else Next()"
 
   # schedule_append:
   #   - v: 'OFF'
