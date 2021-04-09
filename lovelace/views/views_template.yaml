@@ -1,0 +1,85 @@
+#####
+## Views Template
+##
+## Check out https://github.com/akmolina28/HomeAssistantConfig/tree/master/lovelace/views
+## or 
+## https://github.com/search?q=views+lovelace+include&type=Code
+#####
+
+title: CHANGE_ME
+icon: mdi:play-circle
+panel: true/false
+path: CHANGE_ME
+cards:
+  - type: custom:layout-card
+    layout: vertical
+    cards:
+      - type: entities
+        title: Scheduling
+        show_header_toggle: false
+        entities:
+          # - entity: vacuum.roomba
+          #   name: Roomba
+          - entity: input_boolean.vacuum_downstairs_scheduled
+            name: Downstairs
+            icon: mdi:robot-vacuum
+          - entity: input_boolean.vacuum_upstairs_scheduled
+            name: Upstairs
+            icon: mdi:robot-vacuum
+          - entity: switch.netdaemon_vacuum
+            name: Netdaemon app
+            icon: mdi:robot-vacuum
+          - entity: input_boolean.ad_vacuum_schedule
+            name: Appdaemon app
+            icon: mdi:robot-vacuum
+
+          - type: divider
+
+          - type: call-service
+            icon: mdi:broom
+            name: Living Room
+            action_name: Clean
+            service: vacuum.send_command
+            service_data:
+              entity_id: vacuum.roborock
+              command: app_segment_clean
+              params: [1]
+          - type: call-service
+            icon: mdi:broom
+            name: Passage
+            action_name: Clean
+            service: vacuum.send_command
+            service_data:
+              entity_id: vacuum.roborock
+              command: app_segment_clean
+              params: [17]
+          - type: call-service
+            icon: mdi:broom
+            name: Litterbox
+            action_name: Clean
+            service: vacuum.send_command
+            service_data:
+              entity_id: vacuum.roborock
+              command: app_segment_clean
+              params: [19]
+          - type: call-service
+            icon: mdi:broom
+            name: Dining Area
+            action_name: Clean
+            service: vacuum.send_command
+            service_data:
+              entity_id: vacuum.roborock
+              command: app_segment_clean
+              params: [18]
+          - type: call-service
+            icon: mdi:broom
+            name: Kitchen
+            action_name: Clean
+            service: vacuum.send_command
+            service_data:
+              entity_id: vacuum.roborock
+              command: app_segment_clean
+              params: [16]
+
+      - type: custom:more-info-card
+        entity: vacuum.roborock
