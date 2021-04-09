@@ -9,441 +9,8 @@ title: The Brewery
 #   hide_tabs: '{% if is_state("binary_sensor.sensed_trip", "off") %}vacation,{% endif %}{% if is_state("binary_sensor.bayesian_zeke_home", "on") %}cameras,{% endif %}{% if is_state("binary_sensor.curling_season", "off") %}curling{% endif %}'
 
 views:
-  - title: Home
-    path: home
-    icon: mdi:beer
-    badges:
-      - alarm_control_panel.home_alarm
-    cards:
-      - id: f077a7073da44af5828c5bfe6a9f0981 # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: horizontal-stack
-            cards:
-              - type: custom:mini-graph-card
-                name: Temp
-                entities:
-                  - sensor.average_house_temp
-                color_thresholds:
-                  - value: 68
-                    color: "red"
-                  - value: 65
-                    color: "orange"
-                  - value: 62
-                    color: "yellow"
-                  - value: 55
-                    color: "blue"
-                graph: line
-              - type: custom:mini-graph-card
-                name: Humdity
-                entities:
-                  - sensor.average_house_humidity
-              - type: custom:mini-graph-card
-                name: Pressure
-                entities:
-                  - sensor.average_house_pressure
-          - id: e75eb2badf864ae8b76e9a14fde8b60a # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: Master Bedroom
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: light.master_bedroom
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: fan.master_bedroom_fan
-                    state_color: true
-                    name: " "
-                    icon: mdi:fan
-                    tap_action:
-                      action: more-info
-                    hold_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: light.master_bedroom_fan_light
-                    name: "Light"
-                    icon: mdi:fan
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: switch.circadian_lighting_rest_of_house
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: switch.humidifier
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Master Bedroom
-                #     entity: light.master_bedroom
-              - type: horizontal-stack
-                cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    align_state: center
-                    entities:
-                      - sensor.master_bedroom_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    name: Humidity
-                    align_state: center
-                    entities:
-                      - sensor.master_bedroom_humidity
-                    graph: line
-                    show:
-                      name: false
-
-      - id: f077a7073da44af5828c5bfe6a9f0982 # Automatically created id
-        type: vertical-stack
-        cards:
-          - type: custom:vertical-stack-in-card
-            title: Living Room
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: light.living_room_all_except_tv
-                    state_color: true
-                    name: " "
-                    icon: mdi:sofa
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: light.tv
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: light.pendant_lamp
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: fan.living_room_fan
-                    state_color: true
-                    name: " "
-                    icon: mdi:fan
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: light.living_room_fan_light
-                    state_color: true
-                    name: "Light"
-                    icon: mdi:fan
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-              - type: horizontal-stack
-                title: Scenes and Activities
-                show_header_toggle: false
-                cards:
-                  - type: entity-button
-                    entity: scene.reset_living_room
-                    name: " "
-                    icon: mdi:backup-restore
-                    tap_action:
-                      action: call-service
-                      service: scene.turn_on
-                      service_data:
-                        entity_id: scene.reset_living_room
-                  - type: entity-button
-                    entity: scene.chill
-                    name: " "
-                    icon: mdi:emoticon-cool-outline
-                    tap_action:
-                      action: call-service
-                      service: scene.turn_on
-                      service_data:
-                        entity_id: scene.chill
-                  - type: entity-button
-                    entity: scene.the_walking_dead
-                    name: " "
-                    icon: mdi:emoticon-dead-outline
-                    tap_action:
-                      action: call-service
-                      service: scene.turn_on
-                      service_data:
-                        entity_id: scene.the_walking_dead
-              - type: horizontal-stack
-                cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    #align_state: center
-                    entities:
-                      - sensor.living_room_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    name: Humidity
-                    #align_state: center
-                    entities:
-                      - sensor.living_room_humidity
-                    graph: line
-                    show:
-                      name: false
-              - type: custom:mini-media-player
-                entity: media_player.living_room_firetv
-                hide:
-                  volume: true
-              - type: custom:mini-media-player
-                entity: media_player.vizio_smartcast
-
-          - id: e75eb2badf864ae8b76e9a14fde8b60b # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: External
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: switch.front_door
-                    state_color: true
-                    name: "Front Door"
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: switch.deck
-                    state_color: true
-                    name: "Deck"
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: switch.deck_led_string
-                    state_color: true
-                    icon: mdi:led-strip
-                    name: "Deck String"
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-
-      - id: f077a7073da44af5828c1bfe6a9f0921 # Automatically created id
-        type: vertical-stack
-        cards:
-          - id: e75eb2badf864ae8b76e9a14fde8b60c # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: Kitchen
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: light.kitchen_sink
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: light.kitchen_table
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-              - type: horizontal-stack
-                cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    align_state: center
-                    entities:
-                      - sensor.kitchen_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    name: Humidity
-                    align_state: center
-                    entities:
-                      - sensor.kitchen_humidity
-                    graph: line
-                    show:
-                      name: false
-          - id: e75eb2badf864ae8b76e9a14fde8b60e # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: Other
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: switch.bathroom_light_fan_switch
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: switch.stairs
-                    state_color: true
-                    name: " "
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: light.basement_lamp
-                    state_color: true
-                    name: "Basement Lamp"
-                    tap_action:
-                      action: toggle
-                  - type: entity-button
-                    entity: light.office_ceiling
-                    state_color: true
-                    name: "Office"
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: light.office_lamp
-                    state_color: true
-                    name: "Office Lamp"
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-
-                  - type: entity-button
-                    entity: light.lava_lamp
-                    state_color: true
-                    name: "Lava Lamp"
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                  - type: entity-button
-                    entity: light.hallway_light
-                    state_color: true
-                    name: "Hallway"
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-              - type: custom:mini-media-player
-                entity: media_player.spotify
-                icon: mdi:spotify
-                hide:
-                  #volume: true
-                  source: true
-
-      - id: f077a7073da44af5828c2bfe6a9f0921 # Automatically created id
-        type: vertical-stack
-        cards:
-          - id: e75eb2badf864ae8b76e9a14fde8b60d # Automatically created id
-            type: custom:vertical-stack-in-card
-            title: Guest Room
-            cards:
-              - type: horizontal-stack
-                cards:
-                  - type: entity-button
-                    entity: light.guest_bedroom
-                    state_color: true
-                    icon: mdi:bed-empty
-                    name: " "
-                    tap_action:
-                      action: toggle
-                    hold_action:
-                      action: more-info
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Ceiling
-                #     entity: light.guest_ceiling
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Left
-                #     entity: light.guest_left_lamp
-                #   - type: "custom:button-card"
-                #     icon: attribute
-                #     name: Right
-                #     entity: light.guest_right_lamp
-              - type: horizontal-stack
-                cards:
-                  - type: custom:mini-graph-card
-                    name: Temp
-                    group: false
-                    align_state: center
-                    entities:
-                      - sensor.guest_room_temperature
-                    color_thresholds:
-                      - value: 68
-                        color: "red"
-                      - value: 65
-                        color: "orange"
-                      - value: 62
-                        color: "yellow"
-                      - value: 55
-                        color: "blue"
-                    graph: line
-                    show:
-                      name: false
-                  - type: custom:mini-graph-card
-                    #name: Humidity
-                    align_state: center
-                    entities:
-                      - sensor.guest_room_humidity
-                    graph: line
-                    show:
-                      name: false
+  # Include home view
+  - !include /config/lovelace/views/view_home.yaml
 
   ##################################################
 
@@ -590,7 +157,7 @@ views:
         type: conditional
         conditions:
           - entity: input_boolean.trip
-            state: "true"
+            state: "on"
         card:
           type: horizontal-stack
           cards:
@@ -826,6 +393,7 @@ views:
               - binary_sensor.washer_door
               - binary_sensor.dryer
               - binary_sensor.dryer_running
+              - sensor.water_softener_level_dt_2weeks
           - type: custom:gauge-card
             title: Water Softener Salt Level
             entity: sensor.water_softener_salt_level
@@ -840,9 +408,9 @@ views:
         title: Vacuum
         show_header_toggle: false
         entities:
-          - vacuum.rockrobo
+          - vacuum.robot
       - type: "custom:valetudo-map-card"
-        entity: sensor.xiaomi_map
+        entity: camera.map
         rotate: 0
         crop:
           top: 0
@@ -1165,13 +733,11 @@ views:
           - device_tracker.honda
           - sensor.wethop_activity
       - id: 1332a
-        title: Bed Sensors
+        title: Bed Sensor
         type: entities
         show_header_toggle: false
         entities:
           - binary_sensor.master_bed_occupancy
-          - binary_sensor.esp32_bed_occupancy
-          - binary_sensor.esp32_whole_bed_pressure
       - id: 142132234abbd3333
         title: Trackers
         type: map
@@ -1237,12 +803,36 @@ views:
 
   ##################################################
 
-  - title: ZHA Network Viz
-    path: zha-net
-    panel: true
+  - title: 3D Printer
+    path: 3d
+    panel: false
     cards:
       - id: 42b1dabdbcc4465680b17d6f1a862263 # Automatically created id
-        type: "custom:zha-network-visualization-card"
+        type: "custom:threedy-card"
+        base_entity: "sensor.octoprint"
+        name: "Prusa MK3S"
+        printer_type: I3
+        monitored:
+          - Status
+          - ETA
+          - Elapsed
+          - Hotend
+          - Bed
+          - Remaining
+        # optionals
+        scale: 1.0
+        round: false
+        temperature_unit: C
+        use_24hr: true
+
+  ##################################################
+
+  # - title: ZHA Network Viz
+  #   path: zha-net
+  #   panel: true
+  #   cards:
+  #     - id: 42b1dabdbcc4465680b17d6f1a862263 # Automatically created id
+  #       type: "custom:zha-network-visualization-card"
 
   # - path: other # Automatically created id
   #   title: Other items

@@ -74,7 +74,8 @@ views:
                     hold_action:
                       action: more-info
                   - type: entity-button
-                    entity: switch.circadian_lighting_rest_of_house
+                    # entity: switch.circadian_lighting_rest_of_house
+                    entity: switch.adaptive_lighting_rest_of_house
                     state_color: true
                     name: " "
                     tap_action:
@@ -237,7 +238,7 @@ views:
                 hide:
                   volume: true
               - type: custom:mini-media-player
-                entity: media_player.vizio_smartcast
+                entity: media_player.lg_webos_smart_tv
 
           - id: e75eb2badf864ae8b76e9a14fde8b60b # Automatically created id
             type: custom:vertical-stack-in-card
@@ -616,7 +617,7 @@ views:
         type: conditional
         conditions:
           - entity: input_boolean.trip
-            state: "true"
+            state: "on"
         card:
           type: horizontal-stack
           cards:
@@ -842,6 +843,7 @@ views:
               - binary_sensor.washer_door
               - binary_sensor.dryer
               - binary_sensor.dryer_running
+              - sensor.water_softener_level_dt_2weeks
           - type: custom:gauge-card
             title: Water Softener Salt Level
             entity: sensor.water_softener_salt_level
@@ -856,9 +858,9 @@ views:
         title: Vacuum
         show_header_toggle: false
         entities:
-          - vacuum.rockrobo
+          - vacuum.robot
       - type: "custom:valetudo-map-card"
-        entity: sensor.xiaomi_map
+        entity: camera.map
         rotate: 0
         crop:
           top: 0
@@ -1200,6 +1202,7 @@ views:
         title: Circadian Brightness
         hours_to_show: 72
         entities:
+          - sensor.rest_of
           - sensor.circadian_brightness
           - sensor.circadian_temperature
 
@@ -1242,12 +1245,33 @@ views:
 
   ##################################################
 
-  - title: ZHA Network Viz
-    path: zha-net
-    panel: true
+  - title: 3D Printer
+    path: 3d
+    panel: false
     cards:
       - id: 42b1dabdbcc4465680b17d6f1a862263 # Automatically created id
-        type: "custom:zha-network-visualization-card"
+        type: "custom:threedy-card"
+        base_entity: "sensor.octoprint"
+        name: "Prusa MK3S"
+        printer_type: I3
+        monitored:
+          - Status
+          - ETA
+          - Elapsed
+          - Hotend
+          - Bed
+        # optionals
+        scale: 1.0
+        round: false
+
+  ##################################################
+
+  # - title: ZHA Network Viz
+  #   path: zha-net
+  #   panel: true
+  #   cards:
+  #     - id: 42b1dabdbcc4465680b17d6f1a862263 # Automatically created id
+  #       type: "custom:zha-network-visualization-card"
 
   # - path: other # Automatically created id
   #   title: Other items
