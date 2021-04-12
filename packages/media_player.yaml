@@ -199,12 +199,12 @@ automation:
     alias: tv_off
     trigger:
       - platform: state
-        entity_id: media_player.vizio_smartcast
+        entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "off"
         for: "00:01:00"
       - platform: state
-        entity_id: media_player.vizio_smartcast
+        entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "unavailable"
         for: "00:01:00"
@@ -216,14 +216,14 @@ automation:
     alias: tv_on
     trigger:
       - platform: state
-        entity_id: media_player.vizio_smartcast
+        entity_id: media_player.lg_webos_smart_tv
         to: "on"
     condition:
       condition: and
       conditions:
         ### Prevent false positives in the middle of the night
         - condition: state
-          entity_id: media_player.vizio_smartcast
+          entity_id: media_player.lg_webos_smart_tv
           state: "on"
           for:
             seconds: 10
@@ -239,17 +239,22 @@ automation:
     alias: tv_off_at_night_bed_prep
     trigger:
       - platform: state
-        entity_id: media_player.vizio_smartcast
+        entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "on"
         to: "off"
         for: "00:00:60"
       - platform: state
-        entity_id: media_player.vizio_smartcast
+        entity_id: media_player.lg_webos_smart_tv
         # With power save mode off tv is off all the way.
         from: "on"
         to: "unavailable"
         for: "00:00:60"
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:12:fc:ff"
+          command: "attribute_updated"
     condition:
       condition: and
       conditions:
@@ -263,6 +268,9 @@ automation:
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
     action:
+      - service: media_player.turn_off
+        data:
+          entity_id: media_player.lg_webos_smart_tv
       - service: media_player.volume_set
         data:
           entity_id: media_player.bedroom
@@ -278,20 +286,20 @@ automation:
     trigger:
       - platform: state
         entity_id: media_player.living_room_firetv
-        from: playing
-        to: paused
+        from: "playing"
+        to: "paused"
         for: "00:00:20"
       - platform: state
-        entity_id: media_player.vizio_smartcast
+        entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
-        from: playing
-        to: paused
+        from: "playing"
+        to: "paused"
         for: "00:00:20"
       - platform: state
         entity_id: media_player.living_room_firetv
         #TODO Temporary hack: ADB showing wrong values
-        from: paused
-        to: standby
+        from: "paused"
+        to: "standby"
         for: "00:00:20"
     condition:
       condition: and
@@ -313,18 +321,18 @@ automation:
       - platform: state
         entity_id: media_player.living_room_firetv
         #TODO Temporary hack: ADB showing wrong values
-        from: paused
-        to: playing
+        from: "paused"
+        to: "playing"
         for: "00:00:20"
       - platform: state
         entity_id: media_player.living_room_firetv
         #TODO Temporary hack: ADB showing wrong values
-        from: standby
-        to: paused
+        from: "standby"
+        to: "paused"
         for: "00:00:20"
       - platform: state
-        entity_id: media_player.vizio_smartcast
-        to: playing
+        entity_id: media_player.lg_webos_smart_tv
+        to: "playing"
         for: "00:00:20"
     condition:
       condition: and
@@ -639,7 +647,7 @@ script:
             ##  This is Passion Pit: spotify:playlist:37i9dQZF1DZ06evO4iu5hu
             ##  Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
             ##  This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
-            ##  The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
+            ##  This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
             ##  This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
             ##  Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
             ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
@@ -651,7 +659,7 @@ script:
               "spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
               "spotify:album:78bpIziExqiI9qztvNFlQu",
               "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
-              "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
+              "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw",
               "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
               "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
@@ -734,7 +742,7 @@ script:
             ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
             ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
             ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
-            ## The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
+            ## This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
             ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
             ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
             ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
@@ -784,7 +792,7 @@ script:
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
               "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
               "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
-              "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
+              "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
               "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
               "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
               "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
@@ -860,7 +868,7 @@ script:
             ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
             ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
             ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
-            ## The Griswolds : spotify:artist:3nUbzTTtP2w4HqvT5y5vkV
+            ## The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
             ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
             ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
             ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
@@ -914,7 +922,7 @@ script:
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
               "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
               "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
-              "spotify:artist:3nUbzTTtP2w4HqvT5y5vkV",
+              "spspotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
               "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
               "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
               "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
@@ -1126,12 +1134,12 @@ script:
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
-          entity_id: media_player.vizio_smartcast
-      - wait_template: "{{is_state('media_player.vizio_smartcast','on')}}"
+          entity_id: media_player.lg_webos_smart_tv
+      - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
       - service: media_player.select_source
         data:
-          entity_id: media_player.vizio_smartcast
-          source: "HDMI-5"
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 1"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv
@@ -1150,12 +1158,12 @@ script:
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
-          entity_id: media_player.vizio_smartcast
-      - wait_template: "{{is_state('media_player.vizio_smartcast','on')}}"
+          entity_id: media_player.lg_webos_smart_tv
+      - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
       - service: media_player.select_source
         data:
-          entity_id: media_player.vizio_smartcast
-          source: "HDMI-5"
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 1"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv
@@ -1172,12 +1180,12 @@ script:
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
-          entity_id: media_player.vizio_smartcast
-      - wait_template: "{{is_state('media_player.vizio_smartcast','on')}}"
+          entity_id: media_player.lg_webos_smart_tv
+      - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
       - service: media_player.select_source
         data:
-          entity_id: media_player.vizio_smartcast
-          source: "HDMI-5"
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 1"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv
@@ -1203,12 +1211,12 @@ script:
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
-          entity_id: media_player.vizio_smartcast
-      - wait_template: "{{is_state('media_player.vizio_smartcast','on')}}"
+          entity_id: media_player.lg_webos_smart_tv
+      - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
       - service: media_player.select_source
         data:
-          entity_id: media_player.vizio_smartcast
-          source: "HDMI-5"
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 1"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv
@@ -1234,12 +1242,12 @@ script:
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
-          entity_id: media_player.vizio_smartcast
-      - wait_template: "{{is_state('media_player.vizio_smartcast','on')}}"
+          entity_id: media_player.lg_webos_smart_tv
+      - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
       - service: media_player.select_source
         data:
-          entity_id: media_player.vizio_smartcast
-          source: "HDMI-5"
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 1"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv
@@ -1265,12 +1273,12 @@ script:
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
-          entity_id: media_player.vizio_smartcast
-      - wait_template: "{{is_state('media_player.vizio_smartcast','on')}}"
+          entity_id: media_player.lg_webos_smart_tv
+      - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
       - service: media_player.select_source
         data:
-          entity_id: media_player.vizio_smartcast
-          source: "HDMI-5"
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 1"
       - service: media_player.select_source
         data:
           entity_id: media_player.living_room_firetv
@@ -1308,6 +1316,13 @@ switch:
 vizio:
   - host: !secret vizio_tv_ip
     access_token: !secret vizio_tv_token
+
+########################
+# webosTV
+########################
+webostv:
+  - host: !secret lg_tv_ip
+
 ########################
 # Zone
 ########################
