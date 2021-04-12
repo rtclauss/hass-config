@@ -17,10 +17,11 @@ Software on the NUC:
   * [Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
   * [esphomeyaml](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml) and [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/master/esphome/bedloadcell1.yaml)
-  * [OpenZwave Beta]()
+  * ~[OpenZwave Beta]()~
+  * [Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)
 
 **Devices in Use:**
-* Apple/iOS Devices - [iPhone 11 Pro](), [iPad Pro]()
+* Apple/iOS Devices - [iPhone 12 Pro](), [iPad Pro]()
 * ~[Nest Thermostat]()~ Replaced with Z-wave Thermostat and [Schedy](https://github.com/rtclauss/hass-config/blob/master/appdaemon/apps/schedy_heating.yaml)
 * [Amazon Echo](http://amzn.to/2i6mShX)
 * [Amazon Echo Dot Gen 2](http://amzn.to/2hvCexj)
