@@ -231,14 +231,18 @@ automation:
         to: "home"
         from: "away"
     condition:
-        - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
-          state: "off"
+      - condition: state
+        entity_id: binary_sensor.master_bed_occupancy
+        state: "off"
     action:
       - service: cover.open_cover
         entity_id: cover.garage_door_opener
       - service: scene.turn_on
         entity_id: scene.arrive_home
+      # First attempt to reset schedy when arrive home
+      - event: schedy_reevaluate
+        event_data:
+          mode: "reset"
 
   - id: notify_home_zone
     alias: notify_home_zone
@@ -473,6 +477,7 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         from: "Twin Cities"
+        to: "not_home"
     # condition:
     #   condition: template
     #   value_template: '{{ 110 <= sensor.zeke_direction <= 260 }}'
@@ -488,7 +493,7 @@ automation:
       - service: notify.all
         data_template:
           message: >-
-            Turn off HVAC Away Mode. You left TC in direction {{ sensor.zeke_direction }} while you drive home from the Cities.
+            Turn off HVAC Away Mode. You left TC in direction {{ states('sensor.zeke_direction') }} while you drive home from the Cities.
 
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
@@ -813,7 +818,7 @@ scene:
       switch.deck_led_string: "off"
       switch.front_door: "off"
       switch.stairs: "off"
-      media_player.vizio_smartcast: "off"
+      media_player.lg_webos_smart_tv: "off"
       switch.humidifier: "off"
 
   - name: leave_home
@@ -824,7 +829,7 @@ scene:
       switch.deck_led_string: "off"
       switch.front_door: "off"
       switch.stairs: "off"
-      media_player.vizio_smartcast: "off"
+      media_player.lg_webos_smart_tv: "off"
       switch.humidifier: "off"
 
 ########################
