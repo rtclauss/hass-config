@@ -456,10 +456,35 @@ automation:
         - condition: state
           entity_id: input_boolean.master_bedroom_auto_on
           state: "on"
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.master_bed_occupancy
+              state: "on"
     action:
       - service: light.turn_off
         data:
           entity_id: light.master_bedroom
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.master_bedroom_auto_on
+
+  - id: master_bedroom_light_auto_boolean_off
+    alias: master_bedroom_light_auto_boolean_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_motion
+        to: "off"
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: input_boolean.master_bedroom_auto_on
+          state: "on"
+        - condition: state
+          entity_id: binary_sensor.master_bed_occupancy
+          state: "on"
+    action:
       - service: homeassistant.turn_off
         data:
           entity_id: input_boolean.master_bedroom_auto_on
@@ -487,9 +512,10 @@ automation:
         data:
           entity_id: light.master_bedroom
           kelvin: >-
-            {{ states('sensor.circadian_temperature') | int }}
+            {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
           brightness_pct: >-
-            {{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') | int }}
+            {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
+          # {{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') | int }}
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.master_bedroom_auto_on
@@ -511,9 +537,9 @@ automation:
             - light.office_lamp
             - light.office_ceiling
           kelvin: >-
-            {{ states('sensor.circadian_temperature') | int }}
+            {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
           brightness_pct: >-
-            {{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') | int }}
+            {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
 
   - id: office_light_off_at_night
     alias: office_light_off_at_night
@@ -609,6 +635,7 @@ automation:
       - service: light.turn_on
         entity_id:
           - light.kitchen_sink
+          - light.kitchen_table
           - light.living_room_all
         data:
           # Hour-long transition before sunset.
@@ -633,6 +660,7 @@ automation:
       - service: light.turn_on
         entity_id:
           - light.kitchen_sink
+          - light.kitchen_table
           - light.living_room_all
         data:
           # Hour-long transition before sunset.
@@ -673,7 +701,9 @@ automation:
       - service: fan.turn_off
         entity_id: fan.living_room_fan
       - service: switch.turn_on
-        entity_id: switch.humidifier
+        entity_id:
+          - switch.humidifier
+          - switch.adaptive_lighting_sleep_mode_rest_of_house
       - service: switch.turn_off
         entity_id:
           - switch.stairs
@@ -713,9 +743,9 @@ automation:
           entity_id: light.master_bedroom
           transition: 5
           kelvin: >-
-            {{ states('sensor.circadian_temperature') | int }}
+            {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
           brightness_pct: >-
-            {{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') | int }}
+            {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
       - service: homeassistant.turn_on
         data:
           entity_id: input_boolean.master_bedroom_auto_on
@@ -1032,13 +1062,17 @@ scene:
 
   - name: cloudy_arrive_home
     entities:
-      switch.stairs: 
+      switch.stairs:
         state: "on"
       light.living_room_all:
         state: "on"
         transition: 30
         brightness_pct: 100
       light.kitchen_sink:
+        state: "on"
+        transition: 30
+        brightness_pct: 100
+      light.kitchen_table:
         state: "on"
         transition: 30
         brightness_pct: 100
@@ -1057,6 +1091,10 @@ scene:
         transition: 30
         brightness_pct: 100
       light.kitchen_sink:
+        state: "on"
+        transition: 30
+        brightness_pct: 100
+      light.kitchen_table:
         state: "on"
         transition: 30
         brightness_pct: 100
@@ -1089,32 +1127,32 @@ sensor:
       circadian_brightness:
         friendly_name: "Circadian Brightness"
         unit_of_measurement: "%"
-        value_template: "{{ state_attr('switch.circadian_lighting_rest_of_house', 'brightness') |int }}"
+        value_template: "{{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') |int }}"
       circadian_temperature:
         friendly_name: "Circadian Color Temp"
         unit_of_measurement: "°K"
-        value_template: "{{ state_attr('sensor.circadian_values', 'colortemp') }}"
+        value_template: "{{ state_attr('switch.adaptive_lighting_rest_of_house', 'color_temp_kelvin') }}"
 
 ########################
 # Switch
 ########################
 switch:
-  - platform: circadian_lighting
-    name: rest_of_house
-    lights_ct:
-      - light.master_bedroom
-      - light.hallway_light
-      - light.office_lamp
-      - light.office_ceiling
-    initial_transition: 30 #seconds
+  # - platform: circadian_lighting
+  #   name: rest_of_house
+  #   lights_ct:
+  #     - light.master_bedroom
+  #     - light.hallway_light
+  #     - light.office_lamp
+  #     - light.office_ceiling
+  #   initial_transition: 30 #seconds
 
-  - platform: circadian_lighting
-    name: living_room
-    initial_transition: 30 #seconds
-    disable_brightness_adjust: true
-    min_brightness: 10
-    lights_ct:
-      - light.living_room_all_except_tv
+  # - platform: circadian_lighting
+  #   name: living_room
+  #   initial_transition: 30 #seconds
+  #   disable_brightness_adjust: true
+  #   min_brightness: 10
+  #   lights_ct:
+  #     - light.living_room_all_except_tv
 
   # - platform: flux
   #   lights:
