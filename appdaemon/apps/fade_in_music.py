@@ -32,6 +32,8 @@ class FadeInMusic(hass.Hass):
         self.log("already fading in spotify is {}".format(FadeInMusic.am_i_already_fading_in_spotify))
         self.turn_on(self.already_fading_in_spotify)
         self.turn_on("script.spotify_wake_up")
+        self.call_service("media_player/media_stop", entity_id="media_player.bedroom")
+        self.call_service("media_player/media_stop", entity_id="media_player.office")
         step = 0.01
         current_volume = 0.01
         i = 1
