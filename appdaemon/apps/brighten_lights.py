@@ -18,6 +18,7 @@ class BrightenLights(hass.Hass):
     # Define a handle to be used for all timers
     self.handle = None
     self.transition = self.args['transition_time_sec']
+    self.camera_sensor = self.args['camera_on_sensor']
 
     # Register callbacks for all sensors we were passed
     for sensor in self.args["sensors"]:
@@ -31,6 +32,12 @@ class BrightenLights(hass.Hass):
     self.log("Detected Motion in {}".format(self.args["sensors"]))
     workday = self.get_state("binary_sensor.workday_sensor")
     #self.log("is it a work day? {}".format(workday))
+
+    camera_state = self.get_state(self.camera_sensor)
+    self.log("is work macbook camera on? {}".format(camera_state))
+
+    if self.camera_sensor == 'on':
+      return
     
     if new == 'on' and workday == 'on':
       for light in self.args["lights"]:
