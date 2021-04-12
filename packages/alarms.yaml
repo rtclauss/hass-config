@@ -592,15 +592,19 @@ script:
       - service: light.turn_on
         data_template:
           entity_id: light.master_bedroom
-          kelvin: "{{ states('sensor.circadian_temperature') | int }}"
-          brightness_pct: "{{ states('sensor.circadian_brightness') | int }}"
+          kelvin: >-
+            {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
+          brightness_pct: >-
+            {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
           transition: 300
       - service: input_boolean.turn_on
         data:
           entity_id: input_boolean.wakeup_alarm_firing
       - service: switch.turn_off
         data:
-          entity_id: switch.humidifier
+          entity_id:
+            - switch.humidifier
+            - switch.adaptive_lighting_sleep_mode_rest_of_house
 
 ########################
 # Sensor
