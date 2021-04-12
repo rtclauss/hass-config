@@ -34,6 +34,14 @@ homeassistant:
       friendly_name: "Vacuum while at work"
       icon: mdi:robot-vacuum
 
+    automation.turn_off_office_lamp_when_work_tp_camera_active:
+      <<: *customize
+      friendly_name: "Turn off Rear Office Lamp when Camera On"
+
+    automation.turn_on_office_lamp_when_work_tp_camera_inactive:
+      <<: *customize
+      friendly_name: "Turn on Rear Office Lamp when Camera Off"
+
     ################################################
     ## Binary Sensors
     ################################################
@@ -80,6 +88,28 @@ automation:
         data:
           entity_id: input_boolean.morning_routine
 
+  - id: turn_off_office_lamp_when_work_tp_camera_active
+    alias: turn_off_office_lamp_when_work_tp_camera_active
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ryans_work_macbook_pro_camera_in_use
+        to: "on"
+    action:
+      - service: light.turn_off
+        data:
+          entity_id: light.office_lamp
+
+  - id: turn_on_office_lamp_when_work_tp_camera_inactive
+    alias: turn_on_office_lamp_when_work_tp_camera_inactive
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ryans_work_macbook_pro_camera_in_use
+        to: "off"
+    action:
+      - service: light.turn_on
+        data:
+          entity_id: light.office_lamp
+
   - id: up_enable_bedroom_light_auto_off
     alias: up_enable_bedroom_light_auto_off
     trigger:
@@ -95,7 +125,7 @@ automation:
         state: "on"
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
-        state:  "off"
+        state: "off"
     action:
       - service: homeassistant.turn_on
         data:
