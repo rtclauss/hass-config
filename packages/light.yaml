@@ -701,8 +701,6 @@ automation:
       - service: fan.turn_off
         entity_id: fan.living_room_fan
       - service: switch.turn_on
-        entity_id:
-          - switch.humidifier
           - switch.adaptive_lighting_sleep_mode_rest_of_house
       - service: switch.turn_off
         entity_id:
@@ -710,6 +708,15 @@ automation:
           - switch.front_door
           - switch.deck
           - switch.lava_lamp
+      # Only turn on the humidifier when it's winter
+      - condition: and
+        conditions:
+          - condition: state
+            entity_id: sensor.season
+            state: 'winter'
+      - service: switch.turn_on
+        entity_id:
+          - switch.humidifier
 
     # - service: fan.turn_on
     #   data:
