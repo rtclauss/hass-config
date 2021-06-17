@@ -235,8 +235,8 @@ automation:
         entity_id: binary_sensor.master_bed_occupancy
         state: "off"
     action:
-      - service: cover.open_cover
-        entity_id: cover.garage_door_opener
+      # - service: cover.open_cover
+      #   entity_id: cover.garage_door_opener
       - service: scene.turn_on
         entity_id: scene.arrive_home
       # First attempt to reset schedy when arrive home
@@ -332,7 +332,9 @@ automation:
     action:
       - service: notify.all
         data:
-          message: Garage door is still open!
+          message: Garage door is still open! Attempting to close...
+      - service: cover.close_cover
+        entity_id: cover.garage_door_opener
 
   - alias: input_boolean_tracker_on
     id: input_boolean_tracker_on
@@ -373,9 +375,9 @@ automation:
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: "off"
-      - condition: template
-        value_template: >-
-          {{ not is_state('media_player.spotify', 'playing') }}
+      # - condition: template
+      #   value_template: >-
+      #     {{ not is_state('media_player.spotify', 'playing') }}
     action:
       - service: script.turn_on
         entity_id: script.spotify_arrival
@@ -413,7 +415,7 @@ automation:
         data:
           message: Home again, home again, jiggity jig.
       - service: vacuum.return_to_base
-        entity_id: vacuum.rockrobo
+        entity_id: vacuum.robot
 
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
@@ -583,7 +585,7 @@ automation:
       - service: notify.all
         data_template:
           message: >-
-            Entering Rochester from direction {{ sensor.zeke_direction }}. Turning off Away Mode. ETA to home {{ states.sensor.time_to_home.state }}.
+            Entering Rochester from direction {{ states.sensor.zeke_direction }}. Turning off Away Mode. ETA to home {{ states.sensor.time_to_home.state }}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
@@ -597,7 +599,7 @@ automation:
         to: "home"
     action:
       - service: vacuum.return_to_base
-        entity_id: vacuum.rockrobo
+        entity_id: vacuum.robot
       - service: switch.turn_off
         entity_id: switch.livingroom_camera_power
       - service: switch.turn_off
@@ -633,7 +635,8 @@ binary_sensor:
         prob_given_false: 0.3
         platform: "state"
         to_state: "home"
-      - entity_id: device_tracker.honda
+      # - entity_id: device_tracker.honda
+      - entity_id: device_tracker.ice_location_tracker
         prob_given_true: 0.80
         prob_given_false: 0.1
         platform: "state"
@@ -710,6 +713,7 @@ input_select:
       - "Work"
       - "home"
       - "not_home"
+      - "Rochester"
     initial: "Work"
 
 ########################
@@ -802,35 +806,55 @@ proximity:
 scene:
   - name: arrive_home
     entities:
-      switch.basement_camera_power: "off"
-      switch.livingroom_camera_power: "off"
+      switch.basement_camera_power:
+        state: "off"
+      switch.livingroom_camera_power:
+        state: "off"
 
   - name: turn_on_cameras
     entities:
-      switch.basement_camera_power: "on"
-      switch.livingroom_camera_power: "on"
+      switch.basement_camera_power:
+        state: "on"
+      switch.livingroom_camera_power:
+        state: "on"
 
   - name: goodnight
     entities:
-      switch.bathroom_light_fan_switch: "off"
-      switch.christmas_tree: "off"
-      switch.deck: "off"
-      switch.deck_led_string: "off"
-      switch.front_door: "off"
-      switch.stairs: "off"
-      media_player.lg_webos_smart_tv: "off"
-      switch.humidifier: "off"
+      switch.bathroom_light_fan_switch:
+        state: "off"
+      switch.christmas_tree:
+        state: "off"
+      switch.deck:
+        state: "off"
+      switch.deck_led_string:
+        state: "off"
+      switch.front_door:
+        state: "off"
+      switch.stairs:
+        state: "off"
+      media_player.lg_webos_smart_tv:
+        state: "off"
+      switch.humidifier:
+        state: "off"
 
   - name: leave_home
     entities:
-      switch.bathroom_light_fan_switch: "off"
-      switch.christmas_tree: "off"
-      switch.deck: "off"
-      switch.deck_led_string: "off"
-      switch.front_door: "off"
-      switch.stairs: "off"
-      media_player.lg_webos_smart_tv: "off"
-      switch.humidifier: "off"
+      switch.bathroom_light_fan_switch:
+        state: "off"
+      switch.christmas_tree:
+        state: "off"
+      switch.deck:
+        state: "off"
+      switch.deck_led_string:
+        state: "off"
+      switch.front_door:
+        state: "off"
+      switch.stairs:
+        state: "off"
+      media_player.lg_webos_smart_tv:
+        state: "off"
+      switch.humidifier:
+        state: "off"
 
 ########################
 # Scripts
