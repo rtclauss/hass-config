@@ -78,9 +78,9 @@ homeassistant:
       <<: *customize
       friendly_name: "Toggle Living Room"
 
-    automation.reset_living_room:
+    automation.button_reset_living_room:
       <<: *customize
-      friendly_name: "Reset Living Room"
+      friendly_name: "Button Reset Living Room"
 
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
@@ -251,6 +251,10 @@ homeassistant:
       <<: *customize
       friendly_name: Bedroom Prep
 
+    scene.outside_ambiance:
+      <<: *customize
+      friendly_name: Outside Ambiance
+
     scene.reset_bedroom:
       <<: *customize
       friendly_name: Reset Bedroom
@@ -258,6 +262,10 @@ homeassistant:
     scene.reset_living_room:
       <<: *customize
       friendly_name: Reset Living Room
+
+    scene.scene_reset_bedroom:
+      <<: *customize
+      friendly_name: Scene Reset Bedroom
 
     scene.the_walking_dead:
       <<: *customize
@@ -270,6 +278,10 @@ homeassistant:
       <<: *customize
       friendly_name: "Fade In Light"
       icon: mdi:lamp
+
+    script.reset_living_room:
+      <<: *customize
+      friendly_name: "Script Reset Living Room"
 
     ################################################
     ## Sensors
@@ -448,7 +460,7 @@ automation:
     alias: master_bedroom_light_auto_off
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
+        entity_id: binary_sensor.master_bedroom_occupancy
         to: "off"
     condition:
       condition: and
@@ -464,16 +476,42 @@ automation:
     action:
       - service: light.turn_off
         data:
-          entity_id: light.master_bedroom
+          entity_id:
+            - light.master_bedroom
+            - light.master_bedroom_fan_light
       - service: homeassistant.turn_off
         data:
           entity_id: input_boolean.master_bedroom_auto_on
+
+  - id: master_bedroom_light_auto_off_in_morning
+    alias: master_bedroom_light_auto_off_in_morning
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bedroom_occupancy
+        to: "off"
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "00:06:00"
+          before: "12:00:00"
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.master_bed_occupancy
+              state: "on"
+    action:
+      - service: light.turn_off
+        data:
+          entity_id:
+            - light.master_bedroom
+            - light.master_bedroom_fan_light
 
   - id: master_bedroom_light_auto_boolean_off
     alias: master_bedroom_light_auto_boolean_off
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
+        entity_id: binary_sensor.master_bedroom_occupancy
         to: "off"
     condition:
       condition: and
@@ -483,7 +521,7 @@ automation:
           state: "on"
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
-          state: "on"
+          state: "off"
     action:
       - service: homeassistant.turn_off
         data:
@@ -493,7 +531,7 @@ automation:
     alias: master_bedroom_light_auto_on
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
+        entity_id: binary_sensor.master_bedroom_occupancy
         to: "on"
     condition:
       condition: and
@@ -666,17 +704,26 @@ automation:
           # Hour-long transition before sunset.
           transition: 5400
 
-  - alias: reset_living_room
-    id: reset_living_room
+  - alias: turn_off_sleep_mode
+    id: turn_off_sleep_mode
+    trigger:
+      - platform: time
+        at: "07:00:00"
+    action:
+      - service: switch.turn_off
+        entity_id: switch.adaptive_lighting_sleep_mode_rest_of_house
+
+  - alias: button_reset_living_room
+    id: button_reset_living_room
     trigger:
       - platform: state
         entity_id:
           - binary_sensor.living_room_button_hold
     action:
       - service: scene.turn_on
-        entity_id: scene.reset_living_room
-      - service: switch.turn_off
-        entity_id: switch.flux
+        entity_id: scene.scene_reset_bedroom
+        data:
+          transition: 10
 
   - id: turn_off_all_lights_when_bed_off
     alias: turn_off_all_lights_when_bed_off
@@ -701,7 +748,7 @@ automation:
       - service: fan.turn_off
         entity_id: fan.living_room_fan
       - service: switch.turn_on
-          - switch.adaptive_lighting_sleep_mode_rest_of_house
+        entity_id: switch.adaptive_lighting_sleep_mode_rest_of_house
       - service: switch.turn_off
         entity_id:
           - switch.stairs
@@ -713,7 +760,7 @@ automation:
         conditions:
           - condition: state
             entity_id: sensor.season
-            state: 'winter'
+            state: "winter"
       - service: switch.turn_on
         entity_id:
           - switch.humidifier
@@ -1018,7 +1065,7 @@ proximity:
 # Scenes
 ########################
 scene:
-  - name: reset_bedroom
+  - name: scene_reset_bedroom
     entities:
       light.master_bedroom_fan_light:
         state: "off"
@@ -1028,18 +1075,16 @@ scene:
         color_temp: 500
         transition: 10
 
-  - name: reset_living_room
+  - name: scene_reset_living_room
     entities:
       light.living_room_all_except_tv:
         state: "on"
-        brightness_pct: 100
         color_temp: 386
-        transition: 10
+        brightness: 255
       light.tv:
         state: "on"
-        brightness_pct: 75
         hs_color: [360, 100]
-        transition: 10
+        brightness: 128
 
   - name: the_walking_dead
     entities:
@@ -1087,6 +1132,11 @@ scene:
         state: "on"
         speed: "smart"
 
+  - name: outside_ambiance
+    entities:
+      switch.deck_led_string:
+        state: "on"
+
   - name: night_arrive_home
     entities:
       switch.front_door:
@@ -1112,8 +1162,6 @@ scene:
         state: "on"
         transition: 10
         brightness: 5
-      switch.humidifier:
-        state: "on"
       light.master_bedroom_fan_light:
         state: "off"
       # fan.master_bedroom_fan:
@@ -1124,6 +1172,13 @@ scene:
 # Scripts
 ########################
 script:
+  reset_living_room:
+    sequence:
+      - service: scene.turn_on
+        target:
+          entity_id: scene.scene_reset_living_room
+        data:
+          transition: 15
 
 ########################
 # Sensor
