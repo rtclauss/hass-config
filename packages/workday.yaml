@@ -92,9 +92,14 @@ automation:
     alias: turn_off_office_lamp_when_work_tp_camera_active
     trigger:
       - platform: state
-        entity_id: binary_sensor.ryans_work_macbook_pro_camera_in_use
+        entity_id: binary_sensor.ryans_macbook_pro_camera_in_use
         to: "on"
     action:
+      - service: media_player.media_pause
+        data:
+          entity_id:
+            - media_player.spotify
+            - media_player.office
       - service: light.turn_off
         data:
           entity_id: light.office_lamp
@@ -103,7 +108,7 @@ automation:
     alias: turn_on_office_lamp_when_work_tp_camera_inactive
     trigger:
       - platform: state
-        entity_id: binary_sensor.ryans_work_macbook_pro_camera_in_use
+        entity_id: binary_sensor.ryans_macbook_pro_camera_in_use
         to: "off"
     action:
       - service: light.turn_on
