@@ -290,6 +290,11 @@ automation:
         to: "paused"
         for: "00:00:20"
       - platform: state
+        entity_id: media_player.apple_tv
+        from: "playing"
+        to: "paused"
+        for: "00:00:20"
+      - platform: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
@@ -312,7 +317,10 @@ automation:
           state: "off"
     action:
       - service: scene.turn_on
-        entity_id: scene.tv_paused
+        target:
+          entity_id: scene.tv_paused
+        data:
+          transition: 5
 
   - id: tv_resumed
     alias: tv_resumed
@@ -334,6 +342,11 @@ automation:
         entity_id: media_player.lg_webos_smart_tv
         to: "playing"
         for: "00:00:20"
+      - platform: state
+        entity_id: media_player.apple_tv
+        from: "paused"
+        to: "playing"
+        for: "00:00:20"
     condition:
       condition: and
       conditions:
@@ -345,7 +358,10 @@ automation:
           state: "off"
     action:
       - service: scene.turn_on
-        entity_id: scene.tv_resumed
+        target:
+          entity_id: scene.tv_resumed
+        data:
+          transition: 20
 
 ########################
 # Binary Sensors
@@ -471,57 +487,59 @@ scene:
       light.guest_bedroom:
         state: "off"
         transition: 20
-      switch.christmas_tree: "off"
-      switch.deck: "off"
-      switch.deck_led_string: "off"
-      switch.front_door: "off"
-      switch.stairs: "off"
+      switch.christmas_tree:
+        state: "off"
+      switch.deck:
+        state: "off"
+      switch.deck_led_string:
+        state: "off"
+      switch.front_door:
+        state: "off"
+      switch.stairs:
+        state: "off"
 
   - name: tv_paused
     entities:
       light.living_room_all_except_tv:
         state: "on"
-        transition: 5
         brightness_pct: 50
       light.kitchen_sink:
         state: "on"
-        transition: 5
         brightness_pct: 100
-      switch.stairs: "on"
+      switch.stairs:
+        state: "on"
 
   - name: tv_resumed
     entities:
       light.living_room_all_except_tv:
         state: "off"
-        transition: 20
       light.kitchen_sink:
         state: "off"
       light.kitchen_table:
         state: "off"
-        transition: 20
       light.lava_lamp:
         state: "off"
       light.office_ceiling:
         state: "off"
-        transition: 20
       light.office_lamp:
         state: "off"
-        transition: 20
       light.hallway_light:
         state: "off"
-        transition: 20
       light.tv:
         state: "on"
         brightness_pct: 25
-        transition: 20
       light.guest_bedroom:
         state: "off"
-        transition: 20
-      switch.christmas_tree: "off"
-      switch.deck: "off"
-      switch.deck_led_string: "off"
-      switch.front_door: "off"
-      switch.stairs: "off"
+      switch.christmas_tree:
+        state: "off"
+      switch.deck:
+        state: "off"
+      switch.deck_led_string:
+        state: "off"
+      switch.front_door:
+        state: "off"
+      switch.stairs:
+        state: "off"
 
 ########################
 # Scripts
@@ -583,7 +601,7 @@ script:
             "spotify:playlist:synthetic044",
             "spotify:album:synthetic003",
             "spotify:album:synthetic007"
-               ] -%}
+            ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -606,7 +624,7 @@ script:
               "spotify:playlist:synthetic013",
               "spotify:playlist:synthetic048",
               "spotify:playlist:synthetic049"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -629,7 +647,7 @@ script:
               "spotify:playlist:synthetic024",
               "spotify:playlist:synthetic036",
               "spotify:playlist:synthetic039"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -666,7 +684,7 @@ script:
               "spotify:user:example:playlist:synthetic058",
               "spotify:user:example:playlist:synthetic059",
               "spotify:playlist:synthetic033"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -691,13 +709,15 @@ script:
               "spotify:playlist:synthetic011",
               "spotify:playlist:synthetic022",
               "spotify:playlist:synthetic017"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
   spotify_arrival:
     alias: "Spotify Arrive Home"
     sequence:
+      - delay:
+          seconds: 90
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -715,16 +735,14 @@ script:
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
-               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-               {{ shuffle[sindex] }}
+            {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+            {{ shuffle[sindex] }}
       - delay:
           seconds: 2
       - service: media_player.volume_set
         data:
           entity_id: media_player.spotify
           volume_level: 0.30
-      - delay:
-          seconds: 2
       - service: media_player.play_media
         data:
           entity_id: media_player.bedroom
@@ -736,7 +754,7 @@ script:
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
-            ## Discover Weekly: spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
@@ -759,7 +777,7 @@ script:
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
-            ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
@@ -786,7 +804,7 @@ script:
               "spotify:user:example:playlist:synthetic068",
               "spotify:user:example:playlist:synthetic060",
               "spotify:user:example:playlist:synthetic057",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic067",
               "spotify:user:example:playlist:synthetic070",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
@@ -808,7 +826,7 @@ script:
               "spotify:user:example:playlist:synthetic055",
               "spotify:user:example:playlist:synthetic051",
               "spotify:user:example:playlist:synthetic070",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic063",
               "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
               "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
@@ -828,7 +846,7 @@ script:
               "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
               "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
               "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -841,8 +859,8 @@ script:
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
-               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-               {{ shuffle[sindex] }}
+            {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+            {{ shuffle[sindex] }}
       - delay:
           seconds: 2
       - service: media_player.volume_set
@@ -862,7 +880,7 @@ script:
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
-            ## Discover Weekly: spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
@@ -885,7 +903,7 @@ script:
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
-            ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
@@ -916,7 +934,7 @@ script:
               "spotify:user:example:playlist:synthetic068",
               "spotify:user:example:playlist:synthetic060",
               "spotify:user:example:playlist:synthetic057",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic067",
               "spotify:user:example:playlist:synthetic070",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
@@ -938,7 +956,7 @@ script:
               "spotify:user:example:playlist:synthetic055",
               "spotify:user:example:playlist:synthetic051",
               "spotify:user:example:playlist:synthetic070",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic063",
               "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
               "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
@@ -962,7 +980,7 @@ script:
               "spotify:playlist:synthetic017",
               "spotify:playlist:synthetic024",
               "spotify:playlist:synthetic011"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
       - delay:
@@ -1011,8 +1029,8 @@ script:
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
-               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-               {{ shuffle[sindex] }}
+            {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+            {{ shuffle[sindex] }}
       - delay:
           seconds: 2
       - service: media_player.volume_set
@@ -1052,7 +1070,7 @@ script:
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
-            ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
             ## Synthetic music note
@@ -1099,7 +1117,7 @@ script:
               "spotify:user:example:playlist:synthetic055",
               "spotify:user:example:playlist:synthetic051",
               "spotify:user:example:playlist:synthetic070",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic063",
               "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
               "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
@@ -1119,7 +1137,7 @@ script:
               "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
               "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
               "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -1131,6 +1149,9 @@ script:
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
+      - service: media_player.turn_on
+        data:
+          entity_id: media_player.apple_tv
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
@@ -1313,9 +1334,9 @@ switch:
 ########################
 # Vizio
 ########################
-vizio:
-  - host: !secret vizio_tv_ip
-    access_token: !secret vizio_tv_token
+# vizio:
+#   - host: !secret vizio_tv_ip
+#     access_token: !secret vizio_tv_token
 
 ########################
 # webosTV
