@@ -290,6 +290,11 @@ automation:
         to: "paused"
         for: "00:00:20"
       - platform: state
+        entity_id: media_player.apple_tv
+        from: "playing"
+        to: "paused"
+        for: "00:00:20"
+      - platform: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
@@ -312,7 +317,10 @@ automation:
           state: "off"
     action:
       - service: scene.turn_on
-        entity_id: scene.tv_paused
+        target:
+          entity_id: scene.tv_paused
+        data:
+          transition: 5
 
   - id: tv_resumed
     alias: tv_resumed
@@ -334,6 +342,11 @@ automation:
         entity_id: media_player.lg_webos_smart_tv
         to: "playing"
         for: "00:00:20"
+      - platform: state
+        entity_id: media_player.apple_tv
+        from: "paused"
+        to: "playing"
+        for: "00:00:20"
     condition:
       condition: and
       conditions:
@@ -345,7 +358,10 @@ automation:
           state: "off"
     action:
       - service: scene.turn_on
-        entity_id: scene.tv_resumed
+        target:
+          entity_id: scene.tv_resumed
+        data:
+          transition: 20
 
 ########################
 # Binary Sensors
@@ -471,57 +487,59 @@ scene:
       light.guest_bedroom:
         state: "off"
         transition: 20
-      switch.christmas_tree: "off"
-      switch.deck: "off"
-      switch.deck_led_string: "off"
-      switch.front_door: "off"
-      switch.stairs: "off"
+      switch.christmas_tree:
+        state: "off"
+      switch.deck:
+        state: "off"
+      switch.deck_led_string:
+        state: "off"
+      switch.front_door:
+        state: "off"
+      switch.stairs:
+        state: "off"
 
   - name: tv_paused
     entities:
       light.living_room_all_except_tv:
         state: "on"
-        transition: 5
         brightness_pct: 50
       light.kitchen_sink:
         state: "on"
-        transition: 5
         brightness_pct: 100
-      switch.stairs: "on"
+      switch.stairs:
+        state: "on"
 
   - name: tv_resumed
     entities:
       light.living_room_all_except_tv:
         state: "off"
-        transition: 20
       light.kitchen_sink:
         state: "off"
       light.kitchen_table:
         state: "off"
-        transition: 20
       light.lava_lamp:
         state: "off"
       light.office_ceiling:
         state: "off"
-        transition: 20
       light.office_lamp:
         state: "off"
-        transition: 20
       light.hallway_light:
         state: "off"
-        transition: 20
       light.tv:
         state: "on"
         brightness_pct: 25
-        transition: 20
       light.guest_bedroom:
         state: "off"
-        transition: 20
-      switch.christmas_tree: "off"
-      switch.deck: "off"
-      switch.deck_led_string: "off"
-      switch.front_door: "off"
-      switch.stairs: "off"
+      switch.christmas_tree:
+        state: "off"
+      switch.deck:
+        state: "off"
+      switch.deck_led_string:
+        state: "off"
+      switch.front_door:
+        state: "off"
+      switch.stairs:
+        state: "off"
 
 ########################
 # Scripts
@@ -583,7 +601,7 @@ script:
             "spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL",
             "spotify:album:33dmmZ0Zg1yvFor6pCuYGm",
             "spotify:album:5DDNife8S8H4uSYRFkYUNw"
-               ] -%}
+            ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -606,7 +624,7 @@ script:
               "spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ",
               "spotify:playlist:6z6y5fEt0QIUuC64w1VOw4",
               "spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -629,7 +647,7 @@ script:
               "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
               "spotify:playlist:3ebHKSjHujS4Tyt2KKP97R",
               "spotify:playlist:4sgUux9hmykyWYmVoe4W6p"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -666,7 +684,7 @@ script:
               "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
               "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
               "spotify:playlist:37i9dQZF1DZ06evO3VghcA"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -691,13 +709,15 @@ script:
               "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
               "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
               "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
   spotify_arrival:
     alias: "Spotify Arrive Home"
     sequence:
+      - delay:
+          seconds: 90
       - service: media_player.select_source
         data:
           entity_id: media_player.spotify
@@ -715,16 +735,14 @@ script:
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
-               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-               {{ shuffle[sindex] }}
+            {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+            {{ shuffle[sindex] }}
       - delay:
           seconds: 2
       - service: media_player.volume_set
         data:
           entity_id: media_player.spotify
           volume_level: 0.30
-      - delay:
-          seconds: 2
       - service: media_player.play_media
         data:
           entity_id: media_player.bedroom
@@ -736,7 +754,7 @@ script:
             ## All Out 90s : spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
             ## 2000s Smash Hits : spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw
             ## 2019 Sealand Invitiational : spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5
-            ## Discover Weekly: spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
             ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
             ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
@@ -759,7 +777,7 @@ script:
             ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
             ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
             ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
             ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
             ## Decembersits Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
@@ -786,7 +804,7 @@ script:
               "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
               "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
               "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
@@ -808,7 +826,7 @@ script:
               "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
               "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
               "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
               "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
@@ -828,7 +846,7 @@ script:
               "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
               "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
               "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -841,8 +859,8 @@ script:
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
-               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-               {{ shuffle[sindex] }}
+            {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+            {{ shuffle[sindex] }}
       - delay:
           seconds: 2
       - service: media_player.volume_set
@@ -862,7 +880,7 @@ script:
             ## All Out 90s : spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
             ## 2000s Smash Hits : spotify:playlist:2f6tXtN0XesjONxicAzMIw
             ## 2019 Sealand Invitiational : spotify:playlist:6uNCXLheVaTbfE1HRCIsQ5
-            ## Discover Weekly: spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
             ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
             ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
@@ -885,7 +903,7 @@ script:
             ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
             ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
             ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
             ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
             ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
@@ -916,7 +934,7 @@ script:
               "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
               "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
               "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
@@ -938,7 +956,7 @@ script:
               "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
               "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
               "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
               "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
@@ -962,7 +980,7 @@ script:
               "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
               "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
               "spotify:playlist:0OZV1MvJmJdeShboKpNKC8"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
       - delay:
@@ -1011,8 +1029,8 @@ script:
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
-               {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-               {{ shuffle[sindex] }}
+            {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+            {{ shuffle[sindex] }}
       - delay:
           seconds: 2
       - service: media_player.volume_set
@@ -1052,7 +1070,7 @@ script:
             ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
             ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
             ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl
+            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
             ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
             ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
             ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
@@ -1099,7 +1117,7 @@ script:
               "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
               "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
               "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:user:spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
               "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
               "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
@@ -1119,7 +1137,7 @@ script:
               "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
               "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
               "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb"
-               ] -%}
+              ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
@@ -1131,6 +1149,9 @@ script:
       - service: media_player.turn_on
         data:
           entity_id: media_player.living_room_firetv
+      - service: media_player.turn_on
+        data:
+          entity_id: media_player.apple_tv
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
@@ -1313,9 +1334,9 @@ switch:
 ########################
 # Vizio
 ########################
-vizio:
-  - host: !secret vizio_tv_ip
-    access_token: !secret vizio_tv_token
+# vizio:
+#   - host: !secret vizio_tv_ip
+#     access_token: !secret vizio_tv_token
 
 ########################
 # webosTV
