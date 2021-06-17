@@ -38,7 +38,13 @@ from homeassistant.components.light import (
     SUPPORT_WHITE_VALUE,
     VALID_TRANSITION,
     is_on,
+    COLOR_MODE_RGB,
+    COLOR_MODE_RGBW,
+    COLOR_MODE_COLOR_TEMP,
+    COLOR_MODE_BRIGHTNESS,
+    ATTR_SUPPORTED_COLOR_MODES,
 )
+
 from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -377,7 +383,24 @@ def _expand_light_groups(hass: HomeAssistant, lights: List[str]) -> List[str]:
 def _supported_features(hass: HomeAssistant, light: str):
     state = hass.states.get(light)
     supported_features = state.attributes[ATTR_SUPPORTED_FEATURES]
-    return {key for key, value in _SUPPORT_OPTS.items() if supported_features & value}
+    supported = {
+        key for key, value in _SUPPORT_OPTS.items() if supported_features & value
+    }
+    supported_color_modes = state.attributes.get(ATTR_SUPPORTED_COLOR_MODES, set())
+    if COLOR_MODE_RGB in supported_color_modes:
+        supported.add("color")
+        # Adding brightness here, see
+        # comment https://github.com/basnijholt/adaptive-lighting/issues/112#issuecomment-836944011
+        supported.add("brightness")
+    if COLOR_MODE_RGBW in supported_color_modes:
+        supported.add("color")
+        supported.add("brightness")  # see above url
+    if COLOR_MODE_COLOR_TEMP in supported_color_modes:
+        supported.add("color_temp")
+        supported.add("brightness")  # see above url
+    if COLOR_MODE_BRIGHTNESS in supported_color_modes:
+        supported.add("brightness")
+    return supported
 
 
 def color_difference_redmean(
@@ -529,10 +552,17 @@ class AdaptiveSwitch(SwitchEntity, RestoreEntity):
         self._transition = min(
             data[CONF_TRANSITION], self._interval.total_seconds() // 2
         )
+        _loc = get_astral_location(self.hass)
+        if isinstance(_loc, tuple):
+            # Astral v2.2
+            location, _ = _loc
+        else:
+            # Astral v1
+            location = _loc
 
         self._sun_light_settings = SunLightSettings(
             name=self._name,
-            astral_location=get_astral_location(self.hass),
+            astral_location=location,
             max_brightness=data[CONF_MAX_BRIGHTNESS],
             max_color_temp=data[CONF_MAX_COLOR_TEMP],
             min_brightness=data[CONF_MIN_BRIGHTNESS],
@@ -1012,7 +1042,10 @@ class SunLightSettings:
         def _replace_time(date: datetime.datetime, key: str) -> datetime.datetime:
             time = getattr(self, f"{key}_time")
             date_time = datetime.datetime.combine(date, time)
-            utc_time = self.time_zone.localize(date_time).astimezone(dt_util.UTC)
+            try:  # HA ≤2021.05, https://github.com/basnijholt/adaptive-lighting/issues/128
+                utc_time = self.time_zone.localize(date_time).astimezone(dt_util.UTC)
+            except AttributeError: # HA ≥2021.06
+                utc_time = date_time.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE).astimezone(dt_util.UTC)
             return utc_time
 
         location = self.astral_location
@@ -1029,8 +1062,14 @@ class SunLightSettings:
         ) + self.sunset_offset
 
         if self.sunrise_time is None and self.sunset_time is None:
-            solar_noon = location.solar_noon(date, local=False)
-            solar_midnight = location.solar_midnight(date, local=False)
+            try:
+                # Astral v1
+                solar_noon = location.solar_noon(date, local=False)
+                solar_midnight = location.solar_midnight(date, local=False)
+            except AttributeError:
+                # Astral v2
+                solar_noon = location.noon(date, local=False)
+                solar_midnight = location.midnight(date, local=False)
         else:
             solar_noon = sunrise + (sunset - sunrise) / 2
             solar_midnight = sunset + ((sunrise + timedelta(days=1)) - sunset) / 2
