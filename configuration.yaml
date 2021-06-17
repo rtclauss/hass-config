@@ -31,7 +31,7 @@ config:
 
 logger:
   #default: warn
-  default: info
+  default: warn
   #homeassistant.components.device_tracker: debug
   #homeassistant.components.media_player: debug
   #pytraccar: debug
@@ -101,7 +101,6 @@ logbook:
       - automation.battery_persistent_notification
       - automation.battery_persistent_notification_clear
       - sensor.xiaomi_map
-      - binary_sensor.esp32_whole_bed_pressure
 
 # Discover some devices automatically
 discovery:
@@ -118,6 +117,7 @@ tts:
 recorder:
   #  db_url: postgresql://@/hass
   db_url: !secret recorder_db_url
+  purge_keep_days: 90
   exclude:
     domains:
       - media_player
@@ -143,7 +143,6 @@ recorder:
       - sensor.dark_sky_precip_probability_4
       - sensor.dark_sky_precip_probability_5
       - sensor.dark_sky_precip_probability_6
-      - binary_sensor.esp32_whole_bed_pressure
 
 influxdb:
   host: !secret influx_db_host
@@ -167,7 +166,6 @@ influxdb:
       - sensor.date
       - sensor.last_boot
       - sensor.xiaomi_map
-      - binary_sensor.esp32_whole_bed_pressure
 
 google:
   client_id: !secret google_client_id
@@ -188,7 +186,7 @@ cloud:
       switch.flux:
         name: Flux
         description: Toggle flux in bedroom
-      scene.reset_living_room:
+      script.reset_bedroom:
         name: Reset Living Room
         description: Reset Living Room lights
       scene.reset_bedroom:
@@ -219,18 +217,23 @@ lovelace:
       type: js
     # - url: /hacsfiles/lovelace-card-mod/card-mod.js
     #   type: js
+    - url: /hacsfiles/threedy/threedy-card.js
+      type: module
     - url: /hacsfiles/gauge-card/gauge-card.js
       type: js
     - url: /hacsfiles/lovelace-auto-entities/auto-entities.js
       type: js
     - url: /hacsfiles/lovelace-valetudo-map-card/valetudo-map-card.js
       type: js
-    - url: /local/zha-network-visualization-card/zha-network-visualization-card.js
-      type: module
+    # - url: /local/zha-network-visualization-card/zha-network-visualization-card.js
+    #   type: module
     - url: /hacsfiles/firetv-card/firetv-card.js
       type: js
     - type: module
       url: /hacsfiles/flex-table-card/flex-table-card.js
+    - url: /hacsfiles/vacuum-card/vacuum-card.js
+      type: module
+
   dashboards:
     db-pc:
       mode: yaml
@@ -306,7 +309,6 @@ mqtt_eventstream:
   ignore_event:
     - call_service
     - state_changed
-
 # image_processing:
 #   - platform: tensorflow
 #     source:
@@ -326,15 +328,15 @@ mqtt_eventstream:
 #       - entity_id: camera.livingroom
 #         name: face_counter
 
-zha_map:
+# zha_map:
 
 # hacs:
 #   token: !secret hacs_token
 #   appdaemon: true
 
-circadian_lighting:
-  # negative numbers make for earlier sunrises
-  sunrise_offset: "1:00:00"
+# circadian_lighting:
+#   # negative numbers make for earlier sunrises
+#   sunrise_offset: "1:00:00"
 
-  #positive makes later sunset
-  sunset_offset: "+01:00:00"
+#   #positive makes later sunset
+#   sunset_offset: "+01:00:00"
