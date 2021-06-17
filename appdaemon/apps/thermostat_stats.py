@@ -63,6 +63,9 @@ class ThermostatStats(hass.Hass):
             old = self.get_state(self.thermostat, attribute="all")
             new = old
 
+        self.log("All attributes for old are: {}".format(old['attributes']))
+        
+
         old_hvac_action = old['attributes'].get("hvac_action")
         new_hvac_action = new['attributes'].get("hvac_action")
 
