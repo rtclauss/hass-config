@@ -35,13 +35,10 @@ class BrightenLights(hass.Hass):
 
     camera_state = self.get_state(self.camera_sensor)
     self.log("is work macbook camera on? {}".format(camera_state))
-
-    if self.camera_sensor == 'on':
-      return
     
-    if new == 'on' and workday == 'on':
+    if new == 'on' and workday == 'on' and camera_state == 'off':
       for light in self.args["lights"]:
         self.log("current brightness for light is: {}".format(self.get_state(light, attribute="brightness")))
         if self.get_state(light, attribute="brightness") == None:
-          self.turn_on(light, brightness = 1)
+          # self.turn_on(light, brightness = 1)
           self.turn_on(light, brightness_pct = 100, transition = self.transition)
