@@ -45,8 +45,8 @@ class BayesianDeviceTracker(hass.Hass):
 
     def location_update(self, entity, attribute, old, new, kwargs):
         #self.log("in location_update")
-        #self.log("triggered by: {} {} {} {} {}".format(
-        #    entity, attribute, old, new, kwargs))
+        self.log("triggered by: {} {} {} {} {}".format(
+            entity, attribute, old, new, kwargs))
         bayesian_state = self.get_state(self.bayesian, attribute="all")
         #self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
 
@@ -81,8 +81,14 @@ class BayesianDeviceTracker(hass.Hass):
         #self.log("here is the GPS state: {}".format(gps_sensors_state))
 
         #qbayes_location = self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
-        new_lat_log = ellipsoidalNvector.LatLon(lat=new["attributes"].get(
-            "latitude"), lon=new["attributes"].get("longitude"))
+        try:
+            new_lat_log = ellipsoidalNvector.LatLon(lat=new["attributes"].get(
+                "latitude"), lon=new["attributes"].get("longitude"))
+        except:
+            # Tesla does not have location data after being home for a while.
+            # self.error("Error with new coordinates. {}".format(new))
+            return
+
         try:
             old_lat_log = ellipsoidalNvector.LatLon(lat=old["attributes"].get(
                 "latitude"), lon=old["attributes"].get("longitude"))
