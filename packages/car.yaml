@@ -84,10 +84,7 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-#    sensor.honda_fit_gas_level:
-#      <<: *customize
-#      icon: mdi:gas-station
-#      unit_of_measurement: '%'
+
 ################################################
 ## Thermostats
 ################################################
@@ -105,22 +102,27 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
-  - id: send_notification_gas_level
-    alias: send_notification_gas_level
+  - id: turn_on_max_range_charge
+    alias: turn_on_max_range_charge
+    # TODO replace this with a AppDaemon app that looks at the distance to the location
+    # and decides whether to turn on max range or not.
     trigger:
-      - platform: numeric_state
-        entity_id: sensor.honda_fit_gas_level
-        below: 25
+      - platform: state
+        entity_id: binary_sensor.trip_in_six_hours
+        from: "off"
+        to: "on"
     action:
+      - service: switch.turn_on
+        entity_id: switch.ice_maxrange_switch
       - service: persistent_notification.create
         data_template:
-          title: Gas Low
-          message: "Honda Fit gas at {{ trigger.to_state.state }}% full"
+          title: Max Charge
+          message: "Long-range trip soon. Charging to the EXTREME!"
           notification_id: low-battery-alert
       - service: notify.all
         data_template:
           message: >-
-            "Honda Fit gas at {{ trigger.to_state.state }}% full"
+            "Long-range trip soon. Charging to the EXTREME!"
 
   - id: garage_door_reminder
     alias: Close forgotten garage door
@@ -140,6 +142,20 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
+  - platform: template
+    sensors:
+      trip_in_six_hours:
+        value_template: >-
+          {% if 
+              (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=6)))) 
+            or 
+              (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=6)))
+            and 
+              is_state("binary_sensor.bayesian_zeke_home","on") )  %}
+            true
+          {% else %}
+            false
+          {% endif %}
 
 ########################
 # Cameras
@@ -219,11 +235,6 @@ script:
 # Sensor
 ########################
 sensor:
-#  - platform: template
-#    sensors:
-#      honda_fit_gas_level:
-#        value_template: >-
-#          {{ state_attr('device_tracker.honda_fit', 'fuel_level') }}
 
 ########################
 # Zone
