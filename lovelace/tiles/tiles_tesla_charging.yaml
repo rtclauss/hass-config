@@ -1,0 +1,78 @@
+#####
+## Tile Template
+##
+## Check out:
+##   https://github.com/akmolina28/HomeAssistantConfig/tree/master/lovelace/tiles
+##   https://github.com/search?q=tiles+lovelace&type=Code
+#####
+---
+type: vertical-stack
+cards:
+  - type: custom:vertical-stack-in-card
+    title: Charging
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: custom:mini-graph-card
+            name: Range
+            group: false
+            #align_state: center
+            entities:
+              - sensor.ice_battery_sensor
+            color_thresholds:
+              - value: 6
+                color: "red"
+              - value: 19
+                color: "orange"
+              - value: 100
+                color: "blue"
+            graph: line
+            show:
+              name: true
+          - type: custom:mini-graph-card
+            name: Range
+            group: false
+            #align_state: center
+            entities:
+              - sensor.ice_range_sensor
+            color_thresholds:
+              - value: 60
+                color: "red"
+              - value: 75
+                color: "orange"
+              - value: 100
+                color: "blue"
+            graph: line
+            show:
+              name: true
+          - type: custom:mini-graph-card
+            name: Rate
+            group: false
+            #align_state: center
+            entities:
+              - sensor.ice_charging_rate_sensor
+            color_thresholds:
+              - value: 60
+                color: "red"
+              - value: 75
+                color: "orange"
+              - value: 100
+                color: "blue"
+            graph: line
+            show:
+              name: true
+
+      - type: horizontal-stack
+        title:
+        show_header_toggle: false
+        cards:
+          - type: entity-button
+            entity: switch.ice_maxrange_switch
+            name: "Charge to Max Range?"
+            icon: mdi:backup-restore
+            show_state: false
+            tap_action:
+              action: call-service
+              service: switch.toggle
+              service_data:
+                entity_id: switch.ice_maxrange_switch
