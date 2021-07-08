@@ -127,16 +127,16 @@ class BayesianDeviceTracker(hass.Hass):
                 self.log("ios says speed is -1, setting speed to 0")
                 attributes['speed'] = 0.0
             else:
-                attributes['speed'] = attributes['speed'] / 0.44704
+                attributes['speed'] = (attributes['speed'] / 0.44704)
             self.log("new ios speed is: {}".format(
                 attributes['speed']))
-        elif 'speed' in attributes.keys():
-            #Traccar reports speed in knots
-            attributes['speed'] = attributes['speed'] *1.151
-            self.log("traccar entity {} says new speed is: {}".format(
-                sensor_state['entity_id'],
-                attributes['speed']))
-        else:
+        # elif 'speed' in attributes.keys():
+        #     #Traccar reports speed in knots
+        #     attributes['speed'] = attributes['speed'] * 1.151
+        #     self.log("traccar entity {} says new speed is: {}".format(
+        #         sensor_state['entity_id'],
+        #         attributes['speed']))
+        elif'speed' not in attributes.keys():
             attributes['speed'] = 0.0
             self.log("No 'speed' in attributes in update from sensor data: {}".format(sensor_state))
 
