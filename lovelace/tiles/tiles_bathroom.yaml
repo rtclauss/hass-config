@@ -1,0 +1,56 @@
+#####
+## Tile Template
+##
+## Check out:
+##   https://github.com/akmolina28/HomeAssistantConfig/tree/master/lovelace/tiles
+##   https://github.com/search?q=tiles+lovelace&type=Code
+#####
+---
+type: vertical-stack
+cards:
+  - type: custom:vertical-stack-in-card
+    title: Bathroom
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: entity-button
+            entity: switch.bathroom_light_fan_switch
+            state_color: true
+            name: " "
+            icon: mdi:vanity-light
+            tap_action:
+              action: toggle
+            hold_action:
+              action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:mini-graph-card
+            name: Temp
+            group: false
+            #align_state: center
+            entities:
+              - sensor.bathroom_temperature
+            color_thresholds:
+              - value: 68
+                color: "red"
+              - value: 65
+                color: "orange"
+              - value: 62
+                color: "yellow"
+              - value: 55
+                color: "blue"
+            graph: line
+            show:
+              name: false
+          - type: custom:mini-graph-card
+            name: Humidity
+            #align_state: center
+            entities:
+              - sensor.bathroom_humidity
+            graph: line
+            show:
+              name: false
+      - type: custom:mini-media-player
+        entity: media_player.bathroom
+        hide:
+          volume: true
