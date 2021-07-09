@@ -147,11 +147,12 @@ binary_sensor:
       trip_in_six_hours:
         value_template: >-
           {% if 
-              (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=6)))) 
-            or 
-              (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=6)))
-            and 
-              is_state("binary_sensor.bayesian_zeke_home","on") )  %}
+            (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=8)))) 
+          or 
+            (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=8))))
+          and
+            (states("sensor.waze_next_trip_distance")|int > 45)
+          %}
             true
           {% else %}
             false
@@ -235,7 +236,30 @@ script:
 # Sensor
 ########################
 sensor:
+  - platform: waze_travel_time
+    name: "Waze Next trip distance"
+    origin: device_tracker.bayesian_zeke_home
+    destination: sensor.calendar_destination
+    region: "US"
 
+  - platform: template
+    sensors:
+      calendar_destination:
+        friendly_name: "Next Calendar Destination"
+        value_template: >-
+          {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+          {% set work_meeting_time = (state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) %}
+          {% if "-" in ((personal_meeting_time - work_meeting_time)|string) %}
+            {{ state_attr("calendar.ryan_claussen", "location") }}
+          {% else %}
+            {{ state_attr("calendar.work_trip", "location") }}
+          {% endif %}
+
+      next_trip_distance:
+        friendly_name: "Distance to next destination"
+        unit_of_measurement: "mi"
+        value_template: >-
+          {{ state_attr("sensor.waze_next_trip_distance", "distance") | int }}
 ########################
 # Zone
 ########################
