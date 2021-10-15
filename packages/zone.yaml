@@ -365,9 +365,6 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
-      - platform: state
-        entity_id: device_tracker.bayesian_zeke_home
-        to: "home"
     condition:
       - condition: state
         entity_id: input_boolean.guest_mode
@@ -415,7 +412,7 @@ automation:
       #   data:
       #     message: Home again, home again, jiggity jig.
       - service: vacuum.return_to_base
-        entity_id: vacuum.robot
+        entity_id: vacuum.valetudo_robot
 
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
@@ -549,7 +546,7 @@ automation:
       - condition: template
         value_template: >-
           {{ 
-            as_timestamp(now()) - as_timestamp(states.device_tracker.bayesian_zeke_home.last_changed) |int > 72000
+            as_timestamp(now(), default=now()) - as_timestamp(states.device_tracker.bayesian_zeke_home.last_changed, default=now()) |int > 72000
             or 
             not is_state('device_tracker.bayesian_zeke_home', 'not_home')
           }}
@@ -585,7 +582,7 @@ automation:
       - service: notify.all
         data_template:
           message: >-
-            Entering Rochester from direction {{ states.sensor.zeke_direction }}. Turning off Away Mode. ETA to home {{ states.sensor.time_to_home.state }}.
+            Entering Rochester from direction {{ states('sensor.zeke_direction') }}. Turning off Away Mode. ETA to home {{ states('sensor.time_to_home') }}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
@@ -599,7 +596,7 @@ automation:
         to: "home"
     action:
       - service: vacuum.return_to_base
-        entity_id: vacuum.robot
+        entity_id: vacuum.valetudo_robot
       - service: switch.turn_off
         entity_id: switch.livingroom_camera_power
       - service: switch.turn_off
@@ -609,17 +606,6 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: template
-    sensors:
-      test_homeward:
-        value_template: >-
-          {% if
-             (((as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed))//60) | int > 95) and (states.sensor.heading_home.state=="towards")
-          %} true
-          {% else %}
-            false
-          {% endif %}
-
   - platform: bayesian
     prior: 0.1
     name: bayesian_zeke_home
@@ -635,27 +621,16 @@ binary_sensor:
         prob_given_false: 0.3
         platform: "state"
         to_state: "home"
-      # - entity_id: device_tracker.honda
-      - entity_id: device_tracker.ice_location_tracker
+      - entity_id: device_tracker.nigori_location_tracker
         prob_given_true: 0.80
         prob_given_false: 0.1
         platform: "state"
         to_state: "home"
-      # - entity_id: device_tracker.android_1
-      #   prob_given_true: 0.60
-      #   prob_given_false: 0.1
-      #   platform: "state"
-      #   to_state: "home"
       - entity_id: device_tracker.arrival_sensor
         prob_given_true: 0.99
         prob_given_false: 0.01
         platform: "state"
         to_state: "home"
-      # - entity_id: binary_sensor.nest_home
-      #   prob_given_true: 0.30
-      #   prob_given_false: 0.4
-      #   platform: 'state'
-      #   to_state: 'on'
       ### Try out the speed sensor
       - entity_id: sensor.zeke_speed
         platform: "numeric_state"
@@ -665,12 +640,12 @@ binary_sensor:
         prob_given_true: 0.95
         prob_given_false: 0.05
         value_template: >-
-          {{ (is_state('sensor.wethop_activity', 'Walking') == True) and (states('sensor.zeke_speed')|float <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
+          {{ (is_state('sensor.wethop_activity', 'Walking') == True) and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
       - platform: template
         prob_given_true: 0.95
         prob_given_false: 0.05
         value_template: >-
-          {{ (is_state('sensor.wethop_activity', 'Biking') == True) and (states('sensor.zeke_speed')|float <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
+          {{ (is_state('sensor.wethop_activity', 'Biking') == True) and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
 
 ########################
 # Device Trackers
@@ -864,40 +839,13 @@ script:
     sequence:
       - service: nest.set_eta
         data_template:
-          eta: "{{states.sensor.time_to_home.state}}"
-          trip_id: "{{ states.input_select.trip_origin.state }}"
+          eta: "{{states('sensor.time_to_home.state')}}"
+          trip_id: "{{ states('input_select.trip_origin') }}"
 
 ########################
 # Sensor
 ########################
 sensor:
-  ##Turn the direction of travel into a sensor which I can use in my s
-  ##Since sensors have a last changed timestamp.
-  - platform: template
-    sensors:
-      heading_home:
-        value_template: >-
-          {{ state_attr('proximity.home','dir_of_travel') |default("unknown") }}
-      home_distance:
-        value_template: "{{ states.proximity.home.state }}"
-        unit_of_measurement: "m"
-      home_time:
-        value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_home.last_changed)) | int //60 }}"
-        unit_of_measurement: "minutes"
-      zeke_speed:
-        unit_of_measurement: "mph"
-        value_template: >-
-          {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int }}
-      twincities:
-        value_template: >-
-          {{ state_attr('proximity.twincities','dir_of_travel') |default("unknown") }}
-      zeke_direction:
-        value_template: >-
-          {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
-            {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int }}
-          {%- else -%}
-           {{ -1 | int }}
-          {%- endif %}
 
   # - platform: places
   #   name: android
@@ -925,6 +873,47 @@ sensor:
   #   map_zoom: 17
   #   home_zone: zone.home
   #   api_key: !secret email_address
+
+########################
+# Template
+########################
+template:
+  - binary_sensor:
+      - name: test_homeward
+        availability: >-
+          {{ states.sensor.heading_home.last_changed is defined }}
+        state: >-
+          {% if
+              (((as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_home.last_changed, default=now()))//60) | int > 95) and (states('sensor.heading_home')=="towards")
+          %} true
+          {% else %}
+            false
+          {% endif %}
+  - sensor:
+      - name: heading_home
+        state: >-
+          {{ state_attr('proximity.home','dir_of_travel') |default("unknown") }}
+      - name: home_distance
+        state: "{{ states('proximity.home') }}"
+        unit_of_measurement: "m"
+      - name: home_time
+        state: >-
+          {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_home.last_changed, default=now())) | int //60 }}
+        unit_of_measurement: "minutes"
+      - name: zeke_speed
+        unit_of_measurement: "mph"
+        state: >-
+          {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int }}
+      - name: twincities
+        state: >-
+          {{ state_attr('proximity.twincities','dir_of_travel') |default("unknown") }}
+      - name: zeke_direction
+        state: >-
+          {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int) >=0 -%}
+            {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int }}
+          {%- else -%}
+            {{ -1 | int }}
+          {%- endif %}
 
 ########################
 # Zone
