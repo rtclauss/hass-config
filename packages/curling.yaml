@@ -226,7 +226,6 @@ automation:
         data:
           entity_id: automation.return_home_from_spcc
 
-
   # - id: toggle_curling_tab
   #   alias: toggle_curling_tab
   #   trigger:
@@ -277,7 +276,7 @@ group:
 script:
   toggle_curling_automation_on_curling_season:
     sequence:
-      - service_template: >-
+      - service: >-
           {% if is_state("binary_sensor.curling_season", 'on') %}
             automation.turn_on
           {% else %}
@@ -297,10 +296,20 @@ sensor:
           {{ states('proximity.occ') }}
         unit_of_measurement: "m"
       occ_time:
-        value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_occ.last_changed)) | int //60 }}"
+        value_template: >-
+          {% if states.sensor.heading_occ.last_changed is defined %}
+            {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_occ.last_changed, default=now())) | int //60 }}
+          {% else %}
+            {{now()}}
+          {% endif %}
         unit_of_measurement: "minutes"
       spcc_time:
-        value_template: "{{ (as_timestamp(now()) - as_timestamp(states.sensor.heading_spcc.last_changed)) | int //60 }}"
+        value_template: >-
+          {% if states.sensor.spcc.last_changed is defined %}
+            {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_spcc.last_changed, default=now())) | int //60 }}
+          {% else %}
+            {{now()}}
+          {% endif %}
         unit_of_measurement: "minutes"
       spcc_distance:
         value_template: >-
