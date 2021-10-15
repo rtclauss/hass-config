@@ -18,7 +18,7 @@ cards:
             group: false
             #align_state: center
             entities:
-              - sensor.ice_battery_sensor
+              - sensor.nigori_battery_sensor
             color_thresholds:
               - value: 6
                 color: "red"
@@ -34,7 +34,7 @@ cards:
             group: false
             #align_state: center
             entities:
-              - sensor.ice_range_sensor
+              - sensor.nigori_range_sensor
             color_thresholds:
               - value: 60
                 color: "red"
@@ -50,7 +50,7 @@ cards:
             group: false
             #align_state: center
             entities:
-              - sensor.ice_charging_rate_sensor
+              - sensor.nigori_charging_rate_sensor
             color_thresholds:
               - value: 60
                 color: "red"
@@ -66,8 +66,27 @@ cards:
         title:
         show_header_toggle: false
         cards:
-          - type: entity-button
-            entity: switch.ice_maxrange_switch
+          - type: markdown
+            entity_id: sensor.charge_complete
+            title: "Estimated Completion Time"
+            content: >-
+              {% if state_attr('sensor.nigori_charging_rate_sensor','time_left') > 0 %}
+                ### {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}
+              {% else %}
+                ### Charging Complete
+              {% endif %}
+          # - type: entity
+          #   entity: sensor.charge_complete
+          #   name: "Estimated Completion Time"
+          #   #icon: mdi:battery-charging-100
+          #   #show_state: false
+
+      - type: horizontal-stack
+        title:
+        show_header_toggle: false
+        cards:
+          - type: button
+            entity: switch.nigori_maxrange_switch
             name: "Charge to Max Range?"
             icon: mdi:backup-restore
             show_state: false
@@ -75,4 +94,15 @@ cards:
               action: call-service
               service: switch.toggle
               service_data:
-                entity_id: switch.ice_maxrange_switch
+                entity_id: switch.nigori_maxrange_switch
+          - type: markdown
+            entity_id: binary_sensor.upcoming_trip_charging
+            title: "Reason"
+            content: >-
+              {% if states('binary_sensor.upcoming_trip_charging') %}
+                ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}
+                #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}
+                #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int }} mi
+              {% else %}
+                
+              {% endif %}
