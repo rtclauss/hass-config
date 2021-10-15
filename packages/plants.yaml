@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: 'plants'
+        package: "plants"
 
       expose: &expose
         <<: *customize
@@ -40,15 +40,15 @@ homeassistant:
     ################################################
     ## Device Trackers
     ################################################
-    
+
     ################################################
     ## Frontend
     ################################################
-    
+
     ################################################
     ## Groups
     ################################################
-    
+
     ################################################
     ## Input Boolean
     ################################################
@@ -80,14 +80,13 @@ homeassistant:
       <<: *customize
       friendly_name: "Four Inch Potted Nepenthes"
 
-    plant.orchid:
+    plant.monstera:
       <<: *customize
-      friendly_name: "Orchid"
+      friendly_name: "Monstera"
 
     plant.west_hanging_nepenthes:
       <<: *customize
       friendly_name: "West Hanging Nepenthes"
-
 
     ################################################
     ## Proximity
@@ -150,29 +149,29 @@ homeassistant:
       friendly_name: "Four Inch Nepenthes Temperature"
       device_class: temperature
 
-    sensor.orchid_battery:
+    sensor.monstera_battery:
       <<: *customize
-      friendly_name: "Orchid Battery"
+      friendly_name: "Monstera Battery"
       device_class: battery
 
-    sensor.orchid_conductivity:
+    sensor.monstera_conductivity:
       <<: *customize
-      friendly_name: "Orchid Conductivity"
+      friendly_name: "Monstera Conductivity"
       icon: mdi:flash
 
-    sensor.orchid_light_intensity:
+    sensor.monstera_light_intensity:
       <<: *customize
-      friendly_name: "Orchid Light Intensity"
+      friendly_name: "Monstera Light Intensity"
       device_class: illuminance
 
-    sensor.orchid_moisture:
+    sensor.monstera_moisture:
       <<: *customize
-      friendly_name: "Orchid Moisture"
+      friendly_name: "Monstera Moisture"
       device_class: humidity
 
-    sensor.orchid_temperature:
+    sensor.monstera_temperature:
       <<: *customize
-      friendly_name: "Orchid Temperature"
+      friendly_name: "Monstera Temperature"
       device_class: temperature
 
     sensor.west_hanging_nepenthes_battery:
@@ -288,6 +287,7 @@ light:
 # Plant
 ########################
 plant:
+  # https://raw.githubusercontent.com/khronimo/MiFloraDB/master/PlantDB_5335_U0.csv
   east_hanging_nepenthes:
     sensors:
       battery: sensor.east_hanging_nepenthes_battery
@@ -318,13 +318,22 @@ plant:
     max_temperature: 95
     min_battery: 10
 
-  orchid:
+  monstera:
     sensors:
-      battery: sensor.orchid_battery
-      conductivity: sensor.orchid_conductivity
-      brightness: sensor.orchid_light_intensity
-      moisture: sensor.orchid_moisture
-      temperature: sensor.orchid_temperature
+      battery: sensor.monstera_battery
+      conductivity: sensor.monstera_conductivity
+      brightness: sensor.monstera_light_intensity
+      moisture: sensor.monstera_moisture
+      temperature: sensor.monstera_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 2000
+    min_temperature: 54
+    max_temperature: 90
+    min_brightness: 800
+    max_brightness: 15000
+    min_battery: 10
 
   terrarium:
     sensors:
@@ -429,32 +438,32 @@ sensor:
     device_class: temperature
 
   - platform: mqtt
-    name: orchid_battery
-    state_topic: haplants/sensor/orchid_battery/state
+    name: monstera_battery
+    state_topic: haplants/sensor/monstera_battery/state
     unit_of_measurement: "%"
     device_class: battery
 
   - platform: mqtt
-    name: orchid_conductivity
-    state_topic: haplants/sensor/orchid_conductivity/state
+    name: monstera_conductivity
+    state_topic: haplants/sensor/monstera_conductivity/state
     unit_of_measurement: "\u00b5S/cm"
     icon: mdi:flash-circle
 
   - platform: mqtt
-    name: orchid_light_intensity
-    state_topic: haplants/sensor/orchid_light_intensity/state
+    name: monstera_light_intensity
+    state_topic: haplants/sensor/monstera_light_intensity/state
     unit_of_measurement: "lx"
     device_class: illuminance
 
   - platform: mqtt
-    name: orchid_moisture
-    state_topic: haplants/sensor/orchid_moisture/state
+    name: monstera_moisture
+    state_topic: haplants/sensor/monstera_moisture/state
     unit_of_measurement: "%"
     icon: mdi:water-percent
 
   - platform: mqtt
-    name: orchid_temperature
-    state_topic: haplants/sensor/orchid_temperature/state
+    name: monstera_temperature
+    state_topic: haplants/sensor/monstera_temperature/state
     unit_of_measurement: "\u00b0F"
     device_class: temperature
 
@@ -464,7 +473,6 @@ sensor:
     unit_of_measurement: "%"
     device_class: battery
 
-    
   - platform: mqtt
     name: terrarium_battery
     state_topic: haplants/sensor/terrarium_battery/state
@@ -506,7 +514,7 @@ sensor:
     state_topic: haplants/sensor/west_hanging_nepenthes_light_intensity/state
     unit_of_measurement: "lx"
     device_class: illuminance
-    #icon: 
+    #icon:
 
   - platform: mqtt
     name: west_hanging_nepenthes_moisture
@@ -522,7 +530,6 @@ sensor:
     device_class: temperature
     #icon:
 
-
 #   - platform: miflora
 #     name: east_hanging_nepenthes
 #     mac: 'C4:7C:8D:66:4C:51'
@@ -532,14 +539,14 @@ sensor:
 #     name: west_hanging_nepenthes
 #     mac: 'C4:7C:8D:66:4E:57'
 #     median: 7
-    
+
 #   - platform: miflora
 #     name: four_inch_nepenthes
 #     mac: 'C4:7C:8D:66:4E:B3'
 #     median: 7
 
 #   - platform: miflora
-#     name: orchid
+#     name: monstera
 #     mac: 'C4:7C:8D:66:47:C0'
 #     median: 7
 
