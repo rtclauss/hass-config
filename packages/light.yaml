@@ -414,19 +414,35 @@ automation:
         data:
           entity_id: input_boolean.front_door_auto_on
 
-  - id: guest_room_lights_off
-    alias: guest_room_lights_off
+  - id: guest_room_ceiling_lights_on_off
+    alias: guest_room_ceiling_lights_on_off
     trigger:
-      - platform: state
-        entity_id: binary_sensor.guest_room_button
-        to: "on"
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:01:f3:78:cc"
+          command: "hold"
     action:
       - service: homeassistant.toggle
         data:
           entity_id:
             - light.guest_ceiling
-            - light.guest_left_lamp
-            - light.guest_right_lamp
+
+  - id: guest_room_lights_on_off
+    alias: guest_room_lights_on_off
+    trigger:
+      - platform: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:01:f3:78:cc"
+          command: "click"
+          args:
+            click_type: "single"
+    action:
+      - service: homeassistant.toggle
+        data:
+          entity_id:
+            - light.guest_side_lamps
 
   - id: hallway_light_on_at_night
     alias: hallway_light_on_at_night
@@ -708,7 +724,7 @@ automation:
     id: turn_off_sleep_mode
     trigger:
       - platform: time
-        at: "07:00:00"
+        at: "09:00:00"
     action:
       - service: switch.turn_off
         entity_id: switch.adaptive_lighting_sleep_mode_rest_of_house
