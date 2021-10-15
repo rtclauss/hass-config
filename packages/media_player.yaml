@@ -124,7 +124,7 @@ automation:
         data:
           entity_id: media_player.bedroom
           volume_level: >-
-            {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float }}
+            {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
@@ -223,12 +223,6 @@ automation:
       conditions:
         ### Prevent false positives in the middle of the night
         - condition: state
-          entity_id: media_player.lg_webos_smart_tv
-          state: "on"
-          for:
-            seconds: 10
-        ### Prevent false positives in the middle of the night
-        - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
     action:
@@ -288,24 +282,24 @@ automation:
         entity_id: media_player.living_room_firetv
         from: "playing"
         to: "paused"
-        for: "00:00:20"
+        for: "00:00:02"
       - platform: state
         entity_id: media_player.apple_tv
         from: "playing"
         to: "paused"
-        for: "00:00:20"
+        for: "00:00:02"
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
         to: "paused"
-        for: "00:00:20"
+        for: "00:00:02"
       - platform: state
         entity_id: media_player.living_room_firetv
         #TODO Temporary hack: ADB showing wrong values
         from: "paused"
         to: "standby"
-        for: "00:00:20"
+        for: "00:00:02"
     condition:
       condition: and
       conditions:
