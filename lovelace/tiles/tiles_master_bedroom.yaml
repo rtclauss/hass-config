@@ -37,14 +37,21 @@ cards:
           action: toggle
         hold_action:
           action: more-info
-      - type: entity-button
-        entity: switch.humidifier
-        state_color: true
-        name: " "
+      - type: button
+        #entity: switch.humidifier
+        #state_color: true
+        #name: " "
+        icon: mdi:speaker
+        name: Reset Volume
+        show_state: false
         tap_action:
-          action: toggle
-        hold_action:
-          action: more-info
+          action: call-service
+          service: media_player.volume_set
+          service_data:
+            volume_level: 0.01
+            entity_id: media_player.bedroom
+        # hold_action:
+        #   action: more-info
     #   - type: "custom:button-card"
     #     icon: attribute
     #     name: Master Bedroom
@@ -79,3 +86,7 @@ cards:
           name: false
   - type: custom:mini-media-player
     entity: media_player.bedroom
+    speaker_group:
+      platform: sonos
+      show_group_count: true
+      entities: !include /config/lovelace/speaker_group.yaml
