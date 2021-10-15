@@ -114,7 +114,7 @@ automation:
       conditions:
         - condition: template
           value_template: >-
-            {{ states.sensor.dark_sky_precip_probability_1h | int > 50 }}
+            {{ states('sensor.dark_sky_precip_probability_1h') | int > 50 }}
         - condition: template
           value_template: >-
             {{ not is_state('sensor.season', 'winter') }}
@@ -141,7 +141,7 @@ automation:
           state: "on"
         - condition: template
           value_template: >-
-            {{ states.sensor.dark_sky_precip_probability_1h | int > 50 }}
+            {{ states('sensor.dark_sky_precip_probability_1h') | int > 50 }}
         - condition: template
           value_template: >-
             {{ not is_state('sensor.season', 'winter') }}
@@ -321,12 +321,12 @@ sensor:
       precip_next_6h:
         unit_of_measurement: "%"
         value_template: >-
-          {{ [ (states.sensor.dark_sky_precip_probability_1h|float),
-               (states.sensor.dark_sky_precip_probability_2h|float),
-               (states.sensor.dark_sky_precip_probability_3h|float),
-               (states.sensor.dark_sky_precip_probability_4h|float),
-               (states.sensor.dark_sky_precip_probability_5h|float),
-               (states.sensor.dark_sky_precip_probability_6h|float), ] |max }}
+          {{ [ (states('sensor.dark_sky_precip_probability_1h')|float(default=0)),
+               (states('sensor.dark_sky_precip_probability_2h')|float(default=0)),
+               (states('sensor.dark_sky_precip_probability_3h')|float(default=0)),
+               (states('sensor.dark_sky_precip_probability_4h')|float(default=0)),
+               (states('sensor.dark_sky_precip_probability_5h')|float(default=0)),
+               (states('sensor.dark_sky_precip_probability_6h')|float(default=0)), ] |max }}
 
 ################################################
 ## Weather
