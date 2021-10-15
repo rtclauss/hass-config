@@ -95,9 +95,15 @@ class BayesianDeviceTracker(hass.Hass):
         except:
             # Home Assistant has restarted so we have no previous state for the device tracker. Let's use the new location state
             # for the old value.
-            old_lat_log = new_lat_log
-            #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
-            pass
+            try:
+                old_lat_log = new_lat_log
+                self.log("Error getting old lat-long. Setting old value to new value")
+                #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
+                pass
+            except:
+                # Tesla does not have location data after being home for a while.
+                # self.error("Error with new coordinates. {}".format(new))
+                return
 
         #mean_of_points = ellipsoidalNvector.meanOf(
         #    [old_lat_log, new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
@@ -187,8 +193,9 @@ class BayesianDeviceTracker(hass.Hass):
                         except KeyError as ke:
                             #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
                             pass
+                        # Different trackers give the direction of travel in different ways, need a way to get the value!
                         attributes['course'] = gps_attributes.get(
-                            'dirOfTravel', gps_attributes.get("course", gps_attributes.get('bearing',-1)))
+                            'dirOfTravel', gps_attributes.get("course", gps_attributes.get('bearing', gps_attributes.get('heading', -1))))
                         try:
                             del attributes['dirOfTravel']
                         except KeyError as ke:
@@ -252,6 +259,9 @@ class BayesianDeviceTracker(hass.Hass):
                         attributes['latitude'] = mean_of_points.lat
                         attributes['longitude'] = mean_of_points.lon
 
+                        # Add source of update
+                        attributes['source_tracker'] = sensor_state['entity_id']
+
                         # rtclauss add gps_update_time_attribute
                         attributes['gps_updated'] = datetime.now(
                             timezone.utc).isoformat()
@@ -263,8 +273,9 @@ class BayesianDeviceTracker(hass.Hass):
                                                mean_of_points.lon]
                                           )
                     except KeyError as e:
-                        self.error(
-                            "KeyError {}: missing information from sensor. Returning with no action.".format(e))
+                        pass
+                        # self.error(
+                        #     "KeyError {}: missing information from sensor {}. Returning with no action.".format(e, sensor_state['entity_id']))
                         #self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
             else:
                 self.error(
