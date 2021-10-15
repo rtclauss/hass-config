@@ -438,7 +438,7 @@ automation:
                 (
                   states(entity_id) is number
                   or states(entity_id) | length == states(entity_id)| int | string | length
-                  or states(entity_id) | length == states(entity_id)| float | string | length
+                  or states(entity_id) | length == states(entity_id)| float(default=0) | string | length
                 )
                 and states(entity_id) | int < states.input_number.battery_alert_threshold_max.state | int
                 and states(entity_id) | int > states.input_number.battery_alert_threshold_min.state | int
@@ -469,7 +469,7 @@ automation:
                   (
                     states(entity_id) is number
                     or states(entity_id) | length == states(entity_id)| int | string | length
-                    or states(entity_id) | length == states(entity_id)| float | string | length
+                    or states(entity_id) | length == states(entity_id)| float(default=0) | string | length
                   )
                   and states(entity_id) | int < states.input_number.battery_alert_threshold_max.state | int
                   and states(entity_id) | int > states.input_number.battery_alert_threshold_min.state | int
@@ -505,7 +505,7 @@ automation:
                 (
                   states(entity_id) is number
                   or states(entity_id) | length == states(entity_id)| int | string | length
-                  or states(entity_id) | length == states(entity_id)| float | string | length
+                  or states(entity_id) | length == states(entity_id)| float(default=0) | string | length
                 )
                 and states(entity_id) | int < states.input_number.battery_alert_threshold_max.state | int
                 and states(entity_id) | int > states.input_number.battery_alert_threshold_min.state | int
@@ -530,8 +530,6 @@ automation:
     initial_state: "on"
     trigger:
       - platform: time
-        at: "10:00:00"
-      - platform: time
         at: "18:00:00"
       - platform: state
         entity_id:
@@ -542,7 +540,7 @@ automation:
         value_template: *low_battery_check
       - condition: template
         value_template: "{{ states.input_select.notifier_format.state == 'Default' }}"
-      - service_template: >
+      - service: >
           {% if "notify." in states.input_text.notifier_name.state %}
             {{ states.input_text.notifier_name.state }}
           {% else %}
@@ -556,8 +554,6 @@ automation:
     initial_state: "on"
     trigger:
       - platform: time
-        at: "10:00:00"
-      - platform: time
         at: "18:00:00"
       - platform: state
         entity_id:
@@ -568,7 +564,7 @@ automation:
         value_template: *low_battery_check
       - condition: template
         value_template: "{{ states.input_select.notifier_format.state == 'Slack' }}"
-      - service_template: >
+      - service: >
           {% if states.input_text.notifier_name.state != "" %}
             {{ states.input_text.notifier_name.state }}
           {% else %}
@@ -662,7 +658,7 @@ automation:
               "icon": "mdi:battery",
               {% else -%}
               "value_template": "{{ "{{" }} value_json.value | int {{ "}}" }}",
-              {% if attribval | int == attribval or attribval | float == attribval or attribval | length == attribval | float | string | length or attribval | length == attribval | int | string | length -%}
+              {% if attribval | int == attribval or attribval | float(default=0) == attribval or attribval | length == attribval | float(default=0) | string | length or attribval | length == attribval | int | string | length -%}
               "unit_of_measurement": "%",
               "device_class": "battery",
               {%- elif attribval == "High" or attribval == "Full" -%}
@@ -695,10 +691,10 @@ automation:
               {%- endif -%}
               "value": {% if attribval | int == attribval -%}
                 {{ attribval | int }}
-              {%- elif attribval | float == attribval -%}
-                {{ attribval | float }}
-              {%- elif attribval | length == attribval | float | string | length -%}
-                {{ attribval | float }}
+              {%- elif attribval | float(default=0) == attribval -%}
+                {{ attribval | float(default=0) }}
+              {%- elif attribval | length == attribval | float(default=0) | string | length -%}
+                {{ attribval | float(default=0) }}
               {%- elif attribval | length == attribval | int | string | length -%}
                 {{ attribval | int }}
               {%- else -%}
@@ -746,7 +742,7 @@ automation:
               not is_state_attr(item.entity_id, 'hidden', true)
               and (
                 is_state_attr(item.entity_id, 'device_class', 'battery')
-                or 'battery' in item.attributes.icon | lower
+                or (item.attributes.icon is defined and 'battery' in item.attributes.icon | lower)
                 or (item.entity_id | lower).endswith('_bat')
                 or (item.name | lower).endswith('_bat')
                 ) or (
@@ -757,6 +753,8 @@ automation:
                     item.attributes.icon is not defined
                   ) and (
                     not is_state_attr(item.entity_id, 'battery_alert_disabled', true)
+                  ) and (
+                    not is_state_attr(item.entity_id, 'restored', true)
                   )
                 )
               )
