@@ -239,7 +239,7 @@ binary_sensor:
       bathroom_humidity_high:
         value_template: >-
           {% if
-              (states('sensor.bathroom_humidity')|float) > (states('sensor.average_house_humidity')|float + 10)
+              (states('sensor.bathroom_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10)
           %} True
           {% else %}
              False
@@ -491,22 +491,22 @@ sensor:
       rate_of_house_temp_change_5m:
         unit_of_measurement: "°F/5 minute"
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_5m', 'change_rate')  |float}}
+          {{ state_attr('sensor.house_temperature_stats_5m', 'change_rate')  |float(default=0)}}
 
       rate_of_house_temp_change_10m:
         unit_of_measurement: "°F/5 minute"
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate')|float * 60.0 * 5.0 |float}}
+          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate')|float(default=0) * 60.0 * 5.0 |float(default=0)}}
 
       rate_of_house_temp_change_1h:
         unit_of_measurement: "°F/5 minute"
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 60.0 * 5.0 |float}}
+          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
 
       rate_of_house_temp_change_30m:
         unit_of_measurement: "°F/5 minute"
         value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float}}
+          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
 
   - platform: statistics
     name: min_rate_of_house_temp_change_10m
