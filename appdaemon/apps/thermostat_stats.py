@@ -103,7 +103,14 @@ class ThermostatStats(hass.Hass):
         #old_away_mode = old['attributes']['away_mode']
 
         avg_house_temp = float(self.get_state(self.house_average_temp_sensor))
-        avg_house_humidity = float(self.get_state(self.house_average_humidity_sensor))
+
+        self.log("average house humdity is: {} of type {}".format(self.get_state(self.house_average_humidity_sensor), type(self.get_state(self.house_average_humidity_sensor))))
+        
+        ahh = self.get_state(self.house_average_humidity_sensor)
+        if ahh == 'unknown':
+            avg_house_humidity = -1
+        else:
+            avg_house_humidity = float(self.get_state(self.house_average_humidity_sensor))
 
         outside_temp = float(self.get_state(self.outside_temp_sensor))
         outside_cloud_cover = float(self.get_state(self.outside_cloud_cover_sensor))
