@@ -31,9 +31,10 @@ class FadeInMusic(hass.Hass):
       if not FadeInMusic.am_i_already_fading_in_spotify == 'on': 
         self.log("already fading in spotify is {}".format(FadeInMusic.am_i_already_fading_in_spotify))
         self.turn_on(self.already_fading_in_spotify)
-        self.turn_on("script.spotify_wake_up")
         self.call_service("media_player/media_stop", entity_id="media_player.bedroom")
+        self.call_service("media_player/media_stop", entity_id="media_player.bathroom")
         self.call_service("media_player/media_stop", entity_id="media_player.office")
+        self.turn_on("script.spotify_wake_up")
         step = 0.01
         current_volume = 0.01
         i = 1
@@ -45,5 +46,8 @@ class FadeInMusic(hass.Hass):
   def increase_volume(self, kwargs):
     new_volume = kwargs['new_volume']
     self.log("new wake up volume is {}".format(new_volume))
-    self.call_service("media_player/volume_set", entity_id="media_player.spotify", volume_level=new_volume)
-      
+    # TODO replace this with a call to the Sonos group.
+    #self.call_service("media_player/volume_set", entity_id="media_player.spotify", volume_level=new_volume)
+    self.call_service("media_player/volume_set", entity_id="media_player.bedroom", volume_level=new_volume)
+    self.call_service("media_player/volume_set", entity_id="media_player.bathroom", volume_level=new_volume)
+    self.call_service("media_player/volume_set", entity_id="media_player.office", volume_level=new_volume) 
