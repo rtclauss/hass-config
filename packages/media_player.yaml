@@ -1000,26 +1000,30 @@ script:
   spotify_wake_up:
     alias: "Spotify Wake Up"
     sequence:
-      - service: media_player.select_source
+      - alias: "Check if guests are here."
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - alias: "Join Sonos speakers into group"
+        service: sonos.join
         data:
-          entity_id: media_player.spotify
-        data_template:
-          source: >-
-            {% if is_state('input_boolean.guest_mode', 'on') %}
-              Bedroom
-            {% else %}
-              Everywhere
-            {% endif %}
+          master: media_player.bedroom
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+            - media_player.office
       - delay:
           seconds: 2
-      - service: media_player.media_pause
+      - alias: "Pause currently playing media"
+        service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.bedroom
       - delay:
           seconds: 2
-      - service: media_player.shuffle_set
+      - alias: "Enable Shuffle"
+        service: media_player.shuffle_set
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.bedroom
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1027,15 +1031,20 @@ script:
             {{ shuffle[sindex] }}
       - delay:
           seconds: 2
-      - service: media_player.volume_set
+      - alias: "Set volume low"
+        service: media_player.volume_set
         data:
-          entity_id: media_player.spotify
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+            - media_player.office
           volume_level: 0.01
       - delay:
           seconds: 2
-      - service: media_player.play_media
+      - alias: "Play random wakeup music"
+        service: media_player.play_media
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.bedroom
           media_content_type: playlist
         data_template:
           media_content_id: >-
