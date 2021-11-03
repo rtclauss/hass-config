@@ -243,7 +243,7 @@ input_number:
     step: 0.00001
     mode: box
     # TODO update the unit of measure
-    unit_of_measurement: EUR/kWh
+    unit_of_measurement: USD/kWh
 
 ########################
 # Input Select
@@ -299,6 +299,15 @@ script:
 # Sensor
 ########################
 sensor:
+  # Sometimes the raw value will drop to zero so filter out the large swings
+  - platform: filter
+    name: filtered_raw_electrical_sensor
+    entity_id: sensor.raw_house_electrical_meter
+    #device_class: energy
+    filters:
+      - filter: outlier
+        window_size: 10
+        radius: 50
 
 ########################
 # Switch
@@ -306,6 +315,27 @@ sensor:
 switch:
 
 ########################
+# Template
+########################
+template:
+  - sensor:
+      - name: house_electrical_meter
+        device_class: energy
+        unit_of_measurement: kWh
+        availability: >
+          {% if is_state("sensor.filtered_raw_electrical_sensor", "unavailable") %}
+            false
+          {% else %}
+            true
+          {%- endif %}
+        state: >-
+          {% if not states('sensor.filtered_raw_electrical_sensor') in ['unavailable','unknown','Unavailable','Unknown'] %}
+            {{(states("sensor.filtered_raw_electrical_sensor")| int)/100.0}}
+          {% else %}
+            unavailable
+          {% endif %}
+
+  ########################
 # Utility Meter
 ########################
 utility_meter:
