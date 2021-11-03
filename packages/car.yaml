@@ -270,11 +270,13 @@ template:
             {% endif %}
         state: >-
           {% if 
-            (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) 
-          or 
-            (now() >= ((state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
-          or 
-            (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
+          (
+              (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) 
+            or 
+              (now() >= ((state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
+            or 
+              (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
+          )
           and
             (state_attr("sensor.waze_next_trip_distance", "distance")|int > 45)
           %}
