@@ -40,7 +40,7 @@ class FadeInMusic(hass.Hass):
         i = 1
         while (current_volume <= 0.3):
           current_volume = current_volume + step
-          self.run_in(self.increase_volume, i*6, new_volume = current_volume)
+          self.run_in(self.increase_volume, i*20, new_volume = current_volume)
           i += 1
 
   def increase_volume(self, kwargs):
