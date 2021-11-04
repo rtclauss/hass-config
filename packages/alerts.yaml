@@ -86,6 +86,46 @@ alarm_control_panel:
 # Automations
 ########################
 automation:
+  - id: basement_dry
+    alias: basement_dry
+    # TODO replace this with a AppDaemon app that looks at the distance to the location
+    # and decides whether to turn on max range or not.
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.basement_flood_sensor_water_alarm_water_leak_detected
+        from: "on"
+        to: "off"
+    action:
+      - service: persistent_notification.create
+        data_template:
+          title: Dry floor
+          message: "Basement floor is dry."
+          notification_id: wet-floor-alert
+      - service: notify.all
+        data_template:
+          message: >-
+            Basement floor has dried.
+
+  - id: basement_wet
+    alias: basement_wet
+    # TODO replace this with a AppDaemon app that looks at the distance to the location
+    # and decides whether to turn on max range or not.
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.basement_flood_sensor_water_alarm_water_leak_detected
+        from: "off"
+        to: "on"
+    action:
+      - service: persistent_notification.create
+        data_template:
+          title: Wet floor
+          message: "Basement floor is wet"
+          notification_id: wet-floor-alert
+      - service: notify.all
+        data_template:
+          message: >-
+            Basement floor is wet. Prop up foam to dry.
+
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip
     trigger:
@@ -298,15 +338,15 @@ ios:
             behavior: "textInput"
             textInputButtonTitle: "Silencio!"
             textInputPlaceholder: "Placeholder"
-      - name: VACUUM
-        identifier: "VACUUM_ON_LEAVE"
-        actions:
-          - identifier: "VACUUM_HOUSE"
-            title: "Vacuum House"
-            activationMode: background
-            authenticationRequired: false
-            destructive: false
-            behavior: default
+      # - name: VACUUM
+      #   identifier: "VACUUM_ON_LEAVE"
+      #   actions:
+      #     - identifier: "VACUUM_HOUSE"
+      #       title: "Vacuum House"
+      #       activationMode: background
+      #       authenticationRequired: false
+      #       destructive: false
+      #       behavior: default
 
 ########################
 # Light
@@ -323,6 +363,8 @@ notify:
       #    - service: telegram
       - service: mobile_app_faro
       - service: mobile_app_wethop
+      - service: mobile_app_rtclauss
+      - service: mobile_app_ryans_macbook_pro
 
 ########################
 # Proximity
