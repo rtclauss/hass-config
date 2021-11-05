@@ -130,7 +130,7 @@ automation:
       - service: notify.all
         data_template:
           message: >-
-            "Long-range trip soon. Charging to 1.21 Gigawatts!"
+            Long-range trip soon. Charging to 1.21 Gigawatts!
 
   - id: garage_door_reminder
     alias: Close forgotten garage door
@@ -271,11 +271,23 @@ template:
         state: >-
           {% if 
           (
+            (
               (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) 
-            or 
+                and
+              ( state_attr("calendar.ryan_claussen", "location") != '')
+            )
+              or 
+            (
               (now() >= ((state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
-            or 
+                and
+              ( state_attr("calendar.work_trip", "location") != '')
+            )
+              or
+            ( 
               (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
+                and
+              ( state_attr("calendar.curling", "location") != '')
+            )
           )
           and
             (state_attr("sensor.waze_next_trip_distance", "distance")|int > 45)
