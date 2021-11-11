@@ -109,6 +109,13 @@ automation:
         to: "on"
         for:
           minutes: 30
+      - platform: numeric_state
+        entity_id:
+          - sensor.dark_sky_precip_probability_1h
+        above: 50
+        to: "on"
+        for:
+          minutes: 10
     condition:
       condition: and
       conditions:
@@ -121,7 +128,18 @@ automation:
     action:
       - service: notify.all
         data:
-          message: "It will rain soon.  Are your car windows closed?"
+          message: "It will rain soon. Are your car windows closed? HA will try to close them for you."
+      - service: tesla_custom.api
+        data:
+          command: WINDOW_CONTROL
+          parameters:
+            path_vars:
+              vehicle_id: !secret tesla_vehicle_id
+            command: close
+            lat: >-
+              {{ state_attr('device_tracker.nigori_location_tracker', "latitude") }}
+            long: >-
+              {{state_attr('device_tracker.nigori_location_tracker', "longitude") }}
 
   - id: alert_house_windows_open_pressure_dropping
     alias: alert_house_windows_open_pressure_dropping
