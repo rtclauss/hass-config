@@ -203,23 +203,18 @@ automation:
         to: "on"
         for:
           seconds: 5
-    condition:
+    # condition:
     action:
       - service: notify.mobile_app_wethop
         data_template:
-          message: >
+          message: >-
             Stream from {{ trigger.to_state.attributes.friendly_name }}
-          data:
-            attachment:
-              content-type: jpeg
-            push:
-              category: camera
-            entity_id: >-
-              {% if trigger.entity_id == "binary_sensor.basement_motion_sensor" %}
-                camera.basement
-              {% else %}
-                camera.livingroom
-              {% endif %}
+          entity_id: >-
+            {% if trigger.entity_id == "binary_sensor.basement_motion_sensor" %}
+              camera.basement
+            {% else %}
+              camera.livingroom
+            {% endif %}
 
   - alias: arm_alarm
     id: arm_alarm
@@ -276,15 +271,7 @@ automation:
     action:
       - service: notify.mobile_app_wethop
         data:
-          message: "Something happened at home!"
-          data:
-            push:
-              badge: 1
-              #sound: <SOUND FILE HERE>
-              category: "alarm" # Needs to match the top level identifier you used in the ios configuration
-            action_data: # Anything passed in action_data will get echoed back to Home Assistant.
-              entity_id: light.test
-              my_custom_data: foo_bar
+          message: "Something triggered alarm panel at home!"
 
 ########################
 # Binary Sensors
@@ -319,34 +306,6 @@ input_number:
 # iOS
 ########################
 ios:
-  push:
-    categories:
-      - name: alarm
-        identifier: "alarm"
-        actions:
-          - identifier: "SOUND_ALARM"
-            title: "Sound Alarm"
-            activationMode: "background"
-            authenticationRequired: true
-            destructive: true
-            behavior: "default"
-          - identifier: "SILENCE_ALARM"
-            title: "Silence Alarm"
-            activationMode: "background"
-            authenticationRequired: true
-            destructive: false
-            behavior: "textInput"
-            textInputButtonTitle: "Silencio!"
-            textInputPlaceholder: "Placeholder"
-      # - name: VACUUM
-      #   identifier: "VACUUM_ON_LEAVE"
-      #   actions:
-      #     - identifier: "VACUUM_HOUSE"
-      #       title: "Vacuum House"
-      #       activationMode: background
-      #       authenticationRequired: false
-      #       destructive: false
-      #       behavior: default
 
 ########################
 # Light
