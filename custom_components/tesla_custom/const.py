@@ -1,13 +1,14 @@
 """Const file for Tesla cars."""
-VERSION = "1.3.1"
+VERSION = "1.6.0"
 CONF_WAKE_ON_START = "enable_wake_on_start"
 CONF_EXPIRATION = "expiration"
+CONF_POLLING_POLICY = "polling_policy"
 DOMAIN = "tesla_custom"
 DATA_LISTENER = "listener"
 DEFAULT_SCAN_INTERVAL = 660
 DEFAULT_WAKE_ON_START = False
 ERROR_URL_NOT_DETECTED = "url_not_detected"
-MIN_SCAN_INTERVAL = 60
+MIN_SCAN_INTERVAL = 10
 
 PLATFORMS = [
     "sensor",
@@ -16,6 +17,7 @@ PLATFORMS = [
     "binary_sensor",
     "device_tracker",
     "switch",
+    "button",
 ]
 
 ICONS = {
@@ -31,6 +33,8 @@ ICONS = {
     "location tracker": "mdi:crosshairs-gps",
     "charging rate sensor": "mdi:speedometer",
     "sentry mode switch": "mdi:shield-car",
+    "horn": "mdi:bullhorn",
+    "flash lights": "mdi:car-light-high",
     "solar panel": "mdi:solar-panel",
 }
 AUTH_CALLBACK_PATH = "/auth/tesla/callback"
@@ -40,4 +44,10 @@ AUTH_PROXY_NAME = "auth:tesla:proxy"
 
 ATTR_PARAMETERS = "parameters"
 ATTR_PATH_VARS = "path_vars"
+ATTR_POLLING_POLICY_NORMAL = "normal"
+ATTR_POLLING_POLICY_CONNECTED = "connected"
+ATTR_POLLING_POLICY_ALWAYS = "always"
+ATTR_VIN = "vin"
+DEFAULT_POLLING_POLICY = ATTR_POLLING_POLICY_NORMAL
 SERVICE_API = "api"
+SERVICE_SCAN_INTERVAL = "polling_interval"
