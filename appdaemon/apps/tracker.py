@@ -18,24 +18,26 @@ class BayesianDeviceTracker(hass.Hass):
         self.minimum_update_window = self.args["minimum_update_window"]
         self.gps_accuracy_tolerance = self.args["gps_accuracy_tolerance"]
 
-        #self.log("preparing to system on init")
+        # self.log("preparing to system on init")
         self.bayes_updated(entity=self.bayesian, attribute={},
                            old={}, new={}, kwargs={})
-        #self.log('done with init')
+        # self.log('done with init')
 
-        #self.log("registering callback {} {}".format(self.location_update, self.gps_sensor_sources))
-        self.listen_state(self.bayes_updated, entity=self.bayesian)
+        # self.log("registering callback {} {}".format(self.location_update, self.gps_sensor_sources))
+        # self.log("registering callback for changes on bayesian sensor: {}".format(self.bayesian))
+        self.listen_state(self.bayes_updated, entity_id=self.bayesian)
         for tracker in self.gps_sensor_sources:
+            # self.log("registering tracking callback for gps item {}".format(tracker))
             self.listen_state(self.location_update,
-                              entity=tracker, attribute="all")
+                              entity_id=tracker, attribute="all")
 
     def bayes_updated(self, entity, attribute, old, new, kwargs):
         sensor_state = self.get_state(entity, attribute="all")
         if sensor_state['state'] == 'on':
             config = self.get_plugin_config()
             self.log("bayes_updated and bayes sensor says I am home")
-            #self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
-            #self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
+            # self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
+            # self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
                               "course": 0.0, "home_probability": sensor_state["attributes"]["probability"], "latitude": config["latitude"], "longitude": config["longitude"]},
                               gps=[config["latitude"], config["longitude"]]
@@ -44,15 +46,15 @@ class BayesianDeviceTracker(hass.Hass):
             return
 
     def location_update(self, entity, attribute, old, new, kwargs):
-        #self.log("in location_update")
+        # self.log("in location_update")
         self.log("triggered by: {} {} {} {} {}".format(
             entity, attribute, old, new, kwargs))
         bayesian_state = self.get_state(self.bayesian, attribute="all")
-        #self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
+        # self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
 
         try:
             if new["attributes"].get("gps_accuracy") > self.gps_accuracy_tolerance:
-                #self.log("New GPS coordinates not accurate at {} m. Not updating.".format(
+                # self.log("New GPS coordinates not accurate at {} m. Not updating.".format(
                 #    new["attributes"].get("gps_accuracy")))
                 return
         except TypeError as te:
@@ -133,7 +135,9 @@ class BayesianDeviceTracker(hass.Hass):
                 self.log("ios says speed is -1, setting speed to 0")
                 attributes['speed'] = 0.0
             else:
+                # Convert to mph
                 attributes['speed'] = (attributes['speed'] / 0.44704)
+                self.log("setting speed from ios to: %s".format(attributes['speed']))
             self.log("new ios speed is: {}".format(
                 attributes['speed']))
         # elif 'speed' in attributes.keys():
@@ -142,7 +146,7 @@ class BayesianDeviceTracker(hass.Hass):
         #     self.log("traccar entity {} says new speed is: {}".format(
         #         sensor_state['entity_id'],
         #         attributes['speed']))
-        elif'speed' not in attributes.keys():
+        elif 'speed' not in attributes.keys():
             attributes['speed'] = 0.0
             self.log("No 'speed' in attributes in update from sensor data: {}".format(sensor_state))
 
