@@ -414,14 +414,15 @@ media_player:
   # - platform: plex
   #   entity_namespace: 'plex'
 
-  - platform: androidtv
-    name: Living Room FireTV
-    host: !secret living_room_firetv_ip
-    adb_server_ip: !secret adb_server_ip
-    adb_server_port: 5037
-    #adbkey: "/config/androidtv/adbkey"
-    apps:
-      com.amazon.tv.launcher: "Fire TV"
+  # Configured via the UI
+  # - platform: androidtv
+  #   name: Living Room FireTV
+  #   host: !secret living_room_firetv_ip
+  #   adb_server_ip: !secret adb_server_ip
+  #   adb_server_port: 5037
+  #   #adbkey: "/config/androidtv/adbkey"
+  #   apps:
+  #     com.amazon.tv.launcher: "Fire TV"
 
   # - platform: spotify
   #   client_id: !secret spotify_client_id
@@ -1017,7 +1018,7 @@ script:
         entity_id: input_boolean.guest_mode
         state: "off"
       - alias: "Join Sonos speakers into group"
-        service: sonos.join
+        service: media_player.join
         data:
           master: media_player.bedroom
           entity_id:
@@ -1161,9 +1162,9 @@ script:
     sequence:
       - service: switch.turn_on
         entity_id: switch.4k_hdmi
-      - service: media_player.turn_on
-        data:
-          entity_id: media_player.living_room_firetv
+      # - service: media_player.turn_on
+      #   data:
+      #     entity_id: media_player.living_room_firetv
       - service: media_player.turn_on
         data:
           entity_id: media_player.apple_tv
@@ -1178,10 +1179,14 @@ script:
           source: "HDMI 1"
       - service: media_player.select_source
         data:
-          entity_id: media_player.living_room_firetv
-          source: "com.amazon.firetv.youtube.tv"
-          #TODO Change
-          #source: 'YoutubeTV'
+          entity_id: media_player.apple_tv
+          source: "YouTube TV"
+      # - service: media_player.select_source
+      #   data:
+      #     entity_id: media_player.living_room_firetv
+      #     source: "com.amazon.firetv.youtube.tv"
+      #TODO Change
+      #source: 'YoutubeTV'
 
   watch_hbo_now:
     alias: "Watch HBO"
@@ -1335,13 +1340,6 @@ script:
 sensor:
 
 ########################
-# Spotify
-########################
-spotify:
-  client_id: !secret spotify_client_id
-  client_secret: !secret spotify_client_secret
-
-########################
 # Switch
 ########################
 switch:
@@ -1356,8 +1354,9 @@ switch:
 ########################
 # webosTV
 ########################
-webostv:
-  - host: !secret lg_tv_ip
+# YAML Deprecated 2022.2
+# webostv:
+#   - host: !secret lg_tv_ip
 
 ########################
 # Zone
