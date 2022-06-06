@@ -21,19 +21,19 @@ Software on the NUC:
   * [I Can't Believe it's not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
 * Running elsewhere
-  * [rtlamr](https://github.com/bemasher/rtlamr) - Runs on a Pi4 and collects electrical utility info.
+  * [rtlamr](https://github.com/bemasher/rtlamr) - Runs on a Pi4 and collects ~~ electrical ~~ water utility info.
 
 **Devices in Use:**
-* Apple/iOS Devices - [iPhone 12 Pro](), [iPad Pro]()
+* Apple/iOS Devices
 * ~~[Nest Thermostat]()~~ Replaced with Z-wave Thermostat and [Schedy](https://github.com/rtclauss/hass-config/blob/master/appdaemon/apps/schedy_heating.yaml)
 * [Amazon Echo](http://amzn.to/2i6mShX)
 * [Amazon Echo Dot Gen 2](http://amzn.to/2hvCexj)
-* [Amazon Fire TV](http://amzn.to/2iD9uPx)
+~~ * [Amazon Fire TV](http://amzn.to/2iD9uPx) ~~
 * Sonos One Speakers
 * Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
 * Xiaomi MiFlora
 * ESP8266 with [VL53L0X](https://www.amazon.com/gp/product/B07F3RH7TC/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1) to measure salt level in [water softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml). See [this commit](https://github.com/rtclauss/hass-config/commit/85b1eade336c0fc94031241b494203fb55b3a7d8) for more info. 
-* HUSBZB-1 Zigbee/Z-Wave Stick (for Z-Wave and Zigbee)
+* HUSBZB-1 Zigbee/Z-Wave Stick (for Z-Wave ~~ and Zigbee ~~)
   * Z-Wave 
     * [GoControl Z-Wave Thermostat](https://www.amazon.com/GoControl-Thermostat-Z-Wave-Battery-Powered-Works/dp/B00ZIRV40K)
     * [Leviton Switch Vizia RF+ VRS05-1LZ](https://www.amazon.com/gp/product/B001HT6NKO/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1) - 3 wire 3-way switch.
@@ -45,9 +45,8 @@ Software on the NUC:
     * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
     * [Zooz Z-Wave Plus S2/ZEN26](https://www.amazon.com/gp/product/B07K1T8Z74/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1)
     * [Inovelli ZSW31-SN Dimmer Switches](https://support.inovelli.com/portal/en/kb/articles/products-switches-dimmer-lzw31-sn-spec-sheet): These are great multifunctional dimmers which have disableable relays so you can control smart bulbs which are plugged in to the controlled socket. To disable the relay, click the Control button 8 times.  Then you use Z-Wave events to control the lights as you see fit.  I use this in my guest room to control the ceiling fan light (ceiling fan is controllable by chain) which is on the circuit and to control the two side lamps (separate control). [See here for how I control these lights in HA](https://github.com/rtclauss/hass-config/blob/master/packages/zigbee_zwave.yaml)
-  * Zigbee
+* [Electro Llama ZZH Stick](https://electrolama.com/projects/zig-a-zig-ah/) for Zigbee2MQTT
     * Philips Hue (bulbs and light strip)
-    * ~~GE Link Smart LED Bulbs~~ Replaced due to poor antenna quality and humidity forming in the bulb
     * Lutron Pico LZL-4B-WH-L01 Connected Bulb Remote for resetting bulbs
     * [EcoSmart 60-Watt Equivalent A19 Dimmable SMART LED Light Bulb Tunable White](https://www.homedepot.com/p/EcoSmart-60-Watt-Equivalent-A19-Dimmable-SMART-LED-Light-Bulb-Tunable-White-2-Pack-A9A19A60WESDZ02/309683612). Replaced the GE Link LED Bulb in most cases. Used with [Circadian Lighting](https://github.com/claytonjn/hass-circadian_lighting) from HACS. [See here for how it's configured](https://github.com/rtclauss/hass-config/blob/master/packages/light.yaml#L1090)
     * Xiaomi Aqara Motion Sensors
@@ -57,13 +56,15 @@ Software on the NUC:
     * Xiaomi Vibration Sensor
     * SmartThings Presence Sensor
     * SmartThings Motion Sensor
-    * [Hampton Bay (King of Fans)](https://www.homedepot.com/p/Hampton-Bay-Universal-Wink-Enabled-White-Ceiling-Fan-Premier-Remote-Control-99432/206591100) - These devices are very particular about what they will initially pair with.  I moved the NUC to the same room as the fans for the initial pairing.  After they were on the network they communicate over the Zigbee mesh proper. I recommend opening up the unit to check if the Zigbee antenna is firmly seated on the board.  You can also replace the small antenna with something like (this on Amazon)[https://www.amazon.com/gp/product/B077SVP7PN/ref=ppx_yo_dt_b_asin_title_o08_s00?ie=UTF8&psc=1].
+    * ~~[Hampton Bay (King of Fans)](https://www.homedepot.com/p/Hampton-Bay-Universal-Wink-Enabled-White-Ceiling-Fan-Premier-Remote-Control-99432/206591100)~~ - These devices are very particular about what they will initially pair with.  I moved the NUC to the same room as the fans for the initial pairing.  After they were on the network they communicate over the Zigbee mesh proper. I recommend opening up the unit to check if the Zigbee antenna is firmly seated on the board.  You can also replace the small antenna with something like (this on Amazon)[https://www.amazon.com/gp/product/B077SVP7PN/ref=ppx_yo_dt_b_asin_title_o08_s00?ie=UTF8&psc=1].
     * Peanut Zigbee Smart Plug - Used to control the lava lamp in my office. Does not require Almond hub and does pair via ZHA.  Also act as more reliable repeaters for the Hampton Bay/KoF fans.  See [this blog post](http://diysoldier.com/hampton-bay-smart-ceiling-fan-and-light-control/), [this SmartThings Community thread](https://community.smartthings.com/t/hampton-bay-zigbee-fan-controller/47463/476) and [this reddit thread](https://www.reddit.com/r/SmartThings/comments/a3pbnz/peanut_smartplug_best_smart_plug_ive_found_for_10/) for more information.
       * ~~[Humidifier](https://www.amazon.com/dp/B002QAYJPO/) for the bedroom~~ Replaced by HVAC Humidifier
       * Lava Lamp
       * Christmas Lights
-
+* [Bond Bridge](https://bondhome.io/product/bond-bridge/) to control ceiling fans
+* Rachio for sprinklers
 * Unifi nanoHD-AP
+* Unifi U6-Pro
 * Unifi US-8
 * ~~Unifi USG~~ Replaced with UDM-PRO after switching ISPs
 * ~~[Generic OBDII GPRS Real Time Tracker](https://www.aliexpress.com/item/32981833499.html?spm=a2g0s.9042311.0.0.1bfa4c4dpn9kUy)~~
