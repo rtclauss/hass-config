@@ -14,7 +14,7 @@ Software on the NUC:
   * [AppDaemon](https://github.com/hassio-addons/addon-appdaemon)
   * [VSCode](https://github.com/hassio-addons/addon-vscode)
   * [Mosquitto Broker](https://home-assistant.io/addons/mosquitto/)
-  * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~
+  * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
   * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml) and [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/master/esphome/bedloadcell1.yaml)
   * [Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)
@@ -61,8 +61,9 @@ Software on the NUC:
       * ~~[Humidifier](https://www.amazon.com/dp/B002QAYJPO/) for the bedroom~~ Replaced by HVAC Humidifier
       * Lava Lamp
       * Christmas Lights
-* [Bond Bridge](https://bondhome.io/product/bond-bridge/) to control ceiling fans
+* [Bond Bridge](https://bondhome.io/product/bond-bridge/) to control ceiling fans (and maybe more!)
 * Rachio for sprinklers
+* MyQ Garage Door
 * Unifi nanoHD-AP
 * Unifi U6-Pro
 * Unifi US-8
