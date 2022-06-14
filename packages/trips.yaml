@@ -287,7 +287,10 @@ automation:
       - service: climate.set_temperature
         data:
           temperature: 70
-          entity_id: climate.glycol_thermostat
+          # Z-Wave Thermostat
+          # entity: climate.glycol_thermostat
+          # Nest Thermostat
+          entity: climate.hallway_glycol
       - service: notify.all
         data_template:
           message: >-
@@ -315,7 +318,10 @@ automation:
       - service: climate.set_temperature
         data:
           temperature: 70
-          entity_id: climate.glycol_thermostat
+          # Z-Wave Thermostat
+          # entity: climate.glycol_thermostat
+          # Nest Thermostat
+          entity: climate.hallway_glycol
       - service: notify.all
         data_template:
           message: >-
@@ -459,14 +465,14 @@ group:
   vacation_group_card_2:
     entities:
       - light.living_room_all
-      - light.master_bedroom
+      - light.owner_suite_lamps
       - switch.stairs
       - scene.vacation_group_2
 
   vacation_group_card_3:
     entities:
       - light.living_room_all
-      - light.master_bedroom
+      - light.owner_suite_lamps
       - light.kitchen_table
       - scene.vacation_group_3
 
@@ -486,6 +492,8 @@ group:
 input_boolean:
   trip:
     name: On a Trip
+  house_unoccupied:
+    name: House Unoccupied
 
 ########################
 # Input DateTimes
@@ -591,6 +599,11 @@ scene:
 # Scripts
 ########################
 script:
+  # toggle_automations_showing_house:
+  #   sequence:
+  #     - service: homeassistant.toggle
+  #       data:
+  #         entity_id: group.all_automations
   # vacation_group_visibility:
   #   sequence:
   #     - service: script.group_visibility
