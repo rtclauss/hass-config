@@ -37,7 +37,7 @@ logger:
   #  default: debug
   # logs:
   #   homeassistant.components.filter.sensor: debug
-#    hass_nabucasa.iot: debug
+  # hass_nabucasa.iot: debug
 #homeassistant.helpers: debug
 #homeassistant.helpers.condition: debug
 #homeassistant.components.proximity: debug
@@ -46,14 +46,13 @@ logger:
 #    homeassistant.components.zha: debug
 #    zigpy: debug
 #    homeassistant.components.alarm_control_panel: debug
-#    homeassistant.components.flux: debug
 
 http:
   use_x_forwarded_for: true
   trusted_proxies:
     - !secret fermentor_ipv4
     - !secret fermentor_ipv6
-  #ip_ban_enabled: true
+  ip_ban_enabled: false
   #login_attempts_threshold: 5
 
 # Enables support for tracking state changes over time.
@@ -77,7 +76,6 @@ logbook:
       - automation.update_battery_status_group_members
       - automation.battery_persistent_notification
       - automation.battery_persistent_notification_clear
-      - sensor.xiaomi_map
 
 # Discover some devices automatically
 discovery:
@@ -113,15 +111,6 @@ recorder:
       - weather
     entities:
       - sensor.time
-      - sensor.date
-      - sensor.xiaomi_map
-      - sensor.last_boot
-      - sensor.dark_sky_precip_probability_1
-      - sensor.dark_sky_precip_probability_2
-      - sensor.dark_sky_precip_probability_3
-      - sensor.dark_sky_precip_probability_4
-      - sensor.dark_sky_precip_probability_5
-      - sensor.dark_sky_precip_probability_6
 
 influxdb:
   host: !secret influx_db_host
@@ -142,9 +131,6 @@ influxdb:
       - vacuum
     entities:
       - sensor.time
-      - sensor.date
-      - sensor.last_boot
-      - sensor.xiaomi_map
 
 cloud:
   alexa:
@@ -152,9 +138,6 @@ cloud:
       input_boolean.guest_mode:
         name: Guest Mode
         description: Turn on guest mode
-      switch.flux:
-        name: Flux
-        description: Toggle flux in bedroom
       script.reset_bedroom:
         name: Reset Living Room
         description: Reset Living Room lights
