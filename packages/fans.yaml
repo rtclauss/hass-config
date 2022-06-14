@@ -116,16 +116,17 @@ automation:
     id: turn_on_fan_if_bedroom_occupied
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_occupancy
+        entity_id: binary_sensor.owner_suite_occupancy
         to: "on"
     condition:
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: "off"
+        enabled: false
     action:
       - service: fan.turn_on
         data:
-          entity_id: fan.master_bedroom_fan
+          entity_id: fan.owner_suite
           percentage: 67
           #speed: "medium"  # TODO have this change depending on the season: low in winter, medium spring/fall, high in summer
           #speed: smart
@@ -134,17 +135,18 @@ automation:
     id: turn_off_fan_if_bedroom_occupied
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_occupancy
+        entity_id: binary_sensor.owner_suite_occupancy
         to: "off"
         for: "00:10:00"
     condition:
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: "off"
+        enabled: false
     action:
       - service: fan.turn_off
         data:
-          entity_id: fan.master_bedroom_fan
+          entity_id: fan.owner_suite
 
 ########################
 # Binary Sensors

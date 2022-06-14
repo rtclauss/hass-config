@@ -358,6 +358,9 @@ group:
   climate:
     name: Climate at a Glance
     entities:
+      # Nest Thermostat
+      - climate.hallway_glycol
+      # Z-Wave Thermostat
       - climate.glycol_thermostat
       - sensor.glycol_thermostat_temperature
       - sensor.hallway_thermostat_glycol_humidity
@@ -445,12 +448,18 @@ sensor:
     type: mean
     entity_ids:
       - sensor.living_room_temperature
-      - sensor.master_bedroom_temperature
       - sensor.guest_room_temperature
       - sensor.bathroom_temperature
       - sensor.kitchen_temperature
       - sensor.office_temperature
       - sensor.thermostat_temperature
+      # new house below
+      - sensor.basement_closet_tph_temperature
+      - sensor.upstairs_closet_tph_temperature
+      - sensor.owner_suite_tph_temperature
+      - sensor.office_tph_temperature
+      - sensor.guest_room_tph_temperature
+      - sensor.glycol_temperature
       #- sensor.motion_sensor_temperature
       #- sensor.hallway_thermostat_glycol_temperature
 
@@ -460,11 +469,16 @@ sensor:
     type: mean
     entity_ids:
       - sensor.living_room_humidity
-      - sensor.master_bedroom_humidity
       - sensor.guest_room_humidity
       - sensor.bathroom_humidity
       - sensor.hallway_thermostat_glycol_humidity
       - sensor.office_humidity
+      # new house below
+      - sensor.basement_closet_tph_humidity
+      - sensor.upstairs_closet_tph_humidity
+      - sensor.owner_suite_tph_humidity
+      - sensor.office_tph_humidity
+      - sensor.guest_room_tph_humidity
 
   - platform: min_max
     name: average_house_pressure
@@ -472,11 +486,16 @@ sensor:
     type: mean
     entity_ids:
       - sensor.living_room_pressure
-      - sensor.master_bedroom_pressure
       - sensor.guest_room_pressure
       - sensor.bathroom_pressure
       - sensor.kitchen_pressure
       - sensor.office_pressure
+      # new house below
+      - sensor.basement_closet_tph_pressure
+      - sensor.upstairs_closet_tph_pressure
+      - sensor.owner_suite_tph_pressure
+      - sensor.office_tph_pressure
+      - sensor.guest_room_tph_pressure
 
   - platform: template
     sensors:
@@ -488,41 +507,60 @@ sensor:
       #   value_template: >-
       #     {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
 
+      glycol_temperature:
+        unit_of_measurement: "°F"
+        availability_template: >-
+          {{ states("climate.hallway_glycol") != None }}
+        value_template: >-
+          {{ state_attr('climate.hallway_glycol', 'current_temperature') }}
+
       rate_of_house_temp_change_5m:
         unit_of_measurement: "°F/5 minute"
+        availability_template: >-
+          {{ states("sensor.rate_of_house_temp_change_5m", "change_rate") != None }}
         value_template: >-
           {{ state_attr('sensor.house_temperature_stats_5m', 'change_rate')  |float(default=0)}}
 
       rate_of_house_temp_change_10m:
         unit_of_measurement: "°F/5 minute"
+        availability_template: >-
+          {{ states("sensor.rate_of_house_temp_change_10m", "change_rate") != None }}
         value_template: >-
           {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate')|float(default=0) * 60.0 * 5.0 |float(default=0)}}
 
       rate_of_house_temp_change_1h:
+        availability_template: >-
+          {{ states("sensor.house_temperature_stats_1h", "change_rate") != None }}
         unit_of_measurement: "°F/5 minute"
         value_template: >-
           {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
 
       rate_of_house_temp_change_30m:
         unit_of_measurement: "°F/5 minute"
+        availability_template: >-
+          {{ states("sensor.house_temperature_stats_30m", "change_rate") != None }}
         value_template: >-
           {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
 
   - platform: statistics
     name: min_rate_of_house_temp_change_10m
     entity_id: sensor.rate_of_house_temp_change_10m
+    state_characteristic: mean
 
   - platform: statistics
     name: min_rate_of_house_temp_change_1h
     entity_id: sensor.rate_of_house_temp_change_1h
+    state_characteristic: mean
 
   - platform: statistics
     name: min_rate_of_house_temp_change_30m
     entity_id: sensor.rate_of_house_temp_change_30m
+    state_characteristic: mean
 
   - platform: statistics
     name: house_temperature_stats_5m
     entity_id: sensor.average_house_temp
+    state_characteristic: mean
     max_age:
       minutes: 5
     precision: 8
@@ -530,6 +568,7 @@ sensor:
   - platform: statistics
     name: house_temperature_stats_10m
     entity_id: sensor.average_house_temp
+    state_characteristic: mean
     max_age:
       minutes: 10
     precision: 10
@@ -537,6 +576,7 @@ sensor:
   - platform: statistics
     name: house_temperature_stats_30m
     entity_id: sensor.average_house_temp
+    state_characteristic: mean
     max_age:
       minutes: 30
     precision: 8
@@ -544,6 +584,7 @@ sensor:
   - platform: statistics
     name: house_temperature_stats_1h
     entity_id: sensor.average_house_temp
+    state_characteristic: mean
     max_age:
       hours: 1
     precision: 8
