@@ -296,8 +296,10 @@ views:
         type: thermostat
         title: Upstairs
         show_header_toggle: false
-        entity: climate.glycol_thermostat
-        #entity: climate.hallway_glycol
+        # Z-Wave Thermostat
+        # entity: climate.glycol_thermostat
+        # Nest Thermostat
+        entity: climate.hallway_glycol
       - id: 23254aaa3 # Automatically created id
         type: entities
         title: Schedy
@@ -424,7 +426,8 @@ views:
       #   entities:
       #     - vacuum.robot
       - type: "custom:valetudo-map-card"
-        entity: camera.map_data
+        vacuum: valetudo_robot
+        # entity: camera.map_data
         rotate: 0
         crop:
           top: 0
@@ -627,7 +630,7 @@ views:
           - sensor.zeke_speed
           - device_tracker.wethop
           - device_tracker.wethop_wifi
-          - device_tracker.arrival_sensor
+          - binary_sensor.arrival_sensor_presence
           # - binary_sensor.nest_home
           # - device_tracker.android_1
           # - device_tracker.honda
@@ -653,7 +656,20 @@ views:
           - sensor.spcc_time
           - sensor.spcc_distance
           - sensor.heading_spcc
-##################################################
+  ##################################################
 
-##################################################
+  ##################################################
 
+  - title: Show House
+    path: ShowHouse
+    panel: false
+    icon: mdi:sale
+    cards:
+      - type: entities
+        title: House Status
+        show_header_toggle: false
+        entities:
+          - script.toggle_automations_showing_house
+          - group.all_automations
+
+  ##################################################
