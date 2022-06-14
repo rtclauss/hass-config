@@ -54,12 +54,12 @@ homeassistant:
       friendly_name: "Turn off hallway light automatically"
       icon: mdi:ceiling-light
 
-    automation.master_bedroom_light_auto_on:
+    automation.owner_suite_light_auto_on:
       <<: *customize
       friendly_name: "Turn on master bedroom lights automatically"
       icon: mdi:ceiling-light
 
-    automation.master_bedroom_light_auto_off:
+    automation.owner_suite_light_auto_off:
       <<: *customize
       friendly_name: "Turn off master bedroom lights automatically"
       icon: mdi:ceiling-light
@@ -78,9 +78,9 @@ homeassistant:
       <<: *customize
       friendly_name: "Toggle Living Room"
 
-    automation.button_reset_living_room:
+    automation.button_reset_basement:
       <<: *customize
-      friendly_name: "Button Reset Living Room"
+      friendly_name: "Button Reset Basement"
 
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
@@ -114,7 +114,13 @@ homeassistant:
       icon: mdi:home
       hidden: true
 
-    input_boolean.master_bedroom_auto_on:
+    input_boolean.owner_suite_bathroom_auto_on:
+      <<: *customize
+      friendly_name: "Owner Suite Lights Automatically Turned on"
+      icon: mdi:toilet
+      hidden: true
+
+    input_boolean.owner_suite_auto_on:
       <<: *customize
       friendly_name: "Master Bedroom Light Automatically Turned on"
       icon: mdi:bed
@@ -197,7 +203,7 @@ homeassistant:
       friendly_name: "Living Room Lights except TV Bias"
       icon: mdi:television
 
-    light.master_bedroom:
+    light.owner_suite:
       <<: *customize
       friendly_name: "Master Bedroom"
       icon: mdi:bed
@@ -259,9 +265,9 @@ homeassistant:
       <<: *customize
       friendly_name: Reset Bedroom
 
-    scene.reset_living_room:
+    scene.scene_reset_basement:
       <<: *customize
-      friendly_name: Reset Living Room
+      friendly_name: Reset Basement
 
     scene.scene_reset_bedroom:
       <<: *customize
@@ -274,14 +280,9 @@ homeassistant:
     ################################################
     ## Scripts
     ################################################
-    script.fade_in:
+    script.reset_basement:
       <<: *customize
-      friendly_name: "Fade In Light"
-      icon: mdi:lamp
-
-    script.reset_living_room:
-      <<: *customize
-      friendly_name: "Script Reset Living Room"
+      friendly_name: "Script Reset Basement"
 
     ################################################
     ## Sensors
@@ -323,6 +324,18 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: basement_lights_auto_on
+    alias: basement_lights_auto_on
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.basement_landing_occupancy
+        to: "on"
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id:
+            - light.basement_all_down_lights
+
   - id: deck_light_auto_off
     alias: deck_light_auto_off
     trigger:
@@ -472,38 +485,80 @@ automation:
         data:
           entity_id: light.hallway_light
 
-  - id: master_bedroom_light_auto_off
-    alias: master_bedroom_light_auto_off
+  - id: owner_suite_bath_light_auto_off
+    alias: owner_suite_bath_light_auto_off
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_occupancy
+        entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+        to: "off"
+        for:
+          seconds: 30
+    condition:
+      condition: state
+      entity_id: input_boolean.owner_suite_auto_on
+      state: "on"
+    action:
+      - service: homeassistant.turn_off
+        data:
+          entity_id:
+            - light.master_bedroom_bathroom_lights
+      - service: homeassistant.turn_off
+        data:
+          entity_id: input_boolean.owner_suite_auto_on
+
+  - id: owner_suite_bath_light_auto_on
+    alias: owner_suite_bath_light_auto_on
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+        to: "on"
+    # condition:
+    #   condition: and
+    #   conditions:
+    #     - condition: sun
+    #       after: sunset
+    action:
+      - service: homeassistant.turn_on
+        data:
+          entity_id:
+            - light.master_bedroom_bathroom_lights
+      - service: homeassistant.turn_on
+        data:
+          entity_id: input_boolean.owner_suite_auto_on
+
+  - id: owner_suite_light_auto_off
+    alias: owner_suite_light_auto_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.owner_suite_occupancy
         to: "off"
     condition:
       condition: and
       conditions:
         - condition: state
-          entity_id: input_boolean.master_bedroom_auto_on
+          entity_id: input_boolean.owner_suite_auto_on
           state: "on"
         - condition: not
           conditions:
             - condition: state
               entity_id: binary_sensor.master_bed_occupancy
               state: "on"
+              enabled: false
     action:
       - service: light.turn_off
         data:
           entity_id:
-            - light.master_bedroom
-            - light.master_bedroom_fan_light
+            - light.owner_suite_lamps
+            - light.owner_suite_ceiling
       - service: homeassistant.turn_off
         data:
-          entity_id: input_boolean.master_bedroom_auto_on
+          entity_id: input_boolean.owner_suite_auto_on
 
-  - id: master_bedroom_light_auto_off_in_morning
-    alias: master_bedroom_light_auto_off_in_morning
+  - id: owner_suite_light_auto_off_in_morning
+    alias: owner_suite_light_auto_off_in_morning
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_occupancy
+        entity_id: binary_sensor.owner_suite_occupancy
         to: "off"
     condition:
       condition: and
@@ -516,38 +571,40 @@ automation:
             - condition: state
               entity_id: binary_sensor.master_bed_occupancy
               state: "on"
+              enabled: false
     action:
       - service: light.turn_off
         data:
           entity_id:
-            - light.master_bedroom
-            - light.master_bedroom_fan_light
+            - light.owner_suite_lamps
+            - light.owner_suite_ceiling
 
-  - id: master_bedroom_light_auto_boolean_off
-    alias: master_bedroom_light_auto_boolean_off
+  - id: owner_suite_light_auto_boolean_off
+    alias: owner_suite_light_auto_boolean_off
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_occupancy
+        entity_id: binary_sensor.owner_suite_occupancy
         to: "off"
     condition:
       condition: and
       conditions:
         - condition: state
-          entity_id: input_boolean.master_bedroom_auto_on
+          entity_id: input_boolean.owner_suite_auto_on
           state: "on"
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
+          enabled: false
     action:
       - service: homeassistant.turn_off
         data:
-          entity_id: input_boolean.master_bedroom_auto_on
+          entity_id: input_boolean.owner_suite_auto_on
 
-  - id: master_bedroom_light_auto_on
-    alias: master_bedroom_light_auto_on
+  - id: owner_suite_light_auto_on
+    alias: owner_suite_light_auto_on
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_occupancy
+        entity_id: binary_sensor.owner_suite_occupancy
         to: "on"
     condition:
       condition: and
@@ -556,28 +613,29 @@ automation:
           entity_id: device_tracker.bayesian_zeke_home
           zone: zone.home
         - condition: state
-          entity_id: light.master_bedroom
+          entity_id: light.owner_suite_lamps
           state: "off"
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
+          enabled: false
     action:
       - service: light.turn_on
         data:
-          entity_id: light.master_bedroom
+          entity_id: light.owner_suite_lamps
           kelvin: >-
             {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
           brightness_pct: >-
             {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
       - service: homeassistant.turn_on
         data:
-          entity_id: input_boolean.master_bedroom_auto_on
+          entity_id: input_boolean.owner_suite_auto_on
 
   - id: office_light_on_at_night
     alias: office_light_on_at_night
     trigger:
       - platform: state
-        entity_id: binary_sensor.office_motion
+        entity_id: binary_sensor.office_motion_occupancy
         to: "on"
     condition:
       condition: sun
@@ -598,7 +656,7 @@ automation:
     alias: office_light_off_at_night
     trigger:
       - platform: state
-        entity_id: binary_sensor.office_motion
+        entity_id: binary_sensor.office_motion_occupancy
         to: "off"
     condition:
       condition: sun
@@ -726,17 +784,22 @@ automation:
         at: "09:00:00"
     action:
       - service: switch.turn_off
-        entity_id: switch.adaptive_lighting_sleep_mode_rest_of_house
+        data:
+          entity_id:
+            - switch.adaptive_lighting_sleep_mode_basement
+            - switch.adaptive_lighting_sleep_mode_bedroom
+            - switch.adaptive_lighting_sleep_mode_hallways
+            - switch.adaptive_lighting_sleep_mode_rest_of_house
 
-  - alias: button_reset_living_room
-    id: button_reset_living_room
+  - alias: button_reset_basement
+    id: button_reset_basement
     trigger:
       - platform: state
         entity_id:
-          - binary_sensor.living_room_button_hold
+          - binary_sensor.basement_button_hold
     action:
       - service: scene.turn_on
-        entity_id: scene.scene_reset_bedroom
+        entity_id: scene.scene_reset_basement
         data:
           transition: 10
 
@@ -744,7 +807,7 @@ automation:
     alias: turn_off_all_lights_when_bed_off
     trigger:
       - platform: state
-        entity_id: light.master_bedroom
+        entity_id: light.owner_suite_lamps
         to: "off"
     condition:
       condition: and
@@ -755,41 +818,50 @@ automation:
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "on"
+          enabled: false
     action:
-      - service: scene.turn_on
-        entity_id: scene.good_night
+      # - service: scene.turn_on
+      #   entity_id: scene.good_night
       - service: light.turn_off
         entity_id: "all"
       - service: fan.turn_off
-        entity_id: fan.living_room_fan
+        entity_id:
+          - fan.den_ceiling
+          - fan.office_ceiling_fan
       - service: switch.turn_on
-        entity_id: switch.adaptive_lighting_sleep_mode_rest_of_house
+        data:
+          entity_id:
+            - switch.adaptive_lighting_sleep_mode_basement
+            - switch.adaptive_lighting_sleep_mode_bedroom
+            - switch.adaptive_lighting_sleep_mode_hallways
+            - switch.adaptive_lighting_sleep_mode_rest_of_house
       - service: switch.turn_off
         entity_id:
           - switch.stairs
           - switch.front_door
-          - switch.deck
+          - switch.deck_string
           - switch.lava_lamp
       # Only turn on the humidifier when it's winter
-      - condition: and
-        conditions:
-          - condition: state
-            entity_id: sensor.season
-            state: "winter"
-      - service: switch.turn_on
-        entity_id:
-          - switch.humidifier
+      # Not used with whole-home humidifier
+      # - condition: and
+      #   conditions:
+      #     - condition: state
+      #       entity_id: sensor.season
+      #       state: "winter"
+      # - service: switch.turn_on
+      #   entity_id:
+      #     - switch.humidifier
 
     # - service: fan.turn_on
     #   data:
-    #     entity_id: fan.master_bedroom_fan
+    #     entity_id: fan.owner_suite
     #     speed: 'smart'
   ## off is handled by other automations
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom
     trigger:
       - platform: state
-        entity_id: binary_sensor.master_bedroom_motion
+        entity_id: binary_sensor.owner_suite_occupancy
         to: "on"
       - platform: state
         entity_id: binary_sensor.hallway_motion
@@ -804,12 +876,12 @@ automation:
           entity_id: switch.bathroom_light_fan_switch
           state: "on"
         - condition: state
-          entity_id: light.master_bedroom
+          entity_id: light.owner_suite_lamps
           state: "off"
     action:
       - service: light.turn_on
         data:
-          entity_id: light.master_bedroom
+          entity_id: light.owner_suite_lamps
           transition: 5
           kelvin: >-
             {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
@@ -817,7 +889,7 @@ automation:
             {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
       - service: homeassistant.turn_on
         data:
-          entity_id: input_boolean.master_bedroom_auto_on
+          entity_id: input_boolean.owner_suite_auto_on
 
   - id: turn_off_basement_light_when_dark_in_room
     alias: turn_off_basement_light_when_dark_in_room
@@ -848,7 +920,7 @@ automation:
     alias: turn_off_office_light_when_not_occupied
     trigger:
       - platform: state
-        entity_id: binary_sensor.office_motion
+        entity_id: binary_sensor.office_motion_occupancy
         to: "off"
         for:
           minutes: 10
@@ -869,9 +941,11 @@ automation:
       - service: light.turn_off
         data:
           entity_id:
-            - light.office_lamp
+            - light.office
             - light.office_ceiling
           transition: 5
+      - service: fan.turn_off
+        entity_id: fan.office_ceiling_fan
       - service: homeassistant.turn_off
         data:
           entity_id: input_boolean.office_auto_on
@@ -937,8 +1011,7 @@ group:
   external:
     name: External
     entities:
-      - switch.deck
-      - switch.deck_led_string
+      - switch.deck_string
       - switch.front_door
 
   Living Room: ## TODO is this group needed anymore? or should I change its members?
@@ -948,19 +1021,19 @@ group:
       - light.pendant_lamp
       - light.left_lamp
       - light.right_lamp
-      - switch.flux
       - switch.christmas_tree
       - light.christmas_lights
   ## TODO is this group needed anymore? or should I change it?
-  master_bedroom:
+  owner_suite:
     name: Master Bedroom
     entities:
-      - light.master_bedroom
+      - light.owner_suite_lamps
+      - light.owner_suite_ceiling
 
   guest_bedroom:
     name: Guest Bedroom
     entities:
-      - light.guest_ceiling
+      - light.guest_room_ceiling
       - light.guest_left_lamp
       - light.guest_right_lamp
 
@@ -984,7 +1057,7 @@ group:
 input_boolean:
   deck_auto_on:
   front_door_auto_on:
-  master_bedroom_auto_on:
+  owner_suite_auto_on:
   basement_auto_on:
   office_auto_on:
 ########################
@@ -1014,14 +1087,6 @@ light:
       - light.living_room_flanking_tv
       - light.pendant_lamp
 
-  # Switch to ZHA Group
-  # 4/8/2020
-  # - platform: group
-  #   name: master_bedroom
-  #   entities:
-  #     - light.bedroom_lamp
-  #     - light.bedroom_lamp_2
-
   - platform: group
     name: office
     entities:
@@ -1032,7 +1097,7 @@ light:
   - platform: group
     name: guest_bedroom
     entities:
-      - light.guest_ceiling
+      - light.guest_room_ceiling
       - light.guest_left_lamp
       - light.guest_right_lamp
 
@@ -1082,17 +1147,17 @@ proximity:
 scene:
   - name: scene_reset_bedroom
     entities:
-      light.master_bedroom_fan_light:
+      light.owner_suite_ceilng:
         state: "off"
-      light.master_bedroom:
+      light.owner_suite_lamps:
         state: "on"
         brightness_pct: 75
         color_temp: 500
         transition: 10
 
-  - name: scene_reset_living_room
+  - name: scene_reset_basement
     entities:
-      light.living_room_all_except_tv:
+      light.basement_all_down_lights:
         state: "on"
         color_temp: 386
         brightness: 255
@@ -1129,36 +1194,33 @@ scene:
 
   - name: cloudy_arrive_home
     entities:
-      switch.stairs:
-        state: "on"
-      light.living_room_all:
+      light.basement_all_down_lights:
         state: "on"
         transition: 30
-        brightness_pct: 100
+      switch.stairs:
+        state: "on"
       light.kitchen_sink:
         state: "on"
         transition: 30
         brightness_pct: 100
-      light.kitchen_table:
+      light.hall_lights:
         state: "on"
         transition: 30
         brightness_pct: 100
-      fan.living_room_fan:
+      light.den_floods:
         state: "on"
-        speed: "smart"
+        transition: 30
 
   - name: outside_ambiance
     entities:
-      switch.deck_led_string:
+      light.deck_string:
         state: "on"
 
   - name: night_arrive_home
     entities:
       switch.front_door:
         state: "on"
-      switch.stairs:
-        state: "on"
-      light.living_room_all:
+      light.hall_lights:
         state: "on"
         transition: 30
         brightness_pct: 100
@@ -1166,19 +1228,26 @@ scene:
         state: "on"
         transition: 30
         brightness_pct: 100
-      light.kitchen_table:
+      light.owner_suite_lamps:
         state: "on"
         transition: 30
         brightness_pct: 100
 
   - name: bedroom_prep
     entities:
-      light.master_bedroom:
+      light.owner_suite_lamps:
         state: "on"
         transition: 10
         brightness: 5
-      light.master_bedroom_fan_light:
+      light.owner_suite_ceiling:
         state: "off"
+      cover.owner_suite_blinds:
+        state: "closed"
+      fan.owner_suite:
+        state: "on"
+      light.master_bedroom_bathroom_lights:
+        state: "on"
+        brightness_pct: 75
       # fan.master_bedroom_fan:
       #   state: "on"
       #   speed: "smart"
@@ -1187,11 +1256,11 @@ scene:
 # Scripts
 ########################
 script:
-  reset_living_room:
+  reset_basement:
     sequence:
       - service: scene.turn_on
         target:
-          entity_id: scene.scene_reset_living_room
+          entity_id: scene.scene_reset_basement
         data:
           transition: 15
 

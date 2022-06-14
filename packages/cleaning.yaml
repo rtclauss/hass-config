@@ -149,7 +149,6 @@ homeassistant:
       icon: mdi:washer
       friendly_name: "Washing Machine"
 
-
     ################################################
     ## Thermostats
     ################################################
@@ -167,18 +166,32 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
+  - id: wash_finished
+    alias: wash_finished
+    trigger:
+      - platform: state
+        # entity_id: binary_sensor.washer_door
+        # to: "off"
+        entity_id: binary_sensor.front_load_washer_wash_completed
+        to: "on"
+    action:
+      - service: notify.all
+        data:
+          message: "Washing machine finished! \U0001F9FA"
   - id: washer_reminder
     alias: washer_reminder
     trigger:
       - platform: state
-        entity_id: binary_sensor.washer_door
-        to: "off"
+        # entity_id: binary_sensor.washer_door
+        # to: "off"
+        entity_id: binary_sensor.front_load_washer_wash_completed
+        to: "on"
         for:
           hours: 18
     action:
       - service: notify.all
         data:
-          message: "Clothes still in washing machine.  Get them out before they turn musty! \U0001F9FA"
+          message: "Items still in washing machine.  Get them out before they turn musty! \U0001F9FA"
 
   - id: empty_vacuum_on_thursday
     alias: empty_vacuum_on_thursday
@@ -321,12 +334,7 @@ script:
 # Sensor
 ########################
 sensor:
-  - platform: mqtt
-    state_topic: "valetudo/rockrobo/state"
-    json_attributes_topic: "valetudo/rockrobo/map_data"
-    name: xiaomi_map
-    value_template: "OK"
-    scan_interval: 5
+
 
 ########################
 # Switch

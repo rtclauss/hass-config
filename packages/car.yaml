@@ -131,12 +131,20 @@ automation:
         data_template:
           message: >-
             Long-range trip soon. Charging to 1.21 Gigawatts!
+      # TODO enable
+      # once https://github.com/home-assistant/core/pull/66162
+      # is released in 2022.2 or 2022.3
+      # - service: script.tesla_set_precondition_schedule_time
+      # - service: notify.all
+      #   data_template:
+      #     message: >-
+      #       Set car precondition time!
 
   - id: garage_door_reminder
     alias: Close forgotten garage door
     trigger:
       - platform: state
-        entity_id: cover.garage_door_opener
+        entity_id: cover.garage_door
         to: open
     condition:
       - condition: time
@@ -145,6 +153,90 @@ automation:
       - service: notify.all
         data:
           message: Close the garage door.
+
+  - alias: Tesla set polling time short on startup if charger is connected
+    description: When HA starts up. We adjust the Polling Interval down from the configured value if we are connected to a charger
+    trigger:
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: binary_sensor.nigori_charger_sensor
+        state: "on"
+    action:
+      - delay: '00:01:00'
+      - service: tesla_custom.polling_interval
+        data:
+          scan_interval: 30
+
+  - alias: Tesla set polling time short on startup if car is driving
+    description: When HA starts up. We adjust the Polling Interval down from the configured value if we are driving
+    trigger:
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: binary_sensor.nigori_parking_brake_sensor
+        state: "off"
+    action:
+      - delay: '00:01:00'
+      - service: tesla_custom.polling_interval
+        data:
+          scan_interval: 30
+
+  - alias: Tesla set polling time short when charger is connected
+    description: We adjust the Polling Interval down from the configured value if we are connecting to a charger
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.nigori_charger_sensor
+        to: "on"
+    action:
+      - service: tesla_custom.polling_interval
+        data:
+          scan_interval: 30
+
+  - alias: Tesla set polling time long when charger is disconnected
+    description: We adjust the Polling Interval up to the configured value if we are disconnecting from the charger
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.nigori_charger_sensor
+        to: "off"
+        for: "00:15:00"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.nigori_parking_brake_sensor
+        state: "on"
+    action:
+      - service: tesla_custom.polling_interval
+        data:
+          scan_interval: 660
+
+  - alias: Tesla set polling time short when car is driving
+    description: We adjust the Polling Interval down from the configured value if we are driving
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.nigori_parking_brake_sensor
+        to: "off"
+    action:
+      - service: tesla_custom.polling_interval
+        data:
+          scan_interval: 30
+
+  - alias: Tesla set polling time long when car is parked
+    description: We adjust the Polling Interval up to the configured value when we are parked if the charger is not connected
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.nigori_parking_brake_sensor
+        to: "on"
+        for: "00:15:00"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.nigori_charger_sensor
+        state: "off"
+    action:
+      - service: tesla_custom.polling_interval
+        data:
+          scan_interval: 660
 
 ########################
 # Binary Sensors
@@ -225,6 +317,34 @@ scene:
 # Scripts
 ########################
 script:
+  tesla_set_precondition_schedule_time:
+    alias: Tesla Set Precondition Schedule Time
+    #mode: restart
+    sequence:
+      - alias: Set Scheduled Departure Time
+        service: tesla_custom.api
+        data:
+          command: SCHEDULED_DEPARTURE
+          parameters:
+            path_vars:
+              vehicle_id: "{{ state_attr('binary_sensor.nigori_online_sensor', 'id') }}"
+            enable:
+              true
+              # TODO replace with
+              # state_attr('binary_sensor.upcoming_trip_charging', 'start_time')
+              # and add 3 hours and 30 minutes to time
+              # once https://github.com/home-assistant/core/pull/66162
+              # is released in 2022.2 or 2022.3
+            departure_time: >-
+              {% if (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) %}
+                ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=state_attr('sensor.waze_next_trip_distance','duration'), minutes=30)))
+              {% elif state_attr("calendar.work_trip",     "start_time")!=None and (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(minutes=4)))) %}
+                ((state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) - (timedelta(hours=state_attr('sensor.waze_next_trip_distance','duration'), minutes=30)))
+              {% elif state_attr("calendar.curling",     "start_time") != None and (now() >= ((state_attr("calendar.curling",     "start_time") | as_datetime|as_local) - (timedelta(minutes=4)))) %}
+                ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=state_attr('sensor.waze_next_trip_distance','duration'), minutes=30)))
+              {% endif %}
+            preconditioning_enabled: true
+            wake_if_asleep: true
 
 ########################
 # Sensor
@@ -236,11 +356,16 @@ sensor:
         friendly_name: "Next Calendar Destination"
         value_template: >-
           {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-          {% set work_meeting_time = (state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) %}
-          {% if "-" in ((personal_meeting_time - work_meeting_time)|string) %}
-            {{ state_attr("calendar.ryan_claussen", "location") }}
+          {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time") %}
+          {% if state_attr("calendar.work_trip", "start_time") != None %}
+            {% set work_meeting_time = (state_attr("calendar.work_trip", "start_time") | is_defined| as_datetime|as_local) %}
+            {% if "-" in ((personal_meeting_time - work_meeting_time)|string) %}
+              {{ state_attr("calendar.ryan_claussen", "location") }}
+            {% else %}
+              {{ state_attr("calendar.work_trip", "location") }}
+            {% endif %}
           {% else %}
-            {{ state_attr("calendar.work_trip", "location") }}
+            {{ state_attr("calendar.ryan_claussen", "location") }}
           {% endif %}
 
 ########################
@@ -253,38 +378,38 @@ template:
           {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
         attributes:
           entry: >-
-            {% if (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) %}
+            {% if (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
               Personal: {{ state_attr('calendar.ryan_claussen', 'message') }}
-            {% elif (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) %}
+            {% elif state_attr("calendar.work_trip", "start_time")!= None and (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
               Work: {{ state_attr('calendar.work_trip', 'message') }}
-            {% elif (now() >= ((state_attr("calendar.curling",     "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) %}
+            {% elif state_attr("calendar.curling", "start_time") != None and (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
               Curling: {{ state_attr('calendar.curling', 'message') }}
             {% endif %}
           start_time: >-
-            {% if (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) %}
+            {% if (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
               {{ state_attr("calendar.ryan_claussen", "start_time") }}
-            {% elif (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) %}
+            {% elif state_attr("calendar.work_trip", "start_time")!= None and (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
               {{ state_attr("calendar.work_trip",     "start_time") }}
-            {% elif (now() >= ((state_attr("calendar.curling",     "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) %}
+            {% elif state_attr("calendar.curling", "start_time") != None and (now() >= ((state_attr("calendar.curling",     "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
               {{ state_attr("calendar.curling",     "start_time") }}
             {% endif %}
         state: >-
           {% if 
           (
             (
-              (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=4)))) 
+              (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) 
                 and
               ( state_attr("calendar.ryan_claussen", "location") != '')
             )
               or 
-            (
-              (now() >= ((state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
+            (state_attr("calendar.work_trip", "start_time") != None and
+              (now() >= ((state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) - (timedelta(hours=24))))
                 and
               ( state_attr("calendar.work_trip", "location") != '')
             )
               or
-            ( 
-              (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=4))))
+            ( state_attr("calendar.curling", "start_time") != None and
+              (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=24))))
                 and
               ( state_attr("calendar.curling", "location") != '')
             )
@@ -292,9 +417,9 @@ template:
           and
             (state_attr("sensor.waze_next_trip_distance", "distance")|int > 45)
           %}
-            true
+            True
           {% else %}
-            false
+            Talse
           {% endif %}
   - sensor:
       - name: charge_complete

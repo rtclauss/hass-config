@@ -109,31 +109,42 @@ automation:
   - id: bedroom_music_volume
     alias: bedroom_music_volume
     trigger:
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_ieee: "00:15:8d:00:02:8f:66:12"
-          command: "rotate_left"
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_ieee: "00:15:8d:00:02:8f:66:12"
-          command: "rotate_right"
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+      #     command: "rotate_left"
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+      #     command: "rotate_right"
+      - platform: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "rotate_right"
+      - platform: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "rotate_left"
     action:
       - service: media_player.volume_set
         data:
           entity_id: media_player.bedroom
+          # volume_level: >-
+          # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
           volume_level: >-
-            {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
+            {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.to_state.action_angle/1000) | round(2) | float(default=0) }}
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
     trigger:
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_ieee: "00:15:8d:00:02:8f:66:12"
-          command: "knock"
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+      #     command: "knock"
+      - platform: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "tap"
     action:
       - service: media_player.media_play_pause
         data:
@@ -142,25 +153,37 @@ automation:
   - id: bedroom_music_select_playlist
     alias: bedroom_music_select_playlist
     trigger:
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_ieee: "00:15:8d:00:02:8f:66:12"
-          command: "flip"
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+      #     command: "flip"
+      - platform: state
+        entity_id: sensor.owner_suite_cube_action_to_side
+        not_to:
+          - "None"
+          - "unknown"
     action:
+      - service: notify.all
+        data_template:
+          message: >-
+            {{ "script.bedroom_playlist_" + (trigger.to_state.state | string) }}
       - service: script.turn_on
         data_template:
           entity_id: >-
-            {{ "script.bedroom_playlist_" + (trigger.event.data["args"]["activated_face"] | int | string) }}
+            {{ "script.bedroom_playlist_" + (trigger.to_state.state | string) }}
 
   - id: bedroom_music_skip_track
     alias: bedroom_music_skip_track
     trigger:
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_ieee: "00:15:8d:00:02:8f:66:12"
-          command: "slide"
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+      #     command: "slide"
+      - platform: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "slide"
     action:
       - service: media_player.media_next_track
         data:
@@ -169,11 +192,14 @@ automation:
   - id: bedroom_music_shuffle
     alias: bedroom_music_shuffle
     trigger:
-      - platform: event
-        event_type: zha_event
-        event_data:
-          device_ieee: "00:15:8d:00:02:8f:66:12"
-          command: "shake"
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+      #     command: "shake"
+      - platform: state
+        entity_id: sensor.owner_suite_cube_action
+        to: "shake"
     action:
       - service: media_player.shuffle_set
         data:
@@ -221,10 +247,11 @@ automation:
     condition:
       condition: and
       conditions:
-        ### Prevent false positives in the middle of the night
-        - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
-          state: "off"
+    ## Prevent false positives in the middle of the night
+      - condition: state
+        entity_id: binary_sensor.master_bed_occupancy
+        state: "off"
+        enabled: false
     action:
       - service: switch.turn_on
         entity_id: switch.4k_hdmi
@@ -261,13 +288,16 @@ automation:
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
+          enabled: false
     action:
       - service: media_player.turn_off
         data:
           entity_id: media_player.lg_webos_smart_tv
       - service: media_player.volume_set
         data:
-          entity_id: media_player.bedroom
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
           volume_level: 0.02
       - service: scene.turn_on
         entity_id: scene.bedroom_prep
@@ -284,7 +314,7 @@ automation:
         to: "paused"
         for: "00:00:02"
       - platform: state
-        entity_id: media_player.apple_tv
+        entity_id: media_player.basement
         from: "playing"
         to: "paused"
         for: "00:00:02"
@@ -337,7 +367,7 @@ automation:
         to: "playing"
         for: "00:00:20"
       - platform: state
-        entity_id: media_player.apple_tv
+        entity_id: media_player.basement
         from: "paused"
         to: "playing"
         for: "00:00:20"
@@ -491,18 +521,16 @@ scene:
 
   - name: tv_paused
     entities:
-      light.living_room_all_except_tv:
+      light.basement_all_down_lights:
         state: "on"
         brightness_pct: 50
       light.kitchen_sink:
         state: "on"
         brightness_pct: 100
-      switch.stairs:
-        state: "on"
 
   - name: tv_resumed
     entities:
-      light.living_room_all_except_tv:
+      light.basement_all_down_lights:
         state: "off"
       light.kitchen_sink:
         state: "off"
@@ -525,7 +553,7 @@ scene:
         state: "off"
       switch.deck:
         state: "off"
-      switch.deck_led_string:
+      light.deck_string:
         state: "off"
       switch.front_door:
         state: "off"
@@ -536,7 +564,7 @@ scene:
 # Scripts
 ########################
 script:
-  bedroom_playlist_1:
+  bedroom_playlist_0:
     alias: "Play LoFi"
     sequence:
       - service: media_player.play_media
@@ -563,7 +591,7 @@ script:
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
-  bedroom_playlist_2:
+  bedroom_playlist_1:
     alias: "Play Guster"
     sequence:
       - service: media_player.play_media
@@ -596,7 +624,7 @@ script:
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
-  bedroom_playlist_3:
+  bedroom_playlist_2:
     alias: "Play Joe Pera"
     sequence:
       - service: media_player.play_media
@@ -619,7 +647,7 @@ script:
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
-  bedroom_playlist_4:
+  bedroom_playlist_3:
     alias: "Play VaporWave and Retro"
     sequence:
       - service: media_player.play_media
@@ -642,7 +670,7 @@ script:
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
-  bedroom_playlist_5:
+  bedroom_playlist_4:
     alias: "Play Alt/Independent"
     sequence:
       - service: media_player.play_media
@@ -679,7 +707,7 @@ script:
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
 
-  bedroom_playlist_6:
+  bedroom_playlist_5:
     alias: "Play LoFi"
     sequence:
       - service: media_player.play_media
@@ -844,6 +872,13 @@ script:
   spotify_bedtime:
     alias: "Spotify Bedtime"
     sequence:
+      - service: media_player.join
+        target:
+          entity_id:
+            - media_player.bedroom
+        data:
+          group_members:
+            - media_player.bathroom
       - service: media_player.shuffle_set
         data:
           entity_id: media_player.bedroom
@@ -859,13 +894,13 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-            - media_player.office
           volume_level: 0.35
       - delay:
           seconds: 2
       - service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id:
+            - media_player.bedroom
           media_content_type: music
         data_template:
           media_content_id: >-
@@ -985,7 +1020,6 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-            - media_player.office
           volume_level: 0.2
       - delay:
           minutes: 1
@@ -994,7 +1028,6 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-            - media_player.office
           volume_level: 0.1
       - delay:
           minutes: 1
@@ -1003,7 +1036,6 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-            - media_player.office
           volume_level: 0.01
 
   spotify_wake_up:
@@ -1020,7 +1052,6 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-            - media_player.office
       - delay:
           seconds: 2
       - alias: "Pause currently playing media"
@@ -1046,7 +1077,6 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-            - media_player.office
           volume_level: 0.01
       - delay:
           seconds: 2
@@ -1163,7 +1193,7 @@ script:
       #     entity_id: media_player.living_room_firetv
       - service: media_player.turn_on
         data:
-          entity_id: media_player.apple_tv
+          entity_id: media_player.basement
       - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
@@ -1175,7 +1205,7 @@ script:
           source: "HDMI 1"
       - service: media_player.select_source
         data:
-          entity_id: media_player.apple_tv
+          entity_id: media_player.basement
           source: "YouTube TV"
       # - service: media_player.select_source
       #   data:

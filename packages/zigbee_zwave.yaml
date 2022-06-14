@@ -91,10 +91,10 @@ homeassistant:
       friendly_name: "Master Bed Occupancy"
       icon: mdi:bed-empty
 
-    binary_sensor.master_bedroom_motion:
+    binary_sensor.owner_suite_occupancy:
       <<: *customize
       device_class: motion
-      friendly_name: "Master Bedroom Motion"
+      friendly_name: "Master Bedroom Occupancy"
 
     binary_sensor.living_room_motion_sensor:
       <<: *customize
@@ -124,11 +124,6 @@ homeassistant:
     binary_sensor.office_button:
       <<: *customize
       friendly_name: "Office Button push"
-
-    binary_sensor.office_motion:
-      <<: *customize
-      device_class: motion
-      friendly_name: "Office Motion"
 
     binary_sensor.office_north_window_contact:
       <<: *customize
@@ -177,26 +172,6 @@ homeassistant:
     sensor.basement_door_battery:
       <<: *customize
       friendly_name: "Basement Door Battery"
-
-    #    sensor.bathroom_battery:
-    #      <<: *customize
-    #      friendly_name: "Bathroom Battery"
-    #      device_class: battery
-
-    sensor.bathroom_humidity:
-      <<: *customize
-      friendly_name: "Bathroom Humidity"
-      device_class: humidity
-
-    sensor.bathroom_pressure:
-      <<: *customize
-      friendly_name: "Bathroom Pressure"
-      icon: mdi:gauge
-
-    sensor.bathroom_temperature:
-      <<: *customize
-      friendly_name: "Bathroom Temperature"
-      device_class: temperature
 
     sensor.deck_door_battery:
       <<: *customize
@@ -323,7 +298,7 @@ homeassistant:
     #      friendly_name: "Master Bedroom Battery"
     #      device_class: battery
 
-    sensor.master_bedroom_humidity:
+    sensor.owner_suite_tph_humidity:
       <<: *customize
       friendly_name: "Master Bedroom Humidity"
       device_class: humidity
@@ -338,12 +313,12 @@ homeassistant:
       friendly_name: "Master Bedroom Motion Sensor Battery"
       device_class: battery
 
-    sensor.master_bedroom_pressure:
+    sensor.owner_suite_tph_pressure:
       <<: *customize
       friendly_name: "Master Bedroom Pressure"
       icon: mdi:gauge
 
-    sensor.master_bedroom_temperature:
+    sensor.owner_suite_tph_temperature:
       <<: *customize
       friendly_name: "Master Bedroom Temperature"
       device_class: temperature
@@ -432,39 +407,39 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-  - alias: in_bed_on
-    id: in_bed_on
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.master_bed_occupancy
-        to: "on"
-    # condition:
-    #   condition: state
-    #   entity_id: binary_sensor.master_bed_occupancy
-    #   state: "on"
-    #   for:
-    #     seconds: 5
-    action:
-      - service: input_boolean.turn_on
-        data:
-          entity_id: input_boolean.master_bed_occupancy
+  # - alias: in_bed_on
+  #   id: in_bed_on
+  #   trigger:
+  #     # - platform: state
+  #     #   entity_id: binary_sensor.master_bed_occupancy
+  #     #   to: "on"
+  #   # condition:
+  #   #   condition: state
+  #   #   entity_id: binary_sensor.master_bed_occupancy
+  #   #   state: "on"
+  #   #   for:
+  #   #     seconds: 5
+  #   action:
+  #     - service: input_boolean.turn_on
+  #       data:
+  #         entity_id: input_boolean.master_bed_occupancy
 
-  - alias: in_bed_off
-    id: in_bed_off
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.master_bed_occupancy
-        to: "off"
-    # condition:
-    #   condition: state
-    #   entity_id: binary_sensor.master_bed_occupancy
-    #   state: "off"
-    #   for:
-    #     seconds: 5
-    action:
-      - service: input_boolean.turn_off
-        data:
-          entity_id: input_boolean.master_bed_occupancy
+  # - alias: in_bed_off
+  #   id: in_bed_off
+  #   trigger:
+  #     - platform: state
+  #       entity_id: binary_sensor.master_bed_occupancy
+  #       to: "off"
+  #   # condition:
+  #   #   condition: state
+  #   #   entity_id: binary_sensor.master_bed_occupancy
+  #   #   state: "off"
+  #   #   for:
+  #   #     seconds: 5
+  #   action:
+  #     - service: input_boolean.turn_off
+  #       data:
+  #         entity_id: input_boolean.master_bed_occupancy
 
   - id: turn_on_guest_bedroom_fan_light_zwave_switch
     alias: turn_on_guest_bedroom_fan_light_zwave_switch

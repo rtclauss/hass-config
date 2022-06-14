@@ -81,13 +81,14 @@ homeassistant:
       <<: *customize
       friendly_name: "Returning from long road trip (95 minutes)"
 
+      binary_sensor.arrival_sensor_presence:
+        <<: *customize
+        # friendly_name: Zigbee Arrival Sensor
+        #device_class: occupancy
+
     ################################################
     ## Device Trackers
     ################################################
-    device_tracker.arrival_sensor:
-      <<: *customize
-      friendly_name: Zigbee Arrival Sensor
-      #device_class: occupancy
 
     ################################################
     ## Groups
@@ -202,7 +203,7 @@ automation:
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
         to: "home"
-        from: "away"
+        from: "Twin Cities"
     condition:
       condition: and
       conditions:
@@ -212,6 +213,7 @@ automation:
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
+          enabled: false
     action:
       - service: scene.turn_on
         entity_id: scene.cloudy_arrive_home
@@ -234,9 +236,10 @@ automation:
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: "off"
+        enabled: false
     action:
       # - service: cover.open_cover
-      #   entity_id: cover.garage_door_opener
+      #   entity_id: cover.garage_door
       - service: scene.turn_on
         entity_id: scene.arrive_home
       # First attempt to reset schedy when arrive home
@@ -292,14 +295,14 @@ automation:
         from: "home"
     condition:
       - condition: state
-        entity_id: cover.garage_door_opener
+        entity_id: cover.garage_door
         state: open
     action:
       - service: notify.all
         data:
           message: Garage door is still open! Attempting to close...
       - service: cover.close_cover
-        entity_id: cover.garage_door_opener
+        entity_id: cover.garage_door
 
   - alias: input_boolean_tracker_on
     id: input_boolean_tracker_on
@@ -337,6 +340,7 @@ automation:
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: "off"
+        enabled: false
       # - condition: template
       #   value_template: >-
       #     {{ not is_state('media_player.spotify', 'playing') }}
@@ -363,6 +367,7 @@ automation:
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
+          enabled: false
         - condition: or
           conditions:
             - condition: sun
@@ -373,11 +378,13 @@ automation:
     action:
       - service: scene.turn_on
         entity_id: scene.night_arrive_home
-      # - service: notify.all
-      #   data:
-      #     message: Home again, home again, jiggity jig.
+      - service: notify.all
+        data:
+          message: Home again, home again, jiggity jig.
       - service: vacuum.return_to_base
         entity_id: vacuum.valetudo_robot
+      - service: switch.turn_off
+        entity_id: switch.nigori_maxrange_switch
 
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
@@ -395,6 +402,7 @@ automation:
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
+          enabled: false
         - condition: or
           conditions:
             - condition: time
@@ -422,25 +430,29 @@ automation:
       - service: climate.set_temperature
         data:
           temperature: 70
-          entity_id: climate.glycol_thermostat
+          # Z-Wave Thermostat
+          # entity: climate.glycol_thermostat
+          # Nest Thermostat
+          entity: climate.hallway_glycol
       - service: notify.all
         data_template:
           message: >-
             Turning on HVAC while you drive home from a road trip
 
-  - id: return_home_from_twin_cities
-    alias: return_home_from_twin_cities
+            # TODO change implementation
+  - id: return_home_from_rochester
+    alias: return_home_from_rochester
     trigger:
       # - platform: state
       #   entity_id: device_tracker.bayesian_zeke_home
       #   from: 'Twin Cities'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.twincities
+        zone: zone.rochester
         event: leave
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
-        from: "Twin Cities"
+        from: "Rochester"
         to: "not_home"
     # condition:
     #   condition: template
@@ -453,11 +465,14 @@ automation:
       - service: climate.set_temperature
         data:
           temperature: 70
-          entity_id: climate.glycol_thermostat
+          # Z-Wave Thermostat
+          # entity: climate.glycol_thermostat
+          # Nest Thermostat
+          entity: climate.hallway_glycol
       - service: notify.all
         data_template:
           message: >-
-            Turn off HVAC Away Mode. You left TC in direction {{ states('sensor.zeke_direction') }} while you drive home from the Cities.
+            Turn off HVAC Away Mode. You left RST in direction {{ states('sensor.zeke_direction') }} while you drive home.
 
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
@@ -474,38 +489,29 @@ automation:
         entity_id: input_boolean.guest_mode
         state: "off"
     action:
-      - service: cover.close_cover
-        entity_id: cover.garage_door_opener
-      - service: scene.turn_on
-        entity_id: scene.leave_home
-      - service: light.turn_off
-        entity_id: "all"
-      - service: fan.turn_off
-        entity_id: "all"
-      - delay: 25
-      - service: scene.turn_on
-        entity_id: scene.leave_home
-      - service: light.turn_off
-        entity_id: "all"
-      - service: fan.turn_off
-        entity_id: "all"
-      # - service: notify.all
-      #   data:
-      #     message: Auf weidersehen!
-      - service: notify.mobile_app_wethop
-        data:
-          title: "Auf weidersehen"
-          message: "Vacuum the house?"
+      parallel:
+        - service: cover.close_cover
+          entity_id: cover.garage_door
+        - service: scene.turn_on
+          entity_id: scene.leave_home
+        - service: light.turn_off
+          entity_id: "all"
+        - service: fan.turn_off
+          entity_id: "all"
+        - service: notify.mobile_app_wethop
           data:
-            actions:
-              - action: "VACUUM_HOUSE"
-                title: "Vacuum House"
-                activationMode: background
-                authenticationRequired: false
-                destructive: false
-                behavior: default
-      - service: scene.turn_on
-        entity_id: scene.turn_on_cameras
+            title: "Auf weidersehen"
+            message: "Vacuum the house?"
+            data:
+              actions:
+                - action: "VACUUM_HOUSE"
+                  title: "Vacuum House"
+                  activationMode: background
+                  authenticationRequired: false
+                  destructive: false
+                  behavior: default
+        - service: scene.turn_on
+          entity_id: scene.turn_on_cameras
 
   - id: update_trip_origin
     alias: update_trip_origin
@@ -529,16 +535,13 @@ automation:
   - id: update_nest_eta
     alias: update_nest_eta
     trigger:
-      # - platform: state
-      #   entity_id: device_tracker.bayesian_zeke_home
-      #   to: 'Rochester'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.rochester
+        zone: zone.twincities
         event: enter
       - platform: state
         entity_id: device_tracker.bayesian_zeke_home
-        to: "Rochester"
+        to: "Twin Cities"
         from: "Away"
     action:
       # - service: nest.set_eta
@@ -548,11 +551,14 @@ automation:
       - service: climate.set_temperature
         data:
           temperature: 70
-          entity_id: climate.glycol_thermostat
+          # Z-Wave Thermostat
+          # entity: climate.glycol_thermostat
+          # Nest Thermostat
+          entity: climate.hallway_glycol
       - service: notify.all
         data_template:
           message: >-
-            Entering Rochester from direction {{ states('sensor.zeke_direction') }}. Turning off Away Mode. ETA to home {{ states('sensor.time_to_home') }}.
+            Entering Twin Cities from direction {{ states('sensor.zeke_direction') }}. Turning off Away Mode. ETA to home {{ states('sensor.time_to_home') }}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
@@ -596,11 +602,11 @@ binary_sensor:
         prob_given_false: 0.1
         platform: "state"
         to_state: "home"
-      - entity_id: device_tracker.arrival_sensor
+      - entity_id: binary_sensor.arrival_sensor_presence
         prob_given_true: 0.99
         prob_given_false: 0.01
         platform: "state"
-        to_state: "home"
+        to_state: "on"
       ### Try out the speed sensor
       - entity_id: sensor.zeke_speed
         platform: "numeric_state"
@@ -610,18 +616,17 @@ binary_sensor:
         prob_given_true: 0.95
         prob_given_false: 0.05
         value_template: >-
-          {{ (is_state('sensor.wethop_activity', 'Walking') == True) and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
+          {{ (is_state('sensor.wethop_activity', 'Walking') == True) and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Twin Cities')) }}
       - platform: template
         prob_given_true: 0.95
         prob_given_false: 0.05
         value_template: >-
-          {{ (is_state('sensor.wethop_activity', 'Biking') == True) and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Rochester')) }}
+          {{ (is_state('sensor.wethop_activity', 'Biking') == True) and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Twin Cities')) }}
 
 ########################
 # Device Trackers
 ########################
 device_tracker:
-
 
 ########################
 # Input Booleans
@@ -660,7 +665,7 @@ group:
       - device_tracker.bayesian_zeke_home
       - device_tracker.wethop
       - device_tracker.wethop_wifi
-      - device_tracker.arrival_sensor
+      - binary_sensor.arrival_sensor_presence
       - sensor.zeke_speed
       - sensor.iphone_battery_state
       # - binary_sensor.nest_home
@@ -795,12 +800,12 @@ scene:
 # Scripts
 ########################
 script:
-  update_nest_eta:
-    sequence:
-      - service: nest.set_eta
-        data_template:
-          eta: "{{states('sensor.time_to_home.state')}}"
-          trip_id: "{{ states('input_select.trip_origin') }}"
+  # update_nest_eta:
+  #   sequence:
+  #     - service: nest.set_eta
+  #       data_template:
+  #         eta: "{{states('sensor.time_to_home.state')}}"
+  #         trip_id: "{{ states('input_select.trip_origin') }}"
 
 ########################
 # Sensor
