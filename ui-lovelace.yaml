@@ -252,8 +252,10 @@ views:
         type: thermostat
         title: Upstairs
         show_header_toggle: false
-        entity: climate.glycol_thermostat
-        #entity: climate.hallway_glycol
+        # Z-Wave Thermostat
+        # entity: climate.glycol_thermostat
+        # Nest Thermostat
+        entity: climate.hallway_glycol
       - id: 23254aaa3 # Automatically created id
         type: entities
         title: Schedy
@@ -444,7 +446,7 @@ views:
       #   entities:
       #     - vacuum.robot
       - type: "custom:valetudo-map-card"
-        entity: camera.map_data
+        vacuum: valetudo_robot
         rotate: 0
         crop:
           top: 0
@@ -628,7 +630,7 @@ views:
         show_header_toggle: false
         entities:
           - binary_sensor.hallway_motion
-          - binary_sensor.office_motion
+          - binary_sensor.office_motion_occupancy
           - binary_sensor.master_bedroom_motion
           - binary_sensor.downstairs_motion
           - binary_sensor.living_room_motion_sensor
@@ -761,7 +763,7 @@ views:
           - sensor.zeke_speed
           - device_tracker.wethop
           - device_tracker.wethop_wifi
-          - device_tracker.arrival_sensor
+          - binary_sensor.arrival_sensor_presence
           # - binary_sensor.nest_home
           # - device_tracker.android_1
           # - device_tracker.honda
@@ -805,6 +807,7 @@ views:
   - title: ZHA
     path: zha
     panel: true
+    icon: mdi:zigbee
     cards:
       - id: 42b1dabdbcc4461480b17d6f1a862363 # Automatically created id
         type: "custom:zha-network-card"
@@ -842,6 +845,7 @@ views:
   - title: 3D Printer
     path: 3d
     panel: false
+    icon: mdi:printer-3d-nozzle
     cards:
       - id: 42b1dabdbcc4465680b17d6f1a862263 # Automatically created id
         type: "custom:threedy-card"
@@ -860,6 +864,20 @@ views:
         round: false
         temperature_unit: C
         use_24hr: true
+
+  ##################################################
+
+  - title: House unoccupied
+    path: ShowHouse
+    panel: false
+    icon: mdi:sale
+    cards:
+      - type: entities
+        title: House Status
+        show_header_toggle: false
+        entities:
+          - script.toggle_automations_showing_house
+          - group.all_automations
 
   ##################################################
 
