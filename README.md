@@ -22,6 +22,7 @@ Software on the NUC:
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
 * Running elsewhere
   * [rtlamr](https://github.com/bemasher/rtlamr) - Runs on a Pi4 and collects ~~ electrical ~~ water utility info.
+  * [Zigbee2MQTT](https://zigbee2mqtt.io/) - Zigbee control over MQTT
 
 **Devices in Use:**
 * Apple/iOS Devices
