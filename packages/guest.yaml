@@ -58,7 +58,6 @@ homeassistant:
       icon: mdi:account-alert
       #persistent: true
 
-
     ################################################
     ## Input Numbers
     ################################################
@@ -115,13 +114,22 @@ automation:
         entity_id: binary_sensor.guest_on_wifi
         to: "off"
         for: "16:00:00"
-    condition:
+    # condition:
     action:
       - service: input_boolean.turn_off
         entity_id: input_boolean.guest_mode
       - service: notify.all
         data:
           message: Guest Mode Deactivated
+      - service: media_player.join
+        target:
+          entity_id:
+            - media_player.bedroom
+        data:
+          group_members:
+            - media_player.bathroom
+            - media_player.office
+            - media_player.den_1
 
   - id: turn_on_guest_mode_when_guest_wifi_active
     alias: turn_on_guest_mode_when_guest_wifi_active
@@ -130,13 +138,34 @@ automation:
         entity_id: binary_sensor.guest_on_wifi
         to: "on"
         for: "00:45:00"
-    condition:
+    #condition:
     action:
       - service: input_boolean.turn_on
         entity_id: input_boolean.guest_mode
       - service: notify.all
         data:
           message: Guest Mode Activated
+      - service: media_player.unjoin
+        target:
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+            - media_player.office
+            - media_player.den_1
+      - service: media_player.join
+        target:
+          entity_id:
+            - media_player.bedroom
+        data:
+          group_members:
+            - media_player.bathroom
+      - service: media_player.join
+        target:
+          entity_id:
+            - media_player.office
+        data:
+          group_members:
+            - media_player.den_1
 
 ########################
 # Binary Sensors
@@ -146,7 +175,7 @@ binary_sensor:
     sensors:
       guest_on_wifi:
         value_template: >-
-          {{ (states.device_tracker | selectattr('state','eq','home') | selectattr('attributes.is_guest', 'eq', true) | list| count) > 0 }}
+          {{ (states.device_tracker | selectattr('state','eq','home') | selectattr("attributes.is_guest", 'defined') | selectattr("attributes.is_guest", 'eq', True) | list| count) > 0 }}
 
 ########################
 # Cameras
