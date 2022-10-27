@@ -19,7 +19,7 @@ homeassistant:
       expose: &expose
         <<: *customize
         haaska_hidden: false
-        homebridge_hidden: false
+        homebridge_hidden: true
 
     ################################################
     ## Alarm Panels
@@ -92,7 +92,7 @@ automation:
     # and decides whether to turn on max range or not.
     trigger:
       - platform: state
-        entity_id: binary_sensor.basement_flood_sensor_water_alarm_water_leak_detected
+        entity_id: binary_sensor.basement_unfinished_leak_water_leak
         from: "on"
         to: "off"
     action:
@@ -112,7 +112,7 @@ automation:
     # and decides whether to turn on max range or not.
     trigger:
       - platform: state
-        entity_id: binary_sensor.basement_flood_sensor_water_alarm_water_leak_detected
+        entity_id: binary_sensor.basement_unfinished_leak_water_leak
         from: "off"
         to: "on"
     action:
@@ -125,6 +125,46 @@ automation:
         data_template:
           message: >-
             Basement floor is wet. Prop up foam to dry.
+
+  - id: kitchen_wet
+    alias: kitchen_wet
+    # TODO replace this with a AppDaemon app that looks at the distance to the location
+    # and decides whether to turn on max range or not.
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.kitchen_sink_leak_water_leak
+        from: "off"
+        to: "on"
+    action:
+      - service: persistent_notification.create
+        data_template:
+          title: Wet floor
+          message: "Area under kitchen sink is wet"
+          notification_id: wet-floor-alert
+      - service: notify.all
+        data_template:
+          message: >-
+            Area under kitchen sink is wet. Prop up foam to dry.
+
+  - id: laundry_wet
+    alias: laundry_wet
+    # TODO replace this with a AppDaemon app that looks at the distance to the location
+    # and decides whether to turn on max range or not.
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.laundry_room_leak_water_leak
+        from: "off"
+        to: "on"
+    action:
+      - service: persistent_notification.create
+        data_template:
+          title: Wet floor
+          message: "Area under kitchen sink is wet"
+          notification_id: wet-floor-alert
+      - service: notify.all
+        data_template:
+          message: >-
+            Area under kitchen sink is wet. Prop up foam to dry.
 
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip
@@ -330,6 +370,7 @@ notify:
       - service: mobile_app_wethop
       - service: mobile_app_rtclauss
       - service: mobile_app_ryans_macbook_pro
+      - service: lg_webos_tv_oled65cxpua
 
 ########################
 # Proximity
