@@ -54,29 +54,25 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-  # Implemented in Schedy
-  # - id: arrive_at_work
-  #   alias: arrive_at_work
-  #   trigger:
-  #     # - platform: state
-  #     #   entity_id: device_tracker.bayesian_zeke_home
-  #     #   to: 'Work'
-  #     - platform: zone
-  #       entity_id: device_tracker.bayesian_zeke_home
-  #       event: enter
-  #       zone: zone.work
-  #   condition:
-  #     condition: state
-  #     entity_id: 'binary_sensor.workday_sensor'
-  #     state: 'on'
-  #   action:
-  #     - service: climate.set_preset_mode
-  #       data:
-  #         preset_mode: 'Away and Eco'
-  #         entity_id: all
-  #     - service: notify.all
-  #       data:
-  #         message: 'Arriving at work. Setting Nest Away.'
+  - id: arrive_at_work
+    alias: arrive_at_work
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        event: enter
+        zone: zone.work
+    condition:
+      condition: state
+      entity_id: "binary_sensor.workday_sensor"
+      state: "on"
+    action:
+      - service: climate.set_preset_mode
+        data:
+          preset_mode: "away"
+          entity_id: all
+      - service: notify.all
+        data:
+          message: "Arriving at work. Setting Ecobee Away."
 
   - id: turn_off_morning_routine
     alias: turn_off_morning_routine
@@ -92,7 +88,7 @@ automation:
     alias: turn_off_office_lamp_when_work_tp_camera_active
     trigger:
       - platform: state
-        entity_id: binary_sensor.ryans_work_macbook_pro_camera_in_use
+        entity_id: binary_sensor.ryans_macbook_pro_camera_in_use
         to: "on"
     action:
       - service: media_player.media_pause
@@ -102,40 +98,18 @@ automation:
             - media_player.office
       - service: light.turn_off
         data:
-          entity_id: light.office_lamp
+          entity_id: light.office_floor_lamp
 
   - id: turn_on_office_lamp_when_work_tp_camera_inactive
     alias: turn_on_office_lamp_when_work_tp_camera_inactive
     trigger:
       - platform: state
-        entity_id: binary_sensor.ryans_work_macbook_pro_camera_in_use
+        entity_id: binary_sensor.ryans_macbook_pro_camera_in_use
         to: "off"
     action:
       - service: light.turn_on
         data:
-          entity_id: light.office_lamp
-
-  - id: up_enable_bedroom_light_auto_off
-    alias: up_enable_bedroom_light_auto_off
-    trigger:
-      - platform: state
-        entity_id:
-          - binary_sensor.hallway_motion
-    condition:
-      - condition: state
-        entity_id: binary_sensor.workday_sensor
-        state: "on"
-      - condition: state
-        entity_id: light.owner_suite_lamps
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.master_bed_occupancy
-        state: "off"
-        enabled: false
-    action:
-      - service: homeassistant.turn_on
-        data:
-          entity_id: input_boolean.master_bedroom_auto_on
+          entity_id: light.office_floor_lamp
 
   - id: vacuum_while_working
     alias: vacuum_while_working
@@ -154,11 +128,12 @@ automation:
       - platform: event
         event_type: mobile_app_notification_action
         event_data:
-          actionName: VACUUM_HOUSE
+          action: VACUUM_HOUSE
     condition: []
     action:
-      - service: vacuum.start
-        data:
+      - alias: Start Vacuums
+        service: vacuum.start
+        target:
           entity_id: all
 
 ########################
