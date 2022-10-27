@@ -120,11 +120,8 @@ automation:
       #     device_ieee: "00:15:8d:00:02:8f:66:12"
       #     command: "rotate_right"
       - platform: state
-        entity_id: sensor.owner_suite_cube_action
-        to: "rotate_right"
-      - platform: state
-        entity_id: sensor.owner_suite_cube_action
-        to: "rotate_left"
+        entity_id: sensor.owner_suite_cube_action_angle
+        not_to: None
     action:
       - service: media_player.volume_set
         data:
@@ -132,7 +129,7 @@ automation:
           # volume_level: >-
           # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
           volume_level: >-
-            {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.to_state.action_angle/1000) | round(2) | float(default=0) }}
+            {{ (state_attr('media_player.bedroom', 'volume_level') + (float(trigger.to_state.state)/1000)) | round(2) | float(default=0) }}
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
@@ -150,6 +147,32 @@ automation:
         data:
           entity_id: media_player.bedroom
 
+  - id: bed_without_prep
+    alias: bed_without_prep
+    trigger:
+      # - platform: event
+      #   event_type: zha_event
+      #   event_data:
+      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+      #     command: "knock"
+      - platform: state
+        entity_id: binary_sensor.master_bed_occupancy
+        to: "on"
+    condition:
+      - and:
+          - condition: numeric_state
+            entity_id: media_player.bedroom
+            attribute: "volume_level"
+            above: 0.1
+          - condition: state
+            entity_id:
+              - media_player.bedroom
+            state: "playing"
+    action:
+      - service: script.turn_on
+        data:
+          entity_id: script.spotify_bedtime_volume
+
   - id: bedroom_music_select_playlist
     alias: bedroom_music_select_playlist
     trigger:
@@ -162,6 +185,9 @@ automation:
         entity_id: sensor.owner_suite_cube_action_to_side
         not_to:
           - "None"
+          - "unknown"
+          - "unavailable"
+        not_from:
           - "unknown"
     action:
       - service: notify.all
@@ -221,6 +247,84 @@ automation:
           entity_id: media_player.spotify
           source: Bathroom
 
+  - id: play_music_in_bathroom_when_up
+    alias: play_music_in_bathroom_when_up
+    mode: single
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.owner_suite_bathroom_room_occupancy
+    condition:
+      - alias: "Not in Bed"
+        condition: state
+        entity_id: binary_sensor.master_bed_occupancy
+        state: "off"
+      - alias: "morning routine already started"
+        condition: state
+        entity_id: input_boolean.morning_routine
+        state: "off"
+      - or:
+          - alias: "weekday morning time"
+            condition: time
+            after: "05:00:00"
+            before: "10:30:00"
+            weekday:
+              - "mon"
+              - "tue"
+              - "wed"
+              - "thu"
+              - "fri"
+          - alias: "weekend morning time"
+            condition: time
+            after: "07:00:00"
+            before: "14:00:00"
+            weekday:
+              - "sat"
+              - "sun"
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.morning_routine
+      - alias: "Stop Playback"
+        service: media_player.media_stop
+        target:
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+            - media_player.office
+      - alias: "Set Volume 0.01"
+        service: media_player.volume_set
+        data:
+          volume_level: 0.01
+        target:
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+            - media_player.office
+      - service: script.turn_on
+        entity_id: script.spotify_wake_up
+      - alias: "Set Volume 0.09 in office"
+        service: media_player.volume_set
+        data:
+          volume_level: 0.09
+        target:
+          entity_id:
+            - media_player.office
+      - alias: "Repeat until desired volume reached"
+        repeat:
+          sequence:
+            - alias: "Increase Volume by 0.01"
+              service: media_player.volume_set
+              data:
+                volume_level: "{{ 0.01 * repeat.index }}"
+              target:
+                entity_id:
+                  - media_player.bedroom
+                  - media_player.bathroom
+            - delay:
+                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
+                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
+          until: "{{repeat.index == 30}}"
+
   - id: tv_off
     alias: tv_off
     trigger:
@@ -228,15 +332,20 @@ automation:
         entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "off"
-        for: "00:01:00"
+        for: "00:00:05"
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "unavailable"
-        for: "00:01:00"
+        for: "00:00:10"
     action:
       - service: switch.turn_off
         entity_id: switch.4k_hdmi
+      - service: scene.turn_on
+        target:
+          entity_id: scene.scene_reset_basement
+        data:
+          transition: 1.5
 
   - id: tv_on
     alias: tv_on
@@ -247,11 +356,11 @@ automation:
     condition:
       condition: and
       conditions:
-    ## Prevent false positives in the middle of the night
-      - condition: state
-        entity_id: binary_sensor.master_bed_occupancy
-        state: "off"
-        enabled: false
+        ## Prevent false positives in the middle of the night
+        - condition: state
+          entity_id: binary_sensor.master_bed_occupancy
+          state: "off"
+          # enabled: false
     action:
       - service: switch.turn_on
         entity_id: switch.4k_hdmi
@@ -264,18 +373,22 @@ automation:
         #TODO Temporary hack: ADB showing wrong values
         from: "on"
         to: "off"
-        for: "00:00:60"
+        for: "00:00:20"
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         # With power save mode off tv is off all the way.
         from: "on"
         to: "unavailable"
-        for: "00:00:60"
+        for: "00:00:20"
       - platform: event
         event_type: zha_event
         event_data:
           device_ieee: "00:15:8d:00:02:12:fc:ff"
           command: "attribute_updated"
+      - platform: state
+        entity_id:
+          - sensor.hall_button_action
+        to: "single"
     condition:
       condition: and
       conditions:
@@ -288,8 +401,11 @@ automation:
         - condition: state
           entity_id: binary_sensor.master_bed_occupancy
           state: "off"
-          enabled: false
+          # enabled: false
     action:
+      - service: cover.close_cover
+        entity_id:
+          - cover.garage_door
       - service: media_player.turn_off
         data:
           entity_id: media_player.lg_webos_smart_tv
@@ -300,7 +416,10 @@ automation:
             - media_player.bathroom
           volume_level: 0.02
       - service: scene.turn_on
-        entity_id: scene.bedroom_prep
+        target:
+          entity_id: scene.bedroom_prep
+        data:
+          transition: 60
       - service: script.turn_on
         entity_id: script.spotify_bedtime
 
@@ -309,26 +428,15 @@ automation:
     initial_state: true
     trigger:
       - platform: state
-        entity_id: media_player.living_room_firetv
-        from: "playing"
-        to: "paused"
-        for: "00:00:02"
-      - platform: state
         entity_id: media_player.basement
         from: "playing"
         to: "paused"
-        for: "00:00:02"
+        for: "00:00:05"
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
         to: "paused"
-        for: "00:00:02"
-      - platform: state
-        entity_id: media_player.living_room_firetv
-        #TODO Temporary hack: ADB showing wrong values
-        from: "paused"
-        to: "standby"
         for: "00:00:02"
     condition:
       condition: and
@@ -350,18 +458,6 @@ automation:
     alias: tv_resumed
     initial_state: true
     trigger:
-      - platform: state
-        entity_id: media_player.living_room_firetv
-        #TODO Temporary hack: ADB showing wrong values
-        from: "paused"
-        to: "playing"
-        for: "00:00:20"
-      - platform: state
-        entity_id: media_player.living_room_firetv
-        #TODO Temporary hack: ADB showing wrong values
-        from: "standby"
-        to: "paused"
-        for: "00:00:20"
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         to: "playing"
@@ -480,84 +576,35 @@ proximity:
 # Scenes
 ########################
 scene:
-  - name: tv_playing_media
-    entities:
-      light.living_room_all_except_tv:
-        state: "off"
-        transition: 20
-      light.kitchen_sink:
-        state: "off"
-      light.kitchen_table:
-        state: "off"
-        transition: 20
-      light.lava_lamp:
-        state: "off"
-      light.office_ceiling:
-        state: "off"
-        transition: 20
-      light.office_lamp:
-        state: "off"
-        transition: 20
-      light.hallway_light:
-        state: "off"
-        transition: 20
-      light.tv:
-        state: "on"
-        brightness_pct: 75
-        transition: 20
-      light.guest_bedroom:
-        state: "off"
-        transition: 20
-      switch.christmas_tree:
-        state: "off"
-      switch.deck:
-        state: "off"
-      switch.deck_led_string:
-        state: "off"
-      switch.front_door:
-        state: "off"
-      switch.stairs:
-        state: "off"
-
   - name: tv_paused
     entities:
       light.basement_all_down_lights:
         state: "on"
-        brightness_pct: 50
+        brightness: 128
       light.kitchen_sink:
         state: "on"
-        brightness_pct: 100
+        brightness: 255
+      light.den_floods:
+        state: "on"
+        brightness: 255
 
   - name: tv_resumed
     entities:
       light.basement_all_down_lights:
         state: "off"
-      light.kitchen_sink:
+      light.kitchen_all:
         state: "off"
-      light.kitchen_table:
+      light.hall_lights_all:
         state: "off"
-      light.lava_lamp:
+      light.den_all:
         state: "off"
-      light.office_ceiling:
+      light.office_all:
         state: "off"
-      light.office_lamp:
+      light.office_floor_lamp_1:
         state: "off"
-      light.hallway_light:
-        state: "off"
-      light.tv:
-        state: "on"
-        brightness_pct: 25
-      light.guest_bedroom:
-        state: "off"
-      switch.christmas_tree:
-        state: "off"
-      switch.deck:
+      light.office_floor_lamp_2:
         state: "off"
       light.deck_string:
-        state: "off"
-      switch.front_door:
-        state: "off"
-      switch.stairs:
         state: "off"
 
 ########################
@@ -610,6 +657,8 @@ script:
             ## Guster Accoustic: spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL
             ## OMAGAH: spotify:album:33dmmZ0Zg1yvFor6pCuYGm
             ## Lost and Gone Forever: Live: spotify:album:5DDNife8S8H4uSYRFkYUNw
+            ## With Utah Orchestra 7/29/22: spotify:playlist:2pkBoRddjDNLJgElp0rl45
+            ## Utepils 7/8/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
             #}
             {%- set plists = ["spotify:playlist:65fTj3YJl4jvFmXxru7BfO",
             "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
@@ -619,7 +668,9 @@ script:
             "spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
             "spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL",
             "spotify:album:33dmmZ0Zg1yvFor6pCuYGm",
-            "spotify:album:5DDNife8S8H4uSYRFkYUNw"
+            "spotify:album:5DDNife8S8H4uSYRFkYUNw",
+            "spotify:playlist:2pkBoRddjDNLJgElp0rl45",
+            "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
             ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
@@ -689,7 +740,7 @@ script:
             ##  Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
             ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
             ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
-            ## MGMT Kids Playlsit: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
+            ## MGMT Kids Playlist: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
             ## This is Walk the Moon: spotify:playlist:37i9dQZF1DZ06evO3VghcA
             #}
             {%- set plists = ["spotify:playlist:37i9dQZF1DWVK4jhlkcOzu",
@@ -785,7 +836,6 @@ script:
             ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
             ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
             ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
-            ## Conway Twitty: The #1 Hits Collection : spotify:album:1cE3wPf9E328RukGpUp38O
             ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
             ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
             ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
@@ -818,6 +868,7 @@ script:
             ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
             ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
             ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
+            ## Guster w/Utah Orchestra (7/29/22): spotify:playlist:4gmNQHup10wDckuwWL3IFZ
             #}
             {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
               "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
@@ -834,7 +885,6 @@ script:
               "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
               "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
               "spotify:album:4JEgSaokMH5mMRClx9wp3S",
-              "spotify:album:1cE3wPf9E328RukGpUp38O",
               "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
               "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
               "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
@@ -864,7 +914,8 @@ script:
               "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
               "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
               "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
-              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb"
+              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
+              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
               ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
@@ -872,13 +923,40 @@ script:
   spotify_bedtime:
     alias: "Spotify Bedtime"
     sequence:
-      - service: media_player.join
-        target:
-          entity_id:
-            - media_player.bedroom
-        data:
-          group_members:
-            - media_player.bathroom
+      # - service: media_player.join
+      #   target:
+      #     entity_id:
+      #       - media_player.bedroom
+      #   data:
+      #     group_members:
+      #       - media_player.bathroom
+      #       - media_player.office
+      #       - media_player.den_1
+      - if:
+          - alias: "Check if guests are here."
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
+        then:
+          - alias: "Join Sonos speakers into all group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+        else:
+          - alias: "Join Sonos speakers into all bedroom group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
       - service: media_player.shuffle_set
         data:
           entity_id: media_player.bedroom
@@ -887,6 +965,11 @@ script:
             {%- set shuffle = [true, false] -%}
             {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
             {{ shuffle[sindex] }}
+      - service: media_player.repeat_set
+        data:
+          repeat: all
+        target:
+          entity_id: media_player.bedroom
       - delay:
           seconds: 2
       - service: media_player.volume_set
@@ -894,7 +977,9 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-          volume_level: 0.35
+            - media_player.office
+            - media_player.den_1
+          volume_level: 0.20
       - delay:
           seconds: 2
       - service: media_player.play_media
@@ -921,7 +1006,6 @@ script:
             ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
             ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
             ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
-            ## Conway Twitty: The #1 Hits Collection : spotify:album:1cE3wPf9E328RukGpUp38O
             ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
             ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
             ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
@@ -958,6 +1042,9 @@ script:
             ## Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
             ## RetroWave Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
             ## Simpsons Wave: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
+            ## Guster w/Utah Symphone 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+            ## Sigur Ros @ State Theatre 5/31/2022: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
+            ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
             #}
             {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
               "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
@@ -974,7 +1061,6 @@ script:
               "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
               "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
               "spotify:album:4JEgSaokMH5mMRClx9wp3S",
-              "spotify:album:1cE3wPf9E328RukGpUp38O",
               "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
               "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
               "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
@@ -1008,50 +1094,100 @@ script:
               "spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
               "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
               "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
-              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8"
+              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
+              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
+              "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
+              "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
               ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
+      - wait_for_trigger:
+          - platform: state
+            entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+            to: "on"
+        timeout:
+          minutes: 10 # TODO this as a variable that is passed by the caller. Different timeouts for tv off and for laying in bed automation
+        continue_on_timeout: false
+      - delay:
+          minutes: 3
+      - service: script.turn_on
+        entity_id: script.spotify_bedtime_volume
+
+  spotify_bedtime_volume:
+    alias: "Spotify Bedtime Rampdown"
+    sequence:
+      - service: media_player.volume_set
+        data:
+          entity_id:
+            - media_player.bedroom
+            - media_player.office
+            - media_player.bathroom
+            - media_player.den_1
+          volume_level: 0.15
       - delay:
           minutes: 2
-          seconds: 30
       - service: media_player.volume_set
         data:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
-          volume_level: 0.2
-      - delay:
-          minutes: 1
-      - service: media_player.volume_set
-        data:
-          entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
+            - media_player.office
           volume_level: 0.1
       - delay:
-          minutes: 1
+          minutes: 2
       - service: media_player.volume_set
         data:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
+            - media_player.office
+          volume_level: 0.05
+      - delay:
+          minutes: 2
+      - service: media_player.volume_set
+        data:
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+            - media_player.office
           volume_level: 0.01
 
   spotify_wake_up:
     alias: "Spotify Wake Up"
     sequence:
-      - alias: "Check if guests are here."
-        condition: state
-        entity_id: input_boolean.guest_mode
-        state: "off"
-      - alias: "Join Sonos speakers into group"
-        service: media_player.join
-        data:
-          master: media_player.bedroom
-          entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
+      - if:
+          - alias: "Check if guests are here."
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
+        then:
+          - alias: "Join Sonos speakers into all group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+        else:
+          - alias: "Unjoin allSonos speakers into bedroom group"
+            service: media_player.unjoin
+            target:
+              entity_id:
+                - media_player.bedroom
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+          - alias: "Join Sonos speakers into bedroom group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
       - delay:
           seconds: 2
       - alias: "Pause currently playing media"
@@ -1069,6 +1205,11 @@ script:
             {%- set shuffle = [true, false] -%}
             {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
             {{ shuffle[sindex] }}
+      - service: media_player.repeat_set
+        data:
+          repeat: all
+        target:
+          entity_id: media_player.bedroom
       - delay:
           seconds: 2
       - alias: "Set volume low"
@@ -1077,6 +1218,7 @@ script:
           entity_id:
             - media_player.bedroom
             - media_player.bathroom
+            - media_player.office
           volume_level: 0.01
       - delay:
           seconds: 2
@@ -1103,7 +1245,6 @@ script:
             ## Matt and Kim : Lightning : spotify:album:2MbpbHn31Luzr8G3uDsSUH
             ## '90s Pop Rock Essentials : spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
             ## 90s Rock Anthems: spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F
-            ## Conway Twitty - 25 Number Ones spotify:album:4GeLWE7lG3Ur3SaYaolhkh
             ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
             ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
             ## This is The Lumineers : spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO
@@ -1134,6 +1275,10 @@ script:
             ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
             ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
             ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
+            ## Guster w/Utah Symphony 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+            ## Sigur Ros @ State Theatre: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
+            ## City Pop: spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk
+            ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
             #}
             {%- set plists = ["spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW", 
               "spotify:user:myplay.com:playlist:3hoI0s5TLdpPMcimSRmQpj",
@@ -1150,7 +1295,6 @@ script:
               "spotify:album:2MbpbHn31Luzr8G3uDsSUH",
               "spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
               "spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F",
-              "spotify:album:4GeLWE7lG3Ur3SaYaolhkh",
               "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
               "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
               "spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO",
@@ -1178,7 +1322,11 @@ script:
               "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
               "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
               "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
-              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb"
+              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
+              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
+              "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
+              "spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk",
+              "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
               ] -%}
               {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
               {{ plists[pindex] }}
@@ -1188,13 +1336,9 @@ script:
     sequence:
       - service: switch.turn_on
         entity_id: switch.4k_hdmi
-      # - service: media_player.turn_on
-      #   data:
-      #     entity_id: media_player.living_room_firetv
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.living_room_firetv','off') != True }}"
       - service: media_player.turn_on
         data:
           entity_id: media_player.lg_webos_smart_tv
@@ -1207,12 +1351,6 @@ script:
         data:
           entity_id: media_player.basement
           source: "YouTube TV"
-      # - service: media_player.select_source
-      #   data:
-      #     entity_id: media_player.living_room_firetv
-      #     source: "com.amazon.firetv.youtube.tv"
-      #TODO Change
-      #source: 'YoutubeTV'
 
   watch_hbo_now:
     alias: "Watch HBO"
