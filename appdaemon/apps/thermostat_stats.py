@@ -27,6 +27,10 @@ class ThermostatChanges(Base):
     outside_humidity = Column(Float)
     outside_cloud_cover = Column(Float)
 
+    sun_state = Column(String)
+    sun_elevation = Column(Float)
+    sun_azimuth = Column(Float)
+
     time = Column(DateTime)
 
     def __str__(self):
@@ -37,8 +41,11 @@ class ThermostatStats(hass.Hass):
     def initialize(self) -> None:
         self.house_average_temp_sensor = self.args['house_average_temp']
         self.house_average_humidity_sensor = self.args['house_average_humidity']
+        self.thermostat_database = self.args['thermostat_db']
 
         self.thermostat = self.args["thermostat"]
+
+        self.sun = self.args["sun"]
         
         self.outside_temp_feels_like = self.args['outside_temp_feels_like']
         self.outside_temp_sensor = self.args["outside_temp"]
@@ -46,7 +53,8 @@ class ThermostatStats(hass.Hass):
         self.outside_humidity_sensor = self.args["outside_humidity"]
         self.listen_state(self.state_changed, self.thermostat, attribute="all")
         self.listen_state(self.state_changed, self.house_average_temp_sensor, attribute="all")
-        engine = sqlalchemy.create_engine("sqlite:////config/thermostat.db", echo = True)
+        # engine = sqlalchemy.create_engine("sqlite:////config/thermostat.db", echo = True)
+        engine = sqlalchemy.create_engine(self.thermostat_database, echo = True)
         self.log(engine)
         Base.metadata.create_all(engine)
         from sqlalchemy.orm import sessionmaker
@@ -116,8 +124,12 @@ class ThermostatStats(hass.Hass):
         outside_cloud_cover = float(self.get_state(self.outside_cloud_cover_sensor))
         outside_humidity = float(self.get_state(self.outside_humidity_sensor))
 
+        sun_azimuth = float(self.get_state(self.sun, attribute="azimuth"))
+        sun_elevation = float(self.get_state(self.sun, attribute="elevation"))
+        sun_state = self.get_state(self.sun)
 
-        tempInfo = ThermostatChanges(changed_item=changed_item, old_temp = old_temp, new_temp = new_temp, old_target = old_target_temp, new_target = new_target_temp, new_state = new_hvac_action, old_state=old_hvac_action, time = datetime.datetime.now(), house_average_humidity=avg_house_humidity, house_average_temp=avg_house_temp, outside_temp=outside_temp, outside_humidity=outside_humidity, outside_cloud_cover=outside_cloud_cover)
+
+        tempInfo = ThermostatChanges(changed_item=changed_item, old_temp = old_temp, new_temp = new_temp, old_target = old_target_temp, new_target = new_target_temp, new_state = new_hvac_action, old_state=old_hvac_action, time = datetime.datetime.now(), house_average_humidity=avg_house_humidity, house_average_temp=avg_house_temp, outside_temp=outside_temp, outside_humidity=outside_humidity, outside_cloud_cover=outside_cloud_cover, sun_state=sun_state, sun_azimuth=sun_azimuth, sun_elevation=sun_elevation)
         self.log("Writing to thermostat.db: {}".format(tempInfo))
         self.session.add(tempInfo)
         self.session.commit()
