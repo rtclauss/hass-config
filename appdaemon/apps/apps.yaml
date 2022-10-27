@@ -1,18 +1,18 @@
 ---
-auto_fan_speed_master_bedroom:
+auto_fan_speed_owner_suite:
   module: auto_fan_speed
   class: AutoFanSpeed
-  temp_sensor: sensor.master_bedroom_temperature
-  fan: fan.master_bedroom_fan
+  temp_sensor: sensor.owner_suite_tph_temperature
+  fan: fan.owner_suite
   sun: sun.sun
   speeds:
-    low: 64
-    medium: 68
-    high: 71
+    low: 63
+    medium: 67
+    high: 73
     sun_offset: 0
   time:
     start: "21:00:00"
-    end: "10:30:00"
+    end: "12:30:00"
     turn_off_at_end_time: True
   debug: true
 
@@ -20,10 +20,10 @@ brighten_office_lights:
   module: brighten_lights
   class: BrightenLights
   lights: 
-    - light.office_lamp
+    - light.office_floor_lamp
     - light.office_ceiling
   sensors: 
-    - binary_sensor.office_motion
+    - binary_sensor.office_motion_occupancy
   camera_on_sensor: binary_sensor.ryans_macbook_pro_camera_in_use
   transition_time_sec: 600
   constrain_input_boolean: input_boolean.guest_mode,off
@@ -61,15 +61,16 @@ bayesian_device_tracker:
   bayesian_device_tracker_name: "bayesian_zeke_home"
   gps_accuracy_tolerance: 100
   minimum_update_distance: 3
-  minimum_update_window: 10
+  minimum_update_window: 5
 
 
 Occupancy Simulator:
   module: occusim
   class: OccuSim
   log_msg: "1"
-  # notify: "0"
+  notify: "0"
   enable: input_boolean.trip,on
+  #enable: input_boolean.house_unoccupied,on
   # test: "1"
   dump_times: "1"
   # reset_time: 02:00:00
@@ -85,7 +86,7 @@ Occupancy Simulator:
   step_evening_name: Evening
   step_evening_start: "16:00:01"
   step_evening_end: "21:30:00"
-
+  
   step_night_end: "23:59:00"
   step_night_name: Night
   step_night_start: "21:30:01"
@@ -94,27 +95,29 @@ Occupancy Simulator:
   random_morning_bathroom_maxduration: "00:45:00"
   random_morning_bathroom_minduration: "00:03:00"
   random_morning_bathroom_name: Morning Bathroom
-  random_morning_bathroom_number: "2"
-  random_morning_bathroom_off_1: switch.bathroom_light_fan_switch
-  random_morning_bathroom_on_1: switch.bathroom_light_fan_switch
+  random_morning_bathroom_number: "3"
+  random_morning_bathroom_off_1: light.owner_suite_bathroom_lights
+  random_morning_bathroom_on_1: light.owner_suite_bathroom_lights
   random_morning_bathroom_start: Morning
 
+  random_morning_office_days: mon,tue,wed,thu,fri
   random_morning_office_end: Afternoon
   random_morning_office_maxduration: "04:00:00"
   random_morning_office_minduration: "00:15:00"
   random_morning_office_name: Morning office
   random_morning_office_number: "1"
-  random_morning_office_off_1: light.office_ceiling
-  random_morning_office_on_1: light.office_ceiling
+  random_morning_office_off_1: light.office_lights
+  random_morning_office_on_1: light.office_lights
   random_morning_office_start: Morning
 
+  random_afternoon_office_days: mon,tue,wed,thu,fri
   random_afternoon_office_end: Evening
   random_afternoon_office_maxduration: "04:00:00"
   random_afternoon_office_minduration: "00:15:00"
   random_afternoon_office_name: Afternoon office
   random_afternoon_office_number: "1"
-  random_afternoon_office_office_off_1: light.office_ceiling
-  random_afternoon_office_office_on_1: light.office_ceiling
+  random_afternoon_office_office_off_1: light.office_lights
+  random_afternoon_office_office_on_1: light.office_lights
   random_afternoon_office_start: Afternoon
 
   random_afternoon_livingroom_end: Evening
@@ -122,8 +125,8 @@ Occupancy Simulator:
   random_afternoon_livingroom_minduration: "00:15:00"
   random_afternoon_livingroom_name: Afternoon Living Room
   random_afternoon_livingroom_number: "1"
-  random_afternoon_livingroom_livingroom_off_1: light.living_room_all
-  random_afternoon_livingroom_livingroom_on_1: light.living_room_all
+  random_afternoon_livingroom_livingroom_off_1: light.living_room_lamps
+  random_afternoon_livingroom_livingroom_on_1: light.living_room_lamps
   random_afternoon_livingroom_start: Afternoon
 
   random_evening_bathroom_end: Night
@@ -131,8 +134,8 @@ Occupancy Simulator:
   random_evening_bathroom_minduration: "00:01:30"
   random_evening_bathroom_name: Evening Bathroom
   random_evening_bathroom_number: "3"
-  random_evening_bathroom_off_1: switch.bathroom_light_fan_switch
-  random_evening_bathroom_on_1: switch.bathroom_light_fan_switch
+  random_evening_bathroom_off_1: light.owner_suite_bathroom_lights
+  random_evening_bathroom_on_1: light.owner_suite_bathroom_lights
   random_evening_bathroom_start: Evening
 
   random_evening_kitchen_end: Night
@@ -154,6 +157,52 @@ Occupancy Simulator:
   random_evening_guest_on_1: light.guest_ceiling
   random_evening_guest_start: Evening
 
+  random_evening_kitchen_1_end: Night
+  random_evening_kitchen_1_maxduration: "01:35:00"
+  random_evening_kitchen_1_minduration: "00:24:00"
+  random_evening_kitchen_1_name: Evening Kitchen
+  random_evening_kitchen_1_number: "4"
+  random_evening_kitchen_1_off_1: light.kitchen_sink
+  random_evening_kitchen_1_on_1: light.kitchen_sink
+  random_evening_kitchen_1_start: Evening
+
+  random_evening_bedroom_entry_end: Night
+  random_evening_bedroom_entry_maxduration: "03:0:12"
+  random_evening_bedroom_entry_minduration: "00:45:00"
+  random_evening_bedroom_entry_name: Evening Owner Bedroom
+  random_evening_bedroom_entry_number: "3"
+  random_evening_bedroom_entry_off_1: light.owner_suite_lamps
+  random_evening_bedroom_entry_on_1: light.owner_suite_lamps
+  random_evening_bedroom_entry_start: Evening
+
+  random_evening_tmp_hallway_end: Night
+  random_evening_tmp_hallway_maxduration: "03:0:12"
+  random_evening_tmp_hallway_minduration: "00:45:00"
+  random_evening_tmp_hallway_name: Evening Entry Tmp
+  random_evening_tmp_hallway_number: "3"
+  random_evening_tmp_hallway_off_1: light.hall_all_downlights
+  random_evening_tmp_hallway_on_1: light.hall_all_downlights
+  random_evening_tmp_hallway_start: Evening
+
+  random_evening_den_end: Night
+  random_evening_den_maxduration: "03:0:12"
+  random_evening_den_minduration: "00:45:00"
+  random_evening_den_name: Evening Den Tmp
+  random_evening_den_number: "2"
+  random_evening_den_off_1: light.den_floods
+  random_evening_den_on_1: light.den_floods
+  random_evening_den_off_3: light.den_leather_chair
+  random_evening_den_on_3: light.den_leather_chair
+  random_evening_den_start: Evening
+
+  random_evening_tmp_basement_end: Night
+  random_evening_tmp_basement_maxduration: "03:0:12"
+  random_evening_tmp_basement_minduration: "00:45:00"
+  random_evening_tmp_basement_name: Evening Basement Tmp
+  random_evening_tmp_basement_number: "2"
+  random_evening_tmp_basement_off_1: light.basement_all_down_lights
+  random_evening_tmp_basement_on_1: light.basement_all_down_lights
+  random_evening_tmp_basement_start: Evening
 
 Restart HA if network down:
   class: restart_ha
@@ -171,13 +220,15 @@ living_room_magic_cube:
   id: "00:15:8d:00:02:8a:f0:5f"
   light: light.living_room_all_except_tv
 
-automatic_helper:
-  module: automatic_helper
-  class: AutomaticHelper
-  tracker_input: device_tracker.bayesian_zeke_home
-  calendar: calendar.curling
-  notify_target: notify/all
-  driving_time: 120
+
+# Not used
+# automatic_helper:
+#   module: automatic_helper
+#   class: AutomaticHelper
+#   tracker_input: device_tracker.bayesian_zeke_home
+#   calendar: calendar.curling
+#   notify_target: notify/all
+#   driving_time: 120
 
 # May not be needed anymore thanks to Schedy
 # nest_travel_helper:
@@ -187,22 +238,24 @@ automatic_helper:
 #   outside_temp: sensor.dark_sky_temperature
 #   driving_sensor: binary_sensor.car_in_motion
 #   phone: device_tracker.bayesian_zeke_home
-#   thermostat: climate.hallway_glycol
+#   thermostat: climate.my_ecobee
 
-Fade-in music:
-  class: FadeInMusic
-  module: fade_in_music
-  sensors: 
-    - binary_sensor.master_bedroom_motion
-    - binary_sensor.hallway_motion
-  transition_time_sec: 120
-  constrain_input_boolean: input_boolean.guest_mode,off
-  constrain_input_boolean: input_boolean.bayesian_zeke_home
-  constrain_input_boolean: input_boolean.master_bed_occupancy,off
-  constrain_start_time: "06:50:00"
-  constrain_end_time: "11:30:00"
-  #should this be a constraint?
-  already_fading_in_spotify: input_boolean.morning_routine
+# 08/25/2022: Moved to automation in media_player
+# Fade-in music:
+#   class: FadeInMusic
+#   module: fade_in_music
+#   sensors: 
+#     - binary_sensor.bedroom_occupancy
+#     # - binary_sensor.hallway_motion
+#     - binary_sensor.owner_suite_bathroom_room_occupancy
+#   transition_time_sec: 120
+#   constrain_input_boolean: input_boolean.guest_mode,off
+#   constrain_input_boolean: input_boolean.bayesian_zeke_home
+#   constrain_input_boolean: input_boolean.master_bed_occupancy,off
+#   constrain_start_time: "06:50:00"
+#   constrain_end_time: "11:30:00"
+#   #should this be a constraint?
+#   already_fading_in_spotify: input_boolean.morning_routine
 
 #living_room_group:
 #  module: group
@@ -230,7 +283,26 @@ thermostat_stats:
   outside_temp: sensor.dark_sky_temperature
   outside_humidity: sensor.dark_sky_humidity
   outside_cloud_cover: sensor.dark_sky_cloud_coverage
-  thermostat: climate.glycol_thermostat
+  # Z-Wave Thermostat
+  #thermostat: climate.glycol_thermostat
+  thermostat_db: !secret thermostat_recorder_db_url
+  thermostat: climate.my_ecobee
   house_average_temp: sensor.average_house_temp
   house_average_humidity: sensor.average_house_humidity
+  sun: sun.sun
 
+groups:
+  module: group_all
+  class: GroupAll
+
+ench:
+  module: ench
+  class: EnCh
+  notify: notify.all
+  show_friendly_name: true
+  # exclude:
+  #   - sensor.out_of_order
+  #   - binary_sensor.always_unavailable
+  battery:
+    interval_min: 180
+    min_level: 10
