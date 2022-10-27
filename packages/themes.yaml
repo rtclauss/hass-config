@@ -112,14 +112,15 @@ automation:
         entity_id: sun.sun
         to: below_horizon
     action:
-      - service_template: frontend.set_theme
-        data_template:
+      - service: frontend.set_theme
+        data:
           name: >-
             {% if states.sun.sun.state == "above_horizon" %}
               oxfordblue
             {% else %}
               {{ ["ios-dark-mode", "midnight_blue", "noctis-solarized", "oxfordblue", "slate_red", "synthwave"] | random }}
             {% endif %}
+          mode: dark
 
 ########################
 # Binary Sensors
