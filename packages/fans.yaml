@@ -88,65 +88,163 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
-  - alias: turn_on_fan_if_living_room_occupied
-    id: turn_on_fan_if_living_room_occupied
+  - alias: den_fan_control
+    id: den_fan_control
     trigger:
       - platform: state
-        entity_id: binary_sensor.living_room_motion_sensor
+        entity_id: binary_sensor.den_occupancy
         to: "on"
-    action:
-      - service: fan.turn_on
-        data:
-          entity_id: fan.living_room_fan
-          #speed: smart
-
-  - alias: turn_off_fan_if_living_room_occupied
-    id: turn_off_fan_if_living_room_occupied
-    trigger:
+        id: den-occupied
       - platform: state
-        entity_id: binary_sensor.living_room_motion_sensor
+        entity_id: binary_sensor.den_occupancy
         to: "off"
         for: "00:30:00"
+        id: den-unoccupied
     action:
-      - service: fan.turn_off
-        data:
-          entity_id: fan.living_room_fan
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: den-occupied
+            sequence:
+              - service: fan.turn_on
+                data:
+                  entity_id: fan.den_ceiling
+                  #speed: smart
+          - conditions:
+              - condition: trigger
+                id: den-unoccupied
+            sequence:
+              - service: fan.turn_off
+                data:
+                  entity_id: fan.den_ceiling
 
-  - alias: turn_on_fan_if_bedroom_occupied
-    id: turn_on_fan_if_bedroom_occupied
+  # - alias: turn_off_fan_if_den_unoccupied
+  #   id: turn_off_fan_if_den_unoccupied
+  #   trigger:
+  #     - platform: state
+  #       entity_id: binary_sensor.den_occupancy
+  #       to: "off"
+  #       for: "00:30:00"
+  #   action:
+  #     - service: fan.turn_off
+  #       data:
+  #         entity_id: fan.den_ceiling
+
+  - alias: bedroom_fan_control
+    id: bedroom_fan_control
     trigger:
       - platform: state
-        entity_id: binary_sensor.owner_suite_occupancy
+        entity_id: binary_sensor.bedroom_occupancy
         to: "on"
-    condition:
-      - condition: state
-        entity_id: binary_sensor.master_bed_occupancy
-        state: "off"
-        enabled: false
-    action:
-      - service: fan.turn_on
-        data:
-          entity_id: fan.owner_suite
-          percentage: 67
-          #speed: "medium"  # TODO have this change depending on the season: low in winter, medium spring/fall, high in summer
-          #speed: smart
-
-  - alias: turn_off_fan_if_bedroom_occupied
-    id: turn_off_fan_if_bedroom_occupied
-    trigger:
+        id: bedroom-occupied
       - platform: state
-        entity_id: binary_sensor.owner_suite_occupancy
+        entity_id: binary_sensor.bedroom_occupancy
         to: "off"
         for: "00:10:00"
+        id: bedroom-unoccupied
     condition:
       - condition: state
         entity_id: binary_sensor.master_bed_occupancy
         state: "off"
+        # enabled: false
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: bedroom-occupied
+            sequence:
+              - service: fan.turn_on
+                data:
+                  entity_id: fan.owner_suite
+                  percentage: 67
+                  #speed: "medium"  # TODO have this change depending on the season: low in winter, medium spring/fall, high in summer
+                  #speed: smart
+          - conditions:
+              - condition: trigger
+                id: bedroom-unoccupied
+            sequence:
+              - service: fan.turn_on
+                data:
+                  entity_id: fan.owner_suite
+                  percentage: 67
+                  #speed: "medium"  # TODO have this change depending on the season: low in winter, medium spring/fall, high in summer
+                  #speed: smart
+
+  # - alias: turn_off_fan_if_bedroom_unoccupied
+  #   id: turn_off_fan_if_bedroom_unoccupied
+  #   trigger:
+  #     - platform: state
+  #       entity_id: binary_sensor.bedroom_occupancy
+  #       to: "off"
+  #       for: "00:10:00"
+  #   condition:
+  #     - condition: state
+  #       entity_id: binary_sensor.master_bed_occupancy
+  #       state: "off"
+  #       # enabled: false
+  #   action:
+  #     - service: fan.turn_off
+  #       data:
+  #         entity_id: fan.owner_suite
+
+  - alias: toggle_ofice_fan
+    id: toggle_ofice_fan
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.office_occupancy
+        to: "on"
+        id: office-occupied
+        enabled: false
+      - platform: state
+        entity_id: binary_sensor.office_motion_occupancy
+        to: "on"
+        id: office-occupied
+        enabled: false
+      - platform: state
+        entity_id: binary_sensor.office_occupancy
+        to: "off"
+        for: "00:30:00"
+        id: office-unoccupied
+        enabled: false
+      - platform: state
+        entity_id: binary_sensor.office_motion_occupancy
+        to: "off"
+        for: "00:30:00"
+        id: office-unoccupied
         enabled: false
     action:
-      - service: fan.turn_off
-        data:
-          entity_id: fan.owner_suite
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: office-occupied
+            sequence:
+              - service: fan.turn_on
+                data:
+                  entity_id: fan.office_ceiling_fan
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: office-unoccupied
+            sequence:
+              - service: fan.turn_off
+                data:
+                  entity_id: fan.office_ceiling_fan
+
+  # - alias: turn_off_fan_if_office_unoccupied
+  #   id: turn_off_fan_if_office_unoccupied
+  #   trigger:
+  #     - platform: state
+  #       entity_id: binary_sensor.office_occupancy
+  #       to: "off"
+  #       for: "00:30:00"
+  #     - platform: state
+  #       entity_id: binary_sensor.office_motion_occupancy
+  #       to: "off"
+  #       for: "00:30:00"
+  #   action:
+  #     - service: fan.turn_off
+  #       data:
+  #         entity_id: fan.office_ceiling_fan
 
 ########################
 # Binary Sensors
