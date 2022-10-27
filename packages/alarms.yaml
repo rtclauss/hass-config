@@ -146,57 +146,57 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
-  - id: meeting_wake_up
-    alias: meeting_wake_up
-    trigger:
-      - platform: time
-        at: input_datetime.next_work_meeting
-    condition:
-      - condition: state
-        entity_id: binary_sensor.workday_sensor
-        state: "on"
-      - condition: state
-        entity_id: device_tracker.bayesian_zeke_home
-        state: "home"
-      - condition: state
-        entity_id: input_boolean.special_meeting
-        state: "on"
-      # - condition: state
-      #   entity_id: input_boolean.morning_routine
-      #   ##TODO this could be on if guests are here...
-      #   state: "off"
-      # TODO Need to add condition that checks that I'm still in bed
-      - condition: state
-        entity_id: input_boolean.master_bed_occupancy
-        state: "on"
-        enabled: false
-    action:
-      - service: input_boolean.turn_off
-        entity_id: input_boolean.special_meeting
-      - service: script.turn_on
-        entity_id: script.wake_up_script
-      - service: media_player.media_pause
-        data:
-          entity_id: media_player.bedroom
-      - delay:
-          seconds: 2
-      - service: media_player.shuffle_set
-        data:
-          entity_id: media_player.bedroom
-          shuffle: false
-      - delay:
-          seconds: 2
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.2
-      - delay:
-          seconds: 2
-      - service: media_player.play_media
-        data:
-          entity_id: media_player.bedroom
-          media_content_type: music
-          media_content_id: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ" # Surfin' Bird
+  # - id: meeting_wake_up
+  #   alias: meeting_wake_up
+  #   trigger:
+  #     - platform: time
+  #       at: input_datetime.next_work_meeting
+  #   condition:
+  #     - condition: state
+  #       entity_id: binary_sensor.workday_sensor
+  #       state: "on"
+  #     - condition: state
+  #       entity_id: device_tracker.bayesian_zeke_home
+  #       state: "home"
+  #     - condition: state
+  #       entity_id: input_boolean.special_meeting
+  #       state: "on"
+  #     # - condition: state
+  #     #   entity_id: input_boolean.morning_routine
+  #     #   ##TODO this could be on if guests are here...
+  #     #   state: "off"
+  #     # TODO Need to add condition that checks that I'm still in bed
+  #     - condition: state
+  #       entity_id: input_boolean.master_bed_occupancy
+  #       state: "on"
+  #       # enabled: false
+  #   action:
+  #     - service: input_boolean.turn_off
+  #       entity_id: input_boolean.special_meeting
+  #     - service: script.turn_on
+  #       entity_id: script.wake_up_script
+  #     - service: media_player.media_pause
+  #       data:
+  #         entity_id: media_player.bedroom
+  #     - delay:
+  #         seconds: 2
+  #     - service: media_player.shuffle_set
+  #       data:
+  #         entity_id: media_player.bedroom
+  #         shuffle: false
+  #     - delay:
+  #         seconds: 2
+  #     - service: media_player.volume_set
+  #       data:
+  #         entity_id: media_player.bedroom
+  #         volume_level: 0.2
+  #     - delay:
+  #         seconds: 2
+  #     - service: media_player.play_media
+  #       data:
+  #         entity_id: media_player.bedroom
+  #         media_content_type: music
+  #         media_content_id: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ" # Surfin' Bird
 
   - id: alarm_snooze
     alias: alarm_snooze
@@ -223,7 +223,7 @@ automation:
       - condition: state
         entity_id: input_boolean.master_bed_occupancy
         state: "on"
-        enabled: false
+        # enabled: false
     action:
       - service: script.turn_on
         entity_id: script.snooze_script
@@ -243,6 +243,18 @@ automation:
         data:
           entity_id: media_player.bedroom
 
+  - id: reset_lighting_on_start
+    alias: reset_lighting_on_start
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - alias: "Turn on Adaptive Brightness for Bedroom"
+        service: switch.turn_on
+        entity_id:
+          - switch.adaptive_lighting_adapt_brightness_owner_suite
+          - switch.adaptive_lighting_adapt_color_owner_suite
+
   - id: toggle_owner_suite_light_automation
     alias: toggle_owner_suite_light_automation
     trigger:
@@ -258,70 +270,191 @@ automation:
         data:
           entity_id: automation.owner_suite_light_auto_on
 
-  - id: weekday_alarm_wake_up
-    alias: weekday_alarm_wake_up
+  - id: turn_off_owner_suite_lamps_at_noon
+    alias: turn_off_owner_suite_lamps_at_noon
+    trigger:
+      - platform: time
+        at: "11:00:00"
+    action:
+      - service: light.turn_off
+        data:
+          entity_id: light.owner_suite_lamps
+
+  # - id: weekday_alarm_wake_up
+  #   alias: weekday_alarm_wake_up
+  #   trigger:
+  #     - platform: time
+  #       at: input_datetime.weekday_alarm
+  #   condition:
+  #     condition: and
+  #     conditions:
+  #       - condition: state
+  #         entity_id: binary_sensor.workday_sensor
+  #         state: "on"
+  #       - condition: state
+  #         entity_id: device_tracker.bayesian_zeke_home
+  #         state: "home"
+  #       - condition: state
+  #         entity_id: binary_sensor.planned_vacation_calendar
+  #         state: "off"
+  #         ## TODO, maybe this should be another automation to toggle
+  #         ## weekday_alarm_on on and off depending on the calendar
+  #       - condition: state
+  #         entity_id: input_boolean.weekday_alarm_on
+  #         state: "on"
+  #       # - condition: state
+  #       #   entity_id: input_boolean.morning_routine
+  #       #   ##TODO this could be on if guests are here...
+  #       #   state: "off"
+  #       - condition: state
+  #         entity_id: input_boolean.master_bed_occupancy
+  #         state: "on"
+  #         # enabled: false
+  #   action:
+  #     - parallel:
+  #         - service: script.turn_on
+  #           entity_id: script.wake_up_script
+  #         - service: script.turn_on
+  #           entity_id: script.sonos_mpr_news_wake_up
+
+  # - id: weekend_alarm_wake_up
+  #   alias: weekend_alarm_wake_up
+  #   trigger:
+  #     - platform: time
+  #       at: input_datetime.weekend_alarm
+  #   condition:
+  #     - condition: state
+  #       entity_id: binary_sensor.workday_sensor
+  #       state: "off"
+  #     - condition: state
+  #       entity_id: device_tracker.bayesian_zeke_home
+  #       state: "home"
+  #     - condition: state
+  #       entity_id: input_boolean.weekend_alarm_on
+  #       state: "on"
+  #     # - condition: state
+  #     #   entity_id: input_boolean.morning_routine
+  #     #   state: "off"
+  #     # TODO Need to add condition that checks that I'm still in bed
+  #     - condition: state
+  #       entity_id: input_boolean.master_bed_occupancy
+  #       state: "on"
+  #       # enabled: false
+  #   action:
+  #     - parallel:
+  #         - service: script.turn_on
+  #           entity_id: script.wake_up_script
+  #         - service: script.turn_on
+  #           data:
+  #             entity_id: >-
+  #               {%- set script = ["script.sonos_the_current_wake_up",
+  #                 "script.sonos_ksdj_wake_up"
+  #                 ] -%}
+  #               {% set pindex =  (range(0, (script | length - 1 ) )|random) -%}
+  #               {{ script[pindex] }}
+
+  - id: alarm_wake_up
+    alias: alarm_wake_up
     trigger:
       - platform: time
         at: input_datetime.weekday_alarm
+        id: weekday-alarm
+      - platform: time
+        at: input_datetime.weekend_alarm
+        id: weekend-alarm
+      - platform: time
+        at: input_datetime.next_work_meeting
+        id: meeting-alarm
     condition:
       condition: and
       conditions:
-        - condition: state
-          entity_id: binary_sensor.workday_sensor
-          state: "on"
         - condition: state
           entity_id: device_tracker.bayesian_zeke_home
           state: "home"
         - condition: state
           entity_id: binary_sensor.planned_vacation_calendar
           state: "off"
-          ## TODO, maybe this should be another automation to toggle
-          ## weekday_alarm_on on and off depending on the calendar
-        - condition: state
-          entity_id: input_boolean.weekday_alarm_on
-          state: "on"
-        # - condition: state
-        #   entity_id: input_boolean.morning_routine
-        #   ##TODO this could be on if guests are here...
-        #   state: "off"
         - condition: state
           entity_id: input_boolean.master_bed_occupancy
           state: "on"
-          enabled: false
+          # enabled: false
     action:
-      - service: script.turn_on
-        entity_id: script.wake_up_script
-      - service: script.turn_on
-        entity_id: script.sonos_mpr_news_wake_up
-
-  - id: weekend_alarm_wake_up
-    alias: weekend_alarm_wake_up
-    trigger:
-      - platform: time
-        at: input_datetime.weekend_alarm
-    condition:
-      - condition: state
-        entity_id: binary_sensor.workday_sensor
-        state: "off"
-      - condition: state
-        entity_id: device_tracker.bayesian_zeke_home
-        state: "home"
-      - condition: state
-        entity_id: input_boolean.weekend_alarm_on
-        state: "on"
-      # - condition: state
-      #   entity_id: input_boolean.morning_routine
-      #   state: "off"
-      # TODO Need to add condition that checks that I'm still in bed
-      - condition: state
-        entity_id: input_boolean.master_bed_occupancy
-        state: "on"
-        enabled: false
-    action:
-      - service: script.turn_on
-        entity_id: script.wake_up_script
-      - service: script.turn_on
-        entity_id: script.sonos_the_current_wake_up
+      - choose:
+          - conditions:
+              # workday Morning Wake up
+              - condition: trigger
+                id: weekday-alarm
+              - condition: state
+                entity_id: binary_sensor.workday_sensor
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.weekday_alarm_on
+                state: "on"
+            sequence:
+              - parallel:
+                  - service: script.turn_on
+                    entity_id: script.wake_up_script
+                  - service: script.turn_on
+                    entity_id: script.sonos_mpr_news_wake_up
+          - conditions:
+              # Weekend alarm wakeup
+              - condition: trigger
+                id: weekend-alarm
+              - condition: state
+                entity_id: binary_sensor.workday_sensor
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.weekend_alarm_on
+                state: "on"
+            sequence:
+              - parallel:
+                  - service: script.turn_on
+                    entity_id: script.wake_up_script
+                  - service: script.turn_on
+                    data:
+                      entity_id: >-
+                        {%- set script = ["script.sonos_the_current_wake_up",
+                          "script.sonos_ksdj_wake_up"
+                          ] -%}
+                        {% set pindex =  (range(0, (script | length - 1 ) )|random) -%}
+                        {{ script[pindex] }}
+          - conditions:
+              # Meeting alarm wakeup
+              - condition: trigger
+                id: meeting-alarm
+              - condition: state
+                entity_id: binary_sensor.workday_sensor
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.special_meeting
+                state: "on"
+            sequence:
+              - service: input_boolean.turn_off
+                entity_id: input_boolean.special_meeting
+              - service: script.turn_on
+                entity_id: script.wake_up_script
+              - service: media_player.media_pause
+                data:
+                  entity_id: media_player.bedroom
+              - delay:
+                  seconds: 2
+              - service: media_player.shuffle_set
+                data:
+                  entity_id: media_player.bedroom
+                  shuffle: false
+              - delay:
+                  seconds: 2
+              - service: media_player.volume_set
+                data:
+                  entity_id: media_player.bedroom
+                  volume_level: 0.2
+              - delay:
+                  seconds: 2
+              - service: media_player.play_media
+                data:
+                  entity_id: media_player.bedroom
+                  media_content_type: music
+                  media_content_id: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ" # Surfin' Bird
 
   - id: turn_on_lava_lamp_workday
     alias: turn_on_lava_lamp_workday
@@ -340,10 +473,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         state: "home"
     action:
-      - service: switch.turn_on
+      - service: light.turn_on
         data:
-          entity_id: switch.lava_lamp
-
+          entity_id: light.office_lava_lamp
 ########################
 # Binary Sensors
 ########################
@@ -461,89 +593,194 @@ script:
   sonos_ksdj_wake_up:
     alias: Sonos KSDJ Wake Up
     sequence:
+      - if:
+          - alias: "Check if no guests are here."
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
+        then:
+          - alias: "Join Sonos speakers into all group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+        else:
+          - alias: "Unjoin all Sonos speakers into bedroom group"
+            service: media_player.unjoin
+            target:
+              entity_id:
+                - media_player.bedroom
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+          - alias: "Join Sonos speakers into bedroom group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
       - service: media_player.volume_set
         data:
-          entity_id: media_player.bedroom
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
           volume_level: 0.01
       - service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
           media_content_id: "x-rincon-mp3radio://ksdj.stream.creek.fm/stream"
           media_content_type: music
-      - delay:
-          minutes: 3
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.1
-      - delay:
-          minutes: 3
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.2
+      - repeat:
+          sequence:
+            - alias: "Increase Volume by 0.01"
+              service: media_player.volume_set
+              data:
+                volume_level: "{{ 0.01 * repeat.index }}"
+              target:
+                entity_id:
+                  - media_player.bedroom
+                  - media_player.bathroom
+            - delay:
+                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
+                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
+          until: "{{repeat.index == 30}}"
 
   sonos_mpr_news_wake_up:
     alias: Sonos MPR News Wake Up
     sequence:
+      - if:
+          - alias: "Check if guests are here."
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
+        then:
+          - alias: "Join Sonos speakers into all group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+        else:
+          - alias: "Unjoin allSonos speakers into bedroom group"
+            service: media_player.unjoin
+            target:
+              entity_id:
+                - media_player.bedroom
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+          - alias: "Join Sonos speakers into bedroom group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
       - service: media_player.volume_set
         data:
-          entity_id: media_player.bedroom
-          volume_level: 0.02
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+          volume_level: 0.01
       - delay:
           seconds: 5
       - service: media_player.select_source
         data:
-          entity_id: media_player.bedroom
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
           source: "MPR News"
-      - delay:
-          minutes: 5
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.05
-      - delay:
-          minutes: 5
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.1
-      - delay:
-          minutes: 5
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.15
-      - delay:
-          minutes: 5
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.2
+      - repeat:
+          sequence:
+            - alias: "Increase Volume by 0.01"
+              service: media_player.volume_set
+              data:
+                volume_level: "{{ 0.01 * repeat.index }}"
+              target:
+                entity_id:
+                  - media_player.bedroom
+                  - media_player.bathroom
+            - delay:
+                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
+                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
+          until: "{{repeat.index == 30}}"
 
   sonos_the_current_wake_up:
     alias: Sonos The Current Wake Up
     sequence:
+      - if:
+          - alias: "Check if guests are here."
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
+        then:
+          - alias: "Join Sonos speakers into all group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+        else:
+          - alias: "Unjoin allSonos speakers into bedroom group"
+            service: media_player.unjoin
+            target:
+              entity_id:
+                - media_player.bedroom
+                - media_player.bathroom
+                - media_player.den_1
+                - media_player.office
+          - alias: "Join Sonos speakers into bedroom group"
+            service: media_player.join
+            target:
+              entity_id:
+                - media_player.bedroom
+            data:
+              group_members:
+                - media_player.bathroom
       - service: media_player.volume_set
         data:
-          entity_id: media_player.bedroom
-          volume_level: 0.02
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+          volume_level: 0.01
       - service: media_player.select_source
         data:
-          entity_id: media_player.bedroom
-          media_content_id: "The Current"
-      - delay:
-          minutes: 3
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.1
-      - delay:
-          minutes: 3
-      - service: media_player.volume_set
-        data:
-          entity_id: media_player.bedroom
-          volume_level: 0.2
+          entity_id:
+            - media_player.bedroom
+            - media_player.bathroom
+          source: "The Current"
+      - repeat:
+          sequence:
+            - alias: "Increase Volume by 0.01"
+              service: media_player.volume_set
+              data:
+                volume_level: "{{ 0.01 * repeat.index }}"
+              target:
+                entity_id:
+                  - media_player.bedroom
+                  - media_player.bathroom
+            - delay:
+                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
+                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
+          until: "{{repeat.index == 30}}"
 
   # sonos_update_alarm:
   #   alias: Update Sonos Alarm
@@ -595,41 +832,65 @@ script:
   wake_up_script:
     alias: Common Wake Up Tasks
     sequence:
-      - service: cover.open_cover
-        entity_id: cover.owner_suite_blinds
-      - service: light.turn_on
-        data_template:
-          entity_id: light.owner_suite_lamps
-          kelvin: >-
-            {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
-          # brightness_pct: >-
-          #   {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
-          brightness_pct: 1
-          transition: 300
+      - alias: Have we already done this?
+        condition: state
+        entity_id:
+          - input_boolean.wakeup_alarm_firing
+        state: "off"
+      # Ok, this is the first time we're doing this. Carry on.
       - service: input_boolean.turn_on
         data:
           entity_id: input_boolean.wakeup_alarm_firing
+      - alias: "Turn off Adaptive Brightness in bedroom for now"
+        service: switch.turn_off
+        entity_id:
+          - switch.adaptive_lighting_adapt_brightness_owner_suite
+          - switch.adaptive_lighting_adapt_color_owner_suite
+      - alias: "Turn on light at dimmest setting. Adaptive Lighting will apply"
+        service: light.turn_on
+        data_template:
+          entity_id: light.owner_suite_lamps
+          kelvin: 370
+          brightness_pct: 1
+      - delay:
+          seconds: 5
       - service: light.turn_on
         data_template:
           entity_id: light.owner_suite_lamps
-          kelvin: >-
-            {{ state_attr('switch.adaptive_lighting_rest_of_house','color_temp_kelvin') | int }}
-          # brightness_pct: >-
-          #   {{ state_attr('switch.adaptive_lighting_rest_of_house', 'brightness_pct') | int }}
+          kelvin: 153
+          brightness_pct: 100
           transition: 300
       - delay:
-          minutes: 5
+          minutes: 1
       - service: switch.turn_off
         data:
           entity_id:
             - switch.adaptive_lighting_sleep_mode_basement
-            - switch.adaptive_lighting_sleep_mode_bedroom
-            - switch.adaptive_lighting_sleep_mode_hallways
-            - switch.adaptive_lighting_sleep_mode_rest_of_house
-      - service: switch.turn_off
-        data:
-          entity_id:
-            - switch.humidifier
+            - switch.adaptive_lighting_sleep_mode_den
+            - switch.adaptive_lighting_sleep_mode_hallway
+            - switch.adaptive_lighting_sleep_mode_kitchen
+            - switch.adaptive_lighting_sleep_mode_owner_suite
+            - switch.adaptive_lighting_sleep_mode_living_room
+      # - service: switch.turn_off
+      #   data:
+      #     entity_id:
+      #       - switch.humidifier
+      - alias: "Slowly Open Blinds"
+        repeat:
+          until: "{{ repeat.index == 25 }}" # look at increasing from 25 to 60 when I get curtains installed
+          sequence:
+            - service: cover.set_cover_position
+              data:
+                entity_id: cover.owner_suite_blinds
+                position: "{{ repeat.index }}"
+            - delay:
+                # seconds: "{{ (1/(tan(repeat.index/180, 5))) | round(0, 'ceil', 5)}}" # <-- drops down to 8 seconds
+                seconds: "{{ (75/(log(repeat.index + 1, 5))) | round(0, 'ceil', 5) }}" # <-- drops down to 23 seconds
+      - alias: "Turn on Adaptive Brightness for bedroom"
+        service: switch.turn_on
+        entity_id:
+          - switch.adaptive_lighting_adapt_brightness_owner_suite
+          - switch.adaptive_lighting_adapt_color_owner_suite
 
 ########################
 # Sensor
