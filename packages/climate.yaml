@@ -203,7 +203,7 @@ automation:
 #   action:
 #   - service: climate.turn_off
 #     data:
-#       entity_id: climate.hallway_glycol
+#       entity_id: climate.my_ecobee
 
 # Implemented in Schedy
 # - id: turn_on_nest_when_windows_closed
@@ -219,7 +219,7 @@ automation:
 #     condition: and
 #     conditions:
 #     - condition: state
-#       entity_id: climate.hallway_glycol
+#       entity_id: climate.my_ecobee
 #       state: 'off'
 #     - condition: state
 #       entity_id: binary_sensor.bayesian_zeke_home
@@ -227,7 +227,7 @@ automation:
 #   action:
 #   - service: climate.set_hvac_mode
 #     data:
-#       entity_id: climate.hallway_glycol
+#       entity_id: climate.my_ecobee
 #       operation_mode: eco
 
 ########################
@@ -248,9 +248,9 @@ binary_sensor:
       nest_home:
         value_template: >-
           {% if
-              is_state_attr('climate.hallway_glycol', 'preset_mode', 'away')
+              is_state_attr('climate.my_ecobee', 'preset_mode', 'away')
                 or
-              is_state_attr('climate.hallway_glycol', 'preset_mode', 'Away and Eco')
+              is_state_attr('climate.my_ecobee', 'preset_mode', 'Away and Eco')
           %} False
           {% else %}
              True
@@ -317,9 +317,9 @@ binary_sensor:
 ########################
 climate:
   - platform: generic_thermostat
-    name: Basement
-    heater: switch.basement_heater
-    target_sensor: sensor.basement_temperature
+    name: Tiki Room
+    heater: switch.tiki_room_heater
+    target_sensor: sensor.tiki_room_tph_temperature
     min_temp: 45
     max_temp: 90
     ac_mode: false
@@ -327,8 +327,8 @@ climate:
     cold_tolerance: 3
     hot_tolerance: 1
     min_cycle_duration:
-      minutes: 15
-    away_temp: 45
+      minutes: 30
+    away_temp: 50
     precision: 1
 
   # - platform: nest
@@ -359,14 +359,12 @@ group:
     name: Climate at a Glance
     entities:
       # Nest Thermostat
-      - climate.hallway_glycol
-      # Z-Wave Thermostat
-      - climate.glycol_thermostat
-      - sensor.glycol_thermostat_temperature
-      - sensor.hallway_thermostat_glycol_humidity
+      - climate.my_ecobee
+      - sensor.my_ecobee_temperature
+      - sensor.my_ecobee_humidity
       - sensor.hallway_thermostat_glycol_target
       - sensor.hallway_thermostat_glycol_operation_mode
-      - climate.basement
+      - climate.tiki_room
       - sensor.basement_temperature
 
 ########################
@@ -440,9 +438,6 @@ sensor:
     round: 5
     time_window: "00:30:00"
 
-  - platform: season
-    type: meteorological
-
   - platform: min_max
     name: average_house_temp
     type: mean
@@ -451,7 +446,6 @@ sensor:
       - sensor.guest_room_temperature
       - sensor.bathroom_temperature
       - sensor.kitchen_temperature
-      - sensor.office_temperature
       - sensor.thermostat_temperature
       # new house below
       - sensor.basement_closet_tph_temperature
@@ -459,7 +453,10 @@ sensor:
       - sensor.owner_suite_tph_temperature
       - sensor.office_tph_temperature
       - sensor.guest_room_tph_temperature
-      - sensor.glycol_temperature
+      - sensor.my_ecobee_temperature
+      - sensor.office_temperature
+      - sensor.bedroom_temperature
+      - sensor.den_temperature
       #- sensor.motion_sensor_temperature
       #- sensor.hallway_thermostat_glycol_temperature
 
@@ -472,13 +469,15 @@ sensor:
       - sensor.guest_room_humidity
       - sensor.bathroom_humidity
       - sensor.hallway_thermostat_glycol_humidity
-      - sensor.office_humidity
+
       # new house below
       - sensor.basement_closet_tph_humidity
       - sensor.upstairs_closet_tph_humidity
       - sensor.owner_suite_tph_humidity
       - sensor.office_tph_humidity
       - sensor.guest_room_tph_humidity
+      - sensor.my_ecobee_humidity
+      - sensor.owner_suite_bathroom_tph_humidity
 
   - platform: min_max
     name: average_house_pressure
@@ -499,20 +498,12 @@ sensor:
 
   - platform: template
     sensors:
-      # I don't think this is actually used for anything except to display the vacation off time in the UI...
-      # turn_off_time:
-      #   entity_id:
-      #     - input_number.random_hour
-      #     - input_number.random_minute
-      #   value_template: >-
-      #     {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
-
-      glycol_temperature:
+      ecobee_temperature:
         unit_of_measurement: "°F"
         availability_template: >-
-          {{ states("climate.hallway_glycol") != None }}
+          {{ states("climate.my_ecobee") != None }}
         value_template: >-
-          {{ state_attr('climate.hallway_glycol', 'current_temperature') }}
+          {{ state_attr('climate.my_ecobee', 'current_temperature') }}
 
       rate_of_house_temp_change_5m:
         unit_of_measurement: "°F/5 minute"
