@@ -400,6 +400,12 @@ script:
     alias: Tesla Set Precondition Schedule Time
     #mode: restart
     sequence:
+      # If this is an all-day event, do not precondition (it will precondition at midnight).
+      - alias: Check if this is not an all-day event
+        condition: state
+        entity_id: binary_sensor.upcoming_trip_charging
+        attribute: all_day
+        state: off
       - alias: Set Scheduled Departure Time
         service: tesla_custom.api
         data:
@@ -477,13 +483,15 @@ template:
             {% elif state_attr("calendar.curling", "start_time") != None and (now() >= ((state_attr("calendar.curling",     "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
               {{ state_attr("calendar.curling",     "start_time") }}
             {% endif %}
+          all_day: >-
+            {{ ( state_attr("calendar.curling", "all_day") ) or ( state_attr("calendar.work_trip", "all_day") ) or ( state_attr("calendar.ryan_claussen", "all_day") ) }}
         state: >-
           {% if 
           (
             (
               (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) 
                 and
-              ( state_attr("calendar.ryan_claussen", "location") != '')
+              ( state_attr("calendar.ryan_claussen", "location") != '' )
             )
               or 
             (state_attr("calendar.work_trip", "start_time") != None and
@@ -503,7 +511,7 @@ template:
           %}
             True
           {% else %}
-            Talse
+            False
           {% endif %}
   - sensor:
       - name: charge_complete
