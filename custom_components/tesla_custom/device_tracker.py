@@ -1,63 +1,68 @@
-"""Support for tracking Tesla cars."""
-from __future__ import annotations
+"""Support for Tesla device tracker."""
+import logging
+
+from teslajsonpy.car import TeslaCar
 
 from homeassistant.components.device_tracker import SOURCE_TYPE_GPS
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
+from homeassistant.core import HomeAssistant
 
-from . import DOMAIN as TESLA_DOMAIN
-from .tesla_device import TeslaDevice
+from . import TeslaDataUpdateCoordinator
+from .base import TeslaCarEntity
+from .const import DOMAIN
+
+_LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the Tesla binary_sensors by config_entry."""
-    entities = [
-        TeslaDeviceEntity(
-            device,
-            hass.data[TESLA_DOMAIN][config_entry.entry_id]["coordinator"],
-        )
-        for device in hass.data[TESLA_DOMAIN][config_entry.entry_id]["devices"][
-            "devices_tracker"
-        ]
-    ]
+async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
+    """Set up the Tesla device trackers by config_entry."""
+    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    cars = hass.data[DOMAIN][config_entry.entry_id]["cars"]
+    entities = []
+
+    for car in cars.values():
+        entities.append(TeslaCarLocation(hass, car, coordinator))
+
     async_add_entities(entities, True)
 
 
-class TeslaDeviceEntity(TeslaDevice, TrackerEntity):
-    """A class representing a Tesla device."""
+class TeslaCarLocation(TeslaCarEntity, TrackerEntity):
+    """Representation of a Tesla car location device tracker."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        car: TeslaCar,
+        coordinator: TeslaDataUpdateCoordinator,
+    ) -> None:
+        """Initialize car location entity."""
+        super().__init__(hass, car, coordinator)
+        self.type = "location tracker"
+
+    @property
+    def source_type(self):
+        """Return device tracker source type."""
+        return SOURCE_TYPE_GPS
+
+    @property
+    def longitude(self):
+        """Return longitude."""
+        return self._car.longitude
+
+    @property
+    def latitude(self):
+        """Return latitude."""
+        return self._car.latitude
+
+    @property
+    def extra_state_attributes(self):
+        """Return device state attributes."""
+        return {
+            "heading": self._car.heading,
+            "speed": self._car.speed,
+        }
 
     @property
     def force_update(self):
         """Disable forced updated since we are polling via the coordinator updates."""
         return False
-
-    @property
-    def latitude(self) -> float | None:
-        """Return latitude value of the device."""
-        location = self.tesla_device.get_location()
-        return self.tesla_device.get_location().get("latitude") if location else None
-
-    @property
-    def longitude(self) -> float | None:
-        """Return longitude value of the device."""
-        location = self.tesla_device.get_location()
-        return self.tesla_device.get_location().get("longitude") if location else None
-
-    @property
-    def source_type(self):
-        """Return the source type, eg gps or router, of the device."""
-        return SOURCE_TYPE_GPS
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes of the device."""
-        attr = super().extra_state_attributes.copy()
-        location = self.tesla_device.get_location()
-        if location:
-            attr.update(
-                {
-                    "trackr_id": self.unique_id,
-                    "heading": location["heading"],
-                    "speed": location["speed"],
-                }
-            )
-        return attr
