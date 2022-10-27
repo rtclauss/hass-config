@@ -44,12 +44,6 @@ homeassistant:
       device_class: vibration
       friendly_name: "Dishwasher Running"
 
-    binary_sensor.dryer:
-      <<: *customize
-      icon: mdi:tumble-dryer
-      device_class: vibration
-      friendly_name: "Dryer Vibration"
-
     binary_sensor.dryer_running:
       <<: *customize
       icon: mdi:tumble-dryer
@@ -139,11 +133,6 @@ homeassistant:
       icon: mdi:washer
       friendly_name: "Washer Vibration"
 
-    sensor.dryer:
-      <<: *customize
-      icon: mdi:tumble-dryer
-      friendly_name: "Dryer Vibration"
-
     sensor.washer_state:
       <<: *customize
       icon: mdi:washer
@@ -178,6 +167,7 @@ automation:
       - service: notify.all
         data:
           message: "Washing machine finished! \U0001F9FA"
+          
   - id: washer_reminder
     alias: washer_reminder
     trigger:
@@ -192,29 +182,6 @@ automation:
       - service: notify.all
         data:
           message: "Items still in washing machine.  Get them out before they turn musty! \U0001F9FA"
-
-  - id: empty_vacuum_on_thursday
-    alias: empty_vacuum_on_thursday
-    trigger:
-      - platform: zone
-        entity_id: person.ryan
-        zone: zone.home
-        event: enter
-      - platform: state
-        entity_id: person.ryan
-        to: "home"
-    condition:
-      condition: time
-      weekday:
-        - thu
-    action:
-      - delay: 00:10:00
-      - service: vacuum.send_command
-        entity_id: vacuum.valetudo_robot
-        data:
-          command: "go_to"
-          params:
-            spot_id: "Garbage"
 
 ########################
 # Binary Sensors
