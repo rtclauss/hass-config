@@ -145,10 +145,14 @@ automation:
         value_template: >-
           {{ now().month == 6 and now().day == 1}}
         id: summer_rate
+        variables:
+          tariff: "summer"
       - platform: template
         value_template: >-
           {{ now().month == 10 and now().day == 1}}
         id: nonsummer_rate
+        variables:
+          tariff: "non-summer"
       # - platform: time
       #   at: input_datetime.summer_energy
       #   id: summer
@@ -156,25 +160,261 @@ automation:
       #   at: input_datetime.non_summer_energy
       #   id: nonsummer
     action:
-      - service: utility_meter.next_tariff
+      - service: select.select_option
         target:
-          entity_id: utility_meter.hourly_electricity
-      - service: utility_meter.next_tariff
+          entity_id: select.hourly_electricity
+        data:
+          option: "{{ tariff }}"
+      - service: select.select_option
         target:
-          entity_id: utility_meter.daily_electricity
-      - service: utility_meter.next_tariff
+          entity_id: select.daily_electricity
+        data:
+          option: "{{ tariff }}"
+      - service: select.select_option
         target:
-          entity_id: utility_meter.monthly_electricity
+          entity_id: select.monthly_electricity
+        data:
+          option: "{{ tariff }}"
       - service: input_number.set_value
         target:
           entity_id: input_number.electrical_rate
         data:
           value: >-
             {% if trigger.id == "nonsummer_rate" %}
-              .12812
+              .1397
             {% else %}
-              .10726
+              .1258
             {% endif %}
+
+  - alias: Restart AppDaemon on HA Startup
+    description: When HA starts up, restart AppDaemon
+    id: restart_appdaemon_on_ha_startup
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - service: hassio.addon_restart
+        data:
+          addon: a0d7b954_appdaemon
+
+  - alias: Turn Sump Back On
+    id: turn_sump_back_on
+    trigger:
+      - platform: state
+        entity_id:
+          - switch.basement_sump_pump
+        to: "off"
+      - platform: state
+        entity_id:
+          - switch.basement_sump_pump
+        not_to: "on"
+      - platform: homeassistant
+        event: start
+    action:
+      - service: switch.turn_on
+        entity_id:
+          - switch.basement_sump_pump
+
+  - alias: Notify Sump Runs
+    id: notify_sump_runs
+    description: Notify number of times the sump pump runs
+    trigger:
+      - platform: time
+        at: "12:30:00"
+    condition:
+      - alias: "Number of times the sump ran"
+        condition: numeric_state
+        entity_id: sensor.sump_runs
+        above: 0
+    action:
+      - service: notify.all
+        data:
+          message: >-
+            {% set sump_runtime = states("sensor.sump_pump_time_on_past_24_hours")|float * 60 *60 %}
+
+            {%- macro phrase(name, divisor, mod=None) %}
+              {%- if name == 's' and (sump_runtime < 60) %}
+                {{-'{}{}'.format(sump_runtime, name)}}
+              {%- else %}
+                {%- set value = ((sump_runtime // divisor) % (mod if mod else divisor)) | int %}
+                {{- '{}{}'.format(value, name) if value | int > 0 else '' }}
+              {%- endif %}
+            {%- endmacro %}
+
+            {%- set values = [ 
+                      phrase('w', 60*60*24*7),
+                      phrase('d', 60*60*24, 7),
+                      phrase('h', 60*60, 24),
+                      phrase('m', 60),
+                      phrase('s', 1),
+                  ] | select('!=','')| list %}
+
+            The sump pump ran {{states("sensor.sump_runs")}}x for {{ values | join(',') }} in the last 24 hours.
+
+  # - alias: Notify Garbage Tomorrow
+  #   id: notify_garbage_day_tomorrow
+  #   description: Notify garbage day is tomorrow
+  #   trigger:
+  #     - platform: time
+  #       at: "14:30:00"
+  #   condition:
+  #     - alias: "Garbage day tomorrow"
+  #       condition: state
+  #       entity_id: sensor.waste_management
+  #       state: "1"
+  #   action:
+  #     - service: notify.all
+  #       data:
+  #         message: >-
+  #           Put out bins tonight. Garbage tomorrow.
+
+  # - alias: Notify Garbage Day Changed
+  #   id: notify_garbage_day_changed
+  #   description: Notify garbage day is NOT tomorrow
+  #   trigger:
+  #     - platform: time
+  #       at: "14:30:00"
+  #   condition:
+  #     - alias: Only on Tuesdays (Day before Garbage Day/Wednesday)
+  #       condition: time
+  #       weekday:
+  #         - tue
+  #     - alias: Garbage day tomorrow
+  #       condition: state
+  #       entity_id: sensor.waste_management
+  #       state: "2"
+  #   action:
+  #     - service: notify.all
+  #       data:
+  #         message: DON't put out bins tonight. Garbage day has changed!
+
+  - alias: Notify Garbage
+    id: notify_garbage_day
+    description: Notify garbage day
+    trigger:
+      - platform: time
+        at: "14:30:00"
+    action:
+      - choose:
+          - conditions:
+              - alias: Only on Tuesdays (Day before Garbage Day/Wednesday)
+                condition: time
+                weekday:
+                  - tue
+              - alias: Garbage day tomorrow
+                condition: state
+                entity_id: sensor.waste_management
+                state: "2"
+            sequence:
+              - service: notify.all
+                data:
+                  message: DO NOT put out bins tonight. Garbage day has changed!
+          - conditions:
+              - alias: "Garbage day tomorrow"
+                condition: state
+                entity_id: sensor.waste_management
+                state: "1"
+            sequence:
+              - service: notify.all
+                data:
+                  message: >-
+                    Put out bins tonight. Garbage tomorrow.
+
+  - alias: Restart CPAP
+    id: restart_cpap
+    description: Restart CPAP so Bluetooth keeps working
+    trigger:
+      - platform: time
+        at: "15:30:00"
+    condition:
+      - alias: "Restart Days"
+        condition: time
+        weekday:
+          - mon
+          - wed
+          - fri
+    action:
+      - service: switch.turn_off
+        entity_id: switch.owner_suite_cpap_plug
+      - delay: 0:20
+      - service: switch.turn_on
+        entity_id: switch.owner_suite_cpap_plug
+
+  - alias: Turn CPAP Back On
+    id: turn_CPAP_back_on
+    trigger:
+      - platform: state
+        entity_id:
+          - switch.owner_suite_cpap_plug
+        to: "off"
+        for: "00:02:00"
+      - platform: state
+        entity_id:
+          - switch.owner_suite_cpap_plug
+        not_to: "on"
+        for: "00:02:00"
+      - platform: homeassistant
+        event: start
+    action:
+      - service: switch.turn_on
+        entity_id:
+          - switch.owner_suite_cpap_plug
+
+  - alias: Garbage Holiday Update
+    id: garbage_holiday_update
+    trigger:
+      - platform: event
+        event_type: garbage_collection_loaded
+        event_data:
+          entity_id: sensor.waste_management
+    action:
+      - variables:
+          holiday_entity: calendar.mn_holidays
+      - alias: "Iterate through the dates"
+        repeat:
+          for_each: "{{ trigger.event.data.collection_dates }}"
+          sequence:
+            - alias: "Is there a public holiday on the week?"
+              condition: template
+              value_template: >-
+                {%- set collection_date = as_datetime(repeat.item) %}
+                {%- set ns = namespace(found=false) %}
+                {%- for i in range(collection_date.weekday()+1) %}
+                  {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                  {%- if d in state_attr(holiday_entity,'holidays') %}
+                    {%- set ns.found = true %}
+                  {%- endif %}
+                {%- endfor %}  
+                {{ ns.found }}
+            - alias: "Move the date"
+              service: garbage_collection.offset_date
+              data:
+                entity_id: "{{ trigger.event.data.entity_id }}"
+                date: "{{ repeat.item }}"
+                offset: >-
+                  {%- set collection_date = as_datetime(repeat.item) %}
+                  {%- set ns = namespace(found_free=false, offset=0) %}
+                  {# Count holidays in the week, increase offset for each found public holiday #}
+                  {%- for i in range(collection_date.weekday()+1) %}
+                    {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                    {%- if d in state_attr(holiday_entity,'holidays') %}
+                      {%- set ns.offset = ns.offset + 1 %}
+                    {%- endif %}
+                  {%- endfor %}
+                  {# Increase offset until we find a date that is not public holiday #}
+                  {%- for _ in range(7) if not ns.found_free %}
+                    {%- set d = ( collection_date + timedelta( days=ns.offset) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                    {%- if d in state_attr(holiday_entity,'holidays') %}
+                      {%- set ns.offset = ns.offset + 1 %}
+                    {% else %}
+                      {%- set ns.found_free = true %}
+                    {%- endif %}
+                  {% endfor %}
+                  {{ ns.offset }}
+      - alias: "Update the garbage_collection entity"
+        service: garbage_collection.update_state
+        data:
+          entity_id: "{{ trigger.event.data.entity_id }}"
 
 ########################
 # Binary Sensors
@@ -190,6 +430,11 @@ camera:
 # Climate
 ########################
 climate:
+
+########################
+# Counter
+########################
+counter:
 
 ########################
 # Covers
@@ -309,7 +554,22 @@ sensor:
       - filter: outlier
         window_size: 10
         radius: 50
-
+  - platform: history_stats
+    name: Sump Pump Time On past 24 hours
+    entity_id: binary_sensor.sump_pump_running
+    state: "on"
+    type: time
+    end: "{{ now() }}"
+    duration:
+      days: 1
+  - platform: history_stats
+    name: Sump Runs
+    entity_id: binary_sensor.sump_pump_running
+    state: "on"
+    type: count
+    end: "{{ now() }}"
+    duration:
+      days: 1
 ########################
 # Switch
 ########################
