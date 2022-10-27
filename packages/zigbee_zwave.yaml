@@ -407,39 +407,78 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-  # - alias: in_bed_on
-  #   id: in_bed_on
-  #   trigger:
-  #     # - platform: state
-  #     #   entity_id: binary_sensor.master_bed_occupancy
-  #     #   to: "on"
-  #   # condition:
-  #   #   condition: state
-  #   #   entity_id: binary_sensor.master_bed_occupancy
-  #   #   state: "on"
-  #   #   for:
-  #   #     seconds: 5
-  #   action:
-  #     - service: input_boolean.turn_on
-  #       data:
-  #         entity_id: input_boolean.master_bed_occupancy
+  - alias: in_bed_on
+    id: in_bed_on
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bed_occupancy
+        to: "on"
+    # condition:
+    #   condition: state
+    #   entity_id: binary_sensor.master_bed_occupancy
+    #   state: "on"
+    #   for:
+    #     seconds: 5
+    action:
+      - service: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.master_bed_occupancy
+      - service: cover.close_cover
+        entity_id:
+          - cover.owner_suite_blinds
+          - cover.garage_door
 
-  # - alias: in_bed_off
-  #   id: in_bed_off
-  #   trigger:
-  #     - platform: state
-  #       entity_id: binary_sensor.master_bed_occupancy
-  #       to: "off"
-  #   # condition:
-  #   #   condition: state
-  #   #   entity_id: binary_sensor.master_bed_occupancy
-  #   #   state: "off"
-  #   #   for:
-  #   #     seconds: 5
-  #   action:
-  #     - service: input_boolean.turn_off
-  #       data:
-  #         entity_id: input_boolean.master_bed_occupancy
+  - alias: in_bed_off
+    id: in_bed_off
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.master_bed_occupancy
+        to: "off"
+    # condition:
+    #   condition: state
+    #   entity_id: binary_sensor.master_bed_occupancy
+    #   state: "off"
+    #   for:
+    #     seconds: 5
+    action:
+      - service: input_boolean.turn_off
+        data:
+          entity_id: input_boolean.master_bed_occupancy
+
+  - id: mail_delivered
+    alias: mail_delivered
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.mailbox_contact
+        from: "off"
+        to: "on"
+    condition:
+      - condition: and
+        conditions:
+          - alias: "Mailbox empty"
+            condition: state
+            entity_id: input_boolean.mail_delivered
+            state: "off"
+          - alias: "On a trip"
+            condition: state
+            entity_id: input_boolean.trip
+            state: "off"
+    action:
+      - service: input_boolean.turn_on
+        entity_id: input_boolean.mail_delivered
+      - service: notify.all
+        data:
+          message: >-
+            Mail delivered.
+
+  - id: reset_mail_delivery
+    alias: reset_mail_delivery
+    trigger:
+      - platform: time
+        at: "01:00:00"
+    action:
+      - service: input_boolean.turn_off
+        entity_id: input_boolean.mail_delivered
 
   - id: turn_on_guest_bedroom_fan_light_zwave_switch
     alias: turn_on_guest_bedroom_fan_light_zwave_switch
@@ -528,12 +567,15 @@ binary_sensor:
   - platform: template
     sensors:
       master_bed_occupancy:
+        device_class: occupancy
         value_template: >-
-          {{
-            states('sensor.bed_load_cell_1') | int > 15
-              or
-            states('sensor.bed_load_cell_2') | int > 15
-          }}
+          {{ states('sensor.average_bed_load')| int(0) > 40 }}
+        # value_template: >-
+        #   {{
+        #     states('sensor.bed_load_cell_1') | int(0) > 15
+        #       or
+        #     states('sensor.bed_load_cell_2') | int(0) > 15
+        #   }}
 
 ########################
 # Device Trackers
@@ -545,6 +587,7 @@ device_tracker:
 ########################
 input_boolean:
   master_bed_occupancy:
+  mail_delivered:
 
 ########################
 # Input Numbers
@@ -557,15 +600,12 @@ input_number:
 group:
   egress_points:
     entities:
-      - binary_sensor.ene_window_contact
-      - binary_sensor.ese_window_contact
-      - binary_sensor.nne_window_contact
-      - binary_sensor.north_kitchen_sink_window_contact
-      - binary_sensor.north_master_bedroom_window_contact
-      - binary_sensor.office_north_window_contact
-      - binary_sensor.se_basement_window_contact
-      - binary_sensor.sse_window_contact
-      - binary_sensor.sw_basement_window_contact
+      # The doors
+      - binary_sensor.den_doors_contact
+      - binary_sensor.kitchen_deck_contact
+      - binary_sensor.main_foyer_front_door_contact
+      - binary_sensor.tiki_room_deck_contact
+      - binary_sensor.hall_garage_entry_contact
 
 ########################
 # Proximity
@@ -586,6 +626,13 @@ script:
 # Sensor
 ########################
 sensor:
+  - platform: template
+    sensors:
+      average_bed_load:
+        friendly_name: "Average Bed Load"
+        unit_of_measurement: "kg"
+        value_template: >-
+          {{ ((states('sensor.bed_load_cell_1') | int(0) )+(states('sensor.bed_load_cell_2') | int(0) ))/2.0 }}
 
 ########################
 # Zone
