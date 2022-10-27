@@ -125,14 +125,6 @@ homeassistant:
     ## Input Numbers
     ################################################
 
-    input_number.random_hour:
-      <<: *customize
-      friendly_name: "Random Light Off Hour"
-
-    input_number.random_minute:
-      <<: *customize
-      friendly_name: "Random Light Off Minute"
-
     input_number.random_vacation_light_group:
       <<: *customize
       friendly_name: "Random Group of Lights to Turn on"
@@ -249,22 +241,13 @@ automation:
           time: "{{ (range(22, 24)|random|int ~ ':' ~ range(0, 59)|random|int ~ ':' ~ range(0, 59)|random|int) }}"
       - service: input_number.set_value
         data_template:
-          entity_id: input_number.random_hour
-          value: "{{ (range(22, 24)|random|int) }}"
-      - service: input_number.set_value
-        data_template:
-          entity_id: input_number.random_minute
-          value: "{{ (range(00, 59)|random|int) }}"
-      - service: input_number.set_value
-        data_template:
           entity_id: input_number.random_vacation_light_group
           value: "{{ (range(1, 4)|random|int) }}"
       - service: notify.all
         data:
           message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_datetime.random_vacation_lights_off") }}
-          #message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_number.random_hour")|int }}:{{states("input_number.random_minute")|int}}
 
-    #- service: script.vacation_group_visibility
+  # TODO is this still needed with Vacation Mode?
   - id: return_home_from_parents
     alias: return_home_from_parents
     trigger:
@@ -284,24 +267,18 @@ automation:
       #   data_template:
       #     eta: '{{states.sensor.time_to_home.state}}'
       #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: climate.set_temperature
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          temperature: 70
-          # Z-Wave Thermostat
-          # entity: climate.glycol_thermostat
-          # Nest Thermostat
-          entity: climate.hallway_glycol
+          preset_mode: "away"
       - service: notify.all
         data_template:
           message: >-
-            Turning on HVAC while driving home from parents
+            Turning off Ecobee away while driving home from parents
 
   - id: send_nest_airport_home_eta
     alias: send_nest_airport_home_eta
     trigger:
-      # - platform: state
-      #   entity_id: device_tracker.bayesian_zeke_home
-      #   from: 'MSP Airport'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.msp
@@ -315,17 +292,14 @@ automation:
       #   data_template:
       #     eta: '{{states.sensor.time_to_home.state}}'
       #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: climate.set_temperature
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          temperature: 70
-          # Z-Wave Thermostat
-          # entity: climate.glycol_thermostat
-          # Nest Thermostat
-          entity: climate.hallway_glycol
+          preset_mode: "Home"
       - service: notify.all
         data_template:
           message: >-
-            Turning on HVAC while driving home from MSP
+            Turning off Ecobee Away mode while driving home from MSP
 
   - id: vacation_lights_on
     alias: vacation_lights_on
@@ -433,6 +407,7 @@ binary_sensor:
             false
           {% endif %}
       flying_home_today:
+        delay_off: 3:00:00
         value_template: >-
           {% if is_state("calendar.flight_to_msp_today", 'on') or is_state("calendar.flight_to_rst_today",'on')  %}
             true
@@ -459,31 +434,34 @@ group:
   vacation_group_card_1:
     entities:
       - light.living_room_all
-      - switch.front_door
+      - light.basement_all_down_lights
+      - light.den_floods
       - scene.vacation_group_1
 
   vacation_group_card_2:
     entities:
-      - light.living_room_all
+      - light.basement_all_down_lights
       - light.owner_suite_lamps
-      - switch.stairs
+      - light.office
+      - light.hall_all_downlights
+      - light.kitchen_sink
       - scene.vacation_group_2
 
   vacation_group_card_3:
     entities:
       - light.living_room_all
       - light.owner_suite_lamps
-      - light.kitchen_table
+      - light.kitchen_sink
+      - light.den_leather_chair
       - scene.vacation_group_3
 
   vacation_group_card_4:
     entities:
       - light.living_room_all
-      - light.kitchen_table
-      - light.office_lamp
-      - light.office_ceiling
-      - switch.stairs
-      - switch.front_door
+      - light.kitchen_sink
+      - light.office_lights
+      - light.hall_all_downlights
+      - light.guest_bedroom
       - scene.vacation_group_4
 
 ########################
@@ -508,16 +486,6 @@ input_datetime:
 # Input Numbers
 ########################
 input_number:
-  random_hour:
-    min: 22
-    max: 24
-    step: 1
-    mode: box
-  random_minute:
-    min: 00
-    max: 59
-    step: 1
-    mode: box
   random_vacation_light_group:
     min: 0
     max: 4
@@ -530,69 +498,48 @@ input_number:
 scene:
   - name: Vacation Group 1
     entities:
-      light.living_room_all:
+      light.living_room_lamps:
         state: "on"
-        brightness: 255
-        color_temp: 500
-      switch.front_door:
+      light.basement_all_down_lights:
+        state: "on"
+      light.den_floods:
         state: "on"
 
   - name: Vacation Group 2
     entities:
-      light.pendant_lamp:
+      light.basement_all_down_lights:
         state: "on"
-        brightness: 255
-        color_temp: 500
-      light.tv:
+      light.owner_suite_lamps:
         state: "on"
-        brightness: 255
-        color_temp: 500
-      light.bedroom_lamp:
+      light.office:
         state: "on"
-        brightness: 255
-      light.bedroom_lamp_2:
+      light.hall_all_downlights:
         state: "on"
-        brightness: 255
-      switch.stairs:
+      light.kitchen_sink:
         state: "on"
 
   - name: Vacation Group 3
     entities:
-      light.pendant_lamp:
+      light.living_room_lamps:
         state: "on"
-        brightness: 255
-        color_temp: 500
-      light.bedroom_lamp:
+      light.owner_suite_lamps:
         state: "on"
-        brightness: 255
-      light.kitchen_table:
+      light.kitchen_sink:
+        state: "on"
+      light.den_leather_chair:
         state: "on"
 
   - name: Vacation Group 4
     entities:
-      light.pendant_lamp:
+      light.living_room_lamps:
         state: "on"
-        brightness: 128
-        color_temp: 500
-      light.right_lamp:
+      light.kitchen_sink:
         state: "on"
-        brightness: 200
-        color_temp: 500
-      light.tv:
+      light.office_lights:
         state: "on"
-        brightness: 255
-        color_temp: 500
-      light.left_lamp:
+      light.hall_all_downlights:
         state: "on"
-        brightness: 200
-        color_temp: 500
-      light.kitchen_table:
-        state: "on"
-      light.office_lamp:
-        state: "on"
-      switch.stairs:
-        state: "on"
-      switch.front_door:
+      light.guest_bedroom:
         state: "on"
 
 ########################
