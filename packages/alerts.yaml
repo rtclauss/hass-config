@@ -86,85 +86,74 @@ alarm_control_panel:
 # Automations
 ########################
 automation:
-  - id: basement_dry
-    alias: basement_dry
-    # TODO replace this with a AppDaemon app that looks at the distance to the location
-    # and decides whether to turn on max range or not.
+  - id: water_leak_detected
+    alias: water_leak_detected
     trigger:
       - platform: state
         entity_id: binary_sensor.basement_unfinished_leak_water_leak
         from: "on"
         to: "off"
-    action:
-      - service: persistent_notification.create
-        data_template:
-          title: Dry floor
-          message: "Basement floor is dry."
-          notification_id: wet-floor-alert
-      - service: notify.all
-        data_template:
-          message: >-
-            Basement floor has dried.
-
-  - id: basement_wet
-    alias: basement_wet
-    # TODO replace this with a AppDaemon app that looks at the distance to the location
-    # and decides whether to turn on max range or not.
-    trigger:
+        id: dry
       - platform: state
         entity_id: binary_sensor.basement_unfinished_leak_water_leak
         from: "off"
         to: "on"
-    action:
-      - service: persistent_notification.create
-        data_template:
-          title: Wet floor
-          message: "Basement floor is wet"
-          notification_id: wet-floor-alert
-      - service: notify.all
-        data_template:
-          message: >-
-            Basement floor is wet. Prop up foam to dry.
+        id: wet
 
-  - id: kitchen_wet
-    alias: kitchen_wet
-    # TODO replace this with a AppDaemon app that looks at the distance to the location
-    # and decides whether to turn on max range or not.
-    trigger:
       - platform: state
         entity_id: binary_sensor.kitchen_sink_leak_water_leak
         from: "off"
         to: "on"
-    action:
-      - service: persistent_notification.create
-        data_template:
-          title: Wet floor
-          message: "Area under kitchen sink is wet"
-          notification_id: wet-floor-alert
-      - service: notify.all
-        data_template:
-          message: >-
-            Area under kitchen sink is wet. Prop up foam to dry.
+        id: wet
+      - platform: state
+        entity_id: binary_sensor.kitchen_sink_leak_water_leak
+        from: "on"
+        to: "off"
+        id: dry
 
-  - id: laundry_wet
-    alias: laundry_wet
-    # TODO replace this with a AppDaemon app that looks at the distance to the location
-    # and decides whether to turn on max range or not.
-    trigger:
       - platform: state
         entity_id: binary_sensor.laundry_room_leak_water_leak
         from: "off"
         to: "on"
+        id: wet
+      - platform: state
+        entity_id: binary_sensor.laundry_room_leak_water_leak
+        from: "off"
+        to: "on"
+        id: dry
+
     action:
-      - service: persistent_notification.create
-        data_template:
-          title: Wet floor
-          message: "Area under kitchen sink is wet"
-          notification_id: wet-floor-alert
-      - service: notify.all
-        data_template:
-          message: >-
-            Area under kitchen sink is wet. Prop up foam to dry.
+      - choose:
+        - conditions:
+          - condition: trigger
+            id: wet
+          sequence:
+            # Select Wet
+            - service: persistent_notification.create
+              data_template:
+                title: Wet floor
+                message: >-
+                  {{  trigger.from_state.attributes.friendly_name }} is wet.
+                notification_id: wet-floor-alert
+            - service: notify.all
+              data_template:
+                message: >-
+                  {{  trigger.from_state.attributes.friendly_name }} is wet.
+        - conditions:
+          - condition: trigger
+            id: dry
+          sequence:
+            # Select dry
+            - service: persistent_notification.create
+              data_template:
+                title: Dry floor
+                message: >-
+                  {{  trigger.from_state.attributes.friendly_name }} is dry.
+                notification_id: wet-floor-alert
+            - service: notify.all
+              data_template:
+                message: >-
+                  {{  trigger.from_state.attributes.friendly_name }} has dried.
 
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip
