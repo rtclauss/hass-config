@@ -23,6 +23,7 @@ class AutomaticHelper(hass.Hass):
         self.log(old)
         self.log(new)
 
+
     def event_received(self, event_name, data, kwargs):
         event_type = data["type"]
         event_location = data["location"]
