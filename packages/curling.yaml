@@ -116,68 +116,55 @@ homeassistant:
 # Automations
 ########################
 automation:
-  # Implemented in schedy
-  # - id: leave_home_for_curling
-  #   alias: leave_home_for_curling
-  #   trigger:
-  #   - entity_id: binary_sensor.bayesian_zeke_home
-  #     from: 'on'
-  #     platform: state
-  #     to: 'off'
-  #   condition:
-  #     condition: and
-  #     conditions:
-  #       - condition: time
-  #         after: '17:00:00'
-  #         before: '19:45:00'
-  #         weekday:
-  #         - tue
-  #         - wed
-  #       - condition: state
-  #         entity_id: input_boolean.guest_mode
-  #         state: 'off'
-  #   action:
-  #   - data:
-  #       preset_mode: 'Away and Eco'
-  #       entity_id: all
-  #     service: climate.set_preset_mode
-  #   - data:
-  #       message: Good Curling!
-  #     service: notify.all
+  - id: leave_home_for_curling
+    alias: leave_home_for_curling
+    trigger:
+      - platform: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "17:00:00"
+          before: "19:45:00"
+          weekday:
+            - tue
+            - wed
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+    action:
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
+        data:
+          preset_mode: "away"
+      - data:
+          message: Good Curling!
+        service: notify.all
 
   - id: return_home_from_occ
     alias: return_home_from_occ
     trigger:
-      # - platform: state
-      #   entity_id: device_tracker.bayesian_zeke_home
-      #   from: 'Owatonna Curling Club'
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.occ
         event: leave
     condition:
-      condition: time
-      weekday:
-        - sun
-        - mon
-        - tue
+      condition: state
+      entity_id:
+        - group.curling_sensors
+      state: "on"
     action:
-      # - service: nest.set_eta
-      #   data_template:
-      #     eta: '{{states.sensor.time_to_home.state}}'
-      #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: climate.set_temperature
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          temperature: 70
-          hvac_mode: heat
-          # Z-Wave Thermostat
-          # entity: climate.glycol_thermostat
-          # Nest Thermostat
-          entity: climate.hallway_glycol
+          preset_mode: "Home"
       - service: notify.all
         data_template:
           message: >-
-            Turning on heat while driving home from OCC
+            Turning off Ecobee Away mode while driving home from OCC
 
   - id: return_home_from_spcc
     alias: return_home_from_spcc
@@ -186,34 +173,20 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.spcc
         event: leave
-      # - platform: state
-      #   entity_id: device_tracker.bayesian_zeke_home
-      #   from: "St Paul Curling Club"
-      #   to: "Twin Cities"
     condition:
-      condition: time
-      weekday:
-        - sun
-        - wed
-        - thu
-        # TODO add condition for curling season
+      condition: state
+      entity_id:
+        - binary_sensor.curling_season
+      state: "on"
     action:
-      # - service: nest.set_eta
-      #   data_template:
-      #     eta: '{{states.sensor.time_to_home.state}}'
-      #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: climate.set_temperature
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          temperature: 70
-          hvac_mode: heat
-          # Z-Wave Thermostat
-          # entity: climate.glycol_thermostat
-          # Nest Thermostat
-          entity: climate.hallway_glycol
+          preset_mode: "Home"
       - service: notify.all
         data_template:
           message: >-
-            Turning on heat while driving home from SPCC
+            Turning off Ecobee away mode while driving home from SPCC
 
   - id: toggle_curling_automations_on_season_change
     alias: toggle_curling_automations_on_season_change
