@@ -50,4 +50,5 @@ class FadeInMusic(hass.Hass):
     #self.call_service("media_player/volume_set", entity_id="media_player.spotify", volume_level=new_volume)
     self.call_service("media_player/volume_set", entity_id="media_player.bedroom", volume_level=new_volume)
     self.call_service("media_player/volume_set", entity_id="media_player.bathroom", volume_level=new_volume)
-    self.call_service("media_player/volume_set", entity_id="media_player.office", volume_level=new_volume) 
+    if(new_volume < 0.09):
+      self.call_service("media_player/volume_set", entity_id="media_player.office", volume_level=new_volume) 
