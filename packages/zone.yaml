@@ -492,8 +492,12 @@ automation:
           entity_id: cover.garage_door
         - service: scene.turn_on
           entity_id: scene.leave_home
-        - service: light.turn_off
-          entity_id: "all"
+        - service: script.lights_off_except
+          data:
+            exclude_lights:
+              - light.outside_front_lights
+        # - service: light.turn_off
+        #   entity_id: "all"
         - service: fan.turn_off
           entity_id: "all"
         # - alias: "Notify action"
@@ -836,6 +840,8 @@ scene:
 
   - name: leave_home
     entities:
+      media_player.lg_webos_smart_tv:
+        state: "off"
       switch.bathroom_light_fan_switch:
         state: "off"
       switch.christmas_tree:
@@ -847,8 +853,6 @@ scene:
       switch.front_door:
         state: "off"
       switch.stairs:
-        state: "off"
-      media_player.lg_webos_smart_tv:
         state: "off"
       # switch.humidifier:
       #   state: "off"

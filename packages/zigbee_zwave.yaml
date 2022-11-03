@@ -413,6 +413,11 @@ automation:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
         to: "on"
+        id: bed-occupied
+      - platform: state
+        entity_id: binary_sensor.master_bed_occupancy
+        to: "off"
+        id: bed-unoccupied
     # condition:
     #   condition: state
     #   entity_id: binary_sensor.master_bed_occupancy
@@ -420,30 +425,25 @@ automation:
     #   for:
     #     seconds: 5
     action:
-      - service: input_boolean.turn_on
-        data:
-          entity_id: input_boolean.master_bed_occupancy
-      - service: cover.close_cover
-        entity_id:
-          - cover.owner_suite_blinds
-          - cover.garage_door
-
-  - alias: in_bed_off
-    id: in_bed_off
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.master_bed_occupancy
-        to: "off"
-    # condition:
-    #   condition: state
-    #   entity_id: binary_sensor.master_bed_occupancy
-    #   state: "off"
-    #   for:
-    #     seconds: 5
-    action:
-      - service: input_boolean.turn_off
-        data:
-          entity_id: input_boolean.master_bed_occupancy
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: bed-occupied
+            sequence:
+              - service: input_boolean.turn_on
+                data:
+                  entity_id: input_boolean.master_bed_occupancy
+              - service: cover.close_cover
+                entity_id:
+                  - cover.owner_suite_blinds
+                  - cover.garage_door
+          - conditions:
+              - condition: trigger
+                id: bed-unoccupied
+            sequence:
+              - service: input_boolean.turn_off
+                data:
+                  entity_id: input_boolean.master_bed_occupancy
 
   - id: mail_delivered
     alias: mail_delivered
