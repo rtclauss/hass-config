@@ -39,14 +39,9 @@ homeassistant:
       friendly_name: "Turn on front door light automatically"
       icon: mdi:home
 
-    automation.hallway_light_on_at_night:
+    automation.hallway_light_toggle_at_night:
       <<: *customize
-      friendly_name: "Turn on hallway light automatically at night"
-      icon: mdi:ceiling-light
-
-    automation.hallway_light_off_at_night:
-      <<: *customize
-      friendly_name: "Turn off hallway light automatically at night"
+      friendly_name: "Toggle hallway light automatically at night"
       icon: mdi:ceiling-light
 
     automation.owner_suite_light_auto_on:
@@ -556,6 +551,37 @@ automation:
                 data:
                   entity_id: input_boolean.front_door_auto_on
 
+  - id: front_lights_toggle
+    alias: basement_lights_auto_on
+    trigger:
+      - platform: sun
+        event: sunrise
+        offset: "00:00:00"
+        id: sunrise
+      - platform: sun
+        event: sunset
+        offset: "-00:45:00"
+        id: sunset
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: sunrise
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.outside_front_lights
+                  transition: 600
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: sunset
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.outside_front_lights
+                  transition: 600
+
   # - id: front_door_light_auto_on
   #   alias: front_door_light_auto_on
   #   trigger:
@@ -652,7 +678,7 @@ automation:
                 data:
                   entity_id:
                     - light.hall_all_downlights
-                  transition: 0.5
+                  transition: 2.5
                   # Should do this automatically
                   # kelvin: "{{ states('sensor.circadian_temperature') | int }}"
                   # brightness_pct: 2
@@ -665,24 +691,6 @@ automation:
                   entity_id:
                     - light.hall_all_downlights
                   transition: 5
-
-  # - id: hallway_light_off_at_night
-  #   alias: hallway_light_off_at_night
-  #   trigger:
-  #     - platform: state
-  #       entity_id:
-  #         - binary_sensor.hall_main_foyer_motion_occupancy
-  #         - binary_sensor.hall_upstairs_motion_occupancy
-  #       to: "off"
-  #   condition:
-  #     condition: sun
-  #     before: sunrise
-  #     after: sunset
-  #     after_offset: "-0:30:00"
-  #   action:
-  #     - service: light.turn_off
-  #       data:
-  #         entity_id: light.hall_all_downlights
 
   - id: in_bed_turn_off_other_lights
     alias: in_bed_turn_off_other_lights
@@ -1140,6 +1148,7 @@ automation:
         target:
           entity_id: input_boolean.wakeup_alarm_firing
 
+  # TODO figure out a way to avoid the: motion downstairs but upstairs has turned off so I'm going to turn off everything.
   - alias: toggle_hallway_day
     id: toggle_hallway_day
     trigger:
@@ -1155,7 +1164,7 @@ automation:
           - binary_sensor.hall_upstairs_motion_occupancy
         to: "off"
         for:
-          seconds: 90
+          seconds: 120
         id: hallway-no-motion
     condition:
       - condition: sun
@@ -1171,7 +1180,7 @@ automation:
                 data:
                   entity_id:
                     - light.hall_lights_all
-                  transition: 0.5
+                  transition: 1.5
           - conditions:
               - condition: trigger
                 id: hallway-no-motion
@@ -1250,8 +1259,12 @@ automation:
       - parallel:
           # - service: scene.turn_on
           #   entity_id: scene.good_night
-          - service: light.turn_off
-            entity_id: "all"
+          - service: script.lights_off_except
+            data:
+              exclude_lights:
+                - light.outside_front_lights
+          # - service: light.turn_off
+          #   entity_id: "all"
           - service: fan.turn_off
             entity_id:
               - fan.den_ceiling
@@ -1737,6 +1750,22 @@ script:
           entity_id: scene.scene_reset_basement
         data:
           transition: 15
+
+  lights_off_except:
+    icon: mdi:home-lightbulb
+    fields:
+      exclude_lights:
+        description: "Excluded lights as list"
+    sequence:
+      - service: logbook.log
+        data_template:
+          entity_id: script.turn_off_lights
+          name: Exclude log
+          message: "Turning of all lights except: {{ exclude_lights }}"
+      - service: light.turn_off
+        data_template:
+          entity_id: >
+            {%- for device in states.light|rejectattr('entity_id','in', exclude_lights )|rejectattr('state','in','off') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
 
 ########################
 # Sensor
