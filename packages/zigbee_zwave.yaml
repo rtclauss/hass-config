@@ -407,8 +407,8 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-  - alias: in_bed_on
-    id: in_bed_on
+  - alias: in_bed_toggles
+    id: in_bed_toggles
     trigger:
       - platform: state
         entity_id: binary_sensor.master_bed_occupancy
@@ -479,6 +479,156 @@ automation:
     action:
       - service: input_boolean.turn_off
         entity_id: input_boolean.mail_delivered
+
+  - alias: guest_room_switch_actions
+    id: guest_room_switch_actions
+    trigger:
+      - platform: state
+        entity_id: sensor.guest_room_fan_switch_action
+        to: "up_single"
+        id: up-single
+      - platform: state
+        entity_id: sensor.guest_room_fan_switch_action
+        to: "down_single"
+        id: down-single
+      - platform: state
+        entity_id: sensor.guest_room_fan_switch_action
+        to: "up_double"
+        id: up-double
+      - platform: state
+        entity_id: sensor.guest_room_fan_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-single
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.guest_room_ceiling
+          - conditions:
+              - condition: trigger
+                id: down-single
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.guest_room_ceiling
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - service: fan.increase_speed
+                data:
+                  entity_id: fan.guest_room
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - service: fan.decrease_speed
+                data:
+                  entity_id: fan.guest_room
+
+  - alias: office_switch_actions
+    id: office_switch_actions
+    trigger:
+      - platform: state
+        entity_id: sensor.office_fan_switch_action
+        to: "up_single"
+        id: up-single
+      - platform: state
+        entity_id: sensor.office_fan_switch_action
+        to: "down_single"
+        id: down-single
+      - platform: state
+        entity_id: sensor.office_fan_switch_action
+        to: "up_double"
+        id: up-double
+      - platform: state
+        entity_id: sensor.office_fan_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-single
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.office_ceiling
+          - conditions:
+              - condition: trigger
+                id: down-single
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.office_ceiling
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - service: fan.increase_speed
+                data:
+                  entity_id: fan.office_ceiling_fan
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - service: fan.decrease_speed
+                data:
+                  entity_id: fan.office_ceiling_fan
+
+  - alias: office_switch_actions
+    id: office_switch_actions
+    trigger:
+      - platform: state
+        entity_id: sensor.owner_suite_fan_switch_action
+        to: "up_single"
+        id: up-single
+      - platform: state
+        entity_id: sensor.owner_suite_fan_switch_action
+        to: "down_single"
+        id: down-single
+      - platform: state
+        entity_id: sensor.owner_suite_fan_switch_action
+        to: "up_double"
+        id: up-double
+      - platform: state
+        entity_id: sensor.owner_suite_fan_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-single
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.owner_suite_ceiling
+          - conditions:
+              - condition: trigger
+                id: down-single
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.owner_suite_ceiling
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - service: fan.increase_speed
+                data:
+                  entity_id: fan.owner_suite
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - service: fan.decrease_speed
+                data:
+                  entity_id: fan.owner_suite
 
   - id: turn_on_guest_bedroom_fan_light_zwave_switch
     alias: turn_on_guest_bedroom_fan_light_zwave_switch
