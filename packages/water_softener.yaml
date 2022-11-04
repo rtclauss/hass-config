@@ -127,6 +127,76 @@ automation:
           message: >-
             Water softener salt is low at {{states('sensor.water_softener_salt_level')}} mm.
 
+  - id: buy_more_salt
+    alias: buy_more_salt
+    trigger:
+      - platform: state
+        entity_id: sensor.zeke_place
+        attribute: place_name
+        to: "Home Depot"
+      - platform: state
+        entity_id: sensor.zeke_place
+        attribute: place_name
+        to: "Menards"
+      - platform: state
+        entity_id: sensor.zeke_place
+        attribute: place_name
+        to: "Lowes"
+    condition:
+      - alias: "Salt Bag Inventory Low"
+        condition: numeric_state
+        entity_id: input_number.bags_of_salt_at_home
+        below: 2
+    action:
+      - service: notify.mobile_app_wethop
+        data:
+          title: "Buy Softener Salt"
+          message: >-
+            "You only have {{states("input_number.bags_of_salt_at_home")| int}} salt bags at home. How many did you buy?"
+          data:
+            actions:
+              - action: "BOUGHT_SALT"
+                title: "Purchased salt"
+                activationMode: background
+                authenticationRequired: false
+                destructive: false
+                behavior: textInput
+                textInputButtonTitle: Number of bags
+                textInputPlaceholder: 3
+                icon: sfsymbols:bag.badge.questionmark
+
+  - id: salt_purchased
+    alias: salt_purchased
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: BOUGHT_SALT
+    condition: []
+    action:
+      - alias: Increase Number of salt bags in inventory
+        service: input_number.set_value
+        entity_id: input_number.bags_of_salt_at_home
+        data:
+          value: >-
+            {{(states("input_number.bags_of_salt_at_home")|int) + (trigger.event.data.reply_text | int)}}
+
+  - id: temp_notify_place_name
+    alias: temp_notify_place_name
+    trigger:
+      - platform: state
+        entity_id: sensor.zeke_place
+        to:
+    condition:
+    action:
+      - alias: "Notify"
+        service: notify.all
+        data_template:
+          message: >-
+            At place_name: {{states("sensor.zeke_place", "place_name")}}
+            At place: {{states("sensor.zeke_place", "place")}}
+            At named place: {{states("sensor.zeke_place", "name")}}
+
 ########################
 # Binary Sensors
 ########################
@@ -136,6 +206,11 @@ binary_sensor:
 # Cameras
 ########################
 camera:
+
+########################
+# Counter
+########################
+counter:
 
 ########################
 # Device Trackers
@@ -166,6 +241,13 @@ input_boolean:
 # Input Numbers
 ########################
 input_number:
+  bags_of_salt_at_home:
+    name: Bags of Softener Salt at Home
+    icon: mdi:shaker-outline
+    min: 0
+    max: 20
+    mode: box
+    step: 1
 
 ########################
 # Input Select
