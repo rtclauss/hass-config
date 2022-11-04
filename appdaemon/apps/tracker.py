@@ -245,14 +245,18 @@ class BayesianDeviceTracker(hass.Hass):
                     
                     # Let's try the intermediate calculation and change the mean depending on the speed.
                     speed = attributes['speed']
-                    if speed > 10:
-                        update_ratio=0.1
+                    if speed is not None:
+                        # Going from old-> new as below means we use larger fractions: 0.9, 0.95, etc
+                        # if we go from new -> old, use smaller fractions: 0.1, 0.05, etc
+                        if speed > 10:
+                            update_ratio=0.9
+                        else:
+                            update_ratio=0.95
                     else:
-                        update_ratio=0.05
-                    mean_of_points = new_lat_log_p.intermediateTo(
-                        old_lat_log_p, update_ratio)
-                    #self.log("Mean of location between old and new is {}".format(
-                    #    mean_of_points))
+                        update_ratio=0.95
+                    mean_of_points = old_lat_log_p.intermediateTo(new_lat_log_p, update_ratio)
+                    self.log("Mean of location between old and new is {}".format(mean_of_points))
+
 
                     # self.log("{}".format(attributes))
                     # For some reason setting attributes of gps coordinates overrides the gps data in device_tracker/see
