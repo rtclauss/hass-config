@@ -125,9 +125,6 @@ automation:
           value_template: >-
             {{ not is_state('sensor.season', 'winter') }}
     action:
-      - service: notify.all
-        data:
-          message: "It will rain soon. Are your car windows closed? HA will try to close them for you."
       - service: tesla_custom.api
         data:
           command: WINDOW_CONTROL
@@ -139,6 +136,12 @@ automation:
               {{ state_attr('device_tracker.nigori_location_tracker', "latitude") }}
             long: >-
               {{state_attr('device_tracker.nigori_location_tracker', "longitude") }}
+      - alias: "Check if we already notified within the last hour"
+        condition: template
+        value_template: "{{ now() - state_attr('automation.alert_car_windows_open_pressure_dropping','last_triggered') > timedelta(hours=1) }}"
+      - service: notify.all
+        data:
+          message: "It will rain soon. Are your car windows closed? HA will try to close them for you."
 
   - id: alert_house_windows_open_pressure_dropping
     alias: alert_house_windows_open_pressure_dropping
@@ -162,6 +165,7 @@ automation:
         - condition: template
           value_template: >-
             {{ not is_state('sensor.season', 'winter') }}
+        - "{{ now() - state_attr('automation.alert_house_windows_open_pressure_dropping','last_triggered') > timedelta(hours=4) }}"
     action:
       - service: persistent_notification.create
         data_template:
