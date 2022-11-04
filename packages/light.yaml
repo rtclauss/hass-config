@@ -552,7 +552,7 @@ automation:
                   entity_id: input_boolean.front_door_auto_on
 
   - id: front_lights_toggle
-    alias: basement_lights_auto_on
+    alias: front_lights_toggle
     trigger:
       - platform: sun
         event: sunrise
@@ -1758,11 +1758,12 @@ script:
         description: "Excluded lights as list"
     sequence:
       - service: logbook.log
-        data_template:
+        data:
           entity_id: script.turn_off_lights
           name: Exclude log
           message: "Turning of all lights except: {{ exclude_lights }}"
-      - service: light.turn_off
+          domain: light
+      - service: light.script
         data_template:
           entity_id: >
             {%- for device in states.light|rejectattr('entity_id','in', exclude_lights )|rejectattr('state','in','off') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
