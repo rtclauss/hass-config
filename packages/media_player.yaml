@@ -305,7 +305,7 @@ automation:
       - alias: "Set Volume 0.09 in office"
         service: media_player.volume_set
         data:
-          volume_level: 0.09
+          volume_level: 0.2
         target:
           entity_id:
             - media_player.office
@@ -613,178 +613,328 @@ scene:
 script:
   bedroom_playlist_0:
     alias: "Play LoFi"
+    variables:
+      playlist: >-
+        {# 
+        ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
+        ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
+        ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
+        ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
+        ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+        ##  Deep Sleep: spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY
+        #}
+        {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
+          "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
+          "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
+          "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
+          "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
+          "spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY"
+            ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
-      - service: media_player.play_media
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play Lowfi
+          message: "Playing Lowfi playlist: {{ playlist }}"
+      - alias: "Play random wakeup music"
+        service: media_player.play_media
         data:
           entity_id: media_player.bedroom
-          media_content_type: music
+          media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {# 
-            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
-            ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
-            ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
-            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
-            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
-            ##  Deep Sleep: spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY
-            #}
-            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
-              "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
-              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
-              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
-              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
-              "spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY"
-               ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   bedroom_playlist_1:
     alias: "Play Guster"
+    variables:
+      playlist: >-
+        {# 
+        ## Showbox Seattle 2/16/19: spotify:playlist:65fTj3YJl4jvFmXxru7BfO
+        ## MN Zoo 7/22/19: spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl
+        ## First Ave 2/9/19: spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq
+        ## w/Oregon Orchestra: spotify:playlist:6al92r67tCsIrZygrIr6d6
+        ## Almost every song, ever: spotify:playlist:4z7avZTuCTdFD2uGfG6GvL
+        ## Guster Radio: spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
+        ## Guster Accoustic: spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL
+        ## OMAGAH: spotify:album:33dmmZ0Zg1yvFor6pCuYGm
+        ## Lost and Gone Forever: Live: spotify:album:5DDNife8S8H4uSYRFkYUNw
+        ## With Utah Orchestra 7/29/22: spotify:playlist:2pkBoRddjDNLJgElp0rl45
+        ## Utepils 7/8/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+        #}
+        {%- set plists = ["spotify:playlist:65fTj3YJl4jvFmXxru7BfO",
+        "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
+        "spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq",
+        "spotify:playlist:6al92r67tCsIrZygrIr6d6",
+        "spotify:playlist:4z7avZTuCTdFD2uGfG6GvL",
+        "spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
+        "spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL",
+        "spotify:album:33dmmZ0Zg1yvFor6pCuYGm",
+        "spotify:album:5DDNife8S8H4uSYRFkYUNw",
+        "spotify:playlist:2pkBoRddjDNLJgElp0rl45",
+        "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
+        ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
-      - service: media_player.play_media
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play Guster
+          message: "Playing Guster playlist: {{ playlist }}"
+      - alias: "Play random wakeup music"
+        service: media_player.play_media
         data:
           entity_id: media_player.bedroom
-          media_content_type: music
+          media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {# 
-            ## Showbox Seattle 2/16/19: spotify:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## MN Zoo 7/22/19: spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl
-            ## First Ave 2/9/19: spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## w/Oregon Orchestra: spotify:playlist:6al92r67tCsIrZygrIr6d6
-            ## Almost every song, ever: spotify:playlist:4z7avZTuCTdFD2uGfG6GvL
-            ## Guster Radio: spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Guster Accoustic: spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL
-            ## OMAGAH: spotify:album:33dmmZ0Zg1yvFor6pCuYGm
-            ## Lost and Gone Forever: Live: spotify:album:5DDNife8S8H4uSYRFkYUNw
-            ## With Utah Orchestra 7/29/22: spotify:playlist:2pkBoRddjDNLJgElp0rl45
-            ## Utepils 7/8/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
-            #}
-            {%- set plists = ["spotify:playlist:65fTj3YJl4jvFmXxru7BfO",
-            "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-            "spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-            "spotify:playlist:6al92r67tCsIrZygrIr6d6",
-            "spotify:playlist:4z7avZTuCTdFD2uGfG6GvL",
-            "spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
-            "spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL",
-            "spotify:album:33dmmZ0Zg1yvFor6pCuYGm",
-            "spotify:album:5DDNife8S8H4uSYRFkYUNw",
-            "spotify:playlist:2pkBoRddjDNLJgElp0rl45",
-            "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
-            ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   bedroom_playlist_2:
     alias: "Play Joe Pera"
+    variables:
+      playlist: >-
+        {# 
+        ## Sweater Weather Instrumentals: spotify:playlist:37i9dQZF1DWUvZBXGjNCU4
+        ## Joe Pera Talks You to Sleep: spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ
+        ## Joe Pera Listens to all of Joe Pera: spotify:playlist:6z6y5fEt0QIUuC64w1VOw4
+        ## Holland Patent Public Radio: spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr
+        #}
+        {%- set plists = ["spotify:playlist:37i9dQZF1DWUvZBXGjNCU4",
+          "spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ",
+          "spotify:playlist:6z6y5fEt0QIUuC64w1VOw4",
+          "spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr"
+          ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
-      - service: media_player.play_media
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play Joe Pera
+          message: "Playing Joe Pera playlist: {{ playlist }}"
+      - alias: "Play random wakeup music"
+        service: media_player.play_media
         data:
           entity_id: media_player.bedroom
-          media_content_type: music
+          media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {# 
-            ## Sweater Weather Instrumentals: spotify:playlist:37i9dQZF1DWUvZBXGjNCU4
-            ## Joe Pera Talks You to Sleep: spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ
-            ## Joe Pera Listens to all of Joe Pera: spotify:playlist:6z6y5fEt0QIUuC64w1VOw4
-            ## Holland Patent Public Radio: spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr
-            #}
-            {%- set plists = ["spotify:playlist:37i9dQZF1DWUvZBXGjNCU4",
-              "spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ",
-              "spotify:playlist:6z6y5fEt0QIUuC64w1VOw4",
-              "spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   bedroom_playlist_3:
     alias: "Play VaporWave and Retro"
+    variables:
+      playlist: >-
+        {# 
+        ##  Vaporwave Aesthetic Mix: spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5
+        ##  RetroWave/Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
+        ##  REtrowave/Synthwave: spotify:playlist:3ebHKSjHujS4Tyt2KKP97R
+        ##  Synthwave from Space: spotify:playlist:4sgUux9hmykyWYmVoe4W6p
+        #}
+        {%- set plists = ["spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5",
+          "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
+          "spotify:playlist:3ebHKSjHujS4Tyt2KKP97R",
+          "spotify:playlist:4sgUux9hmykyWYmVoe4W6p"
+          ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
-      - service: media_player.play_media
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play Retrowave
+          message: "Playing RetroWave playlist: {{ playlist }}"
+      - alias: "Play VaporWave music"
+        service: media_player.play_media
         data:
           entity_id: media_player.bedroom
-          media_content_type: music
+          media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {# 
-            ##  Vaporwave Aesthetic Mix: spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5
-            ##  RetroWave/Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
-            ##  REtrowave/Synthwave: spotify:playlist:3ebHKSjHujS4Tyt2KKP97R
-            ##  Synthwave from Space: spotify:playlist:4sgUux9hmykyWYmVoe4W6p
-            #}
-            {%- set plists = ["spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5",
-              "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
-              "spotify:playlist:3ebHKSjHujS4Tyt2KKP97R",
-              "spotify:playlist:4sgUux9hmykyWYmVoe4W6p"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   bedroom_playlist_4:
     alias: "Play Alt/Independent"
+    variables:
+      playlist: >-
+        {# 
+        ##  This is The Wombats: spotify:playlist:37i9dQZF1DWVK4jhlkcOzu
+        ##  This is Passion Pit: spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+        ##  Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
+        ##  This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+        ##  This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
+        ##  This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
+        ##  Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
+        ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
+        ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
+        ## MGMT Kids Playlist: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
+        ## This is Walk the Moon: spotify:playlist:37i9dQZF1DZ06evO3VghcA
+        #}
+        {%- set plists = ["spotify:playlist:37i9dQZF1DWVK4jhlkcOzu",
+          "spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+          "spotify:album:78bpIziExqiI9qztvNFlQu",
+          "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+          "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
+          "spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw",
+          "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
+          "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
+          "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
+          "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
+          "spotify:playlist:37i9dQZF1DZ06evO3VghcA"
+          ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
-      - service: media_player.play_media
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play Alt/Independent
+          message: "Playing Alt/Independent playlist: {{ playlist }}"
+      - alias: "Play Lowfi music"
+        service: media_player.play_media
         data:
           entity_id: media_player.bedroom
-          media_content_type: music
+          media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {# 
-            ##  This is The Wombats: spotify:playlist:37i9dQZF1DWVK4jhlkcOzu
-            ##  This is Passion Pit: spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ##  Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
-            ##  This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
-            ##  This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
-            ##  This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ##  Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
-            ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
-            ## MGMT Kids Playlist: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
-            ## This is Walk the Moon: spotify:playlist:37i9dQZF1DZ06evO3VghcA
-            #}
-            {%- set plists = ["spotify:playlist:37i9dQZF1DWVK4jhlkcOzu",
-              "spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:album:78bpIziExqiI9qztvNFlQu",
-              "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
-              "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
-              "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
-              "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
-              "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
-              "spotify:playlist:37i9dQZF1DZ06evO3VghcA"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   bedroom_playlist_5:
     alias: "Play LoFi"
+    variables:
+      playlist: >-
+        {# 
+        ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
+        ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
+        ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
+        ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
+        ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+        #}
+        {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
+          "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
+          "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
+          "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
+          "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"
+          ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
-      - service: media_player.play_media
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play Lowfi
+          message: "Playing Lowfi playlist: {{ playlist }}"
+      - alias: "Play Lowfi music"
+        service: media_player.play_media
         data:
           entity_id: media_player.bedroom
-          media_content_type: music
+          media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {# 
-            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
-            ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
-            ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
-            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
-            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
-            #}
-            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
-              "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
-              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
-              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
-              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   spotify_arrival:
     alias: "Spotify Arrive Home"
+    variables:
+      playlist: >-
+        {# 
+        ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
+        ## All Out 90s : spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
+        ## 2000s Smash Hits : spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw
+        ## 2019 Sealand Invitiational : spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5
+        ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
+        ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
+        ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+        ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
+        ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+        ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
+        ## This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
+        ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
+        ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
+        ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
+        ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
+        ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
+        ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
+        ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
+        ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
+        ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
+        ## This is The Lumineers : spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO
+        ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
+        ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
+        ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
+        ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
+        ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+        ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
+        ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
+        ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
+        ## Decembersits Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
+        ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
+        ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
+        ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
+        ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
+        ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
+        ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
+        ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
+        ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
+        ## This is Tool : spotify:playlist:37i9dQZF1DX0GDEVNHvE3h
+        ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DXaMu9xyX1HzK
+        ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
+        ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
+        ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
+        ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
+        ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
+        ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
+        ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
+        ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
+        ## Guster w/Utah Orchestra (7/29/22): spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+        #}
+        {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
+          "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
+          "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
+          "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
+          "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+          "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
+          "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+          "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
+          "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+          "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
+          "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
+          "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
+          "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
+          "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
+          "spotify:album:4JEgSaokMH5mMRClx9wp3S",
+          "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
+          "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
+          "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
+          "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
+          "spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO",
+          "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
+          "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
+          "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
+          "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
+          "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+          "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+          "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
+          "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
+          "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
+          "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
+          "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
+          "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
+          "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
+          "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
+          "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
+          "spotify:playlist:37i9dQZF1DX0GDEVNHvE3h",
+          "spotify:playlist:37i9dQZF1DXaMu9xyX1HzK",
+          "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
+          "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
+          "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
+          "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
+          "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
+          "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
+          "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
+          "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
+          "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
+          ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
       - delay:
           seconds: 90
@@ -813,115 +963,135 @@ script:
         data:
           entity_id: media_player.spotify
           volume_level: 0.30
-      - service: media_player.play_media
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play Lowfi
+          message: "Playing Arrival playlist: {{ playlist }}"
+      - alias: "Play arrival music"
+        service: media_player.play_media
         data:
           entity_id: media_player.bedroom
           media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {# 
-            ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
-            ## All Out 90s : spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
-            ## 2000s Smash Hits : spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw
-            ## 2019 Sealand Invitiational : spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5
-            ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
-            ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
-            ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
-            ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
-            ## This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
-            ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
-            ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
-            ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
-            ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
-            ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
-            ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
-            ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
-            ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
-            ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
-            ## This is The Lumineers : spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO
-            ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
-            ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
-            ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
-            ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decembersits Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
-            ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
-            ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
-            ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
-            ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
-            ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
-            ## This is Tool : spotify:playlist:37i9dQZF1DX0GDEVNHvE3h
-            ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DXaMu9xyX1HzK
-            ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
-            ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
-            ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
-            ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
-            ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
-            ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
-            ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
-            ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
-            ## Guster w/Utah Orchestra (7/29/22): spotify:playlist:4gmNQHup10wDckuwWL3IFZ
-            #}
-            {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
-              "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
-              "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
-              "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
-              "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
-              "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
-              "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
-              "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
-              "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
-              "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
-              "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
-              "spotify:album:4JEgSaokMH5mMRClx9wp3S",
-              "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
-              "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
-              "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
-              "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
-              "spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO",
-              "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
-              "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-              "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
-              "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
-              "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
-              "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
-              "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
-              "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
-              "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
-              "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
-              "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
-              "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-              "spotify:playlist:37i9dQZF1DX0GDEVNHvE3h",
-              "spotify:playlist:37i9dQZF1DXaMu9xyX1HzK",
-              "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
-              "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
-              "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
-              "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
-              "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
-              "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
-              "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
-              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
-              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   spotify_bedtime:
     alias: "Spotify Bedtime"
+    variables:
+      playlist: >-
+        {# 
+        ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
+        ## All Out 90s : spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
+        ## 2000s Smash Hits : spotify:playlist:2f6tXtN0XesjONxicAzMIw
+        ## 2019 Sealand Invitiational : spotify:playlist:6uNCXLheVaTbfE1HRCIsQ5
+        ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
+        ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
+        ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+        ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
+        ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
+        ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
+        ## The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
+        ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
+        ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
+        ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
+        ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
+        ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
+        ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
+        ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
+        ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
+        ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
+        ## This is The Lumineers : spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO
+        ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
+        ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
+        ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
+        ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
+        ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+        ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
+        ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
+        ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
+        ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
+        ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
+        ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
+        ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
+        ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
+        ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
+        ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
+        ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
+        ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
+        ## This is Tool : spotify:playlist:37i9dQZF1DX0GDEVNHvE3h
+        ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DXaMu9xyX1HzK
+        ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
+        ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
+        ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
+        ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
+        ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
+        ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
+        ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
+        ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
+        ## 90s Pop Rock Essentials: spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
+        ## Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+        ## RetroWave Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
+        ## Simpsons Wave: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
+        ## Guster w/Utah Symphone 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+        ## Sigur Ros @ State Theatre 5/31/2022: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
+        ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
+        #}
+        {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
+          "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
+          "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
+          "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
+          "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+          "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
+          "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+          "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
+          "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
+          "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
+          "spspotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
+          "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
+          "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
+          "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
+          "spotify:album:4JEgSaokMH5mMRClx9wp3S",
+          "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
+          "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
+          "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
+          "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
+          "spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO",
+          "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
+          "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
+          "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
+          "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
+          "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+          "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+          "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
+          "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
+          "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
+          "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
+          "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
+          "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
+          "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
+          "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
+          "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
+          "spotify:playlist:37i9dQZF1DX0GDEVNHvE3h",
+          "spotify:playlist:37i9dQZF1DXaMu9xyX1HzK",
+          "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
+          "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
+          "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
+          "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
+          "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
+          "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
+          "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
+          "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
+          "spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
+          "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
+          "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
+          "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
+          "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
+          "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
+          "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
+          ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
       # - service: media_player.join
       #   target:
@@ -982,125 +1152,18 @@ script:
           volume_level: 0.20
       - delay:
           seconds: 2
-      - service: media_player.play_media
-        data:
-          entity_id:
-            - media_player.bedroom
-          media_content_type: music
+      - service: logbook.log
         data_template:
-          media_content_id: >-
-            {# 
-            ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu 
-            ## All Out 90s : spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
-            ## 2000s Smash Hits : spotify:playlist:2f6tXtN0XesjONxicAzMIw
-            ## 2019 Sealand Invitiational : spotify:playlist:6uNCXLheVaTbfE1HRCIsQ5
-            ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
-            ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
-            ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1
-            ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
-            ## The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
-            ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
-            ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
-            ## This is Jimmy Eat World : spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM
-            ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
-            ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
-            ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
-            ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
-            ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
-            ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
-            ## This is The Lumineers : spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO
-            ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
-            ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
-            ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
-            ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
-            ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
-            ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
-            ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
-            ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
-            ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
-            ## This is Tool : spotify:playlist:37i9dQZF1DX0GDEVNHvE3h
-            ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DXaMu9xyX1HzK
-            ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
-            ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
-            ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
-            ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
-            ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
-            ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
-            ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
-            ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
-            ## 90s Pop Rock Essentials: spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
-            ## Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
-            ## RetroWave Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
-            ## Simpsons Wave: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
-            ## Guster w/Utah Symphone 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
-            ## Sigur Ros @ State Theatre 5/31/2022: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
-            ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
-            #}
-            {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
-              "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
-              "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
-              "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
-              "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
-              "spotify:playlist:37i9dQZF1DWTmUQ5ZV8Wa1",
-              "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
-              "spspotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
-              "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
-              "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
-              "spotify:user:spotify:playlist:37i9dQZF1DX4wNVWmoZ4FM",
-              "spotify:album:4JEgSaokMH5mMRClx9wp3S",
-              "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
-              "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
-              "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
-              "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
-              "spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO",
-              "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
-              "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-              "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
-              "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
-              "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
-              "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
-              "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
-              "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
-              "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
-              "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
-              "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
-              "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-              "spotify:playlist:37i9dQZF1DX0GDEVNHvE3h",
-              "spotify:playlist:37i9dQZF1DXaMu9xyX1HzK",
-              "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
-              "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
-              "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
-              "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
-              "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
-              "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
-              "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
-              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
-              "spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
-              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
-              "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
-              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
-              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
-              "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
-              "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          entity_id: media_player.bedroom
+          name: Play Bedtime
+          message: "Playing Bedtime playlist: {{ playlist }}"
+      - alias: "Play bedtime music"
+        service: media_player.play_media
+        data:
+          entity_id: media_player.bedroom
+          media_content_type: playlist
+        data_template:
+          media_content_id: "{{ playlist }}"
       - wait_for_trigger:
           - platform: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
@@ -1154,6 +1217,111 @@ script:
 
   spotify_wake_up:
     alias: "Spotify Wake Up"
+    icon: mdi:weather-sunset-up
+    description: "Play music in the morning when I visit the bathroom."
+    variables:
+      playlist: >-
+        {#
+        ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
+        ## Have a Great Day! : spotify:user:spotify:playlist:37i9dQZF1DX7KNKjOK0o75
+        ## 90s Greatest Guilty Pleasures: spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs
+        ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
+        ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
+        ## MGMT Kids Playlist: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
+        ## Guardians of the Galaxy Vols 1 & 2 : spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU
+        ## Walk the Moon Talking is Hard: spotify:album:3mNoFlD1wsoXfkljfFzExT
+        ## This is Fall Out Boy: spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek
+        ## This is Panic! at the Disco : spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7
+        ## Coheed & Cambria Good Apollo: spotify:track:4Dc5crLrKYIIqf6sk0PvQm
+        ## APC Mer De Noms: spotify:album:0GeWd0yUKXHbCXVag1mJvO
+        ## Matt and Kim : Lightning : spotify:album:2MbpbHn31Luzr8G3uDsSUH
+        ## '90s Pop Rock Essentials : spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
+        ## 90s Rock Anthems: spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F
+        ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
+        ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
+        ## This is The Lumineers : spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO
+        ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
+        ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
+        ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
+        ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
+        ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
+        ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
+        ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
+        ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
+        ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
+        ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
+        ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
+        ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
+        ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
+        ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
+        ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
+        ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
+        ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
+        ## This is Tool : spotify:playlist:37i9dQZF1DX0GDEVNHvE3h
+        ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DXaMu9xyX1HzK
+        ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
+        ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
+        ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
+        ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
+        ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
+        ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
+        ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
+        ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
+        ## Guster w/Utah Symphony 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+        ## Sigur Ros @ State Theatre: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
+        ## City Pop: spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk
+        ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
+        #}
+        {%- set plists = ["spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW", 
+          "spotify:user:myplay.com:playlist:3hoI0s5TLdpPMcimSRmQpj",
+          "spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs",
+          "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
+          "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
+          "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
+          "spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU",
+          "spotify:album:3mNoFlD1wsoXfkljfFzExT",
+          "spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek",
+          "spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7",
+          "spotify:track:4Dc5crLrKYIIqf6sk0PvQm",
+          "spotify:album:0GeWd0yUKXHbCXVag1mJvO",
+          "spotify:album:2MbpbHn31Luzr8G3uDsSUH",
+          "spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
+          "spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F",
+          "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
+          "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
+          "spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO",
+          "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
+          "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
+          "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
+          "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
+          "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
+          "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
+          "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
+          "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
+          "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
+          "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
+          "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
+          "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
+          "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
+          "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
+          "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
+          "spotify:playlist:37i9dQZF1DX0GDEVNHvE3h",
+          "spotify:playlist:37i9dQZF1DXaMu9xyX1HzK",
+          "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
+          "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
+          "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
+          "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
+          "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
+          "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
+          "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
+          "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
+          "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
+          "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
+          "spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk",
+          "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
+          ] -%}
+          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {{ plists[pindex] }}
     sequence:
       - if:
           - alias: "Check if guests are here."
@@ -1161,7 +1329,7 @@ script:
             entity_id: input_boolean.guest_mode
             state: "off"
         then:
-          - alias: "Join Sonos speakers into all group"
+          - alias: "No Guests: Join Sonos speakers into all group"
             service: media_player.join
             target:
               entity_id:
@@ -1172,7 +1340,7 @@ script:
                 - media_player.den_1
                 - media_player.office
         else:
-          - alias: "Unjoin allSonos speakers into bedroom group"
+          - alias: "Guests here: Unjoin all Sonos speakers into bedroom group"
             service: media_player.unjoin
             target:
               entity_id:
@@ -1180,7 +1348,7 @@ script:
                 - media_player.bathroom
                 - media_player.den_1
                 - media_player.office
-          - alias: "Join Sonos speakers into bedroom group"
+          - alias: "Guests here: Join Sonos speakers into bedroom group"
             service: media_player.join
             target:
               entity_id:
@@ -1222,114 +1390,18 @@ script:
           volume_level: 0.01
       - delay:
           seconds: 2
+      - service: logbook.log
+        data_template:
+          entity_id: media_player.bedroom
+          name: Play morning playlist
+          message: "Playing wakup playlist: {{ playlist }}"
       - alias: "Play random wakeup music"
         service: media_player.play_media
         data:
           entity_id: media_player.bedroom
           media_content_type: playlist
         data_template:
-          media_content_id: >-
-            {#
-            ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
-            ## Have a Great Day! : spotify:user:spotify:playlist:37i9dQZF1DX7KNKjOK0o75
-            ## 90s Greatest Guilty Pleasures: spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs
-            ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
-            ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
-            ## MGMT Kids Playlsit: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
-            ## Guardians of the Galaxy Vols 1 & 2 : spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU
-            ## Walk the Moon Talking is Hard: spotify:album:3mNoFlD1wsoXfkljfFzExT
-            ## This is Fall Out Boy: spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek
-            ## This is Panic! at the Disco : spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7
-            ## Coheed & Cambria Good Apollo: spotify:track:4Dc5crLrKYIIqf6sk0PvQm
-            ## APC Mer De Noms: spotify:album:0GeWd0yUKXHbCXVag1mJvO
-            ## Matt and Kim : Lightning : spotify:album:2MbpbHn31Luzr8G3uDsSUH
-            ## '90s Pop Rock Essentials : spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
-            ## 90s Rock Anthems: spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F
-            ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
-            ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
-            ## This is The Lumineers : spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO
-            ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
-            ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
-            ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
-            ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
-            ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
-            ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
-            ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
-            ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
-            ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
-            ## This is Tool : spotify:playlist:37i9dQZF1DX0GDEVNHvE3h
-            ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DXaMu9xyX1HzK
-            ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
-            ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
-            ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
-            ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
-            ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
-            ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
-            ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
-            ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
-            ## Guster w/Utah Symphony 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
-            ## Sigur Ros @ State Theatre: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
-            ## City Pop: spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk
-            ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
-            #}
-            {%- set plists = ["spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW", 
-              "spotify:user:myplay.com:playlist:3hoI0s5TLdpPMcimSRmQpj",
-              "spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs",
-              "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
-              "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
-              "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
-              "spotify:user:hollywdrecrds:playlist:1xY6msLHX1W34EzB0UkkbU",
-              "spotify:album:3mNoFlD1wsoXfkljfFzExT",
-              "spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek",
-              "spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7",
-              "spotify:track:4Dc5crLrKYIIqf6sk0PvQm",
-              "spotify:album:0GeWd0yUKXHbCXVag1mJvO",
-              "spotify:album:2MbpbHn31Luzr8G3uDsSUH",
-              "spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
-              "spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F",
-              "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
-              "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
-              "spotify:user:spotify:playlist:37i9dQZF1DXdxZQJxjFMLO",
-              "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
-              "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-              "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
-              "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
-              "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
-              "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
-              "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
-              "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
-              "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
-              "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
-              "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
-              "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-              "spotify:playlist:37i9dQZF1DX0GDEVNHvE3h",
-              "spotify:playlist:37i9dQZF1DXaMu9xyX1HzK",
-              "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
-              "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
-              "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
-              "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
-              "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
-              "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
-              "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
-              "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
-              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
-              "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
-              "spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk",
-              "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
-              {{ plists[pindex] }}
+          media_content_id: "{{ playlist }}"
 
   watch_tv:
     alias: "Watch TV"
