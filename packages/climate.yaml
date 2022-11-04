@@ -151,6 +151,60 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: buy_more_air_filters
+    alias: buy_more_air_filters
+    trigger:
+      - platform: state
+        entity_id: sensor.zeke_place
+        attribute: place_name
+        to: "Home Depot"
+      - platform: state
+        entity_id: sensor.zeke_place
+        attribute: place_name
+        to: "Menards"
+      - platform: state
+        entity_id: sensor.zeke_place
+        attribute: place_name
+        to: "Lowes"
+    condition:
+      - alias: "Salt Bag Inventory Low"
+        condition: numeric_state
+        entity_id: input_number.air_filters_at_home
+        below: 1
+    action:
+      - service: notify.mobile_app_wethop
+        data:
+          title: "Buy Air Filters"
+          message: >-
+            "You only have {{states("input_number.air_filters_at_home")| int}} 16x25 air filters at home. How many did you buy?"
+          data:
+            actions:
+              - action: "BOUGHT_AIR_FILTERS"
+                title: "Purchased air filters"
+                activationMode: background
+                authenticationRequired: false
+                destructive: false
+                behavior: textInput
+                textInputButtonTitle: Number of filters
+                textInputPlaceholder: 2
+                icon: sfsymbols:bag.badge.questionmark
+
+  - id: air_filters_purchased
+    alias: air_filters_purchased
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: BOUGHT_AIR_FILTERS
+    condition: []
+    action:
+      - alias: Increase Number of air filters in inventory
+        service: input_number.set_value
+        entity_id: input_number.air_filters_at_home
+        data:
+          value: >-
+            {{(states("input_number.air_filters_at_home")|int) + (trigger.event.data.reply_text | int)}}
+
   - id: turn_on_bathroom_fan_when_humidity_high
     alias: turn_on_bathroom_fan_when_humidity_high
     trigger:
@@ -376,6 +430,13 @@ input_boolean:
 # Input Numbers
 ########################
 input_number:
+  air_filters_at_home:
+    name: Air Filter Inventory at Home
+    icon: mdi:shaker-outline
+    min: 0
+    max: 20
+    mode: box
+    step: 1
 
 ########################
 # Scenes
@@ -524,21 +585,25 @@ sensor:
     name: min_rate_of_house_temp_change_10m
     entity_id: sensor.rate_of_house_temp_change_10m
     state_characteristic: mean
+    sampling_size: 20 # TODO Remove after 2022.12
 
   - platform: statistics
     name: min_rate_of_house_temp_change_1h
     entity_id: sensor.rate_of_house_temp_change_1h
     state_characteristic: mean
+    sampling_size: 20 # TODO Remove after 2022.12
 
   - platform: statistics
     name: min_rate_of_house_temp_change_30m
     entity_id: sensor.rate_of_house_temp_change_30m
     state_characteristic: mean
+    sampling_size: 20 # TODO Remove after 2022.12
 
   - platform: statistics
     name: house_temperature_stats_5m
     entity_id: sensor.average_house_temp
     state_characteristic: mean
+    sampling_size: 20 # TODO Remove after 2022.12
     max_age:
       minutes: 5
     precision: 8
@@ -547,6 +612,7 @@ sensor:
     name: house_temperature_stats_10m
     entity_id: sensor.average_house_temp
     state_characteristic: mean
+    sampling_size: 20 # TODO Remove after 2022.12
     max_age:
       minutes: 10
     precision: 10
@@ -555,6 +621,7 @@ sensor:
     name: house_temperature_stats_30m
     entity_id: sensor.average_house_temp
     state_characteristic: mean
+    sampling_size: 20 # TODO Remove after 2022.12
     max_age:
       minutes: 30
     precision: 8
@@ -563,6 +630,7 @@ sensor:
     name: house_temperature_stats_1h
     entity_id: sensor.average_house_temp
     state_characteristic: mean
+    sampling_size: 20 # TODO Remove after 2022.12
     max_age:
       hours: 1
     precision: 8
