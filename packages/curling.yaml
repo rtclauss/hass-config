@@ -141,10 +141,14 @@ automation:
             - binary_sensor.curling_season
           state: "on"
     action:
-      - service: select.select_option
-        entity_id: select.my_ecobee_current_mode
+      - alias: Start Vacuums
+        service: vacuum.start
+        target:
+          entity_id: all
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          option: "Away"
+          preset_mode: "Away"
       - data:
           message: Good Curling!
         service: notify.all
@@ -162,10 +166,10 @@ automation:
         - binary_sensor.curling_season
       state: "on"
     action:
-      - service: select.select_option
-        entity_id: select.my_ecobee_current_mode
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          option: "Home"
+          preset_mode: "Home"
       - service: notify.all
         data_template:
           message: >-
@@ -184,10 +188,10 @@ automation:
         - binary_sensor.curling_season
       state: "on"
     action:
-      - service: select.select_option
-        entity_id: select.my_ecobee_current_mode
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          option: "Home"
+          preset_mode: "Home"
       - service: notify.all
         data_template:
           message: >-
