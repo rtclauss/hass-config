@@ -524,6 +524,7 @@ automation:
         to: "on"
         id: door-opened
     condition:
+      []
       # condition: state
       # entity_id: input_boolean.front_door_auto_on
       # state: "on"
@@ -533,9 +534,10 @@ automation:
               - condition: trigger
                 id: door-closed
             sequence:
-              - service: homeassistant.turn_off
-                data:
-                  entity_id: switch.front_door
+              # TODO maybe don't turn off the lights.
+              # - service: homeassistant.turn_off
+              #   data:
+              #     entity_id: light.outside_front_lights
               - service: homeassistant.turn_off
                 data:
                   entity_id: input_boolean.front_door_auto_on
@@ -544,9 +546,11 @@ automation:
               - condition: trigger
                 id: door-opened
             sequence:
-              - service: homeassistant.turn_on
+              - service: light.turn_on
                 data:
-                  entity_id: switch.front_door
+                  entity_id:
+                    - light.outside_front_lights
+                    - light.hall_all_downlights
               - service: homeassistant.turn_on
                 data:
                   entity_id: input_boolean.front_door_auto_on
@@ -560,7 +564,7 @@ automation:
         id: sunrise
       - platform: sun
         event: sunset
-        offset: "-00:45:00"
+        offset: "-01:45:00"
         id: sunset
     action:
       - choose:
