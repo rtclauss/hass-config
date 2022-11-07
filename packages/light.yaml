@@ -686,6 +686,8 @@ automation:
               - condition: trigger
                 id: motion-not-detected
             sequence:
+              - condition: >-
+                  "{{ states('binary_sensor.hall_upstairs_motion_occupancy') == states('binary_sensor.hall_main_foyer_motion_occupancy') }}"
               - service: light.turn_off
                 data:
                   entity_id:
@@ -1185,6 +1187,8 @@ automation:
               - condition: trigger
                 id: hallway-no-motion
             sequence:
+              - condition: >-
+                  {{ states('binary_sensor.hall_upstairs_motion_occupancy') == states('binary_sensor.hall_main_foyer_motion_occupancy') }}
               - service: light.turn_off
                 data:
                   entity_id:
@@ -1753,20 +1757,28 @@ script:
 
   lights_off_except:
     icon: mdi:home-lightbulb
+    mode: parallel
     fields:
       exclude_lights:
         description: "Excluded lights as list"
+    variables:
+      all_other_lights: >
+        {%- for device in states.light|rejectattr('entity_id','in', exclude_lights )|rejectattr('state','in','off') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
       - service: logbook.log
         data:
-          entity_id: script.turn_off_lights
+          entity_id: script.lights_off_except
           name: Exclude log
           message: "Turning of all lights except: {{ exclude_lights }}"
-          domain: light
+          domain: script
       - service: light.turn_off
         data_template:
           entity_id: >
-            {%- for device in states.light|rejectattr('entity_id','in', exclude_lights )|rejectattr('state','in','off') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+            {{all_other_lights}}
+      - service: light.turn_off
+        data_template:
+          entity_id: >
+            {{all_other_lights}}
 
 ########################
 # Sensor
