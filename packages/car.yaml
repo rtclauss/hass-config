@@ -450,18 +450,31 @@ sensor:
           {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
           {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
           {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
-          {% if state_attr("calendar.work_trip", "start_time") != None %}
-            {% set work_meeting_time = (state_attr("calendar.work_trip", "start_time") | is_defined| as_datetime|as_local) %}
-            {% if not "-" in ((personal_meeting_time - curling_upcoming)|string) %}
-              {{ state_attr("calendar.curling", "location") }}
-            {% elif "-" in ((personal_meeting_time - work_meeting_time)|string) %}
-              {{ state_attr("calendar.", "location") }}
+            {% if (personal_meeting_time < curling_upcoming) %}
+              {% if (personal_meeting_time < work_meeting_upcoming) %}
+                {% if (personal_meeting_time - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.ryan_claussen', 'location') }}
+                {% else %}
+                  unavailable
+                {% endif %}
+              {% else %}
+                  {{ state_attr('calendar.work_trip', 'location') }}
+              {% endif %}
             {% else %}
-              {{ state_attr("calendar.work_trip", "location") }}
+              {% if (curling_upcoming < work_meeting_upcoming) %}
+                {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.curling', 'location') }}
+                {% else %}
+                  unavailable
+                {% endif %}
+              {% else %}
+              {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.work_trip', 'location') }}
+                {% else %}
+                  unavailable
+                {% endif %}
+              {% endif %}
             {% endif %}
-          {% else %}
-            {{ state_attr("calendar.ryan_claussen", "location") }}
-          {% endif %}
 
 ########################
 # Template
