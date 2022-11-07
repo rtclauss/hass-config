@@ -461,10 +461,10 @@ automation:
       #   data_template:
       #     eta: '{{states.sensor.time_to_home.state}}'
       #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: select.select_option
-        entity_id: select.my_ecobee_current_mode
+      - service: climate.set_preset_mode
+        entity_id: climate.my_ecobee
         data:
-          option: "Home" # TODO set this to the correct schedule (Home or Sleep)
+          preset_mode: "Home" # TODO set this to the correct schedule (Home or Sleep)
       - service: notify.all
         data_template:
           message: >-
@@ -964,8 +964,8 @@ zone:
 
   - name: AAA
     latitude: REDACTED
-    longitude: REDACTED1663
-    radius: 1770
+    longitude: REDACTED00
+    radius: 1850
 
   - name: OCC
     latitude: REDACTED
@@ -997,6 +997,8 @@ zone:
     latitude: REDACTED
     longitude: REDACTED0
     radius: 35000
+    # Don't use for device tracker location names
+    passive: true
 
   - name: Work
     latitude: !secret work_latitude
