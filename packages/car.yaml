@@ -448,11 +448,14 @@ sensor:
         friendly_name: "Next Calendar Destination"
         value_template: >-
           {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-          {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time") %}
+          {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+          {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
           {% if state_attr("calendar.work_trip", "start_time") != None %}
             {% set work_meeting_time = (state_attr("calendar.work_trip", "start_time") | is_defined| as_datetime|as_local) %}
-            {% if "-" in ((personal_meeting_time - work_meeting_time)|string) %}
-              {{ state_attr("calendar.ryan_claussen", "location") }}
+            {% if not "-" in ((personal_meeting_time - curling_upcoming)|string) %}
+              {{ state_attr("calendar.curling", "location") }}
+            {% elif "-" in ((personal_meeting_time - work_meeting_time)|string) %}
+              {{ state_attr("calendar.", "location") }}
             {% else %}
               {{ state_attr("calendar.work_trip", "location") }}
             {% endif %}
@@ -470,23 +473,93 @@ template:
           {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
         attributes:
           entry: >-
-            {% if (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
-              Personal: {{ state_attr('calendar.ryan_claussen', 'message') }}
-            {% elif state_attr("calendar.work_trip", "start_time")!= None and (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
-              Work: {{ state_attr('calendar.work_trip', 'message') }}
-            {% elif state_attr("calendar.curling", "start_time") != None and (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
-              Curling: {{ state_attr('calendar.curling', 'message') }}
+            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+
+            {% if (personal_meeting_time < curling_upcoming) %}
+              {% if (personal_meeting_time < work_meeting_upcoming) %}
+                {% if (personal_meeting_time - now())< timedelta(hours=24) %}
+                Personal: {{ state_attr('calendar.ryan_claussen', 'message') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% else %}
+                 Work: {{ state_attr('calendar.work_trip', 'message') }}
+              {% endif %}
+            {% else %}
+              {% if (curling_upcoming < work_meeting_upcoming) %}
+                {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                 Curling: {{ state_attr('calendar.curling', 'message') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% else %}
+              {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                 Work: {{ state_attr('calendar.work_trip', 'message') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% endif %}
             {% endif %}
           start_time: >-
-            {% if (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
-              {{ state_attr("calendar.ryan_claussen", "start_time") }}
-            {% elif state_attr("calendar.work_trip", "start_time")!= None and (now() >= ((state_attr("calendar.work_trip",     "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
-              {{ state_attr("calendar.work_trip",     "start_time") }}
-            {% elif state_attr("calendar.curling", "start_time") != None and (now() >= ((state_attr("calendar.curling",     "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) %}
-              {{ state_attr("calendar.curling",     "start_time") }}
+            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% if (personal_meeting_time < curling_upcoming) %}
+              {% if (personal_meeting_time < work_meeting_upcoming) %}
+                {% if (personal_meeting_time - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.ryan_claussen', 'start_time') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% else %}
+                 {{ state_attr('calendar.work_trip', 'start_time') }}
+              {% endif %}
+            {% else %}
+              {% if (curling_upcoming < work_meeting_upcoming) %}
+                {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.curling', 'start_time') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% else %}
+              {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.work_trip', 'start_time') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% endif %}
             {% endif %}
           all_day: >-
-            {{ ( state_attr("calendar.curling", "all_day") ) or ( state_attr("calendar.work_trip", "all_day") ) or ( state_attr("calendar.ryan_claussen", "all_day") ) }}
+            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% if (personal_meeting_time < curling_upcoming) %}
+              {% if (personal_meeting_time < work_meeting_upcoming) %}
+                {% if (personal_meeting_time - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.ryan_claussen', 'all_day') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% else %}
+                  {{ state_attr('calendar.work_trip', 'all_day') }}
+              {% endif %}
+            {% else %}
+              {% if (curling_upcoming < work_meeting_upcoming) %}
+                {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                 Curling: {{ state_attr('calendar.curling', 'all_day') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% else %}
+              {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                  {{ state_attr('calendar.work_trip', 'all_day') }}
+                {% else %}
+                  None
+                {% endif %}
+              {% endif %}
+            {% endif %}
         state: >-
           {% if 
           (
@@ -509,7 +582,7 @@ template:
             )
           )
           and
-            (state_attr("sensor.waze_next_trip_distance", "distance")|int > 45)
+            (state_attr("sensor.waze_next_trip_distance", "distance")|int(0) > 45)
           %}
             True
           {% else %}
