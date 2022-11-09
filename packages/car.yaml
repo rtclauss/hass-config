@@ -446,35 +446,51 @@ sensor:
     sensors:
       calendar_destination:
         friendly_name: "Next Calendar Destination"
+        # as_datetime(13596565062) is a magic number for the year 2400. 
         value_template: >-
-          {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-          {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
-          {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
-            {% if (personal_meeting_time < curling_upcoming) %}
-              {% if (personal_meeting_time < work_meeting_upcoming) %}
-                {% if (personal_meeting_time - now())< timedelta(hours=24) %}
-                  {{ state_attr('calendar.ryan_claussen', 'location') }}
-                {% else %}
-                  unavailable
-                {% endif %}
+          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+          {% else %}
+            {% set personal_meeting_time = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if state_attr("calendar.work_trip", "start_time")  != None %}
+            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+          {% else %}
+            {% set work_meeting_upcoming = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if state_attr("calendar.curling", "start_time")  != None %}
+            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+          {% else %}
+            {% set curling_upcoming = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if (personal_meeting_time < curling_upcoming) %}
+            {% if (personal_meeting_time < work_meeting_upcoming) %}
+              {% if (personal_meeting_time - now())< timedelta(hours=24) %}
+                {{ state_attr('calendar.ryan_claussen', 'location') }}
               {% else %}
-                  {{ state_attr('calendar.work_trip', 'location') }}
+                unavailable
               {% endif %}
             {% else %}
-              {% if (curling_upcoming < work_meeting_upcoming) %}
-                {% if (curling_upcoming - now())< timedelta(hours=24) %}
-                  {{ state_attr('calendar.curling', 'location') }}
-                {% else %}
-                  unavailable
-                {% endif %}
-              {% else %}
+                {{ state_attr('calendar.work_trip', 'location') }}
+            {% endif %}
+          {% else %}
+            {% if (curling_upcoming < work_meeting_upcoming) %}
               {% if (curling_upcoming - now())< timedelta(hours=24) %}
-                  {{ state_attr('calendar.work_trip', 'location') }}
-                {% else %}
-                  unavailable
-                {% endif %}
+                {{ state_attr('calendar.curling', 'location') }}
+              {% else %}
+                unavailable
+              {% endif %}
+            {% else %}
+            {% if (curling_upcoming - now())< timedelta(hours=24) %}
+                {{ state_attr('calendar.work_trip', 'location') }}
+              {% else %}
+                unavailable
               {% endif %}
             {% endif %}
+          {% endif %}
 
 ########################
 # Template
@@ -485,10 +501,25 @@ template:
         availability: >-
           {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
         attributes:
+          # as_datetime(13596565062) is a magic number for the year 2400. 
           entry: >-
-            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
-            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+              {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+            {% else %}
+              {% set personal_meeting_time = as_datetime(13596565062) %}
+            {% endif %}
+
+            {% if state_attr("calendar.work_trip", "start_time")  != None %}
+              {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+            {% else %}
+              {% set work_meeting_upcoming = as_datetime(13596565062) %}
+            {% endif %}
+
+            {% if state_attr("calendar.curling", "start_time")  != None %}
+              {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% else %}
+              {% set curling_upcoming = as_datetime(13596565062) %}
+            {% endif %}
 
             {% if (personal_meeting_time < curling_upcoming) %}
               {% if (personal_meeting_time < work_meeting_upcoming) %}
@@ -515,10 +546,25 @@ template:
                 {% endif %}
               {% endif %}
             {% endif %}
+          # as_datetime(13596565062) is a magic number for the year 2400. 
           start_time: >-
-            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
-            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+              {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+            {% else %}
+              {% set personal_meeting_time = as_datetime(13596565062) %}
+            {% endif %}
+
+            {% if state_attr("calendar.work_trip", "start_time")  != None %}
+              {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+            {% else %}
+              {% set work_meeting_upcoming = as_datetime(13596565062) %}
+            {% endif %}
+
+            {% if state_attr("calendar.curling", "start_time")  != None %}
+              {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% else %}
+              {% set curling_upcoming = as_datetime(13596565062) %}
+            {% endif %}
             {% if (personal_meeting_time < curling_upcoming) %}
               {% if (personal_meeting_time < work_meeting_upcoming) %}
                 {% if (personal_meeting_time - now())< timedelta(hours=24) %}
@@ -544,10 +590,26 @@ template:
                 {% endif %}
               {% endif %}
             {% endif %}
+          # as_datetime(13596565062) is a magic number for the year 2400. 
           all_day: >-
-            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
-            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+              {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+            {% else %}
+              {% set personal_meeting_time = as_datetime(13596565062) %}
+            {% endif %}
+
+            {% if state_attr("calendar.work_trip", "start_time")  != None %}
+              {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+            {% else %}
+              {% set work_meeting_upcoming = as_datetime(13596565062) %}
+            {% endif %}
+
+            {% if state_attr("calendar.curling", "start_time")  != None %}
+              {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+            {% else %}
+              {% set curling_upcoming = as_datetime(13596565062) %}
+            {% endif %}
+
             {% if (personal_meeting_time < curling_upcoming) %}
               {% if (personal_meeting_time < work_meeting_upcoming) %}
                 {% if (personal_meeting_time - now())< timedelta(hours=24) %}
@@ -573,32 +635,29 @@ template:
                 {% endif %}
               {% endif %}
             {% endif %}
+        # as_datetime(13596565062) is a magic number for the year 2400. 
         state: >-
-          {% if 
-          (
-            (
-              (now() >= ((state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) - (timedelta(hours=24)))) 
-                and
-              ( state_attr("calendar.ryan_claussen", "location") != '' )
-            )
-              or 
-            (state_attr("calendar.work_trip", "start_time") != None and
-              (now() >= ((state_attr("calendar.work_trip", "start_time") | as_datetime|as_local) - (timedelta(hours=24))))
-                and
-              ( state_attr("calendar.work_trip", "location") != '')
-            )
-              or
-            ( state_attr("calendar.curling", "start_time") != None and
-              (now() >= ((state_attr("calendar.curling", "start_time") | as_datetime|as_local) - (timedelta(hours=24))))
-                and
-              ( state_attr("calendar.curling", "location") != '')
-            )
-          )
-          and
-            (state_attr("sensor.waze_next_trip_distance", "distance")|int(0) > 45)
-          %}
-            True
+          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
           {% else %}
+            {% set personal_meeting_time = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if state_attr("calendar.work_trip", "start_time")  != None %}
+            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+          {% else %}
+            {% set work_meeting_upcoming = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if state_attr("calendar.curling", "start_time")  != None %}
+            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+          {% else %}
+            {% set curling_upcoming = as_datetime(13596565062) %}
+          {% endif %}
+          
+          {% if ( ( personal_meeting_time-now() < timedelta(hours=24) ) or ( work_meeting_upcoming-now() < timedelta(hours=24) ) or ( curling_upcoming-now()<timedelta(hours=24) ) ) and ( state_attr("sensor.waze_next_trip_distance", "distance")|int(0) > 45 ) %}
+            True
+          {% else %} 
             False
           {% endif %}
   - sensor:
