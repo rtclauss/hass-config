@@ -43,9 +43,9 @@ homeassistant:
       device_class: opening
       #icon: mdi:window-open
 
-    binary_sensor.nest_home:
+    binary_sensor.ecobee_home:
       <<: *customize
-      friendly_name: "Nest Home/Away Mode"
+      friendly_name: "Ecobee Home/Away/Sleep Mode"
       device_class: presence
 
     binary_sensor.pressure_falling:
@@ -296,18 +296,18 @@ binary_sensor:
               (states('sensor.bathroom_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10)
           %} True
           {% else %}
-             False
+            False
           {% endif %}
 
-      nest_home:
+      ecobee_home:
         value_template: >-
           {% if
-              is_state_attr('climate.my_ecobee', 'preset_mode', 'away')
+              is_state_attr('climate.my_ecobee', 'preset_mode', 'Away')
                 or
               is_state_attr('climate.my_ecobee', 'preset_mode', 'Away and Eco')
           %} False
           {% else %}
-             True
+            True
           {% endif %}
 
       fresh_air_open:
