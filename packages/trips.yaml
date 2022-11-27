@@ -220,6 +220,68 @@ automation:
           entity_id: input_number.random_vacation_light_group
           value: "{{ (0|int) }}"
 
+  - id: garage_opened_on_a_trip
+    alias: Garage Door Opened while on a Trip
+    trigger:
+      - platform: state
+        entity_id: cover.garage_door
+        to: open
+        id: door_opened_while_gone
+      - platform: homeassistant
+        event: start
+        id: door_opened_while_gone
+      - platform: event
+        event_type: mobile_app_notification_action
+        id: close_garage_mobile_trigger
+        event_data:
+          action: CLOSE_GARAGE
+    condition:
+      - condition: state
+        entity_id: binary_sensor.sensed_trip
+        state: "on"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: door_opened_while_gone
+            sequence:
+              - service: notify.mobile_app_wethop
+                data:
+                  title: "Garage opened while on a trip"
+                  # message: "Close the door?"
+                  data:
+                    tag: "garage-opened-on-trip"
+                    persistent: true
+                    actions:
+                      - action: "CLOSE_GARAGE"
+                        title: "Close the door now"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "IGNORE_GARAGE"
+                        title: "Ignore for 5 minutes"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+          - conditions:
+              - condition: trigger
+                id: close_garage_mobile_trigger
+            sequence:
+              - service: cover.close_cover
+                entity_id: cover.garage_door
+      - delay:
+          minutes: 5
+      - condition: state
+        entity_id: binary_sensor.sensed_trip
+        state: "on"
+      - service: notify.all
+        data:
+          message: Closing garage door while you're on a trip.
+      - service: cover.close_cover
+        entity_id: cover.garage_door
+
   - id: random_off_time
     alias: random_off_time
     trigger:
@@ -438,13 +500,13 @@ group:
   vacation_group_card_1:
     entities:
       - light.living_room_all
-      - light.basement_all_down_lights
+      - light.basement_great_room
       - light.den_floods
       - scene.vacation_group_1
 
   vacation_group_card_2:
     entities:
-      - light.basement_all_down_lights
+      - light.basement_great_room
       - light.owner_suite_lamps
       - light.office
       - light.hall_all_downlights
@@ -504,14 +566,14 @@ scene:
     entities:
       light.living_room_lamps:
         state: "on"
-      light.basement_all_down_lights:
+      light.basement_great_room:
         state: "on"
       light.den_floods:
         state: "on"
 
   - name: Vacation Group 2
     entities:
-      light.basement_all_down_lights:
+      light.basement_great_room:
         state: "on"
       light.owner_suite_lamps:
         state: "on"
