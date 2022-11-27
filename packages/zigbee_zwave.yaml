@@ -407,6 +407,42 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - alias: basement_bathroom_switch_actions
+    id: basement_bathroom_switch_actions
+    trigger:
+      - platform: state
+        entity_id: sensor.basement_bathroom_shower_switch_action
+        to: "up_single"
+        id: up-single
+      - platform: state
+        entity_id: sensor.basement_bathroom_shower_switch_action
+        to: "down_single"
+        id: down-single
+      - platform: state
+        entity_id: sensor.basement_bathroom_shower_switch_action
+        to: "up_double"
+        id: up-double
+      - platform: state
+        entity_id: sensor.basement_bathroom_shower_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-single
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.basement_bathroom_shower
+          - conditions:
+              - condition: trigger
+                id: down-single
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.basement_bathroom_shower
+
   - alias: in_bed_toggles
     id: in_bed_toggles
     trigger:
@@ -437,6 +473,8 @@ automation:
                 entity_id:
                   - cover.owner_suite_blinds
                   - cover.garage_door
+              - service: script.turn_on
+                entity_id: script.night_tv_mode_switches
           - conditions:
               - condition: trigger
                 id: bed-unoccupied
@@ -773,6 +811,91 @@ scene:
 # Scripts
 ########################
 script:
+  night_tv_mode_switches:
+    icon: mdi:light-switch
+    variables:
+      all_switches_led_color_off: >
+        {%- for device in states.number | select('match', '.*ledcolorwhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_switches_led_color_on: >
+        {%- for device in states.number | select('match', '.*ledcolorwhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_switches_led_intensity_on: >
+        {%- for device in states.number | select('match', '.*ledintensitywhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_switches_led_intensity_off: >
+        {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+    sequence:
+      - service: logbook.log
+        data:
+          entity_id: script.night_tv_mode_switches
+          name: Exclude log
+          message: "Setting all light Inovelli switch led colors to red"
+          domain: script
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_switches_led_color_off}}
+        data:
+          value: "0"
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_switches_led_intensity_off}}
+        data:
+          value: "1"
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_switches_led_intensity_on}}
+        data:
+          value: "50"
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_switches_led_color_on}}
+        data:
+          value: "0"
+
+  day_mode_switches:
+    icon: mdi:light-switch
+    variables:
+      all_off_led_switches: >
+        {%- for device in states.number | select('match', '.*ledcolorwhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_on_led_switches: >
+        {%- for device in states.number | select('match', '.*ledcolorwhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_switches_led_intensity_on: >
+        {%- for device in states.number | select('match', '.*ledintensitywhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_switches_led_intensity_off: >
+        {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+    sequence:
+      - service: logbook.log
+        data:
+          entity_id: script.day_mode_switches
+          name: Exclude log
+          message: "Setting all light switch colors to blue"
+          domain: script
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_off_led_switches}}
+        data:
+          value: "170"
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_switches_led_intensity_off}}
+        data:
+          value: "1"
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_switches_led_intensity_on}}
+        data:
+          value: "75"
+      - service: number.set_value
+        data_template:
+          entity_id: >
+            {{all_on_led_switches}}
+        data:
+          value: "170"
 
 ########################
 # Sensor
