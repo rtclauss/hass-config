@@ -163,7 +163,7 @@ automation:
           - condition: numeric_state
             entity_id: media_player.bedroom
             attribute: "volume_level"
-            above: 0.1
+            above: 0.01
           - condition: state
             entity_id:
               - media_player.bedroom
@@ -172,6 +172,9 @@ automation:
       - service: script.turn_on
         data:
           entity_id: script.spotify_bedtime_volume
+      - service: script.turn_on
+        data:
+          entity_id: script.night_tv_mode_switches
 
   - id: bedroom_music_select_playlist
     alias: bedroom_music_select_playlist
@@ -233,8 +236,8 @@ automation:
           shuffle: >-
             {{ not (state_attr('media_player.bedroom', 'shuffle')) }}
 
-  - id: play_music_in_bathroom
-    alias: play_music_in_bathroom
+  - id: play_music_in_bathroom_via_nfc_tap
+    alias: play_music_in_bathroom_via_nfc_tap
     trigger:
       - platform: event
         event_type: tag_scanned
@@ -482,6 +485,8 @@ automation:
           entity_id: scene.tv_resumed
         data:
           transition: 20
+      - service: script.turn_on
+        entity_id: script.night_tv_mode_switches
 
 ########################
 # Binary Sensors
