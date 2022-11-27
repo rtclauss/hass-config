@@ -218,7 +218,7 @@ homeassistant:
       friendly_name: "Living Room Right"
       icon: mdi:lamp
 
-    light.tv:
+    light.basement_tv_bias:
       <<: *customize
       friendly_name: "TV Bias"
       icon: mdi:television
@@ -421,11 +421,17 @@ automation:
       - platform: state
         entity_id: binary_sensor.basement_landing_occupancy
         to: "on"
+    condition:
+      - alias: "In bed"
+        condition: state
+        entity_id:
+          - binary_sensor.master_bed_occupancy
+        state: "off"
     action:
       - service: homeassistant.turn_on
         data:
           entity_id:
-            - light.basement_all_down_lights
+            - light.basement_great_room
 
   - id: cpap_on_lights_off
     alias: cpap_on_lights_off
@@ -1223,7 +1229,7 @@ automation:
     id: turn_off_sleep_mode
     trigger:
       - platform: time
-        at: "06:00:00"
+        at: "07:00:00"
     action:
       - service: switch.turn_off
         data:
@@ -1263,6 +1269,11 @@ automation:
           entity_id: binary_sensor.master_bed_occupancy
           state: "on"
           # enabled: false
+          # Don't turn off all the lights if there are guests in the house. Specifically the office/guest room
+        - condition: state
+          entity_id:
+            - input_boolean.guest_mode
+          state: "on"
     action:
       - parallel:
           # - service: scene.turn_on
@@ -1276,7 +1287,6 @@ automation:
           - service: fan.turn_off
             entity_id:
               - fan.den_ceiling
-              - fan.office_ceiling_fan
           - service: switch.turn_on
             data:
               entity_id:
@@ -1664,7 +1674,7 @@ scene:
         state: "on"
         color_temp: 386
         brightness: 255
-      light.tv:
+      light.basement_tv_bias:
         state: "on"
         hs_color: [360, 100]
         brightness: 128
@@ -1683,7 +1693,7 @@ scene:
         state: "on"
         brightness: 64
         rgb_color: [255, 0, 0]
-      light.tv:
+      light.basement_tv_bias:
         state: "on"
         brightness: 64
         rgb_color: [255, 0, 0]
