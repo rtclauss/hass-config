@@ -456,10 +456,19 @@ automation:
                   media_content_type: music
                   media_content_id: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ" # Surfin' Bird
 
-  - id: turn_on_lava_lamp_workday
-    alias: turn_on_lava_lamp_workday
+  - id: toggle_lava_lamp_workday
+    alias: toggle_lava_lamp_workday
     trigger:
       - platform: template
+        id: lava-lamp-off
+        # don't let lamp run for longer than 10 hours
+        value_template: >-
+          {% set forward_time = states.input_datetime.next_work_meeting.state[0:2]|int + 10 %}
+          {% set ten_hoursforward = strptime(forward_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
+          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
+          {{ formatted_time == ten_hoursforward }}
+      - platform: template
+        id: lava-lamp-on
         value_template: >-
           {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -2 %}
           {% set two_hoursback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
@@ -472,10 +481,27 @@ automation:
       - condition: state
         entity_id: device_tracker.bayesian_zeke_home
         state: "home"
+      - condition: state
+        entity_id:
+          - input_boolean.guest_mode
+        state: "off"
     action:
-      - service: light.turn_on
-        data:
-          entity_id: light.office_lava_lamp
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: lava-lamp-on
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.office_lava_lamp
+          - conditions:
+              - condition: trigger
+                id: lava-lamp-off
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.office_lava_lamp
+
 ########################
 # Binary Sensors
 ########################
@@ -877,7 +903,7 @@ script:
       #       - switch.humidifier
       - alias: "Slowly Open Blinds"
         repeat:
-          until: "{{ repeat.index == 25 }}" # look at increasing from 25 to 60 when I get curtains installed
+          until: "{{ repeat.index == 40 }}" # look at increasing from 25 to 60 when I get curtains installed
           sequence:
             - service: cover.set_cover_position
               data:
@@ -886,6 +912,9 @@ script:
             - delay:
                 # seconds: "{{ (1/(tan(repeat.index/180, 5))) | round(0, 'ceil', 5)}}" # <-- drops down to 8 seconds
                 seconds: "{{ (75/(log(repeat.index + 1, 5))) | round(0, 'ceil', 5) }}" # <-- drops down to 23 seconds
+      - alias: "Set light switches to day mode"
+        service: script.turn_on
+        entity_id: script.day_mode_switches
       - alias: "Turn on Adaptive Brightness for bedroom"
         service: switch.turn_on
         entity_id:
