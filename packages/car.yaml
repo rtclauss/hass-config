@@ -123,6 +123,16 @@ automation:
         zone: zone.home
         event: enter
         id: arrive-home
+    condition:
+      condition: and
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.bayesian_zeke_home
+          zone: zone.home
+        - condition: zone
+          entity_id: device_tracker.nigori_location_tracker
+          zone: zone.home
+          enabled: false
     action:
       - choose:
           - conditions:
@@ -446,7 +456,7 @@ sensor:
     sensors:
       calendar_destination:
         friendly_name: "Next Calendar Destination"
-        # as_datetime(13596565062) is a magic number for the year 2400. 
+        # as_datetime(13596565062) is a magic number for the year 2400.
         value_template: >-
           {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
             {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
@@ -501,7 +511,7 @@ template:
         availability: >-
           {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
         attributes:
-          # as_datetime(13596565062) is a magic number for the year 2400. 
+          # as_datetime(13596565062) is a magic number for the year 2400.
           entry: >-
             {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
               {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
@@ -546,7 +556,7 @@ template:
                 {% endif %}
               {% endif %}
             {% endif %}
-          # as_datetime(13596565062) is a magic number for the year 2400. 
+          # as_datetime(13596565062) is a magic number for the year 2400.
           start_time: >-
             {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
               {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
@@ -590,7 +600,7 @@ template:
                 {% endif %}
               {% endif %}
             {% endif %}
-          # as_datetime(13596565062) is a magic number for the year 2400. 
+          # as_datetime(13596565062) is a magic number for the year 2400.
           all_day: >-
             {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
               {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
@@ -635,7 +645,7 @@ template:
                 {% endif %}
               {% endif %}
             {% endif %}
-        # as_datetime(13596565062) is a magic number for the year 2400. 
+        # as_datetime(13596565062) is a magic number for the year 2400.
         state: >-
           {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
             {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
@@ -654,7 +664,7 @@ template:
           {% else %}
             {% set curling_upcoming = as_datetime(13596565062) %}
           {% endif %}
-          
+
           {% if ( ( personal_meeting_time-now() < timedelta(hours=24) ) or ( work_meeting_upcoming-now() < timedelta(hours=24) ) or ( curling_upcoming-now()<timedelta(hours=24) ) ) and ( state_attr("sensor.waze_next_trip_distance", "distance")|int(0) > 45 ) %}
             True
           {% else %} 
