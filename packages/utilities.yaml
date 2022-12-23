@@ -138,14 +138,29 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
+  - alias: restart_water_meter
+    id: restart_water_meter
+    trigger:
+      - platform: time_pattern
+        minutes: "/48"
+    condition: []
+    action:
+      - service: switch.turn_off
+        entity_id: switch.basement_water_meter_plug
+      - delay:
+          seconds: 10
+      - service: switch.turn_on
+        entity_id: switch.basement_water_meter_plug
+
   - alias: check_non_responding_entities
     id: check_non_responding_entities
     trigger:
       - platform: time_pattern
         hours: "/12"
     action:
-      - service: notify.all
-        data:
+      - service: persistent_notification.create
+        data_template:
+          title: Stale Entities
           message: >-
             The following entities have not updated in 24 hours: 
             {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
@@ -157,6 +172,8 @@ automation:
               and not (item.entity_id | lower).find('alert') != -1
               and not (item.entity_id | lower).find('season') != -1
               and not (item.entity_id | lower).endswith('microphone')
+              and not (item.entity_id | lower).endswith('hacs')
+              and not (item.entity_id | lower).find('sonos') != -1
               and not (item.entity_id | lower).find('dark_sky') != -1
             )-%}
               {{ item.entity_id }}
@@ -595,6 +612,15 @@ sensor:
     end: "{{ now() }}"
     duration:
       days: 1
+
+  - platform: systemmonitor
+    resources:
+      - type: memory_free
+      - type: memory_use
+      - type: memory_use_percent
+      - type: swap_use
+      - type: swap_free
+
 ########################
 # Switch
 ########################
