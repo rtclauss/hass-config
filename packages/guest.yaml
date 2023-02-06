@@ -137,7 +137,7 @@ automation:
       - platform: state
         entity_id: binary_sensor.guest_on_wifi
         to: "on"
-        for: "00:45:00"
+        for: "00:10:00"
     #condition:
     action:
       - service: input_boolean.turn_on
@@ -159,13 +159,63 @@ automation:
         data:
           group_members:
             - media_player.bathroom
-      - service: media_player.join
-        target:
-          entity_id:
-            - media_player.office
+      # - service: media_player.join
+      #   target:
+      #     entity_id:
+      #       - media_player.office
+      #   data:
+      #     group_members:
+      #       - media_player.den_1
+
+  - id: climate_guest_mode_day
+    alias: climate_guest_mode_day
+    trigger:
+      - platform: state
+        entity_id: input_boolean.guest_mode
+        to: "on"
+        for:
+          seconds: 20
+      - platform: time
+        at: 07:00:00
+    condition:
+      - condition: time
+        after: "06:00:00"
+        before: "00:00:00"
+      - condition: state
+        entity_id:
+          - input_boolean.guest_mode
+        state: "on"
+    action:
+      - service: climate.set_preset_mode
         data:
-          group_members:
-            - media_player.den_1
+          preset_mode: "Guest Day"
+        target:
+          entity_id: climate.my_ecobee
+
+  - id: climate_guest_mode_night
+    alias: climate_guest_mode_night
+    trigger:
+      - platform: state
+        entity_id: input_boolean.guest_mode
+        to: "on"
+        for:
+          seconds: 20
+      - platform: time
+        at: 00:00:00
+    condition:
+      - condition: time
+        after: "00:00:00"
+        before: "06:00:00"
+      - condition: state
+        entity_id:
+          - input_boolean.guest_mode
+        state: "on"
+    action:
+      - service: climate.set_preset_mode
+        data:
+          preset_mode: "Guest Sleep"
+        target:
+          entity_id: climate.my_ecobee
 
 ########################
 # Binary Sensors
