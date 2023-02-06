@@ -461,19 +461,19 @@ automation:
     trigger:
       - platform: template
         id: lava-lamp-off
-        # don't let lamp run for longer than 10 hours
+        # don't let lamp run for longer than 10 hours. Use 9 as magic number since we turn on the lamp 1 hr before meeting.
         value_template: >-
-          {% set forward_time = states.input_datetime.next_work_meeting.state[0:2]|int + 10 %}
-          {% set ten_hoursforward = strptime(forward_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
+          {% set forward_time = states.input_datetime.next_work_meeting.state[0:2]|int + 9 %}
+          {% set nine_hoursforward = strptime(forward_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
           {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
-          {{ formatted_time == ten_hoursforward }}
+          {{ formatted_time == nine_hoursforward }}
       - platform: template
         id: lava-lamp-on
         value_template: >-
-          {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -2 %}
-          {% set two_hoursback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
+          {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -1 %}
+          {% set one_hourback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
           {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
-          {{ formatted_time == two_hoursback }}
+          {{ formatted_time == one_hourback }}
     condition:
       - condition: state
         entity_id: "binary_sensor.workday_sensor"
@@ -903,12 +903,12 @@ script:
       #       - switch.humidifier
       - alias: "Slowly Open Blinds"
         repeat:
-          until: "{{ repeat.index == 40 }}" # look at increasing from 25 to 60 when I get curtains installed
+          until: "{{ (repeat.index * 2) == 40 }}" # look at increasing from 25 to 60 when I get curtains installed
           sequence:
             - service: cover.set_cover_position
               data:
                 entity_id: cover.owner_suite_blinds
-                position: "{{ repeat.index }}"
+                position: "{{ repeat.index * 2 }}"
             - delay:
                 # seconds: "{{ (1/(tan(repeat.index/180, 5))) | round(0, 'ceil', 5)}}" # <-- drops down to 8 seconds
                 seconds: "{{ (75/(log(repeat.index + 1, 5))) | round(0, 'ceil', 5) }}" # <-- drops down to 23 seconds
