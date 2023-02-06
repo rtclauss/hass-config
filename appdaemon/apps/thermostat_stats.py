@@ -130,8 +130,8 @@ class ThermostatStats(hass.Hass):
 
 
         tempInfo = ThermostatChanges(changed_item=changed_item, old_temp = old_temp, new_temp = new_temp, old_target = old_target_temp, new_target = new_target_temp, new_state = new_hvac_action, old_state=old_hvac_action, time = datetime.datetime.now(), house_average_humidity=avg_house_humidity, house_average_temp=avg_house_temp, outside_temp=outside_temp, outside_humidity=outside_humidity, outside_cloud_cover=outside_cloud_cover, sun_state=sun_state, sun_azimuth=sun_azimuth, sun_elevation=sun_elevation)
-        self.log("Writing to thermostat.db: {}".format(tempInfo))
+        # self.log("Writing to thermostat.db: {}".format(tempInfo))
         self.session.add(tempInfo)
         self.session.commit()
-        self.log("DB Update Done")
+        # self.log("DB Update Done")
 
