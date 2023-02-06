@@ -59,7 +59,7 @@ bayesian_device_tracker:
     - device_tracker.nigori_location_tracker
   bayesian_input: binary_sensor.bayesian_zeke_home
   bayesian_device_tracker_name: "bayesian_zeke_home"
-  gps_accuracy_tolerance: 100
+  gps_accuracy_tolerance: 2000
   minimum_update_distance: 3
   minimum_update_window: 5
 
@@ -68,7 +68,7 @@ Occupancy Simulator:
   module: occusim
   class: OccuSim
   log_msg: "1"
-  notify: "0"
+  #notify: "1"
   enable: input_boolean.trip,on
   #enable: input_boolean.house_unoccupied,on
   # test: "1"
@@ -306,3 +306,50 @@ ench:
   battery:
     interval_min: 180
     min_level: 10
+
+follow_laundry_room:
+  # Office does not using a bound zigbee group to control the floor lamp
+  module: inovelli_mirror
+  class: Follow
+  leader: light.laundry_room
+  follower: light.laundry_wall_switch
+
+follow_office:
+  # Office does not using a bound zigbee group to control the floor lamp
+  module: inovelli_mirror
+  class: Follow
+  leader: light.office_floor_lamp
+  follower: light.office_fan_switch
+
+## All these have boudn the switch to the light/group so bouncing behavior occurs
+# follow_living_room:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.living_room_lamps
+#   follower: light.living_room_wall_switch
+
+# follow_dining_room:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.dining_room
+#   follower: light.dining_room_overhead
+
+# follow_den_room:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.den_all
+#   follower: light.den_wall_switch
+
+# follow_kitchen_sink:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.kitchen_sink
+#   follower: light.kitchen_sink_light_switch
+
+# follow_hallway:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.hall_lights_all
+#   follower: light.hallway_light_switch
+
+
