@@ -5,24 +5,6 @@ from dataclasses import dataclass
 import logging
 from typing import Any, Callable, Tuple
 
-from .wideq import (
-    FEAT_AUTODOOR,
-    FEAT_CHILDLOCK,
-    FEAT_DOORCLOSE,
-    FEAT_DOORLOCK,
-    FEAT_DOOROPEN,
-    FEAT_DUALZONE,
-    FEAT_EXTRADRY,
-    FEAT_HIGHTEMP,
-    FEAT_NIGHTDRY,
-    FEAT_STANDBY,
-    FEAT_REMOTESTART,
-    FEAT_RINSEREFILL,
-    FEAT_SALTREFILL,
-    FEAT_WATER_TANK_FULL,
-    DeviceType,
-)
-
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -41,17 +23,15 @@ from .device_helpers import (
     DEVICE_ICONS,
     STATE_LOOKUP,
     WASH_DEVICE_TYPES,
+    LGEBaseDevice,
     LGERangeDevice,
     LGERefrigeratorDevice,
     LGEWashDevice,
     get_entity_name,
     get_multiple_devices_types,
 )
-from .sensor import (
-    ATTR_DOOR_OPEN,
-    ATTR_ERROR_STATE,
-    ATTR_RUN_COMPLETED,
-)
+from .sensor import ATTR_DOOR_OPEN, ATTR_ERROR_STATE, ATTR_RUN_COMPLETED
+from .wideq import DehumidifierFeatures, DeviceType, WashDeviceFeatures
 
 # range sensor attributes
 ATTR_COOKTOP_STATE = "cooktop_state"
@@ -88,77 +68,89 @@ WASH_DEV_BINARY_SENSORS: Tuple[ThinQBinarySensorEntityDescription, ...] = (
         value_fn=lambda x: x.error_state,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_STANDBY,
+        key=WashDeviceFeatures.STANDBY,
         name="Standby",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_CHILDLOCK,
+        key=WashDeviceFeatures.CHILDLOCK,
         name="Child lock",
         icon="mdi:account-off-outline",
         icon_on="mdi:account-lock",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_DOORCLOSE,
+        key=WashDeviceFeatures.DOORCLOSE,
         name="Door close",
         icon="mdi:alpha-o-box-outline",
         icon_on="mdi:alpha-c-box",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_DOORLOCK,
+        key=WashDeviceFeatures.DOORLOCK,
         name="Door lock",
         icon="mdi:lock-open-variant-outline",
         icon_on="mdi:lock",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_DOOROPEN,
+        key=WashDeviceFeatures.DOOROPEN,
         name="Door open",
         device_class=BinarySensorDeviceClass.OPENING,
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_AUTODOOR,
+        key=WashDeviceFeatures.AUTODOOR,
         name="Auto door",
         icon="mdi:auto-upload",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_REMOTESTART,
+        key=WashDeviceFeatures.REMOTESTART,
         name="Remote start",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_DUALZONE,
+        key=WashDeviceFeatures.DUALZONE,
         name="Dual zone",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_RINSEREFILL,
+        key=WashDeviceFeatures.RINSEREFILL,
         name="Rinse refill",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_SALTREFILL,
+        key=WashDeviceFeatures.SALTREFILL,
         name="Salt refill",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_HIGHTEMP,
+        key=WashDeviceFeatures.HIGHTEMP,
         name="High temp",
         device_class=BinarySensorDeviceClass.HEAT,
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_EXTRADRY,
+        key=WashDeviceFeatures.EXTRADRY,
         name="Extra dry",
         entity_registry_enabled_default=False,
     ),
     ThinQBinarySensorEntityDescription(
-        key=FEAT_NIGHTDRY,
+        key=WashDeviceFeatures.NIGHTDRY,
         name="Night dry",
+        entity_registry_enabled_default=False,
+    ),
+    ThinQBinarySensorEntityDescription(
+        key=WashDeviceFeatures.DETERGENT,
+        name="Detergent",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_registry_enabled_default=False,
+    ),
+    ThinQBinarySensorEntityDescription(
+        key=WashDeviceFeatures.SOFTENER,
+        name="Softener",
+        device_class=BinarySensorDeviceClass.PROBLEM,
         entity_registry_enabled_default=False,
     ),
 )
@@ -174,25 +166,28 @@ RANGE_BINARY_SENSORS: Tuple[ThinQBinarySensorEntityDescription, ...] = (
     ThinQBinarySensorEntityDescription(
         key=ATTR_COOKTOP_STATE,
         name="Cooktop state",
-        device_class=BinarySensorDeviceClass.HEAT,
+        device_class=BinarySensorDeviceClass.POWER,
         value_fn=lambda x: x.cooktop_state,
     ),
     ThinQBinarySensorEntityDescription(
         key=ATTR_OVEN_STATE,
         name="Oven state",
-        device_class=BinarySensorDeviceClass.HEAT,
+        device_class=BinarySensorDeviceClass.POWER,
         value_fn=lambda x: x.oven_state,
+        entity_registry_enabled_default=False,
     ),
 )
 DEHUMIDIFIER_BINARY_SENSORS: Tuple[ThinQBinarySensorEntityDescription, ...] = (
     ThinQBinarySensorEntityDescription(
-        key=FEAT_WATER_TANK_FULL,
+        key=DehumidifierFeatures.WATER_TANK_FULL,
         name="Water Tank Full",
     ),
 )
 
 
-def _binary_sensor_exist(lge_device: LGEDevice, sensor_desc: ThinQBinarySensorEntityDescription) -> bool:
+def _binary_sensor_exist(
+    lge_device: LGEDevice, sensor_desc: ThinQBinarySensorEntityDescription
+) -> bool:
     """Check if a sensor exist for device."""
     if sensor_desc.value_fn is not None:
         return True
@@ -227,7 +222,9 @@ async def async_setup_entry(
             [
                 LGEBinarySensor(lge_device, sensor_desc, LGEWashDevice(lge_device))
                 for sensor_desc in WASH_DEV_BINARY_SENSORS
-                for lge_device in get_multiple_devices_types(lge_devices, WASH_DEVICE_TYPES)
+                for lge_device in get_multiple_devices_types(
+                    lge_devices, WASH_DEVICE_TYPES
+                )
                 if _binary_sensor_exist(lge_device, sensor_desc)
             ]
         )
@@ -235,7 +232,9 @@ async def async_setup_entry(
         # add refrigerators
         lge_sensors.extend(
             [
-                LGEBinarySensor(lge_device, sensor_desc, LGERefrigeratorDevice(lge_device))
+                LGEBinarySensor(
+                    lge_device, sensor_desc, LGERefrigeratorDevice(lge_device)
+                )
                 for sensor_desc in REFRIGERATOR_BINARY_SENSORS
                 for lge_device in lge_devices.get(DeviceType.REFRIGERATOR, [])
                 if _binary_sensor_exist(lge_device, sensor_desc)
@@ -275,9 +274,7 @@ def get_binary_sensor_name(device, ent_key, ent_name) -> str:
     """Get the name for the binary sensor"""
     name = get_entity_name(device, ent_key, ent_name)
     if ent_key == ATTR_RUN_COMPLETED:
-        name = name.replace(
-            "<Run>", RUN_COMPLETED_PREFIX.get(device.type, "Run")
-        )
+        name = name.replace("<Run>", RUN_COMPLETED_PREFIX.get(device.type, "Run"))
 
     return name
 
@@ -285,13 +282,14 @@ def get_binary_sensor_name(device, ent_key, ent_name) -> str:
 class LGEBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Class to monitor binary sensors for LGE device"""
 
-    entity_description = ThinQBinarySensorEntityDescription
+    entity_description: ThinQBinarySensorEntityDescription
+    _wrap_device: LGEBaseDevice | None
 
     def __init__(
-            self,
-            api: LGEDevice,
-            description: ThinQBinarySensorEntityDescription,
-            wrapped_device=None,
+        self,
+        api: LGEDevice,
+        description: ThinQBinarySensorEntityDescription,
+        wrapped_device: LGEBaseDevice | None = None,
     ):
         """Initialize the binary sensor."""
         super().__init__(api.coordinator)

@@ -2,12 +2,10 @@
 from __future__ import annotations
 
 import logging
+
 import voluptuous as vol
 
-from .wideq import FEAT_HUMIDITY, FEAT_TARGET_HUMIDITY, DeviceType
-from .wideq.dehumidifier import DeHumidifierDevice
-
-from homeassistant.components.humidifier import HumidifierEntity, HumidifierDeviceClass
+from homeassistant.components.humidifier import HumidifierDeviceClass, HumidifierEntity
 from homeassistant.components.humidifier.const import (
     DEFAULT_MAX_HUMIDITY,
     DEFAULT_MIN_HUMIDITY,
@@ -22,6 +20,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import LGEDevice
 from .const import DOMAIN, LGE_DEVICES, LGE_DISCOVERY_NEW
+from .wideq import DehumidifierFeatures, DeviceType
+from .wideq.devices.dehumidifier import DeHumidifierDevice
 
 ATTR_CURRENT_HUMIDITY = "current_humidity"
 ATTR_FAN_MODE = "fan_mode"
@@ -99,7 +99,14 @@ class LGEDeHumidifier(LGEBaseHumidifier):
         self._attr_name = api.name
         self._attr_unique_id = f"{api.unique_id}-DEHUM"
         self._attr_device_class = HumidifierDeviceClass.DEHUMIDIFIER
-        self._attr_available_modes = self._device.op_modes
+
+        self._use_fan_modes = False
+        self._attr_available_modes = None
+        if len(self._device.op_modes) > 1:
+            self._attr_available_modes = self._device.op_modes
+        elif len(self._device.fan_speeds) > 1:
+            self._attr_available_modes = self._device.fan_speeds
+            self._use_fan_modes = True
 
     @property
     def supported_features(self) -> int:
@@ -112,7 +119,9 @@ class LGEDeHumidifier(LGEBaseHumidifier):
     def extra_state_attributes(self):
         """Return the optional state attributes with device specific additions."""
         state = {}
-        if humidity := self._api.state.device_features.get(FEAT_HUMIDITY):
+        if humidity := self._api.state.device_features.get(
+            DehumidifierFeatures.HUMIDITY
+        ):
             state[ATTR_CURRENT_HUMIDITY] = humidity
         if fan_modes := self._device.fan_speeds:
             state[ATTR_FAN_MODES] = fan_modes
@@ -129,19 +138,26 @@ class LGEDeHumidifier(LGEBaseHumidifier):
     @property
     def mode(self) -> str | None:
         """Return current operation."""
+        if self._use_fan_modes:
+            return self._api.state.fan_speed
         return self._api.state.operation_mode
 
     async def async_set_mode(self, mode: str) -> None:
         """Set new target mode."""
+        if not self.available_modes:
+            raise NotImplementedError()
         if mode not in self.available_modes:
             raise ValueError(f"Invalid mode [{mode}]")
-        await self._device.set_op_mode(mode)
+        if self._use_fan_modes:
+            await self._device.set_fan_speed(mode)
+        else:
+            await self._device.set_op_mode(mode)
         self._api.async_set_updated()
 
     @property
     def target_humidity(self) -> int | None:
         """Return the humidity we try to reach."""
-        return self._api.state.device_features.get(FEAT_TARGET_HUMIDITY)
+        return self._api.state.device_features.get(DehumidifierFeatures.TARGET_HUMIDITY)
 
     async def async_set_humidity(self, humidity: int) -> None:
         """Set new target humidity."""
@@ -165,7 +181,6 @@ class LGEDeHumidifier(LGEBaseHumidifier):
         """Return the minimum humidity."""
         if (min_value := self._device.target_humidity_min) is not None:
             return min_value
-
         return DEFAULT_MIN_HUMIDITY
 
     @property
@@ -173,7 +188,6 @@ class LGEDeHumidifier(LGEBaseHumidifier):
         """Return the maximum humidity."""
         if (max_value := self._device.target_humidity_max) is not None:
             return max_value
-
         return DEFAULT_MAX_HUMIDITY
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:

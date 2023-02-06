@@ -1,14 +1,13 @@
 """Support for Tesla covers."""
 import logging
 
-from teslajsonpy.car import TeslaCar
-
 from homeassistant.components.cover import (
-    CoverEntity,
     CoverDeviceClass,
+    CoverEntity,
     CoverEntityFeature,
 )
 from homeassistant.core import HomeAssistant
+from teslajsonpy.car import TeslaCar
 
 from . import TeslaDataUpdateCoordinator
 from .base import TeslaCarEntity
@@ -164,8 +163,8 @@ class TeslaCarWindows(TeslaCarEntity, CoverEntity):
         """Initialize window cover entity."""
         super().__init__(hass, car, coordinator)
         self.type = "windows"
-        self._attr_device_class = CoverDeviceClass.WINDOW
-        self._attr_icon = "mdi:window-closed"
+        self._attr_device_class = CoverDeviceClass.AWNING
+        self._attr_icon = "mdi:car-door"
         self._attr_supported_features = (
             CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
         )
@@ -173,14 +172,14 @@ class TeslaCarWindows(TeslaCarEntity, CoverEntity):
     async def async_close_cover(self, **kwargs):
         """Send close cover command."""
         _LOGGER.debug("Closing cover: %s", self.name)
-        if self.is_closed == False:
+        if self.is_closed is False:
             await self._car.close_windows()
             await self.async_update_ha_state()
 
     async def async_open_cover(self, **kwargs):
         """Send open cover command."""
         _LOGGER.debug("Opening cover: %s", self.name)
-        if self.is_closed == True:
+        if self.is_closed is True:
             await self._car.vent_windows()
             await self.async_update_ha_state()
 

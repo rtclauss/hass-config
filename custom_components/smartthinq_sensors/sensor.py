@@ -6,44 +6,6 @@ from dataclasses import dataclass
 import logging
 from typing import Any, Callable, Tuple
 
-from .wideq import (
-    FEAT_COOKTOP_LEFT_FRONT_STATE,
-    FEAT_COOKTOP_LEFT_REAR_STATE,
-    FEAT_COOKTOP_CENTER_STATE,
-    FEAT_COOKTOP_RIGHT_FRONT_STATE,
-    FEAT_COOKTOP_RIGHT_REAR_STATE,
-    FEAT_DRYLEVEL,
-    FEAT_ENERGY_CURRENT,
-    FEAT_ERROR_MSG,
-    FEAT_FILTER_BOTTOM_LIFE,
-    FEAT_FILTER_DUST_LIFE,
-    FEAT_FILTER_MAIN_LIFE,
-    FEAT_FILTER_MID_LIFE,
-    FEAT_FILTER_TOP_LIFE,
-    FEAT_HALFLOAD,
-    FEAT_HOT_WATER_TEMP,
-    FEAT_HUMIDITY,
-    FEAT_IN_WATER_TEMP,
-    FEAT_OUT_WATER_TEMP,
-    FEAT_OVEN_LOWER_CURRENT_TEMP,
-    FEAT_OVEN_LOWER_STATE,
-    FEAT_OVEN_UPPER_CURRENT_TEMP,
-    FEAT_OVEN_UPPER_STATE,
-    FEAT_PM1,
-    FEAT_PM10,
-    FEAT_PM25,
-    FEAT_PRE_STATE,
-    FEAT_PROCESS_STATE,
-    FEAT_RUN_STATE,
-    FEAT_SPINSPEED,
-    FEAT_TARGET_HUMIDITY,
-    FEAT_TEMPCONTROL,
-    FEAT_TUBCLEAN_COUNT,
-    FEAT_WATERTEMP,
-    WM_DEVICE_TYPES,
-    DeviceType,
-)
-
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -54,8 +16,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
     PERCENTAGE,
-    POWER_WATT,
     STATE_UNAVAILABLE,
+    UnitOfPower,
 )
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
@@ -67,12 +29,23 @@ from .const import DEFAULT_ICON, DEFAULT_SENSOR, DOMAIN, LGE_DEVICES, LGE_DISCOV
 from .device_helpers import (
     DEVICE_ICONS,
     WASH_DEVICE_TYPES,
-    LGEACDevice,
+    LGEBaseDevice,
     LGERangeDevice,
     LGERefrigeratorDevice,
+    LGETempDevice,
     LGEWashDevice,
     get_entity_name,
     get_multiple_devices_types,
+)
+from .wideq import (
+    WM_DEVICE_TYPES,
+    AirConditionerFeatures,
+    AirPurifierFeatures,
+    DehumidifierFeatures,
+    DeviceType,
+    RangeFeatures,
+    WashDeviceFeatures,
+    WaterHeaterFeatures,
 )
 
 # service definition
@@ -93,9 +66,6 @@ ATTR_FRIDGE_TEMP = "fridge_temp"
 ATTR_FREEZER_TEMP = "freezer_temp"
 ATTR_TEMP_UNIT = "temp_unit"
 
-# ac sensor attributes
-ATTR_ROOM_TEMP = "room_temperature"
-
 # range sensor attributes
 ATTR_OVEN_LOWER_TARGET_TEMP = "oven_lower_target_temp"
 ATTR_OVEN_UPPER_TARGET_TEMP = "oven_upper_target_temp"
@@ -114,6 +84,7 @@ class ThinQSensorEntityDescription(SensorEntityDescription):
 
     unit_fn: Callable[[Any], str] | None = None
     value_fn: Callable[[Any], float | str] | None = None
+    feature_attributes: dict[str, str] | None = None
 
 
 WASH_DEV_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
@@ -129,54 +100,59 @@ WASH_DEV_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
         value_fn=lambda x: x.current_course,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_RUN_STATE,
+        key=WashDeviceFeatures.RUN_STATE,
         name="Run state",
         icon=DEFAULT_ICON,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_PROCESS_STATE,
+        key=WashDeviceFeatures.PROCESS_STATE,
         name="Process state",
         icon=DEFAULT_ICON,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_SPINSPEED,
+        key=WashDeviceFeatures.SPINSPEED,
         name="Spin speed",
         icon="mdi:rotate-3d",
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_WATERTEMP,
+        key=WashDeviceFeatures.WATERTEMP,
         name="Water temp",
         icon="mdi:thermometer-lines",
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_TEMPCONTROL,
+        key=WashDeviceFeatures.RINSEMODE,
+        name="Rinse mode",
+        icon="mdi:waves",
+    ),
+    ThinQSensorEntityDescription(
+        key=WashDeviceFeatures.TEMPCONTROL,
         name="Temp control",
         icon="mdi:thermometer-lines",
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_DRYLEVEL,
+        key=WashDeviceFeatures.DRYLEVEL,
         name="Dry level",
         icon="mdi:tumble-dryer",
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_ERROR_MSG,
+        key=WashDeviceFeatures.ERROR_MSG,
         name="Error message",
         icon="mdi:alert-circle-outline",
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_PRE_STATE,
+        key=WashDeviceFeatures.PRE_STATE,
         name="Pre state",
         icon=DEFAULT_ICON,
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_TUBCLEAN_COUNT,
+        key=WashDeviceFeatures.TUBCLEAN_COUNT,
         name="Tub clean counter",
         icon=DEFAULT_ICON,
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_HALFLOAD,
+        key=WashDeviceFeatures.HALFLOAD,
         name="Half load",
         icon="mdi:circle-half-full",
         entity_registry_enabled_default=False,
@@ -228,16 +204,15 @@ REFRIGERATOR_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
 )
 AC_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
     ThinQSensorEntityDescription(
-        key=ATTR_ROOM_TEMP,
+        key=AirConditionerFeatures.ROOM_TEMP,
         name="Room temperature",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
         unit_fn=lambda x: x.temp_unit,
-        value_fn=lambda x: x.curr_temp,
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_HOT_WATER_TEMP,
+        key=AirConditionerFeatures.HOT_WATER_TEMP,
         name="Hot water temperature",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -245,15 +220,14 @@ AC_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_IN_WATER_TEMP,
+        key=AirConditionerFeatures.WATER_IN_TEMP,
         name="In water temperature",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
         unit_fn=lambda x: x.temp_unit,
-        entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_OUT_WATER_TEMP,
+        key=AirConditionerFeatures.WATER_OUT_TEMP,
         name="Out water temperature",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -261,20 +235,29 @@ AC_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_ENERGY_CURRENT,
+        key=AirConditionerFeatures.ENERGY_CURRENT,
         name="Energy current",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=POWER_WATT,
-        entity_registry_enabled_default=False,
+        native_unit_of_measurement=UnitOfPower.WATT,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_HUMIDITY,
+        key=AirConditionerFeatures.HUMIDITY,
         name="Humidity",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement=PERCENTAGE,
-        entity_registry_enabled_default=False,
+    ),
+    ThinQSensorEntityDescription(
+        key=AirConditionerFeatures.FILTER_MAIN_LIFE,
+        name="Filter Remaining Life",
+        icon="mdi:air-filter",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        feature_attributes={
+            "use_time": AirConditionerFeatures.FILTER_MAIN_USE,
+            "max_time": AirConditionerFeatures.FILTER_MAIN_MAX,
+        },
     ),
 )
 RANGE_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
@@ -284,43 +267,53 @@ RANGE_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
         value_fn=lambda x: x.power_state,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_COOKTOP_LEFT_FRONT_STATE,
+        key=RangeFeatures.COOKTOP_LEFT_FRONT_STATE,
         name="Cooktop left front state",
         icon="mdi:arrow-left-bold-box-outline",
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_COOKTOP_LEFT_REAR_STATE,
+        key=RangeFeatures.COOKTOP_LEFT_REAR_STATE,
         name="Cooktop left rear state",
         icon="mdi:arrow-left-bold-box",
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_COOKTOP_CENTER_STATE,
+        key=RangeFeatures.COOKTOP_CENTER_STATE,
         name="Cooktop center state",
         icon="mdi:minus-box-outline",
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_COOKTOP_RIGHT_FRONT_STATE,
+        key=RangeFeatures.COOKTOP_RIGHT_FRONT_STATE,
         name="Cooktop right front state",
         icon="mdi:arrow-right-bold-box-outline",
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_COOKTOP_RIGHT_REAR_STATE,
+        key=RangeFeatures.COOKTOP_RIGHT_REAR_STATE,
         name="Cooktop right rear state",
         icon="mdi:arrow-right-bold-box",
         entity_registry_enabled_default=False,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_OVEN_LOWER_STATE,
+        key=RangeFeatures.OVEN_LOWER_STATE,
         name="Oven lower state",
         icon="mdi:inbox-arrow-down",
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_OVEN_UPPER_STATE,
+        key=RangeFeatures.OVEN_LOWER_MODE,
+        name="Oven lower mode",
+        icon="mdi:inbox-arrow-down",
+    ),
+    ThinQSensorEntityDescription(
+        key=RangeFeatures.OVEN_UPPER_STATE,
         name="Oven upper state",
+        icon="mdi:inbox-arrow-up",
+    ),
+    ThinQSensorEntityDescription(
+        key=RangeFeatures.OVEN_UPPER_MODE,
+        name="Oven upper mode",
         icon="mdi:inbox-arrow-up",
     ),
     ThinQSensorEntityDescription(
@@ -332,7 +325,7 @@ RANGE_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
         value_fn=lambda x: x.oven_lower_target_temp,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_OVEN_LOWER_CURRENT_TEMP,
+        key=RangeFeatures.OVEN_LOWER_CURRENT_TEMP,
         name="Oven lower current temperature",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -347,7 +340,7 @@ RANGE_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
         value_fn=lambda x: x.oven_upper_target_temp,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_OVEN_UPPER_CURRENT_TEMP,
+        key=RangeFeatures.OVEN_UPPER_CURRENT_TEMP,
         name="Oven upper current temperature",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -356,79 +349,99 @@ RANGE_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
 )
 AIR_PURIFIER_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
     ThinQSensorEntityDescription(
-        key=FEAT_HUMIDITY,
+        key=AirPurifierFeatures.HUMIDITY,
         name="Current Humidity",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement=PERCENTAGE,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_PM1,
+        key=AirPurifierFeatures.PM1,
         name="PM1",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.PM1,
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_PM10,
+        key=AirPurifierFeatures.PM10,
         name="PM10",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.PM10,
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_PM25,
+        key=AirPurifierFeatures.PM25,
         name="PM2.5",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.PM25,
         native_unit_of_measurement=CONCENTRATION_MICROGRAMS_PER_CUBIC_METER,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_FILTER_MAIN_LIFE,
+        key=AirPurifierFeatures.FILTER_MAIN_LIFE,
         name="Filter Remaining Life (Main)",
         icon="mdi:air-filter",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+        feature_attributes={
+            "use_time": AirPurifierFeatures.FILTER_MAIN_USE,
+            "max_time": AirPurifierFeatures.FILTER_MAIN_MAX,
+        },
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_FILTER_BOTTOM_LIFE,
+        key=AirPurifierFeatures.FILTER_BOTTOM_LIFE,
         name="Filter Remaining Life (Bottom)",
         icon="mdi:air-filter",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+        feature_attributes={
+            "use_time": AirPurifierFeatures.FILTER_BOTTOM_USE,
+            "max_time": AirPurifierFeatures.FILTER_BOTTOM_MAX,
+        },
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_FILTER_DUST_LIFE,
+        key=AirPurifierFeatures.FILTER_DUST_LIFE,
         name="Filter Remaining Life (Dust)",
         icon="mdi:air-filter",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+        feature_attributes={
+            "use_time": AirPurifierFeatures.FILTER_DUST_USE,
+            "max_time": AirPurifierFeatures.FILTER_DUST_MAX,
+        },
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_FILTER_MID_LIFE,
+        key=AirPurifierFeatures.FILTER_MID_LIFE,
         name="Filter Remaining Life (Middle)",
         icon="mdi:air-filter",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+        feature_attributes={
+            "use_time": AirPurifierFeatures.FILTER_MID_USE,
+            "max_time": AirPurifierFeatures.FILTER_MID_MAX,
+        },
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_FILTER_TOP_LIFE,
+        key=AirPurifierFeatures.FILTER_TOP_LIFE,
         name="Filter Remaining Life (Top)",
         icon="mdi:air-filter",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+        feature_attributes={
+            "use_time": AirPurifierFeatures.FILTER_TOP_USE,
+            "max_time": AirPurifierFeatures.FILTER_TOP_MAX,
+        },
     ),
 )
 DEHUMIDIFIER_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
     ThinQSensorEntityDescription(
-        key=FEAT_HUMIDITY,
+        key=DehumidifierFeatures.HUMIDITY,
         name="Current Humidity",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement=PERCENTAGE,
     ),
     ThinQSensorEntityDescription(
-        key=FEAT_TARGET_HUMIDITY,
+        key=DehumidifierFeatures.TARGET_HUMIDITY,
         name="Target Humidity",
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.HUMIDITY,
@@ -436,9 +449,28 @@ DEHUMIDIFIER_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
     ),
 )
+WATER_HEATER_SENSORS: Tuple[ThinQSensorEntityDescription, ...] = (
+    ThinQSensorEntityDescription(
+        key=WaterHeaterFeatures.HOT_WATER_TEMP,
+        name="Hot water temperature",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        unit_fn=lambda x: x.temp_unit,
+        entity_registry_enabled_default=False,
+    ),
+    ThinQSensorEntityDescription(
+        key=WaterHeaterFeatures.ENERGY_CURRENT,
+        name="Energy current",
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.WATT,
+    ),
+)
 
 
-def _sensor_exist(lge_device: LGEDevice, sensor_desc: ThinQSensorEntityDescription) -> bool:
+def _sensor_exist(
+    lge_device: LGEDevice, sensor_desc: ThinQSensorEntityDescription
+) -> bool:
     """Check if a sensor exist for device."""
     if sensor_desc.value_fn is not None:
         return True
@@ -473,7 +505,9 @@ async def async_setup_entry(
             [
                 LGEWashDeviceSensor(lge_device, sensor_desc)
                 for sensor_desc in WASH_DEV_SENSORS
-                for lge_device in get_multiple_devices_types(lge_devices, WASH_DEVICE_TYPES)
+                for lge_device in get_multiple_devices_types(
+                    lge_devices, WASH_DEVICE_TYPES
+                )
                 if _sensor_exist(lge_device, sensor_desc)
             ]
         )
@@ -491,7 +525,7 @@ async def async_setup_entry(
         # add AC
         lge_sensors.extend(
             [
-                LGESensor(lge_device, sensor_desc, LGEACDevice(lge_device))
+                LGESensor(lge_device, sensor_desc, LGETempDevice(lge_device))
                 for sensor_desc in AC_SENSORS
                 for lge_device in lge_devices.get(DeviceType.AC, [])
                 if _sensor_exist(lge_device, sensor_desc)
@@ -528,6 +562,16 @@ async def async_setup_entry(
             ]
         )
 
+        # add water_heater
+        lge_sensors.extend(
+            [
+                LGESensor(lge_device, sensor_desc, LGETempDevice(lge_device))
+                for sensor_desc in WATER_HEATER_SENSORS
+                for lge_device in lge_devices.get(DeviceType.WATER_HEATER, [])
+                if _sensor_exist(lge_device, sensor_desc)
+            ]
+        )
+
         async_add_entities(lge_sensors)
 
     _async_discover_device(lge_cfg_devices)
@@ -555,13 +599,14 @@ async def async_setup_entry(
 class LGESensor(CoordinatorEntity, SensorEntity):
     """Class to monitor sensors for LGE device"""
 
-    entity_description = ThinQSensorEntityDescription
+    entity_description: ThinQSensorEntityDescription
+    _wrap_device: LGEBaseDevice | None
 
     def __init__(
-            self,
-            api: LGEDevice,
-            description: ThinQSensorEntityDescription,
-            wrapped_device=None,
+        self,
+        api: LGEDevice,
+        description: ThinQSensorEntityDescription,
+        wrapped_device: LGEBaseDevice | None = None,
     ):
         """Initialize the sensor."""
         super().__init__(api.coordinator)
@@ -613,6 +658,18 @@ class LGESensor(CoordinatorEntity, SensorEntity):
         """Return True if unable to access real state of the entity."""
         return self._api.assumed_state
 
+    @property
+    def extra_state_attributes(self):
+        """Return the optional state attributes."""
+        features = self.entity_description.feature_attributes
+        if not (features and self._api.state):
+            return None
+        data = {}
+        for key, feat in features.items():
+            if (val := self._api.state.device_features.get(feat)) is not None:
+                data[key] = val
+        return data
+
     def _get_sensor_state(self):
         """Get current sensor state"""
         if self._wrap_device and self.entity_description.value_fn is not None:
@@ -640,10 +697,12 @@ class LGESensor(CoordinatorEntity, SensorEntity):
 class LGEWashDeviceSensor(LGESensor):
     """A sensor to monitor LGE Wash devices"""
 
+    _wrap_device: LGEWashDevice
+
     def __init__(
-            self,
-            api: LGEDevice,
-            description: ThinQSensorEntityDescription,
+        self,
+        api: LGEDevice,
+        description: ThinQSensorEntityDescription,
     ):
         """Initialize the sensor."""
         super().__init__(api, description, LGEWashDevice(api))
@@ -652,7 +711,7 @@ class LGEWashDeviceSensor(LGESensor):
     def extra_state_attributes(self):
         """Return the optional state attributes."""
         if not self._is_default:
-            return None
+            return super().extra_state_attributes
 
         data = {
             ATTR_RUN_COMPLETED: self._wrap_device.run_completed,
@@ -671,10 +730,12 @@ class LGEWashDeviceSensor(LGESensor):
 class LGERefrigeratorSensor(LGESensor):
     """A sensor to monitor LGE Refrigerator devices"""
 
+    _wrap_device: LGERefrigeratorDevice
+
     def __init__(
-            self,
-            api: LGEDevice,
-            description: ThinQSensorEntityDescription,
+        self,
+        api: LGEDevice,
+        description: ThinQSensorEntityDescription,
     ):
         """Initialize the sensor."""
         super().__init__(api, description, LGERefrigeratorDevice(api))
@@ -683,7 +744,7 @@ class LGERefrigeratorSensor(LGESensor):
     def extra_state_attributes(self):
         """Return the optional state attributes."""
         if not self._is_default:
-            return None
+            return super().extra_state_attributes
 
         data = {
             ATTR_FRIDGE_TEMP: self._wrap_device.temp_fridge,
@@ -702,10 +763,12 @@ class LGERefrigeratorSensor(LGESensor):
 class LGERangeSensor(LGESensor):
     """A sensor to monitor LGE range devices"""
 
+    _wrap_device: LGERangeDevice
+
     def __init__(
-            self,
-            api: LGEDevice,
-            description: ThinQSensorEntityDescription,
+        self,
+        api: LGEDevice,
+        description: ThinQSensorEntityDescription,
     ):
         """Initialize the sensor."""
         super().__init__(api, description, LGERangeDevice(api))
@@ -714,7 +777,7 @@ class LGERangeSensor(LGESensor):
     def extra_state_attributes(self):
         """Return the optional state attributes."""
         if not self._is_default:
-            return None
+            return super().extra_state_attributes
 
         data = {
             ATTR_OVEN_LOWER_TARGET_TEMP: self._wrap_device.oven_lower_target_temp,
