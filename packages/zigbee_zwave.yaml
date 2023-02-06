@@ -63,7 +63,7 @@ homeassistant:
       device_class: opening
       friendly_name: "East South East Window"
 
-    binary_sensor.front_door_contact:
+    binary_sensor.main_foyer_front_door_contact:
       <<: *customize
       device_class: opening
       friendly_name: "Front Door"
@@ -443,6 +443,62 @@ automation:
                 data:
                   entity_id: light.basement_bathroom_shower
 
+  - alias: dining_room_switch_actions
+    id: dining_room_switch_actions
+    trigger:
+      - platform: state
+        entity_id: sensor.dining_room_overhead_action
+        to: "up_single"
+        id: up-single
+      - platform: state
+        entity_id: sensor.dining_room_overhead_action
+        to: "down_single"
+        id: down-single
+      - platform: state
+        entity_id: sensor.dining_room_overhead_action
+        to: "up_double"
+        id: up-double
+      - platform: state
+        entity_id: sensor.dining_room_overhead_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-single
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.dining_room
+                  brightness_pct: 100
+          - conditions:
+              - condition: trigger
+                id: down-single
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.dining_room
+                  transition: 5
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.dining_room
+                  kelvin: >-
+                    {{state_attr("light.dining_room","color_temp_kelvin")+200}}
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.dining_room
+                  kelvin: >-
+                    {{state_attr("light.dining_room","color_temp_kelvin")-200}}
+
   - alias: in_bed_toggles
     id: in_bed_toggles
     trigger:
@@ -509,6 +565,84 @@ automation:
           message: >-
             Mail delivered.
 
+  - id: office_light_control_button
+    alias: office_light_control_button
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.office_light_button_1_action
+          - sensor.office_light_button_2_action
+        to: "toggle"
+        id: toggle
+      - platform: state
+        entity_id:
+          - sensor.office_light_button_1_action
+          - sensor.office_light_button_2_action
+        to: "brightness_up_click"
+        id: brightness_up_click
+      - platform: state
+        entity_id:
+          - sensor.office_light_button_1_action
+          - sensor.office_light_button_2_action
+        to: "brightness_down_click"
+        id: brightness_down_click
+      - platform: state
+        entity_id:
+          - sensor.office_light_button_1_action
+          - sensor.office_light_button_2_action
+        to: "arrow_right_click"
+        id: arrow_right_click
+      - platform: state
+        entity_id:
+          - sensor.office_light_button_1_action
+          - sensor.office_light_button_2_action
+        to: "arrow_left_click"
+        id: arrow_left_click
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: toggle
+            sequence:
+              - service: light.toggle
+                data:
+                  entity_id: light.office_floor_lamp
+          - conditions:
+              - condition: trigger
+                id: brightness_up_click
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.office_floor_lamp
+                  brightness_pct: >-
+                    {{ (state_attr('light.office_floor_lamp', 'brightness') | int + 12.5 )/255 * 100}}
+                  # 5% increase
+          - conditions:
+              - condition: trigger
+                id: brightness_down_click
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.office_floor_lamp
+                  brightness_pct: >-
+                    {{ (state_attr('light.office_floor_lamp', 'brightness') | int - 12.5 )/255 *100}}
+                  # 5% decrease
+          # not used as office floor lamp doesn't support color temps
+          # - conditions:
+          #     - condition: trigger
+          #       id: arrow_left_click
+          #   sequence:
+          #     - service: light.turn_on
+          #       data:
+          #         entity_id: fan.guest_room
+          # - conditions:
+          #     - condition: trigger
+          #       id: arrow_right_click
+          #   sequence:
+          #     - service: light.turn_on
+          #       data:
+          #         entity_id: fan.guest_room
+
   - id: reset_mail_delivery
     alias: reset_mail_delivery
     trigger:
@@ -567,6 +701,194 @@ automation:
               - service: fan.decrease_speed
                 data:
                   entity_id: fan.guest_room
+
+  - alias: kitchen_overhead_switch_actions
+    id: kitchen_overhead_switch_actions
+    trigger:
+      - platform: state
+        entity_id: sensor.kitchen_overhead_lights_switch_action
+        to: "up_single"
+        id: up-single
+      - platform: state
+        entity_id: sensor.kitchen_overhead_lights_switch_action
+        to: "down_single"
+        id: down-single
+      - platform: state
+        entity_id: sensor.kitchen_overhead_lights_switch_action
+        to: "up_double"
+        id: up-double
+      - platform: state
+        entity_id: sensor.kitchen_overhead_lights_switch_action
+        to: "down_double"
+        id: down-double
+      - platform: state
+        entity_id: sensor.kitchen_overhead_lights_switch_action
+        to: "up_held"
+        id: up-held
+      - platform: state
+        entity_id: sensor.kitchen_overhead_lights_switch_action
+        to: "down_held"
+        id: down-held
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-single
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.kitchen_overhead
+                  transition: 1
+          - conditions:
+              - condition: trigger
+                id: down-single
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.kitchen_overhead
+                  transition: 5
+          - conditions:
+              - condition: trigger
+                id: up-held
+            sequence:
+              repeat:
+                sequence:
+                  - service: light.turn_on
+                    data:
+                      entity_id: light.kitchen_overhead
+                      brightness: >-
+                        {{state_attr('light.kitchen_overhead', 'brightness') + 10 }}
+                  - delay:
+                      milliseconds: 50
+                until:
+                  - condition: or
+                    conditions:
+                      - condition: state
+                        entity_id: sensor.kitchen_overhead_lights_switch_action
+                        state: "up_release"
+                      - alias: "condition alias (name)"
+                        condition: numeric_state
+                        entity_id: light.kitchen_overhead
+                        attribute: brightness
+                        above: 254
+          - conditions:
+              - condition: trigger
+                id: down-held
+            sequence:
+              repeat:
+                sequence:
+                  - service: light.turn_on
+                    data:
+                      entity_id: light.kitchen_overhead
+                      brightness: >-
+                        {{state_attr('light.kitchen_overhead', 'brightness') - 10}}
+                  - delay:
+                      milliseconds: 50
+                until:
+                  - condition: or
+                    conditions:
+                      - condition: state
+                        entity_id: sensor.kitchen_overhead_lights_switch_action
+                        state: "down_release"
+                      - alias: "condition alias (name)"
+                        condition: numeric_state
+                        entity_id: light.kitchen_overhead
+                        attribute: brightness
+                        below: 1
+
+  - alias: laundry_switch_actions
+    id: laundry_switch_actions
+    trigger:
+      - platform: state
+        entity_id: sensor.laundry_wall_switch_action
+        to: "up_single"
+        id: up-single
+      - platform: state
+        entity_id: sensor.laundry_wall_switch_action
+        to: "down_single"
+        id: down-single
+      - platform: state
+        entity_id: sensor.laundry_wall_switch_action
+        to: "up_double"
+        id: up-double
+      - platform: state
+        entity_id: sensor.laundry_wall_switch_action
+        to: "down_double"
+        id: down-double
+      - platform: state
+        entity_id: sensor.laundry_wall_switch_action
+        to: "up_held"
+        id: up-held
+      - platform: state
+        entity_id: sensor.laundry_wall_switch_action
+        to: "down_held"
+        id: down-held
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-single
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id: light.laundry_room
+                  transition: 1
+          - conditions:
+              - condition: trigger
+                id: down-single
+            sequence:
+              - service: light.turn_off
+                data:
+                  entity_id: light.laundry_room
+                  transition: 5
+          - conditions:
+              - condition: trigger
+                id: up-held
+            sequence:
+              repeat:
+                sequence:
+                  - service: light.turn_on
+                    data:
+                      entity_id: light.laundry_room
+                      brightness: >-
+                        {{state_attr('light.laundry_room', 'brightness') + 10 }}
+                  - delay:
+                      milliseconds: 50
+                until:
+                  - condition: or
+                    conditions:
+                      - condition: state
+                        entity_id: sensor.laundry_wall_switch_action
+                        state: "up_release"
+                      - alias: "condition alias (name)"
+                        condition: numeric_state
+                        entity_id: light.laundry_room
+                        attribute: brightness
+                        above: 254
+          - conditions:
+              - condition: trigger
+                id: down-held
+            sequence:
+              repeat:
+                sequence:
+                  - service: light.turn_on
+                    data:
+                      entity_id: light.laundry_room
+                      brightness: >-
+                        {{state_attr('light.laundry_room', 'brightness') - 10}}
+                  - delay:
+                      milliseconds: 50
+                until:
+                  - condition: or
+                    conditions:
+                      - condition: state
+                        entity_id: sensor.laundry_wall_switch_action
+                        state: "down_release"
+                      - alias: "condition alias (name)"
+                        condition: numeric_state
+                        entity_id: light.laundry_room
+                        attribute: brightness
+                        below: 1
 
   - alias: office_switch_actions
     id: office_switch_actions
@@ -759,7 +1081,7 @@ binary_sensor:
       master_bed_occupancy:
         device_class: occupancy
         value_template: >-
-          {{ states('sensor.average_bed_load')| int(0) > 40 }}
+          {{ states('sensor.average_bed_load')| int(0) > 20 }}
         # value_template: >-
         #   {{
         #     states('sensor.bed_load_cell_1') | int(0) > 15
