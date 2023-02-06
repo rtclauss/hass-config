@@ -168,12 +168,22 @@ automation:
               - service: number.set_value
                 entity_id: number.nigori_charge_limit
                 data:
-                  value: "75"
+                  value: >-
+                    {% if is_state('binary_sensor.upcoming_trip_charging', 'on') %}
+                      100
+                    {% else %}
+                      65
+                    {% endif %}
               - service: persistent_notification.create
                 enabled: false
                 data_template:
-                  title: Max Charge Off
-                  message: "Turned off max charge"
+                  title: Charge Limit
+                  message: >-
+                    {% if is_state('binary_sensor.upcoming_trip_charging', 'on') %}
+                      Charge limit set 100
+                    {% else %}
+                      Charge limit set 65
+                    {% endif %}
                   notification_id: low-battery-alert
               - service: notify.all
                 enabled: false
@@ -633,7 +643,7 @@ template:
             {% else %}
               {% if (curling_upcoming < work_meeting_upcoming) %}
                 {% if (curling_upcoming - now())< timedelta(hours=24) %}
-                 Curling: {{ state_attr('calendar.curling', 'all_day') }}
+                  Curling: {{ state_attr('calendar.curling', 'all_day') }}
                 {% else %}
                   None
                 {% endif %}
