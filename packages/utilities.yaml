@@ -228,6 +228,30 @@ automation:
               .1258
             {% endif %}
 
+  - id: switch_water_tariff
+    alias: switch_water_tariff
+    trigger:
+      []
+      # - platform: time
+      #   at: "09:00:00"
+      #   variables:
+      #     tariff: "peak"
+      # - platform: time
+      #   at: "21:00:00"
+      #   variables:
+      #     tariff: "offpeak"
+    action:
+      - service: select.select_option
+        target:
+          entity_id: select.daily_energy
+        data:
+          option: "{{ tariff }}"
+      - service: select.select_option
+        target:
+          entity_id: select.monthly_energy
+        data:
+          option: "{{ tariff }}"
+
   - alias: Restart AppDaemon on HA Startup
     description: When HA starts up, restart AppDaemon
     id: restart_appdaemon_on_ha_startup
@@ -646,8 +670,18 @@ template:
           {% else %}
             unavailable
           {% endif %}
+      - name: tariff_under_15k_water
+        unique_id: tariff_under_15k_water
+        icon: mdi:cash-minus
+        unit_of_measurement: $/gal
+        state: "0.00486"
+      - name: tariff_between_16k_30K_gal
+        unique_id: tariff_between_16k_30K_gal
+        icon: mdi:cash-minus
+        unit_of_measurement: $/gal
+        state: "0.00497"
 
-  ########################
+########################
 # Utility Meter
 ########################
 utility_meter:
@@ -669,6 +703,29 @@ utility_meter:
     tariffs:
       - non-summer
       - summer
+  # hourly_water:
+  #   source: sensor.watermeter_value
+  #   name: Hourly Water Usage
+  #   cycle: hourly
+  # daily_water:
+  #   source: sensor.watermeter_value
+  #   name: Daily Water Usage
+  #   cycle: daily
+  # weekly_water:
+  #   source: sensor.watermeter_value
+  #   name: Weekly Water Usage
+  #   cycle: weekly
+  # monthly_water:
+  #   source: sensor.watermeter_value
+  #   name: Monthly Water Usage
+  #   cycle: monthly
+  # quarterly_water:
+  #   source: sensor.watermeter_value
+  #   name: Quarterly Water Usage
+  #   cycle: quarterly
+  #   tariffs:
+  #     - under_15k_gal
+  #     - between_16k_30K_gal
 
 ########################
 # Weather
