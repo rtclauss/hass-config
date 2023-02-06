@@ -112,7 +112,7 @@ homeassistant:
 
     input_boolean.owner_bath_auto_on:
       <<: *customize
-      friendly_name: "Master Bedroom Light Automatically Turned on"
+      friendly_name: "Owner Suite Bath Lights Automatically Turned on"
       icon: mdi:bed
       hidden: true
 
@@ -520,13 +520,13 @@ automation:
     alias: front_door_light_auto_toggle
     trigger:
       - platform: state
-        entity_id: binary_sensor.front_door_contact
+        entity_id: binary_sensor.main_foyer_front_door_contact
         to: "off"
         for:
           seconds: 30
         id: door-closed
       - platform: state
-        entity_id: binary_sensor.front_door_contact
+        entity_id: binary_sensor.main_foyer_front_door_contact
         to: "on"
         id: door-opened
     condition:
@@ -580,8 +580,9 @@ automation:
             sequence:
               - service: light.turn_off
                 data:
-                  entity_id: light.outside_front_lights
                   transition: 600
+                target:
+                  entity_id: light.outside_front_lights
       - choose:
           - conditions:
               - condition: trigger
@@ -589,30 +590,44 @@ automation:
             sequence:
               - service: light.turn_on
                 data:
-                  entity_id: light.outside_front_lights
                   transition: 600
+                  brightness_pct: 100
+                target:
+                  entity_id: light.outside_front_lights
 
-  # - id: front_door_light_auto_on
-  #   alias: front_door_light_auto_on
-  #   trigger:
-  #     - platform: state
-  #       entity_id: binary_sensor.front_door_contact
-  #       to: "on"
-  #   condition:
-  #     condition: and
-  #     conditions:
-  #       - condition: sun
-  #         after: sunset
-  #       - condition: state
-  #         entity_id: switch.front_door
-  #         state: "off"
-  #   action:
-  #     - service: homeassistant.turn_on
-  #       data:
-  #         entity_id: switch.front_door
-  #     - service: homeassistant.turn_on
-  #       data:
-  #         entity_id: input_boolean.front_door_auto_on
+  - id: garage_entry_door_light_auto_toggle
+    alias: garage_entry_light_auto_toggle
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.hall_garage_entry_contact
+        to: "off"
+        for:
+          minutes: 5
+        id: door-closed
+      - platform: state
+        entity_id: binary_sensor.hall_garage_entry_contact
+        to: "on"
+        id: door-opened
+    condition: []
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: door-closed
+            sequence:
+              - service: homeassistant.turn_off
+                data:
+                  entity_id: light.hall_transition_lights
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: door-opened
+            sequence:
+              - service: light.turn_on
+                data:
+                  entity_id:
+                    - light.hall_transition_lights
+                    - light.hall_all_downlights
 
   - id: guest_room_ceiling_lights_on_off
     alias: guest_room_ceiling_lights_on_off
@@ -725,25 +740,15 @@ automation:
             before: sunrise
             before_offset: "+2:00:00"
     action:
-      - service: light.turn_off
-        target:
-          area_id:
-            - 13b74091cb0d4c85b33aa3c02110dc61
-            - 4927cd530ee44a9e9eefc33f0de6c90e
-            - 63fed54ed79341e78947d811495a52cd
-            - deck
-            - den
-            - garage
-            - 13b74091cb0d4c85b33aa3c02110dc61
-            - 7cd73f11a4bf476e839c61b4a3090edd
-            - laundry_room
-            - 72a8db21bc2d457e80748541dc138d07
-            - 54913feabaa14cf88ff2190e25bef547
-            - owner_suite_bathroom
-            - 8144b95c1eb245499ecaf8d49e4ffe30
-            - tiki_room
+      - service: script.lights_off_except
         data:
-          transition: 60
+          exclude_lights:
+            - light.outside_front_lights
+            - light.owner_suite_lamps
+            - light.owner_suite_lamp_bulb_1
+            - light.owner_suite_lamp_bulb_2
+            - light.owner_suite_all
+          transition: 120
 
   - id: kitchen_lights_toggle
     alias: kitchen_lights_toggle
@@ -760,7 +765,7 @@ automation:
         for:
           minutes: 60
         id: kitchen_unoccupied
-    condition:
+    condition: []
     action:
       - choose:
           # IF lunch
@@ -1273,7 +1278,7 @@ automation:
         - condition: state
           entity_id:
             - input_boolean.guest_mode
-          state: "on"
+          state: "off"
     action:
       - parallel:
           # - service: scene.turn_on
@@ -1282,6 +1287,7 @@ automation:
             data:
               exclude_lights:
                 - light.outside_front_lights
+              transition: 30
           # - service: light.turn_off
           #   entity_id: "all"
           - service: fan.turn_off
@@ -1306,6 +1312,13 @@ automation:
             entity_id:
               - media_player.lg_webos_smart_tv
               - media_player.basement
+          - service: number.set_value
+            entity_id:
+              - number.owner_suite_closet_ledintensitywhenoff
+              - number.owner_suite_fan_switch_ledintensitywhenoff
+              - number.owner_suite_bathroom_vanity_ledintensitywhenoff
+            data:
+              value: 0
         # Only turn on the humidifier when it's winter
         # Not used with whole-home humidifier
         # - condition: and
@@ -1501,7 +1514,7 @@ group:
   kitchen:
     name: Kitchen
     entities:
-      - light.kitchen_table
+      - light.kitchen_overhead
       - light.kitchen_sink
 
   other_lights:
@@ -1548,6 +1561,12 @@ light:
       - light.south_kitchen
       - light.north_kitchen
       - light.kitchen_sink
+
+  - platform: group
+    name: laundry_room
+    entities:
+      - light.laundry_room_north
+      - light.laundry_room_south
 
   - platform: group
     name: living_room_all
@@ -1789,10 +1808,14 @@ script:
         data_template:
           entity_id: >
             {{all_other_lights}}
+          transition: >-
+            {{ transition }}
       - service: light.turn_off
         data_template:
           entity_id: >
             {{all_other_lights}}
+          transition: >-
+            {{ transition }}
 
 ########################
 # Sensor
