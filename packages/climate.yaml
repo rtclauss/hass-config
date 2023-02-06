@@ -205,31 +205,37 @@ automation:
           value: >-
             {{(states("input_number.air_filters_at_home")|int) + (trigger.event.data.reply_text | int)}}
 
-  - id: turn_on_bathroom_fan_when_humidity_high
-    alias: turn_on_bathroom_fan_when_humidity_high
+  - id: toggle_bathroom_fan_when_showering
+    alias: toggle_bathroom_fan_when_showering
     trigger:
-      - platform: state
+      - id: humidity-high
+        platform: state
         entity_id: binary_sensor.bathroom_humidity_high
         to: "on"
         for:
           seconds: 20
-    action:
-      - service: switch.turn_on
-        data:
-          entity_id: switch.bathroom_light_fan_switch
-
-  - id: turn_off_bathroom_fan_when_humidity_normal
-    alias: turn_off_bathroom_fan_when_humidity_normal
-    trigger:
-      - platform: state
+      - id: humidity-normal
+        platform: state
         entity_id: binary_sensor.bathroom_humidity_high
         to: "off"
         for:
           minutes: 10
     action:
-      - service: switch.turn_off
-        data:
-          entity_id: switch.bathroom_light_fan_switch
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: humidity-high
+            sequence:
+              - service: fan.turn_on
+                data:
+                  entity_id: fan.owner_suite_bathroom_fan
+          - conditions:
+              - condition: trigger
+                id: humidity-normal
+            sequence:
+              - service: fan.turn_off
+                data:
+                  entity_id: fan.owner_suite_bathroom_fan
 
 # Implemented in Schedy
 # - id: turn_off_nest_when_windows_open
@@ -293,8 +299,9 @@ binary_sensor:
       bathroom_humidity_high:
         value_template: >-
           {% if
-              (states('sensor.bathroom_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10)
-          %} True
+              (states('sensor.owner_suite_bathroom_tph_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10)
+          %}
+            True
           {% else %}
             False
           {% endif %}
@@ -499,6 +506,22 @@ sensor:
     round: 5
     time_window: "00:30:00"
 
+  - platform: history_stats
+    name: Heating Today
+    entity_id: sensor.hvac_activity
+    state: "heating"
+    type: time
+    start: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Cooling Today
+    entity_id: sensor.hvac_activity
+    state: "cooling"
+    type: time
+    start: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
+    end: "{{ now() }}"
+
   - platform: min_max
     name: average_house_temp
     type: mean
@@ -634,3 +657,11 @@ sensor:
     max_age:
       hours: 1
     precision: 8
+
+################################################
+## Templates
+################################################
+template:
+  - sensor:
+      - name: HVAC Activity
+        state: "{{ state_attr('climate.my_ecobee', 'hvac_action') }}"
