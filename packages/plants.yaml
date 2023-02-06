@@ -233,6 +233,37 @@ automation:
     action:
       - service: switch.turn_on
         entity_id: switch.carnivorous_plants_light
+
+  - id: water_notification
+    alias: water_notification
+    trigger:
+      - platform: time
+        at: "12:15:00"
+    condition:
+      - alias: "condition alias (name)"
+        condition: template
+        value_template: >-
+          {{states.plant| selectattr('state', 'eq', 'problem')| list | length > 0}}
+    action:
+      - service: notify.all
+        data:
+          message: >-
+            {%- for plant in states.plant -%}
+              {%- set data = namespace(problems=[]) -%}
+                {%- for problem in plant.attributes.problem.split(', ') if ((problem not in ['none','brightness low', 'conductivity low'])) -%}
+                  {%- set data.problems = data.problems + [problem] -%}
+                {%- endfor -%}
+                {%- if data.problems | length > 0 -%}
+                      {{- plant.attributes.friendly_name -}}
+                  {%- if 'moisture low' in data.problems -%}
+                    {{- ' - moisture: ' -}}{{- states[plant.attributes.sensors.moisture].state_with_unit -}}
+                  {%- endif -%}
+                  {%- if 'battery unavailable' in data.problems -%}
+                    {{- ', battery likely dead' }}
+                  {%- endif -%}
+                {% endif %}
+            {% endfor -%}
+
 ########################
 # Binary Sensors
 ########################
@@ -474,7 +505,7 @@ plant:
 
   north_hanging_nepenthes:
     sensors:
-      battery: sensor.east_hanging_nepenthes_battery
+      battery: sensor.n_hanging_nepenthes_battery
       conductivity: sensor.n_nepenthes_conductivity
       brightness: sensor.n_nepenthes_illuminance
       moisture: sensor.n_nepenthes_moisture
