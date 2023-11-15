@@ -12,7 +12,8 @@ import json
 import logging
 import os
 import ssl
-from typing import Any, Optional
+import sys
+from typing import Any
 from urllib.parse import (
     ParseResult,
     parse_qs,
@@ -25,7 +26,7 @@ from urllib.parse import (
 import uuid
 
 import aiohttp
-import cchardet
+from charset_normalizer import detect
 import xmltodict
 
 from . import core_exceptions as exc
@@ -35,6 +36,12 @@ from .device_info import KEY_DEVICE_ID, DeviceInfo
 
 # The core version
 CORE_VERSION = "coreAsync"
+
+ENABLE_CLEANUP_CLOSED = not (3, 11, 1) <= sys.version_info < (3, 11, 4)
+# Enabling cleanup closed on python 3.11.1+ leaks memory relatively quickly
+# see https://github.com/aio-libs/aiohttp/issues/7252
+# aiohttp interacts poorly with https://github.com/python/cpython/pull/98540
+# The issue was fixed in 3.11.4 via https://github.com/python/cpython/pull/104485
 
 # enable logging of auth information
 LOG_AUTH_INFO = False
@@ -82,8 +89,9 @@ API2_ERRORS = {
     "0106": exc.NotConnectedError,
     "0100": exc.FailedRequestError,
     "0110": exc.InvalidCredentialError,
-    "9999": exc.NotConnectedError,  # This come as "other errors", we manage as not connected.
     9000: exc.InvalidRequestError,  # Surprisingly, an integer (not a string).
+    "9995": exc.FailedRequestError,  # This come as "other errors", we manage as not FailedRequestError.
+    "9999": exc.FailedRequestError,  # This come as "other errors", we manage as not FailedRequestError.
 }
 
 DEFAULT_TOKEN_VALIDITY = 3600  # seconds
@@ -95,6 +103,8 @@ MIN_TIME_BETWEEN_UPDATE = 25
 _LG_SSL_CIPHERS = (
     "DEFAULT:!aNULL:!eNULL:!MD5:!3DES:!DES:!RC4:!IDEA:!SEED:!aDSS:!SRP:!PSK"
 )
+
+_LOCAL_LANG_FILE = "local_lang_pack.json"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,7 +138,9 @@ def lg_client_session() -> aiohttp.ClientSession:
     """Create an aiohttp client session to use with LG ThinQ."""
     context = ssl.create_default_context()
     context.set_ciphers(_LG_SSL_CIPHERS)
-    connector = aiohttp.TCPConnector(enable_cleanup_closed=True, ssl_context=context)
+    connector = aiohttp.TCPConnector(
+        enable_cleanup_closed=ENABLE_CLEANUP_CLOSED, ssl_context=context
+    )
     return aiohttp.ClientSession(connector=connector)
 
 
@@ -342,10 +354,10 @@ class CoreAsync:
             if "resultCode" in result:
                 code = result["resultCode"]
                 if code != "0000":
+                    message = result.get("result") or "ThinQ APIv2 error"
                     if code in API2_ERRORS:
-                        raise API2_ERRORS[code]()
-                    message = result.get("result", "error")
-                    raise exc.APIError(code, message)
+                        raise API2_ERRORS[code](message)
+                    raise exc.APIError(message, code)
 
             return result
 
@@ -356,10 +368,10 @@ class CoreAsync:
         if "returnCd" in msg:
             code = msg["returnCd"]
             if code != "0000":
+                message = msg.get("returnMsg") or "ThinQ APIv1 error"
                 if code in API2_ERRORS:
-                    raise API2_ERRORS[code]()
-                message = msg["returnMsg"]
-                raise exc.APIError(code, message)
+                    raise API2_ERRORS[code](message)
+                raise exc.APIError(message, code)
 
         return msg
 
@@ -1222,7 +1234,7 @@ class ClientAsync:
     def __init__(
         self,
         auth: Auth,
-        session: Optional[Session] = None,
+        session: Session | None = None,
         country: str = DEFAULT_COUNTRY,
         language: str = DEFAULT_LANGUAGE,
         *,
@@ -1231,7 +1243,7 @@ class ClientAsync:
         """Initialize the client."""
         # The three steps required to get access to call the API.
         self._auth: Auth = auth
-        self._session: Optional[Session] = session
+        self._session: Session | None = session
         self._last_device_update = datetime.utcnow()
         self._lock = asyncio.Lock()
         # The last list of devices we got from the server. This is the
@@ -1242,6 +1254,7 @@ class ClientAsync:
         # responses.
         self._model_url_info: dict[str, Any] = {}
         self._common_lang_pack = None
+        self._local_lang_pack = None
 
         # Locale information used to discover a gateway, if necessary.
         self._country = country
@@ -1496,8 +1509,8 @@ class ClientAsync:
 
         content = await self._auth.gateway.core.http_get_bytes(info_url)
 
-        # we use cchardet to detect correct encoding and convert to unicode string
-        encoding = cchardet.detect(content)["encoding"]
+        # we use charset_normalizer to detect correct encoding and convert to unicode string
+        encoding = detect(content)["encoding"]
         try:
             str_content = str(content, encoding, errors="replace")
         except (LookupError, TypeError):
@@ -1527,6 +1540,28 @@ class ClientAsync:
                 await self._load_json_info(self._session.common_lang_pack_url)
             ).get("pack", {})
         return self._common_lang_pack
+
+    def local_lang_pack(self) -> dict[str, str]:
+        """Load JSON local lang pack from local."""
+        if self._local_lang_pack is not None:
+            return self._local_lang_pack
+
+        result = {}
+        data_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), _LOCAL_LANG_FILE
+        )
+        try:
+            with open(data_file, "r", encoding="utf-8") as lang_file:
+                lang_pack = json.load(lang_file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            self._local_lang_pack = {}
+            return {}
+        if self._language in lang_pack:
+            result = lang_pack[self._language]
+        else:
+            result = lang_pack.get(DEFAULT_LANGUAGE, {})
+        self._local_lang_pack = result
+        return result
 
     async def model_url_info(self, url, device=None):
         """

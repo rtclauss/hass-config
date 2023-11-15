@@ -7,9 +7,7 @@ from homeassistant.components.cover import (
     CoverEntityFeature,
 )
 from homeassistant.core import HomeAssistant
-from teslajsonpy.car import TeslaCar
 
-from . import TeslaDataUpdateCoordinator
 from .base import TeslaCarEntity
 from .const import DOMAIN
 
@@ -18,48 +16,40 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
     """Set up the Tesla locks by config_entry."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    cars = hass.data[DOMAIN][config_entry.entry_id]["cars"]
+    entry_data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinators = entry_data["coordinators"]
+    cars = entry_data["cars"]
     entities = []
 
-    for car in cars.values():
-        entities.append(TeslaCarChargerDoor(hass, car, coordinator))
-        entities.append(TeslaCarFrunk(hass, car, coordinator))
-        entities.append(TeslaCarTrunk(hass, car, coordinator))
-        entities.append(TeslaCarWindows(hass, car, coordinator))
+    for vin, car in cars.items():
+        coordinator = coordinators[vin]
+        entities.append(TeslaCarChargerDoor(car, coordinator))
+        entities.append(TeslaCarFrunk(car, coordinator))
+        entities.append(TeslaCarTrunk(car, coordinator))
+        entities.append(TeslaCarWindows(car, coordinator))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities, update_before_add=True)
 
 
 class TeslaCarChargerDoor(TeslaCarEntity, CoverEntity):
     """Representation of a Tesla car charger door cover."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-    ) -> None:
-        """Initialize charger door cover entity."""
-        super().__init__(hass, car, coordinator)
-        self.type = "charger door"
-        self._attr_device_class = CoverDeviceClass.DOOR
-        self._attr_icon = "mdi:ev-plug-tesla"
-        self._attr_supported_features = (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
-        )
+    type = "charger door"
+    _attr_device_class = CoverDeviceClass.DOOR
+    _attr_icon = "mdi:ev-plug-tesla"
+    _attr_supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
 
     async def async_close_cover(self, **kwargs):
         """Send close cover command."""
         _LOGGER.debug("Closing cover: %s", self.name)
         await self._car.charge_port_door_close()
-        await self.async_update_ha_state()
+        self.async_write_ha_state()
 
     async def async_open_cover(self, **kwargs):
         """Send open cover command."""
         _LOGGER.debug("Opening cover: %s", self.name)
         await self._car.charge_port_door_open()
-        await self.async_update_ha_state()
+        self.async_write_ha_state()
 
     @property
     def is_closed(self):
@@ -70,28 +60,23 @@ class TeslaCarChargerDoor(TeslaCarEntity, CoverEntity):
 class TeslaCarFrunk(TeslaCarEntity, CoverEntity):
     """Representation of a Tesla car frunk lock."""
 
-    def __init__(
-        self, hass: HomeAssistant, car: dict, coordinator: TeslaDataUpdateCoordinator
-    ) -> None:
-        """Initialize frunk lock entity."""
-        super().__init__(hass, car, coordinator)
-        self.type = "frunk"
-        self._attr_device_class = CoverDeviceClass.DOOR
-        self._attr_icon = "mdi:car"
+    type = "frunk"
+    _attr_device_class = CoverDeviceClass.DOOR
+    _attr_icon = "mdi:car"
 
     async def async_close_cover(self, **kwargs):
         """Send close cover command."""
         _LOGGER.debug("Closing cover: %s", self.name)
         if self.is_closed is False:
             await self._car.toggle_frunk()
-            await self.async_update_ha_state()
+            self.async_write_ha_state()
 
     async def async_open_cover(self, **kwargs):
         """Send open cover command."""
         _LOGGER.debug("Opening cover: %s", self.name)
         if self.is_closed is True:
             await self._car.toggle_frunk()
-            await self.async_update_ha_state()
+            self.async_write_ha_state()
 
     @property
     def is_closed(self):
@@ -111,31 +96,23 @@ class TeslaCarFrunk(TeslaCarEntity, CoverEntity):
 class TeslaCarTrunk(TeslaCarEntity, CoverEntity):
     """Representation of a Tesla car trunk cover."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-    ) -> None:
-        """Initialize trunk cover entity."""
-        super().__init__(hass, car, coordinator)
-        self.type = "trunk"
-        self._attr_device_class = CoverDeviceClass.DOOR
-        self._attr_icon = "mdi:car-back"
+    type = "trunk"
+    _attr_device_class = CoverDeviceClass.DOOR
+    _attr_icon = "mdi:car-back"
 
     async def async_close_cover(self, **kwargs):
         """Send close cover command."""
         _LOGGER.debug("Closing cover: %s", self.name)
         if self.is_closed is False:
             await self._car.toggle_trunk()
-            await self.async_update_ha_state()
+            self.async_write_ha_state()
 
     async def async_open_cover(self, **kwargs):
         """Send open cover command."""
         _LOGGER.debug("Opening cover: %s", self.name)
         if self.is_closed is True:
             await self._car.toggle_trunk()
-            await self.async_update_ha_state()
+            self.async_write_ha_state()
 
     @property
     def is_closed(self):
@@ -154,34 +131,24 @@ class TeslaCarTrunk(TeslaCarEntity, CoverEntity):
 class TeslaCarWindows(TeslaCarEntity, CoverEntity):
     """Representation of a Tesla car window cover."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-    ) -> None:
-        """Initialize window cover entity."""
-        super().__init__(hass, car, coordinator)
-        self.type = "windows"
-        self._attr_device_class = CoverDeviceClass.AWNING
-        self._attr_icon = "mdi:car-door"
-        self._attr_supported_features = (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
-        )
+    type = "windows"
+    _attr_device_class = CoverDeviceClass.AWNING
+    _attr_icon = "mdi:car-door"
+    _attr_supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
 
     async def async_close_cover(self, **kwargs):
         """Send close cover command."""
         _LOGGER.debug("Closing cover: %s", self.name)
         if self.is_closed is False:
             await self._car.close_windows()
-            await self.async_update_ha_state()
+            self.async_write_ha_state()
 
     async def async_open_cover(self, **kwargs):
         """Send open cover command."""
         _LOGGER.debug("Opening cover: %s", self.name)
         if self.is_closed is True:
             await self._car.vent_windows()
-            await self.async_update_ha_state()
+            self.async_write_ha_state()
 
     @property
     def is_closed(self):
