@@ -5,6 +5,7 @@ import logging
 from datetime import timedelta
 from typing import Any, Dict
 
+# mypy: disable-error-code="attr-defined"
 import holidays  # pylint: disable=import-self
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -109,12 +110,18 @@ async def update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 def create_holidays(
-    years: list, country: str, subdiv: str, observed: bool
+    years: list,
+    country: str,
+    subdiv: str,
+    language: str,
+    observed: bool,
 ) -> holidays.HolidayBase:
     """Create holidays from parameters."""
     kwargs: Dict[str, Any] = {"years": years}
     if subdiv != "":
         kwargs["subdiv"] = subdiv
+    if language != "":
+        kwargs["language"] = language
     kwargs["observed"] = observed
     # pylint: disable=maybe-no-member
     if country == "SE":

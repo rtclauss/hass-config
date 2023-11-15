@@ -4,9 +4,7 @@ import logging
 from homeassistant.components.device_tracker import SOURCE_TYPE_GPS
 from homeassistant.components.device_tracker.config_entry import TrackerEntity
 from homeassistant.core import HomeAssistant
-from teslajsonpy.car import TeslaCar
 
-from . import TeslaDataUpdateCoordinator
 from .base import TeslaCarEntity
 from .const import DOMAIN
 
@@ -15,29 +13,23 @@ _LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
     """Set up the Tesla device trackers by config_entry."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    cars = hass.data[DOMAIN][config_entry.entry_id]["cars"]
+    entry_data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinators = entry_data["coordinators"]
+    cars = entry_data["cars"]
     entities = []
 
-    for car in cars.values():
-        entities.append(TeslaCarLocation(hass, car, coordinator))
-        entities.append(TeslaCarDestinationLocation(hass, car, coordinator))
+    for vin, car in cars.items():
+        coordinator = coordinators[vin]
+        entities.append(TeslaCarLocation(car, coordinator))
+        entities.append(TeslaCarDestinationLocation(car, coordinator))
 
-    async_add_entities(entities, True)
+    async_add_entities(entities, update_before_add=True)
 
 
 class TeslaCarLocation(TeslaCarEntity, TrackerEntity):
     """Representation of a Tesla car location device tracker."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-    ) -> None:
-        """Initialize car location entity."""
-        super().__init__(hass, car, coordinator)
-        self.type = "location tracker"
+    type = "location tracker"
 
     @property
     def source_type(self):
@@ -71,15 +63,7 @@ class TeslaCarLocation(TeslaCarEntity, TrackerEntity):
 class TeslaCarDestinationLocation(TeslaCarEntity, TrackerEntity):
     """Representation of a Tesla car destination location device tracker."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-    ) -> None:
-        """Initialize car destination location entity."""
-        super().__init__(hass, car, coordinator)
-        self.type = "destination location tracker"
+    type = "destination location tracker"
 
     @property
     def source_type(self):

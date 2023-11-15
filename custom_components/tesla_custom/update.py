@@ -3,27 +3,19 @@ from typing import Any
 
 from homeassistant.components.update import UpdateEntity, UpdateEntityFeature
 from homeassistant.core import HomeAssistant
-from teslajsonpy.car import TeslaCar
 
-from . import TeslaDataUpdateCoordinator
 from .base import TeslaCarEntity
 from .const import DOMAIN
 
 
 async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
     """Set up the Tesla update entities by config_entry."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    cars = hass.data[DOMAIN][config_entry.entry_id]["cars"]
+    entry_data = hass.data[DOMAIN][config_entry.entry_id]
+    coordinators = entry_data["coordinators"]
+    cars = entry_data["cars"]
 
-    entities = [
-        TeslaCarUpdate(
-            hass,
-            car,
-            coordinator,
-        )
-        for car in cars.values()
-    ]
-    async_add_entities(entities, True)
+    entities = [TeslaCarUpdate(car, coordinators[vin]) for vin, car in cars.items()]
+    async_add_entities(entities, update_before_add=True)
 
 
 INSTALLABLE_STATUSES = ["available", "scheduled"]
@@ -40,15 +32,7 @@ PRETTY_STATUS_STRINGS = {
 class TeslaCarUpdate(TeslaCarEntity, UpdateEntity):
     """Representation of a Tesla car update."""
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        car: TeslaCar,
-        coordinator: TeslaDataUpdateCoordinator,
-    ) -> None:
-        """Initialize update entity."""
-        super().__init__(hass, car, coordinator)
-        self.type = "software update"
+    type = "software update"
 
     @property
     def supported_features(self):
