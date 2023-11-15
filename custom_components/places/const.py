@@ -9,6 +9,10 @@ from homeassistant.const import (
 )
 
 DOMAIN = "places"
+VERSION = "v2.5.3"
+EVENT_TYPE = DOMAIN + "_state_update"
+PLATFORM = Platform.SENSOR
+ENTITY_ID_FORMAT = Platform.SENSOR + ".{}"
 
 # Defaults
 DEFAULT_EXTENDED_ATTR = False
@@ -18,6 +22,7 @@ DEFAULT_MAP_PROVIDER = "apple"
 DEFAULT_MAP_ZOOM = 18
 DEFAULT_DISPLAY_OPTIONS = "zone_name, place"
 DEFAULT_SHOW_TIME = False
+DEFAULT_DATE_FORMAT = "mm/dd"
 DEFAULT_USE_GPS = True
 
 # Settings
@@ -26,6 +31,7 @@ TRACKING_DOMAINS = [
     str(Platform.DEVICE_TRACKER),
     str("person"),
     str(Platform.SENSOR),
+    CONF_ZONE,
     "variable",
 ]
 TRACKING_DOMAINS_NEED_LATLONG = [
@@ -44,10 +50,11 @@ CONF_MAP_ZOOM = "map_zoom"
 CONF_NATIVE_VALUE = "native_value"
 CONF_DISPLAY_OPTIONS = "options"
 CONF_SHOW_TIME = "show_time"
+CONF_DATE_FORMAT = "date_format"
 CONF_USE_GPS = "use_gps_accuracy"
-CONF_YAML_HASH = "yaml_hash"
 
 # Attributes
+ATTR_ATTRIBUTES = "attributes"
 ATTR_CITY = "city"
 ATTR_CITY_CLEAN = "city_clean"
 ATTR_COUNTRY = "country"
@@ -98,11 +105,11 @@ ATTR_POSTAL_CODE = "postal_code"
 ATTR_POSTAL_TOWN = "postal_town"
 ATTR_PREVIOUS_STATE = "previous_state"
 ATTR_REGION = "state_province"
+ATTR_SHOW_DATE = "show_date"
 ATTR_STATE_ABBR = "state_abbr"
 ATTR_STREET = "street"
 ATTR_STREET_REF = "street_ref"
 ATTR_STREET_NUMBER = "street_number"
-ATTR_UPDATES_SKIPPED = "updates_skipped"
 ATTR_WIKIDATA_DICT = "wikidata_dict"
 ATTR_WIKIDATA_ID = "wikidata_id"
 
@@ -120,6 +127,7 @@ CONFIG_ATTRIBUTES_LIST = [
     CONF_NAME,
     CONF_DISPLAY_OPTIONS,
     CONF_SHOW_TIME,
+    CONF_DATE_FORMAT,
     CONF_USE_GPS,
     CONF_UNIQUE_ID,
 ]
@@ -149,7 +157,6 @@ RESET_ATTRIBUTE_LIST = [
     ATTR_STREET_NUMBER,
     ATTR_STREET,
     ATTR_STREET_REF,
-    ATTR_UPDATES_SKIPPED,
     ATTR_WIKIDATA_DICT,
     ATTR_WIKIDATA_ID,
 ]
@@ -197,6 +204,7 @@ EXTRA_STATE_ATTRIBUTE_LIST = [
     ATTR_LAST_UPDATED,
 ]
 JSON_IGNORE_ATTRIBUTE_LIST = [
+    ATTR_ATTRIBUTES,
     ATTR_DEVICETRACKER_ID,
     ATTR_DISPLAY_OPTIONS,
     ATTR_DISPLAY_OPTIONS_LIST,
@@ -209,7 +217,6 @@ JSON_IGNORE_ATTRIBUTE_LIST = [
     ATTR_LOCATION_CURRENT,
     ATTR_LOCATION_PREVIOUS,
     ATTR_PREVIOUS_STATE,
-    ATTR_UPDATES_SKIPPED,
 ]
 JSON_ATTRIBUTE_LIST = [
     ATTR_CITY,
@@ -255,6 +262,7 @@ JSON_ATTRIBUTE_LIST = [
     ATTR_STREET_REF,
     ATTR_WIKIDATA_DICT,
     ATTR_WIKIDATA_ID,
+    ATTR_SHOW_DATE,
 ]
 EVENT_ATTRIBUTE_LIST = [
     ATTR_PLACE_NAME,
@@ -319,6 +327,7 @@ DISPLAY_OPTIONS_MAP = {
     "place_neighbourhood": ATTR_PLACE_NEIGHBOURHOOD,
     "city": ATTR_CITY,
     "city_clean": ATTR_CITY_CLEAN,
+    "postal_town": ATTR_POSTAL_TOWN,
     "region": ATTR_REGION,
     "state": ATTR_REGION,
     "state_abbr": ATTR_STATE_ABBR,

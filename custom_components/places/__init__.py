@@ -2,14 +2,13 @@ import logging
 
 from homeassistant import config_entries, core
 from homeassistant.const import Platform
+from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-
-# List of platforms to support. There should be a matching .py file for each,
-# eg <cover.py> and <sensor.py>
 PLATFORMS: list[str] = [Platform.SENSOR]
+CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 
 async def async_setup_entry(
@@ -17,7 +16,7 @@ async def async_setup_entry(
 ) -> bool:
     """Set up from a config entry."""
 
-    # _LOGGER.debug("[init async_setup_entry] entry: " + str(entry.data))
+    # _LOGGER.debug(f"[init async_setup_entry] entry: {entry.data}")
     hass.data.setdefault(DOMAIN, {})
     hass_data = dict(entry.data)
     hass.data[DOMAIN][entry.entry_id] = hass_data
@@ -34,7 +33,7 @@ async def async_unload_entry(
     # This is called when an entry/configured device is to be removed. The class
     # needs to unload itself, and remove callbacks. See the classes for further
     # details
-    _LOGGER.info("Unloading: " + str(entry.data))
+    _LOGGER.info(f"Unloading: {entry.data}")
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)

@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from copy import deepcopy
 from datetime import datetime
+from enum import Enum
 import json
 import logging
 from numbers import Number
@@ -19,6 +21,8 @@ from .const import BIT_OFF, BIT_ON, StateOptions
 from .core_async import ClientAsync
 from .device_info import DeviceInfo, PlatformType
 from .model_info import ModelInfo
+
+LANG_PACK = "pack"
 
 LABEL_BIT_OFF = "@CP_OFF_EN_W"
 LABEL_BIT_ON = "@CP_ON_EN_W"
@@ -34,6 +38,7 @@ LOCAL_LANG_PACK = {
     "LOCK": StateOptions.ON,
     "INITIAL_BIT_OFF": StateOptions.OFF,
     "INITIAL_BIT_ON": StateOptions.ON,
+    "@WM_EDD_REFILL_W": StateOptions.OFF,
     "IGNORE": StateOptions.NONE,
     "NONE": StateOptions.NONE,
     "NOT_USE": "Not Used",
@@ -44,8 +49,6 @@ MAX_RETRIES = 3
 MAX_UPDATE_FAIL_ALLOWED = 10
 MAX_INVALID_CREDENTIAL_ERR = 3
 SLEEP_BETWEEN_RETRIES = 2  # seconds
-
-MONITOR_RESTART_SECONDS = 0  # 0 to disable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,24 +75,29 @@ class Monitor:
         self._platform_type = device_info.platform_type
         self._device_descr = device_info.name
         self._work_id: str | None = None
-        self._monitor_start_time: datetime | None = None
-        self._disconnected = True
         self._has_error = False
         self._invalid_credential_count = 0
 
     def _raise_error(
-        self, msg, *, not_logged=False, exc: Exception = None, exc_info=False
+        self,
+        msg,
+        *,
+        not_logged=False,
+        exc: Exception = None,
+        exc_info=False,
+        warn_lev=True,
     ) -> None:
         """Log and raise error with different level depending on condition."""
-        log_lev = logging.DEBUG
+
         if not_logged and Monitor._client_connected:
             Monitor._client_connected = False
-            self._has_error = True
-            log_lev = logging.WARNING
 
-        if not self._has_error:
-            self._has_error = True
+        if self._has_error or not_logged or warn_lev:
             log_lev = logging.WARNING
+        else:
+            log_lev = logging.INFO
+
+        self._has_error = True
         _LOGGER.log(
             log_lev, "%s - Device: %s", msg, self._device_descr, exc_info=exc_info
         )
@@ -111,32 +119,30 @@ class Monitor:
             if Monitor._client_connected:
                 await self._client.refresh_auth()
                 return True
-            self._disconnected = True
             return await self._refresh_client()
 
     async def _refresh_client(self) -> bool:
         """Refresh the devices shared client"""
-        async with Monitor._client_lock:
-            if Monitor._client_connected:
-                return True
-            call_time = datetime.utcnow()
-            difference = (call_time - Monitor._last_client_refresh).total_seconds()
-            if difference <= MIN_TIME_BETWEEN_CLI_REFRESH:
-                return False
-
-            Monitor._last_client_refresh = call_time
-            refresh_gateway = False
-            if Monitor._not_logged_count >= 30:
-                Monitor._not_logged_count = 0
-                refresh_gateway = True
-            Monitor._not_logged_count += 1
-            _LOGGER.debug("ThinQ client not connected. Trying to reconnect...")
-            await self._client.refresh(refresh_gateway)
-            _LOGGER.warning("ThinQ client successfully reconnected")
-            Monitor._client_connected = True
-            Monitor._critical_error = False
-            Monitor._not_logged_count = 0
+        if Monitor._client_connected:
             return True
+        call_time = datetime.utcnow()
+        difference = (call_time - Monitor._last_client_refresh).total_seconds()
+        if difference <= MIN_TIME_BETWEEN_CLI_REFRESH:
+            return False
+
+        Monitor._last_client_refresh = call_time
+        refresh_gateway = False
+        if Monitor._not_logged_count >= 30:
+            Monitor._not_logged_count = 0
+            refresh_gateway = True
+        Monitor._not_logged_count += 1
+        _LOGGER.debug("ThinQ client not connected. Trying to reconnect...")
+        await self._client.refresh(refresh_gateway)
+        _LOGGER.warning("ThinQ client successfully reconnected")
+        Monitor._client_connected = True
+        Monitor._critical_error = False
+        Monitor._not_logged_count = 0
+        return True
 
     async def refresh(self, query_device=False) -> Any | None:
         """Update device state"""
@@ -152,10 +158,11 @@ class Monitor:
                 await asyncio.sleep(SLEEP_BETWEEN_RETRIES)
 
             try:
-                if mon_started := await self._restart_monitor():
-                    state = await self.poll(query_device)
+                if refresh_auth := await self._refresh_auth():
+                    state, retry = await self.poll(query_device)
 
             except core_exc.NotConnectedError:
+                # This exceptions occurs when APIv1 device is turned off
                 if self._has_error:
                     _LOGGER.info(
                         "Connection is now available - Device: %s", self._device_descr
@@ -164,8 +171,12 @@ class Monitor:
                 _LOGGER.debug(
                     "Status not available. Device %s not connected", self._device_descr
                 )
-                self._disconnected = True
-                raise
+                if iteration >= 1:  # just retry 2 times
+                    raise
+                continue
+
+            except core_exc.FailedRequestError:
+                self._raise_error("Status update request failed", warn_lev=False)
 
             except core_exc.DeviceNotFound:
                 self._raise_error(
@@ -207,7 +218,9 @@ class Monitor:
 
             except (asyncio.TimeoutError, aiohttp.ServerTimeoutError) as exc:
                 # These are network errors, refresh client is not required
-                self._raise_error("Connection to ThinQ failed. Timeout error", exc=exc)
+                self._raise_error(
+                    "Connection to ThinQ failed. Timeout error", exc=exc, warn_lev=False
+                )
 
             except aiohttp.ClientError as exc:
                 # These are network errors, refresh client is not required
@@ -224,47 +237,29 @@ class Monitor:
                 )
 
             else:
-                if not mon_started:
+                if not refresh_auth:
                     self._raise_error(
                         "Connection to ThinQ not available. Client refresh error",
                         not_logged=True,
                     )
 
-                if state:
-                    _LOGGER.debug("ThinQ status updated")
-                    # l = dir(state)
-                    # _LOGGER.debug('Status attributes: %s', l)
+                if state or not retry:
                     break
 
                 _LOGGER.debug("No status available yet")
-                continue
 
         if self._has_error:
             _LOGGER.info("Connection is now available - Device: %s", self._device_descr)
             self._has_error = False
         return state
 
-    async def _restart_monitor(self) -> bool:
-        """Restart the device monitor"""
-
-        if not await self._refresh_auth():
-            return False
-
-        if not self._disconnected:
-            return True
-
-        await self.stop()
-        await self.start()
-        self._disconnected = False
-        return True
-
     async def start(self) -> None:
         """Start monitor for ThinQ1 device."""
         if self._platform_type != PlatformType.THINQ1:
             return
-        self._work_id = None
+        if self._work_id:
+            return
         self._work_id = await self._client.session.monitor_start(self._device_id)
-        self._monitor_start_time = datetime.utcnow()
 
     async def stop(self) -> None:
         """Stop monitor for ThinQ1 device."""
@@ -274,7 +269,7 @@ class Monitor:
         self._work_id = None
         await self._client.session.monitor_stop(self._device_id, work_id)
 
-    async def poll(self, query_device=False) -> Any | None:
+    async def poll(self, query_device=False) -> tuple[Any | None, bool]:
         """
         Get the current status data (a bytestring) or None if the
         device is not yet ready.
@@ -283,52 +278,51 @@ class Monitor:
             return await self._poll_v1()
         return await self._poll_v2(query_device)
 
-    async def _poll_v1_watch_dog(self) -> None:
-        """Force restart monitor every n seconds to avoid connection lost."""
-        if MONITOR_RESTART_SECONDS <= 0:
-            return
-        if self._monitor_start_time is not None:
-            diff = (datetime.utcnow() - self._monitor_start_time).total_seconds()
-            if diff >= MONITOR_RESTART_SECONDS:
-                await self.stop()
-
-    async def _poll_v1(self) -> bytes | None:
+    async def _poll_v1(self) -> tuple[Any | None, bool]:
         """
         Get the current status data (a bytestring) or None if the
         device is not yet ready.
         """
-        await self._poll_v1_watch_dog()
-
+        await self.start()
         if not self._work_id:
-            await self.start()
-            if not self._work_id:
-                return None
+            return None, True
 
         try:
-            return await self._client.session.monitor_poll(
+            result = await self._client.session.monitor_poll(
                 self._device_id, self._work_id
             )
         except core_exc.MonitorError:
-            # Try to restart the task.
-            await self.stop()
-            return None
+            result = None
+        except Exception:
+            self._work_id = None
+            raise
 
-    async def _poll_v2(self, query_device=False) -> Any | None:
+        if not result:
+            self._work_id = None
+
+        return result, True
+
+    async def _poll_v2(self, query_device=False) -> tuple[Any | None, bool]:
         """
         Get the current status data (a json str) or None if the
         device is not yet ready.
         """
         if self._platform_type != PlatformType.THINQ2:
-            return None
+            return None, False
+
+        snapshot = None
         if query_device:
             result = await self._client.session.get_device_v2_settings(self._device_id)
-            return result.get("snapshot")
+            if "snapshot" in result:
+                snapshot = deepcopy(result["snapshot"])
+            return snapshot, False
 
         await self._client.refresh_devices()
-        device_data = self._client.get_device(self._device_id)
-        if device_data:
-            return device_data.snapshot
-        return None
+        if device_data := self._client.get_device(self._device_id):
+            if dev_snapshot := device_data.snapshot:
+                snapshot = deepcopy(dev_snapshot)
+
+        return snapshot, False
 
     @staticmethod
     def decode_json(data: bytes) -> dict[str, Any]:
@@ -350,6 +344,15 @@ class Monitor:
 
     async def __aexit__(self, exc_type, exc_value, exc_traceback) -> None:
         await self.stop()
+
+
+def _remove_duplicated(elem: list) -> list:
+    """Remove duplicated values from a list."""
+    return list(dict.fromkeys(elem))
+
+
+class DeviceNotInitialized(Exception):
+    """Device exception occurred when device is not initialized."""
 
 
 class Device:
@@ -375,6 +378,7 @@ class Device:
         self._model_info: ModelInfo | None = None
         self._model_lang_pack = None
         self._product_lang_pack = None
+        self._local_lang_pack = None
         self._should_poll = device_info.platform_type == PlatformType.THINQ1
         self._mon = Monitor(client, device_info)
         self._control_set = 0
@@ -409,8 +413,10 @@ class Device:
         return self._attr_name
 
     @property
-    def model_info(self) -> ModelInfo | None:
+    def model_info(self) -> ModelInfo:
         """Return 'model_info' for this device."""
+        if self._model_info is None:
+            raise DeviceNotInitialized()
         return self._model_info
 
     @property
@@ -458,6 +464,10 @@ class Device:
                 self._device_info.product_lang_pack_url
             )
 
+        # load local language pack
+        if self._local_lang_pack is None:
+            self._local_lang_pack = self._client.local_lang_pack()
+
         return True
 
     def _get_state_key(self, key_name):
@@ -473,6 +483,16 @@ class Device:
         key = self._get_state_key(key_name[2])
 
         return [ctrl, cmd, key]
+
+    def _get_property_values(self, prop_key: list | str, prop_enum: Enum) -> list[str]:
+        """Return a list of available values for a specific device property."""
+        key = self._get_state_key(prop_key)
+        if not self.model_info.is_enum_type(key):
+            return []
+        options = self.model_info.value(key).options
+        mapping = _remove_duplicated(list(options.values()))
+        valid_props = [e.value for e in prop_enum]
+        return [prop_enum(o).name for o in mapping if o in valid_props]
 
     async def _set_control(
         self,
@@ -746,9 +766,13 @@ class Device:
 
         text_value = LOCAL_LANG_PACK.get(enum_name)
         if not text_value and self._model_lang_pack:
-            text_value = self._model_lang_pack.get("pack", {}).get(enum_name)
+            if LANG_PACK in self._model_lang_pack:
+                text_value = self._model_lang_pack[LANG_PACK].get(enum_name)
         if not text_value and self._product_lang_pack:
-            text_value = self._product_lang_pack.get("pack", {}).get(enum_name)
+            if LANG_PACK in self._product_lang_pack:
+                text_value = self._product_lang_pack[LANG_PACK].get(enum_name)
+        if not text_value and self._local_lang_pack:
+            text_value = self._local_lang_pack.get(enum_name)
         if not text_value:
             text_value = enum_name
 
@@ -865,7 +889,7 @@ class DeviceStatus:
 
     @property
     def has_data(self) -> bool:
-        """Check if status cointain valid data."""
+        """Check if status contain valid data."""
         return bool(self._data)
 
     @property
