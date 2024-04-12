@@ -1,7 +1,7 @@
 "use strict";
 
 // VERSION info
-var VERSION = "0.7.3";
+var VERSION = "0.7.5";
 
 // typical [[1,2,3], [6,7,8]] to [[1, 6], [2, 7], [3, 8]] converter
 var transpose = m => m[0].map((x, i) => m.map(x => x[i]));
@@ -108,6 +108,7 @@ class DataTable {
 
         this.headers = this.cols.filter(col => !col.hidden).map(
             (col, idx) => new Object({
+                id: "Col" + idx,
                 name: col.name,
                 icon: col.icon || null
             }));
@@ -483,6 +484,13 @@ class FlexTableCard extends HTMLElement {
             throw new Error('Please provide the "columns" option as a list.');
         }
 
+        if (config.service) {
+            const service_config = config.service.split('.');
+            if (service_config.length != 2) {
+                throw new Error('Please specify service in "domain.service" format.');
+            }
+        }
+
         const root = this.shadowRoot;
         if (root.lastChild)
             root.removeChild(root.lastChild);
@@ -540,7 +548,7 @@ class FlexTableCard extends HTMLElement {
 
         // temporary for generated header html stuff
         let my_headers = this.tbl.headers.map((obj, idx) => new Object({
-            th_html_begin: `<th class="${cfg.columns[idx].align || 'left'}" id="${obj.name}">`,
+            th_html_begin: `<th class="${cfg.columns[idx].align || 'left'}" id="${obj.id}">`,
             th_html_end: `${obj.name}</th>`,
             icon_html: ((obj.icon) ? `<ha-icon id='icon' icon='${obj.icon}'></ha-icon>` : "")
         }));
@@ -566,17 +574,17 @@ class FlexTableCard extends HTMLElement {
 
         // add sorting click handler to header elements
         this.tbl.headers.map((obj, idx) => {
-            root.getElementById(obj.name).onclick = (click) => {
+            root.getElementById(obj.id).onclick = (click) => {
                 // remove previous sort by
                 this.tbl.headers.map((obj, idx) => {
-                    root.getElementById(obj.name).classList.remove("headerSortDown");
-                    root.getElementById(obj.name).classList.remove("headerSortUp");
+                    root.getElementById(obj.id).classList.remove("headerSortDown");
+                    root.getElementById(obj.id).classList.remove("headerSortUp");
                 });
                 this.tbl.updateSortBy(idx);
                 if (this.tbl.sort_by.indexOf("+") != -1) {
-                    root.getElementById(obj.name).classList.add("headerSortUp");
+                    root.getElementById(obj.id).classList.add("headerSortUp");
                 } else {
-                    root.getElementById(obj.name).classList.add("headerSortDown");
+                    root.getElementById(obj.id).classList.add("headerSortDown");
                 }
                 this._updateContent(
                     root.getElementById("flextbl"),
@@ -629,6 +637,49 @@ class FlexTableCard extends HTMLElement {
         }
         this.#old_rowcount = rowcount;
 
+        if (config.service) {
+            // Use service to populate
+            const service_config = config.service.split('.');
+            let domain = service_config[0];
+            let service = service_config[1];
+            let service_data = config.service_data;
+
+            let entity_list = entities.map((entity) =>
+                entity.entity_id
+            );
+
+            hass.callWS({
+                "type": "call_service",
+                "domain": domain,
+                "service": service,
+                "service_data": service_data,
+                "target": { "entity_id": entity_list },
+                "return_response": true,
+            }).then(return_response => {
+                const entities = new Array();
+                Object.keys(return_response.response).forEach((entity_id, idx) => {
+                    let resp_obj = {};
+                    if (entity_list.length > 0) {
+                        // Return payload(s) below entity key(s).
+                        const entity_key = (Object.keys(return_response.response))[idx];
+                        resp_obj = { "entity_id": entity_id, "attributes": return_response.response[entity_key] };
+                    }
+                    else {
+                        // Return entire response payload.
+                        resp_obj = { "entity_id": entity_id, "attributes": return_response.response };
+                    }
+                    entities.push(resp_obj);
+                })
+                this._fill_card(entities, config, root);
+            });
+        }
+        else {
+            // Use entities to populate
+            this._fill_card(entities, config, root);
+        }
+    }
+
+    _fill_card(entities, config, root) {
         // `raw_rows` to be filled with data here, due to 'attr_as_list' it is possible to have
         // multiple data `raw_rows` acquired into one cell(.raw_data), so re-iterate all rows
         // to---if applicable---spawn new DataRow objects for these accordingly
