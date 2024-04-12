@@ -2,6 +2,7 @@
 A high-level, convenient abstraction for interacting with
 the LG SmartThinQ API for most use cases.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,6 +13,7 @@ from enum import Enum
 import json
 import logging
 from numbers import Number
+import os
 from typing import Any
 
 import aiohttp
@@ -38,6 +40,8 @@ LOCAL_LANG_PACK = {
     "LOCK": StateOptions.ON,
     "INITIAL_BIT_OFF": StateOptions.OFF,
     "INITIAL_BIT_ON": StateOptions.ON,
+    "STANDBY_OFF": StateOptions.OFF,
+    "STANDBY_ON": StateOptions.ON,
     "@WM_EDD_REFILL_W": StateOptions.OFF,
     "IGNORE": StateOptions.NONE,
     "NONE": StateOptions.NONE,
@@ -77,6 +81,7 @@ class Monitor:
         self._work_id: str | None = None
         self._has_error = False
         self._invalid_credential_count = 0
+        self._error_log_count = 0
 
     def _raise_error(
         self,
@@ -85,19 +90,22 @@ class Monitor:
         not_logged=False,
         exc: Exception = None,
         exc_info=False,
-        warn_lev=True,
+        debug_count=0,
     ) -> None:
         """Log and raise error with different level depending on condition."""
 
         if not_logged and Monitor._client_connected:
             Monitor._client_connected = False
 
-        if self._has_error or not_logged or warn_lev:
+        self._error_log_count += 1
+        if self._error_log_count > debug_count:
+            self._has_error = True
+
+        if self._has_error or not_logged:
             log_lev = logging.WARNING
         else:
-            log_lev = logging.INFO
+            log_lev = logging.DEBUG
 
-        self._has_error = True
         _LOGGER.log(
             log_lev, "%s - Device: %s", msg, self._device_descr, exc_info=exc_info
         )
@@ -163,6 +171,7 @@ class Monitor:
 
             except core_exc.NotConnectedError:
                 # This exceptions occurs when APIv1 device is turned off
+                self._error_log_count = 0
                 if self._has_error:
                     _LOGGER.info(
                         "Connection is now available - Device: %s", self._device_descr
@@ -176,7 +185,7 @@ class Monitor:
                 continue
 
             except core_exc.FailedRequestError:
-                self._raise_error("Status update request failed", warn_lev=False)
+                self._raise_error("Status update request failed", debug_count=2)
 
             except core_exc.DeviceNotFound:
                 self._raise_error(
@@ -219,13 +228,15 @@ class Monitor:
             except (asyncio.TimeoutError, aiohttp.ServerTimeoutError) as exc:
                 # These are network errors, refresh client is not required
                 self._raise_error(
-                    "Connection to ThinQ failed. Timeout error", exc=exc, warn_lev=False
+                    "Connection to ThinQ failed. Timeout error", exc=exc, debug_count=2
                 )
 
             except aiohttp.ClientError as exc:
                 # These are network errors, refresh client is not required
                 self._raise_error(
-                    "Connection to ThinQ failed. Network connection error", exc=exc
+                    "Connection to ThinQ failed. Network connection error",
+                    exc=exc,
+                    debug_count=2,
                 )
 
             except Exception as exc:  # pylint: disable=broad-except
@@ -248,6 +259,7 @@ class Monitor:
 
                 _LOGGER.debug("No status available yet")
 
+        self._error_log_count = 0
         if self._has_error:
             _LOGGER.info("Connection is now available - Device: %s", self._device_descr)
             self._has_error = False
@@ -368,12 +380,15 @@ class Device:
         client: ClientAsync,
         device_info: DeviceInfo,
         status: DeviceStatus | None = None,
+        *,
+        sub_device: str | None = None,
     ):
         """Create a wrapper for a `DeviceInfo` object associated with a Client."""
 
         self._client = client
         self._device_info = device_info
         self._status = status
+        self._sub_device = sub_device
         self._model_data = None
         self._model_info: ModelInfo | None = None
         self._model_lang_pack = None
@@ -388,6 +403,9 @@ class Device:
         # attributes for properties
         self._attr_unique_id = self._device_info.device_id
         self._attr_name = self._device_info.name
+        if sub_device:
+            self._attr_unique_id += f"-{sub_device}"
+            self._attr_name += f" {sub_device.capitalize()}"
 
         # for logging unknown states received
         self._unknown_states = []
@@ -420,6 +438,11 @@ class Device:
         return self._model_info
 
     @property
+    def subkey_device(self) -> Device | None:
+        """Return the available sub device."""
+        return None
+
+    @property
     def available_features(self) -> dict:
         """Return available features."""
         return self._available_features
@@ -448,7 +471,9 @@ class Device:
                 if self._model_data is None:
                     return False
 
-            self._model_info = ModelInfo.get_model_info(self._model_data)
+            self._model_info = ModelInfo.get_model_info(
+                self._model_data, self._sub_device
+            )
             if self._model_info is None:
                 return False
 
@@ -571,7 +596,7 @@ class Device:
         if self._should_poll or self.client.emulation:
             return None
 
-        payload = await self._client.session.device_v2_controls(
+        result = await self._client.session.device_v2_controls(
             self._device_info.device_id,
             ctrl_key,
             command,
@@ -580,7 +605,6 @@ class Device:
             ctrl_path=ctrl_path,
         )
 
-        result = payload.get("result")
         if not result or "data" not in result:
             return None
         return result["data"]
@@ -688,6 +712,26 @@ class Device:
             except Exception as exc:  # pylint: disable=broad-except
                 _LOGGER.debug("Error calling additional poll V2 methods: %s", exc)
 
+    def _load_emul_v1_payload(self):
+        """
+        This is used only for debug.
+        Load the payload for V1 device from file "deviceV1.txt".
+        """
+        if not self._client.emulation:
+            return None
+
+        data_file = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "deviceV1.txt"
+        )
+        try:
+            with open(data_file, "r", encoding="utf-8") as emu_payload:
+                device_v1 = json.load(emu_payload)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return None
+        if ret_val := device_v1.get(self.device_info.device_id):
+            return str(ret_val).encode()
+        return None
+
     async def _device_poll(
         self,
         snapshot_key="",
@@ -727,7 +771,8 @@ class Device:
             return self._model_info.decode_snapshot(snapshot, snapshot_key)
 
         # ThinQ V1 - Monitor data must be polled """
-        data = await self._mon.refresh()
+        if not (data := self._load_emul_v1_payload()):
+            data = await self._mon.refresh()
         if not data:
             return None
 
@@ -893,9 +938,9 @@ class DeviceStatus:
         return bool(self._data)
 
     @property
-    def data(self):
+    def as_dict(self):
         """Return status raw data."""
-        return self._data
+        return deepcopy(self._data)
 
     @property
     def is_on(self) -> bool:
@@ -943,11 +988,11 @@ class DeviceStatus:
 
     def update_status(self, key, value) -> bool:
         """Update the status key to a specific value."""
-        if key in self._data:
-            self._data[key] = value
-            self._features_updated = False
-            return True
-        return False
+        if not (upd_key := self._get_data_key(key)):
+            return False
+        self._data[upd_key] = value
+        self._features_updated = False
+        return True
 
     def update_status_feat(self, key, value, upd_features=False) -> bool:
         """Update device status and features."""
@@ -1008,14 +1053,16 @@ class DeviceStatus:
             curr_key, self._data[curr_key], ref_key
         )
 
-    def lookup_bit_enum(self, key):
+    def lookup_bit_enum(self, key, *, sub_key=None):
         """Lookup value for a specific key of type bit enum."""
         if not self._data:
             str_val = ""
         else:
             str_val = self._data.get(key)
             if not str_val:
-                str_val = self._device.model_info.bit_value(key, self._data)
+                str_val = self._device.model_info.option_bit_value(
+                    key, self._data, sub_key
+                )
 
         if str_val is None:
             return None
@@ -1023,20 +1070,27 @@ class DeviceStatus:
 
         # exception because doorlock bit
         # is not inside the model enum
-        if key == "DoorLock" and ret_val is None:
-            if str_val == "1":
+        door_locks = {"DoorLock": "1", "doorLock": "DOORLOCK_ON"}
+        if ret_val is None and key in door_locks:
+            if self.is_info_v2 and not str_val:
+                return None
+            if str_val == door_locks[key]:
                 return LABEL_BIT_ON
             return LABEL_BIT_OFF
 
         return ret_val
 
-    def lookup_bit(self, key):
+    def lookup_bit(self, key, *, sub_key=None, invert=False):
         """Lookup bit value for a specific key of type enum."""
-        enum_val = self.lookup_bit_enum(key)
+        enum_val = self.lookup_bit_enum(key, sub_key=sub_key)
         if enum_val is None:
             return None
-        bit_val = LOCAL_LANG_PACK.get(enum_val, StateOptions.OFF)
-        if bit_val == StateOptions.ON:
+        bit_val = LOCAL_LANG_PACK.get(enum_val)
+        if not bit_val:
+            return StateOptions.OFF
+        if not invert:
+            return bit_val
+        if bit_val == StateOptions.OFF:
             return StateOptions.ON
         return StateOptions.OFF
 
