@@ -9,6 +9,10 @@ from typing import Any, Dict
 import holidays  # pylint: disable=import-self
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.config_validation import (  # noqa: F401
+    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA_BASE,
+)
 from homeassistant.helpers.typing import ConfigType
 
 from . import const
