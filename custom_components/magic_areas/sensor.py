@@ -1,95 +1,184 @@
+"""Sensor controls for magic areas."""
+
 import logging
 
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-
-from custom_components.magic_areas.base.primitives import SensorGroupBase
-from custom_components.magic_areas.const import (
-    AGGREGATE_MODE_SUM,
-    CONF_AGGREGATES_MIN_ENTITIES,
-    CONF_FEATURE_AGGREGATION,
+from homeassistant.components.group.sensor import (
+    ATTR_MEAN,
+    ATTR_SUM,
+    SensorGroup,
+    SensorStateClass,
 )
-from custom_components.magic_areas.util import add_entities_when_ready
+from homeassistant.components.sensor import (
+    DEVICE_CLASS_UNITS,
+    DOMAIN as SENSOR_DOMAIN,
+    UNIT_CONVERTERS,
+    SensorDeviceClass,
+)
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import ATTR_DEVICE_CLASS
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
+from .add_entities_when_ready import add_entities_when_ready
+from .base.entities import MagicEntity
+from .base.magic import MagicArea
+from .const import (
+    AGGREGATE_MODE_SUM,
+    AGGREGATE_MODE_TOTAL_SENSOR,
+    CONF_AGGREGATES_MIN_ENTITIES,
+    CONF_AGGREGATES_SENSOR_DEVICE_CLASSES,
+    CONF_FEATURE_AGGREGATION,
+    DEFAULT_AGGREGATES_MIN_ENTITIES,
+    DEFAULT_AGGREGATES_SENSOR_DEVICE_CLASSES,
+    DEFAULT_SENSOR_PRECISION,
+    MagicAreasFeatureInfoAggregates,
+)
+from .util import cleanup_removed_entries
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the Demo config entry."""
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+):
+    """Set up the magic area sensor config entry."""
 
     add_entities_when_ready(hass, async_add_entities, config_entry, add_sensors)
 
-def add_sensors(area, async_add_entities):
-    
-    # Create aggregates
-    if not area.has_feature(CONF_FEATURE_AGGREGATION):
-        return
 
+def add_sensors(area: MagicArea, async_add_entities: AddEntitiesCallback):
+    """Add the sensors for the magic areas."""
+
+    entities_to_add = []
+
+    if area.has_feature(CONF_FEATURE_AGGREGATION):
+        entities_to_add.extend(create_aggregate_sensors(area))
+
+    if entities_to_add:
+        async_add_entities(entities_to_add)
+
+    if SENSOR_DOMAIN in area.magic_entities:
+        cleanup_removed_entries(
+            area.hass, entities_to_add, area.magic_entities[SENSOR_DOMAIN]
+        )
+
+
+def create_aggregate_sensors(area: MagicArea) -> list[Entity]:
+    """Create the aggregate sensors for the area."""
+
+    eligible_entities: dict[str, str] = {}
     aggregates = []
 
-    # Check SENSOR_DOMAIN entities, count by device_class
-    if not area.has_entities(SENSOR_DOMAIN):
-        return
+    if SENSOR_DOMAIN not in area.entities:
+        return []
 
-    device_class_uom_pairs = []
+    if not area.has_feature(CONF_FEATURE_AGGREGATION):
+        return []
 
     for entity in area.entities[SENSOR_DOMAIN]:
-        if "device_class" not in entity.keys():
+        if ATTR_DEVICE_CLASS not in entity:
             _LOGGER.debug(
-                f"Entity {entity['entity_id']} does not have device_class defined"
+                "Entity %s does not have device_class defined",
+                entity["entity_id"],
             )
             continue
 
-        if "unit_of_measurement" not in entity.keys():
+        if "unit_of_measurement" not in entity:
             _LOGGER.debug(
-                f"Entity {entity['entity_id']} does not have unit_of_measurement defined"
+                "Entity %s does not have unit_of_measurement defined",
+                entity["entity_id"],
             )
             continue
 
-        dc_uom_pair = (entity["device_class"], entity["unit_of_measurement"])
-        device_class_uom_pairs.append(dc_uom_pair)
+        # Dictionary of sensors by device class.
+        if entity[ATTR_DEVICE_CLASS] not in eligible_entities:
+            eligible_entities[entity[ATTR_DEVICE_CLASS]] = []
 
-    # Sort out individual pairs, if they show up more than CONF_AGGREGATES_MIN_ENTITIES,
-    # we create a sensor for them
-    unique_pairs = set(device_class_uom_pairs)
+        eligible_entities[entity[ATTR_DEVICE_CLASS]].append(entity["entity_id"])
 
-    for dc_uom_pair in unique_pairs:
-        entity_count = device_class_uom_pairs.count(dc_uom_pair)
+    # Create aggregates
+    for device_class, entities in eligible_entities.items():
 
-        if entity_count < area.feature_config(CONF_FEATURE_AGGREGATION).get(
-            CONF_AGGREGATES_MIN_ENTITIES
+        if len(entities) < area.feature_config(CONF_FEATURE_AGGREGATION).get(
+            CONF_AGGREGATES_MIN_ENTITIES, DEFAULT_AGGREGATES_MIN_ENTITIES
         ):
             continue
 
-        device_class, unit_of_measurement = dc_uom_pair
+        if device_class not in area.feature_config(CONF_FEATURE_AGGREGATION).get(
+            CONF_AGGREGATES_SENSOR_DEVICE_CLASSES,
+            DEFAULT_AGGREGATES_SENSOR_DEVICE_CLASSES,
+        ):
+            continue
 
         _LOGGER.debug(
-            f"Creating aggregate sensor for device_class '{device_class}' ({unit_of_measurement}) with {entity_count} entities ({area.slug})"
+            "Creating aggregate sensor for device_class '%s' with %d entities (%s)",
+            device_class,
+            len(entities),
+            area.slug,
         )
+
         aggregates.append(
-            AreaSensorGroupSensor(area, device_class, unit_of_measurement)
+            AreaAggregateSensor(
+                area=area, device_class=device_class, entity_ids=entities
+            )
         )
 
-    async_add_entities(aggregates)
+    return aggregates
 
-class AreaSensorGroupSensor(SensorGroupBase):
-    def __init__(self, area, device_class, unit_of_measurement):
+
+class AreaSensorGroupSensor(MagicEntity, SensorGroup):
+    """Sensor for the magic area, group sensor with all the stuff in it."""
+
+    def __init__(
+        self,
+        area: MagicArea,
+        device_class: SensorDeviceClass,
+        entity_ids: list[str],
+    ) -> None:
         """Initialize an area sensor group sensor."""
 
-        super().__init__(area, device_class)
-
-        self._mode = "sum" if device_class in AGGREGATE_MODE_SUM else "mean"
-        self._unit_of_measurement = unit_of_measurement
-        
-        device_class_name = " ".join(device_class.split("_")).title()
-        self._name = (
-            f"Area {device_class_name} [{unit_of_measurement}] ({self.area.name})"
+        MagicEntity.__init__(
+            self, area=area, domain=SENSOR_DOMAIN, translation_key=device_class
         )
 
-    async def _initialize(self, _=None) -> None:
-        self.logger.debug(f"{self.name} Sensor initializing.")
+        unit_of_measurement = None
 
-        self.load_sensors(SENSOR_DOMAIN, self._unit_of_measurement)
+        # Resolve unit of measurement
+        unit_attr_name = f"{device_class}_unit"
+        if hasattr(area.hass.config.units, unit_attr_name):
+            unit_of_measurement = getattr(area.hass.config.units, unit_attr_name)
+        else:
+            if device_class in UNIT_CONVERTERS:
+                unit_of_measurement = UNIT_CONVERTERS[device_class].NORMALIZED_UNIT
+            else:
+                unit_of_measurement = list(DEVICE_CLASS_UNITS[device_class])[0]
 
-        # Setup the listeners
-        await self._setup_listeners()
+        self._attr_suggested_display_precision = DEFAULT_SENSOR_PRECISION
+        self.device_class = device_class
 
-        self.logger.debug(f"{self.name} Sensor initialized.")
+        SensorGroup.__init__(
+            self,
+            hass=area.hass,
+            device_class=device_class,
+            entity_ids=entity_ids,
+            ignore_non_numeric=True,
+            sensor_type=ATTR_SUM if device_class in AGGREGATE_MODE_SUM else ATTR_MEAN,
+            state_class=(
+                SensorStateClass.TOTAL
+                if device_class in AGGREGATE_MODE_TOTAL_SENSOR
+                else SensorStateClass.MEASUREMENT
+            ),
+            unit_of_measurement=unit_of_measurement,
+            name=None,
+            unique_id=self._attr_unique_id,
+        )
+        delattr(self, "_attr_name")
+
+
+class AreaAggregateSensor(AreaSensorGroupSensor):
+    """Aggregate sensor for the area."""
+
+    feature_info = MagicAreasFeatureInfoAggregates()
