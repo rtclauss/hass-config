@@ -1,58 +1,97 @@
 """Magic Areas component for Home Assistant."""
+
+from collections import defaultdict
 import logging
-from collections import defaultdict 
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import ATTR_NAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.area_registry import async_get as areareg_async_get
+from homeassistant.helpers.floor_registry import async_get as floorreg_async_get
 
-from custom_components.magic_areas.base.magic import MagicArea, MagicMetaArea
-from custom_components.magic_areas.util import get_meta_area_object
-from custom_components.magic_areas.const import (
+from .base.magic import MagicArea, MagicMetaArea
+from .const import (
+    CONF_CLEAR_TIMEOUT,
+    CONF_EXTENDED_TIME,
+    CONF_EXTENDED_TIMEOUT,
     CONF_ID,
     CONF_NAME,
+    CONF_SECONDARY_STATES,
+    CONF_SLEEP_TIMEOUT,
     DATA_AREA_OBJECT,
     DATA_UNDO_UPDATE_LISTENER,
-    META_AREAS,
+    DEFAULT_CLEAR_TIMEOUT,
+    DEFAULT_EXTENDED_TIME,
+    DEFAULT_EXTENDED_TIMEOUT,
+    DEFAULT_SLEEP_TIMEOUT,
     META_AREA_EXTERIOR,
-    META_AREA_INTERIOR,
     META_AREA_GLOBAL,
+    META_AREA_INTERIOR,
     MODULE_DATA,
+    MagicConfigEntryVersion,
+    MetaAreaType,
+)
+from .util import (
+    basic_area_from_floor,
+    basic_area_from_meta,
+    basic_area_from_object,
+    seconds_to_minutes,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 
+async def async_setup(hass: HomeAssistant, config: dict):
+    """Set up the component."""
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     """Set up the component."""
     data = hass.data.setdefault(MODULE_DATA, {})
     area_id = config_entry.data[CONF_ID]
     area_name = config_entry.data[CONF_NAME]
 
-    _LOGGER.debug(f"Setting up entry for {area_name}")
+    _LOGGER.debug("%s: Setting up entry.", area_name)
 
-    meta_ids = [meta_area.lower() for meta_area in META_AREAS]
+    # Load floors
+    floor_registry = floorreg_async_get(hass)
+    floors = floor_registry.async_list_floors()
 
-    if area_id not in meta_ids:
-        area_registry = hass.helpers.area_registry.async_get(hass)
+    non_floor_meta_ids = [
+        meta_area_type
+        for meta_area_type in MetaAreaType
+        if meta_area_type != MetaAreaType.FLOOR
+    ]
+    floor_ids = [f.floor_id for f in floors]
+
+    if area_id in non_floor_meta_ids:
+        meta_area = basic_area_from_meta(area_id)
+        magic_area = MagicMetaArea(hass, meta_area, config_entry)
+    elif area_id in floor_ids:
+        meta_area = basic_area_from_floor(floor_registry.async_get_floor(area_id))
+        magic_area = MagicMetaArea(hass, meta_area, config_entry)
+    else:
+        area_registry = areareg_async_get(hass)
         area = area_registry.async_get_area(area_id)
 
         if not area:
-            _LOGGER.debug(f"Could not find {area_name} ({area_id}) on registry")
+            _LOGGER.warning("%s: ID '%s' not found on registry", area_name, area_id)
             return False
 
-        _LOGGER.debug(f"Got area {area_name} from registry: {area}")
+        _LOGGER.debug("%s: Got area from registry: %s", area_name, str(area))
 
         magic_area = MagicArea(
             hass,
-            area,
+            basic_area_from_object(area),
             config_entry,
         )
-    else:
-        meta_area = get_meta_area_object(area_name)
-        magic_area = MagicMetaArea(hass, meta_area, config_entry)
 
     _LOGGER.debug(
-        f"Magic Area {magic_area.name} ({magic_area.id}) created: {magic_area.config}"
+        "%s: Magic Area (%s) created: %s",
+        magic_area.name,
+        magic_area.id,
+        str(magic_area.config),
     )
 
     undo_listener = config_entry.add_update_listener(async_update_options)
@@ -63,19 +102,11 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     }
 
     # Setup platforms
-    for platform in magic_area.available_platforms():
-        _LOGGER.debug(f"Area {magic_area.name}: Loading platform '{platform}'...")
-        hass.async_create_task(
-            hass.config_entries.async_forward_entry_setup(
-                config_entry, platform
-            )
-        )
-        magic_area.loaded_platforms.append(platform)
+    await hass.config_entries.async_forward_entry_setups(
+        config_entry, magic_area.available_platforms()
+    )
 
-    """
-        Conditional reload of related meta-areas
-    """
-
+    # Conditional reload of related meta-areas
     # Populate dict with all meta-areas with ID as key
     meta_areas = defaultdict()
 
@@ -86,51 +117,130 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
 
     # Handle non-meta areas
     if not magic_area.is_meta():
+        meta_area_key = (
+            META_AREA_EXTERIOR.lower()
+            if magic_area.is_exterior()
+            else META_AREA_INTERIOR.lower()
+        )
 
-        meta_area_key = META_AREA_EXTERIOR.lower() if magic_area.is_exterior() else META_AREA_INTERIOR.lower()
-
-        if meta_area_key in meta_areas.keys():
-
+        if meta_area_key in meta_areas:
             meta_area_object = meta_areas[meta_area_key]
 
             if meta_area_object.initialized:
-                await hass.config_entries.async_reload(meta_area_object.hass_config.entry_id)
+                await hass.config_entries.async_reload(
+                    meta_area_object.hass_config.entry_id
+                )
     else:
-        META_AREA_GLOBAL_ID = META_AREA_GLOBAL.lower()
+        meta_area_global_id = META_AREA_GLOBAL.lower()
 
-        if magic_area.id != META_AREA_GLOBAL_ID and META_AREA_GLOBAL_ID in meta_areas.keys():
-            if meta_areas[META_AREA_GLOBAL_ID].initialized:
-                await hass.config_entries.async_reload(meta_areas[META_AREA_GLOBAL_ID].hass_config.entry_id)
+        if magic_area.id != meta_area_global_id and meta_area_global_id in meta_areas:
+            if meta_areas[meta_area_global_id].initialized:
+                await hass.config_entries.async_reload(
+                    meta_areas[meta_area_global_id].hass_config.entry_id
+                )
 
     return True
 
 
-async def async_update_options(hass, config_entry: ConfigEntry):
+async def async_update_options(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
     """Update options."""
+    _LOGGER.debug(
+        "Detected options change for entry %s, reloading", config_entry.entry_id
+    )
     await hass.config_entries.async_reload(config_entry.entry_id)
 
-async def async_unload_entry(hass, config_entry: ConfigEntry) -> bool:
+
+async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Unload a config entry."""
 
-    platforms_unloaded = []
     data = hass.data[MODULE_DATA]
     area_data = data[config_entry.entry_id]
     area = area_data[DATA_AREA_OBJECT]
 
-    for platform in area.loaded_platforms:
-        unload_ok = await hass.config_entries.async_forward_entry_unload(
-            config_entry, platform
-        )
-        platforms_unloaded.append(unload_ok)
+    await hass.config_entries.async_unload_platforms(
+        config_entry, area.available_platforms()
+    )
 
     area_data[DATA_UNDO_UPDATE_LISTENER]()
-
-    all_unloaded = all(platforms_unloaded)
-
-    if all_unloaded:
-        data.pop(config_entry.entry_id)
+    data.pop(config_entry.entry_id)
 
     if not data:
         hass.data.pop(MODULE_DATA)
 
-    return all_unloaded
+    return True
+
+
+def migrate_seconds_to_minutes(config_data: dict) -> dict:
+    """Perform migration of seconds-based config options to minutes."""
+
+    # Update seconds -> minutes
+    if CONF_CLEAR_TIMEOUT in config_data:
+        config_data[CONF_CLEAR_TIMEOUT] = seconds_to_minutes(
+            config_data[CONF_CLEAR_TIMEOUT], DEFAULT_CLEAR_TIMEOUT
+        )
+    if CONF_SECONDARY_STATES in config_data:
+        entries_to_convert = {
+            CONF_EXTENDED_TIMEOUT: DEFAULT_EXTENDED_TIMEOUT,
+            CONF_EXTENDED_TIME: DEFAULT_EXTENDED_TIME,
+            CONF_SLEEP_TIMEOUT: DEFAULT_SLEEP_TIMEOUT,
+        }
+        for option_key, option_value in entries_to_convert.items():
+            if option_key in config_data[CONF_SECONDARY_STATES]:
+                old_value = config_data[CONF_SECONDARY_STATES][option_key]
+                config_data[CONF_SECONDARY_STATES][option_key] = seconds_to_minutes(
+                    old_value, option_value
+                )
+
+    return config_data
+
+
+# Example migration function
+async def async_migrate_entry(hass, config_entry: ConfigEntry):
+    """Migrate old entry."""
+    _LOGGER.info(
+        "%s: Migrating configuration from version %s.%s, current config: %s",
+        config_entry.data[ATTR_NAME],
+        config_entry.version,
+        config_entry.minor_version,
+        str(config_entry.data),
+    )
+
+    if config_entry.version > MagicConfigEntryVersion.MAJOR:
+        # This means the user has downgraded from a future version
+        _LOGGER.warning(
+            "%s: Major version downgrade detection, skipping migration.",
+            config_entry.data[ATTR_NAME],
+        )
+        # FIXING MY MESS @FIXME remove before release
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data={**config_entry.data},
+            minor_version=MagicConfigEntryVersion.MINOR,
+            version=MagicConfigEntryVersion.MAJOR,
+        )
+        # return False
+        return True
+
+    old_data = {**config_entry.data}
+    new_data = {**config_entry.data}
+
+    if config_entry.version == 1:
+        new_data = migrate_seconds_to_minutes(new_data)
+
+    if old_data != new_data:
+
+        hass.config_entries.async_update_entry(
+            config_entry,
+            data=new_data,
+            minor_version=MagicConfigEntryVersion.MINOR,
+            version=MagicConfigEntryVersion.MAJOR,
+        )
+
+        _LOGGER.info(
+            "Migration to configuration version %s.%s successful: %s",
+            config_entry.version,
+            config_entry.minor_version,
+            str(new_data),
+        )
+
+    return True

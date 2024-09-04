@@ -1,22 +1,17 @@
-"""
+"""Platform file for Magic Area's climate entities.
+
 This file is mostly https://github.com/daenny/climate_group,
 adapted to work with Magic Areas.
 
 Once this goes into the main Home Assistant code it will be phased out.
 """
+
 from __future__ import annotations
 
 import logging
-
-"""
-    Climate Group Imports
-"""
-from typing import Any
 from statistics import mean
+from typing import Any
 
-from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.components.climate import (
     ATTR_CURRENT_TEMPERATURE,
     ATTR_FAN_MODE,
@@ -34,7 +29,6 @@ from homeassistant.components.climate import (
     ATTR_TARGET_TEMP_LOW,
     ATTR_TARGET_TEMP_STEP,
     DOMAIN as CLIMATE_DOMAIN,
-    PLATFORM_SCHEMA,
     SERVICE_SET_FAN_MODE,
     SERVICE_SET_HVAC_MODE,
     SERVICE_SET_PRESET_MODE,
@@ -45,46 +39,38 @@ from homeassistant.components.climate import (
     HVACAction,
     HVACMode,
 )
-
-from homeassistant.components.group import GroupEntity
+from homeassistant.components.group.entity import GroupEntity
 from homeassistant.components.group.util import (
     find_state_attributes,
     most_frequent_attribute,
     reduce_attribute,
     states_equal,
 )
-
+from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_SUPPORTED_FEATURES,
     ATTR_TEMPERATURE,
-    STATE_OFF,
-    CONF_ENTITIES,
-    CONF_NAME,
-    CONF_TEMPERATURE_UNIT,
-    CONF_UNIQUE_ID,
+    STATE_ON,
     STATE_UNAVAILABLE,
-    STATE_UNKNOWN,
-    UnitOfTemperature,
 )
+from homeassistant.core import Event, callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.event import async_track_state_change_event
 
-"""
-    Magic Area Imports
-"""
-from custom_components.magic_areas.base.entities import MagicEntity
-from custom_components.magic_areas.const import (
+from .add_entities_when_ready import add_entities_when_ready
+from .base.entities import MagicEntity
+from .const import (
     AREA_STATE_CLEAR,
     CONF_CLIMATE_GROUPS_TURN_ON_STATE,
     CONF_FEATURE_CLIMATE_GROUPS,
     DEFAULT_CLIMATE_GROUPS_TURN_ON_STATE,
     EVENT_MAGICAREAS_AREA_STATE_CHANGED,
+    MagicAreasFeatureInfoClimateGroups,
 )
+from .util import cleanup_removed_entries
 
-from custom_components.magic_areas.util import add_entities_when_ready
-
-"""
-    Climate Group Constants
-"""
+# Climate Group Constants
 
 SUPPORT_FLAGS = (
     ClimateEntityFeature.TARGET_TEMPERATURE
@@ -94,9 +80,7 @@ SUPPORT_FLAGS = (
     | ClimateEntityFeature.FAN_MODE
 )
 
-"""
-    Magic Areas Constants
-"""
+# Magic Areas Constants
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,23 +88,33 @@ DEFAULT_NAME = "Climate Group"
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-
+    """Set up the Area config entry."""
     add_entities_when_ready(hass, async_add_entities, config_entry, setup_climate_group)
 
 
 def setup_climate_group(area, async_add_entities):
-
+    """Add all the climate entities for all features that have one."""
     # Check feature availability
     if not area.has_feature(CONF_FEATURE_CLIMATE_GROUPS):
         return
 
     # Check if there are any climate entities
     if not area.has_entities(CLIMATE_DOMAIN):
-        _LOGGER.debug(f"No {CLIMATE_DOMAIN} entities for area {area.name} ")
+        _LOGGER.debug("%s: No %s entities for area.", area.name, CLIMATE_DOMAIN)
         return
 
     climate_entities = [e["entity_id"] for e in area.entities[CLIMATE_DOMAIN]]
-    async_add_entities([AreaClimateGroup(area, climate_entities)])
+
+    climate_groups = [AreaClimateGroup(area, climate_entities)]
+
+    if climate_groups:
+        async_add_entities(climate_groups)
+
+    if CLIMATE_DOMAIN in area.magic_entities:
+        cleanup_removed_entries(
+            area.hass, climate_groups, area.magic_entities[CLIMATE_DOMAIN]
+        )
+
 
 class ClimateGroup(GroupEntity, ClimateEntity):
     """Representation of a climate group."""
@@ -221,11 +215,13 @@ class ClimateGroup(GroupEntity, ClimateEntity):
         if all_hvac_modes:
             # Merge all effects from all effect_lists with a union merge.
             self._attr_hvac_modes = list(set().union(*all_hvac_modes))
-        
+
         current_hvac_modes = [x.state for x in states if x.state != HVACMode.OFF]
         # return the most common hvac mode (what the thermostat is set to do) except OFF
         if current_hvac_modes:
-            self._attr_hvac_mode = max(set(current_hvac_modes), key=current_hvac_modes.count)
+            self._attr_hvac_mode = max(
+                set(current_hvac_modes), key=current_hvac_modes.count
+            )
         # return off if all are off
         elif all(x.state == HVACMode.OFF for x in states):
             self._attr_hvac_mode = HVACMode.OFF
@@ -238,7 +234,9 @@ class ClimateGroup(GroupEntity, ClimateEntity):
         current_hvac_actions = [a for a in hvac_actions if a != HVACAction.OFF]
         # return the most common action if it is not off
         if current_hvac_actions:
-            self._attr_hvac_action = max(set(current_hvac_actions), key=current_hvac_actions.count)
+            self._attr_hvac_action = max(
+                set(current_hvac_actions), key=current_hvac_actions.count
+            )
         # return action off if all are off
         elif all(a == HVACAction.OFF for a in hvac_actions):
             self._attr_hvac_action = HVACAction.OFF
@@ -302,7 +300,11 @@ class ClimateGroup(GroupEntity, ClimateEntity):
         _LOGGER.debug("Setting temperature: %s", data)
 
         await self.hass.services.async_call(
-            CLIMATE_DOMAIN, SERVICE_SET_TEMPERATURE, data, blocking=True, context=self._context
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            data,
+            blocking=True,
+            context=self._context,
         )
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -310,7 +312,11 @@ class ClimateGroup(GroupEntity, ClimateEntity):
         data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_HVAC_MODE: hvac_mode}
         _LOGGER.debug("Setting hvac mode: %s", data)
         await self.hass.services.async_call(
-            CLIMATE_DOMAIN, SERVICE_SET_HVAC_MODE, data, blocking=True, context=self._context
+            CLIMATE_DOMAIN,
+            SERVICE_SET_HVAC_MODE,
+            data,
+            blocking=True,
+            context=self._context,
         )
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
@@ -318,7 +324,11 @@ class ClimateGroup(GroupEntity, ClimateEntity):
         data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_FAN_MODE: fan_mode}
         _LOGGER.debug("Setting fan mode: %s", data)
         await self.hass.services.async_call(
-            CLIMATE_DOMAIN, SERVICE_SET_FAN_MODE, data, blocking=True, context=self._context
+            CLIMATE_DOMAIN,
+            SERVICE_SET_FAN_MODE,
+            data,
+            blocking=True,
+            context=self._context,
         )
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
@@ -347,43 +357,74 @@ class ClimateGroup(GroupEntity, ClimateEntity):
 
 
 class AreaClimateGroup(MagicEntity, ClimateGroup):
+    """Climate group."""
+
+    feature_info = MagicAreasFeatureInfoClimateGroups()
+
     def __init__(self, area, entities):
+        """Initialize climate group."""
+        MagicEntity.__init__(self, area, domain=CLIMATE_DOMAIN)
 
-        MagicEntity.__init__(self, area)
-
-        name = f"Area Climate ({area.name})"
-
-        self._name = name
         self._entities = entities
         unit = self.area.hass.config.units.temperature_unit
 
-        ClimateGroup.__init__(self, self.unique_id, self._name, self._entities, unit)
+        ClimateGroup.__init__(
+            self,
+            name=None,
+            unique_id=self.unique_id,
+            entity_ids=self._entities,
+            temperature_unit=unit,
+        )
+        delattr(self, "_attr_name")
 
         _LOGGER.debug(
-            f"Climate group {self._name} created with entities: {self._entities}"
+            "%s: Climate group created with entities: %s",
+            self.area.name,
+            str(self._entities),
         )
 
+    def _is_control_enabled(self):
+        """Check if light climate is enabled by checking climate control switch state."""
+
+        entity_id = f"{SWITCH_DOMAIN}.magic_areas_climate_groups_{self.area.slug}_climate_control"
+        switch_entity = self.hass.states.get(entity_id)
+
+        if not switch_entity:
+            return False
+
+        return switch_entity.state.lower() == STATE_ON
+
     def area_state_changed(self, area_id, states_tuple):
+        """Handle area state change event."""
         if self.area.is_meta():
-            _LOGGER.debug(f"{self.area.name} is meta. Noop.")
+            _LOGGER.debug("%s: %s is meta. Noop.", self.name, self.area.name)
             return
 
+        # Do nothing if control is disabled
+        if not self._is_control_enabled():
+            _LOGGER.debug("%s: Control disabled, skipping.", self.name)
+            return
+
+        # pylint: disable-next=unused-variable
         new_states, old_states = states_tuple
 
         if area_id != self.area.id:
             _LOGGER.debug(
-                f"Area state change event not for us. Skipping. (req: {area_id}/self: {self.area.id})"
+                "%s: Area state change event not for us. Skipping. (req: %s}/self: %s)",
+                self.name,
+                area_id,
+                self.area.id,
             )
             return
 
-        _LOGGER.debug(f"Climate group {self.name} detected area state change")
+        _LOGGER.debug("%s: Climate group detected area state change.", self.name)
 
         if AREA_STATE_CLEAR in new_states and self._attr_hvac_action != HVACAction.OFF:
             _LOGGER.debug(
-                f"{self.area.name}: Area clear, turning off Climate {self.entity_id}"
+                "%s: Area %s clear, turning off climate.", self.name, self.area.name
             )
             return self._turn_off()
-        
+
         if self.area.is_occupied() and self._attr_hvac_action == HVACAction.OFF:
             configured_state = self.area.feature_config(
                 CONF_FEATURE_CLIMATE_GROUPS
@@ -398,11 +439,15 @@ class AreaClimateGroup(MagicEntity, ClimateGroup):
                 return
 
             _LOGGER.debug(
-                f"{self.area.name}: Area on {configured_state}, turning on Climate {self.entity_id}"
+                "%s: Area %s on %s, turning on climate.",
+                self.name,
+                self.area.name,
+                configured_state,
             )
             return self._turn_on()
 
     def _turn_off(self):
+        """Turn off member entities."""
         service_data = {
             ATTR_ENTITY_ID: self.entity_id,
             ATTR_HVAC_MODE: HVACMode.OFF,
@@ -410,9 +455,8 @@ class AreaClimateGroup(MagicEntity, ClimateGroup):
         self.hass.services.call(CLIMATE_DOMAIN, SERVICE_SET_HVAC_MODE, service_data)
 
     def _turn_on(self):
-
+        """Turn on member entities."""
         for mode in (HVACMode.HEAT_COOL, HVACMode.HEAT, HVACMode.COOL):
-            
             if mode not in self._attr_hvac_modes:
                 continue
 

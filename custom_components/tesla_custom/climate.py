@@ -18,9 +18,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 KEEPER_MAP = {
-    "Keep On": 1,
-    "Dog Mode": 2,
-    "Camp Mode": 3,
+    "keep": 1,
+    "dog": 2,
+    "camp": 3,
 }
 
 
@@ -41,10 +41,17 @@ class TeslaCarClimate(TeslaCarEntity, ClimateEntity):
 
     type = "HVAC (climate) system"
     _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
+        ClimateEntityFeature.TARGET_TEMPERATURE
+        | ClimateEntityFeature.PRESET_MODE
+        | ClimateEntityFeature.FAN_MODE
     )
     _attr_hvac_modes = [HVACMode.HEAT_COOL, HVACMode.OFF]
-    _attr_preset_modes = ["Normal", "Defrost", "Keep On", "Dog Mode", "Camp Mode"]
+    _attr_preset_modes = ["normal", "defrost", "keep", "dog", "camp"]
+    _attr_fan_modes = ["off", "bioweapon"]
+
+    @property
+    def translation_key(self):
+        return "car_climate"
 
     @property
     def hvac_mode(self) -> HVACMode:
@@ -118,21 +125,21 @@ class TeslaCarClimate(TeslaCarEntity, ClimateEntity):
         Requires SUPPORT_PRESET_MODE.
         """
         if self._car.defrost_mode == 2:
-            return "Defrost"
+            return "defrost"
         if self._car.climate_keeper_mode == "dog":
-            return "Dog Mode"
+            return "dog"
         if self._car.climate_keeper_mode == "camp":
-            return "Camp Mode"
+            return "camp"
         if self._car.climate_keeper_mode == "on":
-            return "Keep On"
+            return "keep"
 
-        return "Normal"
+        return "normal"
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set new preset mode."""
         _LOGGER.debug("%s: Setting preset_mode to: %s", self.name, preset_mode)
 
-        if preset_mode == "Normal":
+        if preset_mode == "normal":
             # If setting Normal, we need to check Defrost And Keep modes.
             if self._car.defrost_mode != 0:
                 await self._car.set_max_defrost(0)
@@ -140,10 +147,27 @@ class TeslaCarClimate(TeslaCarEntity, ClimateEntity):
             if self._car.climate_keeper_mode != 0:
                 await self._car.set_climate_keeper_mode(0)
 
-        elif preset_mode == "Defrost":
+        elif preset_mode == "defrost":
             await self._car.set_max_defrost(2)
 
         else:
             await self._car.set_climate_keeper_mode(KEEPER_MAP[preset_mode])
         # max_defrost changes multiple states so refresh all entities
         await self.coordinator.async_refresh()
+
+    @property
+    def fan_mode(self):
+        """Return the bioweapon mode as fan mode.
+
+        Requires SUPPORT_FAN_MODE.
+        """
+        if self._car.bioweapon_mode:
+            return "bioweapon"
+
+        return "off"
+
+    async def async_set_fan_mode(self, fan_mode: str) -> None:
+        """Set new fan mode as bioweapon mode."""
+        _LOGGER.debug("%s: Setting fan_mode to: %s", self.name, fan_mode)
+
+        await self._car.set_bioweapon_mode(fan_mode == "bioweapon")
