@@ -12,8 +12,6 @@ homeassistant:
   internal_url: !secret internal_url
   auth_providers:
     - type: homeassistant
-    - type: legacy_api_password
-      api_password: !secret http_password
     - type: trusted_networks
       trusted_networks:
         - 172.16.0.0/12
@@ -25,15 +23,15 @@ hassio:
 
 ffmpeg:
 
-map:
-
 ios:
 
 config:
 
 logger:
   #default: warn
-  default: warn
+  default: error
+  # logs:
+  #   custom_components.adaptive_lighting: debug
   #  default: warn
   #  default: debug
   # logs:
@@ -67,6 +65,8 @@ sun:
 # Enables the frontend
 frontend:
   themes: !include_dir_merge_named themes
+  extra_module_url:
+    - /hacsfiles/lovelace-card-mod/card-mod.js
 
 # Allows you to issue voice commands from the frontend
 #conversation:
@@ -79,9 +79,6 @@ logbook:
       - automation.update_battery_status_group_members
       - automation.battery_persistent_notification
       - automation.battery_persistent_notification_clear
-
-# Discover some devices automatically
-discovery:
 
 tts:
   - platform: google_translate
@@ -133,6 +130,12 @@ influxdb:
 cloud:
   alexa:
     entity_config:
+      cover.owner_suite_blinds:
+        display_categories: INTERIOR_BLIND
+      cover.owner_suite_north_blind:
+        display_categories: INTERIOR_BLIND
+      cover.owner_suite_south_blind:
+        display_categories: INTERIOR_BLIND
       input_boolean.guest_mode:
         name: Guest Mode
         description: Turn on guest mode
@@ -148,9 +151,25 @@ cloud:
 
 # browser_mod:
 
+# Add automations panel to sidebar for faster debugging.
+panel_custom:
+  - name: Automations
+    sidebar_title: Automations
+    sidebar_icon: mdi:cog-transfer
+    js_url: /api/hassio/app/entrypoint.js
+    url_path: config/automation/dashboard
+    embed_iframe: true
+    require_admin: true
+    config:
+      ingress: core_configurator
+
 lovelace:
   mode: yaml
   resources:
+    - url: /hacsfiles/homeassistant-minimalistic-area-card/minimalistic-area-card.js
+      type: module
+    - url: /hacsfiles/mushroom-strategy/mushroom-strategy.js
+      type: module
     - url: /hacsfiles/entity-attributes-card/entity-attributes-card.js
       type: module
     - url: /hacsfiles/mini-media-player/mini-media-player-bundle.js
@@ -189,34 +208,16 @@ lovelace:
       type: module
     # - url: /hacsfiles/homeassistant-minimalistic-area-card/minimalistic-area-card.js
     #   type: module
+    - url: /hacsfiles/lovelace-time-picker-card/time-picker-card.js
+      type: module
 
   dashboards:
-    db-pc:
-      mode: yaml
-      title: Dev/PC
-      icon: mdi:laptop
-      show_in_sidebar: false
-      filename: ui-pc.yaml
-      require_admin: true
-    db-phone:
-      mode: yaml
-      title: Phone
-      icon: mdi:tablet-cellphone
-      show_in_sidebar: false
-      filename: ui-phone.yaml
-      require_admin: true
     db-guest:
       mode: yaml
       title: Guest
       icon: mdi:bag-checked
       show_in_sidebar: false
       filename: ui-guest.yaml
-    db-mushroom:
-      mode: yaml
-      title: Mushroom
-      icon: mdi:mushroom
-      show_in_sidebar: false
-      filename: ui-mushroom.yaml
 
 system_health:
 
@@ -230,13 +231,12 @@ mobile_app:
 # Stream
 ########################
 stream:
-
-mqtt_eventstream:
-  publish_topic: master/topic
-  subscribe_topic: slaves/#
-  ignore_event:
-    - call_service
-    - state_changed
+# mqtt_eventstream:
+# publish_topic: homeassistant/plant
+# subscribe_topic: haplants/plant/#
+# ignore_event:
+#   - call_service
+#   - state_changed
 # image_processing:
 #   - platform: tensorflow
 #     source:
