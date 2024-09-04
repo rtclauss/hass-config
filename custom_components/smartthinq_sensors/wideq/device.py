@@ -162,6 +162,7 @@ class Monitor:
         for iteration in range(MAX_RETRIES):
             _LOGGER.debug("Polling...")
             # Wait one second between iteration
+
             if iteration > 0:
                 await asyncio.sleep(SLEEP_BETWEEN_RETRIES)
 
@@ -183,6 +184,9 @@ class Monitor:
                 if iteration >= 1:  # just retry 2 times
                     raise
                 continue
+
+            except core_exc.ClientDisconnected:
+                return None
 
             except core_exc.FailedRequestError:
                 self._raise_error("Status update request failed", debug_count=2)
@@ -491,7 +495,7 @@ class Device:
 
         # load local language pack
         if self._local_lang_pack is None:
-            self._local_lang_pack = self._client.local_lang_pack()
+            self._local_lang_pack = await self._client.local_lang_pack()
 
         return True
 

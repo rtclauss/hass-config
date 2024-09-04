@@ -13,15 +13,17 @@ from homeassistant.config_entries import (
     ConfigEntry,
 )
 from homeassistant.const import (
+    CONF_CLIENT_ID,
     CONF_REGION,
     CONF_TOKEN,
+    EVENT_HOMEASSISTANT_STOP,
     MAJOR_VERSION,
     MINOR_VERSION,
     Platform,
     UnitOfTemperature,
     __version__,
 )
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -145,7 +147,7 @@ class LGEAuthentication:
         return None
 
     async def create_client_from_token(
-        self, token: str, oauth_url: str | None = None
+        self, token: str, oauth_url: str | None = None, client_id: str | None = None
     ) -> ClientAsync:
         """Create a new client using refresh token."""
         return await ClientAsync.from_token(
@@ -154,6 +156,7 @@ class LGEAuthentication:
             language=self._language,
             oauth_url=oauth_url,
             aiohttp_session=self._client_session,
+            client_id=client_id,
         )
 
 
@@ -179,7 +182,7 @@ def _notify_message(
 
 
 @callback
-def _migrate_old_entry_config(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _migrate_old_config_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Migrate an old config entry if available."""
     old_key = "outh_url"  # old conf key with typo error
     if old_key not in entry.data:
@@ -189,6 +192,19 @@ def _migrate_old_entry_config(hass: HomeAssistant, entry: ConfigEntry) -> None:
     new_data = {k: v for k, v in entry.data.items() if k != old_key}
     hass.config_entries.async_update_entry(
         entry, data={**new_data, CONF_OAUTH2_URL: oauth2_url}
+    )
+
+
+@callback
+def _add_clientid_config_entry(
+    hass: HomeAssistant, entry: ConfigEntry, client_id: str
+) -> None:
+    """Add the client id to the config entry, so it can be reused."""
+    if CONF_CLIENT_ID in entry.data or not client_id:
+        return
+
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, CONF_CLIENT_ID: client_id}
     )
 
 
@@ -205,11 +221,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning(msg)
         return False
 
-    _migrate_old_entry_config(hass, entry)
+    _migrate_old_config_entry(hass, entry)
     region = entry.data[CONF_REGION]
     language = entry.data[CONF_LANGUAGE]
     refresh_token = entry.data[CONF_TOKEN]
     oauth2_url = None  # entry.data.get(CONF_OAUTH2_URL)
+    client_id: str | None = entry.data.get(CONF_CLIENT_ID)
     use_api_v2 = entry.data.get(CONF_USE_API_V2, False)
     use_ha_session = entry.data.get(CONF_USE_HA_SESSION, False)
 
@@ -249,7 +266,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # raising ConfigEntryNotReady platform setup will be retried
     lge_auth = LGEAuthentication(hass, region, language, use_ha_session)
     try:
-        client = await lge_auth.create_client_from_token(refresh_token, oauth2_url)
+        client = await lge_auth.create_client_from_token(
+            refresh_token, oauth2_url, client_id
+        )
     except (AuthenticationError, InvalidCredentialError) as exc:
         if (auth_retry := hass.data[DOMAIN].get(AUTH_RETRY, 0)) >= MAX_AUTH_RETRY:
             hass.data.pop(DOMAIN)
@@ -290,6 +309,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     _LOGGER.debug("ThinQ client connected")
 
+    if not client_id:
+        _add_clientid_config_entry(hass, entry, client.client_id)
+
     try:
         lge_devices, unsupported_devices, discovered_devices = await lge_devices_setup(
             hass, client
@@ -319,6 +341,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(
         async_dispatcher_connect(hass, SIGNAL_RELOAD_ENTRY, _async_call_reload_entry)
+    )
+
+    async def _close_lg_client(event: Event) -> None:
+        """Close client to abort pollong."""
+        await client.close()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _close_lg_client)
     )
 
     hass.data[DOMAIN] = {
