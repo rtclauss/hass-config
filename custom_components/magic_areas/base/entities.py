@@ -2,16 +2,18 @@
 
 import logging
 
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from ..const import (
+from custom_components.magic_areas.base.magic import MagicArea
+from custom_components.magic_areas.const import (
     DOMAIN,
     MAGIC_DEVICE_ID_PREFIX,
     MAGICAREAS_UNIQUEID_PREFIX,
+    META_AREAS,
     MagicAreasFeatureInfo,
 )
-from .magic import MagicArea
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,9 +21,9 @@ _LOGGER = logging.getLogger(__name__)
 class MagicEntity(RestoreEntity):
     """MagicEntity is the base entity for use with all the magic classes."""
 
-    area: MagicArea = None
+    area: MagicArea
     feature_info: MagicAreasFeatureInfo | None = None
-    _extra_identifiers: list[str] = None
+    _extra_identifiers: list[str] | None = None
     _attr_has_entity_name = True
 
     def __init__(
@@ -34,6 +36,9 @@ class MagicEntity(RestoreEntity):
         """Initialize the magic area."""
         # Avoiding using super() due multiple inheritance issues
         RestoreEntity.__init__(self)
+
+        if not self.feature_info:
+            raise NotImplementedError(f"{self.name}: Feature info not set.")
 
         self.logger = logging.getLogger(type(self).__module__)
         self.area = area
@@ -68,7 +73,9 @@ class MagicEntity(RestoreEntity):
             self._attr_translation_key,
         )
 
-    def _generate_entity_id(self, domain: str):
+    def _generate_entity_id(self, domain: str) -> str:
+        if not self.feature_info:
+            raise NotImplementedError(f"{self.name}: Feature info not set.")
 
         entity_id_parts = [
             MAGICAREAS_UNIQUEID_PREFIX,
@@ -90,8 +97,9 @@ class MagicEntity(RestoreEntity):
         return f"{domain}.{entity_id}"
 
     def _generaete_unique_id(self, domain: str, extra_parts: list | None = None):
-
         # Format: magicareas_feature_domain_areaname_name
+        if not self.feature_info:
+            raise NotImplementedError(f"{self.name}: Feature info not set.")
 
         unique_id_parts = [
             MAGICAREAS_UNIQUEID_PREFIX,
@@ -109,7 +117,7 @@ class MagicEntity(RestoreEntity):
         return "_".join(unique_id_parts)
 
     @property
-    def should_poll(self) -> str:
+    def should_poll(self) -> bool:
         """If entity should be polled."""
         return False
 
@@ -124,4 +132,51 @@ class MagicEntity(RestoreEntity):
             name=self.area.name,
             manufacturer="Magic Areas",
             model="Magic Area",
+            translation_key=(
+                self.area.slug
+                if (self.area.is_meta() and self.area.name in META_AREAS)
+                else None
+            ),
         )
+
+    async def restore_state(self) -> None:
+        """Restore the state of the entity."""
+        last_state = await self.async_get_last_state()
+
+        if last_state is None:
+            _LOGGER.debug("%s: New entity created", self.name)
+            self._attr_state = STATE_OFF
+        else:
+            _LOGGER.debug(
+                "%s: entity restored [state=%s]",
+                self.name,
+                last_state.state,
+            )
+            self._attr_state = last_state.state
+            self._attr_extra_state_attributes = dict(last_state.attributes)
+
+        self.schedule_update_ha_state()
+
+
+class BinaryMagicEntity(MagicEntity):
+    """Class for Binary-based magic entities."""
+
+    _attr_is_on: bool
+
+    async def restore_state(self) -> None:
+        """Restore the state of the entity."""
+        last_state = await self.async_get_last_state()
+
+        if last_state is None:
+            _LOGGER.debug("%s: New entity created", self.name)
+            self._attr_is_on = False
+        else:
+            _LOGGER.debug(
+                "%s: entity restored [state=%s]",
+                self.name,
+                last_state.state,
+            )
+            self._attr_is_on = last_state.state == STATE_ON
+            self._attr_extra_state_attributes = dict(last_state.attributes)
+
+        self.schedule_update_ha_state()

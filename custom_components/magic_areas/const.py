@@ -1,28 +1,32 @@
 """Constants for Magic Areas."""
 
-from enum import IntEnum, StrEnum
+from enum import IntEnum, StrEnum, auto
 from itertools import chain
 
 import voluptuous as vol
 
+from homeassistant.components.alarm_control_panel.const import AlarmControlPanelState
 from homeassistant.components.binary_sensor import (
     DOMAIN as BINARY_SENSOR_DOMAIN,
     BinarySensorDeviceClass,
 )
-from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
-from homeassistant.components.cover import DOMAIN as COVER_DOMAIN
+from homeassistant.components.climate.const import DOMAIN as CLIMATE_DOMAIN
+from homeassistant.components.cover.const import DOMAIN as COVER_DOMAIN
 from homeassistant.components.device_tracker.const import (
     DOMAIN as DEVICE_TRACKER_DOMAIN,
 )
+from homeassistant.components.fan import DOMAIN as FAN_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as INPUT_BOOLEAN_DOMAIN
 from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
-from homeassistant.components.media_player import DOMAIN as MEDIA_PLAYER_DOMAIN
+from homeassistant.components.media_player.const import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.components.remote import DOMAIN as REMOTE_DOMAIN
-from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN, SensorDeviceClass
-from homeassistant.components.sun import DOMAIN as SUN_DOMAIN
-from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.components.sensor.const import (
+    DOMAIN as SENSOR_DOMAIN,
+    SensorDeviceClass,
+)
+from homeassistant.components.sun.const import DOMAIN as SUN_DOMAIN
+from homeassistant.components.switch.const import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import (
-    STATE_ALARM_TRIGGERED,
     STATE_ON,
     STATE_OPEN,
     STATE_PLAYING,
@@ -33,12 +37,14 @@ from homeassistant.const import (
 from homeassistant.helpers import config_validation as cv
 
 ONE_MINUTE = 60  # seconds, for conversion
+EMPTY_STRING = ""
 
 DOMAIN = "magic_areas"
 MODULE_DATA = f"{DOMAIN}_data"
 
 ADDITIONAL_LIGHT_TRACKING_ENTITIES = ["sun.sun"]
 DEFAULT_SENSOR_PRECISION = 2
+UPDATE_INTERVAL = ONE_MINUTE
 
 # Light group options
 CONF_OVERHEAD_LIGHTS = "overhead_lights"  # cv.entity_ids
@@ -89,6 +95,14 @@ LIGHT_GROUP_ACT_ON = {
 }
 
 
+class CalculationMode(StrEnum):
+    """Modes for calculating values."""
+
+    ANY = auto()
+    ALL = auto()
+    MAJORITY = auto()
+
+
 class LightGroupCategory(StrEnum):
     """Categories of light groups."""
 
@@ -127,7 +141,18 @@ DISTRESS_SENSOR_CLASSES = [
     BinarySensorDeviceClass.SAFETY,
     BinarySensorDeviceClass.GAS,
 ]  # @todo make configurable
-DISTRESS_STATES = [STATE_ALARM_TRIGGERED, STATE_ON, STATE_PROBLEM]
+DISTRESS_STATES = [AlarmControlPanelState.TRIGGERED, STATE_ON, STATE_PROBLEM]
+
+# Wasp in a Box
+WASP_IN_A_BOX_WASP_DEVICE_CLASSES = [
+    BinarySensorDeviceClass.MOTION,
+    BinarySensorDeviceClass.OCCUPANCY,
+    BinarySensorDeviceClass.PRESENCE,
+]
+WASP_IN_A_BOX_BOX_DEVICE_CLASSES = [
+    BinarySensorDeviceClass.DOOR,
+    BinarySensorDeviceClass.GARAGE_DOOR,
+]
 
 # Aggregates
 AGGREGATE_SENSOR_CLASSES = (
@@ -149,6 +174,11 @@ AGGREGATE_MODE_TOTAL_SENSOR = [
     SensorDeviceClass.ENERGY,
 ]
 
+AGGREGATE_MODE_TOTAL_INCREASING_SENSOR = [
+    SensorDeviceClass.GAS,
+    SensorDeviceClass.WATER,
+]
+
 
 class MagicConfigEntryVersion(IntEnum):
     """Magic Area config entry version."""
@@ -161,7 +191,7 @@ class MagicAreasFeatureInfo:
     """Base class for feature information."""
 
     id: str
-    translation_keys: dict[str, str]
+    translation_keys: dict[str, str | None]
     icons: dict[str, str] = {}
 
 
@@ -170,6 +200,7 @@ class MagicAreasFeatureInfoPresenceTracking(MagicAreasFeatureInfo):
 
     id = "presence_tracking"
     translation_keys = {BINARY_SENSOR_DOMAIN: "area_state"}
+    icons = {BINARY_SENSOR_DOMAIN: "mdi:texture-box"}
 
 
 class MagicAreasFeatureInfoPresenceHold(MagicAreasFeatureInfo):
@@ -178,6 +209,22 @@ class MagicAreasFeatureInfoPresenceHold(MagicAreasFeatureInfo):
     id = "presence_hold"
     translation_keys = {SWITCH_DOMAIN: "presence_hold"}
     icons = {SWITCH_DOMAIN: "mdi:car-brake-hold"}
+
+
+class MagicAreasFeatureInfoBLETrackers(MagicAreasFeatureInfo):
+    """Feature information for feature: BLE Trackers."""
+
+    id = "ble_trackers"
+    translation_keys = {BINARY_SENSOR_DOMAIN: "ble_tracker_monitor"}
+    icons = {BINARY_SENSOR_DOMAIN: "mdi:bluetooth"}
+
+
+class MagicAreasFeatureInfoWaspInABox(MagicAreasFeatureInfo):
+    """Feature information for feature: Wasp in a box."""
+
+    id = "wasp_in_a_box"
+    translation_keys = {BINARY_SENSOR_DOMAIN: "wasp_in_a_box"}
+    icons = {BINARY_SENSOR_DOMAIN: "mdi:bee"}
 
 
 class MagicAreasFeatureInfoAggregates(MagicAreasFeatureInfo):
@@ -215,15 +262,25 @@ class MagicAreasFeatureInfoLightGroups(MagicAreasFeatureInfo):
     icons = {SWITCH_DOMAIN: "mdi:lightbulb-auto-outline"}
 
 
-class MagicAreasFeatureInfoClimateGroups(MagicAreasFeatureInfo):
-    """Feature information for feature: Climate groups."""
+class MagicAreasFeatureInfoClimateControl(MagicAreasFeatureInfo):
+    """Feature information for feature: Climate control."""
 
-    id = "climate_groups"
+    id = "climate_control"
     translation_keys = {
-        CLIMATE_DOMAIN: "climate_group",
         SWITCH_DOMAIN: "climate_control",
     }
     icons = {SWITCH_DOMAIN: "mdi:thermostat-auto"}
+
+
+class MagicAreasFeatureInfoFanGroups(MagicAreasFeatureInfo):
+    """Feature information for feature: Fan groups."""
+
+    id = "fan_groups"
+    translation_keys = {
+        FAN_DOMAIN: "fan_group",
+        SWITCH_DOMAIN: "fan_control",
+    }
+    icons = {SWITCH_DOMAIN: "mdi:fan-auto"}
 
 
 class MagicAreasFeatureInfoMediaPlayerGroups(MagicAreasFeatureInfo):
@@ -257,45 +314,51 @@ class MagicAreasFeatures(StrEnum):
     AREA = "area"  # Default feature
     PRESENCE_HOLD = "presence_hold"
     LIGHT_GROUPS = "light_groups"
-    CLIMATE_GROUPS = "climate_groups"
+    CLIMATE_CONTROL = "climate_control"
     COVER_GROUPS = "cover_groups"
     MEDIA_PLAYER_GROUPS = "media_player_groups"
     AREA_AWARE_MEDIA_PLAYER = "area_aware_media_player"
     AGGREGATES = "aggregates"
     HEALTH = "health"
     THRESHOLD = "threshold"
+    FAN_GROUPS = "fan_groups"
+    WASP_IN_A_BOX = "wasp_in_a_box"
+    BLE_TRACKER = "ble_trackers"
 
 
 # Magic Areas Events
 class MagicAreasEvents(StrEnum):
     """Magic Areas events."""
 
-    STARTED = "magicareas_start"
-    READY = "magicareas_ready"
-    AREA_READY = "magicareas_area_ready"
     AREA_STATE_CHANGED = "magicareas_area_state_changed"
 
 
-EVENT_MAGICAREAS_STARTED = "magicareas_start"
-EVENT_MAGICAREAS_READY = "magicareas_ready"
-EVENT_MAGICAREAS_AREA_READY = "magicareas_area_ready"
-EVENT_MAGICAREAS_AREA_OCCUPIED = "magicareas_area_occupied"
-EVENT_MAGICAREAS_AREA_CLEAR = "magicareas_area_clear"
 EVENT_MAGICAREAS_AREA_STATE_CHANGED = "magicareas_area_state_changed"
+
+
+# SelectorTranslationKeys
+class SelectorTranslationKeys(StrEnum):
+    """Translation keys for config flow UI selectors."""
+
+    CLIMATE_PRESET_LIST = auto()
+    AREA_TYPE = auto()
+    AREA_STATES = auto()
+    CONTROL_ON = auto()
+    CALCULATION_MODE = auto()
+
 
 ALL_BINARY_SENSOR_DEVICE_CLASSES = [cls.value for cls in BinarySensorDeviceClass]
 ALL_SENSOR_DEVICE_CLASSES = [cls.value for cls in SensorDeviceClass]
 
 # Data Items
 DATA_AREA_OBJECT = "area_object"
-DATA_UNDO_UPDATE_LISTENER = "undo_update_listener"
+DATA_TRACKED_LISTENERS = "tracked_listeners"
 
 # Attributes
 ATTR_STATES = "states"
 ATTR_AREAS = "areas"
 ATTR_ACTIVE_AREAS = "active_areas"
 ATTR_TYPE = "type"
-ATTR_UPDATE_INTERVAL = "update_interval"
 ATTR_CLEAR_TIMEOUT = "clear_timeout"
 ATTR_ACTIVE_SENSORS = "active_sensors"
 ATTR_LAST_ACTIVE_SENSORS = "last_active_sensors"
@@ -360,7 +423,7 @@ MAGIC_AREAS_COMPONENTS = [
     SWITCH_DOMAIN,
     SENSOR_DOMAIN,
     LIGHT_DOMAIN,
-    CLIMATE_DOMAIN,
+    FAN_DOMAIN,
 ]
 
 MAGIC_AREAS_COMPONENTS_META = [
@@ -369,7 +432,7 @@ MAGIC_AREAS_COMPONENTS_META = [
     COVER_DOMAIN,
     SENSOR_DOMAIN,
     LIGHT_DOMAIN,
-    CLIMATE_DOMAIN,
+    SWITCH_DOMAIN,
 ]
 
 MAGIC_AREAS_COMPONENTS_GLOBAL = MAGIC_AREAS_COMPONENTS_META
@@ -417,6 +480,7 @@ CONF_ENABLED_FEATURES, DEFAULT_ENABLED_FEATURES = "features", {}  # cv.ensure_li
 CONF_SECONDARY_STATES, DEFAULT_AREA_STATES = "secondary_states", {}  # cv.ensure_list
 CONF_INCLUDE_ENTITIES = "include_entities"  # cv.entity_ids
 CONF_EXCLUDE_ENTITIES = "exclude_entities"  # cv.entity_ids
+CONF_KEEP_ONLY_ENTITIES = "keep_only_entities"  # cv.entity_ids
 (
     CONF_PRESENCE_DEVICE_PLATFORMS,
     DEFAULT_PRESENCE_DEVICE_PLATFORMS,
@@ -453,14 +517,65 @@ CONF_AGGREGATES_MIN_ENTITIES, DEFAULT_AGGREGATES_MIN_ENTITIES = (
     DEFAULT_AGGREGATES_BINARY_SENSOR_DEVICE_CLASSES,
 ) = (
     "aggregates_binary_sensor_device_classes",
-    ALL_BINARY_SENSOR_DEVICE_CLASSES,
+    [
+        BinarySensorDeviceClass.CONNECTIVITY,
+        BinarySensorDeviceClass.DOOR,
+        BinarySensorDeviceClass.GARAGE_DOOR,
+        BinarySensorDeviceClass.GAS,
+        BinarySensorDeviceClass.HEAT,
+        BinarySensorDeviceClass.LIGHT,
+        BinarySensorDeviceClass.LOCK,
+        BinarySensorDeviceClass.MOISTURE,
+        BinarySensorDeviceClass.MOTION,
+        BinarySensorDeviceClass.MOVING,
+        BinarySensorDeviceClass.OCCUPANCY,
+        BinarySensorDeviceClass.PRESENCE,
+        BinarySensorDeviceClass.PROBLEM,
+        BinarySensorDeviceClass.SAFETY,
+        BinarySensorDeviceClass.SMOKE,
+        BinarySensorDeviceClass.SOUND,
+        BinarySensorDeviceClass.TAMPER,
+        BinarySensorDeviceClass.UPDATE,
+        BinarySensorDeviceClass.VIBRATION,
+        BinarySensorDeviceClass.WINDOW,
+    ],
 )  # cv.ensure_list
 CONF_AGGREGATES_SENSOR_DEVICE_CLASSES, DEFAULT_AGGREGATES_SENSOR_DEVICE_CLASSES = (
     "aggregates_sensor_device_classes",
-    ALL_SENSOR_DEVICE_CLASSES,
+    [
+        SensorDeviceClass.AQI,
+        SensorDeviceClass.ATMOSPHERIC_PRESSURE,
+        SensorDeviceClass.CO,
+        SensorDeviceClass.CO2,
+        SensorDeviceClass.CURRENT,
+        SensorDeviceClass.ENERGY,
+        SensorDeviceClass.ENERGY_STORAGE,
+        SensorDeviceClass.GAS,
+        SensorDeviceClass.HUMIDITY,
+        SensorDeviceClass.ILLUMINANCE,
+        SensorDeviceClass.IRRADIANCE,
+        SensorDeviceClass.MOISTURE,
+        SensorDeviceClass.NITROGEN_DIOXIDE,
+        SensorDeviceClass.NITROGEN_MONOXIDE,
+        SensorDeviceClass.NITROUS_OXIDE,
+        SensorDeviceClass.OZONE,
+        SensorDeviceClass.POWER,
+        SensorDeviceClass.PRESSURE,
+        SensorDeviceClass.SULPHUR_DIOXIDE,
+        SensorDeviceClass.TEMPERATURE,
+        SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS,
+        SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+    ],
 )  # cv.ensure_list
 CONF_AGGREGATES_ILLUMINANCE_THRESHOLD, DEFAULT_AGGREGATES_ILLUMINANCE_THRESHOLD = (
     "aggregates_illuminance_threshold",
+    0,  # 0 = disabled
+)  # cv.positive_int
+(
+    CONF_AGGREGATES_ILLUMINANCE_THRESHOLD_HYSTERESIS,
+    DEFAULT_AGGREGATES_ILLUMINANCE_THRESHOLD_HYSTERESIS,
+) = (
+    "aggregates_illuminance_threshold_hysteresis",
     0,  # 0 = disabled
 )  # cv.positive_int
 
@@ -469,12 +584,22 @@ CONF_HEALTH_SENSOR_DEVICE_CLASSES, DEFAULT_HEALTH_SENSOR_DEVICE_CLASSES = (
     DISTRESS_SENSOR_CLASSES,
 )
 
+CONF_RELOAD_ON_REGISTRY_CHANGE, DEFAULT_RELOAD_ON_REGISTRY_CHANGE = (
+    "reload_on_registry_change",
+    True,
+)
+
+CONF_IGNORE_DIAGNOSTIC_ENTITIES, DEFAULT_IGNORE_DIAGNOSTIC_ENTITIES = (
+    "ignore_diagnostic_entities",
+    True,
+)
+
+
 CONF_CLEAR_TIMEOUT, DEFAULT_CLEAR_TIMEOUT, DEFAULT_CLEAR_TIMEOUT_META = (
     "clear_timeout",
     1,
     0,
 )  # cv.positive_int
-CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL = "update_interval", 60  # cv.positive_int
 CONF_NOTIFICATION_DEVICES, DEFAULT_NOTIFICATION_DEVICES = (
     "notification_devices",
     [],
@@ -497,6 +622,20 @@ CONF_SLEEP_ENTITY = "sleep_entity"
 CONF_EXTENDED_TIME, DEFAULT_EXTENDED_TIME = "extended_time", 5  # cv.positive_int
 CONF_EXTENDED_TIMEOUT, DEFAULT_EXTENDED_TIMEOUT = "extended_timeout", 10  # int
 
+CONF_BLE_TRACKER_ENTITIES, DEFAULT_BLE_TRACKER_ENTITIES = (
+    "ble_tracker_entities",
+    [],
+)  # cv.entity_ids
+
+CONF_WASP_IN_A_BOX_DELAY, DEFAULT_WASP_IN_A_BOX_DELAY = (
+    "delay",
+    90,
+)  # cv.positive_int
+CONF_WASP_IN_A_BOX_WASP_DEVICE_CLASSES, DEFAULT_WASP_IN_A_BOX_WASP_DEVICE_CLASSES = (
+    "wasp_device_classes",
+    [BinarySensorDeviceClass.MOTION, BinarySensorDeviceClass.OCCUPANCY],
+)  # cv.ensure_list
+
 CONFIGURABLE_AREA_STATE_MAP = {
     AREA_STATE_SLEEP: CONF_SLEEP_ENTITY,
     AREA_STATE_DARK: CONF_DARK_ENTITY,
@@ -504,8 +643,8 @@ CONFIGURABLE_AREA_STATE_MAP = {
 }
 
 # features
-CONF_FEATURE_CLIMATE_GROUPS = "climate_groups"
-
+CONF_FEATURE_CLIMATE_CONTROL = "climate_control"
+CONF_FEATURE_FAN_GROUPS = "fan_groups"
 CONF_FEATURE_MEDIA_PLAYER_GROUPS = "media_player_groups"
 CONF_FEATURE_LIGHT_GROUPS = "light_groups"
 CONF_FEATURE_COVER_GROUPS = "cover_groups"
@@ -513,12 +652,14 @@ CONF_FEATURE_AREA_AWARE_MEDIA_PLAYER = "area_aware_media_player"
 CONF_FEATURE_AGGREGATION = "aggregates"
 CONF_FEATURE_HEALTH = "health"
 CONF_FEATURE_PRESENCE_HOLD = "presence_hold"
+CONF_FEATURE_BLE_TRACKERS = "ble_trackers"
+CONF_FEATURE_WASP_IN_A_BOX = "wasp_in_a_box"
 
 CONF_FEATURE_LIST_META = [
     CONF_FEATURE_MEDIA_PLAYER_GROUPS,
     CONF_FEATURE_LIGHT_GROUPS,
     CONF_FEATURE_COVER_GROUPS,
-    CONF_FEATURE_CLIMATE_GROUPS,
+    CONF_FEATURE_CLIMATE_CONTROL,
     CONF_FEATURE_AGGREGATION,
     CONF_FEATURE_HEALTH,
 ]
@@ -526,6 +667,9 @@ CONF_FEATURE_LIST_META = [
 CONF_FEATURE_LIST = CONF_FEATURE_LIST_META + [
     CONF_FEATURE_AREA_AWARE_MEDIA_PLAYER,
     CONF_FEATURE_PRESENCE_HOLD,
+    CONF_FEATURE_BLE_TRACKERS,
+    CONF_FEATURE_FAN_GROUPS,
+    CONF_FEATURE_WASP_IN_A_BOX,
 ]
 
 CONF_FEATURE_LIST_GLOBAL = CONF_FEATURE_LIST_META
@@ -536,12 +680,52 @@ CONF_PRESENCE_HOLD_TIMEOUT, DEFAULT_PRESENCE_HOLD_TIMEOUT = (
     0,
 )  # cv.int
 
-# Climate Group Options
-CONF_CLIMATE_GROUPS_TURN_ON_STATE, DEFAULT_CLIMATE_GROUPS_TURN_ON_STATE = (
-    "turn_on_state",
-    AREA_STATE_EXTENDED,
+# Climate control options
+CONF_CLIMATE_CONTROL_ENTITY_ID, DEFAULT_CLIMATE_CONTROL_ENTITY_ID = ("entity_id", None)
+CONF_CLIMATE_CONTROL_PRESET_CLEAR, DEFAULT_CLIMATE_CONTROL_PRESET_CLEAR = (
+    "preset_clear",
+    EMPTY_STRING,
+)
+CONF_CLIMATE_CONTROL_PRESET_OCCUPIED, DEFAULT_CLIMATE_CONTROL_PRESET_OCCUPIED = (
+    "preset_occupied",
+    EMPTY_STRING,
+)
+CONF_CLIMATE_CONTROL_PRESET_EXTENDED, DEFAULT_CLIMATE_CONTROL_PRESET_EXTENDED = (
+    "preset_extended",
+    EMPTY_STRING,
+)
+CONF_CLIMATE_CONTROL_PRESET_SLEEP, DEFAULT_CLIMATE_CONTROL_PRESET_SLEEP = (
+    "preset_sleep",
+    EMPTY_STRING,
 )
 
+# Fan Group options
+CONF_FAN_GROUPS_REQUIRED_STATE, DEFAULT_FAN_GROUPS_REQUIRED_STATE = (
+    "required_state",
+    AREA_STATE_EXTENDED,
+)
+CONF_FAN_GROUPS_TRACKED_DEVICE_CLASS, DEFAULT_FAN_GROUPS_TRACKED_DEVICE_CLASS = (
+    "tracked_device_class",
+    SensorDeviceClass.TEMPERATURE,
+)
+CONF_FAN_GROUPS_SETPOINT, DEFAULT_FAN_GROUPS_SETPOINT = ("setpoint", 0.0)
+FAN_GROUPS_ALLOWED_TRACKED_DEVICE_CLASS = [
+    SensorDeviceClass.TEMPERATURE,
+    SensorDeviceClass.HUMIDITY,
+    SensorDeviceClass.CO,
+    SensorDeviceClass.CO2,
+    SensorDeviceClass.AQI,
+    SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS,
+    SensorDeviceClass.VOLATILE_ORGANIC_COMPOUNDS_PARTS,
+    SensorDeviceClass.NITROGEN_DIOXIDE,
+    SensorDeviceClass.NITROGEN_MONOXIDE,
+    SensorDeviceClass.GAS,
+    SensorDeviceClass.OZONE,
+    SensorDeviceClass.PM1,
+    SensorDeviceClass.PM10,
+    SensorDeviceClass.PM25,
+    SensorDeviceClass.SULPHUR_DIOXIDE,
+]
 
 # Config Schema
 
@@ -562,7 +746,12 @@ AGGREGATE_FEATURE_SCHEMA = vol.Schema(
             CONF_AGGREGATES_ILLUMINANCE_THRESHOLD,
             default=DEFAULT_AGGREGATES_ILLUMINANCE_THRESHOLD,
         ): cv.positive_int,
-    }
+        vol.Optional(
+            CONF_AGGREGATES_ILLUMINANCE_THRESHOLD_HYSTERESIS,
+            default=DEFAULT_AGGREGATES_ILLUMINANCE_THRESHOLD_HYSTERESIS,
+        ): cv.positive_int,
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 HEALTH_FEATURE_SCHEMA = vol.Schema(
@@ -571,7 +760,8 @@ HEALTH_FEATURE_SCHEMA = vol.Schema(
             CONF_HEALTH_SENSOR_DEVICE_CLASSES,
             default=DEFAULT_HEALTH_SENSOR_DEVICE_CLASSES,
         ): cv.ensure_list,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 PRESENCE_HOLD_FEATURE_SCHEMA = vol.Schema(
@@ -579,16 +769,95 @@ PRESENCE_HOLD_FEATURE_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_PRESENCE_HOLD_TIMEOUT, default=DEFAULT_PRESENCE_HOLD_TIMEOUT
         ): cv.positive_int,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
-CLIMATE_GROUP_FEATURE_SCHEMA = vol.Schema(
+BLE_TRACKER_FEATURE_SCHEMA = vol.Schema(
     {
         vol.Optional(
-            CONF_CLIMATE_GROUPS_TURN_ON_STATE,
-            default=DEFAULT_CLIMATE_GROUPS_TURN_ON_STATE,
-        ): str,
+            CONF_BLE_TRACKER_ENTITIES, default=DEFAULT_BLE_TRACKER_ENTITIES
+        ): cv.entity_ids,
+    },
+    extra=vol.REMOVE_EXTRA,
+)
+
+WASP_IN_A_BOX_FEATURE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(
+            CONF_WASP_IN_A_BOX_DELAY, default=DEFAULT_WASP_IN_A_BOX_DELAY
+        ): cv.positive_int,
+        vol.Optional(
+            CONF_WASP_IN_A_BOX_WASP_DEVICE_CLASSES,
+            default=DEFAULT_WASP_IN_A_BOX_WASP_DEVICE_CLASSES,
+        ): cv.ensure_list,
+    },
+    extra=vol.REMOVE_EXTRA,
+)
+
+CLIMATE_CONTROL_FEATURE_SCHEMA_ENTITY_SELECT = vol.Schema(
+    {
+        vol.Required(CONF_CLIMATE_CONTROL_ENTITY_ID): cv.entity_id,
     }
+)
+CLIMATE_CONTROL_FEATURE_SCHEMA_PRESET_SELECT = vol.Schema(
+    {
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_CLEAR,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_CLEAR,
+        ): str,
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_OCCUPIED,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_OCCUPIED,
+        ): str,
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_SLEEP,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_SLEEP,
+        ): str,
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_EXTENDED,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_EXTENDED,
+        ): str,
+    },
+    extra=vol.REMOVE_EXTRA,
+)
+CLIMATE_CONTROL_FEATURE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(CONF_CLIMATE_CONTROL_ENTITY_ID): cv.entity_id,
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_CLEAR,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_CLEAR,
+        ): str,
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_OCCUPIED,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_OCCUPIED,
+        ): str,
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_SLEEP,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_SLEEP,
+        ): str,
+        vol.Optional(
+            CONF_CLIMATE_CONTROL_PRESET_EXTENDED,
+            default=DEFAULT_CLIMATE_CONTROL_PRESET_EXTENDED,
+        ): str,
+    },
+    extra=vol.REMOVE_EXTRA,
+)
+
+FAN_GROUP_FEATURE_SCHEMA = vol.Schema(
+    {
+        vol.Optional(
+            CONF_FAN_GROUPS_REQUIRED_STATE, default=DEFAULT_FAN_GROUPS_REQUIRED_STATE
+        ): str,
+        vol.Optional(
+            CONF_FAN_GROUPS_TRACKED_DEVICE_CLASS,
+            default=DEFAULT_FAN_GROUPS_TRACKED_DEVICE_CLASS,
+        ): str,
+        vol.Optional(
+            CONF_FAN_GROUPS_SETPOINT, default=DEFAULT_FAN_GROUPS_SETPOINT
+        ): float,
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 LIGHT_GROUP_FEATURE_SCHEMA = vol.Schema(
@@ -615,30 +884,35 @@ LIGHT_GROUP_FEATURE_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_TASK_LIGHTS_ACT_ON, default=DEFAULT_LIGHT_GROUP_ACT_ON
         ): cv.ensure_list,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 AREA_AWARE_MEDIA_PLAYER_FEATURE_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_NOTIFICATION_DEVICES, default=[]): cv.entity_ids,
         vol.Optional(CONF_NOTIFY_STATES, default=DEFAULT_NOTIFY_STATES): cv.ensure_list,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 ALL_FEATURES = set(CONF_FEATURE_LIST) | set(CONF_FEATURE_LIST_GLOBAL)
 
 CONFIGURABLE_FEATURES = {
     CONF_FEATURE_LIGHT_GROUPS: LIGHT_GROUP_FEATURE_SCHEMA,
-    CONF_FEATURE_CLIMATE_GROUPS: CLIMATE_GROUP_FEATURE_SCHEMA,
+    CONF_FEATURE_CLIMATE_CONTROL: CLIMATE_CONTROL_FEATURE_SCHEMA,
+    CONF_FEATURE_FAN_GROUPS: FAN_GROUP_FEATURE_SCHEMA,
     CONF_FEATURE_AGGREGATION: AGGREGATE_FEATURE_SCHEMA,
     CONF_FEATURE_HEALTH: HEALTH_FEATURE_SCHEMA,
     CONF_FEATURE_AREA_AWARE_MEDIA_PLAYER: AREA_AWARE_MEDIA_PLAYER_FEATURE_SCHEMA,
     CONF_FEATURE_PRESENCE_HOLD: PRESENCE_HOLD_FEATURE_SCHEMA,
+    CONF_FEATURE_BLE_TRACKERS: BLE_TRACKER_FEATURE_SCHEMA,
+    CONF_FEATURE_WASP_IN_A_BOX: WASP_IN_A_BOX_FEATURE_SCHEMA,
 }
 
 NON_CONFIGURABLE_FEATURES_META = [
     CONF_FEATURE_LIGHT_GROUPS,
-    CONF_FEATURE_CLIMATE_GROUPS,
+    CONF_FEATURE_FAN_GROUPS,
 ]
 
 NON_CONFIGURABLE_FEATURES = {
@@ -651,7 +925,8 @@ FEATURES_SCHEMA = vol.Schema(
         for feature, feature_schema in chain(
             CONFIGURABLE_FEATURES.items(), NON_CONFIGURABLE_FEATURES.items()
         )
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 SECONDARY_STATES_SCHEMA = vol.Schema(
@@ -668,8 +943,34 @@ SECONDARY_STATES_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_EXTENDED_TIMEOUT, default=DEFAULT_EXTENDED_TIMEOUT
         ): cv.positive_int,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
+
+CONF_SECONDARY_STATES_CALCULATION_MODE, DEFAULT_SECONDARY_STATES_CALCULATION_MODE = (
+    "calculation_mode",
+    CalculationMode.MAJORITY,
+)
+
+META_AREA_SECONDARY_STATES_SCHEMA = vol.Schema(
+    {
+        vol.Optional(
+            CONF_SLEEP_TIMEOUT, default=DEFAULT_SLEEP_TIMEOUT
+        ): cv.positive_int,
+        vol.Optional(
+            CONF_EXTENDED_TIME, default=DEFAULT_EXTENDED_TIME
+        ): cv.positive_int,
+        vol.Optional(
+            CONF_EXTENDED_TIMEOUT, default=DEFAULT_EXTENDED_TIMEOUT
+        ): cv.positive_int,
+        vol.Optional(
+            CONF_SECONDARY_STATES_CALCULATION_MODE,
+            default=DEFAULT_SECONDARY_STATES_CALCULATION_MODE,
+        ): vol.In(CalculationMode),
+    },
+    extra=vol.REMOVE_EXTRA,
+)
+
 
 # Basic Area Options Schema
 REGULAR_AREA_BASIC_OPTIONS_SCHEMA = vol.Schema(
@@ -679,14 +980,25 @@ REGULAR_AREA_BASIC_OPTIONS_SCHEMA = vol.Schema(
         ),
         vol.Optional(CONF_INCLUDE_ENTITIES, default=[]): cv.entity_ids,
         vol.Optional(CONF_EXCLUDE_ENTITIES, default=[]): cv.entity_ids,
-    }
+        vol.Optional(
+            CONF_RELOAD_ON_REGISTRY_CHANGE, default=DEFAULT_RELOAD_ON_REGISTRY_CHANGE
+        ): cv.boolean,
+        vol.Optional(
+            CONF_IGNORE_DIAGNOSTIC_ENTITIES, default=DEFAULT_IGNORE_DIAGNOSTIC_ENTITIES
+        ): cv.boolean,
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 META_AREA_BASIC_OPTIONS_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_TYPE, default=AREA_TYPE_META): AREA_TYPE_META,
         vol.Optional(CONF_ENABLED_FEATURES, default={}): FEATURES_SCHEMA,
         vol.Optional(CONF_EXCLUDE_ENTITIES, default=[]): cv.entity_ids,
-    }
+        vol.Optional(
+            CONF_RELOAD_ON_REGISTRY_CHANGE, default=DEFAULT_RELOAD_ON_REGISTRY_CHANGE
+        ): cv.boolean,
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 # Presence Tracking Schema
@@ -700,13 +1012,12 @@ REGULAR_AREA_PRESENCE_TRACKING_OPTIONS_SCHEMA = vol.Schema(
             CONF_PRESENCE_SENSOR_DEVICE_CLASS,
             default=DEFAULT_PRESENCE_DEVICE_SENSOR_CLASS,
         ): cv.ensure_list,
+        vol.Optional(CONF_KEEP_ONLY_ENTITIES, default=[]): cv.entity_ids,
         vol.Optional(
             CONF_CLEAR_TIMEOUT, default=DEFAULT_CLEAR_TIMEOUT
         ): cv.positive_int,
-        vol.Optional(
-            CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
-        ): cv.positive_int,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 META_AREA_PRESENCE_TRACKING_OPTIONS_SCHEMA = vol.Schema(
@@ -714,10 +1025,8 @@ META_AREA_PRESENCE_TRACKING_OPTIONS_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_CLEAR_TIMEOUT, default=DEFAULT_CLEAR_TIMEOUT_META
         ): cv.positive_int,
-        vol.Optional(
-            CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
-        ): cv.positive_int,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 # Magic Areas
@@ -729,6 +1038,13 @@ REGULAR_AREA_SCHEMA = vol.Schema(
         vol.Optional(CONF_INCLUDE_ENTITIES, default=[]): cv.entity_ids,
         vol.Optional(CONF_EXCLUDE_ENTITIES, default=[]): cv.entity_ids,
         vol.Optional(
+            CONF_RELOAD_ON_REGISTRY_CHANGE, default=DEFAULT_RELOAD_ON_REGISTRY_CHANGE
+        ): cv.boolean,
+        vol.Optional(
+            CONF_IGNORE_DIAGNOSTIC_ENTITIES, default=DEFAULT_IGNORE_DIAGNOSTIC_ENTITIES
+        ): cv.boolean,
+        vol.Optional(CONF_KEEP_ONLY_ENTITIES, default=[]): cv.entity_ids,
+        vol.Optional(
             CONF_PRESENCE_DEVICE_PLATFORMS,
             default=DEFAULT_PRESENCE_DEVICE_PLATFORMS,
         ): cv.ensure_list,
@@ -739,12 +1055,10 @@ REGULAR_AREA_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_CLEAR_TIMEOUT, default=DEFAULT_CLEAR_TIMEOUT
         ): cv.positive_int,
-        vol.Optional(
-            CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
-        ): cv.positive_int,
         vol.Optional(CONF_ENABLED_FEATURES, default={}): FEATURES_SCHEMA,
         vol.Optional(CONF_SECONDARY_STATES, default={}): SECONDARY_STATES_SCHEMA,
-    }
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
 META_AREA_SCHEMA = vol.Schema(
@@ -753,23 +1067,33 @@ META_AREA_SCHEMA = vol.Schema(
         vol.Optional(CONF_ENABLED_FEATURES, default={}): FEATURES_SCHEMA,
         vol.Optional(CONF_EXCLUDE_ENTITIES, default=[]): cv.entity_ids,
         vol.Optional(
+            CONF_RELOAD_ON_REGISTRY_CHANGE, default=DEFAULT_RELOAD_ON_REGISTRY_CHANGE
+        ): cv.boolean,
+        vol.Optional(
             CONF_CLEAR_TIMEOUT, default=DEFAULT_CLEAR_TIMEOUT_META
         ): cv.positive_int,
         vol.Optional(
-            CONF_UPDATE_INTERVAL, default=DEFAULT_UPDATE_INTERVAL
-        ): cv.positive_int,
-    }
+            CONF_SECONDARY_STATES, default={}
+        ): META_AREA_SECONDARY_STATES_SCHEMA,
+    },
+    extra=vol.REMOVE_EXTRA,
 )
 
-AREA_SCHEMA = vol.Schema(vol.Any(REGULAR_AREA_SCHEMA, META_AREA_SCHEMA))
+AREA_SCHEMA = vol.Schema(
+    vol.Any(REGULAR_AREA_SCHEMA, META_AREA_SCHEMA), extra=vol.REMOVE_EXTRA
+)
 
-_DOMAIN_SCHEMA = vol.Schema({cv.slug: vol.Any(AREA_SCHEMA, None)})
+_DOMAIN_SCHEMA = vol.Schema(
+    {cv.slug: vol.Any(AREA_SCHEMA, None)}, extra=vol.REMOVE_EXTRA
+)
 
 # VALIDATION_TUPLES
 OPTIONS_AREA = [
     (CONF_TYPE, DEFAULT_TYPE, vol.In([AREA_TYPE_INTERIOR, AREA_TYPE_EXTERIOR])),
     (CONF_INCLUDE_ENTITIES, [], cv.entity_ids),
     (CONF_EXCLUDE_ENTITIES, [], cv.entity_ids),
+    (CONF_RELOAD_ON_REGISTRY_CHANGE, DEFAULT_RELOAD_ON_REGISTRY_CHANGE, cv.boolean),
+    (CONF_IGNORE_DIAGNOSTIC_ENTITIES, DEFAULT_IGNORE_DIAGNOSTIC_ENTITIES, cv.boolean),
 ]
 OPTIONS_PRESENCE_TRACKING = [
     (
@@ -782,16 +1106,16 @@ OPTIONS_PRESENCE_TRACKING = [
         DEFAULT_PRESENCE_DEVICE_SENSOR_CLASS,
         cv.ensure_list,
     ),
+    (CONF_KEEP_ONLY_ENTITIES, [], cv.entity_ids),
     (CONF_CLEAR_TIMEOUT, DEFAULT_CLEAR_TIMEOUT, int),
-    (CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, int),
 ]
 
 OPTIONS_AREA_META = [
     (CONF_EXCLUDE_ENTITIES, [], cv.entity_ids),
+    (CONF_RELOAD_ON_REGISTRY_CHANGE, DEFAULT_RELOAD_ON_REGISTRY_CHANGE, cv.boolean),
 ]
 OPTIONS_PRESENCE_TRACKING_META = [
     (CONF_CLEAR_TIMEOUT, DEFAULT_CLEAR_TIMEOUT, int),
-    (CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, int),
 ]
 
 OPTIONS_SECONDARY_STATES = [
@@ -801,6 +1125,17 @@ OPTIONS_SECONDARY_STATES = [
     (CONF_SLEEP_TIMEOUT, DEFAULT_SLEEP_TIMEOUT, int),
     (CONF_EXTENDED_TIME, DEFAULT_EXTENDED_TIME, int),
     (CONF_EXTENDED_TIMEOUT, DEFAULT_EXTENDED_TIMEOUT, int),
+]
+
+OPTIONS_SECONDARY_STATES_META = [
+    (CONF_SLEEP_TIMEOUT, DEFAULT_SLEEP_TIMEOUT, int),
+    (CONF_EXTENDED_TIME, DEFAULT_EXTENDED_TIME, int),
+    (CONF_EXTENDED_TIMEOUT, DEFAULT_EXTENDED_TIMEOUT, int),
+    (
+        CONF_SECONDARY_STATES_CALCULATION_MODE,
+        DEFAULT_SECONDARY_STATES_CALCULATION_MODE,
+        str,
+    ),
 ]
 
 OPTIONS_LIGHT_GROUP = [
@@ -835,6 +1170,11 @@ OPTIONS_AGGREGATES = [
         DEFAULT_AGGREGATES_ILLUMINANCE_THRESHOLD,
         int,
     ),
+    (
+        CONF_AGGREGATES_ILLUMINANCE_THRESHOLD_HYSTERESIS,
+        DEFAULT_AGGREGATES_ILLUMINANCE_THRESHOLD_HYSTERESIS,
+        int,
+    ),
 ]
 
 OPTIONS_HEALTH_SENSOR = [
@@ -849,12 +1189,45 @@ OPTIONS_PRESENCE_HOLD = [
     (CONF_PRESENCE_HOLD_TIMEOUT, DEFAULT_PRESENCE_HOLD_TIMEOUT, int),
 ]
 
-OPTIONS_CLIMATE_GROUP = [
-    (CONF_CLIMATE_GROUPS_TURN_ON_STATE, DEFAULT_CLIMATE_GROUPS_TURN_ON_STATE, str),
+OPTIONS_BLE_TRACKERS = [
+    (CONF_BLE_TRACKER_ENTITIES, DEFAULT_BLE_TRACKER_ENTITIES, cv.entity_ids),
 ]
 
-OPTIONS_CLIMATE_GROUP_META = [
-    (CONF_CLIMATE_GROUPS_TURN_ON_STATE, None, str),
+OPTIONS_WASP_IN_A_BOX = [
+    (CONF_WASP_IN_A_BOX_DELAY, DEFAULT_WASP_IN_A_BOX_DELAY, cv.positive_int),
+    (
+        CONF_WASP_IN_A_BOX_WASP_DEVICE_CLASSES,
+        DEFAULT_WASP_IN_A_BOX_WASP_DEVICE_CLASSES,
+        vol.In(WASP_IN_A_BOX_WASP_DEVICE_CLASSES),
+    ),
+]
+OPTIONS_CLIMATE_CONTROL_ENTITY_SELECT = [
+    (CONF_CLIMATE_CONTROL_ENTITY_ID, None, cv.entity_id),
+]
+OPTIONS_CLIMATE_CONTROL = [
+    (CONF_CLIMATE_CONTROL_PRESET_CLEAR, DEFAULT_CLIMATE_CONTROL_PRESET_CLEAR, str),
+    (
+        CONF_CLIMATE_CONTROL_PRESET_OCCUPIED,
+        DEFAULT_CLIMATE_CONTROL_PRESET_OCCUPIED,
+        str,
+    ),
+    (CONF_CLIMATE_CONTROL_PRESET_SLEEP, DEFAULT_CLIMATE_CONTROL_PRESET_SLEEP, str),
+    (
+        CONF_CLIMATE_CONTROL_PRESET_EXTENDED,
+        DEFAULT_CLIMATE_CONTROL_PRESET_EXTENDED,
+        str,
+    ),
+]
+
+
+OPTIONS_FAN_GROUP = [
+    (CONF_FAN_GROUPS_REQUIRED_STATE, DEFAULT_FAN_GROUPS_REQUIRED_STATE, str),
+    (
+        CONF_FAN_GROUPS_TRACKED_DEVICE_CLASS,
+        DEFAULT_FAN_GROUPS_TRACKED_DEVICE_CLASS,
+        str,
+    ),
+    (CONF_FAN_GROUPS_SETPOINT, DEFAULT_FAN_GROUPS_SETPOINT, float),
 ]
 
 OPTIONS_AREA_AWARE_MEDIA_PLAYER = [
