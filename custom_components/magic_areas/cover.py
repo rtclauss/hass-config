@@ -4,18 +4,23 @@ import logging
 
 from homeassistant.components.cover import (
     DEVICE_CLASSES as COVER_DEVICE_CLASSES,
-    DOMAIN as COVER_DOMAIN,
+    CoverDeviceClass,
 )
+from homeassistant.components.cover.const import DOMAIN as COVER_DOMAIN
 from homeassistant.components.group.cover import CoverGroup
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .add_entities_when_ready import add_entities_when_ready
-from .base.entities import MagicEntity
-from .base.magic import MagicArea
-from .const import CONF_FEATURE_COVER_GROUPS, MagicAreasFeatureInfoCoverGroups
-from .util import cleanup_removed_entries
+from custom_components.magic_areas.base.entities import MagicEntity
+from custom_components.magic_areas.base.magic import MagicArea
+from custom_components.magic_areas.const import (
+    CONF_FEATURE_COVER_GROUPS,
+    EMPTY_STRING,
+    MagicAreasFeatureInfoCoverGroups,
+)
+from custom_components.magic_areas.helpers.area import get_area_from_config_entry
+from custom_components.magic_areas.util import cleanup_removed_entries
 
 _LOGGER = logging.getLogger(__name__)
 DEPENDENCIES = ["magic_areas"]
@@ -26,12 +31,11 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ):
-    """Set up the Area config entry."""
+    """Set up the area cover config entry."""
 
-    add_entities_when_ready(hass, async_add_entities, config_entry, _add_cover_groups)
+    area: MagicArea | None = get_area_from_config_entry(hass, config_entry)
+    assert area is not None
 
-
-def _add_cover_groups(area: MagicArea, async_add_entities: AddEntitiesCallback):
     # Check feature availability
     if not area.has_feature(CONF_FEATURE_COVER_GROUPS):
         return
@@ -80,7 +84,10 @@ class AreaCoverGroup(MagicEntity, CoverGroup):
         MagicEntity.__init__(
             self, area, domain=COVER_DOMAIN, translation_key=device_class
         )
-        self._attr_device_class = device_class
+        sensor_device_class: CoverDeviceClass | None = (
+            CoverDeviceClass(device_class) if device_class else None
+        )
+        self._attr_device_class = sensor_device_class
         self._entities = [
             e
             for e in area.entities[COVER_DOMAIN]
@@ -89,7 +96,7 @@ class AreaCoverGroup(MagicEntity, CoverGroup):
         CoverGroup.__init__(
             self,
             entities=[e["entity_id"] for e in self._entities],
-            name=None,
+            name=EMPTY_STRING,
             unique_id=self._attr_unique_id,
         )
         delattr(self, "_attr_name")

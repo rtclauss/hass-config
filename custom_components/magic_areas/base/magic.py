@@ -3,7 +3,16 @@
 from datetime import UTC, datetime
 import logging
 
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, STATE_ON
+from homeassistant.components.binary_sensor import DOMAIN as BINARY_SENSOR_DOMAIN
+from homeassistant.components.switch.const import DOMAIN as SWITCH_DOMAIN
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import (
+    ATTR_DEVICE_CLASS,
+    ATTR_ENTITY_ID,
+    STATE_ON,
+    EntityCategory,
+)
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import async_get as devicereg_async_get
 from homeassistant.helpers.entity_registry import (
     RegistryEntry,
@@ -11,19 +20,26 @@ from homeassistant.helpers.entity_registry import (
 )
 from homeassistant.util import slugify
 
-from ..const import (
+from custom_components.magic_areas.const import (
     AREA_STATE_OCCUPIED,
     AREA_TYPE_EXTERIOR,
     AREA_TYPE_INTERIOR,
     AREA_TYPE_META,
     CONF_ENABLED_FEATURES,
     CONF_EXCLUDE_ENTITIES,
+    CONF_FEATURE_AGGREGATION,
+    CONF_FEATURE_BLE_TRACKERS,
+    CONF_FEATURE_PRESENCE_HOLD,
+    CONF_FEATURE_WASP_IN_A_BOX,
+    CONF_IGNORE_DIAGNOSTIC_ENTITIES,
     CONF_INCLUDE_ENTITIES,
+    CONF_PRESENCE_DEVICE_PLATFORMS,
+    CONF_PRESENCE_SENSOR_DEVICE_CLASS,
     CONF_TYPE,
     CONFIGURABLE_AREA_STATE_MAP,
     DATA_AREA_OBJECT,
-    EVENT_MAGICAREAS_AREA_READY,
-    EVENT_MAGICAREAS_READY,
+    DEFAULT_IGNORE_DIAGNOSTIC_ENTITIES,
+    DEFAULT_PRESENCE_DEVICE_PLATFORMS,
     MAGIC_AREAS_COMPONENTS,
     MAGIC_AREAS_COMPONENTS_GLOBAL,
     MAGIC_AREAS_COMPONENTS_META,
@@ -31,7 +47,18 @@ from ..const import (
     MODULE_DATA,
     MetaAreaType,
 )
-from ..util import areas_loaded, flatten_entity_list, is_entity_list
+
+# Classes
+
+
+class BasicArea:
+    """An interchangeable area object for Magic Areas to consume."""
+
+    id: str
+    name: str
+    icon: str | None = None
+    floor_id: str | None = None
+    is_meta: bool = False
 
 
 class MagicArea:
@@ -42,24 +69,21 @@ class MagicArea:
 
     def __init__(
         self,
-        hass,
-        area,
-        config,
-        listen_event=EVENT_HOMEASSISTANT_STARTED,
-        init_on_hass_running=True,
+        hass: HomeAssistant,
+        area: BasicArea,
+        config: ConfigEntry,
     ) -> None:
-        """Initialize area."""
+        """Initialize the magic area with all the stuff."""
+        self.hass: HomeAssistant = hass
+        self.name: str = area.name
+        # Default to the icon for the area.
+        self.icon: str | None = area.icon
+        self.id: str = area.id
+        self.slug: str = slugify(self.name)
+        self.hass_config: ConfigEntry = config
+        self.initialized: bool = False
+        self.floor_id: str | None = area.floor_id
         self.logger = logging.getLogger(__name__)
-
-        self.hass = hass
-        self.name = area.name
-        self.id = area.id
-        self.icon = area.icon
-        self.slug = slugify(self.name)
-        self.hass_config = config
-        self.initialized = False
-        self.floor_id = area.floor_id
-        self.is_meta_area = area.is_meta
 
         # Merged options
         area_config = dict(config.data)
@@ -67,35 +91,23 @@ class MagicArea:
             area_config.update(config.options)
         self.config = area_config
 
-        self.entities = {}
-        self.magic_entities = {}
+        self.entities: dict[str, list[dict[str, str]]] = {}
+        self.magic_entities: dict[str, list[dict[str, str]]] = {}
 
-        self.last_changed = datetime.now(UTC)
-        self.states = []
+        self.last_changed: datetime = datetime.now(UTC)
 
-        self.loaded_platforms = []
+        self.states: list[str] = []
 
-        # Add callback for initialization
-        if self.hass.is_running and init_on_hass_running:
-            self.hass.async_create_task(self.initialize())
-        else:
-            self.hass.bus.async_listen_once(listen_event, self.initialize)
+        self.loaded_platforms: list[str] = []
 
         self.logger.debug("%s: Primed for initialization.", self.name)
 
     def finalize_init(self):
         """Finalize initialization of the area."""
         self.initialized = True
-
-        self.hass.bus.async_fire(EVENT_MAGICAREAS_AREA_READY, {"id": self.id})
-
-        if not self.is_meta():
-            # Check if we finished loading all areas
-            if areas_loaded(self.hass):
-                self.hass.bus.async_fire(EVENT_MAGICAREAS_READY)
-
-        area_type = "Meta-Area" if self.is_meta() else "Area"
-        self.logger.debug("%s (%s) initialized.", self.name, area_type)
+        self.logger.debug(
+            "%s (%s) initialized.", self.name, "Meta-Area" if self.is_meta() else "Area"
+        )
 
     def is_occupied(self) -> bool:
         """Return if area is occupied."""
@@ -187,17 +199,35 @@ class MagicArea:
 
     def _should_exclude_entity(self, entity: RegistryEntry) -> bool:
         """Exclude entity."""
-        return (
-            entity.config_entry_id == self.hass_config.entry_id  # Is magic_area entity
-            or entity.disabled  # Is disabled
-            or entity.entity_id  # In excluded list
-            in self.config.get(CONF_EXCLUDE_ENTITIES)
-        )
+
+        # Is magic_area entity?
+        if entity.config_entry_id == self.hass_config.entry_id:
+            return True
+
+        # Is disabled?
+        if entity.disabled:
+            return True
+
+        # Is in the exclusion list?
+        if entity.entity_id in self.config.get(CONF_EXCLUDE_ENTITIES, []):
+            return True
+
+        # Are we excluding DIAGNOSTIC and CONFIG?
+        if self.config.get(
+            CONF_IGNORE_DIAGNOSTIC_ENTITIES, DEFAULT_IGNORE_DIAGNOSTIC_ENTITIES
+        ):
+            if entity.entity_category in [
+                EntityCategory.CONFIG,
+                EntityCategory.DIAGNOSTIC,
+            ]:
+                return True
+
+        return False
 
     async def load_entities(self) -> None:
         """Load entities into entity list."""
 
-        entity_list = []
+        entity_list: list[RegistryEntry] = []
         include_entities = self.config.get(CONF_INCLUDE_ENTITIES)
 
         entity_registry = entityreg_async_get(self.hass)
@@ -208,7 +238,7 @@ class MagicArea:
         for device in devices_in_area:
             entity_list.extend(
                 [
-                    entity.entity_id
+                    entity
                     for entity in entity_registry.entities.get_entries_for_device_id(
                         device.id
                     )
@@ -220,7 +250,7 @@ class MagicArea:
         entities_in_area = entity_registry.entities.get_entries_for_area_id(self.id)
         entity_list.extend(
             [
-                entity.entity_id
+                entity
                 for entity in entities_in_area
                 if entity.entity_id not in entity_list
                 and not self._should_exclude_entity(entity)
@@ -228,7 +258,10 @@ class MagicArea:
         )
 
         if include_entities and isinstance(include_entities, list):
-            entity_list.extend(include_entities)
+            for include_entity in include_entities:
+                entity_entry = entity_registry.async_get(include_entity)
+                if entity_entry:
+                    entity_list.append(entity_entry)
 
         self.load_entity_list(entity_list)
 
@@ -251,69 +284,122 @@ class MagicArea:
         )
 
         for entity_id in [entity.entity_id for entity in entities_for_config_id]:
-
             entity_domain = entity_id.split(".")[0]
 
             if entity_domain not in self.magic_entities:
                 self.magic_entities[entity_domain] = []
 
-            self.magic_entities[entity_domain].append(entity_id)
+            self.magic_entities[entity_domain].append(self.get_entity_dict(entity_id))
 
         self.logger.debug(
             "%s: Loaded magic entities: %s", self.name, str(self.magic_entities)
         )
 
-    def load_entity_list(self, entity_list):
+    def get_entity_dict(self, entity_id) -> dict[str, str]:
+        """Return entity_id in a dictionary with attributes (if available)."""
+
+        # Get latest state and create object
+        latest_state = self.hass.states.get(entity_id)
+        entity_dict = {ATTR_ENTITY_ID: entity_id}
+
+        if latest_state:
+            # Need to exclude entity_id if present but latest_state.attributes
+            # is a ReadOnlyDict so we can't remove it, need to iterate and select
+            # all keys that are NOT entity_id
+            for attr_key, attr_value in latest_state.attributes.items():
+                if attr_key != ATTR_ENTITY_ID:
+                    entity_dict[attr_key] = attr_value
+
+        return entity_dict
+
+    def load_entity_list(self, entity_list: list[RegistryEntry]) -> None:
         """Populate entity list with loaded entities."""
         self.logger.debug("%s: Original entity list: %s", self.name, str(entity_list))
 
-        flattened_entity_list = flatten_entity_list(entity_list)
-        unique_entities = set(flattened_entity_list)
+        seen_entity_ids: list[str] = []
 
-        self.logger.debug("%s: Unique entities: %s", self.name, str(unique_entities))
-
-        for entity_id in unique_entities:
-            self.logger.debug("%s: Loading entity: %s", self.name, entity_id)
+        for entity in entity_list:
+            if entity.entity_id in seen_entity_ids:
+                continue
+            self.logger.debug("%s: Loading entity: %s", self.name, entity.entity_id)
 
             try:
-                # pylint: disable-next=unused-variable
-                entity_component, entity_name = entity_id.split(".")
+                updated_entity = self.get_entity_dict(entity.entity_id)
 
-                # Get latest state and create object
-                latest_state = self.hass.states.get(entity_id)
-                updated_entity = {"entity_id": entity_id}
-
-                if latest_state:
-                    # Need to exclude entity_id if present but latest_state.attributes
-                    # is a ReadOnlyDict so we can't remove it, need to iterate and select
-                    # all keys that are NOT entity_id
-                    for attr_key, attr_value in latest_state.attributes.items():
-                        if attr_key != "entity_id":
-                            updated_entity[attr_key] = attr_value
-
-                # Ignore groups
-                if is_entity_list(updated_entity["entity_id"]):
-                    self.logger.debug(
-                        "%s: '%s' is probably a group, skipping...",
-                        self.name,
-                        entity_id,
+                if not entity.domain:
+                    self.logger.warning(
+                        "%s: Entity domain not found for %s", self.name, entity
                     )
                     continue
+                if entity.domain not in self.entities:
+                    self.entities[entity.domain] = []
 
-                if entity_component not in self.entities:
-                    self.entities[entity_component] = []
-
-                self.entities[entity_component].append(updated_entity)
+                self.entities[entity.domain].append(updated_entity)
+                seen_entity_ids.append(entity.entity_id)
 
             # Adding pylint exception because this is a last-resort hail-mary catch-all
             # pylint: disable-next=broad-exception-caught
             except Exception as err:
                 self.logger.error(
-                    "%s: Unable to load entity '%s': %s", self.name, entity_id, str(err)
+                    "%s: Unable to load entity '%s': %s",
+                    self.name,
+                    entity,
+                    str(err),
                 )
 
         # Load our own entities
         self.load_magic_entities()
+
+    def get_presence_sensors(self) -> list[str]:
+        """Return list of entities used for presence tracking."""
+
+        sensors: list[str] = []
+
+        valid_presence_platforms = self.config.get(
+            CONF_PRESENCE_DEVICE_PLATFORMS, DEFAULT_PRESENCE_DEVICE_PLATFORMS
+        )
+
+        for component, entities in self.entities.items():
+            if component not in valid_presence_platforms:
+                continue
+
+            for entity in entities:
+                if not entity:
+                    continue
+
+                if component == BINARY_SENSOR_DOMAIN:
+                    if ATTR_DEVICE_CLASS not in entity:
+                        continue
+
+                    if entity[ATTR_DEVICE_CLASS] not in self.config.get(
+                        CONF_PRESENCE_SENSOR_DEVICE_CLASS, []
+                    ):
+                        continue
+
+                sensors.append(entity[ATTR_ENTITY_ID])
+
+        # Append presence_hold switch as a presence_sensor
+        if self.has_feature(CONF_FEATURE_PRESENCE_HOLD):
+            presence_hold_switch_id = (
+                f"{SWITCH_DOMAIN}.magic_areas_presence_hold_{self.slug}"
+            )
+            sensors.append(presence_hold_switch_id)
+
+        # Append BLE Tracker monitor as a presence_sensor
+        if self.has_feature(CONF_FEATURE_BLE_TRACKERS):
+            ble_tracker_sensor_id = f"{BINARY_SENSOR_DOMAIN}.magic_areas_ble_trackers_{self.slug}_ble_tracker_monitor"
+            sensors.append(ble_tracker_sensor_id)
+
+        # Append Wasp In The Box sensor as presence monitor
+        if self.has_feature(CONF_FEATURE_AGGREGATION) and self.has_feature(
+            CONF_FEATURE_WASP_IN_A_BOX
+        ):
+            wasp_in_the_box_sensor_id = (
+                f"{BINARY_SENSOR_DOMAIN}.magic_areas_wasp_in_a_box_{self.slug}"
+            )
+            sensors.append(wasp_in_the_box_sensor_id)
+
+        return sensors
 
     async def initialize(self, _=None) -> None:
         """Initialize area."""
@@ -331,31 +417,17 @@ class MagicArea:
 class MagicMetaArea(MagicArea):
     """Magic Meta Area class."""
 
-    def __init__(self, hass, area, config) -> None:
-        """Initialize Meta Area."""
-        super().__init__(
-            hass,
-            area,
-            config,
-            EVENT_MAGICAREAS_READY,
-            init_on_hass_running=areas_loaded(hass),
-        )
+    def get_presence_sensors(self) -> list[str]:
+        """Return list of entities used for presence tracking."""
 
-    def areas_loaded(self, hass=None):
-        """Check if all areas have finished loading."""
-        hass_object = hass if hass else self.hass
+        sensors: list[str] = []
 
-        if MODULE_DATA not in hass_object.data:
-            return False
-
-        data = hass_object.data[MODULE_DATA]
-        for area_info in data.values():
-            area = area_info[DATA_AREA_OBJECT]
-            if area.config.get(CONF_TYPE) != AREA_TYPE_META:
-                if not area.initialized:
-                    return False
-
-        return True
+        # MetaAreas track their children
+        child_areas = self.get_child_areas()  # pylint: disable=no-member
+        for child_area in child_areas:
+            entity_id = f"{BINARY_SENSOR_DOMAIN}.magic_areas_presence_tracking_{child_area}_area_state"
+            sensors.append(entity_id)
+        return sensors
 
     def get_active_areas(self):
         """Return areas that are occupied."""
@@ -366,6 +438,10 @@ class MagicMetaArea(MagicArea):
             try:
                 entity_id = f"binary_sensor.area_{area}"
                 entity = self.hass.states.get(entity_id)
+
+                if not entity:
+                    self.logger.debug("%s: Unable to get area state entity.", area)
+                    continue
 
                 if entity.state == STATE_ON:
                     active_areas.append(area)
@@ -382,16 +458,15 @@ class MagicMetaArea(MagicArea):
     def get_child_areas(self):
         """Return areas that a Meta area is watching."""
         data = self.hass.data[MODULE_DATA]
-        areas = []
+        areas: list[str] = []
 
         for area_info in data.values():
-            area = area_info[DATA_AREA_OBJECT]
+            area: MagicArea = area_info[DATA_AREA_OBJECT]
 
-            if area.is_meta_area:
+            if area.is_meta():
                 continue
 
             if self.floor_id:
-
                 if self.floor_id == area.floor_id:
                     areas.append(area.slug)
             else:
@@ -407,14 +482,7 @@ class MagicMetaArea(MagicArea):
         """Initialize Meta area."""
         if self.initialized:
             self.logger.warning("%s: Already initialized, ignoring.", self.name)
-            return False
-
-        # Meta-areas need to wait until other magic areas are loaded.
-        if not self.areas_loaded():
-            self.logger.warning(
-                "%s: Non-meta areas not loaded. This shouldn't happen.", self.name
-            )
-            return False
+            return None
 
         self.logger.debug("%s: Initializing meta area...", self.name)
 
@@ -424,32 +492,46 @@ class MagicMetaArea(MagicArea):
 
     async def load_entities(self) -> None:
         """Load entities into entity list."""
-        entity_list = []
+
+        entity_registry = entityreg_async_get(self.hass)
+        entity_list: list[RegistryEntry] = []
         child_areas = self.get_child_areas()
 
         data = self.hass.data[MODULE_DATA]
         for area_info in data.values():
-
-            area = area_info[DATA_AREA_OBJECT]
+            area: MagicArea = area_info[DATA_AREA_OBJECT]
 
             if area.slug not in child_areas:
                 continue
 
-            for entities in area.entities.values():
+            # Force loading of magic entities
+            area.load_magic_entities()
+
+            for entities in area.magic_entities.values():
                 for entity in entities:
-                    if not isinstance(entity["entity_id"], str):
+                    if not isinstance(entity[ATTR_ENTITY_ID], str):
                         self.logger.debug(
                             "%s: Entity ID is not a string: '%s' (probably a group, skipping)",
                             self.name,
-                            str(entity["entity_id"]),
+                            str(entity[ATTR_ENTITY_ID]),
                         )
                         continue
 
                     # Skip excluded entities
-                    if entity["entity_id"] in self.config.get(CONF_EXCLUDE_ENTITIES):
+                    if entity[ATTR_ENTITY_ID] in self.config.get(
+                        CONF_EXCLUDE_ENTITIES, []
+                    ):
                         continue
 
-                    entity_list.append(entity["entity_id"])
+                    entity_entry = entity_registry.async_get(entity[ATTR_ENTITY_ID])
+                    if not entity_entry:
+                        self.logger.warning(
+                            "%s: Magic Entity not found on Entity Registry: %s",
+                            self.name,
+                            entity[ATTR_ENTITY_ID],
+                        )
+                        continue
+                    entity_list.append(entity_entry)
 
         self.load_entity_list(entity_list)
 

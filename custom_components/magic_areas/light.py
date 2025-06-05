@@ -1,20 +1,12 @@
 """Platform file for Magic Area's light entities."""
 
-import asyncio
 import logging
 
-from homeassistant.components.group.light import LightGroup
-from homeassistant.components.light import (
-    ATTR_COLOR_TEMP,
-    ATTR_HS_COLOR,
-    DOMAIN as LIGHT_DOMAIN,
-    SUPPORT_COLOR,
-    SUPPORT_COLOR_TEMP,
-)
-from homeassistant.components.switch import DOMAIN as SWITCH_DOMAIN
+from homeassistant.components.group.light import FORWARDED_ATTRIBUTES, LightGroup
+from homeassistant.components.light.const import DOMAIN as LIGHT_DOMAIN
+from homeassistant.components.switch.const import DOMAIN as SWITCH_DOMAIN
 from homeassistant.const import (
     ATTR_ENTITY_ID,
-    ATTR_SUPPORTED_FEATURES,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_OFF,
@@ -22,18 +14,13 @@ from homeassistant.const import (
 )
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.event import async_track_state_change_event
-from homeassistant.util import color as color_util
 
-from .add_entities_when_ready import add_entities_when_ready
-from .base.entities import MagicEntity
-from .const import (
+from custom_components.magic_areas.base.entities import MagicEntity
+from custom_components.magic_areas.base.magic import MagicArea
+from custom_components.magic_areas.const import (
     AREA_PRIORITY_STATES,
-    AREA_STATE_BRIGHT,
-    AREA_STATE_CLEAR,
-    AREA_STATE_DARK,
-    AREA_STATE_OCCUPIED,
-    CONF_FEATURE_LIGHT_GROUPS,
     DEFAULT_LIGHT_GROUP_ACT_ON,
+    EMPTY_STRING,
     EVENT_MAGICAREAS_AREA_STATE_CHANGED,
     LIGHT_GROUP_ACT_ON,
     LIGHT_GROUP_ACT_ON_OCCUPANCY_CHANGE,
@@ -42,24 +29,25 @@ from .const import (
     LIGHT_GROUP_DEFAULT_ICON,
     LIGHT_GROUP_ICONS,
     LIGHT_GROUP_STATES,
+    AreaStates,
     LightGroupCategory,
     MagicAreasFeatureInfoLightGroups,
+    MagicAreasFeatures,
 )
-from .util import cleanup_removed_entries
+from custom_components.magic_areas.helpers.area import get_area_from_config_entry
+from custom_components.magic_areas.util import cleanup_removed_entries
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Set up the Area config entry."""
+    """Set up the area light config entry."""
 
-    add_entities_when_ready(hass, async_add_entities, config_entry, add_lights)
+    area: MagicArea | None = get_area_from_config_entry(hass, config_entry)
+    assert area is not None
 
-
-def add_lights(area, async_add_entities):
-    """Add all the light entities for all features that have one."""
     # Check feature availability
-    if not area.has_feature(CONF_FEATURE_LIGHT_GROUPS):
+    if not area.has_feature(MagicAreasFeatures.LIGHT_GROUPS):
         return
 
     # Check if there are any lights
@@ -73,15 +61,23 @@ def add_lights(area, async_add_entities):
 
     # Create light groups
     if area.is_meta():
-        light_groups.append(MagicLightGroup(area, light_entities))
+        light_groups.append(
+            MagicLightGroup(
+                area, light_entities, translation_key=LightGroupCategory.ALL
+            )
+        )
     else:
         light_group_ids = []
 
         # Create extended light groups
         for category in LIGHT_GROUP_CATEGORIES:
-            category_lights = area.feature_config(CONF_FEATURE_LIGHT_GROUPS).get(
-                category
-            )
+            category_lights = [
+                light_entity
+                for light_entity in area.feature_config(
+                    MagicAreasFeatures.LIGHT_GROUPS
+                ).get(category, {})
+                if light_entity in light_entities
+            ]
 
             if category_lights:
                 _LOGGER.debug(
@@ -133,7 +129,7 @@ class MagicLightGroup(MagicEntity, LightGroup):
         )
         LightGroup.__init__(
             self,
-            name=None,
+            name=EMPTY_STRING,
             unique_id=self.unique_id,
             entity_ids=entities,
             mode=False,
@@ -154,100 +150,30 @@ class MagicLightGroup(MagicEntity, LightGroup):
 
     async def async_turn_on(self, **kwargs) -> None:
         """Forward the turn_on command to all lights in the light group."""
-        data = {}
 
-        # Copy parameters over
-        for arg_keyword, arg_value in kwargs.items():
-            data[arg_keyword] = arg_value
+        data = {
+            key: value for key, value in kwargs.items() if key in FORWARDED_ATTRIBUTES
+        }
 
-        # Active lights
-        active_lights = self._get_active_lights()
-        targeted_lights = self._entity_ids
-
-        if active_lights:
-            _LOGGER.debug(
-                "%s: restricting call to active lights: %s",
-                self.area.name,
-                str(active_lights),
-            )
-
-            targeted_lights = active_lights
-
-        # Split entities by supported features
-        entity_map = {SUPPORT_COLOR: [], SUPPORT_COLOR_TEMP: []}
-        for entity_id in targeted_lights:
-            state = self.hass.states.get(entity_id)
-            if not state:
-                continue
-            support = state.attributes.get(ATTR_SUPPORTED_FEATURES)
-
-            if bool(support & SUPPORT_COLOR):
-                if bool(support & SUPPORT_COLOR_TEMP):
-                    entity_map[SUPPORT_COLOR_TEMP].append(entity_id)
-                else:
-                    entity_map[SUPPORT_COLOR].append(entity_id)
-
-        no_color_support = list(
-            set(targeted_lights)
-            - set(entity_map[SUPPORT_COLOR])
-            - set(entity_map[SUPPORT_COLOR_TEMP])
+        # Get active lights or default to all lights
+        active_lights = self._get_active_lights() or self._entity_ids
+        _LOGGER.debug(
+            "%s: restricting call to active lights: %s",
+            self.area.name,
+            str(active_lights),
         )
 
-        service_calls = []
+        data[ATTR_ENTITY_ID] = active_lights
 
-        if entity_map[SUPPORT_COLOR_TEMP]:
-            service_data = data.copy()
-            service_data[ATTR_ENTITY_ID] = entity_map[SUPPORT_COLOR_TEMP]
-            service_call = self.hass.services.async_call(
-                LIGHT_DOMAIN,
-                SERVICE_TURN_ON,
-                service_data,
-                blocking=True,
-                context=self._context,
-            )
-            service_calls.append(service_call)
+        _LOGGER.debug("%s: Forwarded turn_on command: %s", self.area.name, data)
 
-        if entity_map[SUPPORT_COLOR]:
-            service_data = data.copy()
-            service_data[ATTR_ENTITY_ID] = entity_map[SUPPORT_COLOR]
-
-            # Perform color_temp emulation if ATTR_COLOR_TEMP is passed
-            if ATTR_COLOR_TEMP in service_data:
-                temp_k = color_util.color_temperature_mired_to_kelvin(
-                    service_data[ATTR_COLOR_TEMP]
-                )
-                hs_color = color_util.color_temperature_to_hs(temp_k)
-                service_data[ATTR_HS_COLOR] = hs_color
-                del service_data[ATTR_COLOR_TEMP]
-
-            service_call = self.hass.services.async_call(
-                LIGHT_DOMAIN,
-                SERVICE_TURN_ON,
-                service_data,
-                blocking=True,
-                context=self._context,
-            )
-            service_calls.append(service_call)
-
-        if no_color_support:
-            service_data = data.copy()
-            service_data[ATTR_ENTITY_ID] = no_color_support
-            if ATTR_COLOR_TEMP in service_data:
-                del service_data[ATTR_COLOR_TEMP]
-            if ATTR_HS_COLOR in service_data:
-                del service_data[ATTR_HS_COLOR]
-
-            service_call = self.hass.services.async_call(
-                LIGHT_DOMAIN,
-                SERVICE_TURN_ON,
-                service_data,
-                blocking=True,
-                context=self._context,
-            )
-            service_calls.append(service_call)
-
-        # Perform calls
-        await asyncio.gather(*service_calls)
+        await self.hass.services.async_call(
+            LIGHT_DOMAIN,
+            SERVICE_TURN_ON,
+            data,
+            blocking=True,
+            context=self._context,
+        )
 
 
 class AreaLightGroup(MagicLightGroup):
@@ -269,16 +195,16 @@ class AreaLightGroup(MagicLightGroup):
 
         self._icon = LIGHT_GROUP_DEFAULT_ICON
 
-        if self.category != LightGroupCategory.ALL:
+        if self.category and self.category != LightGroupCategory.ALL:
             self._icon = LIGHT_GROUP_ICONS.get(self.category, LIGHT_GROUP_DEFAULT_ICON)
 
         # Get assigned states
-        if category != LightGroupCategory.ALL:
-            self.assigned_states = area.feature_config(CONF_FEATURE_LIGHT_GROUPS).get(
-                LIGHT_GROUP_STATES[category], []
-            )
-            self.act_on = area.feature_config(CONF_FEATURE_LIGHT_GROUPS).get(
-                LIGHT_GROUP_ACT_ON[category], DEFAULT_LIGHT_GROUP_ACT_ON
+        if self.category and self.category != LightGroupCategory.ALL:
+            self.assigned_states = area.feature_config(
+                MagicAreasFeatures.LIGHT_GROUPS
+            ).get(LIGHT_GROUP_STATES[self.category], [])
+            self.act_on = area.feature_config(MagicAreasFeatures.LIGHT_GROUPS).get(
+                LIGHT_GROUP_ACT_ON[self.category], DEFAULT_LIGHT_GROUP_ACT_ON
             )
 
         # Add static attributes
@@ -377,7 +303,7 @@ class AreaLightGroup(MagicLightGroup):
         new_states, lost_states = states_tuple
 
         # If area clear
-        if AREA_STATE_CLEAR in new_states:
+        if AreaStates.CLEAR in new_states:
             self.logger.debug("%s: Area is clear, should turn off lights!", self.name)
             self.reset_control()
             return self._turn_off()
@@ -388,18 +314,18 @@ class AreaLightGroup(MagicLightGroup):
         """Handle secondary state change."""
         new_states, lost_states = states_tuple
 
-        if AREA_STATE_CLEAR in new_states:
+        if AreaStates.CLEAR in new_states:
             self.logger.debug(
                 "%s: Area is clear, reset control state and Noop!", self.name
             )
             self.reset_control()
             return False
 
-        if self.area.has_state(AREA_STATE_BRIGHT):
+        if self.area.has_state(AreaStates.BRIGHT):
             # Only turn off lights when bright if the room was already occupied
             if (
-                AREA_STATE_BRIGHT in new_states
-                and AREA_STATE_OCCUPIED not in new_states
+                AreaStates.BRIGHT in new_states
+                and AreaStates.OCCUPIED not in new_states
             ):
                 self.controlled = True
                 self._turn_off()
@@ -450,7 +376,7 @@ class AreaLightGroup(MagicLightGroup):
         # ACT ON Control
         # Do not act on occupancy change if not defined on act_on
         if (
-            AREA_STATE_OCCUPIED in new_states
+            AreaStates.OCCUPIED in new_states
             and LIGHT_GROUP_ACT_ON_OCCUPANCY_CHANGE not in self.act_on
         ):
             self.logger.debug(
@@ -460,7 +386,7 @@ class AreaLightGroup(MagicLightGroup):
 
         # Do not act on state change if not defined on act_on
         if (
-            AREA_STATE_OCCUPIED not in new_states
+            AreaStates.OCCUPIED not in new_states
             and LIGHT_GROUP_ACT_ON_STATE_CHANGE not in self.act_on
         ):
             self.logger.debug(
@@ -483,9 +409,9 @@ class AreaLightGroup(MagicLightGroup):
             return self._turn_on()
 
         # Only turn lights off if not going into dark state
-        if AREA_STATE_DARK in new_states:
+        if AreaStates.DARK in new_states:
             self.logger.debug(
-                "%s: Entering %s state, noop.", self.name, AREA_STATE_DARK
+                "%s: Entering %s state, noop.", self.name, AreaStates.DARK
             )
             return False
 
@@ -515,10 +441,10 @@ class AreaLightGroup(MagicLightGroup):
         relevant_states = self.area.states.copy()
 
         if self.area.is_occupied():
-            relevant_states.append(AREA_STATE_OCCUPIED)
+            relevant_states.append(AreaStates.OCCUPIED)
 
-        if AREA_STATE_DARK in relevant_states:
-            relevant_states.remove(AREA_STATE_DARK)
+        if AreaStates.DARK in relevant_states:
+            relevant_states.remove(AreaStates.DARK)
 
         return relevant_states
 
@@ -587,6 +513,9 @@ class AreaLightGroup(MagicLightGroup):
     def handle_group_state_change_primary(self):
         """Handle group state change for primary area state events."""
         controlling = False
+
+        if not self._child_ids:
+            return
 
         for entity_id in self._child_ids:
             if self.is_child_controllable(entity_id):
