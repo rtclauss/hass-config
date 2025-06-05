@@ -4,9 +4,9 @@ esphome:
   board: esp01_1m
   libraries:
     - "Wire"
-    - "VL53L0X"
-  includes:
-    - "vl53l0x_sensor.h"
+  #   - "VL53L0X"
+  # includes:
+  #   - "vl53l0x_sensor.h"
 
 wifi:
   ssid: !secret wifi_ap
@@ -22,19 +22,52 @@ logger:
 api:
 
 ota:
+  - platform: esphome
+
+# Sync time with Home Assistant.
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+i2c:
+  sda: SDA
+  scl: SCL
+  scan: true
+  # id: bus_a
 
 sensor:
-- platform: custom
-  lambda: |-
-    auto my_sensor = new VL53L0XSensor(300000);
-    App.register_component(my_sensor);
-    return {my_sensor};
+# - platform: custom
+#   lambda: |-
+#     auto my_sensor = new VL53L0XSensor(300000);
+#     App.register_component(my_sensor);
+#     return {my_sensor};
+#   sensors:
+#     name: "My Water Softener VL53L0X Sensor"
+#     icon: "mdi:shaker-outline"
+#     unit_of_measurement: mm
+#     device_class: distance
+#     state_class: measurement
+#     filters:
+#       - exponential_moving_average:
+#           alpha: 0.1
+#           send_every: 15
 
-  sensors:
+  - platform: vl53l0x
     name: "My Water Softener VL53L0X Sensor"
     icon: "mdi:shaker-outline"
-    unit_of_measurement: mm
-#    filters:
-#      - exponential_moving_average:
-#          alpha: 0.1
-#          send_every: 15
+    id: distance1
+    device_class: distance
+    state_class: measurement
+    unit_of_measurement: "mm"
+    # address: 0x29
+    # enable_pin: D8
+    timeout: 1000ms
+    update_interval: 2s
+    long_range: true
+    filters:
+      # Convert to from m to mm
+      - lambda: return x * 1000;
+      - exponential_moving_average:
+          alpha: 0.1
+          send_every: 15
+      - round: 0

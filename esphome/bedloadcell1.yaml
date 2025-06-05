@@ -1,6 +1,9 @@
+#  the sensors for load cell one are on the eastern-most east half of the bed
+#  and the western most western half of the bed
 esphome:
   name: bedloadcell1
-  platform: ESP8266
+  
+esp8266:
   board: esp01_1m
 
 wifi:
@@ -21,26 +24,116 @@ logger:
   esp8266_store_log_strings_in_flash: False
 
 ota:
+  - platform: esphome
+
+# Sync time with Home Assistant.
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+# pin:
+#   - number: GPIO0
+#     allow_other_uses: true
+#   - number: GPIO14
+#     allow_other_uses: true
 
 sensor:
+  - platform: homeassistant
+    id: current_empty_value
+    name: current_empty_value
+    entity_id: sensor.raw_bed_load_cell_1_average
+    internal: True
+
+  - platform: homeassistant
+    id: current_occupied_value
+    name: current_occupied_value
+    entity_id: sensor.raw_bed_load_cell_1_night_occupied_average
+    internal: True
+
   - platform: hx711
     name: "Bed Load Cell 1"
-    dout_pin: GPIO0
-    clk_pin: GPIO14
-    gain: 128
-    update_interval: 2s
-    filters:
-      - calibrate_linear:
-          # - -305926 -> 0 # 0.6kg
-          # - -307196 -> 0 # was 10kg
-          # - -315550 -> 0 # was 7.8 kg
-          # - -345546 -> 0 # was -99 kg
-          # - -315550 -> 0 # was 4.15 kg
-          # - -331430 -> 0 # was 4.37 kg
-          - -347358 -> 0 # was x.xx kg
-          - -645000 -> 86
-      - sliding_window_moving_average:
-          window_size: 15
-          send_every: 1
+    device_class: weight
+    state_class: measurement
     unit_of_measurement: kg
+    dout_pin: 
+      number: GPIO0
+      allow_other_uses: True
+    clk_pin: 
+      number: GPIO14
+      allow_other_uses: True
+    gain: 128
+    update_interval: 0.5s
+    filters:
+      - median:
+          window_size: 5
+          send_every: 6
+      # -400000 is a magic number that represents the HX711 reading for 86kg
+      # that is the negative value in both the float m and float c calculations
+      # this is value is recorded with my body straddling the middle of the bed
+      # between the two frames.
+      # 12/21/23 - changed from -400000.0 to -450000.0
+      # 12/15/24 - new bed means change from -450000.0 to -135000.0
+      # - lambda: !lambda |-
+      #     ESP_LOGI("main", "Calibration of 0kg value is: %f", id(current_empty_value).state);
+      #     ESP_LOGI("main", "Calibration of 86kg value is: %f", id(current_occupied_value).state);
+      #     ESP_LOGI("main", "Raw Value of my sensor: %f", x);
+      #     float m = (86.0 - 0.0)/(-135000.0 - id(current_empty_value).state);
+      #     float c = 86.0 - (m * -135000.0);
+      #     float y = m * x + c;
+      #     ESP_LOGI("main", "Calibrated value of my sensor: %f", y);
+      #     return (y);
+      # Switch to completely calculated values:
+      - lambda: !lambda |-
+          ESP_LOGI("main", "Calibration of 0kg value is: %f", id(current_empty_value).state);
+          ESP_LOGI("main", "Calibration of 86kg value is: %f", id(current_occupied_value).state);
+          ESP_LOGI("main", "Raw Value of my sensor: %f", x);
+          float m = (86.0 - 0.0)/(id(current_occupied_value).state - id(current_empty_value).state);
+          float c = 86.0 - (m * id(current_occupied_value).state);
+          float y = m * x + c;
+          ESP_LOGI("main", "Calibrated value of my sensor: %f", y);
+          return (y);
+
+    accuracy_decimals: 2
+
+  # - platform: hx711
+  #   name: "Bed Load Cell 1"
+  #   device_class: weight
+  #   state_class: measurement
+  #   unit_of_measurement: kg
+  #   dout_pin: GPIO0
+  #   clk_pin: GPIO14
+  #   gain: 128
+  #   update_interval: 500ms
+  #   filters:
+  #     - calibrate_linear:
+  #         # - -305926 -> 0 # 0.6kg
+  #         # - -307196 -> 0 # was 10kg
+  #         # - -315550 -> 0 # was 7.8 kg
+  #         # - -345546 -> 0 # was -99 kg
+  #         # - -315550 -> 0 # was 4.15 kg
+  #         # - -331430 -> 0 # was 4.37 kg
+  #         # - -347358 -> 0 # was 7.27 kg
+  #         - -372516 -> 0
+  #         - -645000 -> 86
+  #     - sliding_window_moving_average:
+  #         window_size: 15
+  #         send_every: 1
+  #   accuracy_decimals: 2
+
+  - platform: hx711
+    name: "Raw Bed Load Cell 1"
+    state_class: measurement
+    unit_of_measurement: value
+    dout_pin: 
+      number: GPIO0
+      allow_other_uses: True
+    clk_pin: 
+      number: GPIO14
+      allow_other_uses: True
+    gain: 128
+    update_interval: 0.5s
+    filters:
+      - median:
+          window_size: 5
+          send_every: 6
     accuracy_decimals: 2
