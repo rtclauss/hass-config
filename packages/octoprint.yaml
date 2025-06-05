@@ -137,7 +137,8 @@ automation:
         entity_id: binary_sensor.octoprint_printing
         from: "on"
         to: "off"
-        for: "00:30:00"
+        for:
+          minutes: 30
     action:
       - service: notify.all
         data:
@@ -147,19 +148,19 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: octoprint
-    monitored_conditions:
-      - Printing
-      - Printing Error
+  # - platform: octoprint
+  #   monitored_conditions:
+  #     - Printing
+  #     - Printing Error
 
 ########################
 # Cameras
 ########################
 camera:
-  - platform: mjpeg
-    name: OctoPrint
-    still_image_url: !secret octopi_still_image_url
-    mjpeg_url: !secret octopi_mjpeg_url
+  # - platform: mjpeg
+  #   name: OctoPrint
+  #   still_image_url: !secret octopi_still_image_url
+  #   mjpeg_url: !secret octopi_mjpeg_url
 
 ########################
 # Climate
@@ -247,11 +248,6 @@ notify:
 plant:
 
 ########################
-# Proximity
-########################
-proximity:
-
-########################
 # Scenes
 ########################
 scene:
@@ -276,32 +272,32 @@ switch:
 ########################
 template:
   - sensor:
-    - name: "OctoPrint Time Elapsed"
-      unit_of_measurement: 's'
-      availability: >
-        {{ not is_state('sensor.octoprint_start_time', 'unavailable') }}
-      state: >
-        {% set start = as_timestamp(states('sensor.octoprint_start_time')) %}
-        {% if is_number(start) %}
-          {{ (as_timestamp(now()) - start) | int }}
-        {% else %}
-          unknown
-        {% endif %}
-      attributes:
-        start_time: "states('sensor.octoprint_start_time')"
-    - name: "OctoPrint Time Remaining"
-      unit_of_measurement: 's'
-      availability: >
-        {{ not is_state('sensor.octoprint_estimated_finish_time', 'unavailable') }}
-      state: >
-        {% set finish = as_timestamp(states('sensor.octoprint_estimated_finish_time')) %}
-        {% if is_number(finish) %}
-          {{ (finish - as_timestamp(now())) | int }}
-        {% else %}
-          unknown
-        {% endif %}
-      attributes:
-        start_time: "states('sensor.octoprint_estimated_finish_time')"
+      - name: "OctoPrint Time Elapsed"
+        unit_of_measurement: "s"
+        availability: >
+          {{ not is_state('sensor.octoprint_start_time', 'unavailable') }}
+        state: >
+          {% set start = as_timestamp(states('sensor.octoprint_start_time')) %}
+          {% if is_number(start) %}
+            {{ (as_timestamp(now()) - start) | int }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          start_time: "states('sensor.octoprint_start_time')"
+      - name: "OctoPrint Time Remaining"
+        unit_of_measurement: "s"
+        availability: >
+          {{ not is_state('sensor.octoprint_estimated_finish_time', 'unavailable') }}
+        state: >
+          {% set finish = as_timestamp(states('sensor.octoprint_estimated_finish_time')) %}
+          {% if is_number(finish) %}
+            {{ (finish - as_timestamp(now())) | int }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          start_time: "states('sensor.octoprint_estimated_finish_time')"
 
 ########################
 # Weather
