@@ -1,10 +1,14 @@
 esphome:
   name: denbluetoothproxy
+  project: 
+    name: rtclauss.bluetooth
+    version: 1.0.0
 
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
+    # type: arduino
 
 # Enable logging
 logger:
@@ -13,7 +17,13 @@ logger:
 api:
 
 ota:
-  password: "70342fb7c4171e7a76a18f21449c76a1"
+  - platform: esphome
+    password: "70342fb7c4171e7a76a18f21449c76a1"
+
+# Sync time with Home Assistant.
+time:
+  - platform: homeassistant
+    id: homeassistant_time
 
 improv_serial:
 
@@ -34,10 +44,9 @@ dashboard_import:
 
 esp32_ble_tracker:
   scan_parameters:
-    interval: 1100ms
-    window: 1100ms
-    active: true
+    interval: 300ms
+    window: 300ms
+    active: false
 
 bluetooth_proxy:
-
-    
+xiaomi_ble:

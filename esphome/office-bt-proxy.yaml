@@ -1,20 +1,34 @@
 esphome:
   name: office-bt-proxy
+  project: 
+    name: rtclauss.bluetoothproxy
+    version: 1.0.0
+  platformio_options:
+    build_flags: 
+      - -Wno-maybe-uninitialized
+
+substitutions:
+  roomname: office
+  yourname: Ryan
+  rssi_present: id(harssi_present).state
+  rssi_not_present: id(harssi_not_present).state
 
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf
+    # type: arduino
 
 # Enable logging
 logger:
-  # level: VERY_VERBOSE
+  # level: INFO
 
 # Enable Home Assistant API
 api:
 
 ota:
-  password: "a2165fb9213f0f478846082f5d7399e0"
+  - platform: esphome
+    password: "a2165fb9213f0f478846082f5d7399e0"
 
 improv_serial:
 
@@ -27,6 +41,10 @@ wifi:
     ssid: "OfficeBt Fallback Hotspot"
     password: "w6bg4m9c9rY7"
 
+# Sync time with Home Assistant.
+time:
+  - platform: homeassistant
+    id: homeassistant_time
 
 captive_portal:
 
@@ -34,24 +52,203 @@ dashboard_import:
   package_import_url: github://esphome/bluetooth-proxies/esp32-generic.yaml@main
 
 esp32_ble_tracker:
-  # scan_parameters:
-  #   interval: 1100ms
-  #   window: 1100ms
-  #   active: true
+  scan_parameters:
+    interval: 300ms
+    window: 300ms
+    active: false
+  on_ble_advertise:
+    - then:
+      # Look for manufacturer data of form: 4c00 10 05 YY 98 XXXXXX
+      # Where YY can be 01..0F or 20..2F; and XXXXXX is ignored
+      - lambda: |-
+          optional<int16_t> best_rssi = nullopt;
+          for (auto data : x.get_manufacturer_datas()) {
+            // Guard against non-Apple datagrams, or those that are too small.
+            if (data.data.size() < 4 || data.uuid.to_string() != "0x004C" || data.data[0] != 0x10 || data.data[1] < 5) {
+              continue;
+            }
+            const int16_t rssi = x.get_rssi();
+            const uint8_t status_flags = data.data[2] >> 4;  // High nibble
+            const uint8_t data_flags = data.data[3];
+            
+            if (data_flags == 0x98) {  // Match unlocked Apple Watch. To also match locked watch use: if (data_flags == 0x98 || data_flags == 0x18) {
+              if (status_flags == 0 || status_flags == 2) {
+                best_rssi = max(rssi, best_rssi.value_or(rssi));
+                ESP_LOGD("ble_adv", "Found Apple Watch (mac %s) rssi %i", x.address_str().c_str(), rssi);
+              } else {
+                ESP_LOGD("ble_adv", "Possible Apple Watch? (mac %s) rssi %i, unrecognised status/action flags %#04x", x.address_str().c_str(), rssi, data.data[2]);
+              }
+            }
+          }
+          if (best_rssi) {
+            id(apple_watch_rssi).publish_state(*best_rssi);
+          }
+
+xiaomi_ble:
 
 bluetooth_proxy:
+  # active: true
 
-# sensor:
-#   - platform: xiaomi_hhccjcy01
-#     mac_address: "80:EA:CA:88:BC:50"
-#     temperature:
-#       name: "Peace Lily Temperature"
-#     moisture:
-#       name: "Peace Lily Moisture"
-#     illuminance:
-#       name: "Peace Lily Illuminance"
-#     conductivity:
-#       name: "Peace Lily Soil Conductivity"
-#     battery_level:
-#       name: "Peace Lily Battery Level"
-    
+sensor:
+  #Apple Watch Sensors:
+  - platform: template
+    id: apple_watch_rssi
+    name: "$yourname Apple Watch $roomname RSSI"
+    device_class: signal_strength
+    unit_of_measurement: dBm
+    accuracy_decimals: 0
+    filters:
+      - exponential_moving_average:
+          alpha: 0.3
+          send_every: 1
+    on_value:
+      then:
+        - lambda: |-
+            if (id(apple_watch_rssi).state > $rssi_present) {
+              id(room_presence_debounce).publish_state(1);
+            } else if (id(apple_watch_rssi).state < $rssi_not_present) {
+              id(room_presence_debounce).publish_state(0);
+            }
+        - script.execute: presence_timeout # Publish 0 if no rssi received
+  
+  - platform: template
+    id: room_presence_debounce
+    filters:
+      - sliding_window_moving_average:
+          window_size: 3
+          send_every: 1
+          
+  - platform: homeassistant
+    name: HA RSSI Present Value
+    entity_id: input_number.rssi_present
+    id: harssi_present
+    internal: true
+  - platform: homeassistant
+    name: HA RSSI Not Present Value
+    entity_id: input_number.rssi_not_present
+    id: harssi_not_present
+    internal: true
+
+  # # Xiami Plant Sensors
+  # # - platform: xiaomi_hhccjcy01
+  # #   mac_address: 'C4:7C:8D:66:4E:B3'
+  # #   temperature:
+  # #     name: "4in Nepenthes Temperature"
+  # #   moisture:
+  # #     name: "4in Nepenthes Moisture"
+  # #   illuminance:
+  # #     name: "4in Nepenthes Illuminance"
+  # #   conductivity:
+  # #     name: "4in Nepenthes Soil Conductivity"
+  # #   battery_level:
+  # #     name: "4in Nepenthes Battery Level"
+  # - platform: xiaomi_hhccjcy01
+  #   mac_address: '80:EA:CA:88:BC:50'
+  #   temperature:
+  #     name: "Elkhorn Fern Temperature"
+  #   moisture:
+  #     name: "Elkhorn Fern Moisture"
+  #   illuminance:
+  #     name: "Elkhorn Fern Illuminance"
+  #   conductivity:
+  #     name: "Elkhorn Fern Conductivity"
+  #   battery_level:
+  #     name: "Elkhorn Fern Battery Level"
+  # - platform: xiaomi_hhccjcy01
+  #   mac_address: '5C:85:7E:B0:09:D1'
+  #   temperature:
+  #     name: "Birdnest Fern Temperature"
+  #   moisture:
+  #     name: "Birdnest Fern Moisture"
+  #   illuminance:
+  #     name: "Birdnest Fern Illuminance"
+  #   conductivity:
+  #     name: "Birdnest Fern Conductivity"
+  #   battery_level:
+  #     name: "Birdnest Fern Battery Level"
+  # - platform: xiaomi_hhccjcy01
+  #   mac_address: '5C:85:7E:B0:06:C9'
+  #   temperature:
+  #     name: "ZZ Plant Temperature"
+  #   moisture:
+  #     name: "ZZ Plant Moisture"
+  #   illuminance:
+  #     name: "ZZ Plant Illuminance"
+  #   conductivity:
+  #     name: "ZZ Plant Conductivity"
+  #   battery_level:
+  #     name: "ZZ Plant Battery Level"
+  # # - platform: xiaomi_hhccjcy01
+  # #   mac_address: '5C:85:7E:B0:09:E5'
+  # #   temperature:
+  # #     name: "Rubber Plant Temperature"
+  # #   moisture:
+  # #     name: "Rubber Plant Moisture"
+  # #   illuminance:
+  # #     name: "Rubber Plant Illuminance"
+  # #   conductivity:
+  # #     name: "Rubber Plant Conductivity"
+  # #   battery_level:
+  # #     name: "Rubber Plant Battery Level"
+  # - platform: xiaomi_hhccjcy01
+  #   mac_address: 'C4:7C:8D:66:47:C0'
+  #   temperature:
+  #     name: "Monstera Temperature"
+  #   moisture:
+  #     name: "Monstera Moisture"
+  #   illuminance:
+  #     name: "Monstera Illuminance"
+  #   conductivity:
+  #     name: "Monstera Conductivity"
+  #   battery_level:
+  #     name: "Monstera Battery Level"
+  # # - platform: xiaomi_hhccjcy01
+  # #   mac_address: 'C4:7C:8D:66:4E:57'
+  # #   temperature:
+  # #     name: "North Nepenthes Temperature"
+  # #   moisture:
+  # #     name: "North Nepenthes Moisture"
+  # #   illuminance:
+  # #     name: "North Nepenthes Illuminance"
+  # #   conductivity:
+  # #     name: "North Nepenthes Soil Conductivity"
+  # #   battery_level:
+  # #     name: "North Nepenthes Battery Level"
+  # # - platform: xiaomi_hhccjcy01
+  # #   mac_address: 'C4:7C:8D:66:4C:51'
+  # #   temperature:
+  # #     name: "South Nepenthes Temperature"
+  # #   moisture:
+  # #     name: "South Nepenthes Moisture"
+  # #   illuminance:
+  # #     name: "South Nepenthes Illuminance"
+  # #   conductivity:
+  # #     name: "South Nepenthes Soil Conductivity"
+  # #   battery_level:
+  # #     name: "South Nepenthes Battery Level"
+
+binary_sensor:
+  # Apple Watch Presense sensor
+  - platform: template
+    id: room_presence
+    name: "$yourname $roomname presence"
+    device_class: occupancy
+    lambda: |-
+      if (id(room_presence_debounce).state > 0.99) {
+        return true;
+      } else if (id(room_presence_debounce).state < 0.01) {
+        return false;
+      } else {
+        return id(room_presence).state;
+      }
+
+script:
+  # Apple Watch Presense script
+  # Publish event every 30 seconds when no rssi received
+  id: presence_timeout
+  mode: restart
+  then:
+    - delay: 30s
+    - lambda: |-
+        id(room_presence_debounce).publish_state(0);
+    - script.execute: presence_timeout

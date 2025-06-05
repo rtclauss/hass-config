@@ -1,5 +1,5 @@
 esphome:
-  name: bedloadcell2
+  name: bedloadcell2 # this is the west side of the bed sensor
   platform: ESP8266
   board: esp01_1m
 
@@ -23,23 +23,77 @@ logger:
 ota:
 
 sensor:
+  - platform: homeassistant
+    id: current_empty_value
+    name: current_empty_value
+    entity_id: sensor.raw_bed_load_cell_2_average
+    internal: True
+
+
   - platform: hx711
     name: "Bed Load Cell 2"
+    device_class: weight
+    state_class: measurement
+    unit_of_measurement: kg
     dout_pin: GPIO0
     clk_pin: GPIO14
     gain: 128
-    update_interval: 2s
+    update_interval: 0.5s
     filters:
-      - calibrate_linear:
-          #- 551118 -> 0
-          # - 530134 -> 0 # -.2 kg
-          # - 530646 -> 0 # was 1.9kg
-          # - 524644 -> 0 # was 3.88 kg
-          # - 508613 -> 0 # was 9.91 kg
-          - 469417 -> 0
-          - 169400 -> 86
+      # -134510.0 is a magic number that represents the HX711 reading for 86kg
+      # that is the negative value in both the float m and float c calculations
+      - lambda: !lambda |-
+          ESP_LOGI("main", "Calibration 0 value is: %f", id(current_empty_value).state);
+          ESP_LOGI("main", "Raw Value of my sensor: %f", x);
+          float m = (86.0 - 0.0)/(-125000.0 - id(current_empty_value).state);
+          float c = 86.0 - (m * -125000.0);
+          float y = m * x + c;
+          ESP_LOGI("main", "Calibrated value of my sensor: %f", y);
+          return (y);
       - sliding_window_moving_average:
           window_size: 15
           send_every: 1
-    unit_of_measurement: kg
+    accuracy_decimals: 2
+
+
+  # 7/19/23 old working, not dynamic update daily for zero range.
+  # - platform: hx711
+  #   name: "Bed Load Cell 2"
+  #   device_class: weight
+  #   state_class: measurement
+  #   unit_of_measurement: kg
+  #   dout_pin: GPIO0
+  #   clk_pin: GPIO14
+  #   gain: 128
+  #   update_interval: 2s
+  #   filters:
+  #     - calibrate_linear:
+  #         #- 551118 -> 0
+  #         # - 530134 -> 0 # -.2 kg
+  #         # - 530646 -> 0 # was 1.9kg
+  #         # - 524644 -> 0 # was 3.88 kg
+  #         # - 508613 -> 0 # was 9.91 kg
+  #         # - 469417 -> 0
+  #         # - 401689 -> 0 # was 19kg on 5/6/2023
+  #         # - 382171 -> 0 # was 60kg on 7/5/2023
+  #         - 163555 -> 0 # was 0 on 7/19/23
+  #         - 
+  #         # - 169400 -> 86 was 145kg on same date
+  #         # - 15400 -> 86 was 154kg on 7/13/2023
+  #         - -134510 -> 86
+  #     - sliding_window_moving_average:
+  #         window_size: 15
+  #         send_every: 1
+  #   accuracy_decimals: 2
+  - platform: hx711
+    name: "Raw Bed Load Cell 2"
+    state_class: measurement
+    dout_pin: GPIO0
+    clk_pin: GPIO14
+    gain: 128
+    update_interval: 0.5s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 1
     accuracy_decimals: 2
