@@ -74,10 +74,6 @@ homeassistant:
     ################################################
 
     ################################################
-    ## Proximity
-    ################################################
-
-    ################################################
     ## Scripts
     ################################################
 
@@ -123,6 +119,9 @@ automation:
         zone: zone.home
         event: enter
         id: arrive-home
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     condition:
       condition: and
       conditions:
@@ -134,13 +133,42 @@ automation:
           zone: zone.home
           enabled: false
     action:
+      # Disabled until the API uses the new fleet api
+      # add charge schedule: https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#add-charge-schedule
+      # - service: script.tesla_set_precondition_schedule_time
       - choose:
           - conditions:
               - condition: trigger
                 id: trip-upcoming
             sequence:
-              # - service: switch.turn_on
-              #   entity_id: switch.nigori_maxrange_switch
+              - service: notify.mobile_app_wethop
+                data:
+                  title: "Tesla Charging"
+                  message: >-
+                    Upcoming trip {{state_attr("binary_sensor.upcoming_trip_charging", "entry")}} of distance {{state_attr("sensor.waze_next_trip_distance", "distance")|round}} mi. Charge to Max Range?
+                  data:
+                    actions:
+                      - action: "MAX_RANGE_TRIP"
+                        title: "Yes"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "NORMAL_RANGE_TRIP"
+                        title: "No"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+              - wait_for_trigger:
+                  - platform: event
+                    event_type: mobile_app_notification_action
+                    id: max_range
+                    event_data:
+                      action: MAX_RANGE_TRIP
+                timeout:
+                  hours: 1
+                continue_on_timeout: false
               - service: number.set_value
                 entity_id: number.nigori_charge_limit
                 data:
@@ -151,55 +179,97 @@ automation:
                   message: "Long-range trip soon. Charging to 1.21 Gigawatts!"
                   notification_id: low-battery-alert
               - service: notify.all
-                data_template:
+                data:
+                  data:
+                    url: "/ryan-new-mushroom/tesla"
                   message: >-
                     Long-range trip soon. Charging to 1.21 Gigawatts!
-              - service: script.tesla_set_precondition_schedule_time
-              - service: notify.all
-                data_template:
-                  message: >-
-                    Set car precondition time!
           - conditions:
               - condition: trigger
                 id: arrive-home
+              - condition: state
+                entity_id: binary_sensor.upcoming_trip_charging
+                state: "on"
             sequence:
               # - service: switch.turn_off
               #   entity_id: switch.nigori_maxrange_switch
+              - service: notify.mobile_app_wethop
+                data:
+                  title: "Tesla Charging"
+                  message: >-
+                    Upcoming trip {{state_attr("binary_sensor.upcoming_trip_charging", "entry")}} of distance {{state_attr("sensor.waze_next_trip_distance", "distance")}} mi. Charge to Max Range?
+                  data:
+                    actions:
+                      - action: "MAX_RANGE"
+                        title: "Yes"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "NORMAL_RANGE"
+                        title: "No"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+
+  - id: do_restart_garage_door_esp
+    alias: do_restart_garage_door_esp
+    trigger:
+      - platform: time
+        at: "04:00:00"
+    condition: []
+    action:
+      - action: rest_command.restart_garage_opener
+
+  - id: set_charging_rate
+    alias: set_charging_rate
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        id: max_range
+        event_data:
+          action: MAX_RANGE
+      - platform: event
+        event_type: mobile_app_notification_action
+        id: normal_range
+        event_data:
+          action: NORMAL_RANGE
+      - platform: state
+        id: max_range
+        entity_id: input_boolean.long_range_travel
+        from: "off"
+        to: "on"
+      - platform: state
+        id: normal_range
+        entity_id: input_boolean.long_range_travel
+        from: "on"
+        to: "off"
+    condition: []
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: max_range
+            sequence:
               - service: number.set_value
                 entity_id: number.nigori_charge_limit
                 data:
                   value: >-
-                    {% if is_state('binary_sensor.upcoming_trip_charging', 'on') %}
-                      100
-                    {% else %}
-                      65
-                    {% endif %}
-              - service: persistent_notification.create
-                enabled: false
-                data_template:
-                  title: Charge Limit
-                  message: >-
-                    {% if is_state('binary_sensor.upcoming_trip_charging', 'on') %}
-                      Charge limit set 100
-                    {% else %}
-                      Charge limit set 65
-                    {% endif %}
-                  notification_id: low-battery-alert
-              - service: notify.all
-                enabled: false
-                data_template:
-                  message: >-
-                    Turned off max charge
-              # - service: script.turn_on
-              #   entity_id: script.tesla_set_charge_limit_soc
-              # TODO enable
-              # once https://github.com/home-assistant/core/pull/66162
-              # is released in 2022.2 or 2022.3
-              - service: script.tesla_set_precondition_schedule_time
-              - service: notify.all
-                data_template:
-                  message: >-
-                    Set car precondition time!
+                    100
+              - service: input_boolean.turn_on
+                entity_id: input_boolean.long_range_travel
+          - conditions:
+              - condition: trigger
+                id: normal_range
+            sequence:
+              - service: number.set_value
+                entity_id: number.nigori_charge_limit
+                data:
+                  value: >-
+                    80
+              - service: input_boolean.turn_off
+                entity_id: input_boolean.long_range_travel
 
   # - id: turn_off_max_range_charge_when_arrive_home
   #   alias: turn_off_max_range_charge_when_arrive_home
@@ -304,7 +374,8 @@ automation:
       - platform: state
         entity_id: binary_sensor.nigori_charging
         to: "off"
-        for: "00:15:00"
+        for:
+          minutes: 15
     condition:
       - condition: state
         entity_id: binary_sensor.nigori_parking_brake
@@ -321,7 +392,8 @@ automation:
       - platform: state
         entity_id: binary_sensor.nigori_parking_brake
         to: "on"
-        for: "00:15:00"
+        for:
+          minutes: 15
     condition:
       - condition: state
         entity_id: binary_sensor.nigori_charging
@@ -330,6 +402,22 @@ automation:
       - service: tesla_custom.polling_interval
         data:
           scan_interval: 660
+
+  - alias: Tire Rotations
+    description: We adjust the Polling Interval up to the configured value when we are parked if the charger is not connected
+    id: tire_rotation
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.nigori_odometer
+        value_template: >-
+          {{ state | int % 6250  }}
+        below: 20
+    condition:
+    action:
+      - service: notify.all
+        data_template:
+          message: >
+            Time to rotate the car's tires.
 
 ########################
 # Binary Sensors
@@ -345,11 +433,6 @@ camera:
 # Cover
 ########################
 cover:
-  # Removed and moved to UI config
-  # - platform: myq
-  #   username: !secret myq_user
-  #   password: !secret myq_password
-  #   type: chamberlain
 
 ########################
 # Device Trackers
@@ -395,6 +478,13 @@ input_boolean:
 input_select:
 
 ########################
+# Input Text
+########################
+input_text:
+  home_address:
+    initial: !secret home_address
+
+########################
 # iOS
 ########################
 ios:
@@ -405,9 +495,13 @@ ios:
 light:
 
 ########################
-# Proximity
+# REST Command
 ########################
-proximity:
+rest_command:
+  restart_garage_opener:
+    url: http://10.254.254.247/button/restart/press
+    method: POST
+    payload: true
 
 ########################
 # Scenes
@@ -428,6 +522,12 @@ script:
         entity_id: binary_sensor.upcoming_trip_charging
         attribute: all_day
         state: off
+      - service: logbook.log
+        data:
+          entity_id: script.tesla_set_precondition_schedule_time
+          domain: script
+          name: Setting precondition time due to trip starting at
+          message: " : {{ (state_attr('binary_sensor.upcoming_trip_charging', 'start_time')| as_datetime|as_local) }}"
       - alias: Set Scheduled Departure Time
         service: tesla_custom.api
         data:
@@ -437,7 +537,14 @@ script:
               vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
             enable: true
             departure_time: >-
-              {{state_attr('binary_sensor.upcoming_trip_charging', 'start_time')| as_datetime|as_local - timedelta(minutes=state_attr('sensor.waze_next_trip_distance','duration')) - timedelta(minutes=19)}}
+              {% set upcomingStart = (state_attr('binary_sensor.upcoming_trip_charging', 'start_time')| as_datetime|as_local)%}
+              {% set difference = (timedelta(minutes=state_attr('sensor.waze_next_trip_distance','duration')) + timedelta(minutes=19)) %}
+              {% set timeDeltaTrip = upcomingStart - difference %}
+              {% set timeStampHour = timeDeltaTrip| as_timestamp | timestamp_custom("%H") %}
+              {% set timeStampMinute = timeDeltaTrip| as_timestamp | timestamp_custom("%M") %}
+              {% set hourMinutes = timeStampHour |int * 60 %}
+              {% set totalOffsetFromMidnight = hourMinutes+ (timeStampMinute| int) %}
+              {{totalOffsetFromMidnight }}
             preconditioning_enabled: true
             preconditioning_weekdays_only: false
             off_peak_charging_enabled: true
@@ -488,26 +595,26 @@ sensor:
 
           {% if (personal_meeting_time < curling_upcoming) %}
             {% if (personal_meeting_time < work_meeting_upcoming) %}
-              {% if (personal_meeting_time - now())< timedelta(hours=24) %}
+              {% if (personal_meeting_time - now())< timedelta(hours=24) and state_attr('calendar.ryan_claussen', 'location') != "" %}
                 {{ state_attr('calendar.ryan_claussen', 'location') }}
               {% else %}
-                unavailable
+                {{states("input_text.home_address")}}
               {% endif %}
             {% else %}
                 {{ state_attr('calendar.work_trip', 'location') }}
             {% endif %}
           {% else %}
             {% if (curling_upcoming < work_meeting_upcoming) %}
-              {% if (curling_upcoming - now())< timedelta(hours=24) %}
+              {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.curling', 'location') != "" %}
                 {{ state_attr('calendar.curling', 'location') }}
               {% else %}
-                unavailable
+                {{states("input_text.home_address")}}
               {% endif %}
             {% else %}
-            {% if (curling_upcoming - now())< timedelta(hours=24) %}
+            {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.work_trip', 'location') != "" %}
                 {{ state_attr('calendar.work_trip', 'location') }}
               {% else %}
-                unavailable
+                {{states("input_text.home_address")}}
               {% endif %}
             {% endif %}
           {% endif %}
@@ -549,18 +656,18 @@ template:
                   None
                 {% endif %}
               {% else %}
-                 Work: {{ state_attr('calendar.work_trip', 'message') }}
+                Work: {{ state_attr('calendar.work_trip', 'message') }}
               {% endif %}
             {% else %}
               {% if (curling_upcoming < work_meeting_upcoming) %}
                 {% if (curling_upcoming - now())< timedelta(hours=24) %}
-                 Curling: {{ state_attr('calendar.curling', 'message') }}
+                Curling: {{ state_attr('calendar.curling', 'message') }}
                 {% else %}
                   None
                 {% endif %}
               {% else %}
               {% if (curling_upcoming - now())< timedelta(hours=24) %}
-                 Work: {{ state_attr('calendar.work_trip', 'message') }}
+                Work: {{ state_attr('calendar.work_trip', 'message') }}
                 {% else %}
                   None
                 {% endif %}
@@ -593,7 +700,7 @@ template:
                   None
                 {% endif %}
               {% else %}
-                 {{ state_attr('calendar.work_trip', 'start_time') }}
+                {{ state_attr('calendar.work_trip', 'start_time') }}
               {% endif %}
             {% else %}
               {% if (curling_upcoming < work_meeting_upcoming) %}
@@ -657,19 +764,19 @@ template:
             {% endif %}
         # as_datetime(13596565062) is a magic number for the year 2400.
         state: >-
-          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+          {% if state_attr("calendar.ryan_claussen", "start_time")  != None and "nocharge" not in state_attr("calendar.ryan_claussen", "description") %}
             {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
           {% else %}
             {% set personal_meeting_time = as_datetime(13596565062) %}
           {% endif %}
 
-          {% if state_attr("calendar.work_trip", "start_time")  != None %}
+          {% if state_attr("calendar.work_trip", "start_time")  != None and "nocharge" not in state_attr("calendar.ryan_claussen", "description") %}
             {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
           {% else %}
             {% set work_meeting_upcoming = as_datetime(13596565062) %}
           {% endif %}
 
-          {% if state_attr("calendar.curling", "start_time")  != None %}
+          {% if state_attr("calendar.curling", "start_time")  != None and "nocharge" not in state_attr("calendar.ryan_claussen", "description") %}
             {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
           {% else %}
             {% set curling_upcoming = as_datetime(13596565062) %}

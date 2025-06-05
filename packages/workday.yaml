@@ -60,18 +60,22 @@ automation:
       - platform: zone
         entity_id: device_tracker.bayesian_zeke_home
         event: enter
-        zone: zone.work
+        # zone: zone.work
+        zone: zone.rochester
     condition:
       condition: state
       entity_id: "binary_sensor.workday_sensor"
       state: "on"
     action:
       - service: climate.set_preset_mode
+        enabled: false
         entity_id: climate.my_ecobee
         data:
-          preset_mode: "Away"
+          preset_mode: "away_indefinitely"
       - service: notify.all
         data:
+          data:
+            url: "/ryan-new-mushroom/climate"
           message: "Arriving at work. Setting Ecobee Away."
 
   - id: turn_off_morning_routine
@@ -80,7 +84,7 @@ automation:
       - platform: time
         at: "00:00:01"
     action:
-      - service: homeassistant.turn_off
+      - service: input_boolean.turn_off
         data:
           entity_id: input_boolean.morning_routine
 
@@ -88,28 +92,34 @@ automation:
     alias: turn_off_office_lamp_when_work_tp_camera_active
     trigger:
       - platform: state
-        entity_id: binary_sensor.ryans_macbook_pro_camera_in_use
+        entity_id: binary_sensor.ryans_work_macbook_pro_m1_camera_in_use
         to: "on"
     action:
-      - service: light.turn_off
+      - service: retry.actions
         data:
-          entity_id: light.office_floor_lamp
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id: light.office_ceiling
+          initial_grace_period: 5
+          expected_state:
+            - "off"
       - service: media_player.media_pause
         data:
           entity_id:
-            - media_player.spotify
-            - media_player.office
+            - media_player.spotify_ryan_claussen
+            - media_player.office_sonos
 
   - id: turn_on_office_lamp_when_work_tp_camera_inactive
     alias: turn_on_office_lamp_when_work_tp_camera_inactive
     trigger:
       - platform: state
-        entity_id: binary_sensor.ryans_macbook_pro_camera_in_use
+        entity_id: binary_sensor.ryans_work_macbook_pro_m1_camera_in_use
         to: "off"
     action:
       - service: light.turn_on
         data:
-          entity_id: light.office_floor_lamp
+          entity_id: light.office_ceiling
 
   - id: vacuum_while_working
     alias: vacuum_while_working
@@ -120,7 +130,8 @@ automation:
       - entity_id: device_tracker.bayesian_zeke_home
         event: enter
         platform: zone
-        zone: zone.work
+        # zone: zone.work
+        zone: zone.rochester
       # - platform: event
       #   event_type: ios.notification_action_fired
       #   event_data:
@@ -131,18 +142,27 @@ automation:
           action: VACUUM_HOUSE
     condition: []
     action:
-      - alias: Start Vacuums
-        service: vacuum.start
-        target:
-          entity_id: all
+      # Revert back when batteries are all reset/new
+      # including main level vacuum
+      # - alias: Start Vacuums
+      #   service: vacuum.start
+      #   target:
+      #     entity_id: all
+      - action: mqtt.publish
+        data:
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {% set segment_id = now().weekday() + 1 %}
+            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
 
 ########################
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: workday
-    country: US
-    province: !secret home_state
+  # Moved to UI configuration
+  # - platform: workday
+  #   country: US
+  #   province: !secret home_state
 
 ########################
 # Input Booleans

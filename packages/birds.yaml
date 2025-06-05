@@ -1,5 +1,5 @@
 ################################################################
-## Packages / PiHole
+## Packages / TEMPLATE
 ################################################################
 
 ################################################
@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: "pihole"
+        package: "TO_CHANGE"
 
       expose: &expose
         <<: *customize
@@ -38,7 +38,23 @@ homeassistant:
     ################################################
 
     ################################################
+    ## Climate
+    ################################################
+
+    ################################################
+    ## Covers
+    ################################################
+
+    ################################################
     ## Device Trackers
+    ################################################
+
+    ################################################
+    ## Fans
+    ############
+
+    ################################################
+    ## Frontend
     ################################################
 
     ################################################
@@ -66,6 +82,22 @@ homeassistant:
     ################################################
 
     ################################################
+    ## Media Player
+    ################################################
+
+    ################################################
+    ##  Notify
+    ################################################
+
+    ################################################
+    ##  Octoprint
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+
+    ################################################
     ## Proximity
     ################################################
 
@@ -76,37 +108,17 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    sensor.pihole_ads_percentage_today:
-      <<: *customize
-      friendly_name: Percentage of Ad Traffic Blocked
-      unit_of_measurement: "%"
-      icon: mdi:ticket-percent
 
-    sensor.pihole_domains_being_blocked:
-      <<: *customize
-      friendly_name: Total Domains Blocked
-      icon: mdi:do-not-disturb
+    ################################################
+    ## Switches
+    ################################################
 
-    sensor.pihole_dns_unique_clients:
-      <<: *customize
-      friendly_name: Unique Clients
-      icon: mdi:desktop-classic
-
-    sensor.pihole_ads_blocked_today:
-      <<: *customize
-      friendly_name: Ads Blocked Today
-      icon: mdi:do-not-disturb
-
-    sensor.pihole_dns_queries_today:
-      <<: *customize
-      friendly_name: DNS Queries Today
-      icon: mdi:note-text
-
-    group.pihole:
-      <<: *customize
-      friendly_name: PiHole Data
     ################################################
     ## Thermostats
+    ################################################
+
+    ################################################
+    ## Weather
     ################################################
 
     ################################################
@@ -134,26 +146,44 @@ binary_sensor:
 camera:
 
 ########################
+# Climate
+########################
+climate:
+
+########################
+# Covers
+########################
+cover:
+
+########################
 # Device Trackers
 ########################
 device_tracker:
 
 ########################
+# Fans
+########################
+fan:
+
+########################
+# Frontend
+########################
+frontend:
+
+########################
 # Groups
 ########################
 group:
-  pihole:
-    entities:
-      - sensor.pihole_dns_unique_clients
-      - sensor.pihole_dns_queries_today
-      - sensor.pihole_ads_blocked_today
-      - sensor.pihole_ads_percentage_today
-      - sensor.pihole_ads_percentage_blocked_today
 
 ########################
 # Input Booleans
 ########################
 input_boolean:
+
+########################
+# Input DateTime
+########################
+input_datetime:
 
 ########################
 # Input Numbers
@@ -176,14 +206,35 @@ ios:
 light:
 
 ########################
-# Pihole
+# Media Player
 ########################
-# Moved to Integration Configuration.
-#pi_hole:
+media_player:
 
-# Proximity
 ########################
-proximity:
+# MQTT
+########################
+mqtt:
+  - sensor:
+      - name: "Garden Birds"
+        state_topic: "birdpi/apprise"
+        json_attributes_topic: "birdpi/apprise"
+        value_template: "{{ value_json.common_name }}"
+
+########################
+# Notify
+########################
+notify:
+
+########################
+# Octoprint
+########################
+# YAML Deprecated 2022.2
+# octoprint:
+
+########################
+# Plant
+########################
+plant:
 
 ########################
 # Scenes
@@ -199,6 +250,43 @@ script:
 # Sensor
 ########################
 sensor:
+  - platform: rest
+    name: Top 50 Bird Species
+    resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/species/?period=day&limit=50
+
+    value_template: "{{ value_json.species[0].commonName }}"
+    json_attributes:
+      - species
+
+  - platform: rest
+    name: Latest Bird Detection
+    resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/detections/?limit=1
+    value_template: >
+      {% if value_json.detections and value_json.detections | length > 0 %}
+        {{ value_json.detections[0].species.commonName }}
+      {% else %}
+        No detections
+      {% endif %}
+    json_attributes:
+      - detections
+
+########################
+# Switch
+########################
+switch:
+
+########################
+# Template
+########################
+template:
+  - image:
+      - name: Bird-Pi Photo
+        verify_ssl: false
+        url: "{{ state_attr('sensor.garden_birds','image') }}"
+########################
+# Weather
+########################
+weather:
 
 ########################
 # Zone

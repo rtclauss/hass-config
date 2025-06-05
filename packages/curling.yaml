@@ -87,31 +87,6 @@ homeassistant:
     ## Sensors
     ################################################
 
-    sensor.occ_time:
-      <<: *customize
-      friendly_name: "Last change in OCC Dir"
-      icon: mdi:clock
-
-    sensor.spcc_time:
-      <<: *customize
-      friendly_name: "Last Change in SPCC Dir"
-      icon: mdi:clock
-
-    sensor.spcc_distance:
-      <<: *customize
-      friendly_name: "Distance to SPCC"
-      icon: mdi:curling
-
-    sensor.heading_spcc:
-      <<: *customize
-      friendly_name: "Direction of SPCC"
-      icon: mdi:curling
-
-    sensor.heading_occ:
-      <<: *customize
-      friendly_name: "Direction of OCC"
-      icon: mdi:curling
-
 ########################
 # Automations
 ########################
@@ -127,12 +102,12 @@ automation:
       condition: and
       conditions:
         - condition: time
-          after: "16:00:00"
+          after: "15:30:00"
           before: "20:10:00"
           weekday:
-            - mon
             - tue
             - wed
+            - thu
         - condition: state
           entity_id: input_boolean.guest_mode
           state: "off"
@@ -141,17 +116,26 @@ automation:
             - binary_sensor.curling_season
           state: "on"
     action:
-      - alias: Start Vacuums
-        service: vacuum.start
-        target:
-          entity_id: all
-      - service: climate.set_preset_mode
+      # Revert back when batteries are all reset/new
+      # including main level vacuum
+      # - alias: Start Vacuums
+      #   service: vacuum.start
+      #   target:
+      #     entity_id: all
+      - action: mqtt.publish
+        data:
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {% set segment_id = now().weekday() + 1 %}
+            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: climate.set_preset_mode
+        enabled: false
         entity_id: climate.my_ecobee
         data:
-          preset_mode: "Away"
+          preset_mode: "away_indefinitely"
       - data:
           message: Good Curling!
-        service: notify.all
+        action: notify.all
 
   - id: return_home_from_occ
     alias: return_home_from_occ
@@ -161,15 +145,25 @@ automation:
         zone: zone.occ
         event: leave
     condition:
-      condition: state
-      entity_id:
-        - binary_sensor.curling_season
-      state: "on"
+      condition: and
+      conditions:
+        - condition: time
+          weekday:
+            - thu
+            - sun
+        - condition: state
+          entity_id:
+            - binary_sensor.curling_season
+          state: "on"
     action:
-      - service: climate.set_preset_mode
-        entity_id: climate.my_ecobee
+      # - service: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home"
+      - service: ecobee.resume_program
         data:
-          preset_mode: "Home"
+          resume_all: true
+          entity_id: climate.my_ecobee
       - service: notify.all
         data_template:
           message: >-
@@ -188,10 +182,14 @@ automation:
         - binary_sensor.curling_season
       state: "on"
     action:
-      - service: climate.set_preset_mode
-        entity_id: climate.my_ecobee
+      # - service: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home"
+      - service: ecobee.resume_program
         data:
-          preset_mode: "Home"
+          resume_all: true
+          entity_id: climate.my_ecobee
       - service: notify.all
         data_template:
           message: >-
@@ -239,7 +237,7 @@ binary_sensor:
     sensors:
       curling_season:
         value_template: >-
-          {{ now().strftime("%m") |int in [1,2,3,4,10,11,12] }}
+          {{ now().strftime("%m") |int in [1,2,3,10,11,12] }}
 
 ########################
 # Groups
@@ -249,10 +247,11 @@ group:
     entities:
       - binary_sensor.curling_season
       - sensor.occ_time
-      - sensor.heading_occ
+      - sensor.owatonna_curling_club_bayesian_zeke_home_distance
+      - sensor.owatonna_curling_club_nearest_direction_of_travel
       - sensor.spcc_time
-      - sensor.spcc_distance
-      - sensor.heading_spcc
+      - sensor.st_paul_curling_club_bayesian_zeke_home_distance
+      - sensor.st_paul_curling_club_nearest_direction_of_travel
   curling_automations:
     entities:
       - automation.leave_home_for_curling
@@ -278,35 +277,27 @@ script:
 # Sensors
 ########################
 sensor:
-  - platform: template
-    sensors:
-      occ_distance:
-        value_template: >-
-          {{ states('proximity.occ') }}
-        unit_of_measurement: "m"
-      occ_time:
-        value_template: >-
-          {% if states.sensor.heading_occ.last_changed is defined %}
-            {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_occ.last_changed, default=now())) | int //60 }}
+
+################################################
+## Templates
+################################################
+template:
+  - sensor:
+      - name: OCC Time
+        state: >-
+          {% if states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed is defined %}
+             {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
           {% else %}
             {{now()}}
           {% endif %}
         unit_of_measurement: "minutes"
-      spcc_time:
-        value_template: >-
-          {% if states.sensor.heading_spcc.last_changed is defined %}
-             {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_spcc.last_changed, default=now())) | int //60 }}
+        device_class: duration
+      - name: SPCC Time
+        state: >-
+          {% if states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed is defined %}
+             {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
           {% else %}
             {{now()}}
           {% endif %}
         unit_of_measurement: "minutes"
-      spcc_distance:
-        value_template: >-
-          {{ states('proximity.spcc') }}
-        unit_of_measurement: "m"
-      heading_spcc:
-        value_template: >-
-          {{ state_attr('proximity.spcc','dir_of_travel') |default("unknown") }}
-      heading_occ:
-        value_template: >-
-          {{ state_attr('proximity.occ','dir_of_travel') |default("unknown") }}
+        device_class: duration

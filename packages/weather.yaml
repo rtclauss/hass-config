@@ -82,7 +82,7 @@ homeassistant:
       <<: *customize
       friendly_name: Precipitation Intensity
       icon: mdi:weather-pouring
-    sensor.dark_sky_cloud_coverage:
+    sensor.tomorrow_io_the_brewery_cloud_cover:
       <<: *customize
       friendly_name: Cloud Cover
       icon: mdi:weather-cloudy
@@ -111,7 +111,7 @@ automation:
           minutes: 30
       - platform: numeric_state
         entity_id:
-          - sensor.dark_sky_precip_probability_1h
+          - sensor.precip_next_1hr
         above: 50
         for:
           minutes: 5
@@ -120,7 +120,7 @@ automation:
       conditions:
         - condition: template
           value_template: >-
-            {{ states('sensor.dark_sky_precip_probability_1h') | int > 50 }}
+            {{ states('sensor.precip_next_1hr') | int > 50 }}
         - condition: template
           value_template: >-
             {{ not is_state('sensor.season', 'winter') }}
@@ -161,7 +161,7 @@ automation:
           state: "on"
         - condition: template
           value_template: >-
-            {{ states('sensor.dark_sky_precip_probability_1h') | int > 50 }}
+            {{ states('sensor.precip_next_1hr') | int > 50 }}
         - condition: template
           value_template: >-
             {{ not is_state('sensor.season', 'winter') }}
@@ -214,7 +214,10 @@ automation:
     action:
       - service: light.turn_on
         data:
-          entity_id: light.living_room_all
+          entity_id:
+            - light.living_room_lamps
+            - light.basement_all_down_lights
+            - light.owner_suite_all
           flash: long
       - service: light.turn_on
         data:
@@ -333,6 +336,8 @@ automation:
             value_template: "{{ (as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_sent'))) < 3600 }}"
           - condition: template
             value_template: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') not in states('input_text.nws_dakota_county_alerts_triggered_pushbullet_alert_ids') }}"
+          - condition: template
+            value_template: "{{ 'Flood' not in state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_event') }}"
     action:
       - service: notify.mobile_app_wethop
         data_template:
@@ -469,54 +474,11 @@ sensor:
   #     - wind_dir
   #     - wind_1d_mph
 
-  - platform: darksky
-    api_key: !secret darksky_api_key
-    forecast:
-      - 0
-      - 1
-      - 2
-      - 4
-    hourly_forecast:
-      - 1
-      - 2
-      - 3
-      - 4
-      - 5
-      - 6
-    monitored_conditions:
-      - alerts
-      - summary
-      - precip_type
-      - precip_intensity
-      - precip_probability
-      - precip_accumulation
-      - temperature
-      - apparent_temperature
-      - dew_point
-      - wind_speed
-      - wind_bearing
-      - cloud_cover
-      - humidity
-      - pressure
-      - daily_summary
-      - temperature_high
-      - temperature_low
-      - hourly_summary
+  #  - visibility
+  #  - ozone
 
-    #  - visibility
-    #  - ozone
   - platform: template
     sensors:
-      precip_next_6h:
-        unit_of_measurement: "%"
-        value_template: >-
-          {{ [ (states('sensor.dark_sky_precip_probability_1h')|float(default=0)),
-               (states('sensor.dark_sky_precip_probability_2h')|float(default=0)),
-               (states('sensor.dark_sky_precip_probability_3h')|float(default=0)),
-               (states('sensor.dark_sky_precip_probability_4h')|float(default=0)),
-               (states('sensor.dark_sky_precip_probability_5h')|float(default=0)),
-               (states('sensor.dark_sky_precip_probability_6h')|float(default=0)), ] |max }}
-
       nws_dakota_county_alerts_active_alerts:
         ## You can add your county or city name to friendly_name for personalization
         ## For example: Weather Alerts for YourCountyName
@@ -3085,9 +3047,54 @@ sensor:
     county: !secret nws_county
 
 ################################################
+## Templates
+################################################
+template:
+  sensor:
+    - name: outside_humidity
+      unique_id: outside_humidity
+      device_class: humidity
+      state: "{{ int(state_attr('weather.tomorrow_io_the_brewery_daily', 'humidity')) }}"
+
+    - name: outside_temperature
+      unique_id: outside_temperature
+      device_class: temperature
+      unit_of_measurement: "°F"
+      state: "{{ int(state_attr('weather.tomorrow_io_the_brewery_daily', 'temperature')) }}"
+
+    - name: precip_next_1hr
+      unique_id: precip_next_1hr
+      unit_of_measurement: "%"
+      state: >-
+        {% set ns = namespace(probability = int(-1)) %}
+        {% for forecast in state_attr("weather.tomorrow_io_the_brewery_daily", "forecast") %}
+          {% if as_datetime(forecast.datetime) < (utcnow() + timedelta(hours=2)) %}
+            {% if int(forecast.precipitation_probability) > ns.probability %}
+              {% set ns.probability = int(forecast.precipitation_probability) %}
+            {% endif %}
+          {% else %}
+            {% break %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.probability }}
+
+    - name: precip_next_6hr
+      unique_id: precip_next_6hr
+      unit_of_measurement: "%"
+      state: >-
+        {% set ns = namespace(probability = int(-1)) %}
+        {% for forecast in state_attr("weather.tomorrow_io_the_brewery_daily", "forecast") %}
+          {% if as_datetime(forecast.datetime) < (utcnow() + timedelta(hours=6)) %}
+            {% if int(forecast.precipitation_probability) > ns.probability %}
+              {% set ns.probability = int(forecast.precipitation_probability) %}
+            {% endif %}
+          {% else %}
+            {% break %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.probability }}
+
+################################################
 ## Weather
 ################################################
 weather:
-  - platform: darksky
-    api_key: !secret darksky_api_key
-    mode: hourly

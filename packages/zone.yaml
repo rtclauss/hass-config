@@ -100,29 +100,6 @@ homeassistant:
     ################################################
 
     ################################################
-    ## Proximity
-    ################################################
-    proximity.home:
-      #<<: *tracked_devices
-      friendly_name: Proximity to Home
-      icon: mdi:home
-    proximity.occ:
-      #<<: *tracked_devices
-      friendly_name: Proximity to Owatonna Curling Club
-      icon: mdi:curling
-    proximity.spcc:
-      #<<: *tracked_devices
-      friendly_name: Proximity to St Paul Curling Club
-      icon: mdi:curling
-    proximity.twincities:
-      #<<: *tracked_devices
-      friendly_name: Proximity to Twin Cities
-      icon: mdi:city
-    proximity.work:
-      #<<: *tracked_devices
-      friendly_name: Proximity to Work
-
-    ################################################
     ## Scripts
     ################################################
     script.update_nest_eta:
@@ -131,18 +108,9 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    sensor.home_distance:
-      <<: *customize
-      friendly_name: "Distance to Home"
     sensor.home_time:
       <<: *customize
       friendly_name: "Last Change in Home Dir"
-    sensor.twincities:
-      <<: *customize
-      friendly_name: "Direction of Twin Cities"
-    sensor.heading_home:
-      <<: *customize
-      friendly_name: "Direction of Home"
     sensor.zeke_direction:
       <<: *customize
       friendly_name: "Zeke Direction"
@@ -199,14 +167,17 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     condition:
       condition: and
       conditions:
         - condition: numeric_state
-          entity_id: sensor.dark_sky_cloud_coverage
+          entity_id: sensor.tomorrow_io_the_brewery_cloud_cover
           above: 50
         - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
+          entity_id: binary_sensor.bayesian_bed_occupancy
           state: "off"
           # enabled: false
     action:
@@ -225,10 +196,13 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     condition:
       and:
         - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
+          entity_id: binary_sensor.bayesian_bed_occupancy
           state: "off"
         - alias: "I'm driving home"
           condition: state
@@ -262,6 +236,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "off"
     condition:
       condition: or
       conditions:
@@ -289,6 +266,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "off"
     condition:
       - condition: state
         entity_id: cover.garage_door
@@ -329,12 +309,15 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     condition:
       - condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.master_bed_occupancy
+        entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
       - alias: "I'm driving home"
         condition: state
@@ -343,7 +326,7 @@ automation:
         # enabled: false
       # - condition: template
       #   value_template: >-
-      #     {{ not is_state('media_player.spotify', 'playing') }}
+      #     {{ not is_state('media_player.spotify_ryan_claussen', 'playing') }}
     action:
       - service: script.turn_on
         entity_id: script.spotify_arrival
@@ -358,11 +341,14 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     condition:
       condition: and
       conditions:
         - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
+          entity_id: binary_sensor.bayesian_bed_occupancy
           state: "off"
           # enabled: false
         - condition: or
@@ -390,11 +376,14 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     condition:
       condition: and
       conditions:
         - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
+          entity_id: binary_sensor.bayesian_bed_occupancy
           state: "off"
           # enabled: false
         - condition: or
@@ -408,6 +397,8 @@ automation:
         entity_id: scene.bedroom_prep
       - service: notify.all
         data:
+          data:
+            url: "/ryan-new-mushroom/owner-suite"
           message: "Bedroom Prep Activated"
 
           # Use Ecobee Vacation mode now.
@@ -461,12 +452,18 @@ automation:
       #   data_template:
       #     eta: '{{states.sensor.time_to_home.state}}'
       #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: climate.set_preset_mode
-        entity_id: climate.my_ecobee
+      # - service: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home" # TODO set this to the correct schedule (Home or Sleep)
+      - service: ecobee.resume_program
         data:
-          preset_mode: "Home" # TODO set this to the correct schedule (Home or Sleep)
+          resume_all: true
+          entity_id: climate.my_ecobee
       - service: notify.all
-        data_template:
+        data:
+          data:
+            url: "/ryan-new-mushroom/climate"
           message: >-
             Turn off HVAC Away Mode. You {{trigger.event}} {{trigger.zone}} in direction {{ states('sensor.zeke_direction') }}. Setting Ecobee Home.
 
@@ -477,17 +474,23 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "off"
     condition:
       - condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
       - alias: "I'm driving away"
+        enabled: false
         condition: state
         entity_id: sensor.wethop_activity
         state: "Automotive"
         # Todo add biking here?
     action:
       parallel:
+        - service: lock.lock
+          entity_id: lock.front_door_lock
         - service: cover.close_cover
           entity_id: cover.garage_door
         - service: scene.turn_on
@@ -496,6 +499,12 @@ automation:
           data:
             exclude_lights:
               - light.outside_front_lights
+              - light.outside_garage_lights
+              - light.outside_north_west_garage
+              - light.outside_south_west_garage
+              - light.outside_front_door
+              - light.outside_garage_lights
+              - light.outside_front_hue
             transition: 240
         # - service: light.turn_off
         #   entity_id: "all"
@@ -506,20 +515,46 @@ automation:
         #   data:
         #     message: >-
         #       Leaving home with wethop activity {{ states('sensor.wethop_activity') }}
-        - service: notify.mobile_app_wethop
-          data:
-            title: "Auf weidersehen"
-            message: "Vacuum the house?"
-            data:
-              actions:
-                - action: "VACUUM_HOUSE"
-                  title: "Vacuum House"
-                  activationMode: background
-                  authenticationRequired: false
-                  destructive: false
-                  behavior: default
         - service: scene.turn_on
           entity_id: scene.turn_on_cameras
+        - if:
+            - alias: "Haven't vacuumed in more than 2 days"
+              condition: template
+              value_template: >-
+                {{(now()-(states("sensor.vacuum_last_ran")|as_datetime)) > timedelta(hours=48)}}
+          then:
+            # vacuum since it's been longer than two days
+            # Revert back when batteries are all reset/new
+            # including main level vacuum
+            # - alias: Start Vacuums
+            #   service: vacuum.start
+            #   target:
+            #     entity_id: all
+            - action: mqtt.publish
+              data:
+                topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+                payload: >-
+                  {% set segment_id = now().weekday() + 1 %}
+                  {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+          else:
+            - action: mqtt.publish
+              data:
+                topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+                payload: >-
+                  {% set segment_id = now().weekday() + 1 %}
+                  {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+            # - action: notify.all
+            #   data:
+            #     title: "Auf wiedersehen"
+            #     message: "Vacuum the house?"
+            #     data:
+            #       actions:
+            #         - action: "VACUUM_HOUSE"
+            #           title: "Vacuum House"
+            #           activationMode: background
+            #           authenticationRequired: false
+            #           destructive: false
+            #           behavior: default
 
   - alias: Update Bayesian Device tracker on start
     description: When HA starts up, update bayesian device tracker GPS items
@@ -529,6 +564,9 @@ automation:
         event: start
     action:
       - delay: "00:01:00"
+      - service: button.press
+        target:
+          entity_id: button.nigori_force_data_update
       - service: homeassistant.update_entity
         entity_id:
           - device_tracker.wethop
@@ -590,6 +628,9 @@ automation:
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
+      - platform: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     action:
       - service: vacuum.return_to_base
         data:
@@ -728,82 +769,12 @@ group:
       # - binary_sensor.nest_home
 
 ########################
-# Proximity
-########################
-proximity:
-  home:
-    zone: home
-    ignored_zones:
-      # - OCC
-      # - SPCC
-      # - Work
-      # - home
-      # - twincities
-    tolerance: 5
-    unit_of_measurement: m
-    devices:
-      - device_tracker.bayesian_zeke_home
-
-  occ:
-    zone: occ
-    ignored_zones:
-    #   - SPCC
-    #   - Work
-    #   - home
-    tolerance: 5
-    unit_of_measurement: m
-    devices:
-      - device_tracker.bayesian_zeke_home
-
-  spcc:
-    zone: spcc
-    ignored_zones:
-      # - OCC
-      # - Work
-      # - home
-    tolerance: 5
-    unit_of_measurement: m
-    devices:
-      - device_tracker.bayesian_zeke_home
-
-  work:
-    zone: work
-    ignored_zones:
-    #     - OCC
-    #     - SPCC
-    #     - home
-    tolerance: 5
-    unit_of_measurement: m
-    devices:
-      - device_tracker.bayesian_zeke_home
-
-  twincities:
-    zone: twincities
-    ignored_zones:
-      # - Work
-      # - OCC
-    tolerance: 5
-    unit_of_measurement: m
-    devices:
-      - device_tracker.bayesian_zeke_home
-
-  msp:
-    zone: msp
-    ignored_zones:
-      # - Work
-      # - OCC
-    tolerance: 5
-    unit_of_measurement: m
-    devices:
-      - device_tracker.bayesian_zeke_home
-
-########################
 # Scenes
 ########################
 scene:
   - name: arrive_home
     entities:
-      light.hall_lights_all:
+      light.hall_foyer_switch:
         state: "on"
       light.kitchen_sink:
         state: "on"
@@ -823,17 +794,15 @@ scene:
 
   - name: goodnight
     entities:
-      switch.bathroom_light_fan_switch:
-        state: "off"
       switch.christmas_tree:
         state: "off"
-      switch.deck:
+      switch.deck_all:
         state: "off"
       light.deck_string:
         state: "off"
-      switch.front_door:
+      light.hall_main_foyer:
         state: "off"
-      switch.stairs:
+      light.hall_stairway:
         state: "off"
       media_player.lg_webos_smart_tv:
         state: "off"
@@ -852,7 +821,7 @@ scene:
         state: "off"
       light.deck_string:
         state: "off"
-      switch.stairs:
+      light.hall_stairway:
         state: "off"
       # switch.humidifier:
       #   state: "off"
@@ -907,32 +876,23 @@ template:
   - binary_sensor:
       - name: test_homeward
         availability: >-
-          {{ states.sensor.heading_home.last_changed is defined }}
+          {{ states.sensor.the_brewery_nearest_direction_of_travel.last_changed is defined }}
         state: >-
           {% if
-              (((as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_home.last_changed, default=now()))//60) | int > 95) and (states('sensor.heading_home')=="towards")
+              (((as_timestamp(now(), default=now()) - as_timestamp(states.sensor.the_brewery_nearest_direction_of_travel.last_changed, default=now()))//60) | int > 95) and (states('sensor.the_brewery_nearest_direction_of_travel')=="towards")
           %} true
           {% else %}
             false
           {% endif %}
   - sensor:
-      - name: heading_home
-        state: >-
-          {{ state_attr('proximity.home','dir_of_travel') |default("unknown") }}
-      - name: home_distance
-        state: "{{ states('proximity.home') }}"
-        unit_of_measurement: "m"
       - name: home_time
         state: >-
-          {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.heading_home.last_changed, default=now())) | int //60 }}
+          {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.the_brewery_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
         unit_of_measurement: "minutes"
       - name: zeke_speed
         unit_of_measurement: "mph"
         state: >-
           {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int(-1) }}
-      - name: twincities
-        state: >-
-          {{ state_attr('proximity.twincities','dir_of_travel') |default("unknown") }}
       - name: zeke_direction
         state: >-
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int(-1)) >=0 -%}

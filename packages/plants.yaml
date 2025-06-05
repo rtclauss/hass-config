@@ -124,31 +124,6 @@ homeassistant:
       friendly_name: "East Hanging Nepenthes Temperature"
       device_class: temperature
 
-    sensor.four_inch_nepenthes_battery:
-      <<: *customize
-      friendly_name: "Four Inch Nepenthes Battery"
-      device_class: battery
-
-    sensor.four_inch_nepenthes_conductivity:
-      <<: *customize
-      friendly_name: "Four Inch Nepenthes Conductivity"
-      icon: mdi:flash
-
-    sensor.four_inch_nepenthes_light_intensity:
-      <<: *customize
-      friendly_name: "Four Inch Nepenthes Light Intensity"
-      device_class: illuminance
-
-    sensor.four_inch_nepenthes_moisture:
-      <<: *customize
-      friendly_name: "Four Inch Nepenthes Moisture"
-      device_class: humidity
-
-    sensor.four_inch_nepenthes_temperature:
-      <<: *customize
-      friendly_name: "Four Inch Nepenthes Temperature"
-      device_class: temperature
-
     sensor.monstera_battery:
       <<: *customize
       friendly_name: "Monstera Battery"
@@ -247,6 +222,8 @@ automation:
     action:
       - service: notify.all
         data:
+          data:
+            url: "/ryan-new-mushroom/plants"
           message: >-
             {%- for plant in states.plant -%}
               {%- set data = namespace(problems=[]) -%}
@@ -371,31 +348,6 @@ mqtt:
       unit_of_measurement: "\u00b0F"
       device_class: temperature
 
-    - name: four_inch_nepenthes_battery
-      state_topic: haplants/sensor/four_inch_nepenthes_battery/state
-      unit_of_measurement: "%"
-      device_class: battery
-
-    - name: four_inch_nepenthes_conductivity
-      state_topic: haplants/sensor/four_inch_nepenthes_conductivity/state
-      unit_of_measurement: "\u00b5S/cm"
-      icon: mdi:flash-circle
-
-    - name: four_inch_nepenthes_light_intensity
-      state_topic: haplants/sensor/four_inch_nepenthes_light_intensity/state
-      unit_of_measurement: "lx"
-      device_class: illuminance
-
-    - name: four_inch_nepenthes_moisture
-      state_topic: haplants/sensor/four_inch_nepenthes_moisture/state
-      unit_of_measurement: "%"
-      icon: mdi:water-percent
-
-    - name: four_inch_nepenthes_temperature
-      state_topic: haplants/sensor/four_inch_nepenthes_temperature/state
-      unit_of_measurement: "\u00b0F"
-      device_class: temperature
-
     - name: west_hanging_nepenthes_battery
       state_topic: haplants/sensor/west_hanging_nepenthes_battery/state
       unit_of_measurement: "%"
@@ -452,6 +404,23 @@ mqtt:
 ########################
 plant:
   # https://raw.githubusercontent.com/khronimo/MiFloraDB/master/PlantDB_5335_U0.csv
+  bird_of_paradise:
+    sensors:
+      battery: sensor.bird_of_paradise_battery
+      conductivity: sensor.bird_of_paradise_conductivity
+      brightness: sensor.bird_of_paradise_illuminance
+      moisture: sensor.bird_of_paradise_moisture
+      temperature: sensor.bird_of_paradise_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 350
+    max_conductivity: 2000
+    min_brightness: 4000
+    max_brightness: 000
+    min_temperature: 5
+    max_temperature: 35
+    min_battery: 10
+
   birds_nest_fern:
     sensors:
       battery: sensor.bird_nest_fern_battery
@@ -469,13 +438,30 @@ plant:
     max_temperature: 95
     min_battery: 10
 
+  bromeliad:
+    sensors:
+      battery: sensor.bromeliad_battery
+      conductivity: sensor.bromeliad_conductivity
+      brightness: sensor.bromeliad_illuminance
+      moisture: sensor.bromeliad_moisture
+      temperature: sensor.bromeliad_temperature
+    min_moisture: 15
+    max_moisture: 60
+    min_conductivity: 300
+    max_conductivity: 1000
+    min_brightness: 800
+    max_brightness: 27000
+    min_temperature: 50
+    max_temperature: 99
+    min_battery: 10
+
   elkhorn:
     sensors:
-      battery: sensor.elkhorn_battery
-      conductivity: sensor.elkhorn_conductivity
-      brightness: sensor.elkhorn_light_intensity
-      moisture: sensor.elkhorn_moisture
-      temperature: sensor.elkhorn_temperature
+      battery: sensor.elkhorn_fern_battery
+      conductivity: sensor.elkhorn_fern_conductivity
+      brightness: sensor.elkhorn_fern_illuminance
+      moisture: sensor.elkhorn_fern_moisture
+      temperature: sensor.elkhorn_fern_temperature
     min_moisture: 15
     max_moisture: 60
     min_conductivity: 350
@@ -505,7 +491,7 @@ plant:
 
   north_hanging_nepenthes:
     sensors:
-      battery: sensor.n_hanging_nepenthes_battery
+      battery: sensor.n_nepenthes_battery
       conductivity: sensor.n_nepenthes_conductivity
       brightness: sensor.n_nepenthes_illuminance
       moisture: sensor.n_nepenthes_moisture
@@ -539,11 +525,11 @@ plant:
 
   four_inch_nepenthes:
     sensors:
-      battery: sensor.four_inch_nepenthes_battery
-      conductivity: sensor.four_inch_nepenthes_conductivity
-      brightness: sensor.four_inch_nepenthes_light_intensity
-      moisture: sensor.four_inch_nepenthes_moisture
-      temperature: sensor.four_inch_nepenthes_temperature
+      battery: sensor.4in_nepenthes_battery
+      conductivity: sensor.4in_nepenthes_conductivity
+      brightness: sensor.4in_nepenthes_illuminance
+      moisture: sensor.4in_nepenthe_moisture
+      temperature: sensor.4in_nepenthes_temperature
     min_brightness: 1500
     max_brightness: 35000
     min_moisture: 20
@@ -561,6 +547,23 @@ plant:
       brightness: sensor.terrarium_light_intensity
       moisture: sensor.terrarium_moisture
       temperature: sensor.terrarium_temperature
+
+  sansevieria_victoria:
+    sensors:
+      battery: sensor.sanservia_victoria_battery
+      conductivity: sensor.sanservia_victoria_conductivity
+      brightness: sensor.sanservia_victoria_illuminance
+      moisture: sensor.sanservia_victoria_moisture
+      temperature: sensor.sanservia_victoria_temperature
+    min_brightness: 1500
+    max_brightness: 60000
+    min_moisture: 7
+    max_moisture: 50
+    min_conductivity: 300
+    max_conductivity: 1000
+    min_temperature: 50
+    max_temperature: 90
+    min_battery: 10
 
   south_hanging_nepenthes:
     sensors:
@@ -597,11 +600,6 @@ plant:
     min_battery: 10
 
 ########################
-# Proximity
-########################
-proximity:
-
-########################
 # Scenes
 ########################
 scene:
@@ -615,178 +613,6 @@ script:
 # Sensor
 ########################
 sensor:
-  # - platform: mqtt
-  #   name: east_hanging_nepenthes_battery
-  #   state_topic: haplants/sensor/east_hanging_nepenthes_battery/state
-  #   unit_of_measurement: "%"
-  #   device_class: battery
-
-  # - platform: mqtt
-  #   name: east_hanging_nepenthes_conductivity
-  #   state_topic: haplants/sensor/east_hanging_nepenthes_conductivity/state
-  #   unit_of_measurement: "\u00b5S/cm"
-  #   icon: mdi:flash-circle
-
-  # - platform: mqtt
-  #   name: east_hanging_nepenthes_light_intensity
-  #   state_topic: haplants/sensor/east_hanging_nepenthes_light_intensity/state
-  #   unit_of_measurement: "lx"
-  #   device_class: illuminance
-
-  # - platform: mqtt
-  #   name: east_hanging_nepenthes_moisture
-  #   state_topic: haplants/sensor/east_hanging_nepenthes_moisture/state
-  #   unit_of_measurement: "%"
-  #   icon: mdi:water-percent
-
-  # - platform: mqtt
-  #   name: east_hanging_nepenthes_temperature
-  #   state_topic: haplants/sensor/east_hanging_nepenthes_temperature/state
-  #   unit_of_measurement: "\u00b0F"
-  #   device_class: temperature
-
-  # - platform: mqtt
-  #   name: four_inch_nepenthes_battery
-  #   state_topic: haplants/sensor/four_inch_nepenthes_battery/state
-  #   unit_of_measurement: "%"
-  #   device_class: battery
-
-  # - platform: mqtt
-  #   name: four_inch_nepenthes_conductivity
-  #   state_topic: haplants/sensor/four_inch_nepenthes_conductivity/state
-  #   unit_of_measurement: "\u00b5S/cm"
-  #   icon: mdi:flash-circle
-
-  # - platform: mqtt
-  #   name: four_inch_nepenthes_light_intensity
-  #   state_topic: haplants/sensor/four_inch_nepenthes_light_intensity/state
-  #   unit_of_measurement: "lx"
-  #   device_class: illuminance
-
-  # - platform: mqtt
-  #   name: four_inch_nepenthes_moisture
-  #   state_topic: haplants/sensor/four_inch_nepenthes_moisture/state
-  #   unit_of_measurement: "%"
-  #   icon: mdi:water-percent
-
-  # - platform: mqtt
-  #   name: four_inch_nepenthes_temperature
-  #   state_topic: haplants/sensor/four_inch_nepenthes_temperature/state
-  #   unit_of_measurement: "\u00b0F"
-  #   device_class: temperature
-
-  # - platform: mqtt
-  #   name: monstera_battery
-  #   state_topic: haplants/sensor/monstera_battery/state
-  #   unit_of_measurement: "%"
-  #   device_class: battery
-
-  # - platform: mqtt
-  #   name: monstera_conductivity
-  #   state_topic: haplants/sensor/monstera_conductivity/state
-  #   unit_of_measurement: "\u00b5S/cm"
-  #   icon: mdi:flash-circle
-
-  # - platform: mqtt
-  #   name: monstera_light_intensity
-  #   state_topic: haplants/sensor/monstera_light_intensity/state
-  #   unit_of_measurement: "lx"
-  #   device_class: illuminance
-
-  # - platform: mqtt
-  #   name: monstera_moisture
-  #   state_topic: haplants/sensor/monstera_moisture/state
-  #   unit_of_measurement: "%"
-  #   icon: mdi:water-percent
-
-  # - platform: mqtt
-  #   name: monstera_temperature
-  #   state_topic: haplants/sensor/monstera_temperature/state
-  #   unit_of_measurement: "\u00b0F"
-  #   device_class: temperature
-
-  # - platform: mqtt
-  #   name: west_hanging_nepenthes_battery
-  #   state_topic: haplants/sensor/west_hanging_nepenthes_battery/state
-  #   unit_of_measurement: "%"
-  #   device_class: battery
-
-  # - platform: mqtt
-  #   name: terrarium_battery
-  #   state_topic: haplants/sensor/terrarium_battery/state
-  #   unit_of_measurement: "%"
-  #   device_class: battery
-
-  # - platform: mqtt
-  #   name: terrarium_conductivity
-  #   state_topic: haplants/sensor/terrarium_conductivity/state
-  #   unit_of_measurement: "\u00b5S/cm"
-  #   icon: mdi:flash-circle
-
-  # - platform: mqtt
-  #   name: terrarium_light_intensity
-  #   state_topic: haplants/sensor/terrarium_light_intensity/state
-  #   unit_of_measurement: "lx"
-  #   device_class: illuminance
-
-  # - platform: mqtt
-  #   name: terrarium_moisture
-  #   state_topic: haplants/sensor/terrarium_moisture/state
-  #   unit_of_measurement: "%"
-  #   icon: mdi:water-percent
-
-  # - platform: mqtt
-  #   name: terrarium_temperature
-  #   state_topic: haplants/sensor/terrarium_temperature/state
-  #   unit_of_measurement: "\u00b0F"
-  #   device_class: temperature
-
-  # - platform: mqtt
-  #   name: west_hanging_nepenthes_conductivity
-  #   state_topic: haplants/sensor/west_hanging_nepenthes_conductivity/state
-  #   unit_of_measurement: "\u00b5S/cm"
-  #   icon: mdi:flash-circle
-
-  # - platform: mqtt
-  #   name: west_hanging_nepenthes_light_intensity
-  #   state_topic: haplants/sensor/west_hanging_nepenthes_light_intensity/state
-  #   unit_of_measurement: "lx"
-  #   device_class: illuminance
-  #   #icon:
-
-  # - platform: mqtt
-  #   name: west_hanging_nepenthes_moisture
-  #   state_topic: haplants/sensor/west_hanging_nepenthes_moisture/state
-  #   unit_of_measurement: "%"
-  #   #device_class: moisture
-  #   icon: mdi:water-percent
-
-  # - platform: mqtt
-  #   name: west_hanging_nepenthes_temperature
-  #   state_topic: haplants/sensor/west_hanging_nepenthes_temperature/state
-  #   unit_of_measurement: "\u00b0F"
-  #   device_class: temperature
-  #icon:
-
-#   - platform: miflora
-#     name: east_hanging_nepenthes
-#     mac: 'C4:7C:8D:66:4C:51'
-#     median: 7
-
-#   - platform: miflora
-#     name: west_hanging_nepenthes
-#     mac: 'C4:7C:8D:66:4E:57'
-#     median: 7
-
-#   - platform: miflora
-#     name: four_inch_nepenthes
-#     mac: 'C4:7C:8D:66:4E:B3'
-#     median: 7
-
-#   - platform: miflora
-#     name: monstera
-#     mac: 'C4:7C:8D:66:47:C0'
-#     median: 7
 
 ########################
 # Switch

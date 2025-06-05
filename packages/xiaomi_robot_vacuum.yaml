@@ -180,11 +180,6 @@ media_player:
 plant:
 
 ########################
-# Proximity
-########################
-proximity:
-
-########################
 # Scenes
 ########################
 scene:
@@ -196,42 +191,43 @@ script:
   vacuum_master_bedroom:
     alias: "Vacuum Master Bedroom"
     sequence:
-      - service: vacuum.send_command
+      - service: mqtt.publish
         data:
-          entity_id: vacuum.valetudo_robot
-          command: app_zoned_clean
-          params: [[21039, 24096, 26189, 27446, 1]]
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {"action": "start_segment_action","segment_ids": ["7"],"iterations": 4,"customOrder": true}
+
   vacuum_guest_room:
     alias: "Vacuum Guest Room"
     sequence:
-      - service: vacuum.send_command
+      - service: mqtt.publish
         data:
-          entity_id: vacuum.valetudo_robot
-          command: app_zoned_clean
-          params: [[21966, 28227, 26216, 31527, 1]]
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {"action": "start_segment_action","segment_ids": ["5],"iterations": 4,"customOrder": true}
   vacuum_bathroom:
     alias: "Vacuum Bathroom"
     sequence:
-      - service: vacuum.send_command
+      - service: mqtt.publish
         data:
-          entity_id: vacuum.valetudo_robot
-          command: app_zoned_clean
-          params: [[19454, 28899, 22354, 31499, 1]]
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {"action": "start_segment_action","segment_ids": ["4"],"iterations": 4,"customOrder": true}
   # Entryway not working correctly
   vacuum_hallway:
     alias: "Vacuum Hallway"
     sequence:
-      - service: vacuum.send_command
+      - service: mqtt.publish
         data:
-          entity_id: vacuum.valetudo_robot
-          command: app_zoned_clean
-          params: [[19402, 27663, 22102, 29213, 1]]
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {"action": "start_segment_action","segment_ids": ["6","1"],"iterations": 4,"customOrder": true}
   vacuum_kitchen:
     alias: "Vacuum Kitchen"
     sequence:
       - service: vacuum.send_command
         data:
-          entity_id: vacuum.valetudo_robot
+          entity_id: vacuum.valetudo_mainlevel
           command: app_zoned_clean
           params: [[12367, 23534, 17767, 28084, 1]]
   vacuum_living_room:
@@ -239,17 +235,17 @@ script:
     sequence:
       - service: vacuum.send_command
         data:
-          entity_id: vacuum.valetudo_robot
+          entity_id: vacuum.valetudo_mainlevel
           command: app_zoned_clean
           params: [[12383, 27798, 19333, 31498, 1]]
   vacuum_office:
     alias: "Vacuum Office"
     sequence:
-      - service: vacuum.send_command
+      - service: mqtt.publish
         data:
-          entity_id: vacuum.valetudo_robot
-          command: app_zoned_clean
-          params: [[17729, 24149, 21029, 27749, 1]]
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {"action": "start_segment_action","segment_ids": ["2"],"iterations": 4,"customOrder": true}
 
 ########################
 # Sensor
