@@ -14,7 +14,7 @@ homeassistant:
 
     package.node_anchors:
       customize: &customize
-        package: "TO_CHANGE"
+        package: "fans"
 
       expose: &expose
         <<: *customize
@@ -98,7 +98,8 @@ automation:
       - platform: state
         entity_id: binary_sensor.den_occupancy
         to: "off"
-        for: "00:30:00"
+        for:
+          minutes: 30
         id: den-unoccupied
     action:
       - choose:
@@ -140,11 +141,12 @@ automation:
       - platform: state
         entity_id: binary_sensor.bedroom_occupancy
         to: "off"
-        for: "00:10:00"
+        for:
+          minutes: 10
         id: bedroom-unoccupied
     condition:
       - condition: state
-        entity_id: binary_sensor.master_bed_occupancy
+        entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
         # enabled: false
     action:
@@ -163,10 +165,9 @@ automation:
               - condition: trigger
                 id: bedroom-unoccupied
             sequence:
-              - service: fan.turn_on
+              - service: fan.turn_off
                 data:
                   entity_id: fan.owner_suite
-                  percentage: 67
                   #speed: "medium"  # TODO have this change depending on the season: low in winter, medium spring/fall, high in summer
                   #speed: smart
 
@@ -179,7 +180,7 @@ automation:
   #       for: "00:10:00"
   #   condition:
   #     - condition: state
-  #       entity_id: binary_sensor.master_bed_occupancy
+  #       entity_id: binary_sensor.bayesian_bed_occupancy
   #       state: "off"
   #       # enabled: false
   #   action:
@@ -203,13 +204,15 @@ automation:
       - platform: state
         entity_id: binary_sensor.office_occupancy
         to: "off"
-        for: "00:30:00"
+        for:
+          minutes: 30
         id: office-unoccupied
         enabled: false
       - platform: state
         entity_id: binary_sensor.office_motion_occupancy
         to: "off"
-        for: "00:30:00"
+        for:
+          minutes: 30
         id: office-unoccupied
         enabled: false
     action:
@@ -305,11 +308,6 @@ media_player:
 # Plant
 ########################
 plant:
-
-########################
-# Proximity
-########################
-proximity:
 
 ########################
 # Scenes

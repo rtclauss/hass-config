@@ -125,11 +125,11 @@ automation:
     action:
       - service: media_player.volume_set
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           # volume_level: >-
           # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
           volume_level: >-
-            {{ (state_attr('media_player.bedroom', 'volume_level') + (float(trigger.to_state.state)/1000)) | round(2) | float(default=0) }}
+            {{ (state_attr('media_player.bedroom_sonos', 'volume_level') + (float(trigger.to_state.state)/1000)) | round(2) | float(default=0) }}
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
@@ -145,7 +145,7 @@ automation:
     action:
       - service: media_player.media_play_pause
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
 
   - id: bed_without_prep
     alias: bed_without_prep
@@ -156,25 +156,32 @@ automation:
       #     device_ieee: "00:15:8d:00:02:8f:66:12"
       #     command: "knock"
       - platform: state
-        entity_id: binary_sensor.master_bed_occupancy
+        entity_id: binary_sensor.bayesian_bed_occupancy
         to: "on"
     condition:
       - and:
+          - condition: time
+            after: "22:00:00"
+            before: "06:00:00"
           - condition: numeric_state
-            entity_id: media_player.bedroom
+            entity_id: media_player.bedroom_sonos
             attribute: "volume_level"
             above: 0.01
           - condition: state
             entity_id:
-              - media_player.bedroom
+              - media_player.bedroom_sonos
             state: "playing"
     action:
       - service: script.turn_on
         data:
-          entity_id: script.spotify_bedtime_volume
+          entity_id: script.night_tv_mode_switches
+      - service: script.turn_off_owner_suite_inovelli_switch_leds
       - service: script.turn_on
         data:
-          entity_id: script.night_tv_mode_switches
+          entity_id: script.spotify_bedtime_volume
+      # - delay: "00:10:00"
+      # - service: switch.turn_on
+      #   entity_id: switch.sleep_mode
 
   - id: bedroom_music_select_playlist
     alias: bedroom_music_select_playlist
@@ -216,7 +223,7 @@ automation:
     action:
       - service: media_player.media_next_track
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
 
   - id: bedroom_music_shuffle
     alias: bedroom_music_shuffle
@@ -232,9 +239,86 @@ automation:
     action:
       - service: media_player.shuffle_set
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           shuffle: >-
-            {{ not (state_attr('media_player.bedroom', 'shuffle')) }}
+            {{ not (state_attr('media_player.bedroom_sonos', 'shuffle')) }}
+
+  - id: den_sonos_control_actions
+    alias: den_sonos_control_actions
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "toggle"
+        id: toggle_play_pause
+      - platform: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "track_next"
+        id: track_next
+      - platform: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "track_previous"
+        id: track_previous
+      - platform: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_up"
+        id: volume_up
+      # - platform: state
+      #   entity_id:
+      #     - sensor.den_sonos_controls_action
+      #   to: "volume_up_hold"
+      #   id: volume_up_hold
+      - platform: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_down"
+        id: volume_down
+      # - platform: state
+      #   entity_id:
+      #     - sensor.den_sonos_controls_action
+      #   to: "volume_down_hold"
+      #   id: volume_down_hold
+      # TODO Use Dots for shuffle and repeat
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: toggle_play_pause
+            sequence:
+              - service: media_player.media_play_pause
+                target:
+                  entity_id: media_player.den_sonos
+          - conditions:
+              - condition: trigger
+                id: track_next
+            sequence:
+              - service: media_player.media_next_track
+                target:
+                  entity_id: media_player.den_sonos
+          - conditions:
+              - condition: trigger
+                id: track_previous
+            sequence:
+              - service: media_player.media_previous_track
+                target:
+                  entity_id: media_player.den_sonos
+          - conditions:
+              - condition: trigger
+                id: volume_up
+            sequence:
+              - service: media_player.volume_up
+                target:
+                  entity_id: media_player.den_sonos
+          - conditions:
+              - condition: trigger
+                id: volume_down
+            sequence:
+              - service: media_player.volume_down
+                target:
+                  entity_id: media_player.den_sonos
 
   - id: play_music_in_bathroom_via_nfc_tap
     alias: play_music_in_bathroom_via_nfc_tap
@@ -247,7 +331,7 @@ automation:
     action:
       - service: media_player.select_source
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
           source: Bathroom
 
   - id: play_music_in_bathroom_when_up
@@ -259,10 +343,11 @@ automation:
       - platform: state
         entity_id:
           - binary_sensor.owner_suite_bathroom_room_occupancy
+        to: "on"
     condition:
       - alias: "Not in Bed"
         condition: state
-        entity_id: binary_sensor.master_bed_occupancy
+        entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
       - alias: "morning routine already started"
         condition: state
@@ -294,48 +379,91 @@ automation:
           - number.owner_suite_closet_ledintensitywhenoff
           - number.owner_suite_fan_switch_ledintensitywhenoff
           - number.owner_suite_bathroom_vanity_ledintensitywhenoff
+          - number.office_fan_switch_ledintensitywhenoff
+          - number.guest_room_fan_switch_ledintensitywhenoff
         data:
           value: 1
       - alias: "Stop Playback"
         service: media_player.media_stop
         target:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
-      - alias: "Set Volume 0.01"
-        service: media_player.volume_set
-        data:
-          volume_level: 0.01
-        target:
-          entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
-      - service: script.turn_on
-        entity_id: script.spotify_wake_up
-      - alias: "Set Volume 0.09 in office"
-        service: media_player.volume_set
-        data:
-          volume_level: 0.2
-        target:
-          entity_id:
-            - media_player.office
-      - alias: "Repeat until desired volume reached"
-        repeat:
-          sequence:
-            - alias: "Increase Volume by 0.01"
-              service: media_player.volume_set
-              data:
-                volume_level: "{{ 0.01 * repeat.index }}"
-              target:
-                entity_id:
-                  - media_player.bedroom
-                  - media_player.bathroom
-            - delay:
-                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
-                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
-          until: "{{repeat.index == 30}}"
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
+      - choose:
+          # If we're already playing music, don't turn down the music.
+          - conditions:
+              - condition: state
+                entity_id: media_player.bathroom_sonos
+                state: "playing"
+              - alias: "check volume above minimal"
+                condition: numeric_state
+                entity_id: media_player.bathroom_sonos
+                attribute: volume_level
+                above: 0.1
+            sequence:
+              - service: script.turn_on
+                entity_id: script.spotify_wake_up
+              - service: media_player.volume_set
+                data:
+                  entity_id:
+                    - media_player.bedroom_sonos
+                    - media_player.bathroom_sonos
+                    - media_player.office_sonos
+                  volume_level: 0.30
+        default:
+          # Nothing is playing so ease up the music
+          - alias: "Set Volume 0.1"
+            service: media_player.volume_set
+            data:
+              volume_level: 0.1
+            target:
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+          - service: script.turn_on
+            entity_id: script.spotify_wake_up
+          - alias: "Set Volume 0.09 in office"
+            service: media_player.volume_set
+            data:
+              volume_level: 0.2
+            target:
+              entity_id:
+                - media_player.office_sonos
+          - alias: "Repeat until desired volume reached"
+            repeat:
+              sequence:
+                - alias: "Increase Volume by 0.01"
+                  service: media_player.volume_set
+                  data:
+                    volume_level: "{{ 0.01 * repeat.index }}"
+                  target:
+                    entity_id:
+                      - media_player.bedroom_sonos
+                      - media_player.bathroom_sonos
+                - delay:
+                    # As time passes, the delay gets smaller and smaller. 60, 30s, 20s, 15s, 12s,..., 2s
+                    seconds: "{{ (1/(tan(repeat.index/60, 5))) | round(0, 'ceil', 5)}}"
+              until: "{{repeat.index == 30}}"
+
+  - id: restart_sonos_unavailable
+    alias: restart_sonos_unavailable
+    trace:
+      stored_traces: 20
+    mode: single
+    trigger:
+      - platform: state
+        entity_id:
+          - media_player.bedroom_sonos
+          - media_player.bathroom_sonos
+          - media_player.office_sonos
+          - mediat_player.den_sonos
+        to: "unavailable"
+        for:
+          minutes: 10
+    action:
+      - service: homeassistant.restart
 
   - id: tv_off
     alias: tv_off
@@ -344,15 +472,15 @@ automation:
         entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "off"
-        for: "00:00:05"
+        for:
+          seconds: 5
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "unavailable"
-        for: "00:00:10"
+        for:
+          seconds: 10
     action:
-      - service: switch.turn_off
-        entity_id: switch.4k_hdmi
       - service: scene.turn_on
         target:
           entity_id: scene.scene_reset_basement
@@ -372,14 +500,17 @@ automation:
       conditions:
         ## Prevent false positives in the middle of the night
         - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
+          entity_id: binary_sensor.bayesian_bed_occupancy
           state: "off"
           # enabled: false
     action:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: light.turn_on
         entity_id: light.basement_tv_bias
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify_ryan_claussen
 
   - id: tv_off_at_night_bed_prep
     alias: tv_off_at_night_bed_prep
@@ -389,13 +520,15 @@ automation:
         #TODO Temporary hack: ADB showing wrong values
         from: "on"
         to: "off"
-        for: "00:00:20"
+        for:
+          seconds: 20
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         # With power save mode off tv is off all the way.
         from: "on"
         to: "unavailable"
-        for: "00:00:20"
+        for:
+          seconds: 20
       - platform: event
         event_type: zha_event
         event_data:
@@ -415,7 +548,7 @@ automation:
           entity_id: input_boolean.guest_mode
           state: "off"
         - condition: state
-          entity_id: binary_sensor.master_bed_occupancy
+          entity_id: binary_sensor.bayesian_bed_occupancy
           state: "off"
           # enabled: false
     action:
@@ -428,8 +561,8 @@ automation:
       - service: media_player.volume_set
         data:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
           volume_level: 0.02
       - service: scene.turn_on
         target:
@@ -438,6 +571,9 @@ automation:
           transition: 60
       - service: script.turn_on
         entity_id: script.spotify_bedtime
+      - delay: "00:20:00"
+      - service: switch.turn_off
+        entity_id: switch.sleep_mode
 
   - id: tv_paused
     alias: tv_paused
@@ -447,13 +583,15 @@ automation:
         entity_id: media_player.basement
         from: "playing"
         to: "paused"
-        for: "00:00:05"
+        for:
+          seconds: 5
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
         to: "paused"
-        for: "00:00:02"
+        for:
+          seconds: 2
     condition:
       condition: and
       conditions:
@@ -477,13 +615,15 @@ automation:
       - platform: state
         entity_id: media_player.basement
         to: "playing"
-        for: "00:00:05"
+        for:
+          seconds: 5
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
         to: "paused"
-        for: "00:00:02"
+        for:
+          seconds: 2
     condition:
       condition: and
       conditions:
@@ -505,12 +645,14 @@ automation:
       - platform: state
         entity_id: media_player.lg_webos_smart_tv
         to: "playing"
-        for: "00:00:20"
+        for:
+          minutes: 2
       - platform: state
         entity_id: media_player.basement
         from: "paused"
         to: "playing"
-        for: "00:00:20"
+        for:
+          minutes: 2
     condition:
       condition: and
       conditions:
@@ -521,14 +663,33 @@ automation:
           entity_id: input_boolean.guest_mode
           state: "off"
     action:
+      - service: media_player.media_pause
+        data:
+          entity_id:
+            - media_player.office_sonos
+            - media_player.den_sonos
       - service: script.lights_off_except
         data:
           exclude_lights:
             - light.outside_front_lights
+            - light.outside_garage_lights
+            - light.outside_north_west_garage
+            - light.outside_south_west_garage
+            - light.outside_front_door
+            - light.outside_garage_lights
+            - light.outside_front_hue
             - light.basement_tv_bias
           transition: 20
       - service: script.turn_on
         entity_id: script.night_tv_mode_switches
+      - service: media_player.media_pause
+        data:
+          entity_id:
+            - media_player.den_sonos
+      - service: media_player.media_pause
+        data:
+          entity_id:
+            - media_player.spotify_ryan_claussen
 
 ########################
 # Binary Sensors
@@ -615,11 +776,6 @@ plant:
 #  host: fermentor.lan
 
 ########################
-# Proximity
-########################
-proximity:
-
-########################
 # Scenes
 ########################
 scene:
@@ -641,7 +797,7 @@ scene:
         state: "off"
       light.kitchen_all:
         state: "off"
-      light.hall_lights_all:
+      light.hall_upstairs_lights:
         state: "off"
       light.den_all:
         state: "off"
@@ -669,27 +825,31 @@ script:
         ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
         ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
         ##  Deep Sleep: spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY
+        ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
+        ##  Lowfi covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
         #}
         {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
           "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
           "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
           "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
           "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
-          "spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY"
+          "spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY",
+          "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
+          "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
             ] -%}
           {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
           {{ plists[pindex] }}
     sequence:
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Cube Playlist is
           message: " playing Lowfi playlist: {{ playlist }}"
       - alias: "Play random wakeup music"
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -728,14 +888,14 @@ script:
     sequence:
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Cube Playlist is
           message: " playing Guster playlist: {{ playlist }}"
       - alias: "Play random wakeup music"
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -760,14 +920,14 @@ script:
     sequence:
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Cube Playlist is
           message: " playing Joe Pera playlist: {{ playlist }}"
       - alias: "Play random wakeup music"
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -792,14 +952,14 @@ script:
     sequence:
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Cube Playlist is
           message: " playing RetroWave playlist: {{ playlist }}"
       - alias: "Play VaporWave music"
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -838,14 +998,14 @@ script:
     sequence:
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Cube Playlist is
           message: " playing Alt/Independent playlist: {{ playlist }}"
       - alias: "Play Lowfi music"
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -860,29 +1020,60 @@ script:
         ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
         ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
         ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+        ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
+        ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
         #}
         {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
           "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
           "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
           "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
-          "spotify:playlist:37i9dQZF1DWWQRwui0ExPn"
+          "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
+          "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
+          "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
           ] -%}
           {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
           {{ plists[pindex] }}
     sequence:
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Cube Playlist is
           message: " playing Lowfi playlist: {{ playlist }}"
       - alias: "Play Lowfi music"
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
+
+  play_video_games:
+    alias: "Play Video Games"
+    sequence:
+      - service: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      # - service: media_player.turn_on
+      #   data:
+      #     entity_id: media_player.lg_webos_smart_tv
+      # - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
+      - delay:
+          seconds: 10
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 4"
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify_ryan_claussen
+          source: "Everywhere"
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify_ryan_claussen
 
   spotify_arrival:
     alias: "Spotify Arrive Home"
@@ -994,22 +1185,22 @@ script:
       - service: media_player.select_source
         continue_on_error: true
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
           source: "Everywhere"
       - delay:
           seconds: 2
       - service: media_player.media_pause
         continue_on_error: true
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
       - delay:
           seconds: 2
       - service: media_player.shuffle_set
         continue_on_error: true
         data:
           entity_id:
-            - media_player.spotify
-            - media_player.den_1
+            - media_player.spotify_ryan_claussen
+            - media_player.den_sonos
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1021,12 +1212,12 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.spotify
-            - media_player.den_1
+            - media_player.spotify_ryan_claussen
+            - media_player.den_sonos
           volume_level: 0.30
       - service: logbook.log
         data:
-          entity_id: media_player.den_1
+          entity_id: media_player.den_sonos
           domain: media_player
           name: Spotify arrival is
           message: " playing Arrival playlist: {{ playlist }}"
@@ -1034,7 +1225,7 @@ script:
         service: media_player.play_media
         continue_on_error: true
         data:
-          entity_id: media_player.den_1
+          entity_id: media_player.den_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -1099,6 +1290,8 @@ script:
         ## Guster w/Utah Symphone 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
         ## Sigur Ros @ State Theatre 5/31/2022: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
         ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
+        ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
+        ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
         #}
         {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu", 
           "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
@@ -1151,7 +1344,9 @@ script:
           "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
           "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
           "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
-          "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
+          "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV",
+          "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
+          "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
           ] -%}
           {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
           {{ plists[pindex] }}
@@ -1164,7 +1359,7 @@ script:
       #     group_members:
       #       - media_player.bathroom
       #       - media_player.office
-      #       - media_player.den_1
+      #       - media_player.den
       - if:
           - alias: "Check if guests are here."
             condition: state
@@ -1175,25 +1370,25 @@ script:
             service: media_player.join
             target:
               entity_id:
-                - media_player.bedroom
+                - media_player.bedroom_sonos
             data:
               group_members:
-                - media_player.bathroom
-                - media_player.den_1
-                - media_player.office
+                - media_player.bathroom_sonos
+                - media_player.den_sonos
+                - media_player.office_sonos
         else:
           - alias: "Join Sonos speakers into all bedroom group"
             service: media_player.join
             target:
               entity_id:
-                - media_player.bedroom
+                - media_player.bedroom_sonos
             data:
               group_members:
-                - media_player.bathroom
+                - media_player.bathroom_sonos
       - service: media_player.shuffle_set
         continue_on_error: true
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1204,23 +1399,23 @@ script:
         data:
           repeat: all
         target:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
       - delay:
           seconds: 2
       - service: media_player.volume_set
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
-            - media_player.den_1
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
+            - media_player.den_sonos
           volume_level: 0.20
       - delay:
           seconds: 2
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Spotify Bedtime is
           message: " playing Bedtime playlist: {{ playlist }}"
@@ -1228,7 +1423,7 @@ script:
         continue_on_error: true
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -1251,29 +1446,29 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom
-            - media_player.office
-            - media_player.bathroom
-            - media_player.den_1
-          volume_level: 0.15
+            - media_player.bedroom_sonos
+            - media_player.office_sonos
+            - media_player.bathroom_sonos
+            - media_player.den_sonos
+          volume_level: 0.1
       - delay:
           minutes: 2
       - service: media_player.volume_set
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
-          volume_level: 0.1
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
+          volume_level: 0.07
       - delay:
           minutes: 2
       - service: media_player.volume_set
         data:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
           volume_level: 0.05
       - delay:
           minutes: 2
@@ -1281,9 +1476,9 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
           volume_level: 0.01
 
   spotify_wake_up:
@@ -1303,7 +1498,7 @@ script:
         ## Walk the Moon Talking is Hard: spotify:album:3mNoFlD1wsoXfkljfFzExT
         ## This is Fall Out Boy: spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek
         ## This is Panic! at the Disco : spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7
-        ## Coheed & Cambria Good Apollo: spotify:track:4Dc5crLrKYIIqf6sk0PvQm
+        ## Coheed & Cambria Good Apollo: spotify:album:4nYsnQpTAQaPzrPc6rOsBN
         ## APC Mer De Noms: spotify:album:0GeWd0yUKXHbCXVag1mJvO
         ## Matt and Kim : Lightning : spotify:album:2MbpbHn31Luzr8G3uDsSUH
         ## '90s Pop Rock Essentials : spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
@@ -1342,6 +1537,10 @@ script:
         ## Sigur Ros @ State Theatre: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
         ## City Pop: spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk
         ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
+        ## Pride classics: spotify:playlist:5Bm5WlLT2jF5KQHezH0a6i
+        ## This is the 1975: spotify:playlist:37i9dQZF1DZ06evO1X6Ic8
+        ## Early 2000s Alternative: spotify:playlist:5dPSsspVwjaoU7Nf6itkUZ
+        ## Anti-anxiety mix: spotify:playlist:37i9dQZF1EIg42NGihn0NZ
         #}
         {%- set plists = ["spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW", 
           "spotify:user:myplay.com:playlist:3hoI0s5TLdpPMcimSRmQpj",
@@ -1353,7 +1552,7 @@ script:
           "spotify:album:3mNoFlD1wsoXfkljfFzExT",
           "spotify:user:spotify:playlist:37i9dQZF1DX4JbuQ72y8Ek",
           "spotify:user:spotify:playlist:37i9dQZF1DX5C8bjZ5YDv7",
-          "spotify:track:4Dc5crLrKYIIqf6sk0PvQm",
+          "spotify:album:4nYsnQpTAQaPzrPc6rOsBN",
           "spotify:album:0GeWd0yUKXHbCXVag1mJvO",
           "spotify:album:2MbpbHn31Luzr8G3uDsSUH",
           "spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
@@ -1389,7 +1588,11 @@ script:
           "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
           "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
           "spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk",
-          "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV"
+          "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV",
+          "spotify:playlist:5Bm5WlLT2jF5KQHezH0a6i",
+          "spotify:playlist:37i9dQZF1DZ06evO1X6Ic8",
+          "spotify:playlist:5dPSsspVwjaoU7Nf6itkUZ",
+          "spotify:playlist:37i9dQZF1EIg42NGihn0NZ"
           ] -%}
           {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
           {{ plists[pindex] }}
@@ -1405,45 +1608,45 @@ script:
             continue_on_error: true
             target:
               entity_id:
-                - media_player.bedroom
+                - media_player.bedroom_sonos
             data:
               group_members:
-                - media_player.bathroom
-                - media_player.den_1
-                - media_player.office
+                - media_player.bathroom_sonos
+                - media_player.den_sonos
+                - media_player.office_sonos
         else:
           - alias: "Guests here: Unjoin all Sonos speakers into bedroom group"
             service: media_player.unjoin
             continue_on_error: true
             target:
               entity_id:
-                - media_player.bedroom
-                - media_player.bathroom
-                - media_player.den_1
-                - media_player.office
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.den_sonos
+                - media_player.office_sonos
           - alias: "Guests here: Join Sonos speakers into bedroom group"
             service: media_player.join
             continue_on_error: true
             target:
               entity_id:
-                - media_player.bedroom
+                - media_player.bedroom_sonos
             data:
               group_members:
-                - media_player.bathroom
+                - media_player.bathroom_sonos
       - delay:
           seconds: 2
       - alias: "Pause currently playing media"
         continue_on_error: true
         service: media_player.media_pause
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
       - delay:
           seconds: 2
       - alias: "Enable Shuffle"
         continue_on_error: true
         service: media_player.shuffle_set
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
         data_template:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1454,7 +1657,7 @@ script:
         data:
           repeat: all
         target:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
       - delay:
           seconds: 2
       - alias: "Set volume low"
@@ -1462,23 +1665,23 @@ script:
         service: media_player.volume_set
         data:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
           volume_level: 0.05
       - delay:
           seconds: 2
       - service: logbook.log
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           domain: media_player
           name: Spotify Wake Up is
-          message: " playing wakup playlist: {{ playlist }}"
+          message: " playing wakeup playlist: {{ playlist }}"
       - alias: "Play random wakeup music"
         continue_on_error: true
         service: media_player.play_media
         data:
-          entity_id: media_player.bedroom
+          entity_id: media_player.bedroom_sonos
           media_content_type: playlist
         data_template:
           media_content_id: "{{ playlist }}"
@@ -1486,8 +1689,6 @@ script:
   watch_tv:
     alias: "Watch TV"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1510,8 +1711,6 @@ script:
   watch_youtube:
     alias: "Watch YouTube"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1534,8 +1733,6 @@ script:
   watch_netflix:
     alias: "Watch Netflix"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1558,13 +1755,11 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_plex:
     alias: "Watch Plex"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1585,19 +1780,48 @@ script:
           source: "Plex"
       - service: media_player.select_source
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
           source: "Everywhere"
       - delay:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
+
+  watch_f1:
+    alias: "Watch F1"
+    sequence:
+      - service: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      # - service: media_player.turn_on
+      #   data:
+      #     entity_id: media_player.lg_webos_smart_tv
+      # - wait_template: "{{is_state(' media_player.lg_webos_smart_tv','on')}}"
+      - delay:
+          seconds: 10
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "F1 TV"
+      - service: media_player.select_source
+        data:
+          entity_id: media_player.spotify_ryan_claussen
+          source: "Everywhere"
+      - delay:
+          seconds: 2
+      - service: media_player.media_pause
+        data:
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_letterkenny:
     alias: "Watch Letterkenny"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1616,6 +1840,14 @@ script:
         data:
           entity_id: media_player.basement
           source: "Plex"
+      - delay:
+          seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1625,13 +1857,11 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_the_simpsons:
     alias: "Watch The Simpsons"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1652,6 +1882,12 @@ script:
           source: "Plex"
       - delay:
           seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1659,13 +1895,11 @@ script:
           media_content_id: '{ "library_name": "TV", "show_name": "The Simpsons", "shuffle": "1" }'
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_american_dad:
     alias: "Watch American Dad"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1684,6 +1918,14 @@ script:
         data:
           entity_id: media_player.basement
           source: "Plex"
+      - delay:
+          seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1693,13 +1935,11 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_aqua_teen:
     alias: "Watch Aqua Teen"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1718,6 +1958,14 @@ script:
         data:
           entity_id: media_player.basement
           source: "Plex"
+      - delay:
+          seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1727,13 +1975,11 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_bobs_burgers:
     alias: "Watch Bobs Burgers"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1752,6 +1998,14 @@ script:
         data:
           entity_id: media_player.basement
           source: "Plex"
+      - delay:
+          seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1762,13 +2016,11 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_ds9:
     alias: "Watch DS9"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1787,6 +2039,14 @@ script:
         data:
           entity_id: media_player.basement
           source: "Plex"
+      - delay:
+          seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1796,13 +2056,11 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_rick_and_morty:
     alias: "Watch Rick and Morty"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1821,6 +2079,14 @@ script:
         data:
           entity_id: media_player.basement
           source: "Plex"
+      - delay:
+          seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1830,13 +2096,11 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
   watch_tng:
     alias: "Watch TNG"
     sequence:
-      - service: switch.turn_on
-        entity_id: switch.4k_hdmi
       - service: media_player.turn_on
         data:
           entity_id: media_player.basement
@@ -1855,6 +2119,14 @@ script:
         data:
           entity_id: media_player.basement
           source: "Plex"
+      - delay:
+          seconds: 2
+      - service: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
       - service: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -1864,7 +2136,7 @@ script:
           seconds: 2
       - service: media_player.media_pause
         data:
-          entity_id: media_player.spotify
+          entity_id: media_player.spotify_ryan_claussen
 
 ########################
 # Sensor

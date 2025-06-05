@@ -113,7 +113,8 @@ automation:
       - platform: state
         entity_id: binary_sensor.guest_on_wifi
         to: "off"
-        for: "16:00:00"
+        for:
+          hours: 16
     # condition:
     action:
       - service: input_boolean.turn_off
@@ -124,12 +125,12 @@ automation:
       - service: media_player.join
         target:
           entity_id:
-            - media_player.bedroom
+            - media_player.bedroom_sonos
         data:
           group_members:
-            - media_player.bathroom
-            - media_player.office
-            - media_player.den_1
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
+            - media_player.den_sonos
 
   - id: turn_on_guest_mode_when_guest_wifi_active
     alias: turn_on_guest_mode_when_guest_wifi_active
@@ -137,35 +138,60 @@ automation:
       - platform: state
         entity_id: binary_sensor.guest_on_wifi
         to: "on"
-        for: "00:10:00"
+        for:
+          minutes: 10
     #condition:
     action:
+      - service: notify.mobile_app_wethop
+        data:
+          title: "Guest Mode Activated"
+          message: "Leave enabled?"
+          data:
+            actions:
+              - action: "ENABLE_GUEST"
+                title: "Yes"
+                activationMode: background
+                authenticationRequired: false
+                destructive: false
+                behavior: default
+              - action: "DISABLE_GUEST"
+                title: "No"
+                activationMode: background
+                authenticationRequired: false
+                destructive: false
+                behavior: default
+      - wait_for_trigger:
+          - platform: event
+            event_type: mobile_app_notification_action
+            id: enable_guest
+            event_data:
+              action: ENABLE_GUEST
+        timeout:
+          hours: 1
+        continue_on_timeout: false
       - service: input_boolean.turn_on
         entity_id: input_boolean.guest_mode
-      - service: notify.all
-        data:
-          message: Guest Mode Activated
       - service: media_player.unjoin
         target:
           entity_id:
-            - media_player.bedroom
-            - media_player.bathroom
-            - media_player.office
-            - media_player.den_1
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
+            - media_player.den_sonos
       - service: media_player.join
         target:
           entity_id:
-            - media_player.bedroom
+            - media_player.bedroom_sonos
         data:
           group_members:
-            - media_player.bathroom
+            - media_player.bathroom_sonos
       # - service: media_player.join
       #   target:
       #     entity_id:
       #       - media_player.office
       #   data:
       #     group_members:
-      #       - media_player.den_1
+      #       - media_player.den
 
   - id: climate_guest_mode_day
     alias: climate_guest_mode_day
@@ -205,7 +231,7 @@ automation:
     condition:
       - condition: time
         after: "00:00:00"
-        before: "06:00:00"
+        before: "07:00:00"
       - condition: state
         entity_id:
           - input_boolean.guest_mode
@@ -225,7 +251,12 @@ binary_sensor:
     sensors:
       guest_on_wifi:
         value_template: >-
-          {{ (states.device_tracker | selectattr('state','eq','home') | selectattr("attributes.is_guest", 'defined') | selectattr("attributes.is_guest", 'eq', True) | list| count) > 0 }}
+          {% set state = states('sensor.barley_guest') %}
+          {% if is_number(state) and state | float >= 1 %}
+            true
+          {% else %}
+            false
+          {% endif %}
 
 ########################
 # Cameras
@@ -277,11 +308,6 @@ light:
 # Plant
 ########################
 plant:
-
-########################
-# Proximity
-########################
-proximity:
 
 ########################
 # Scenes

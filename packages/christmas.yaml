@@ -93,8 +93,10 @@ automation:
         event: sunset
         offset: -00:45:00
     action:
-      - service: homeassistant.turn_on
-        entity_id: switch.christmas_tree, light.christmas_lights
+      - service: switch.turn_on
+        entity_id: switch.christmas_tree
+      - service: light.turn_on
+        entity_id: light.christmas_lights
       - service: notify.all
         data:
           message: Turning on Christmas Tree.
@@ -106,8 +108,10 @@ automation:
       - platform: time
         at: 00:00:00
     action:
-      - service: homeassistant.turn_off
-        entity_id: switch.christmas_tree, light.christmas_lights
+      - service: switch.turn_off
+        entity_id: switch.christmas_tree
+      - service: light.turn_off
+        entity_id: light.christmas_lights
       - service: notify.all
         data:
           message: Turning off Christmas Tree.
@@ -120,14 +124,54 @@ automation:
         entity_id: light.bedroom_lamp, light.bedroom_lamp_2
         to: "off"
     action:
-      - service: homeassistant.turn_off
-        entity_id: switch.christmas_tree, light.christmas_lights
+      - service: switch.turn_off
+        entity_id: switch.christmas_tree
+      - service: light.turn_off
+        entity_id: light.christmas_lights
+
+  - id: christmas_outside_light_loop_1
+    alias: christmas_outside_light_loop_1
+    # initial_state: false
+    trigger:
+      - platform: sun
+        event: sunset
+        offset: -00:45:00
+      - platform: time_pattern
+        minutes: "/1"
+    condition:
+      - alias: "Christmas-time"
+        condition: state
+        entity_id: binary_sensor.christmas_season
+        state: "on"
+      - condition: or
+        conditions:
+          - alias: "Sunset"
+            condition: sun
+            after: sunset
+            after_offset: -00:45:00
+          - alias: "Sunrise"
+            condition: sun
+            before: sunrise
+            before_offset: 00:45:00
+    action:
+      - service: scene.turn_on
+        data_template:
+          transition: 30
+          entity_id: scene.scene_christmas_outdoors_{{ now().minute % 4 + 1 | int }}
+          # toggle between christmas scenes 1-4
 
   - id: toggle_christmas_automations_on_season_change
     alias: toggle_christmas_automations_on_season_change
     trigger:
       - platform: state
         entity_id: binary_sensor.christmas_season
+      - platform: homeassistant
+        event: start
+    condition:
+      - alias: "It's christmas"
+        condition: state
+        entity_id: binary_sensor.christmas_season
+        state: "on"
     action:
       - service: script.toggle_christmas_automation_during_christmas_season
         data:
@@ -138,6 +182,9 @@ automation:
       - service: script.toggle_christmas_automation_during_christmas_season
         data:
           entity_id: automation.christmas_lights_off_bedroom_off
+      - service: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.outside_light_loop_1
 
   # - id: toggle_christmas_tab
   #   alias: toggle_christmas_tab
@@ -163,7 +210,7 @@ binary_sensor:
     sensors:
       christmas_season:
         value_template: >-
-          {{ now().strftime("%m") |int in [1,11,12] }}
+          {{ now().strftime("%m") |int in [12] }}
 
 ########################
 # Groups
@@ -186,6 +233,67 @@ light:
   # - platform: switch
   #   name: Christmas Lights
   #   entity_id: switch.christmas_lights
+
+########################
+# Scenes
+########################
+scene:
+  - name: scene_christmas_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 0] # Green
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0] # Red
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0] # Red
+        brightness: 255
+  - name: scene_christmas_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0] # Red
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0] # Green
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0] # Green
+        brightness: 255
+  - name: scene_christmas_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 0] # Green
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0] # Red
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0] # Green
+        brightness: 255
+  - name: scene_christmas_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0] # Red
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0] # Green
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0] # Red
+        brightness: 255
 ########################
 # Scripts
 ########################

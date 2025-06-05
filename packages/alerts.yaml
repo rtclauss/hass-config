@@ -124,36 +124,36 @@ automation:
 
     action:
       - choose:
-        - conditions:
-          - condition: trigger
-            id: wet
-          sequence:
-            # Select Wet
-            - service: persistent_notification.create
-              data_template:
-                title: Wet floor
-                message: >-
-                  {{  trigger.from_state.attributes.friendly_name }} is wet.
-                notification_id: wet-floor-alert
-            - service: notify.all
-              data_template:
-                message: >-
-                  {{  trigger.from_state.attributes.friendly_name }} is wet.
-        - conditions:
-          - condition: trigger
-            id: dry
-          sequence:
-            # Select dry
-            - service: persistent_notification.create
-              data_template:
-                title: Dry floor
-                message: >-
-                  {{  trigger.from_state.attributes.friendly_name }} is dry.
-                notification_id: wet-floor-alert
-            - service: notify.all
-              data_template:
-                message: >-
-                  {{  trigger.from_state.attributes.friendly_name }} has dried.
+          - conditions:
+              - condition: trigger
+                id: wet
+            sequence:
+              # Select Wet
+              - service: persistent_notification.create
+                data_template:
+                  title: Wet floor
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} is wet.
+                  notification_id: wet-floor-alert
+              - service: notify.all
+                data:
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} is wet.
+          - conditions:
+              - condition: trigger
+                id: dry
+            sequence:
+              # Select dry
+              - service: persistent_notification.create
+                data:
+                  title: Dry floor
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} is dry.
+                  notification_id: wet-floor-alert
+              - service: notify.all
+                data:
+                  message: >-
+                    {{  trigger.from_state.attributes.friendly_name }} has dried.
 
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip
@@ -196,17 +196,17 @@ automation:
       #        message: "Intruder Alert! Intruder Alert! You are detected and recorded."
       - service: light.turn_on
         data:
-          entity_id: light.living_room_all
+          entity_id: light.living_room_lamps
           flash: long
       - delay: 00:00:02
       - service: light.turn_on
         data:
-          entity_id: light.living_room_all
+          entity_id: light.living_room_lamps
           flash: long
       - delay: 00:00:02
       - service: light.turn_on
         data:
-          entity_id: light.living_room_all
+          entity_id: light.living_room_lamps
           flash: long
 
   - alias: send_notification_when_alarm_triggered
@@ -240,9 +240,9 @@ automation:
             Stream from {{ trigger.to_state.attributes.friendly_name }}
           entity_id: >-
             {% if trigger.entity_id == "binary_sensor.basement_motion_sensor" %}
-              camera.basement
+              camera.tikiroomcamera
             {% else %}
-              camera.livingroom
+              camera.livingroomcamera
             {% endif %}
 
   - alias: arm_alarm
@@ -268,7 +268,7 @@ automation:
       - service: switch.turn_on
         entity_id:
           - switch.livingroom_motion_detection
-          - switch.basement_motion_detection
+          - switch.tikiroomcam_tikiroom_motion_detection
       - service: input_boolean.turn_on
         entity_id:
           - input_boolean.house_unoccupied
@@ -288,7 +288,7 @@ automation:
       - service: switch.turn_off
         entity_id:
           - switch.livingroom_motion_detection
-          - switch.basement_motion_detection
+          - switch.tikiroomcam_tikiroom_motion_detection
       #    - service: notify.all
       #      data_template:
       #        message: >
@@ -360,11 +360,6 @@ notify:
       - service: mobile_app_rtclauss
       - service: mobile_app_ryans_macbook_pro
       - service: lg_webos_tv_oled65cxpua
-
-########################
-# Proximity
-########################
-proximity:
 
 ########################
 # Scenes

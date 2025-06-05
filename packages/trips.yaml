@@ -132,11 +132,6 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    sensor.turn_off_time:
-      <<: *customize
-      friendly_name: "Turn off time"
-      icon: mdi:clock
-
     sensor.me_to_home:
       <<: *customize
       friendly_name: "Time to Home"
@@ -171,11 +166,19 @@ automation:
       - platform: state
         entity_id: binary_sensor.planned_vacation_calendar
         to: "on"
+      - platform: calendar
+        id: calendar
+        entity_id: calendar.ryan_claussen
+        event: start
+        offset: -00:50:00
     condition:
       condition: and
       conditions:
         - condition: state
           entity_id: binary_sensor.bayesian_zeke_home
+          state: "off"
+        - condition: state
+          entity_id: input_boolean.trip
           state: "off"
         - condition: or
           conditions:
@@ -190,6 +193,13 @@ automation:
               state: "off"
               for:
                 hours: 20
+            - condition: template
+              value_template: >-
+                {% if trigger.id == "calendar" and (trigger.calendar_event.location == 'Minneapolis-St Paul Intl/Wold-Chamberlain' and ('(Friend' not in trigger.calendar.summary) or ('friend' not in trigger.calendar.summary)) %}
+                  true
+                {% else %}
+                  false
+                {% endif %}
     action:
       - service: input_boolean.turn_on
         data:
@@ -304,7 +314,7 @@ automation:
       - service: input_number.set_value
         data_template:
           entity_id: input_number.random_vacation_light_group
-          value: "{{ (range(1, 4)|random|int) }}"
+          value: "{{ (range(1, 5)|random|int) }}" #one more than group, max not included
       - service: notify.all
         data:
           message: Turning on group {{states("input_number.random_vacation_light_group")|int }}, lights out at {{ states("input_datetime.random_vacation_lights_off") }}
@@ -329,12 +339,18 @@ automation:
       #   data_template:
       #     eta: '{{states.sensor.time_to_home.state}}'
       #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: climate.set_preset_mode
-        entity_id: climate.my_ecobee
+      # - service: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Away"
+      - service: ecobee.resume_program
         data:
-          preset_mode: "Away"
+          resume_all: true
+          entity_id: climate.my_ecobee
       - service: notify.all
         data_template:
+          data:
+            url: "/ryan-new-mushroom/climate"
           message: >-
             Turning off Ecobee away while driving home from parents
 
@@ -354,12 +370,17 @@ automation:
       #   data_template:
       #     eta: '{{states.sensor.time_to_home.state}}'
       #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      - service: climate.set_preset_mode
-        entity_id: climate.my_ecobee
+      # - service: climate.set_preset_mode
+      #   entity_id: climate.my_ecobee
+      #   data:
+      #     preset_mode: "Home"
+      - service: ecobee.resume_program
         data:
-          preset_mode: "Home"
+          resume_all: true
+          entity_id: climate.my_ecobee
       - service: notify.all
         data_template:
+          data: url:"/ryan-new-mushroom/climate"
           message: >-
             Turning off Ecobee Away mode while driving home from MSP
 
@@ -377,7 +398,7 @@ automation:
       - delay: 00:{{ (range(5,45)|random|int) }}:00
       - service: scene.turn_on
         data_template:
-          entity_id: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
+          target: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
       - service: notify.all
         data:
           message: Turning on lights while you're away.
@@ -400,6 +421,12 @@ automation:
         data:
           exclude_lights:
             - light.outside_front_lights
+            - light.outside_garage_lights
+            - light.outside_north_west_garage
+            - light.outside_south_west_garage
+            - light.outside_front_door
+            - light.outside_garage_lights
+            - light.outside_front_hue
           transition: 240
       # - service: light.turn_off
       #   entity_id: "all"
@@ -412,6 +439,35 @@ automation:
       - service: scene.turn_on
         entity_id: scene.leave_home
 
+  - id: vacuum_on_trip
+    alias: vacuum_on_trip
+    trigger:
+      - trigger: time
+        at: "13:00:00"
+    condition:
+      - alias: "on a trip"
+        condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+    action:
+      # Revert back when batteries are all reset/new
+      # including main level vacuum
+      # - alias: Start Vacuums
+      #   service: vacuum.start
+      #   target:
+      #     entity_id: all
+      - action: mqtt.publish
+        data:
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {% set segment_id = now().weekday() + 1 %}
+            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: notify.all
+        data:
+          data:
+            url: "/ryan-new-mushroom/cleaning"
+          message: "Vacuuming part of the house while you're away \U0001F4BA"
+
   - id: vacuum_flying_home
     alias: vacuum_flying_home
     trigger:
@@ -421,11 +477,22 @@ automation:
         to: "on"
     condition: []
     action:
-      - service: vacuum.start
+      # Revert back when batteries are all reset/new
+      # including main level vacuum
+      # - alias: Start Vacuums
+      #   service: vacuum.start
+      #   target:
+      #     entity_id: all
+      - action: mqtt.publish
         data:
-          entity_id: all
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {% set segment_id = now().weekday() + 1 %}
+            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
       - service: notify.all
         data:
+          data:
+            url: "/ryan-new-mushroom/cleaning"
           message: "Vacuuming the house while you fly home \U0001F4BA"
 
   # - id: toggle_vacation_tab
@@ -490,7 +557,6 @@ group:
       - binary_sensor.planned_work_trip_calendar
       - binary_sensor.sensed_trip
       - binary_sensor.flying_home_today
-      - sensor.turn_off_time
 
   vacation_climate:
     entities:
@@ -498,7 +564,7 @@ group:
 
   vacation_group_card_1:
     entities:
-      - light.living_room_all
+      - light.living_room_lamps
       - light.basement_great_room
       - light.den_floods
       - scene.vacation_group_1
@@ -507,14 +573,16 @@ group:
     entities:
       - light.basement_great_room
       - light.owner_suite_lamps
-      - light.office
-      - light.hall_all_downlights
+      - light.office_all
+      - light.hall_main_foyer
+      - light.hall_upstairs_switch
+      - light.hall_transition_switch
       - light.kitchen_sink
       - scene.vacation_group_2
 
   vacation_group_card_3:
     entities:
-      - light.living_room_all
+      - light.living_room_lamps
       - light.owner_suite_lamps
       - light.kitchen_sink
       - light.den_leather_chair
@@ -522,11 +590,12 @@ group:
 
   vacation_group_card_4:
     entities:
-      - light.living_room_all
+      - light.living_room_lamps
       - light.kitchen_sink
-      - light.office_lights
-      - light.hall_all_downlights
-      - light.guest_bedroom
+      - light.office_all
+      - light.hall_main_foyer
+      - light.hall_upstairs_switch
+      - light.hall_transition_switch
       - scene.vacation_group_4
 
 ########################
@@ -576,10 +645,17 @@ scene:
         state: "on"
       light.owner_suite_lamps:
         state: "on"
-      light.office:
+      light.office_all:
         state: "on"
-      light.hall_all_downlights:
+      light.hall_transition_switch:
         state: "on"
+        brightness: 255
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 255
+      light.hall_upstairs_switch:
+        state: "on"
+        brightness: 255
       light.kitchen_sink:
         state: "on"
 
@@ -600,12 +676,17 @@ scene:
         state: "on"
       light.kitchen_sink:
         state: "on"
-      light.office_lights:
+      light.office_all:
         state: "on"
-      light.hall_all_downlights:
+      light.hall_transition_switch:
         state: "on"
-      light.guest_bedroom:
+        brightness: 255
+      light.hall_foyer_switch:
         state: "on"
+        brightness: 255
+      light.hall_upstairs_switch:
+        state: "on"
+        brightness: 255
 
 ########################
 # Scripts

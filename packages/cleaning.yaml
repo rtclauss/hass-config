@@ -113,10 +113,6 @@ homeassistant:
     ################################################
 
     ################################################
-    ## Proximity
-    ################################################
-
-    ################################################
     ## Scripts
     ################################################
 
@@ -167,7 +163,7 @@ automation:
       - service: notify.all
         data:
           message: "Washing machine finished! \U0001F9FA"
-          
+
   - id: washer_reminder
     alias: washer_reminder
     trigger:
@@ -283,11 +279,6 @@ media_player:
 plant:
 
 ########################
-# Proximity
-########################
-proximity:
-
-########################
 # Scenes
 ########################
 scene:
@@ -302,11 +293,28 @@ script:
 ########################
 sensor:
 
-
 ########################
 # Switch
 ########################
 switch:
+
+########################
+# Template
+########################
+template:
+  - trigger:
+      - platform: state
+        entity_id:
+          - vacuum.valetudo_upstairs_vacuum
+          - vacuum.valetudo_mainlevel
+          - vacuum.valetudo_den
+        to: "cleaning"
+    sensor:
+      - name: "Vacuum last ran"
+        state_class: measurement
+        device_class: timestamp
+        state: >-
+          {{now()}}
 
 ########################
 # Zone

@@ -142,15 +142,44 @@ automation:
     id: restart_water_meter
     trigger:
       - platform: time_pattern
-        minutes: "/48"
+        hours: "/1"
     condition: []
     action:
       - service: switch.turn_off
         entity_id: switch.basement_water_meter_plug
       - delay:
-          seconds: 10
+          seconds: 20
       - service: switch.turn_on
         entity_id: switch.basement_water_meter_plug
+
+        # in the wintertime the humidifier causes the meter to think there is a leak, throwing up a persistent error message that we need
+        # to get past.
+  - alias: trigger_winter_watermeter_flow
+    id: trigger_winter_watermeter_flow
+    trigger:
+      - platform: time_pattern
+        minutes: "/23"
+    condition:
+      - alias: "winter month"
+        condition: template
+        value_template: "{{now().month in [1,2,10,11,12]}}"
+    action:
+      - service: rest_command.turn_off_watermeter_light
+      - delay:
+          seconds: 1
+      - service: rest_command.turn_on_watermeter_light
+      - delay:
+          seconds: 2
+      - service: rest_command.turn_off_watermeter_light
+      - delay:
+          seconds: 3
+      - service: rest_command.turn_on_watermeter_light
+      - delay:
+          seconds: 3
+      - service: rest_command.trigger_flow_watermeter_light
+      - delay:
+          minutes: 4
+      - service: rest_command.turn_off_watermeter_light
 
   - alias: check_non_responding_entities
     id: check_non_responding_entities
@@ -168,13 +197,11 @@ automation:
               and (now()-as_local(item.last_updated) > timedelta(hours=12))
               and not (item.entity_id | lower).find('update') != -1
               and not (item.entity_id | lower).find('heading') != -1
-              and not (item.entity_id | lower).find('darksky') != -1
               and not (item.entity_id | lower).find('alert') != -1
               and not (item.entity_id | lower).find('season') != -1
               and not (item.entity_id | lower).endswith('microphone')
               and not (item.entity_id | lower).endswith('hacs')
               and not (item.entity_id | lower).find('sonos') != -1
-              and not (item.entity_id | lower).find('dark_sky') != -1
             )-%}
               {{ item.entity_id }}
             {% if not loop.last %}, {% endif %}
@@ -252,12 +279,29 @@ automation:
         data:
           option: "{{ tariff }}"
 
-  - alias: Restart AppDaemon on HA Startup
-    description: When HA starts up, restart AppDaemon
+  - alias: Restart AppDaemon on HA Startup or load cells unavailable
+    description: When HA starts up, or bed load cells are unavailable restart AppDaemon
     id: restart_appdaemon_on_ha_startup
     trigger:
       - platform: homeassistant
         event: start
+      - platform: state
+        entity_id:
+          - sensor.bed_load_cell_1
+          # - sensor.bed_load_cell_2
+        to:
+          - "unknown"
+          - "Unknown"
+          - "unavailable"
+          - "Unavailable"
+          - "unknown"
+        for:
+          minutes: 15
+      # action:
+      #   - service: notify.mobile_app_wethop
+      #     data:
+      #       message: >-
+      #         Restarting AppDaemon. Check the Automation Log
     action:
       - service: hassio.addon_restart
         data:
@@ -280,6 +324,30 @@ automation:
       - service: switch.turn_on
         entity_id:
           - switch.basement_sump_pump
+
+  - alias: Notify Sump Pit Getting Full
+    id: notify_sump_pit_getting_full
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.sump_fill
+        below: 0.3
+    action:
+      - service: notify.all
+        data:
+          message: >-
+            "Sump pit is getting full! Check the sump pump!"
+
+  - alias: Notify Sump Pit Full
+    id: notify_sump_pit_full
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.sump_fill
+        below: 0.2
+    action:
+      - service: notify.all
+        data:
+          message: >-
+            "Sump pit is getting very full! Check the sump pump!"
 
   - alias: Notify Sump Runs
     id: notify_sump_runs
@@ -413,12 +481,14 @@ automation:
         entity_id:
           - switch.owner_suite_cpap_plug
         to: "off"
-        for: "00:02:00"
+        for:
+          minutes: 20
       - platform: state
         entity_id:
           - switch.owner_suite_cpap_plug
         not_to: "on"
-        for: "00:02:00"
+        for:
+          minutes: 20
       - platform: homeassistant
         event: start
     action:
@@ -593,9 +663,18 @@ notify:
 plant:
 
 ########################
-# Proximity
+# REST Command
 ########################
-proximity:
+rest_command:
+  turn_on_watermeter_light:
+    url: http://watermeter.iot.rtclauss.org/lighton
+    method: GET
+  turn_off_watermeter_light:
+    url: http://watermeter.iot.rtclauss.org/lightoff
+    method: GET
+  trigger_flow_watermeter_light:
+    url: http://watermeter.iot.rtclauss.org/flow_start
+    method: GET
 
 ########################
 # Scenes
@@ -622,7 +701,7 @@ sensor:
         radius: 50
   - platform: history_stats
     name: Sump Pump Time On past 24 hours
-    entity_id: binary_sensor.sump_pump_running
+    entity_id: binary_sensor.sump_pump_on
     state: "on"
     type: time
     end: "{{ now() }}"
@@ -630,20 +709,12 @@ sensor:
       days: 1
   - platform: history_stats
     name: Sump Runs
-    entity_id: binary_sensor.sump_pump_running
+    entity_id: binary_sensor.sump_pump_on
     state: "on"
     type: count
     end: "{{ now() }}"
     duration:
       days: 1
-
-  - platform: systemmonitor
-    resources:
-      - type: memory_free
-      - type: memory_use
-      - type: memory_use_percent
-      - type: swap_use
-      - type: swap_free
 
 ########################
 # Switch
