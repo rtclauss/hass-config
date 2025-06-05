@@ -1,143 +1,127 @@
 """Magic Areas component for Home Assistant."""
 
-from collections import defaultdict
+from collections.abc import Callable
+from datetime import UTC, datetime
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import ATTR_NAME
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.area_registry import async_get as areareg_async_get
-from homeassistant.helpers.floor_registry import async_get as floorreg_async_get
+from homeassistant.const import ATTR_NAME, EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers.device_registry import (
+    EVENT_DEVICE_REGISTRY_UPDATED,
+    EventDeviceRegistryUpdatedData,
+)
+from homeassistant.helpers.entity_registry import (
+    EVENT_ENTITY_REGISTRY_UPDATED,
+    EventEntityRegistryUpdatedData,
+)
 
-from .base.magic import MagicArea, MagicMetaArea
-from .const import (
-    CONF_CLEAR_TIMEOUT,
-    CONF_EXTENDED_TIME,
-    CONF_EXTENDED_TIMEOUT,
-    CONF_ID,
-    CONF_NAME,
-    CONF_SECONDARY_STATES,
-    CONF_SLEEP_TIMEOUT,
+from custom_components.magic_areas.base.magic import MagicArea
+from custom_components.magic_areas.const import (
+    CONF_RELOAD_ON_REGISTRY_CHANGE,
     DATA_AREA_OBJECT,
-    DATA_UNDO_UPDATE_LISTENER,
-    DEFAULT_CLEAR_TIMEOUT,
-    DEFAULT_EXTENDED_TIME,
-    DEFAULT_EXTENDED_TIMEOUT,
-    DEFAULT_SLEEP_TIMEOUT,
-    META_AREA_EXTERIOR,
-    META_AREA_GLOBAL,
-    META_AREA_INTERIOR,
+    DATA_TRACKED_LISTENERS,
+    DEFAULT_RELOAD_ON_REGISTRY_CHANGE,
     MODULE_DATA,
     MagicConfigEntryVersion,
-    MetaAreaType,
 )
-from .util import (
-    basic_area_from_floor,
-    basic_area_from_meta,
-    basic_area_from_object,
-    seconds_to_minutes,
-)
+from custom_components.magic_areas.helpers.area import get_magic_area_for_config_entry
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup(hass: HomeAssistant, config: dict):
-    """Set up the component."""
-    return True
-
-
 async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry):
     """Set up the component."""
-    data = hass.data.setdefault(MODULE_DATA, {})
-    area_id = config_entry.data[CONF_ID]
-    area_name = config_entry.data[CONF_NAME]
 
-    _LOGGER.debug("%s: Setting up entry.", area_name)
+    @callback
+    def _async_registry_updated(
+        event: (
+            Event[EventEntityRegistryUpdatedData]
+            | Event[EventDeviceRegistryUpdatedData]
+        ),
+    ) -> None:
+        """Reload integration when entity registry is updated."""
 
-    # Load floors
-    floor_registry = floorreg_async_get(hass)
-    floors = floor_registry.async_list_floors()
+        area_data: dict[str, Any] = dict(config_entry.data)
+        if config_entry.options:
+            area_data.update(config_entry.options)
 
-    non_floor_meta_ids = [
-        meta_area_type
-        for meta_area_type in MetaAreaType
-        if meta_area_type != MetaAreaType.FLOOR
-    ]
-    floor_ids = [f.floor_id for f in floors]
+        # Check if disabled
+        if not area_data.get(
+            CONF_RELOAD_ON_REGISTRY_CHANGE, DEFAULT_RELOAD_ON_REGISTRY_CHANGE
+        ):
+            _LOGGER.debug(
+                "%s: Auto-Reloading disabled for this area skipping...",
+                config_entry.data[ATTR_NAME],
+            )
+            return
 
-    if area_id in non_floor_meta_ids:
-        meta_area = basic_area_from_meta(area_id)
-        magic_area = MagicMetaArea(hass, meta_area, config_entry)
-    elif area_id in floor_ids:
-        meta_area = basic_area_from_floor(floor_registry.async_get_floor(area_id))
-        magic_area = MagicMetaArea(hass, meta_area, config_entry)
-    else:
-        area_registry = areareg_async_get(hass)
-        area = area_registry.async_get_area(area_id)
-
-        if not area:
-            _LOGGER.warning("%s: ID '%s' not found on registry", area_name, area_id)
-            return False
-
-        _LOGGER.debug("%s: Got area from registry: %s", area_name, str(area))
-
-        magic_area = MagicArea(
-            hass,
-            basic_area_from_object(area),
+        _LOGGER.debug(
+            "%s: Reloading entry due entity registry change",
+            config_entry.data[ATTR_NAME],
+        )
+        hass.config_entries.async_update_entry(
             config_entry,
+            data={**config_entry.data, "entity_ts": datetime.now(UTC)},
         )
 
-    _LOGGER.debug(
-        "%s: Magic Area (%s) created: %s",
-        magic_area.name,
-        magic_area.id,
-        str(magic_area.config),
-    )
+    async def _async_setup_integration(*args, **kwargs) -> None:
+        """Load integration when Hass has finished starting."""
+        _LOGGER.debug("Setting up entry for %s", config_entry.data[ATTR_NAME])
 
-    undo_listener = config_entry.add_update_listener(async_update_options)
+        magic_area: MagicArea | None = get_magic_area_for_config_entry(
+            hass, config_entry
+        )
+        assert magic_area is not None
+        await magic_area.initialize()
 
-    data[config_entry.entry_id] = {
-        DATA_AREA_OBJECT: magic_area,
-        DATA_UNDO_UPDATE_LISTENER: undo_listener,
-    }
-
-    # Setup platforms
-    await hass.config_entries.async_forward_entry_setups(
-        config_entry, magic_area.available_platforms()
-    )
-
-    # Conditional reload of related meta-areas
-    # Populate dict with all meta-areas with ID as key
-    meta_areas = defaultdict()
-
-    for area in data.values():
-        area_obj = area[DATA_AREA_OBJECT]
-        if area_obj.is_meta():
-            meta_areas[area_obj.id] = area_obj
-
-    # Handle non-meta areas
-    if not magic_area.is_meta():
-        meta_area_key = (
-            META_AREA_EXTERIOR.lower()
-            if magic_area.is_exterior()
-            else META_AREA_INTERIOR.lower()
+        _LOGGER.debug(
+            "%s: Magic Area (%s) created: %s",
+            magic_area.name,
+            magic_area.id,
+            str(magic_area.config),
         )
 
-        if meta_area_key in meta_areas:
-            meta_area_object = meta_areas[meta_area_key]
+        # Setup config uptate listener
+        tracked_listeners: list[Callable] = []
+        tracked_listeners.append(config_entry.add_update_listener(async_update_options))
 
-            if meta_area_object.initialized:
-                await hass.config_entries.async_reload(
-                    meta_area_object.hass_config.entry_id
-                )
+        # Watch for area changes.
+        tracked_listeners.append(
+            hass.bus.async_listen(
+                EVENT_ENTITY_REGISTRY_UPDATED,
+                _async_registry_updated,
+                _entity_registry_filter,
+            )
+        )
+        tracked_listeners.append(
+            hass.bus.async_listen(
+                EVENT_DEVICE_REGISTRY_UPDATED,
+                _async_registry_updated,
+                _device_registry_filter,
+            )
+        )
+
+        hass.data[MODULE_DATA][config_entry.entry_id] = {
+            DATA_AREA_OBJECT: magic_area,
+            DATA_TRACKED_LISTENERS: tracked_listeners,
+        }
+
+        # Setup platforms
+        await hass.config_entries.async_forward_entry_setups(
+            config_entry, magic_area.available_platforms()
+        )
+
+    hass.data.setdefault(MODULE_DATA, {})
+
+    # Wait for Hass to have started before setting up.
+    if hass.is_running:
+        hass.create_task(_async_setup_integration())
     else:
-        meta_area_global_id = META_AREA_GLOBAL.lower()
-
-        if magic_area.id != meta_area_global_id and meta_area_global_id in meta_areas:
-            if meta_areas[meta_area_global_id].initialized:
-                await hass.config_entries.async_reload(
-                    meta_areas[meta_area_global_id].hass_config.entry_id
-                )
+        hass.bus.async_listen_once(
+            EVENT_HOMEASSISTANT_STARTED, _async_setup_integration
+        )
 
     return True
 
@@ -149,20 +133,44 @@ async def async_update_options(hass: HomeAssistant, config_entry: ConfigEntry) -
     )
     await hass.config_entries.async_reload(config_entry.entry_id)
 
+    # @TODO Reload corresponding meta areas (floor+interior/exterior+global)
+
 
 async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
     """Unload a config entry."""
 
+    platforms_unloaded = []
+    if MODULE_DATA not in hass.data:
+        _LOGGER.warning(
+            "Module data object for Magic Areas not found, possibly already removed."
+        )
+        return False
+
     data = hass.data[MODULE_DATA]
+
+    if config_entry.entry_id not in data:
+        _LOGGER.debug(
+            "Config entry '%s' not on data dictionary, probably already unloaded. Skipping.",
+            config_entry.entry_id,
+        )
+        return True
+
     area_data = data[config_entry.entry_id]
     area = area_data[DATA_AREA_OBJECT]
 
-    await hass.config_entries.async_unload_platforms(
-        config_entry, area.available_platforms()
-    )
+    for platform in area.available_platforms():
+        unload_ok = await hass.config_entries.async_forward_entry_unload(
+            config_entry, platform
+        )
+        platforms_unloaded.append(unload_ok)
 
-    area_data[DATA_UNDO_UPDATE_LISTENER]()
-    data.pop(config_entry.entry_id)
+    for tracked_listener in area_data[DATA_TRACKED_LISTENERS]:
+        tracked_listener()
+
+    all_unloaded = all(platforms_unloaded)
+
+    if all_unloaded:
+        data.pop(config_entry.entry_id)
 
     if not data:
         hass.data.pop(MODULE_DATA)
@@ -170,31 +178,7 @@ async def async_unload_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> 
     return True
 
 
-def migrate_seconds_to_minutes(config_data: dict) -> dict:
-    """Perform migration of seconds-based config options to minutes."""
-
-    # Update seconds -> minutes
-    if CONF_CLEAR_TIMEOUT in config_data:
-        config_data[CONF_CLEAR_TIMEOUT] = seconds_to_minutes(
-            config_data[CONF_CLEAR_TIMEOUT], DEFAULT_CLEAR_TIMEOUT
-        )
-    if CONF_SECONDARY_STATES in config_data:
-        entries_to_convert = {
-            CONF_EXTENDED_TIMEOUT: DEFAULT_EXTENDED_TIMEOUT,
-            CONF_EXTENDED_TIME: DEFAULT_EXTENDED_TIME,
-            CONF_SLEEP_TIMEOUT: DEFAULT_SLEEP_TIMEOUT,
-        }
-        for option_key, option_value in entries_to_convert.items():
-            if option_key in config_data[CONF_SECONDARY_STATES]:
-                old_value = config_data[CONF_SECONDARY_STATES][option_key]
-                config_data[CONF_SECONDARY_STATES][option_key] = seconds_to_minutes(
-                    old_value, option_value
-                )
-
-    return config_data
-
-
-# Example migration function
+# Update config version
 async def async_migrate_entry(hass, config_entry: ConfigEntry):
     """Migrate old entry."""
     _LOGGER.info(
@@ -211,36 +195,32 @@ async def async_migrate_entry(hass, config_entry: ConfigEntry):
             "%s: Major version downgrade detection, skipping migration.",
             config_entry.data[ATTR_NAME],
         )
-        # FIXING MY MESS @FIXME remove before release
-        hass.config_entries.async_update_entry(
-            config_entry,
-            data={**config_entry.data},
-            minor_version=MagicConfigEntryVersion.MINOR,
-            version=MagicConfigEntryVersion.MAJOR,
-        )
-        # return False
-        return True
 
-    old_data = {**config_entry.data}
-    new_data = {**config_entry.data}
+        return False
 
-    if config_entry.version == 1:
-        new_data = migrate_seconds_to_minutes(new_data)
+    hass.config_entries.async_update_entry(
+        config_entry,
+        minor_version=MagicConfigEntryVersion.MINOR,
+        version=MagicConfigEntryVersion.MAJOR,
+    )
 
-    if old_data != new_data:
-
-        hass.config_entries.async_update_entry(
-            config_entry,
-            data=new_data,
-            minor_version=MagicConfigEntryVersion.MINOR,
-            version=MagicConfigEntryVersion.MAJOR,
-        )
-
-        _LOGGER.info(
-            "Migration to configuration version %s.%s successful: %s",
-            config_entry.version,
-            config_entry.minor_version,
-            str(new_data),
-        )
+    _LOGGER.info(
+        "Migration to configuration version %s.%s successful: %s",
+        config_entry.version,
+        config_entry.minor_version,
+        str(config_entry.data),
+    )
 
     return True
+
+
+@callback
+def _entity_registry_filter(event_data: EventEntityRegistryUpdatedData) -> bool:
+    """Filter entity registry events."""
+    return event_data["action"] == "update" and "area_id" in event_data["changes"]
+
+
+@callback
+def _device_registry_filter(event_data: EventDeviceRegistryUpdatedData) -> bool:
+    """Filter device registry events."""
+    return event_data["action"] == "update" and "area_id" in event_data["changes"]

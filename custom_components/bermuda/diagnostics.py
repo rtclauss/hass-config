@@ -2,35 +2,33 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.bluetooth.api import _get_manager
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.core import ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import DOMAIN
-from .coordinator import BermudaDataUpdateCoordinator
+
+if TYPE_CHECKING:
+    from . import BermudaConfigEntry
+    from .coordinator import BermudaDataUpdateCoordinator
 
 
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: BermudaConfigEntry) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: BermudaDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: BermudaDataUpdateCoordinator = entry.runtime_data.coordinator
 
     # We can call this with our own config_entry because the diags step doesn't
     # actually use it.
 
-    bt_manager = _get_manager(hass)
-    bt_diags = await bt_manager.async_diagnostics()
+    bt_diags = await coordinator._manager.async_diagnostics()  # noqa
 
     # Param structure for service call
-    call = ServiceCall(DOMAIN, "dump_devices", {"redact": True})
+    call = ServiceCall(hass, DOMAIN, "dump_devices", {"redact": True})
 
     data: dict[str, Any] = {
         "active_devices": f"{coordinator.count_active_devices()}/{len(coordinator.devices)}",
         "active_scanners": f"{coordinator.count_active_scanners()}/{len(coordinator.scanner_list)}",
+        "irk_manager": coordinator.redact_data(coordinator.irk_manager.async_diagnostics_no_redactions()),
         "devices": await coordinator.service_dump_devices(call),
         "bt_manager": coordinator.redact_data(bt_diags),
     }

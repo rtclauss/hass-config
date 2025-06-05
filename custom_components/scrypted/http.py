@@ -161,7 +161,7 @@ class ScryptedView(HomeAssistantView):
     put = _handle
     delete = _handle
     patch = _handle
-    options = _handle
+    # options = _handle
 
     async def _handle_websocket(
         self, request: web.Request, token: str, path: str
@@ -279,6 +279,7 @@ def _init_header(request: web.Request) -> CIMultiDict | dict[str, str]:
             hdrs.SEC_WEBSOCKET_PROTOCOL,
             hdrs.SEC_WEBSOCKET_VERSION,
             hdrs.SEC_WEBSOCKET_KEY,
+            hdrs.HOST,
         ):
             continue
         headers[name] = value
