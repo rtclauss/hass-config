@@ -1,0 +1,357 @@
+---
+auto_fan_speed_owner_suite:
+  module: auto_fan_speed
+  class: AutoFanSpeed
+  temp_sensor: sensor.owner_suite_tph_temperature
+  fan: fan.owner_suite
+  sun: sun.sun
+  speeds:
+    low: 63
+    medium: 67
+    high: 73
+    sun_offset: 0
+  time:
+    start: "21:00:00"
+    end: "12:30:00"
+    turn_off_at_end_time: True
+  debug: true
+
+brighten_office_lights:
+  module: brighten_lights
+  class: BrightenLights
+  # TODO use entire area of office
+  lights: 
+    - light.office_all
+    # - light.office_floor_lamp
+    # - light.office_ceiling
+    # - light.office_fan_switch
+  sensors: 
+    - binary_sensor.office_motion_occupancy
+  camera_on_sensor: binary_sensor.ryans_macbook_pro_camera_in_use
+  transition_time_sec: 600
+  constrain_input_boolean: input_boolean.guest_mode,off
+  constrain_input_boolean: input_boolean.bayesian_zeke_home
+  constrain_input_boolean: input_boolean.master_bed_occupancy,off
+  constrain_input_boolean: input_boolean.morning_routine,off
+  constrain_input_boolean: binary_sensor.workday_sensor
+  constrain_start_time: "06:50:00"
+  constrain_end_time: "11:30:00"
+
+# brighten_master_bedroom_lights_in_the_morning:
+#   module: brighten_lights
+#   class: BrightenLights
+#   lights: 
+#     - light.master_bedroom
+#   sensors: 
+#     - binary_sensor.master_bedroom_motion
+#     - binary_sensor.hallway_motion
+#   transition_time_sec: 600
+#   constrain_input_boolean: input_boolean.master_bed_occupancy,off
+#   constrain_input_boolean: input_boolean.guest_mode,off
+#   constrain_input_boolean: input_boolean.bayesian_zeke_home
+#   constrain_input_boolean: input_boolean.morning_routine,off
+#   constrain_input_boolean: binary_sensor.workday_sensor
+#   constrain_start_time: "06:50:00"
+#   constrain_end_time: "11:30:00"
+
+bayesian_device_tracker:
+  class: BayesianDeviceTracker
+  module: tracker
+  gps_location_sources: 
+    - device_tracker.wethop
+    - device_tracker.nigori_location_tracker
+  bayesian_input: binary_sensor.bayesian_zeke_home
+  bayesian_device_tracker_name: "bayesian_zeke_home"
+  gps_accuracy_tolerance: 2000
+  minimum_update_distance: 3
+  minimum_update_window: 5
+
+# Occupancy Simulator:
+#   module: occusim
+#   class: OccuSim
+#   log_msg: "1"
+#   #notify: "1"
+#   enable: input_boolean.trip,on
+#   #enable: input_boolean.house_unoccupied,on
+#   # test: "1"
+#   dump_times: "1"
+#   # reset_time: 02:00:00
+
+#   step_morning_name: Morning
+#   step_morning_start: "06:00:00"
+#   step_morning_end: "12:00:00"
+
+#   step_afternoon_name: Afternoon
+#   step_afternoon_start: "12:00:01"
+#   step_afternoon_end: "16:00:00"
+  
+#   step_evening_name: Evening
+#   step_evening_start: "16:00:01"
+#   step_evening_end: "21:30:00"
+  
+#   step_night_end: "23:59:00"
+#   step_night_name: Night
+#   step_night_start: "21:30:01"
+
+#   random_morning_bathroom_end: Afternoon
+#   random_morning_bathroom_maxduration: "00:45:00"
+#   random_morning_bathroom_minduration: "00:03:00"
+#   random_morning_bathroom_name: Morning Bathroom
+#   random_morning_bathroom_number: "3"
+#   random_morning_bathroom_off_1: light.owner_suite_bathroom_lights
+#   random_morning_bathroom_on_1: light.owner_suite_bathroom_lights
+#   random_morning_bathroom_start: Morning
+
+#   random_morning_office_days: mon,tue,wed,thu,fri
+#   random_morning_office_end: Afternoon
+#   random_morning_office_maxduration: "04:00:00"
+#   random_morning_office_minduration: "00:15:00"
+#   random_morning_office_name: Morning office
+#   random_morning_office_number: "1"
+#   random_morning_office_off_1: light.office_lights
+#   random_morning_office_on_1: light.office_lights
+#   random_morning_office_start: Morning
+
+#   random_afternoon_office_days: mon,tue,wed,thu,fri
+#   random_afternoon_office_end: Evening
+#   random_afternoon_office_maxduration: "04:00:00"
+#   random_afternoon_office_minduration: "00:15:00"
+#   random_afternoon_office_name: Afternoon office
+#   random_afternoon_office_number: "1"
+#   random_afternoon_office_office_off_1: light.office_lights
+#   random_afternoon_office_office_on_1: light.office_lights
+#   random_afternoon_office_start: Afternoon
+
+#   random_afternoon_livingroom_end: Evening
+#   random_afternoon_livingroom_maxduration: "04:00:00"
+#   random_afternoon_livingroom_minduration: "00:15:00"
+#   random_afternoon_livingroom_name: Afternoon Living Room
+#   random_afternoon_livingroom_number: "1"
+#   random_afternoon_livingroom_livingroom_off_1: light.living_room_lamps
+#   random_afternoon_livingroom_livingroom_on_1: light.living_room_lamps
+#   random_afternoon_livingroom_start: Afternoon
+
+#   random_evening_bathroom_end: Night
+#   random_evening_bathroom_maxduration: "00:15:00"
+#   random_evening_bathroom_minduration: "00:01:30"
+#   random_evening_bathroom_name: Evening Bathroom
+#   random_evening_bathroom_number: "3"
+#   random_evening_bathroom_off_1: light.owner_suite_bathroom_lights
+#   random_evening_bathroom_on_1: light.owner_suite_bathroom_lights
+#   random_evening_bathroom_start: Evening
+
+#   random_evening_kitchen_end: Night
+#   random_evening_kitchen_maxduration: "00:35:00"
+#   random_evening_kitchen_minduration: "00:04:00"
+#   random_evening_kitchen_name: Evening Kitchen
+#   random_evening_kitchen_number: "4"
+#   random_evening_kitchen_off_1: light.kitchen_sink
+#   random_evening_kitchen_on_1: light.kitchen_sink
+#   random_evening_kitchen_start: Evening
+  
+#   random_evening_guest_days: mon,thu,fri
+#   random_evening_guest_end: Night
+#   random_evening_guest_maxduration: "00:17:12"
+#   random_evening_guest_minduration: "00:01:00"
+#   random_evening_guest_name: Evening Guest
+#   random_evening_guest_number: "1"
+#   random_evening_guest_off_1: light.guest_ceiling
+#   random_evening_guest_on_1: light.guest_ceiling
+#   random_evening_guest_start: Evening
+
+#   random_evening_kitchen_1_end: Night
+#   random_evening_kitchen_1_maxduration: "01:35:00"
+#   random_evening_kitchen_1_minduration: "00:24:00"
+#   random_evening_kitchen_1_name: Evening Kitchen
+#   random_evening_kitchen_1_number: "4"
+#   random_evening_kitchen_1_off_1: light.kitchen_sink
+#   random_evening_kitchen_1_on_1: light.kitchen_sink
+#   random_evening_kitchen_1_start: Evening
+
+#   random_evening_bedroom_entry_end: Night
+#   random_evening_bedroom_entry_maxduration: "03:0:12"
+#   random_evening_bedroom_entry_minduration: "00:45:00"
+#   random_evening_bedroom_entry_name: Evening Owner Bedroom
+#   random_evening_bedroom_entry_number: "3"
+#   random_evening_bedroom_entry_off_1: light.owner_suite_lamps
+#   random_evening_bedroom_entry_on_1: light.owner_suite_lamps
+#   random_evening_bedroom_entry_start: Evening
+
+#   random_evening_tmp_hallway_end: Night
+#   random_evening_tmp_hallway_maxduration: "03:0:12"
+#   random_evening_tmp_hallway_minduration: "00:45:00"
+#   random_evening_tmp_hallway_name: Evening Entry Tmp
+#   random_evening_tmp_hallway_number: "3"
+#   random_evening_tmp_hallway_off_1: light.hall_all_downlights
+#   random_evening_tmp_hallway_on_1: light.hall_all_downlights
+#   random_evening_tmp_hallway_start: Evening
+
+#   random_evening_den_end: Night
+#   random_evening_den_maxduration: "03:0:12"
+#   random_evening_den_minduration: "00:45:00"
+#   random_evening_den_name: Evening Den Tmp
+#   random_evening_den_number: "2"
+#   random_evening_den_off_1: light.den_floods
+#   random_evening_den_on_1: light.den_floods
+#   random_evening_den_off_3: light.den_leather_chair
+#   random_evening_den_on_3: light.den_leather_chair
+#   random_evening_den_start: Evening
+
+#   random_evening_tmp_basement_end: Night
+#   random_evening_tmp_basement_maxduration: "03:0:12"
+#   random_evening_tmp_basement_minduration: "00:45:00"
+#   random_evening_tmp_basement_name: Evening Basement Tmp
+#   random_evening_tmp_basement_number: "2"
+#   random_evening_tmp_basement_off_1: light.basement_all_down_lights
+#   random_evening_tmp_basement_on_1: light.basement_all_down_lights
+#   random_evening_tmp_basement_start: Evening
+
+Restart HA if network down:
+  class: restart_ha
+  module: reboot
+  host_to_ping: "8.8.8.8"
+
+Get Bed Load Cell Average Empty Data:
+  class: bed_history
+  module: bed_history
+  load_cells: 
+    - "sensor.raw_bed_load_cell_1"
+    - "sensor.raw_bed_load_cell_2"
+
+# deconz_helper:
+#   module: deconz_helper
+#   class: DeconzHelper
+
+living_room_magic_cube:
+  module: magic_cube
+  class: RemoteControl
+  event: zha_event
+  id: "00:15:8d:00:02:8a:f0:5f"
+  light: light.living_room_lamps_except_tv
+
+
+# Not used
+# automatic_helper:
+#   module: automatic_helper
+#   class: AutomaticHelper
+#   tracker_input: device_tracker.bayesian_zeke_home
+#   calendar: calendar.curling
+#   notify_target: notify/all
+#   driving_time: 120
+
+# May not be needed anymore thanks to Schedy
+# nest_travel_helper:
+#   module: nest_travel_helper
+#   class: NestTravelHelper
+#   outside_temp_feels_like: sensor.dark_sky_apparent_temperature
+#   outside_temp: sensor.dark_sky_temperature
+#   driving_sensor: binary_sensor.car_in_motion
+#   phone: device_tracker.bayesian_zeke_home
+#   thermostat: climate.my_ecobee
+
+# 08/25/2022: Moved to automation in media_player
+# Fade-in music:
+#   class: FadeInMusic
+#   module: fade_in_music
+#   sensors: 
+#     - binary_sensor.bedroom_occupancy
+#     # - binary_sensor.hallway_motion
+#     - binary_sensor.owner_suite_bathroom_room_occupancy
+#   transition_time_sec: 120
+#   constrain_input_boolean: input_boolean.guest_mode,off
+#   constrain_input_boolean: input_boolean.bayesian_zeke_home
+#   constrain_input_boolean: input_boolean.master_bed_occupancy,off
+#   constrain_start_time: "06:50:00"
+#   constrain_end_time: "11:30:00"
+#   #should this be a constraint?
+#   already_fading_in_spotify: input_boolean.morning_routine
+
+#living_room_group:
+#  module: group
+#  class: create_group
+#  name: my_name
+#  device_type: "binary_sensor"
+#  entity_part: "living_room"
+#  hidden: False
+#  view: True
+#  assumed_state: False
+#  friendly_name: Last Updates
+#  nested_view: True #creates a second group inside a viewed group   
+
+washing_machine:
+  module: cleaning_machine
+  class: CleanMachine
+  vibration_sensor: binary_sensor.washing_machine_running
+  open_sensor: binary_sensor.washer_door
+
+
+thermostat_stats:
+  module: thermostat_stats
+  class: ThermostatStats
+  outside_temp_feels_like: sensor.tomorrow_io_the_brewery_feels_like
+  outside_temp: sensor.outside_temperature
+  outside_humidity: sensor.outside_humidity
+  outside_cloud_cover: sensor.tomorrow_io_the_brewery_cloud_cover
+  # Z-Wave Thermostat
+  #thermostat: climate.glycol_thermostat
+  thermostat_db: !secret thermostat_recorder_db_url
+  thermostat: climate.my_ecobee
+  house_average_temp: sensor.average_house_temp
+  house_average_humidity: sensor.average_house_humidity
+  sun: sun.sun
+
+groups:
+  module: group_all
+  class: GroupAll
+
+ench:
+  module: ench
+  class: EnCh
+  notify: notify.all
+  show_friendly_name: false
+  # exclude:
+  #   - sensor.out_of_order
+  #   - binary_sensor.always_unavailable
+  battery:
+    interval_min: 360
+    min_level: 10
+
+follow_laundry_room:
+  # Office does not using a bound zigbee group to control the floor lamp
+  module: inovelli_mirror
+  class: Follow
+  leader: light.laundry_room
+  follower: light.laundry_wall_switch
+
+# follow_office:
+#   # Office does not using a bound zigbee group to control the floor lamp
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.office_floor_lamp
+#   follower: light.office_fan_switch
+
+# follow_dining_room:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.dining_room
+#   follower: light.dining_room_overhead
+
+# follow_den_room:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.den_all
+#   follower: light.den_wall_switch
+
+# follow_kitchen_sink:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.kitchen_sink
+#   follower: light.kitchen_sink_light_switch
+
+# follow_hallway:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.hall_lights_all
+#   follower: light.hallway_light_switch
+
+

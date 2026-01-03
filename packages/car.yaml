@@ -109,17 +109,17 @@ automation:
   - id: max_range_charge_handler
     alias: max_range_charge_handler
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.upcoming_trip_charging
         from: "off"
         to: "on"
         id: trip-upcoming
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
         id: arrive-home
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     condition:
@@ -135,13 +135,13 @@ automation:
     action:
       # Disabled until the API uses the new fleet api
       # add charge schedule: https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands#add-charge-schedule
-      # - service: script.tesla_set_precondition_schedule_time
+      # - action: script.tesla_set_precondition_schedule_time
       - choose:
           - conditions:
               - condition: trigger
                 id: trip-upcoming
             sequence:
-              - service: notify.mobile_app_wethop
+              - action: notify.mobile_app_wethop
                 data:
                   title: "Tesla Charging"
                   message: >-
@@ -161,7 +161,7 @@ automation:
                         destructive: false
                         behavior: default
               - wait_for_trigger:
-                  - platform: event
+                  - trigger: event
                     event_type: mobile_app_notification_action
                     id: max_range
                     event_data:
@@ -169,16 +169,16 @@ automation:
                 timeout:
                   hours: 1
                 continue_on_timeout: false
-              - service: number.set_value
+              - action: number.set_value
                 entity_id: number.nigori_charge_limit
                 data:
                   value: "100"
-              - service: persistent_notification.create
+              - action: persistent_notification.create
                 data_template:
                   title: Max Charge On
                   message: "Long-range trip soon. Charging to 1.21 Gigawatts!"
                   notification_id: low-battery-alert
-              - service: notify.all
+              - action: notify.all
                 data:
                   data:
                     url: "/ryan-new-mushroom/tesla"
@@ -191,9 +191,9 @@ automation:
                 entity_id: binary_sensor.upcoming_trip_charging
                 state: "on"
             sequence:
-              # - service: switch.turn_off
+              # - action: switch.turn_off
               #   entity_id: switch.nigori_maxrange_switch
-              - service: notify.mobile_app_wethop
+              - action: notify.mobile_app_wethop
                 data:
                   title: "Tesla Charging"
                   message: >-
@@ -216,7 +216,7 @@ automation:
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
     trigger:
-      - platform: time
+      - trigger: time
         at: "04:00:00"
     condition: []
     action:
@@ -225,22 +225,22 @@ automation:
   - id: set_charging_rate
     alias: set_charging_rate
     trigger:
-      - platform: event
+      - trigger: event
         event_type: mobile_app_notification_action
         id: max_range
         event_data:
           action: MAX_RANGE
-      - platform: event
+      - trigger: event
         event_type: mobile_app_notification_action
         id: normal_range
         event_data:
           action: NORMAL_RANGE
-      - platform: state
+      - trigger: state
         id: max_range
         entity_id: input_boolean.long_range_travel
         from: "off"
         to: "on"
-      - platform: state
+      - trigger: state
         id: normal_range
         entity_id: input_boolean.long_range_travel
         from: "on"
@@ -252,23 +252,23 @@ automation:
               - condition: trigger
                 id: max_range
             sequence:
-              - service: number.set_value
+              - action: number.set_value
                 entity_id: number.nigori_charge_limit
                 data:
                   value: >-
                     100
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 entity_id: input_boolean.long_range_travel
           - conditions:
               - condition: trigger
                 id: normal_range
             sequence:
-              - service: number.set_value
+              - action: number.set_value
                 entity_id: number.nigori_charge_limit
                 data:
                   value: >-
                     80
-              - service: input_boolean.turn_off
+              - action: input_boolean.turn_off
                 entity_id: input_boolean.long_range_travel
 
   # - id: turn_off_max_range_charge_when_arrive_home
@@ -289,24 +289,24 @@ automation:
   #         entity_id: sensor.wethop_activity
   #         state: "Automotive"
   #   action:
-  #     - service: switch.turn_off
+  #     - action: switch.turn_off
   #       entity_id: switch.nigori_maxrange_switch
-  #     - service: persistent_notification.create
+  #     - action: persistent_notification.create
   #       data_template:
   #         title: Max Charge Off
   #         message: "Turned off max charge"
   #         notification_id: low-battery-alert
-  #     - service: notify.all
+  #     - action: notify.all
   #       data_template:
   #         message: >-
   #           Turned off max charge
-  #     - service: script.turn_on
+  #     - action: script.turn_on
   #       entity_id: script.tesla_set_charge_limit_soc
   #     # TODO enable
   #     # once https://github.com/home-assistant/core/pull/66162
   #     # is released in 2022.2 or 2022.3
-  #     - service: script.tesla_set_precondition_schedule_time
-  #     - service: notify.all
+  #     - action: script.tesla_set_precondition_schedule_time
+  #     - action: notify.all
   #       data_template:
   #         message: >-
   #           Set car precondition time!
@@ -318,20 +318,20 @@ automation:
   #       entity_id: number.nigori_charge_limit
   #   action:
   #     - alias: "Update SOC Limit"
-  #       service: script.turn_on
+  #       action: script.turn_on
   #       entity_id: script.tesla_set_charge_limit_soc
 
   - id: garage_door_reminder
     alias: Close forgotten garage door
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: cover.garage_door
         to: open
     condition:
       - condition: time
         after: "23:30:00"
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: Close the garage door.
 
@@ -339,7 +339,7 @@ automation:
     id: tesla_short_polling_charger_connected
     description: When HA starts up. We adjust the Polling Interval down from the configured value if we are connected to a charger
     trigger:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     condition:
       - condition: state
@@ -347,7 +347,7 @@ automation:
         state: "on"
     action:
       - delay: "00:01:00"
-      - service: tesla_custom.polling_interval
+      - action: tesla_custom.polling_interval
         data:
           scan_interval: 30
 
@@ -355,7 +355,7 @@ automation:
     id: tesla_short_polling_driving
     description: When HA starts up. We adjust the Polling Interval down from the configured value if we are driving
     trigger:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     condition:
       - condition: state
@@ -363,7 +363,7 @@ automation:
         state: "off"
     action:
       - delay: "00:01:00"
-      - service: tesla_custom.polling_interval
+      - action: tesla_custom.polling_interval
         data:
           scan_interval: 30
 
@@ -371,7 +371,7 @@ automation:
     description: We adjust the Polling Interval up to the configured value if we are disconnecting from the charger
     id: tesla_long_polling_charger_disconnected
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.nigori_charging
         to: "off"
         for:
@@ -381,7 +381,7 @@ automation:
         entity_id: binary_sensor.nigori_parking_brake
         state: "on"
     action:
-      - service: tesla_custom.polling_interval
+      - action: tesla_custom.polling_interval
         data:
           scan_interval: 660
 
@@ -389,7 +389,7 @@ automation:
     description: We adjust the Polling Interval up to the configured value when we are parked if the charger is not connected
     id: tesla_long_polling_charger_diconnected_parked
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.nigori_parking_brake
         to: "on"
         for:
@@ -399,7 +399,7 @@ automation:
         entity_id: binary_sensor.nigori_charging
         state: "off"
     action:
-      - service: tesla_custom.polling_interval
+      - action: tesla_custom.polling_interval
         data:
           scan_interval: 660
 
@@ -407,14 +407,14 @@ automation:
     description: We adjust the Polling Interval up to the configured value when we are parked if the charger is not connected
     id: tire_rotation
     trigger:
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.nigori_odometer
         value_template: >-
           {{ state | int % 6250  }}
         below: 20
     condition:
     action:
-      - service: notify.all
+      - action: notify.all
         data_template:
           message: >
             Time to rotate the car's tires.
@@ -522,14 +522,14 @@ script:
         entity_id: binary_sensor.upcoming_trip_charging
         attribute: all_day
         state: off
-      - service: logbook.log
+      - action: logbook.log
         data:
           entity_id: script.tesla_set_precondition_schedule_time
           domain: script
           name: Setting precondition time due to trip starting at
           message: " : {{ (state_attr('binary_sensor.upcoming_trip_charging', 'start_time')| as_datetime|as_local) }}"
       - alias: Set Scheduled Departure Time
-        service: tesla_custom.api
+        action: tesla_custom.api
         data:
           command: SCHEDULED_DEPARTURE
           parameters:
@@ -556,7 +556,7 @@ script:
   #   alias: Tesla Set Charge Limit SOC
   #   mode: restart
   #   sequence:
-  #     - service: tesla_custom.api
+  #     - action: tesla_custom.api
   #       data:
   #         command: CHANGE_CHARGE_LIMIT
   #         parameters:
@@ -569,55 +569,6 @@ script:
 # Sensor
 ########################
 sensor:
-  - platform: template
-    sensors:
-      calendar_destination:
-        friendly_name: "Next Calendar Destination"
-        # as_datetime(13596565062) is a magic number for the year 2400.
-        value_template: >-
-          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
-            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-          {% else %}
-            {% set personal_meeting_time = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if state_attr("calendar.work_trip", "start_time")  != None %}
-            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
-          {% else %}
-            {% set work_meeting_upcoming = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if state_attr("calendar.curling", "start_time")  != None %}
-            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
-          {% else %}
-            {% set curling_upcoming = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if (personal_meeting_time < curling_upcoming) %}
-            {% if (personal_meeting_time < work_meeting_upcoming) %}
-              {% if (personal_meeting_time - now())< timedelta(hours=24) and state_attr('calendar.ryan_claussen', 'location') != "" %}
-                {{ state_attr('calendar.ryan_claussen', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% else %}
-                {{ state_attr('calendar.work_trip', 'location') }}
-            {% endif %}
-          {% else %}
-            {% if (curling_upcoming < work_meeting_upcoming) %}
-              {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.curling', 'location') != "" %}
-                {{ state_attr('calendar.curling', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% else %}
-            {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.work_trip', 'location') != "" %}
-                {{ state_attr('calendar.work_trip', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% endif %}
-          {% endif %}
 
 ########################
 # Template
@@ -805,7 +756,52 @@ template:
       #     {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
       #   state: >-
       #     {{ state_attr("sensor.waze_next_trip_distance", "distance") | int }}
+      - default_entity_id: sensor.calendar_destination
+        name: Next Calendar Destination
+        state: >-
+          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
+          {% else %}
+            {% set personal_meeting_time = as_datetime(13596565062) %}
+          {% endif %}
 
+          {% if state_attr("calendar.work_trip", "start_time")  != None %}
+            {% set work_meeting_upcoming = state_attr("calendar.work_trip", "start_time")| as_datetime|as_local %}
+          {% else %}
+            {% set work_meeting_upcoming = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if state_attr("calendar.curling", "start_time")  != None %}
+            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+          {% else %}
+            {% set curling_upcoming = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if (personal_meeting_time < curling_upcoming) %}
+            {% if (personal_meeting_time < work_meeting_upcoming) %}
+              {% if (personal_meeting_time - now())< timedelta(hours=24) and state_attr('calendar.ryan_claussen', 'location') != "" %}
+                {{ state_attr('calendar.ryan_claussen', 'location') }}
+              {% else %}
+                {{states("input_text.home_address")}}
+              {% endif %}
+            {% else %}
+                {{ state_attr('calendar.work_trip', 'location') }}
+            {% endif %}
+          {% else %}
+            {% if (curling_upcoming < work_meeting_upcoming) %}
+              {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.curling', 'location') != "" %}
+                {{ state_attr('calendar.curling', 'location') }}
+              {% else %}
+                {{states("input_text.home_address")}}
+              {% endif %}
+            {% else %}
+            {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.work_trip', 'location') != "" %}
+                {{ state_attr('calendar.work_trip', 'location') }}
+              {% else %}
+                {{states("input_text.home_address")}}
+              {% endif %}
+            {% endif %}
+          {% endif %}
 ########################
 # Zone
 ########################

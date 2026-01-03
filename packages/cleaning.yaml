@@ -154,20 +154,20 @@ automation:
   - id: wash_finished
     alias: wash_finished
     trigger:
-      - platform: state
+      - trigger: state
         # entity_id: binary_sensor.washer_door
         # to: "off"
         entity_id: binary_sensor.front_load_washer_wash_completed
         to: "on"
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: "Washing machine finished! \U0001F9FA"
 
   - id: washer_reminder
     alias: washer_reminder
     trigger:
-      - platform: state
+      - trigger: state
         # entity_id: binary_sensor.washer_door
         # to: "off"
         entity_id: binary_sensor.front_load_washer_wash_completed
@@ -175,7 +175,7 @@ automation:
         for:
           hours: 18
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: "Items still in washing machine.  Get them out before they turn musty! \U0001F9FA"
 
@@ -183,38 +183,6 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: template
-    sensors:
-      dishwasher_running:
-        #friendly_name: "Washing Machine"
-        delay_off:
-          minutes: 10
-        delay_on:
-          minutes: 5
-        value_template: >-
-          {{ is_state('binary_sensor.dishwasher', 'on') }}
-
-  - platform: template
-    sensors:
-      dryer_running:
-        #friendly_name: "Washing Machine"
-        delay_off:
-          minutes: 10
-        delay_on:
-          minutes: 5
-        value_template: >-
-          {{ is_state('binary_sensor.dryer', 'on') }}
-
-  - platform: template
-    sensors:
-      washing_machine_running:
-        #friendly_name: "Washing Machine"
-        delay_off:
-          minutes: 10
-        delay_on:
-          minutes: 5
-        value_template: >-
-          {{ is_state('binary_sensor.washer', 'on') }}
 
 ########################
 # Cameras
@@ -302,8 +270,24 @@ switch:
 # Template
 ########################
 template:
+  - binary_sensor:
+      - delay_off: 0:10:00
+        delay_on: 0:05:00
+        default_entity_id: binary_sensor.dishwasher_running
+        state: "{{ is_state('binary_sensor.dishwasher', 'on') }}"
+        name: dishwasher_running
+      - delay_off: 0:10:00
+        delay_on: 0:05:00
+        default_entity_id: binary_sensor.dryer_running
+        state: "{{ is_state('binary_sensor.dryer', 'on') }}"
+        name: dryer_running
+      - delay_off: 0:10:00
+        delay_on: 0:05:00
+        default_entity_id: binary_sensor.washing_machine_running
+        state: "{{ is_state('binary_sensor.washer', 'on') }}"
+        name: washing_machine_running
   - trigger:
-      - platform: state
+      - trigger: state
         entity_id:
           - vacuum.valetudo_upstairs_vacuum
           - vacuum.valetudo_mainlevel

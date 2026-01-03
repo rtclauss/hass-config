@@ -57,7 +57,7 @@ automation:
   - id: arrive_at_work
     alias: arrive_at_work
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         event: enter
         # zone: zone.work
@@ -67,12 +67,12 @@ automation:
       entity_id: "binary_sensor.workday_sensor"
       state: "on"
     action:
-      - service: climate.set_preset_mode
+      - action: climate.set_preset_mode
         enabled: false
         entity_id: climate.my_ecobee
         data:
           preset_mode: "away_indefinitely"
-      - service: notify.all
+      - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/climate"
@@ -81,43 +81,48 @@ automation:
   - id: turn_off_morning_routine
     alias: turn_off_morning_routine
     trigger:
-      - platform: time
+      - trigger: time
         at: "00:00:01"
     action:
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         data:
           entity_id: input_boolean.morning_routine
 
   - id: turn_off_office_lamp_when_work_tp_camera_active
     alias: turn_off_office_lamp_when_work_tp_camera_active
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.ryans_work_macbook_pro_m1_camera_in_use
         to: "on"
     action:
-      - service: retry.actions
+      - action: retry.actions
         data:
           sequence:
-            - service: light.turn_off
+            - action: light.turn_off
               target:
                 entity_id: light.office_ceiling
           initial_grace_period: 5
           expected_state:
             - "off"
-      - service: media_player.media_pause
+      - action: media_player.media_pause
         data:
           entity_id:
             - media_player.spotify_ryan_claussen
             - media_player.office_sonos
+      - delay:
+          seconds: 5
+      - action: light.turn_off
+        target:
+          entity_id: light.office_ceiling
 
   - id: turn_on_office_lamp_when_work_tp_camera_inactive
     alias: turn_on_office_lamp_when_work_tp_camera_inactive
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.ryans_work_macbook_pro_m1_camera_in_use
         to: "off"
     action:
-      - service: light.turn_on
+      - action: light.turn_on
         data:
           entity_id: light.office_ceiling
 
@@ -136,7 +141,7 @@ automation:
       #   event_type: ios.notification_action_fired
       #   event_data:
       #     actionName: VACUUM_HOUSE
-      - platform: event
+      - trigger: event
         event_type: mobile_app_notification_action
         event_data:
           action: VACUUM_HOUSE
@@ -145,7 +150,7 @@ automation:
       # Revert back when batteries are all reset/new
       # including main level vacuum
       # - alias: Start Vacuums
-      #   service: vacuum.start
+      #   action: vacuum.start
       #   target:
       #     entity_id: all
       - action: mqtt.publish

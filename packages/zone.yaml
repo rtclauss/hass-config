@@ -163,11 +163,11 @@ automation:
   - id: cloudy_home_arrival
     alias: cloudy_home_arrival
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     condition:
@@ -177,66 +177,56 @@ automation:
           entity_id: sensor.tomorrow_io_the_brewery_cloud_cover
           above: 50
         - condition: state
-          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: binary_sensor.bayesian_bed_occupancy
+          entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
           # enabled: false
     action:
-      - service: scene.turn_on
+      - action: scene.turn_on
         entity_id: scene.cloudy_arrive_home
         data:
           transition: 30
-      - service: notify.all
+      - action: notify.all
         data:
           message: Cloudy day arrival.
 
   - id: default_arrive_home
     alias: default_arrive_home
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     condition:
       and:
         - condition: state
-          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: binary_sensor.bayesian_bed_occupancy
+          entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
         - alias: "I'm driving home"
           condition: state
           entity_id: sensor.wethop_activity
           state: "Automotive"
     action:
-      - service: scene.turn_on
+      - action: scene.turn_on
         entity_id: scene.arrive_home
       # - alias: "Notify action"
-      #   service: notify.mobile_app_wethop
+      #   action: notify.mobile_app_wethop
       #   data:
       #     message: >-
       #       Arriving home with wethop activity {{ states('sensor.wethop_activity') }}
 
-  - id: doorbell_ring
-    alias: doorbell_ring
-    trigger:
-      - platform: state
-        entity_id: binary_sensor.doorbell_contact
-        to: "on"
-        from: "off"
-    action:
-      - service: notify.all
-        data:
-          message: Doorbell rang!
-
   - id: doors_open_when_leaving_home
     alias: doors_open_when_leaving_home
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "off"
     condition:
@@ -255,18 +245,18 @@ automation:
           entity_id: binary_sensor.hall_garage_entry_contact
           state: open
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: Door left open!
 
   - id: garage_door_open_when_leaving_home
     alias: garage_door_open_when_leaving_home
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "off"
     condition:
@@ -274,42 +264,42 @@ automation:
         entity_id: cover.garage_door
         state: open
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: Garage door is still open! Attempting to close...
-      - service: cover.close_cover
+      - action: cover.close_cover
         entity_id: cover.garage_door
 
   - alias: input_boolean_tracker_on
     id: input_boolean_tracker_on
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     action:
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.bayesian_zeke_home
 
   - alias: input_boolean_tracker_off
     id: input_boolean_tracker_off
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "off"
     action:
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         data:
           entity_id: input_boolean.bayesian_zeke_home
 
   - id: play_spotify_when_i_get_home
     alias: play_spotify_when_i_get_home
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     condition:
@@ -317,7 +307,8 @@ automation:
         entity_id: input_boolean.guest_mode
         state: "off"
       - condition: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: input_boolean.chatgpt_bed_occupied
         state: "off"
       - alias: "I'm driving home"
         condition: state
@@ -328,27 +319,28 @@ automation:
       #   value_template: >-
       #     {{ not is_state('media_player.spotify_ryan_claussen', 'playing') }}
     action:
-      - service: script.turn_on
+      - action: script.turn_on
         entity_id: script.spotify_arrival
-      - service: notify.all
+      - action: notify.all
         data:
           message: "Welcome Home"
 
   - id: turn_on_lights_at_night_when_i_get_home
     alias: turn_on_lights_at_night_when_i_get_home
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     condition:
       condition: and
       conditions:
         - condition: state
-          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: binary_sensor.bayesian_bed_occupancy
+          entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
           # enabled: false
         - condition: or
@@ -359,31 +351,32 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - service: scene.turn_on
+      - action: scene.turn_on
         entity_id: scene.night_arrive_home
         data:
           transition: 30
-      - service: vacuum.return_to_base
+      - action: vacuum.return_to_base
         data:
           entity_id: all
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id: switch.nigori_maxrange_switch
 
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     condition:
       condition: and
       conditions:
         - condition: state
-          entity_id: binary_sensor.bayesian_bed_occupancy
+          # entity_id: binary_sensor.bayesian_bed_occupancy
+          entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
           # enabled: false
         - condition: or
@@ -393,9 +386,9 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - service: scene.turn_on
+      - action: scene.turn_on
         entity_id: scene.bedroom_prep
-      - service: notify.all
+      - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/owner-suite"
@@ -409,18 +402,18 @@ automation:
   #       entity_id: binary_sensor.test_homeward
   #       to: "true"
   #   action:
-  #     # - service: nest.set_eta
+  #     # - action: nest.set_eta
   #     #   data_template:
   #     #     eta: '{{states.sensor.time_to_home.state}}'
   #     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-  #     - service: climate.set_temperature
+  #     - action: climate.set_temperature
   #       data:
   #         temperature: 70
   #         # Z-Wave Thermostat
   #         # entity: climate.glycol_thermostat
   #         # Nest Thermostat
   #         entity: climate.my_ecobee
-  #     - service: notify.all
+  #     - action: notify.all
   #       data_template:
   #         message: >-
   #           Turning on HVAC while you drive home from a road trip
@@ -432,15 +425,15 @@ automation:
       # - platform: state
       #   entity_id: device_tracker.bayesian_zeke_home
       #   from: 'Twin Cities'
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.rochester
         event: leave
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.allianzfield
         event: leave
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.targetfield
         event: leave
@@ -448,19 +441,19 @@ automation:
     #   condition: template
     #   value_template: '{{ 110 <= sensor.zeke_direction <= 260 }}'
     action:
-      # - service: nest.set_eta
+      # - action: nest.set_eta
       #   data_template:
       #     eta: '{{states.sensor.time_to_home.state}}'
       #     trip_id: "{{ states.input_select.trip_origin.state }}"
-      # - service: climate.set_preset_mode
+      # - action: climate.set_preset_mode
       #   entity_id: climate.my_ecobee
       #   data:
       #     preset_mode: "Home" # TODO set this to the correct schedule (Home or Sleep)
-      - service: ecobee.resume_program
+      - action: ecobee.resume_program
         data:
           resume_all: true
           entity_id: climate.my_ecobee
-      - service: notify.all
+      - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/climate"
@@ -470,11 +463,11 @@ automation:
   - id: turn_off_lights_when_i_leave
     alias: turn_off_lights_when_i_leave
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: leave
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "off"
     condition:
@@ -489,33 +482,30 @@ automation:
         # Todo add biking here?
     action:
       parallel:
-        - service: lock.lock
+        - action: lock.lock
           entity_id: lock.front_door_lock
-        - service: cover.close_cover
+        - action: cover.close_cover
           entity_id: cover.garage_door
-        - service: scene.turn_on
+        - action: scene.turn_on
           entity_id: scene.leave_home
-        - service: script.lights_off_except
+        - action: script.lights_off_except
           data:
             exclude_lights:
-              - light.outside_front_lights
-              - light.outside_garage_lights
+              - light.outside_front_hue
               - light.outside_north_west_garage
               - light.outside_south_west_garage
               - light.outside_front_door
-              - light.outside_garage_lights
-              - light.outside_front_hue
             transition: 240
-        # - service: light.turn_off
+        # - action: light.turn_off
         #   entity_id: "all"
-        - service: fan.turn_off
+        - action: fan.turn_off
           entity_id: "all"
         # - alias: "Notify action"
-        #   service: notify.mobile_app_wethop
+        #   action: notify.mobile_app_wethop
         #   data:
         #     message: >-
         #       Leaving home with wethop activity {{ states('sensor.wethop_activity') }}
-        - service: scene.turn_on
+        - action: scene.turn_on
           entity_id: scene.turn_on_cameras
         - if:
             - alias: "Haven't vacuumed in more than 2 days"
@@ -527,7 +517,7 @@ automation:
             # Revert back when batteries are all reset/new
             # including main level vacuum
             # - alias: Start Vacuums
-            #   service: vacuum.start
+            #   action: vacuum.start
             #   target:
             #     entity_id: all
             - action: mqtt.publish
@@ -560,14 +550,14 @@ automation:
     description: When HA starts up, update bayesian device tracker GPS items
     id: update_bayesian_device_tracker_on_start
     trigger:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     action:
       - delay: "00:01:00"
-      - service: button.press
+      - action: button.press
         target:
           entity_id: button.nigori_force_data_update
-      - service: homeassistant.update_entity
+      - action: homeassistant.update_entity
         entity_id:
           - device_tracker.wethop
           - device_tracker.nigori_location_tracker
@@ -577,7 +567,7 @@ automation:
   - id: update_trip_origin
     alias: update_trip_origin
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: device_tracker.bayesian_zeke_home
     condition:
       - condition: template
@@ -588,7 +578,7 @@ automation:
             not is_state('device_tracker.bayesian_zeke_home', 'not_home')
           }}
     action:
-      - service: input_select.select_option
+      - action: input_select.select_option
         data_template:
           entity_id: input_select.trip_origin
           option: "{{ trigger.to_state.state }}"
@@ -605,18 +595,18 @@ automation:
   #       to: "Twin Cities"
   #       from: "Away"
   #   action:
-  #     # - service: nest.set_eta
+  #     # - action: nest.set_eta
   #     #   data_template:
   #     #     eta: '{{states.sensor.time_to_home.state}}'
   #     #     trip_id: "{{ states.input_select.trip_origin.state }}"
-  #     - service: climate.set_temperature
+  #     - action: climate.set_temperature
   #       data:
   #         temperature: 70
   #         # Z-Wave Thermostat
   #         # entity: climate.glycol_thermostat
   #         # Nest Thermostat
   #         entity: climate.my_ecobee
-  #     - service: notify.all
+  #     - action: notify.all
   #       data_template:
   #         message: >-
   #           Entering Twin Cities from direction {{ states('sensor.zeke_direction') }}. Turning off Away Mode. ETA to home {{ states('sensor.time_to_home') }}.
@@ -624,20 +614,20 @@ automation:
   - id: vacuum_return_home
     alias: vacuum_return_home
     trigger:
-      - platform: zone
+      - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
     action:
-      - service: vacuum.return_to_base
+      - action: vacuum.return_to_base
         data:
           entity_id: all
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id: switch.living_room_camera
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id: switch.basement_camera_power
 
 ########################
@@ -776,7 +766,7 @@ scene:
     entities:
       light.hall_foyer_switch:
         state: "on"
-      light.kitchen_sink:
+      light.kitchen_sink_overhead:
         state: "on"
       light.den_all:
         state: "on"
@@ -832,7 +822,7 @@ scene:
 script:
   # update_nest_eta:
   #   sequence:
-  #     - service: nest.set_eta
+  #     - action: nest.set_eta
   #       data_template:
   #         eta: "{{states('sensor.time_to_home.state')}}"
   #         trip_id: "{{ states('input_select.trip_origin') }}"

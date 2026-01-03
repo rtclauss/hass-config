@@ -91,11 +91,11 @@ automation:
   - alias: den_fan_control
     id: den_fan_control
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.den_occupancy
         to: "on"
         id: den-occupied
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.den_occupancy
         to: "off"
         for:
@@ -107,7 +107,7 @@ automation:
               - condition: trigger
                 id: den-occupied
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 data:
                   entity_id: fan.den_ceiling
                   #speed: smart
@@ -115,7 +115,7 @@ automation:
               - condition: trigger
                 id: den-unoccupied
             sequence:
-              - service: fan.turn_off
+              - action: fan.turn_off
                 data:
                   entity_id: fan.den_ceiling
 
@@ -127,18 +127,18 @@ automation:
   #       to: "off"
   #       for: "00:30:00"
   #   action:
-  #     - service: fan.turn_off
+  #     - action: fan.turn_off
   #       data:
   #         entity_id: fan.den_ceiling
 
   - alias: bedroom_fan_control
     id: bedroom_fan_control
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bedroom_occupancy
         to: "on"
         id: bedroom-occupied
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bedroom_occupancy
         to: "off"
         for:
@@ -146,7 +146,8 @@ automation:
         id: bedroom-unoccupied
     condition:
       - condition: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
+        # - binary_sensor.bayesian_bed_occupancy
+        entity_id: input_boolean.chatgpt_bed_occupied
         state: "off"
         # enabled: false
     action:
@@ -155,7 +156,7 @@ automation:
               - condition: trigger
                 id: bedroom-occupied
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 data:
                   entity_id: fan.owner_suite
                   percentage: 67
@@ -165,7 +166,7 @@ automation:
               - condition: trigger
                 id: bedroom-unoccupied
             sequence:
-              - service: fan.turn_off
+              - action: fan.turn_off
                 data:
                   entity_id: fan.owner_suite
                   #speed: "medium"  # TODO have this change depending on the season: low in winter, medium spring/fall, high in summer
@@ -184,31 +185,31 @@ automation:
   #       state: "off"
   #       # enabled: false
   #   action:
-  #     - service: fan.turn_off
+  #     - action: fan.turn_off
   #       data:
   #         entity_id: fan.owner_suite
 
   - alias: toggle_office_fan
     id: toggle_office_fan
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.office_occupancy
         to: "on"
         id: office-occupied
         enabled: false
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.office_motion_occupancy
         to: "on"
         id: office-occupied
         enabled: false
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.office_occupancy
         to: "off"
         for:
           minutes: 30
         id: office-unoccupied
         enabled: false
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.office_motion_occupancy
         to: "off"
         for:
@@ -221,7 +222,7 @@ automation:
               - condition: trigger
                 id: office-occupied
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 data:
                   entity_id: fan.office_ceiling_fan
       - choose:
@@ -229,7 +230,7 @@ automation:
               - condition: trigger
                 id: office-unoccupied
             sequence:
-              - service: fan.turn_off
+              - action: fan.turn_off
                 data:
                   entity_id: fan.office_ceiling_fan
 
@@ -245,7 +246,7 @@ automation:
   #       to: "off"
   #       for: "00:30:00"
   #   action:
-  #     - service: fan.turn_off
+  #     - action: fan.turn_off
   #       data:
   #         entity_id: fan.office_ceiling_fan
 

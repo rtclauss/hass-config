@@ -89,34 +89,34 @@ automation:
   - id: water_leak_detected
     alias: water_leak_detected
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.basement_unfinished_leak_water_leak
         from: "on"
         to: "off"
         id: dry
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.basement_unfinished_leak_water_leak
         from: "off"
         to: "on"
         id: wet
 
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.kitchen_sink_leak_water_leak
         from: "off"
         to: "on"
         id: wet
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.kitchen_sink_leak_water_leak
         from: "on"
         to: "off"
         id: dry
 
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.laundry_room_leak_water_leak
         from: "off"
         to: "on"
         id: wet
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.laundry_room_leak_water_leak
         from: "off"
         to: "on"
@@ -129,13 +129,13 @@ automation:
                 id: wet
             sequence:
               # Select Wet
-              - service: persistent_notification.create
+              - action: persistent_notification.create
                 data_template:
                   title: Wet floor
                   message: >-
                     {{  trigger.from_state.attributes.friendly_name }} is wet.
                   notification_id: wet-floor-alert
-              - service: notify.all
+              - action: notify.all
                 data:
                   message: >-
                     {{  trigger.from_state.attributes.friendly_name }} is wet.
@@ -144,13 +144,13 @@ automation:
                 id: dry
             sequence:
               # Select dry
-              - service: persistent_notification.create
+              - action: persistent_notification.create
                 data:
                   title: Dry floor
                   message: >-
                     {{  trigger.from_state.attributes.friendly_name }} is dry.
                   notification_id: wet-floor-alert
-              - service: notify.all
+              - action: notify.all
                 data:
                   message: >-
                     {{  trigger.from_state.attributes.friendly_name }} has dried.
@@ -158,7 +158,7 @@ automation:
   - id: motion_detected_on_trip
     alias: motion_detected_on_trip
     trigger:
-      - platform: state
+      - trigger: state
         entity_id:
           - binary_sensor.basement_door_contact
           - binary_sensor.se_basement_window_contact
@@ -185,38 +185,38 @@ automation:
         entity_id: alarm_control_panel.home_alarm
         state: armed_away
     action:
-      - service: alarm_control_panel.alarm_trigger
+      - action: alarm_control_panel.alarm_trigger
         entity_id: alarm_control_panel.home_alarm
-      - service: notify.all
+      - action: notify.all
         data_template:
           message: >
             Motion detected at {{ trigger.to_state.attributes.friendly_name }} while you're away!
-      #    - service: tts.google_say
+      #    - action: tts.google_say
       #      data:
       #        message: "Intruder Alert! Intruder Alert! You are detected and recorded."
-      - service: light.turn_on
+      - action: light.turn_on
         data:
-          entity_id: light.living_room_lamps
+          entity_id: light.dining_room_lamps
           flash: long
       - delay: 00:00:02
-      - service: light.turn_on
+      - action: light.turn_on
         data:
-          entity_id: light.living_room_lamps
+          entity_id: light.dining_room_lamps
           flash: long
       - delay: 00:00:02
-      - service: light.turn_on
+      - action: light.turn_on
         data:
-          entity_id: light.living_room_lamps
+          entity_id: light.dining_room_lamps
           flash: long
 
   - alias: send_notification_when_alarm_triggered
     id: send_notification_when_alarm_triggered
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: alarm_control_panel.home_alarm
         to: "triggered"
     action:
-      - service: notify.all
+      - action: notify.all
         data_template:
           message: >
             Alarm triggered while you're away
@@ -224,7 +224,7 @@ automation:
   - alias: send_pic_from_camera
     id: send_pic_from_camera
     trigger:
-      - platform: state
+      - trigger: state
         entity_id:
           - binary_sensor.basement_motion_sensor
           - binary_sensor.livingroom_motion_sensor
@@ -234,7 +234,7 @@ automation:
           seconds: 5
     # condition:
     action:
-      - service: notify.mobile_app_wethop
+      - action: notify.mobile_app_wethop
         data_template:
           message: >-
             Stream from {{ trigger.to_state.attributes.friendly_name }}
@@ -248,7 +248,7 @@ automation:
   - alias: arm_alarm
     id: arm_alarm
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         from: "on"
         to: "off"
@@ -257,54 +257,54 @@ automation:
         entity_id: input_boolean.guest_mode
         state: "off"
     action:
-      #    - service: notify.all
+      #    - action: notify.all
       #      data_template:
       #        message: >
       #          Enabled alarm and turned on motion detection
-      - service: alarm_control_panel.alarm_arm_away
+      - action: alarm_control_panel.alarm_arm_away
         entity_id: alarm_control_panel.home_alarm
         data:
           code: !secret alarm_code
-      - service: switch.turn_on
+      - action: switch.turn_on
         entity_id:
           - switch.livingroom_motion_detection
           - switch.tikiroomcam_tikiroom_motion_detection
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         entity_id:
           - input_boolean.house_unoccupied
 
   - alias: disarm_alarm
     id: disarm_alarm
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         from: "off"
         to: "on"
     action:
-      - service: alarm_control_panel.alarm_disarm
+      - action: alarm_control_panel.alarm_disarm
         entity_id: alarm_control_panel.home_alarm
         data:
           code: !secret alarm_code
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id:
           - switch.livingroom_motion_detection
           - switch.tikiroomcam_tikiroom_motion_detection
-      #    - service: notify.all
+      #    - action: notify.all
       #      data_template:
       #        message: >
       #          Disabled alarm and turned off motion detection
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         entity_id:
           - input_boolean.house_unoccupied
 
   - alias: notify_ios_app
     id: notify_ios_app
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: alarm_control_panel.home_alarm
         to: "triggered"
     action:
-      - service: notify.mobile_app_wethop
+      - action: notify.mobile_app_wethop
         data:
           message: "Something triggered alarm panel at home!"
 
@@ -354,12 +354,12 @@ notify:
   - name: all
     platform: group
     services:
-      #    - service: telegram
-      - service: mobile_app_faro
-      - service: mobile_app_wethop
-      - service: mobile_app_rtclauss
-      - service: mobile_app_ryans_macbook_pro
-      - service: lg_webos_tv_oled65cxpua
+      #    - action: telegram
+      - action: mobile_app_faro
+      - action: mobile_app_wethop
+      - action: mobile_app_rtclauss
+      - action: mobile_app_ryans_macbook_pro
+      - action: lg_webos_tv_oled65cxpua
 
 ########################
 # Scenes
@@ -373,20 +373,20 @@ script:
   flash_lights:
     sequence:
       - alias: Lights On
-        service: light.turn_on
+        action: light.turn_on
         data:
           entity_id: all
       - delay:
           # time for flash light on
           seconds: 1
       - alias: Lights Off
-        service: light.turn_off
+        action: light.turn_off
         data:
           entity_id: all
       - delay:
           # time for flash light off
           seconds: 1
       - alias: loop_lights
-        service: script.turn_on
+        action: script.turn_on
         data:
           entity_id: script.flash_lights

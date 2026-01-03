@@ -9,6 +9,7 @@ esp8266:
 wifi:
   ssid: !secret wifi_ap
   password: !secret wifi_password
+  min_auth_mode: WPA2
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -20,7 +21,7 @@ api:
 
 # Enable logging
 logger:
-  level: DEBUG
+  level: INFO
   esp8266_store_log_strings_in_flash: False
 
 ota:
@@ -36,6 +37,12 @@ time:
 #     allow_other_uses: true
 #   - number: GPIO14
 #     allow_other_uses: true
+
+text_sensor:
+  - platform: homeassistant
+    id: ryan_presence
+    entity_id: person.ryan
+    internal: true
 
 sensor:
   - platform: homeassistant
@@ -62,7 +69,7 @@ sensor:
       number: GPIO14
       allow_other_uses: True
     gain: 128
-    update_interval: 0.5s
+    update_interval: 3s
     filters:
       - median:
           window_size: 5
@@ -83,17 +90,18 @@ sensor:
       #     ESP_LOGI("main", "Calibrated value of my sensor: %f", y);
       #     return (y);
       # Switch to completely calculated values:
+        # 9/17/25
       - lambda: !lambda |-
-          ESP_LOGI("main", "Calibration of 0kg value is: %f", id(current_empty_value).state);
-          ESP_LOGI("main", "Calibration of 86kg value is: %f", id(current_occupied_value).state);
-          ESP_LOGI("main", "Raw Value of my sensor: %f", x);
+          ESP_LOGI("calibrated", "Calibration of 0kg value is: %f", id(current_empty_value).state);
+          ESP_LOGI("calibrated", "Calibration of 86kg value is: %f", id(current_occupied_value).state);
+          ESP_LOGI("calibrated", "Raw Value of my sensor: %f", x);
           float m = (86.0 - 0.0)/(id(current_occupied_value).state - id(current_empty_value).state);
           float c = 86.0 - (m * id(current_occupied_value).state);
           float y = m * x + c;
-          ESP_LOGI("main", "Calibrated value of my sensor: %f", y);
+          ESP_LOGI("calibrated", "Calibrated value of my sensor: %f", y);
           return (y);
-
     accuracy_decimals: 2
+
 
   # - platform: hx711
   #   name: "Bed Load Cell 1"
@@ -120,10 +128,174 @@ sensor:
   #         send_every: 1
   #   accuracy_decimals: 2
 
+
+# Native from 6/09/2025 before chatgpt helped
+  # - platform: hx711
+  #   name: "Raw Bed Load Cell 1"
+  #   state_class: measurement
+  #   unit_of_measurement: value
+  #   dout_pin: 
+  #     number: GPIO0
+  #     allow_other_uses: True
+  #   clk_pin: 
+  #     number: GPIO14
+  #     allow_other_uses: True
+  #   gain: 128
+  #   update_interval: 0.5s
+  #   filters:
+  #     - median:
+  #         window_size: 5
+  #         send_every: 6
+  #   accuracy_decimals: 2
+
+
+# 7/31/2025
+  # - platform: hx711
+  #   name: "Raw Bed Load Cell 1"
+  #   state_class: measurement
+  #   unit_of_measurement: raw
+  #   dout_pin: 
+  #     number: GPIO0
+  #     allow_other_uses: True
+  #   clk_pin: 
+  #     number: GPIO14
+  #     allow_other_uses: True
+  #   gain: 128
+  #   update_interval: 1s
+  #   filters:
+  #     - sliding_window_moving_average:
+  #         window_size: 8
+  #         send_every: 1
+  #     - lambda: |-
+  #         static float last = std::numeric_limits<float>::quiet_NaN();
+  #         static unsigned long last_good = millis();
+  #         const float max_step = 1000;            // Reject instant jumps > 2000
+  #         const float min_step = 200;               // Ignore jitter < 100
+  #         const float max_drift_per_sec = 500.0;  // Allow drift ≤ 100 units/sec
+  #         const float min_valid = -180000;        // Optional: sanity lower limit
+  #         const float max_valid = -120000;         // Optional: sanity upper limit
+
+  #         if (isnan(x) || x < min_valid || x > max_valid) {
+  #           ESP_LOGW("hx711", "[lambda] Value out of bounds: %f", x);
+  #           return {};  // Drop invalid value
+  #         }
+
+  #         if (isnan(last)) {
+  #           last = x;
+  #           last_good = millis();
+  #           ESP_LOGI("hx711", "[lambda] First value: %f", x);
+  #           return x;
+  #         }
+
+  #         float delta = abs(x - last);
+  #         unsigned long now = millis();
+  #         float elapsed_sec = (now - last_good) / 1000.0;
+
+  #         // Protect against overflow or first-loop startup
+  #         if (elapsed_sec <= 0.0 || elapsed_sec > 3600) elapsed_sec = 1.0;
+
+  #         if (delta < min_step) {
+  #           ESP_LOGW("bed_occupancy", "[lambda] Noise ignored (Δ=%f)", delta);
+  #           return last;
+  #         }
+
+  #         if (delta > max_step && delta > (max_drift_per_sec * elapsed_sec)) {
+  #           ESP_LOGW("hx711", "[lambda] Spike rejected: new=%f last=%f Δ=%f elapsed=%.2fs", x, last, delta, elapsed_sec);
+  #           return last;  // Reject sample
+  #         }
+
+  #         ESP_LOGI("hx711", "[lambda] Accepted: %f (Δ=%f, %.2fs)", x, delta, elapsed_sec);
+  #         last = x;
+  #         last_good = now;
+  #         return x;
+
+  #   accuracy_decimals: 2
+
+
+# Change on Oct 2, 2025
+  # - platform: hx711
+  #   name: "Raw Bed Load Cell 1"
+  #   id: raw_bed_load_cell
+  #   state_class: measurement
+  #   unit_of_measurement: raw
+  #   dout_pin: 
+  #     number: GPIO0
+  #     allow_other_uses: True
+  #   clk_pin: 
+  #     number: GPIO14
+  #     allow_other_uses: True
+  #   gain: 128
+  #   update_interval: never  # Manual polling recommended
+  #   filters:
+  #     - sliding_window_moving_average:
+  #         window_size: 8
+  #         send_every: 1
+  #     - lambda: |-
+  #         static float last = std::numeric_limits<float>::quiet_NaN();
+  #         static unsigned long last_good = millis();
+  #         static int stable_count = 0;
+  #         const int required_stable = 3;           // Require 3 consecutive stable samples
+  #         const float max_step = 3000;
+  #         const float min_step = 20;
+  #         const float max_drift_per_sec = 1500.0;
+  #         const float min_valid = -180000;
+  #         const float max_valid = -120000;
+
+  #         if (isnan(x) || x < min_valid || x > max_valid) {
+  #           ESP_LOGW("bed_occupancy", "[lambda] Out of bounds: %f", x);
+  #           return last;
+  #         }
+
+  #         unsigned long now = millis();
+  #         float elapsed_sec = (now - last_good) / 1000.0;
+  #         if (elapsed_sec <= 0.0 || elapsed_sec > 3600) elapsed_sec = 1.0;
+
+  #         if (isnan(last)) {
+  #           last = x;
+  #           last_good = now;
+  #           stable_count = 0;
+  #           ESP_LOGI("bed_occupancy", "[lambda] First value: %f", x);
+  #           return x;
+  #         }
+
+  #         float delta = abs(x - last);
+
+  #         if (delta < min_step) {
+  #           ESP_LOGD("bed_occupancy", "[lambda] Jitter ignored (Δ=%f)", delta);
+  #           stable_count = 0;
+  #           return last;
+  #         }
+
+  #         // Large jump check
+  #         if (delta > max_step && delta > (max_drift_per_sec * elapsed_sec)) {
+  #           stable_count++;
+  #           if (stable_count >= required_stable) {
+  #             ESP_LOGW("bed_occupancy", "[lambda] Stable spike accepted after %d samples: %f", stable_count, x);
+  #             last = x;
+  #             last_good = now;
+  #             stable_count = 0;
+  #             return x;
+  #           } else {
+  #             ESP_LOGW("bed_occupancy", "[lambda] Spike candidate (Δ=%f), waiting for stability %d/%d", delta, stable_count, required_stable);
+  #             return last;
+  #           }
+  #         }
+
+  #         // Normal accepted value
+  #         ESP_LOGI("bed_occupancy", "[lambda] Accepted: %f (Δ=%f, %.2fs)", x, delta, elapsed_sec);
+  #         last = x;
+  #         last_good = now;
+  #         stable_count = 0;
+  #         return x;
+
+  #   accuracy_decimals: 2
+
+
   - platform: hx711
     name: "Raw Bed Load Cell 1"
+    id: raw_bed_load_cell
     state_class: measurement
-    unit_of_measurement: value
+    unit_of_measurement: raw
     dout_pin: 
       number: GPIO0
       allow_other_uses: True
@@ -131,9 +303,121 @@ sensor:
       number: GPIO14
       allow_other_uses: True
     gain: 128
-    update_interval: 0.5s
+    update_interval: never
     filters:
-      - median:
-          window_size: 5
-          send_every: 6
+      - sliding_window_moving_average:
+          window_size: 8
+          send_every: 1
+      - lambda: |-
+          const int WN = 21;
+          static float buf[WN];
+          static int idx = 0;
+          static bool primed = false;
+
+          static float last = std::numeric_limits<float>::quiet_NaN();
+          static unsigned long last_good = millis();
+          static int confirm = 0;
+
+          const float MIN_VALID = -180000.0f;
+          const float MAX_VALID = -120000.0f;
+          const float MIN_STEP  = 20.0f;
+          const float MAX_STEP_FAST = 2500.0f;
+          const int   REQUIRED_CONFIRM = 2;
+          const float MAD_K = 6.0f;
+
+          std::string pres = id(ryan_presence).state;
+          const bool away = (pres.empty() || pres != "home");
+          const float AWAY_ABS_CLAMP   = 300.0f;
+          const float AWAY_RATE_CLAMP  = 50.0f;
+
+          if (isnan(x) || x < MIN_VALID || x > MAX_VALID) {
+            ESP_LOGW("bed_occupancy", "[lambda] OOB raw=%f", x);
+            return isnan(last) ? x : last;
+          }
+
+          if (isnan(last)) {
+            last = x;
+            last_good = millis();
+          }
+
+          buf[idx] = x;
+          idx = (idx + 1) % WN;
+          if (idx == 0) primed = true;
+
+          if (!primed) {
+            last = x;
+            last_good = millis();
+            ESP_LOGD("bed_occupancy", "[lambda] Priming window: %f", x);
+            return x;
+          }
+
+          float w[WN];
+          for (int i=0;i<WN;i++) w[i] = buf[i];
+          for (int i=0;i<WN-1;i++){
+            for (int j=i+1;j<WN;j++){
+              if (w[j] < w[i]) { float t=w[i]; w[i]=w[j]; w[j]=t; }
+            }
+          }
+          float med = w[WN/2];
+
+          float absdev[WN];
+          for (int i=0;i<WN;i++) absdev[i] = fabsf(buf[i]-med);
+          for (int i=0;i<WN-1;i++){
+            for (int j=i+1;j<WN;j++){
+              if (absdev[j] < absdev[i]) { float t=absdev[i]; absdev[i]=absdev[j]; absdev[j]=t; }
+            }
+          }
+          float mad = absdev[WN/2];
+          if (mad < 1.0f) mad = 1.0f;
+
+          float delta = fabsf(x - last);
+          unsigned long now = millis();
+          float elapsed = (now - last_good) / 1000.0f;
+          if (elapsed <= 0.0f || elapsed > 3600.0f) elapsed = 1.0f;
+
+          if (away) {
+            if (delta > AWAY_ABS_CLAMP || delta > AWAY_RATE_CLAMP) {
+              ESP_LOGW("bed_occupancy", "[lambda] Away clamp reject: x=%f last=%f Δ=%f", x, last, delta);
+              return last;
+            }
+          }
+
+          float z_like = fabsf(x - med) / mad;
+          if (z_like > MAD_K) {
+            ESP_LOGW("bed_occupancy", "[lambda] MAD reject: x=%f med=%f MAD=%f z≈%f", x, med, mad, z_like);
+            confirm = 0;
+            return last;
+          }
+
+          if (delta < MIN_STEP) {
+            ESP_LOGD("bed_occupancy", "[lambda] Jitter ignored Δ=%f", delta);
+            confirm = 0;
+            return last;
+          }
+
+          if (delta > MAX_STEP_FAST) {
+            confirm++;
+            if (confirm >= REQUIRED_CONFIRM) {
+              ESP_LOGI("bed_occupancy", "[lambda] Large step accepted: x=%f Δ=%f", x, delta);
+              last = x;
+              last_good = now;
+              confirm = 0;
+              return x;
+            } else {
+              ESP_LOGW("bed_occupancy", "[lambda] Large step candidate, waiting confirm %d/%d (x=%f Δ=%f)", confirm, REQUIRED_CONFIRM, x, delta);
+              return last;
+            }
+          }
+
+          ESP_LOGI("bed_occupancy", "[lambda] Accepted x=%f Δ=%f med=%f MAD=%f away=%d", x, delta, med, mad, away);
+          last = x;
+          last_good = now;
+          confirm = 0;
+          return x;
+
     accuracy_decimals: 2
+
+interval:
+  - interval: 1s
+    then:
+      - component.update: raw_bed_load_cell

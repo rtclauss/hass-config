@@ -15,6 +15,7 @@ class SettingsStoreData:
     hideSidebar = attr.ib(type=bool, default=None)
     hideHeader = attr.ib(type=bool, default=None)
     defaultPanel = attr.ib(type=str, default=None)
+    defaultAction = attr.ib(type=object, default=None)
     sidebarPanelOrder = attr.ib(type=list, default=None)
     sidebarHiddenPanels = attr.ib(type=list, default=None)
     sidebarTitle = attr.ib(type=str, default=None)
@@ -24,10 +25,14 @@ class SettingsStoreData:
     autoRegister = attr.ib(type=bool, default=None)
     lockRegister = attr.ib(type=bool, default=None)
     saveScreenState = attr.ib(type=bool, default=None)
+    overlayIcon = attr.ib(type=object, default=None)
+    fullInteraction = attr.ib(type=bool, default=None)
 
     @classmethod
     def from_dict(cls, data):
-        return cls(**data)
+        class_attributes = attr.fields_dict(cls).keys()
+        valid = {key: value for key, value in data.items() if key in class_attributes}
+        return cls(**valid)
 
     def asdict(self):
         return attr.asdict(self)
@@ -44,10 +49,12 @@ class BrowserStoreData:
 
     @classmethod
     def from_dict(cls, data):
+        class_attributes = attr.fields_dict(cls).keys()
+        valid = {key: value for key, value in data.items() if key in class_attributes}
         settings = SettingsStoreData.from_dict(data.get("settings", {}))
         return cls(
             **(
-                data
+                valid
                 | {
                     "settings": settings,
                 }
@@ -128,6 +135,14 @@ class BrowserModStore:
             self.listeners.remove(callback)
 
         return remove_listener
+
+    def get_version(self):
+        return self.data.version
+
+    async def set_version(self, version):
+        if self.data.version != version:
+            self.data.version = version
+            await self.updated()
 
     def get_browser(self, browserID):
         return self.data.browsers.get(browserID, BrowserStoreData())

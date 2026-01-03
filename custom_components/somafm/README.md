@@ -16,6 +16,6 @@ Clone this repository to `{CONFIG}/custom_components/somafm`, then restart Home 
 ![image](/preview.png)
 
 ## Credits
-* Integration by [Maddy Blue](https://github.com/maddyblue/)
+* Integration by [Madelynn Blue](https://github.com/madelynnblue/)
 * HACS hacks by [Wolfgang de Groot](https://github.com/wolfgangs-code/)
 * Music provided by [SomaFM](https://somafm.com)

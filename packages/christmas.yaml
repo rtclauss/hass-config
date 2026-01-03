@@ -89,15 +89,15 @@ automation:
     alias: christmas_tree_on
     initial_state: false
     trigger:
-      - platform: sun
+      - trigger: sun
         event: sunset
         offset: -00:45:00
     action:
-      - service: switch.turn_on
+      - action: switch.turn_on
         entity_id: switch.christmas_tree
-      - service: light.turn_on
+      - action: light.turn_on
         entity_id: light.christmas_lights
-      - service: notify.all
+      - action: notify.all
         data:
           message: Turning on Christmas Tree.
 
@@ -105,14 +105,14 @@ automation:
     alias: christmas_tree_off_midnight
     initial_state: false
     trigger:
-      - platform: time
+      - trigger: time
         at: 00:00:00
     action:
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id: switch.christmas_tree
-      - service: light.turn_off
+      - action: light.turn_off
         entity_id: light.christmas_lights
-      - service: notify.all
+      - action: notify.all
         data:
           message: Turning off Christmas Tree.
 
@@ -120,23 +120,23 @@ automation:
     alias: christmas_lights_off_bedroom_off
     initial_state: false
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: light.bedroom_lamp, light.bedroom_lamp_2
         to: "off"
     action:
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id: switch.christmas_tree
-      - service: light.turn_off
+      - action: light.turn_off
         entity_id: light.christmas_lights
 
   - id: christmas_outside_light_loop_1
     alias: christmas_outside_light_loop_1
     # initial_state: false
     trigger:
-      - platform: sun
+      - trigger: sun
         event: sunset
         offset: -00:45:00
-      - platform: time_pattern
+      - trigger: time_pattern
         minutes: "/1"
     condition:
       - alias: "Christmas-time"
@@ -154,7 +154,7 @@ automation:
             before: sunrise
             before_offset: 00:45:00
     action:
-      - service: scene.turn_on
+      - action: scene.turn_on
         data_template:
           transition: 30
           entity_id: scene.scene_christmas_outdoors_{{ now().minute % 4 + 1 | int }}
@@ -163,9 +163,9 @@ automation:
   - id: toggle_christmas_automations_on_season_change
     alias: toggle_christmas_automations_on_season_change
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.christmas_season
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     condition:
       - alias: "It's christmas"
@@ -173,30 +173,30 @@ automation:
         entity_id: binary_sensor.christmas_season
         state: "on"
     action:
-      - service: script.toggle_christmas_automation_during_christmas_season
+      - action: script.toggle_christmas_automation_during_christmas_season
         data:
           entity_id: automation.christmas_tree_on
-      - service: script.toggle_christmas_automation_during_christmas_season
+      - action: script.toggle_christmas_automation_during_christmas_season
         data:
           entity_id: automation.christmas_tree_off_midnight
-      - service: script.toggle_christmas_automation_during_christmas_season
+      - action: script.toggle_christmas_automation_during_christmas_season
         data:
           entity_id: automation.christmas_lights_off_bedroom_off
-      - service: script.toggle_christmas_automation_during_christmas_season
+      - action: script.toggle_christmas_automation_during_christmas_season
         data:
           entity_id: automation.outside_light_loop_1
 
   # - id: toggle_christmas_tab
   #   alias: toggle_christmas_tab
   #   trigger:
-  #   - platform: state
+  #   - trigger: state
   #     entity_id: binary_sensor.christmas_season
-  #   - platform: homeassistant
+  #   - trigger: homeassistant
   #     event: start
   #   condition: []
   #   action:
   #   - delay: '00:00:{{ (range(1,60)|random|int) }}'
-  #   - service: script.toggle_view
+  #   - action: script.toggle_view
   #     data_template:
   #       view_id: christmas
   #       visible: >-
@@ -206,11 +206,6 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: template
-    sensors:
-      christmas_season:
-        value_template: >-
-          {{ now().strftime("%m") |int in [12] }}
 
 ########################
 # Groups
@@ -300,7 +295,7 @@ scene:
 script:
   toggle_christmas_automation_during_christmas_season:
     sequence:
-      - service: >-
+      - action: >-
           {% if is_state("binary_sensor.christmas_season", 'on') %}
             automation.turn_on
           {% else %}
@@ -308,3 +303,12 @@ script:
           {% endif %}
         data_template:
           entity_id: "{{ entity_id }}"
+
+########################
+# Template
+########################
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.christmas_season
+        state: '{{ now().strftime("%m") |int in [12] }}'
+        name: christmas_season

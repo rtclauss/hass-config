@@ -5,12 +5,13 @@ from homeassistant.helpers import device_registry, entity_registry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.core import callback
 
-from .const import DATA_BROWSERS, DOMAIN, DATA_ADDERS
+from .const import DATA_BROWSERS, DOMAIN, DATA_ADDERS, DYNAMIC_ENTITIES
 from .sensor import BrowserSensor
 from .light import BrowserModLight
 from .binary_sensor import BrowserBinarySensor, ActivityBinarySensor
 from .media_player import BrowserModPlayer
 from .camera import BrowserModCamera
+from .panel import PanelSensor
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class BrowserModBrowser:
             adder([new])
             self.entities[name] = new
 
+        _assert_browser_sensor("sensor", "browserID", "Browser ID", icon="mdi:server")
         _assert_browser_sensor("sensor", "path", "Browser path", icon="mdi:web")
         _assert_browser_sensor("sensor", "visibility", "Browser visibility")
         _assert_browser_sensor(
@@ -132,9 +134,20 @@ class BrowserModBrowser:
             er.async_remove(self.entities["camera"].entity_id)
             del self.entities["camera"]
 
+        if "panel" not in self.entities:
+            adder = hass.data[DOMAIN][DATA_ADDERS]["sensor"]
+            new = PanelSensor(coordinator, browserID, "Panel", icon="hass:view-dashboard")
+            adder([new])
+            self.entities["panel"] = new
+
+        browserEntities = {k: {"entity_id": v.entity_id, "enabled": v.enabled} for k, v in self.entities.items()}
+        for entity in DYNAMIC_ENTITIES:
+            if entity not in browserEntities:
+                browserEntities[entity] = { "entity_id": None, "enabled": False }
+                
         hass.create_task(
             self.send(
-                None, browserEntities={k: v.entity_id for k, v in self.entities.items()}
+                None, browserEntities=browserEntities
             )
         )
 
@@ -183,7 +196,8 @@ class BrowserModBrowser:
         self._connections = list(
             filter(lambda v: v[0] != connection, self._connections)
         )
-        self.update(hass, {"connected": False})
+        if not self._connections:
+            self.update(hass, {"connected": False})
 
 
 def getBrowser(hass, browserID, *, create=True):

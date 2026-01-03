@@ -17,7 +17,7 @@ from homeassistant.components.device_tracker.const import (
 )
 from homeassistant.components.fan import DOMAIN as FAN_DOMAIN
 from homeassistant.components.input_boolean import DOMAIN as INPUT_BOOLEAN_DOMAIN
-from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
+from homeassistant.components.light.const import DOMAIN as LIGHT_DOMAIN
 from homeassistant.components.media_player.const import DOMAIN as MEDIA_PLAYER_DOMAIN
 from homeassistant.components.remote import DOMAIN as REMOTE_DOMAIN
 from homeassistant.components.sensor.const import (
@@ -45,6 +45,15 @@ MODULE_DATA = f"{DOMAIN}_data"
 ADDITIONAL_LIGHT_TRACKING_ENTITIES = ["sun.sun"]
 DEFAULT_SENSOR_PRECISION = 2
 UPDATE_INTERVAL = ONE_MINUTE
+
+
+class MetaAreaAutoReloadSettings(IntEnum):
+    """Settings for Meta-Area Auto Reload functionality."""
+
+    DELAY = 3
+    DELAY_MULTIPLIER = 4
+    THROTTLE = 5
+
 
 # Light group options
 CONF_OVERHEAD_LIGHTS = "overhead_lights"  # cv.entity_ids
@@ -331,6 +340,7 @@ class MagicAreasEvents(StrEnum):
     """Magic Areas events."""
 
     AREA_STATE_CHANGED = "magicareas_area_state_changed"
+    AREA_LOADED = "magicareas_area_loaded"
 
 
 EVENT_MAGICAREAS_AREA_STATE_CHANGED = "magicareas_area_state_changed"
@@ -631,6 +641,10 @@ CONF_WASP_IN_A_BOX_DELAY, DEFAULT_WASP_IN_A_BOX_DELAY = (
     "delay",
     90,
 )  # cv.positive_int
+CONF_WASP_IN_A_BOX_WASP_TIMEOUT, DEFAULT_WASP_IN_A_BOX_WASP_TIMEOUT = (
+    "wasp_timeout",
+    0,  # 0 = disabled
+)  # cv.positive_int
 CONF_WASP_IN_A_BOX_WASP_DEVICE_CLASSES, DEFAULT_WASP_IN_A_BOX_WASP_DEVICE_CLASSES = (
     "wasp_device_classes",
     [BinarySensorDeviceClass.MOTION, BinarySensorDeviceClass.OCCUPANCY],
@@ -786,6 +800,9 @@ WASP_IN_A_BOX_FEATURE_SCHEMA = vol.Schema(
     {
         vol.Optional(
             CONF_WASP_IN_A_BOX_DELAY, default=DEFAULT_WASP_IN_A_BOX_DELAY
+        ): cv.positive_int,
+        vol.Optional(
+            CONF_WASP_IN_A_BOX_WASP_TIMEOUT, default=DEFAULT_WASP_IN_A_BOX_WASP_TIMEOUT
         ): cv.positive_int,
         vol.Optional(
             CONF_WASP_IN_A_BOX_WASP_DEVICE_CLASSES,
@@ -1196,6 +1213,11 @@ OPTIONS_BLE_TRACKERS = [
 OPTIONS_WASP_IN_A_BOX = [
     (CONF_WASP_IN_A_BOX_DELAY, DEFAULT_WASP_IN_A_BOX_DELAY, cv.positive_int),
     (
+        CONF_WASP_IN_A_BOX_WASP_TIMEOUT,
+        DEFAULT_WASP_IN_A_BOX_WASP_TIMEOUT,
+        cv.positive_int,
+    ),
+    (
         CONF_WASP_IN_A_BOX_WASP_DEVICE_CLASSES,
         DEFAULT_WASP_IN_A_BOX_WASP_DEVICE_CLASSES,
         vol.In(WASP_IN_A_BOX_WASP_DEVICE_CLASSES),
@@ -1252,4 +1274,5 @@ CONFIG_FLOW_ENTITY_FILTER_EXT = CONFIG_FLOW_ENTITY_FILTER + [
     MEDIA_PLAYER_DOMAIN,
     CLIMATE_DOMAIN,
     SUN_DOMAIN,
+    FAN_DOMAIN,
 ]

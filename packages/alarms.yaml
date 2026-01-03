@@ -145,7 +145,7 @@ automation:
   # - id: meeting_wake_up
   #   alias: meeting_wake_up
   #   trigger:
-  #     - platform: time
+  #     - trigger: time
   #       at: input_datetime.next_work_meeting
   #   condition:
   #     - condition: state
@@ -167,28 +167,28 @@ automation:
   #       state: "on"
   #       # enabled: false
   #   action:
-  #     - service: input_boolean.turn_off
+  #     - action: input_boolean.turn_off
   #       entity_id: input_boolean.special_meeting
-  #     - service: script.turn_on
+  #     - action: script.turn_on
   #       entity_id: script.wake_up_script
-  #     - service: media_player.media_pause
+  #     - action: media_player.media_pause
   #       data:
   #         entity_id: media_player.bedroom
   #     - delay:
   #         seconds: 2
-  #     - service: media_player.shuffle_set
+  #     - action: media_player.shuffle_set
   #       data:
   #         entity_id: media_player.bedroom
   #         shuffle: false
   #     - delay:
   #         seconds: 2
-  #     - service: media_player.volume_set
+  #     - action: media_player.volume_set
   #       data:
   #         entity_id: media_player.bedroom
   #         volume_level: 0.2
   #     - delay:
   #         seconds: 2
-  #     - service: media_player.play_media
+  #     - action: media_player.play_media
   #       data:
   #         entity_id: media_player.bedroom
   #         media_content_type: music
@@ -196,8 +196,8 @@ automation:
 
   - id: alarm_snooze
     alias: alarm_snooze
-    trigger:
-      - platform: event
+    triggers:
+      - trigger: event
         event_type: zha_event
         event_data:
           device_ieee: "00:15:8d:00:01:f2:a7:0a"
@@ -221,13 +221,13 @@ automation:
         state: "on"
         # enabled: false
     action:
-      - service: script.turn_on
+      - action: script.turn_on
         entity_id: script.snooze_script
 
   - id: cancel_alarms
     alias: cancel_alarms
     trigger:
-      - platform: event
+      - trigger: event
         event_type: zha_event
         event_data:
           device_ieee: "00:15:8d:00:01:f2:a7:0a"
@@ -235,18 +235,18 @@ automation:
           args:
             click_type: "double"
     action:
-      - service: media_player.media_stop
+      - action: media_player.media_stop
         data:
           entity_id: media_player.bedroom_sonos
 
   - id: reset_lighting_on_start
     alias: reset_lighting_on_start
     trigger:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     action:
       - alias: "Turn on Adaptive Brightness for Bedroom"
-        service: switch.turn_on
+        action: switch.turn_on
         entity_id:
           - switch.adaptive_lighting_adapt_brightness_owner_suite
           - switch.adaptive_lighting_adapt_color_owner_suite
@@ -254,10 +254,10 @@ automation:
   - id: turn_off_owner_suite_lamps_at_noon
     alias: turn_off_owner_suite_lamps_at_noon
     trigger:
-      - platform: time
+      - trigger: time
         at: "11:00:00"
     action:
-      - service: light.turn_off
+      - action: light.turn_off
         data:
           area_id:
             - 997d5f472a2e4838b40ab9c1c60d85ef # Owner Suite
@@ -266,13 +266,13 @@ automation:
   - id: alarm_wake_up
     alias: alarm_wake_up
     trigger:
-      - platform: time
+      - trigger: time
         at: input_datetime.weekday_alarm
         id: weekday-alarm
-      - platform: time
+      - trigger: time
         at: input_datetime.weekend_alarm
         id: weekend-alarm
-      - platform: time
+      - trigger: time
         at: input_datetime.next_work_meeting
         id: meeting-alarm
     condition:
@@ -302,9 +302,9 @@ automation:
                 state: "on"
             sequence:
               - parallel:
-                  - service: script.turn_on
+                  - action: script.turn_on
                     entity_id: script.wake_up_script
-                  - service: script.turn_on
+                  - action: script.turn_on
                     entity_id: script.sonos_mpr_news_wake_up
           - conditions:
               # Weekend alarm wakeup
@@ -318,9 +318,9 @@ automation:
                 state: "on"
             sequence:
               - parallel:
-                  - service: script.turn_on
+                  - action: script.turn_on
                     entity_id: script.wake_up_script
-                  - service: script.turn_on
+                  - action: script.turn_on
                     data:
                       entity_id: >-
                         {%- set script = ["script.sonos_the_current_wake_up",
@@ -339,28 +339,28 @@ automation:
                 entity_id: input_boolean.special_meeting
                 state: "on"
             sequence:
-              - service: input_boolean.turn_off
+              - action: input_boolean.turn_off
                 entity_id: input_boolean.special_meeting
-              - service: script.turn_on
+              - action: script.turn_on
                 entity_id: script.wake_up_script
-              - service: media_player.media_pause
+              - action: media_player.media_pause
                 data:
                   entity_id: media_player.bedroom_sonos
               - delay:
                   seconds: 2
-              - service: media_player.shuffle_set
+              - action: media_player.shuffle_set
                 data:
                   entity_id: media_player.bedroom_sonos
                   shuffle: false
               - delay:
                   seconds: 2
-              - service: media_player.volume_set
+              - action: media_player.volume_set
                 data:
                   entity_id: media_player.bedroom_sonos
                   volume_level: 0.2
               - delay:
                   seconds: 2
-              - service: media_player.play_media
+              - action: media_player.play_media
                 data:
                   entity_id: media_player.bedroom_sonos
                   media_content_type: music
@@ -369,7 +369,7 @@ automation:
   - id: toggle_lava_lamp_workday
     alias: toggle_lava_lamp_workday
     trigger:
-      - platform: template
+      - trigger: template
         id: lava-lamp-off
         # don't let lamp run for longer than 10 hours. Use 9 as magic number since we turn on the lamp 1 hr before meeting.
         value_template: >-
@@ -377,7 +377,7 @@ automation:
           {% set nine_hoursforward = strptime(forward_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
           {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
           {{ formatted_time == nine_hoursforward }}
-      - platform: template
+      - trigger: template
         id: lava-lamp-on
         value_template: >-
           {% set back_time = states.input_datetime.next_work_meeting.state[0:2]|int -1 %}
@@ -401,20 +401,20 @@ automation:
               - condition: trigger
                 id: lava-lamp-on
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.office_red_lava_lamp
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.northern_light_lava_lamp
           - conditions:
               - condition: trigger
                 id: lava-lamp-off
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.office_red_lava_lamp
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.northern_light_lava_lamp
 
@@ -538,7 +538,7 @@ script:
         then:
           - alias: "Join Sonos speakers into all group"
             continue_on_error: true
-            service: media_player.join
+            action: media_player.join
             target:
               entity_id:
                 - media_player.bedroom_sonos
@@ -549,7 +549,7 @@ script:
                 - media_player.office_sonos
         else:
           - alias: "Unjoin all Sonos speakers into bedroom group"
-            service: media_player.unjoin
+            action: media_player.unjoin
             target:
               entity_id:
                 - media_player.bedroom_sonos
@@ -557,21 +557,21 @@ script:
                 - media_player.den_sonos
                 - media_player.office_sonos
           - alias: "Join Sonos speakers into bedroom group"
-            service: media_player.join
+            action: media_player.join
             target:
               entity_id:
                 - media_player.bedroom_sonos
             data:
               group_members:
                 - media_player.bathroom_sonos
-      - service: media_player.volume_set
+      - action: media_player.volume_set
         continue_on_error: true
         data:
           entity_id:
             - media_player.bedroom_sonos
             - media_player.bathroom_sonos
           volume_level: 0.01
-      - service: media_player.select_source
+      - action: media_player.select_source
         continue_on_error: true
         data:
           entity_id:
@@ -582,7 +582,7 @@ script:
           sequence:
             - alias: "Increase Volume by 0.01"
               continue_on_error: true
-              service: media_player.volume_set
+              action: media_player.volume_set
               data:
                 volume_level: "{{ 0.01 * repeat.index }}"
               target:
@@ -605,7 +605,7 @@ script:
         then:
           - alias: "Join Sonos speakers into all group"
             continue_on_error: true
-            service: media_player.join
+            action: media_player.join
             target:
               entity_id:
                 - media_player.bedroom_sonos
@@ -616,7 +616,7 @@ script:
                 - media_player.office_sonos
         else:
           - alias: "Unjoin allSonos speakers into bedroom group"
-            service: media_player.unjoin
+            action: media_player.unjoin
             target:
               entity_id:
                 - media_player.bedroom_sonos
@@ -624,14 +624,14 @@ script:
                 - media_player.den_sonos
                 - media_player.office_sonos
           - alias: "Join Sonos speakers into bedroom group"
-            service: media_player.join
+            action: media_player.join
             target:
               entity_id:
                 - media_player.bedroom_sonos
             data:
               group_members:
                 - media_player.bathroom_sonos
-      - service: media_player.volume_set
+      - action: media_player.volume_set
         continue_on_error: true
         data:
           entity_id:
@@ -640,7 +640,7 @@ script:
           volume_level: 0.01
       - delay:
           seconds: 5
-      - service: media_player.select_source
+      - action: media_player.select_source
         continue_on_error: true
         data:
           entity_id:
@@ -651,7 +651,7 @@ script:
           sequence:
             - alias: "Increase Volume by 0.01"
               continue_on_error: true
-              service: media_player.volume_set
+              action: media_player.volume_set
               data:
                 volume_level: "{{ 0.01 * repeat.index }}"
               target:
@@ -674,7 +674,7 @@ script:
         then:
           - alias: "Join Sonos speakers into all group"
             continue_on_error: true
-            service: media_player.join
+            action: media_player.join
             target:
               entity_id:
                 - media_player.bedroom_sonos
@@ -685,7 +685,7 @@ script:
                 - media_player.office_sonos
         else:
           - alias: "Unjoin allSonos speakers into bedroom group"
-            service: media_player.unjoin
+            action: media_player.unjoin
             target:
               entity_id:
                 - media_player.bedroom_sonos
@@ -693,21 +693,21 @@ script:
                 - media_player.den_sonos
                 - media_player.office_sonos
           - alias: "Join Sonos speakers into bedroom group"
-            service: media_player.join
+            action: media_player.join
             target:
               entity_id:
                 - media_player.bedroom_sonos
             data:
               group_members:
                 - media_player.bathroom_sonos
-      - service: media_player.volume_set
+      - action: media_player.volume_set
         continue_on_error: true
         data:
           entity_id:
             - media_player.bedroom_sonos
             - media_player.bathroom_sonos
           volume_level: 0.01
-      - service: media_player.select_source
+      - action: media_player.select_source
         continue_on_error: true
         data:
           entity_id:
@@ -718,7 +718,7 @@ script:
           sequence:
             - alias: "Increase Volume by 0.01"
               continue_on_error: true
-              service: media_player.volume_set
+              action: media_player.volume_set
               data:
                 volume_level: "{{ 0.01 * repeat.index }}"
               target:
@@ -736,7 +736,7 @@ script:
   #     work_meeting_alarm: 0 # This is a Chime
   #     daily_wakeup_alarm: 1 # This is MPR News
   #   sequence:
-  #     - service: sonos.update_alarm
+  #     - action: sonos.update_alarm
   #       data:
   #         entity_id: media_player.bedroom
   #         alarm_id: "{{ work_meeting_alarm }}" # This is a Chime
@@ -749,12 +749,12 @@ script:
   #     work_meeting_alarm: 0 # This is a Chime
   #     daily_wakeup_alarm: 1 # This is MPR News
   #   sequence:
-  #     - service: sonos.update_alarm
+  #     - action: sonos.update_alarm
   #       data:
   #         entity_id: media_player.bedroom
   #         alarm_id: "{{ daily_wakeup_alarm }}" # This is MPR News
   #         enabled: false
-  #     - service: sonos.update_alarm
+  #     - action: sonos.update_alarm
   #       data:
   #         entity_id: media_player.bedroom
   #         alarm_id: "{{ work_meeting_alarm }}" # This is a Chime
@@ -763,18 +763,20 @@ script:
   snooze_script:
     alias: Snooze Tasks
     sequence:
-      - service: light.turn_off
+      - action: light.turn_off
         data:
-          entity_id: light.owner_suite_lamps
-      - service: media_player.media_stop
+          entity_id:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
+      - action: media_player.media_stop
         continue_on_error: true
         data:
           entity_id: media_player.bedroom_sonos
       - delay:
           minutes: 8
-      - service: script.turn_on
+      - action: script.turn_on
         entity_id: script.wake_up_script
-      - service: media_player.media_play
+      - action: media_player.media_play
         continue_on_error: true
         data:
           entity_id: media_player.bedroom_sonos
@@ -788,36 +790,40 @@ script:
           - input_boolean.wakeup_alarm_firing
         state: "off"
       # Ok, this is the first time we're doing this. Carry on.
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.wakeup_alarm_firing
       - alias: "Turn off Adaptive Brightness in bedroom for now"
-        service: switch.turn_off
+        action: switch.turn_off
         entity_id:
           - switch.adaptive_lighting_adapt_brightness_owner_suite
           - switch.adaptive_lighting_adapt_color_owner_suite
       - alias: "Turn on light at dimmest setting. Adaptive Lighting will apply"
-        service: light.turn_on
+        action: light.turn_on
         data_template:
-          entity_id: light.owner_suite_lamps
+          entity_id:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
           kelvin: 370
           brightness_pct: 1
       - delay:
           seconds: 5
-      - service: light.turn_on
+      - action: light.turn_on
         data_template:
-          entity_id: light.owner_suite_lamps
+          entity_id:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
           kelvin: 153
           brightness_pct: 100
           transition: 300
       - delay:
           minutes: 1
-      - service: switch.turn_off
+      - action: switch.turn_off
         data:
           entity_id:
             - switch.sleep_mode
 
-      # - service: switch.turn_off
+      # - action: switch.turn_off
       #   data:
       #     entity_id:
       #       - switch.humidifier
@@ -826,7 +832,7 @@ script:
         repeat:
           until: "{{ (repeat.index * 2) == 80 }}"
           sequence:
-            - service: cover.set_cover_position
+            - action: cover.set_cover_position
               data:
                 entity_id: cover.owner_suite_blinds_ha
                 # entity_id: cover.owner_suite_blinds when z2m starts working again
@@ -837,11 +843,11 @@ script:
                 seconds: "{{ (75/(log(repeat.index + 1, 5))) | round(0, 'ceil', 5) }}" # <-- drops down to 23 seconds
       - alias: "Set light switches to day mode"
         continue_on_error: true
-        service: script.turn_on
+        action: script.turn_on
         entity_id: script.day_mode_switches
       - alias: "Turn on Adaptive Brightness for bedroom"
         continue_on_error: true
-        service: switch.turn_on
+        action: switch.turn_on
         entity_id:
           - switch.adaptive_lighting_adapt_brightness_owner_suite
           - switch.adaptive_lighting_adapt_color_owner_suite

@@ -412,19 +412,19 @@ automation:
   - alias: basement_bathroom_switch_actions
     id: basement_bathroom_switch_actions
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.basement_bathroom_shower_switch_action
         to: "up_single"
         id: up-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.basement_bathroom_shower_switch_action
         to: "down_single"
         id: down-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.basement_bathroom_shower_switch_action
         to: "up_double"
         id: up-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.basement_bathroom_shower_switch_action
         to: "down_double"
         id: down-double
@@ -434,33 +434,33 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.basement_bathroom_shower_switch
           - conditions:
               - condition: trigger
                 id: down-single
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.basement_bathroom_shower_switch
 
   - alias: dining_room_switch_actions
     id: dining_room_switch_actions
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.dining_room_overhead_action
         to: "up_single"
         id: up-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.dining_room_overhead_action
         to: "down_single"
         id: down-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.dining_room_overhead_action
         to: "up_double"
         id: up-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.dining_room_overhead_action
         to: "down_double"
         id: down-double
@@ -470,7 +470,7 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.dining_room_overhead
                   brightness_pct: 100
@@ -478,7 +478,7 @@ automation:
               - condition: trigger
                 id: down-single
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.dining_room_overhead
                   transition: 5
@@ -486,7 +486,7 @@ automation:
               - condition: trigger
                 id: up-double
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id:
                     - light.dining_room_overhead
@@ -497,7 +497,7 @@ automation:
               - condition: trigger
                 id: down-double
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id:
                     - light.dining_room_overhead
@@ -505,15 +505,133 @@ automation:
                   kelvin: >-
                     {{state_attr("light.dining_room","color_temp_kelvin")-200}}
 
+  - alias: side_of_bed_toggles
+    id: side_of_bed_toggles
+    mode: queued
+    triggers:
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.east_bed_button_action
+        to: "1_short_release"
+        id: "east_bed_light_on"
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.west_bed_button_action
+        to: "1_short_release"
+        id: "west_bed_light_on"
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.east_bed_button_action
+        to: "2_short_release"
+        id: "east_bed_light_off"
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.west_bed_button_action
+        to: "2_short_release"
+        id: "west_bed_light_off"
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.east_bed_button_action
+        to: "1_double_press"
+        id: "east_bed_on"
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.west_bed_button_action
+        to: "1_double_press"
+        id: "west_bed_on"
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.east_bed_button_action
+        to: "2_double_press"
+        id: "east_bed_off"
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: sensor.west_bed_button_action
+        to: "2_double_press"
+        id: "west_bed_off"
+    # condition:
+    #   condition: state
+    #   entity_id: binary_sensor.bayesian_bed_occupancy
+    #   state: "on"
+    #   for:
+    #     seconds: 5
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: east_bed_on
+            sequence:
+              - action: input_boolean.turn_on
+                data:
+                  entity_id: input_boolean.east_bed_occupied
+          - conditions:
+              - condition: trigger
+                id: east_bed_off
+            sequence:
+              - action: input_boolean.turn_off
+                data:
+                  entity_id: input_boolean.east_bed_occupied
+          - conditions:
+              - condition: trigger
+                id: west_bed_on
+            sequence:
+              - action: input_boolean.turn_on
+                data:
+                  entity_id: input_boolean.west_bed_occupied
+          - conditions:
+              - condition: trigger
+                id: west_bed_off
+            sequence:
+              - action: input_boolean.turn_off
+                data:
+                  entity_id: input_boolean.west_bed_occupied
+          # control the lights
+          - conditions:
+              - condition: trigger
+                id: east_bed_light_on
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_2
+          - conditions:
+              - condition: trigger
+                id: east_bed_light_off
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_2
+          - conditions:
+              - condition: trigger
+                id: west_bed_light_on
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_1
+          - conditions:
+              - condition: trigger
+                id: west_bed_light_off
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_1
+
   - alias: in_bed_toggles
     id: in_bed_toggles
     trigger:
-      - platform: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id:
+          - input_boolean.chatgpt_bed_occupied
+          - input_boolean.east_bed_occupied
+          - input_boolean.west_bed_occupied
         to: "on"
         id: bed-occupied
-      - platform: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
+      - trigger: state
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id:
+          - input_boolean.chatgpt_bed_occupied
+          - input_boolean.east_bed_occupied
+          - input_boolean.west_bed_occupied
         to: "off"
         id: bed-unoccupied
     # condition:
@@ -528,30 +646,39 @@ automation:
               - condition: trigger
                 id: bed-occupied
             sequence:
-              - service: input_boolean.turn_on
+              - action: input_boolean.turn_on
                 data:
-                  entity_id: input_boolean.master_bed_occupancy
-              - service: cover.close_cover
+                  entity_id:
+                    - input_boolean.master_bed_occupancy
+                    - input_boolean.chatgpt_bed_occupied
+              - action: cover.close_cover
                 entity_id:
                   - cover.owner_suite_blinds_ha
                   # - cover.owner_suite_blinds when z2m starts working again
                   # https://github.com/Koenkk/zigbee2mqtt/issues/19124
                   - cover.garage_door
               # if I roll to the other side of the bed, the bedroom switch leds come back on.
-              # - service: script.turn_on
+              # - action: script.turn_on
               #   entity_id: script.night_tv_mode_switches
           - conditions:
               - condition: trigger
                 id: bed-unoccupied
             sequence:
-              - service: input_boolean.turn_off
+              - condition: state
+                entity_id:
+                  - input_boolean.west_bed_occupied
+                  - input_boolean.east_bed_occupied
+                state: "off"
+              - action: input_boolean.turn_off
                 data:
-                  entity_id: input_boolean.master_bed_occupancy
+                  entity_id:
+                    - input_boolean.master_bed_occupancy
+                    - input_boolean.chatgpt_bed_occupied
 
   - id: mail_delivered
     alias: mail_delivered
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.mailbox_contact
         from: "off"
         to: "on"
@@ -567,9 +694,9 @@ automation:
             entity_id: input_boolean.trip
             state: "off"
     action:
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         entity_id: input_boolean.mail_delivered
-      - service: notify.all
+      - action: notify.all
         data:
           message: >-
             Mail delivered.
@@ -577,31 +704,31 @@ automation:
   - id: office_light_control_button
     alias: office_light_control_button
     trigger:
-      - platform: state
+      - trigger: state
         entity_id:
           - sensor.office_light_button_1_action
           - sensor.office_light_button_2_action
         to: "toggle"
         id: toggle
-      - platform: state
+      - trigger: state
         entity_id:
           - sensor.office_light_button_1_action
           - sensor.office_light_button_2_action
         to: "brightness_up_click"
         id: brightness_up_click
-      - platform: state
+      - trigger: state
         entity_id:
           - sensor.office_light_button_1_action
           - sensor.office_light_button_2_action
         to: "brightness_down_click"
         id: brightness_down_click
-      - platform: state
+      - trigger: state
         entity_id:
           - sensor.office_light_button_1_action
           - sensor.office_light_button_2_action
         to: "arrow_right_click"
         id: arrow_right_click
-      - platform: state
+      - trigger: state
         entity_id:
           - sensor.office_light_button_1_action
           - sensor.office_light_button_2_action
@@ -613,58 +740,61 @@ automation:
               - condition: trigger
                 id: toggle
             sequence:
-              - service: light.toggle
+              - action: light.toggle
                 data:
                   entity_id:
-                    - light.office_floor_lamp
+                    - light.office_floor_lamp_1
+                    - light.office_floor_lamp_2
                     - light.east_table_lamp
                     - light.west_table_lamp
           - conditions:
               - condition: trigger
                 id: brightness_up_click
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id:
-                    - light.office_floor_lamp
+                    - light.office_floor_lamp_1
+                    - light.office_floor_lamp_2
                     - light.east_table_lamp
                     - light.west_table_lamp
                   brightness_pct: >-
-                    {{ (state_attr('light.office_floor_lamp', 'brightness') | int + 12.5 )/255 * 100}}
+                    {{ (state_attr('light.office_floor_lamp_1', 'brightness') | int + 12.5 )/255 * 100}}
                   # 5% increase
           - conditions:
               - condition: trigger
                 id: brightness_down_click
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id:
-                    - light.office_floor_lamp
+                    - light.office_floor_lamp_1
+                    - light.office_floor_lamp_2
                     - light.east_table_lamp
                     - light.west_table_lamp
                   brightness_pct: >-
-                    {{ (state_attr('light.office_floor_lamp', 'brightness') | int - 12.5 )/255 *100}}
+                    {{ (state_attr('light.office_floor_lamp_1', 'brightness') | int - 12.5 )/255 *100}}
                   # 5% decrease
           # not used as office floor lamp doesn't support color temps
           # - conditions:
           #     - condition: trigger
           #       id: arrow_left_click
           #   sequence:
-          #     - service: light.turn_on
+          #     - action: light.turn_on
           #       data:
           #         entity_id: fan.guest_room
           # - conditions:
           #     - condition: trigger
           #       id: arrow_right_click
           #   sequence:
-          #     - service: light.turn_on
+          #     - action: light.turn_on
           #       data:
           #         entity_id: fan.guest_room
 
   - id: reset_owner_suite_blinds
     alias: reset_owner_suite_blinds
     trigger:
-      - platform: time
+      - trigger: time
         at: "13:01:34"
     condition:
       - alias: "Time"
@@ -674,14 +804,15 @@ automation:
           {{ 'false' if now().strftime('%j') | int % 2 else 'true' }}
       - alias: "Bed not occupied"
         condition: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
+        # entity_id: binary_sensor.bayesian_bed_occupancy
+        entity_id: input_boolean.chatgpt_bed_occupied
         state: "off"
     action:
-      - service: cover.open_cover
+      - action: cover.open_cover
         entity_id: cover.owner_suite_blinds_ha
       - delay:
           minutes: 3
-      - service: cover.set_cover_position
+      - action: cover.set_cover_position
         entity_id: cover.owner_suite_blinds_ha
         data:
           position: 50
@@ -689,28 +820,28 @@ automation:
   - id: reset_mail_delivery
     alias: reset_mail_delivery
     trigger:
-      - platform: time
+      - trigger: time
         at: "01:00:00"
     action:
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         entity_id: input_boolean.mail_delivered
 
   - alias: guest_room_switch_actions
     id: guest_room_switch_actions
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.guest_room_fan_switch_action
         to: "up_single"
         id: up-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.guest_room_fan_switch_action
         to: "down_single"
         id: down-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.guest_room_fan_switch_action
         to: "up_double"
         id: up-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.guest_room_fan_switch_action
         to: "down_double"
         id: down-double
@@ -720,55 +851,55 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.guest_room_ceiling
           - conditions:
               - condition: trigger
                 id: down-single
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.guest_room_ceiling
           - conditions:
               - condition: trigger
                 id: up-double
             sequence:
-              - service: fan.increase_speed
+              - action: fan.increase_speed
                 data:
                   entity_id: fan.guest_room
           - conditions:
               - condition: trigger
                 id: down-double
             sequence:
-              - service: fan.decrease_speed
+              - action: fan.decrease_speed
                 data:
                   entity_id: fan.guest_room
 
   - alias: kitchen_overhead_switch_actions
     id: kitchen_overhead_switch_actions
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.kitchen_overhead_lights_switch_action
         to: "up_single"
         id: up-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.kitchen_overhead_lights_switch_action
         to: "down_single"
         id: down-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.kitchen_overhead_lights_switch_action
         to: "up_double"
         id: up-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.kitchen_overhead_lights_switch_action
         to: "down_double"
         id: down-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.kitchen_overhead_lights_switch_action
         to: "up_held"
         id: up-held
-      - platform: state
+      - trigger: state
         entity_id: sensor.kitchen_overhead_lights_switch_action
         to: "down_held"
         id: down-held
@@ -778,7 +909,7 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.kitchen_overhead
                   transition: 1
@@ -786,7 +917,7 @@ automation:
               - condition: trigger
                 id: down-single
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.kitchen_overhead
                   transition: 5
@@ -796,7 +927,7 @@ automation:
             sequence:
               repeat:
                 sequence:
-                  - service: light.turn_on
+                  - action: light.turn_on
                     data:
                       entity_id: light.kitchen_overhead
                       brightness: >-
@@ -820,7 +951,7 @@ automation:
             sequence:
               repeat:
                 sequence:
-                  - service: light.turn_on
+                  - action: light.turn_on
                     data:
                       entity_id: light.kitchen_overhead
                       brightness: >-
@@ -842,27 +973,27 @@ automation:
   - alias: laundry_switch_actions
     id: laundry_switch_actions
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.laundry_wall_switch_action
         to: "up_single"
         id: up-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.laundry_wall_switch_action
         to: "down_single"
         id: down-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.laundry_wall_switch_action
         to: "up_double"
         id: up-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.laundry_wall_switch_action
         to: "down_double"
         id: down-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.laundry_wall_switch_action
         to: "up_held"
         id: up-held
-      - platform: state
+      - trigger: state
         entity_id: sensor.laundry_wall_switch_action
         to: "down_held"
         id: down-held
@@ -872,7 +1003,7 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.laundry_room
                   transition: 1
@@ -880,7 +1011,7 @@ automation:
               - condition: trigger
                 id: down-single
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.laundry_room
                   transition: 5
@@ -890,7 +1021,7 @@ automation:
             sequence:
               repeat:
                 sequence:
-                  - service: light.turn_on
+                  - action: light.turn_on
                     data:
                       entity_id: light.laundry_room
                       brightness: >-
@@ -914,7 +1045,7 @@ automation:
             sequence:
               repeat:
                 sequence:
-                  - service: light.turn_on
+                  - action: light.turn_on
                     data:
                       entity_id: light.laundry_room
                       brightness: >-
@@ -936,19 +1067,19 @@ automation:
   - alias: office_switch_actions
     id: office_switch_actions
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.office_fan_switch_action
         to: "up_single"
         id: up-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.office_fan_switch_action
         to: "down_single"
         id: down-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.office_fan_switch_action
         to: "up_double"
         id: up-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.office_fan_switch_action
         to: "down_double"
         id: down-double
@@ -958,47 +1089,47 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id: light.office_ceiling
           - conditions:
               - condition: trigger
                 id: down-single
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.office_ceiling
           - conditions:
               - condition: trigger
                 id: up-double
             sequence:
-              - service: fan.increase_speed
+              - action: fan.increase_speed
                 data:
                   entity_id: fan.office_ceiling_fan
           - conditions:
               - condition: trigger
                 id: down-double
             sequence:
-              - service: fan.decrease_speed
+              - action: fan.decrease_speed
                 data:
                   entity_id: fan.office_ceiling_fan
 
   - alias: owner_suite_switch_actions
     id: owner_suite_switch_actions
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.owner_suite_fan_switch_action
         to: "up_single"
         id: up-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.owner_suite_fan_switch_action
         to: "down_single"
         id: down-single
-      - platform: state
+      - trigger: state
         entity_id: sensor.owner_suite_fan_switch_action
         to: "up_double"
         id: up-double
-      - platform: state
+      - trigger: state
         entity_id: sensor.owner_suite_fan_switch_action
         to: "down_double"
         id: down-double
@@ -1008,100 +1139,101 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - service: light.turn_on
+              - action: light.turn_on
                 data:
                   entity_id:
                     - light.owner_suite_ceiling
                     - light.owner_suite_lamps
+                    - light.bed_lightstrip
           - conditions:
               - condition: trigger
                 id: down-single
             sequence:
-              - service: light.turn_off
+              - action: light.turn_off
                 data:
                   entity_id: light.owner_suite_ceiling
           - conditions:
               - condition: trigger
                 id: up-double
             sequence:
-              - service: fan.increase_speed
+              - action: fan.increase_speed
                 data:
                   entity_id: fan.owner_suite
           - conditions:
               - condition: trigger
                 id: down-double
             sequence:
-              - service: fan.decrease_speed
+              - action: fan.decrease_speed
                 data:
                   entity_id: fan.owner_suite
 
   - id: reset_inovelli_config
     alias: reset_inovelli_config
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: input_button.reset_inovelli_switch_configurations
     action:
-      - service: script.reset_inovelli_switches
+      - action: script.reset_inovelli_switches
 
   - id: reset_z2m_reboot_counter
     alias: reset_z2m_reboot_counter
     trigger:
-      - platform: event
+      - trigger: event
         event_type: mobile_app_notification_action
         event_data:
           action: REBOOT_Z2M_COUNTER
     action:
-      - service: counter.reset
+      - action: counter.reset
         entity_id: counter.reboot_counter
 
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
     trigger:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     action:
       - delay: "00:01:00"
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/options
           payload: >-
             {"options": {"homeassistant": true}}
-      - service: rest_command.reload_den_vacuum
-      - service: rest_command.reload_upstairs_vacuum
-      - service: rest_command.reload_main_level_vacuum
+      - action: rest_command.reload_den_vacuum
+      - action: rest_command.reload_upstairs_vacuum
+      - action: rest_command.reload_main_level_vacuum
 
   # this automation depends on a HA on RaspberryPi with WOL configured to restart HA after shutdown
   # Sometimes z2m loses communication with the adapter and so the whole server needs to be rebooted.
   - id: shutdown_proxmox_z2m_unavailable
     alias: shutdown_proxmox_z2m_unavailable
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.z2m_failing
         to: "on"
         for:
           minutes: 5
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.zigbee2mqtt_running
         to: "off"
         for:
           minutes: 15
-      - platform: mqtt
+      - trigger: mqtt
         topic: "zigbee2mqtt/bridge/state"
         payload: "offline"
         value_template: "{{ value_json.state }}"
     action:
-      - service: counter.increment
+      - action: counter.increment
         entity_id: counter.reboot_counter
-      - service: notify.mobile_app_wethop
+      - action: notify.mobile_app_wethop
         data:
           message: >-
             Z2M has lost connection to USB adapter. Restarting Z2M first...
-      - service: hassio.addon_restart
+      - action: hassio.addon_restart
         data:
           addon: 45df7312_zigbee2mqtt
       - delay:
           minutes: 5
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/options
           payload: >-
@@ -1116,7 +1248,7 @@ automation:
       #   entity_id:
       #     - counter.reboot_counter
       #   above: 3
-      - service: notify.mobile_app_wethop
+      - action: notify.mobile_app_wethop
         data:
           title: Z2M Failed
           message: >-
@@ -1131,7 +1263,7 @@ automation:
                 behavior: default
       - delay:
           minutes: 2
-      - service: rest_command.proxmox_shutdown
+      - action: rest_command.proxmox_shutdown
 
 ########################
 # Binary Sensors
@@ -1238,21 +1370,21 @@ input_boolean:
 input_number:
 
 ########################
+# Input Numbers
+########################
+input_select:
+  chatgpt_bed_override:
+    name: Bed override
+    options:
+      - "off"
+      - force_occupied
+      - force_unoccupied
+    icon: mdi:bed
+
+########################
 # Locks
 ########################
 lock:
-  - platform: template
-    name: Front door lock
-    value_template: "{{ is_state('input_boolean.front_door_lock', 'off') }}"
-    optimistic: true
-    lock:
-      service: input_boolean.turn_off
-      target:
-        entity_id: input_boolean.front_door_lock
-    unlock:
-      service: input_boolean.turn_on
-      target:
-        entity_id: input_boolean.front_door_lock
 
 ########################
 # Scenes
@@ -1263,6 +1395,71 @@ scene:
 # Scripts
 ########################
 script:
+  reset_z2m_bindings_and_groups:
+    alias: Reset Zigbee Bindings & Groups (Zigbee2MQTT)
+    mode: single
+    sequence:
+      - alias: Request a fresh device roster
+        service: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/devices
+          payload: >
+            {{ {'id': 'reset_z2m_devices'} | tojson }}
+      - alias: Wait for Zigbee2MQTT's response (full list)
+        wait_for_trigger:
+          - platform: mqtt
+            topic: zigbee2mqtt/bridge/response/devices
+            value_template: >
+              {% set payload = trigger.payload_json %}
+              {{ payload.id == 'reset_z2m_devices' and payload.success | default(true) }}
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - variables:
+          z2m_devices: >
+            {% set payload = wait.trigger.payload_json %}
+            {% set devices = payload.data if payload and payload.data is defined else [] %}
+            {{ devices
+              | selectattr('friendly_name', 'defined')
+              | rejectattr('friendly_name', 'equalto', 'Coordinator')
+              | map(attribute='friendly_name')
+              | unique
+              | list }}
+      - alias: Log the device count (optional but handy)
+        service: logbook.log
+        data:
+          name: Zigbee2MQTT Reset
+          message: >
+            Resetting {{ z2m_devices | count }} devices: {{ z2m_devices | join(', ') }}
+      - condition: template
+        value_template: "{{ z2m_devices | count > 0 }}"
+      - repeat:
+          for_each: "{{ z2m_devices }}"
+          sequence:
+            - alias: Unbind everything from the coordinator
+              service: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/unbind
+                payload: >
+                  {{ {'id': 'unbind_' ~ repeat.index,
+                      'device': repeat.item,
+                      'target': 'Coordinator'} | tojson }}
+            - alias: Bind back to the coordinator
+              service: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/bind
+                payload: >
+                  {{ {'id': 'bind_' ~ repeat.index,
+                      'device': repeat.item,
+                      'target': 'Coordinator'} | tojson }}
+            - alias: Clear all group memberships
+              service: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/group/remove_all
+                payload: >
+                  {{ {'id': 'group_reset_' ~ repeat.index,
+                      'device': repeat.item} | tojson }}
+            - delay: "00:00:01"
+
   night_tv_mode_switches:
     icon: mdi:light-switch
     variables:
@@ -1275,31 +1472,31 @@ script:
       all_switches_led_intensity_off: >
         {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
-      - service: logbook.log
+      - action: logbook.log
         data:
           entity_id: script.night_tv_mode_switches
           name: Exclude log
           message: "Setting all light Inovelli switch led colors to red"
           domain: script
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_switches_led_color_off}}
         data:
           value: "0"
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_switches_led_intensity_off}}
         data:
           value: "1"
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_switches_led_intensity_on}}
         data:
           value: "50"
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_switches_led_color_on}}
@@ -1318,31 +1515,31 @@ script:
       all_switches_led_intensity_off: >
         {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
-      - service: logbook.log
+      - action: logbook.log
         data:
           entity_id: script.day_mode_switches
           name: Exclude log
           message: "Setting all light switch colors to blue"
           domain: script
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_off_led_switches}}
         data:
           value: "170"
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_switches_led_intensity_off}}
         data:
           value: "1"
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_switches_led_intensity_on}}
         data:
           value: "75"
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_on_led_switches}}
@@ -1371,26 +1568,26 @@ script:
       all_inovelli_switches_switchtype_mode: >
         {%- for device in states.select | select('match', '.*switchtype.*') | reject('match','.*exhaust.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
-      - service: logbook.log
+      - action: logbook.log
         data:
           entity_id: script.reset_inovelli_switches
           name: Exclude log
           message: "Setting all appropriate light switches smart bulb mode on and dimmer mode"
           domain: script
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_inovelli_switches_active_energy_report_rate}}
         data:
           value: "0"
       - delay: 10 # seconds
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_inovelli_switches_active_power_report_rate}}
         data:
           value: "0"
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_inovelli_switches_energy_report_rate}}
@@ -1398,14 +1595,14 @@ script:
           # value: "623" # enhanced reporting
           value: 0 # default
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id: >
             {{all_inovelli_switches_double_tap_up_mode}}
         data:
           option: "Enabled"
       - delay: 10 # seconds
-      - service: number.set_value
+      - action: number.set_value
         data_template:
           entity_id: >
             {{all_inovelli_switches_double_tap_up_brightness}}
@@ -1413,7 +1610,7 @@ script:
           value: "254"
       - delay: 10 # seconds
         enabled: false
-      - service: select.select_option
+      - action: select.select_option
         enabled: false
         data_template:
           entity_id: >
@@ -1421,21 +1618,21 @@ script:
         data:
           option: "Disabled"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id: >
             {{all_inovelli_switches_sb_mode}}
         data:
           option: "Smart Bulb Mode"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id: >
             {{all_inovelli_switches_bindingofftoonsynclevel_mode}}
         data:
           option: "Enabled"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id:
             - select.hall_stairway_smartbulbmode
@@ -1447,21 +1644,23 @@ script:
             - select.garage_overhead_switch_smartbulbmode
             # - select.deck_kitchen_door_smartbulbmode
             - select.deck_flood_lights_smartbulbmode
+            - select.laundry_wall_switch_smartbulbmode
             - select.basement_overhead_outlet_smartbulbmode # Todo maybe remove this when something is plugged in?
             # -
         data:
           option: "Disabled"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id: >
             {{all_inovelli_switches_ouput_mode}}
         data:
           option: "Dimmer"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id:
+            - select.laundry_wall_switch_outputmode
             - select.garage_overhead_switch_outputmode
             - select.deck_flood_lights_outputmode
             - select.basement_overhead_outlet_outputmode # Todo maybe remove this when something is plugged in?
@@ -1469,7 +1668,7 @@ script:
         data:
           option: "On/Off"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id:
             - select.basement_bathroom_exhaust_outputmode
@@ -1478,14 +1677,14 @@ script:
         data:
           option: "Exhaust Fan (On/Off)"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id: >
             {{all_inovelli_switches_switchtype_mode}}
         data:
           option: "Single-Pole Full Sine Wave"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id:
             - select.owner_suite_bathroom_exhaust_switchtype
@@ -1494,7 +1693,7 @@ script:
         data:
           option: "Single Pole"
       - delay: 10 # seconds
-      - service: select.select_option
+      - action: select.select_option
         data_template:
           entity_id:
             - select.basement_landing_switch_switchtype
@@ -1510,154 +1709,154 @@ script:
       # Now redo the bindings of switches to bulbs/etc
       - delay: 10 # seconds
       # TODO: Z2M 2.0 I need to update these bindings: https://github.com/Koenkk/zigbee2mqtt/pull/24432
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Deck/Kitchen Door/2","to":"Deck/Hue"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Outside/Front Lights/2","to":"Outside/Front Hue"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Owner Suite/Bathroom/Tub Switch/2","to":"Owner Suite/Bathroom/Bathtub Lights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Kitchen/Sink Light Switch/2","to":"Kitchen/Sink"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Upstairs/Switch/2","to":"Hall/Upstairs Lights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Living Room/Wall Switch/2","to":"Living Room/Lamps"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Transition Switch/2","to":"Hall/Transition Lights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Transition Switch/2","to":"Hall/Main Foyer"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Garage Laundry Switch/2","to":"Hall/Transition Lights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Foyer Switch/2","to":"Hall/Main Foyer"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Foyer Switch/2","to":"Hall/Front Door"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Dining Room/Overhead/2","to":"Dining Room/Over Table"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Den/Wall Switch/2","to":"Den/All"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Deck/Flood Lights/2","to":"Deck/All"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/North Hallway Switch/2","to":"Basement/All Down Lights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/North Hallway Switch/2","to":"Basement/North Hallway"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Landing Switch/2","to":"Basement/Landing Group"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room West Switch/2","to":"Basement/All Down Lights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room West Switch/2","to":"Basement/West Downlights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/All Down Lights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/East Downlights"}
       - delay: 10 # seconds
-      - service: mqtt.publish
+      - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
@@ -1667,10 +1866,10 @@ script:
   turn_off_owner_suite_inovelli_switch_leds:
     icon: mdi:light-switch
     sequence:
-      - service: retry.actions
+      - action: retry.actions
         data:
           sequence:
-            - service: number.set_value
+            - action: number.set_value
               data:
                 value: 0
               target:
@@ -1684,7 +1883,7 @@ script:
           expected_state: 0
       - delay:
           seconds: 30
-      - service: number.set_value
+      - action: number.set_value
         entity_id:
           - number.owner_suite_closet_ledintensitywhenoff
           - number.owner_suite_fan_switch_ledintensitywhenoff
@@ -1695,7 +1894,7 @@ script:
           value: 0
       - delay:
           seconds: 30
-      - service: number.set_value
+      - action: number.set_value
         entity_id:
           - number.owner_suite_closet_ledintensitywhenoff
           - number.owner_suite_fan_switch_ledintensitywhenoff
@@ -1740,14 +1939,6 @@ rest_command:
 # Sensor
 ########################
 sensor:
-  - platform: template
-    sensors:
-      average_bed_load:
-        # Only useful when both sensors are used. Right now #2 is broken/not in use
-        friendly_name: "Average Bed Load"
-        unit_of_measurement: "kg"
-        value_template: >-
-          {{ ((states('sensor.bed_load_cell_1') | int(0) )+(states('sensor.bed_load_cell_2') | int(0) ))/2.0 }}
 
 ########################
 # Template
@@ -1771,7 +1962,61 @@ template:
         # state: >-
         #   {{ states('sensor.average_bed_load')| int(0) > 20 }}
 
+  - lock:
+      - name: Front door lock
+        optimistic: true
+        lock:
+          - target:
+              entity_id:
+                - input_boolean.front_door_lock
+            action: input_boolean.turn_off
+        unlock:
+          - target:
+              entity_id:
+                - input_boolean.front_door_lock
+            action: input_boolean.turn_on
+        state: "{{ is_state('input_boolean.front_door_lock', 'off') }}"
+
   - sensor:
+      - unit_of_measurement: kg
+        default_entity_id: sensor.average_bed_load
+        name: Average Bed Load
+        state: >-
+          {{ ((states('sensor.bed_load_cell_1') | int(0) )+(states('sensor.bed_load_cell_2') | int(0) ))/2.0 }}
+
+      - unique_id: bedroom_hour_of_day
+        unit_of_measurement: h
+        default_entity_id: sensor.bedroom_hour_of_day
+        name: Bedroom hour of day
+        state: '"{{ now().hour }}"'
+
+      - unit_of_measurement: kg
+        default_entity_id: sensor.chatgpt_bed_delta_raw
+        name: Raw Bed Load Delta
+        state: ""
+
+      - name: "east_bed_occupied_num"
+        unique_id: east_bed_occupied_num
+        state_class: measurement
+        unit_of_measurement: "1"
+        device_class: power_factor
+        availability: "{{ states('input_boolean.east_bed_occupied') in ['on','off'] }}"
+        state: >-
+          {% set s = states('input_boolean.east_bed_occupied') %}
+          {% if s == 'on' %}1{% elif s == 'off' %}0{% else %}{{ none }}{% endif %}
+
+      - name: "west_bed_occupied_num"
+        unique_id: west_bed_occupied_num
+        state_class: measurement
+        unit_of_measurement: "1"
+        device_class: power_factor
+        availability: "{{ states('input_boolean.west_bed_occupied') in ['on','off'] }}"
+        state: >-
+          {% set s = states('input_boolean.west_bed_occupied') %}
+          {% if s == 'on' %}1{% elif s == 'off' %}0{% else %}{{ none }}{% endif %}
+      - name: chatgpt_bed_override_event
+        state: >-
+        unit_of_measurement: ""
       - name: raw_bed_load_cell_1_average
         state: >-
         unit_of_measurement: ""
@@ -1780,6 +2025,79 @@ template:
         state: >-
         unit_of_measurement: ""
         state_class: measurement
+      # chatgpt
+      - name: chatgpt_bed_day_mad
+        state: >-
+        unit_of_measurement: "kg"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_night_mad
+        state: >-
+        unit_of_measurement: "kg"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_thresh_mad
+        state: >-
+        unit_of_measurement: "kg"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_day_filtered
+        state: >-
+        unit_of_measurement: "raw"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_night_filtered
+        state: >-
+        unit_of_measurement: "raw"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_thresh_filtered
+        state: >-
+        unit_of_measurement: "raw"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_baseline_day
+        state: >-
+        unit_of_measurement: "kg"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_baseline_night
+        state: >-
+        unit_of_measurement: "kg"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_threshold
+        state: >-
+        unit_of_measurement: "kg"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_delta
+        state: >-
+        unit_of_measurement: "kg"
+        state_class: measurement
+        device_class: weight
+
+      - name: chatgpt_bed_zero_offset
+        state: >-
+        unit_of_measurement: "raw"
+        state_class: measurement
+        device_class: weight
+      - name: chatgpt_bed_scale_factor
+        state: >-
+        unit_of_measurement: ""
+        state_class: measurement
+        device_class: weight
+      - name: raw_bed_load_cell_1_yesterday_average
+        state: >-
+        unit_of_measurement: ""
+        state_class: measurement
+        device_class: weight
+      - name: raw_bed_load_cell_1_yesterday_night_average
+        state: >-
+        unit_of_measurement: ""
+        state_class: measurement
+        device_class: weight
+
       - name: raw_bed_load_cell_2_average
         state: >-
       - name: z2m_failing

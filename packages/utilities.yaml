@@ -141,15 +141,15 @@ automation:
   - alias: restart_water_meter
     id: restart_water_meter
     trigger:
-      - platform: time_pattern
+      - trigger: time_pattern
         hours: "/1"
     condition: []
     action:
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id: switch.basement_water_meter_plug
       - delay:
           seconds: 20
-      - service: switch.turn_on
+      - action: switch.turn_on
         entity_id: switch.basement_water_meter_plug
 
         # in the wintertime the humidifier causes the meter to think there is a leak, throwing up a persistent error message that we need
@@ -157,37 +157,37 @@ automation:
   - alias: trigger_winter_watermeter_flow
     id: trigger_winter_watermeter_flow
     trigger:
-      - platform: time_pattern
+      - trigger: time_pattern
         minutes: "/23"
     condition:
       - alias: "winter month"
         condition: template
         value_template: "{{now().month in [1,2,10,11,12]}}"
     action:
-      - service: rest_command.turn_off_watermeter_light
+      - action: rest_command.turn_off_watermeter_light
       - delay:
           seconds: 1
-      - service: rest_command.turn_on_watermeter_light
+      - action: rest_command.turn_on_watermeter_light
       - delay:
           seconds: 2
-      - service: rest_command.turn_off_watermeter_light
+      - action: rest_command.turn_off_watermeter_light
       - delay:
           seconds: 3
-      - service: rest_command.turn_on_watermeter_light
+      - action: rest_command.turn_on_watermeter_light
       - delay:
           seconds: 3
-      - service: rest_command.trigger_flow_watermeter_light
+      - action: rest_command.trigger_flow_watermeter_light
       - delay:
           minutes: 4
-      - service: rest_command.turn_off_watermeter_light
+      - action: rest_command.turn_off_watermeter_light
 
   - alias: check_non_responding_entities
     id: check_non_responding_entities
     trigger:
-      - platform: time_pattern
+      - trigger: time_pattern
         hours: "/12"
     action:
-      - service: persistent_notification.create
+      - action: persistent_notification.create
         data_template:
           title: Stale Entities
           message: >-
@@ -210,13 +210,13 @@ automation:
   - id: switch_electrical_tariff
     alias: switch_electrical_tariff
     trigger:
-      - platform: template
+      - trigger: template
         value_template: >-
           {{ now().month == 6 and now().day == 1}}
         id: summer_rate
         variables:
           tariff: "summer"
-      - platform: template
+      - trigger: template
         value_template: >-
           {{ now().month == 10 and now().day == 1}}
         id: nonsummer_rate
@@ -229,22 +229,22 @@ automation:
       #   at: input_datetime.non_summer_energy
       #   id: nonsummer
     action:
-      - service: select.select_option
+      - action: select.select_option
         target:
           entity_id: select.hourly_electricity
         data:
           option: "{{ tariff }}"
-      - service: select.select_option
+      - action: select.select_option
         target:
           entity_id: select.daily_electricity
         data:
           option: "{{ tariff }}"
-      - service: select.select_option
+      - action: select.select_option
         target:
           entity_id: select.monthly_electricity
         data:
           option: "{{ tariff }}"
-      - service: input_number.set_value
+      - action: input_number.set_value
         target:
           entity_id: input_number.electrical_rate
         data:
@@ -268,12 +268,12 @@ automation:
       #   variables:
       #     tariff: "offpeak"
     action:
-      - service: select.select_option
+      - action: select.select_option
         target:
           entity_id: select.daily_energy
         data:
           option: "{{ tariff }}"
-      - service: select.select_option
+      - action: select.select_option
         target:
           entity_id: select.monthly_energy
         data:
@@ -283,11 +283,12 @@ automation:
     description: When HA starts up, or bed load cells are unavailable restart AppDaemon
     id: restart_appdaemon_on_ha_startup
     trigger:
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
-      - platform: state
+      - trigger: state
         entity_id:
           - sensor.bed_load_cell_1
+          - sensor.chatgpt_bed_delta_raw
           # - sensor.bed_load_cell_2
         to:
           - "unknown"
@@ -296,43 +297,43 @@ automation:
           - "Unavailable"
           - "unknown"
         for:
-          minutes: 15
+          minutes: 10
       # action:
-      #   - service: notify.mobile_app_wethop
+      #   - action: notify.mobile_app_wethop
       #     data:
       #       message: >-
       #         Restarting AppDaemon. Check the Automation Log
     action:
-      - service: hassio.addon_restart
+      - action: hassio.addon_restart
         data:
           addon: a0d7b954_appdaemon
 
   - alias: Turn Sump Back On
     id: turn_sump_back_on
     trigger:
-      - platform: state
+      - trigger: state
         entity_id:
           - switch.basement_sump_pump
         to: "off"
-      - platform: state
+      - trigger: state
         entity_id:
           - switch.basement_sump_pump
         not_to: "on"
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     action:
-      - service: switch.turn_on
+      - action: switch.turn_on
         entity_id:
           - switch.basement_sump_pump
 
   - alias: Notify Sump Pit Getting Full
     id: notify_sump_pit_getting_full
     trigger:
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.sump_fill
         below: 0.3
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: >-
             "Sump pit is getting full! Check the sump pump!"
@@ -340,11 +341,11 @@ automation:
   - alias: Notify Sump Pit Full
     id: notify_sump_pit_full
     trigger:
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id: sensor.sump_fill
         below: 0.2
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: >-
             "Sump pit is getting very full! Check the sump pump!"
@@ -353,7 +354,7 @@ automation:
     id: notify_sump_runs
     description: Notify number of times the sump pump runs
     trigger:
-      - platform: time
+      - trigger: time
         at: "12:30:00"
     condition:
       - alias: "Number of times the sump ran"
@@ -361,7 +362,7 @@ automation:
         entity_id: sensor.sump_runs
         above: 0
     action:
-      - service: notify.all
+      - action: notify.all
         data:
           message: >-
             {% set sump_runtime = states("sensor.sump_pump_time_on_past_24_hours")|float * 60 *60 %}
@@ -397,7 +398,7 @@ automation:
   #       entity_id: sensor.waste_management
   #       state: "1"
   #   action:
-  #     - service: notify.all
+  #     - action: notify.all
   #       data:
   #         message: >-
   #           Put out bins tonight. Garbage tomorrow.
@@ -418,7 +419,7 @@ automation:
   #       entity_id: sensor.waste_management
   #       state: "2"
   #   action:
-  #     - service: notify.all
+  #     - action: notify.all
   #       data:
   #         message: DON't put out bins tonight. Garbage day has changed!
 
@@ -426,7 +427,7 @@ automation:
     id: notify_garbage_day
     description: Notify garbage day
     trigger:
-      - platform: time
+      - trigger: time
         at: "14:30:00"
     action:
       - choose:
@@ -440,7 +441,7 @@ automation:
                 entity_id: sensor.waste_management
                 state: "2"
             sequence:
-              - service: notify.all
+              - action: notify.all
                 data:
                   message: DO NOT put out bins tonight. Garbage day has changed!
           - conditions:
@@ -449,7 +450,7 @@ automation:
                 entity_id: sensor.waste_management
                 state: "1"
             sequence:
-              - service: notify.all
+              - action: notify.all
                 data:
                   message: >-
                     Put out bins tonight. Garbage tomorrow.
@@ -458,7 +459,7 @@ automation:
     id: restart_cpap
     description: Restart CPAP so Bluetooth keeps working
     trigger:
-      - platform: time
+      - trigger: time
         at: "15:30:00"
     condition:
       - alias: "Restart Days"
@@ -468,38 +469,38 @@ automation:
           - wed
           - fri
     action:
-      - service: switch.turn_off
+      - action: switch.turn_off
         entity_id: switch.owner_suite_cpap_plug
       - delay: 0:20
-      - service: switch.turn_on
+      - action: switch.turn_on
         entity_id: switch.owner_suite_cpap_plug
 
   - alias: Turn CPAP Back On
     id: turn_CPAP_back_on
     trigger:
-      - platform: state
+      - trigger: state
         entity_id:
           - switch.owner_suite_cpap_plug
         to: "off"
         for:
           minutes: 20
-      - platform: state
+      - trigger: state
         entity_id:
           - switch.owner_suite_cpap_plug
         not_to: "on"
         for:
           minutes: 20
-      - platform: homeassistant
+      - trigger: homeassistant
         event: start
     action:
-      - service: switch.turn_on
+      - action: switch.turn_on
         entity_id:
           - switch.owner_suite_cpap_plug
 
   - alias: Garbage Holiday Update
     id: garbage_holiday_update
     trigger:
-      - platform: event
+      - trigger: event
         event_type: garbage_collection_loaded
         event_data:
           entity_id: sensor.waste_management
@@ -523,7 +524,7 @@ automation:
                 {%- endfor %}  
                 {{ ns.found }}
             - alias: "Move the date"
-              service: garbage_collection.offset_date
+              action: garbage_collection.offset_date
               data:
                 entity_id: "{{ trigger.event.data.entity_id }}"
                 date: "{{ repeat.item }}"
@@ -548,7 +549,7 @@ automation:
                   {% endfor %}
                   {{ ns.offset }}
       - alias: "Update the garbage_collection entity"
-        service: garbage_collection.update_state
+        action: garbage_collection.update_state
         data:
           entity_id: "{{ trigger.event.data.entity_id }}"
 

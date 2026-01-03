@@ -154,7 +154,7 @@ automation:
   - id: buy_more_air_filters
     alias: buy_more_air_filters
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: sensor.zeke_place
         attribute: place_name
         to:
@@ -169,7 +169,7 @@ automation:
         entity_id: input_number.air_filters_at_home
         below: 1
     action:
-      - service: notify.mobile_app_wethop
+      - action: notify.mobile_app_wethop
         data:
           title: "Buy Air Filters"
           message: >-
@@ -189,14 +189,14 @@ automation:
   - id: air_filters_purchased
     alias: air_filters_purchased
     trigger:
-      - platform: event
+      - trigger: event
         event_type: mobile_app_notification_action
         event_data:
           action: BOUGHT_AIR_FILTERS
     condition: []
     action:
       - alias: Increase Number of air filters in inventory
-        service: input_number.set_value
+        action: input_number.set_value
         entity_id: input_number.air_filters_at_home
         data:
           value: >-
@@ -249,14 +249,14 @@ automation:
               - condition: trigger
                 id: bathroom-humidity-high
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 data:
                   entity_id: fan.owner_suite_bathroom_exhaust
           - conditions:
               - condition: trigger
                 id: bathroom-humidity-normal
             sequence:
-              - service: fan.turn_off
+              - action: fan.turn_off
                 data:
                   entity_id: fan.owner_suite_bathroom_exhaust
           # basement bathroom
@@ -264,14 +264,14 @@ automation:
               - condition: trigger
                 id: basement-bathroom-humidity-high
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 data:
                   entity_id: fan.basement_bathroom_exhaust
           - conditions:
               - condition: trigger
                 id: basement-bathroom-humidity-normal
             sequence:
-              - service: fan.turn_off
+              - action: fan.turn_off
                 data:
                   entity_id: fan.basement_bathroom_exhaust
           # guest bathroom
@@ -279,14 +279,14 @@ automation:
               - condition: trigger
                 id: guest-bathroom-humidity-high
             sequence:
-              - service: fan.turn_on
+              - action: fan.turn_on
                 data:
                   entity_id: fan.guest_bathroom_exhaust
           - conditions:
               - condition: trigger
                 id: guest-bathroom-humidity-normal
             sequence:
-              - service: fan.turn_off
+              - action: fan.turn_off
                 data:
                   entity_id: fan.guest_bathroom_exhaust
 
@@ -314,7 +314,7 @@ automation:
 #     entity_id: binary_sensor.bayesian_zeke_home
 #     state: 'on'
 #   action:
-#   - service: climate.turn_off
+#   - action: climate.turn_off
 #     data:
 #       entity_id: climate.my_ecobee
 
@@ -338,7 +338,7 @@ automation:
 #       entity_id: binary_sensor.bayesian_zeke_home
 #       state: 'on'
 #   action:
-#   - service: climate.set_hvac_mode
+#   - action: climate.set_hvac_mode
 #     data:
 #       entity_id: climate.my_ecobee
 #       operation_mode: eco
@@ -347,73 +347,6 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: template
-    sensors:
-      bathroom_humidity_high:
-        value_template: >-
-          {% if
-              (states('sensor.owner_suite_bathroom_tph_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10)
-          %}
-            True
-          {% else %}
-            False
-          {% endif %}
-      basement_bathroom_humidity_high:
-        value_template: >-
-          {% if
-              (states('sensor.basement_bathroom_tph_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10)
-          %}
-            True
-          {% else %}
-            False
-          {% endif %}
-      guest_bathroom_humidity_high:
-        value_template: >-
-          {% if
-              (states('sensor.guest_bathroom_tph_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10)
-          %}
-            True
-          {% else %}
-            False
-          {% endif %}
-
-      ecobee_aux:
-        device_class: heat
-        value_template: >-
-          {% if
-              'aux' in state_attr('climate.my_ecobee', 'equipment_running')
-          %} True
-          {% else %}
-            False
-          {% endif %}
-
-      ecobee_home:
-        device_class: presence
-        value_template: >-
-          {% if
-              is_state_attr('climate.my_ecobee', 'preset_mode', 'away_indefinitely')
-                or
-              is_state_attr('climate.my_ecobee', 'preset_mode', 'Away')
-          %} False
-          {% else %}
-            True
-          {% endif %}
-
-      fresh_air_open:
-        device_class: window
-        value_template: >-
-          {{
-            is_state('binary_sensor.ene_window_contact', 'on')
-            or is_state('binary_sensor.ese_window_contact', 'on')
-            or is_state('binary_sensor.nne_window_contact', 'on')
-            or is_state('binary_sensor.north_kitchen_sink_window_contact', 'on')
-            or is_state('binary_sensor.north_master_bedroom_window_contact', 'on')
-            or is_state('binary_sensor.office_north_window_contact', 'on')
-            or is_state('binary_sensor.se_basement_window_contact', 'on')
-            or is_state('binary_sensor.sse_window_contact', 'on')
-            or is_state('binary_sensor.sw_basement_window_contact', 'on')
-          }}
-
   - platform: trend
     sensors:
       pressure_falling_v_rapidly:
@@ -657,44 +590,6 @@ sensor:
       - sensor.basement_bathroom_tph_pressure
       - sensor.guest_bathroom_tph_pressure
 
-  - platform: template
-    sensors:
-      ecobee_temperature:
-        device_class: temperature
-        unit_of_measurement: "°F"
-        availability_template: >-
-          {{ states("climate.my_ecobee") != None }}
-        value_template: >-
-          {{ state_attr('climate.my_ecobee', 'current_temperature') }}
-
-      rate_of_house_temp_change_5m:
-        unit_of_measurement: "°F/5 minute"
-        availability_template: >-
-          {{ states("sensor.rate_of_house_temp_change_5m", "change_rate") != None }}
-        value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_5m', 'change_rate')  |float(default=0)}}
-
-      rate_of_house_temp_change_10m:
-        unit_of_measurement: "°F/5 minute"
-        availability_template: >-
-          {{ states("sensor.rate_of_house_temp_change_10m", "change_rate") != None }}
-        value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate')|float(default=0) * 60.0 * 5.0 |float(default=0)}}
-
-      rate_of_house_temp_change_1h:
-        availability_template: >-
-          {{ states("sensor.house_temperature_stats_1h", "change_rate") != None }}
-        unit_of_measurement: "°F/5 minute"
-        value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
-
-      rate_of_house_temp_change_30m:
-        unit_of_measurement: "°F/5 minute"
-        availability_template: >-
-          {{ states("sensor.house_temperature_stats_30m", "change_rate") != None }}
-        value_template: >-
-          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
-
   - platform: statistics
     name: min_rate_of_house_temp_change_10m
     entity_id: sensor.rate_of_house_temp_change_10m
@@ -753,6 +648,93 @@ sensor:
 ## Templates
 ################################################
 template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.bathroom_humidity_high
+        state: >-
+          {% if (states('sensor.owner_suite_bathroom_tph_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10) %}
+            True 
+          {% else %}
+            False
+          {% endif %}
+        name: bathroom_humidity_high
+      - default_entity_id: binary_sensor.basement_bathroom_humidity_high
+        state: >-
+          {% if(states('sensor.basement_bathroom_tph_humidity')|float(default=0))> (states('sensor.average_house_humidity')|float(default=0) + 10) %}
+            True
+          {% else %}
+            False
+          {% endif %}
+        name: basement_bathroom_humidity_high
+      - default_entity_id: binary_sensor.guest_bathroom_humidity_high
+        state: >-
+          {% if(states('sensor.guest_bathroom_tph_humidity')|float(default=0))> (states('sensor.average_house_humidity')|float(default=0) + 10) %}
+            True
+          {% else %}
+            False
+          {% endif %}
+        name: guest_bathroom_humidity_high
+      - device_class: heat
+        default_entity_id: binary_sensor.ecobee_aux
+        state: >-
+          {% if 'aux' in state_attr('climate.my_ecobee', 'equipment_running') %}
+            True
+          {% else %}
+            False
+          {% endif %}
+        name: ecobee_aux
+      - device_class: presence
+        default_entity_id: binary_sensor.ecobee_home
+        state: >-
+          {% if is_state_attr('climate.my_ecobee', 'preset_mode', 'away_indefinitely') or is_state_attr('climate.my_ecobee', 'preset_mode', 'Away') %}
+            False
+          {% else %}
+            True
+          {% endif %}
+        name: ecobee_home
+      - device_class: window
+        default_entity_id: binary_sensor.fresh_air_open
+        state: >-
+          {{ is_state('binary_sensor.ene_window_contact', 'on') or is_state('binary_sensor.ese_window_contact',
+          'on') or is_state('binary_sensor.nne_window_contact', 'on') or is_state('binary_sensor.north_kitchen_sink_window_contact',
+          'on') or is_state('binary_sensor.north_master_bedroom_window_contact', 'on')
+          or is_state('binary_sensor.office_north_window_contact', 'on')  or is_state('binary_sensor.se_basement_window_contact',
+          'on')  or is_state('binary_sensor.sse_window_contact', 'on')  or is_state('binary_sensor.sw_basement_window_contact',
+          'on') }}
+        name: fresh_air_open
   - sensor:
       - name: HVAC Activity
         state: "{{ state_attr('climate.my_ecobee', 'hvac_action') }}"
+      - device_class: temperature
+        unit_of_measurement: °F
+        default_entity_id: sensor.ecobee_temperature
+        availability: '{{ states("climate.my_ecobee") != None }}'
+        state: "{{ state_attr('climate.my_ecobee', 'current_temperature') }}"
+        name: ecobee_temperature
+      - unit_of_measurement: °F/5 minute
+        default_entity_id: sensor.rate_of_house_temp_change_5m
+        availability: >-
+          {{ states("sensor.rate_of_house_temp_change_5m", "change_rate") != None }}
+        state: >-
+          {{ state_attr('sensor.house_temperature_stats_5m', 'change_rate')  |float(default=0)}}
+        name: rate_of_house_temp_change_5m
+      - unit_of_measurement: °F/5 minute
+        default_entity_id: sensor.rate_of_house_temp_change_10m
+        availability: >-
+          {{ states("sensor.rate_of_house_temp_change_10m", "change_rate") != None }}
+        state: >-
+          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate')|float(default=0) * 60.0 * 5.0 |float(default=0)}}
+        name: rate_of_house_temp_change_10m
+      - unit_of_measurement: °F/5 minute
+        default_entity_id: sensor.rate_of_house_temp_change_1h
+        availability: >-
+          {{ states("sensor.house_temperature_stats_1h", "change_rate") != None }}
+        state: >-
+          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
+        name: rate_of_house_temp_change_1h
+      - unit_of_measurement: °F/5 minute
+        default_entity_id: sensor.rate_of_house_temp_change_30m
+        availability: >-
+          {{ states("sensor.house_temperature_stats_30m", "change_rate") != None }}
+        state: >-
+          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
+        name: rate_of_house_temp_change_30m

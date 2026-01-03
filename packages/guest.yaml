@@ -110,19 +110,19 @@ automation:
   - id: turn_off_guest_mode_when_guest_wifi_inactive
     alias: turn_off_guest_mode_when_guest_wifi_inactive
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.guest_on_wifi
         to: "off"
         for:
           hours: 16
     # condition:
     action:
-      - service: input_boolean.turn_off
+      - action: input_boolean.turn_off
         entity_id: input_boolean.guest_mode
-      - service: notify.all
+      - action: notify.all
         data:
           message: Guest Mode Deactivated
-      - service: media_player.join
+      - action: media_player.join
         target:
           entity_id:
             - media_player.bedroom_sonos
@@ -135,14 +135,14 @@ automation:
   - id: turn_on_guest_mode_when_guest_wifi_active
     alias: turn_on_guest_mode_when_guest_wifi_active
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: binary_sensor.guest_on_wifi
         to: "on"
         for:
           minutes: 10
     #condition:
     action:
-      - service: notify.mobile_app_wethop
+      - action: notify.mobile_app_wethop
         data:
           title: "Guest Mode Activated"
           message: "Leave enabled?"
@@ -161,7 +161,7 @@ automation:
                 destructive: false
                 behavior: default
       - wait_for_trigger:
-          - platform: event
+          - trigger: event
             event_type: mobile_app_notification_action
             id: enable_guest
             event_data:
@@ -169,23 +169,23 @@ automation:
         timeout:
           hours: 1
         continue_on_timeout: false
-      - service: input_boolean.turn_on
+      - action: input_boolean.turn_on
         entity_id: input_boolean.guest_mode
-      - service: media_player.unjoin
+      - action: media_player.unjoin
         target:
           entity_id:
             - media_player.bedroom_sonos
             - media_player.bathroom_sonos
             - media_player.office_sonos
             - media_player.den_sonos
-      - service: media_player.join
+      - action: media_player.join
         target:
           entity_id:
             - media_player.bedroom_sonos
         data:
           group_members:
             - media_player.bathroom_sonos
-      # - service: media_player.join
+      # - action: media_player.join
       #   target:
       #     entity_id:
       #       - media_player.office
@@ -196,12 +196,12 @@ automation:
   - id: climate_guest_mode_day
     alias: climate_guest_mode_day
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: input_boolean.guest_mode
         to: "on"
         for:
           seconds: 20
-      - platform: time
+      - trigger: time
         at: 07:00:00
     condition:
       - condition: time
@@ -212,7 +212,7 @@ automation:
           - input_boolean.guest_mode
         state: "on"
     action:
-      - service: climate.set_preset_mode
+      - action: climate.set_preset_mode
         data:
           preset_mode: "Guest Day"
         target:
@@ -221,12 +221,12 @@ automation:
   - id: climate_guest_mode_night
     alias: climate_guest_mode_night
     trigger:
-      - platform: state
+      - trigger: state
         entity_id: input_boolean.guest_mode
         to: "on"
         for:
           seconds: 20
-      - platform: time
+      - trigger: time
         at: 00:00:00
     condition:
       - condition: time
@@ -237,7 +237,7 @@ automation:
           - input_boolean.guest_mode
         state: "on"
     action:
-      - service: climate.set_preset_mode
+      - action: climate.set_preset_mode
         data:
           preset_mode: "Guest Sleep"
         target:
@@ -247,16 +247,6 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: template
-    sensors:
-      guest_on_wifi:
-        value_template: >-
-          {% set state = states('sensor.barley_guest') %}
-          {% if is_number(state) and state | float >= 1 %}
-            true
-          {% else %}
-            false
-          {% endif %}
 
 ########################
 # Cameras
@@ -323,15 +313,29 @@ script:
 # Sensor
 ########################
 sensor:
-  - platform: template
-    sensors:
-      guests_on_wifi:
-        value_template: >-
-          {{ (states.device_tracker | selectattr('state','eq','home') | selectattr('attributes.is_guest', 'eq', true) | list) }}
+
 ########################
 # Switch
 ########################
 switch:
+
+################################################
+## Templates
+################################################
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.guest_on_wifi
+        state: >-
+          {% set state = states('sensor.barley_guest') %} {% if is_number(state) and state | float >= 1 %}
+            True
+          {% else %}
+            False
+          {% endif %}"
+        name: guest_on_wifi
+  - sensor:
+      - name: guests_on_wifi
+        state: >-
+          {{ (states.device_tracker | selectattr('state','eq','home') | selectattr('attributes.is_guest', 'eq', true) | list) }}
 
 ########################
 # Zone
