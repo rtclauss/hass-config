@@ -1,0 +1,381 @@
+################################################################
+## Packages / Christmas
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "other_holidays"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    binary_sensor.st_andrews_day:
+      <<: *customize
+      friendly_name: "St Andrews Day"
+      icon: mdi:calendar
+
+    binary_sensor.halloween:
+      <<: *customize
+      friendly_name: "Halloween"
+      icon: mdi:calendar
+
+########################
+# Automations
+########################
+automation:
+  - alias: Trash reminder evening before pickup
+    triggers:
+      - trigger: time
+        at: "14:30:00"
+    condition:
+      - condition: template
+        value_template: >
+          {% set p = states('sensor.garbage_pickup_date') %}
+          {% if p in ['unknown','unavailable',''] %}
+            false
+          {% else %}
+            {{ (as_datetime(p) - timedelta(days=1)).date() == now().date() }}
+          {% endif %}
+    action:
+      - action: notify.all
+        data:
+          message: >
+            Trash pickup is tomorrow ({{ states('sensor.garbage_pickup_date') }}).
+  - id: reset_after_holiday
+    alias: reset_after_holiday
+    # initial_state: false
+    triggers:
+      - trigger: sun
+        event: sunrise
+        offset: +00:45:00
+    action:
+      - action: scene.turn_on
+        data_template:
+          entity_id: scene.reset_front_lights
+      - delay:
+          seconds: 15
+      - action: light.turn_off
+        data_template:
+          entity_id: light.outside_front_hue
+
+  - id: st_andrews_day_light_loop
+    alias: st_andrews_day_light_loop
+    # initial_state: false
+    triggers:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+      - trigger: time_pattern
+        minutes: "/2"
+    condition:
+      - alias: "St Andrews Day"
+        condition: state
+        entity_id: binary_sensor.st_andrews_day
+        state: "on"
+      - condition: or
+        conditions:
+          - alias: "Sunset"
+            condition: sun
+            after: sunset
+            after_offset: -00:45:00
+          - alias: "Sunrise"
+            condition: sun
+            before: sunrise
+            before_offset: 00:45:00
+    action:
+      - action: scene.turn_on
+        data_template:
+          transition: 30
+          entity_id: scene.scene_st_andrews_day_outdoors_{{ now().minute % 4 + 1 | int }}
+          # toggle between christmas scenes 1-4
+
+  - id: halloween_light_loop
+    alias: halloween_light_loop
+    # initial_state: false
+    triggers:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+      - trigger: time_pattern
+        minutes: "/2"
+    condition:
+      - alias: "Halloween"
+        condition: state
+        entity_id: binary_sensor.halloween
+        state: "on"
+      - condition: or
+        conditions:
+          - alias: "Sunset"
+            condition: sun
+            after: sunset
+            after_offset: -00:45:00
+          - alias: "Sunrise"
+            condition: sun
+            before: sunrise
+            before_offset: 00:45:00
+    action:
+      - action: scene.turn_on
+        data_template:
+          transition: 30
+          entity_id: scene.scene_halloween_outdoors_{{ now().minute % 4 + 1 | int }}
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+
+########################
+# Groups
+########################
+group:
+
+########################
+# Light
+########################
+light:
+
+########################
+# Scenes
+########################
+scene:
+  - name: reset_front_lights
+    entities:
+      light.outside_front_door:
+        state: "on"
+        # rgb_color: [255, 168, 92]
+        color_temp_kelvin: 2732
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        # rgb_color: [255, 168, 92]
+        color_temp_kelvin: 2732
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        # rgb_color: [255, 168, 92]
+        color_temp_kelvin: 2732
+        brightness: 255
+
+  - name: scene_st_andrews_day_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 0, 255] # Blue
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 255, 255] # White
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 0, 255] # Blue
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255] # White
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 0, 255] # Blue
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 255, 255] # White
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255] # White
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0] # Irn Bru Orange
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0] # Irn Bru Orange
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255] # White
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0] # Irn Bru Orange
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [30, 144, 255] # Irn Bru Blue
+        brightness: 255
+
+  - name: scene_halloween_outdoors_1 # Blood Moon Glow
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 50, 50]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [120, 0, 0]
+        brightness: 255
+  - name: scene_halloween_outdoors_2 # Pumpkin Lantern
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 120, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 180, 50]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [180, 60, 0]
+        brightness: 255
+  - name: scene_halloween_outdoors_3 # Witch's Mist
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [60, 0, 120]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [180, 0, 255]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [30, 0, 60]
+        brightness: 255
+  - name: scene_halloween_outdoors_4 # Toxic Fog
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 100]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 120, 40]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 60, 20]
+        brightness: 255
+
+########################
+# Scripts
+########################
+script:
+
+################################################
+## Templates
+################################################
+template:
+  # Example simple date-based binary_sensors (your pattern is fine)
+  - binary_sensor:
+      - name: st_andrews_day
+        unique_id: st_andrews_day
+        state: "{{ now().month == 11 and now().day == 30 }}"
+
+      - name: halloween
+        unique_id: halloween
+        state: "{{ now().month == 10 and now().day == 31 }}"
+
+  # Garbage pickup date (trigger-based template with calendar.get_events)
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time
+        at: "00:05:00"
+      - trigger: time
+        at: "12:05:00"
+      - trigger: state
+        entity_id: calendar.mn_holidays
+    action:
+      - variables:
+          today: "{{ now().date() }}"
+          is_wed: "{{ today.weekday() == 2 }}"
+          after_pickup_time: "{{ now().hour >= 12 }}" # change cutoff if desired
+
+          days_until_wed: >
+            {% set d = 2 - today.weekday() %}
+            {% if d < 0 %}{% set d = d + 7 %}{% endif %}
+            {{ d }}
+
+          base_wed: >
+            {% if is_wed and not after_pickup_time %}
+              {{ today }}
+            {% else %}
+              {{ today + timedelta(days=days_until_wed if (not is_wed) else 7) }}
+            {% endif %}
+
+          week_mon: "{{ base_wed - timedelta(days=base_wed.weekday()) }}"
+          range_start: "{{ week_mon.isoformat() }}T00:00:00"
+          range_end: "{{ (base_wed + timedelta(days=1)).isoformat() }}T23:59:59"
+
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.mn_holidays
+        data:
+          start_date_time: "{{ range_start }}"
+          end_date_time: "{{ range_end }}"
+        response_variable: hols
+
+      - variables:
+          holiday_events: "{{ hols.events | default([]) }}"
+
+          holiday_mon_to_wed: >
+            {% set ws = week_mon %}
+            {% set we = base_wed %}
+            {% set hit = false %}
+            {% for e in holiday_events %}
+              {% set d = as_datetime(e.start).date() %}
+              {% if d >= ws and d <= we %}
+                {% set hit = true %}
+              {% endif %}
+            {% endfor %}
+            {{ hit }}
+
+          pickup_date: >
+            {% if holiday_mon_to_wed %}
+              {{ (base_wed + timedelta(days=1)).isoformat() }}   # Thursday
+            {% else %}
+              {{ base_wed.isoformat() }}                         # Wednesday
+            {% endif %}
+
+    sensor:
+      - name: Garbage pickup date
+        unique_id: garbage_pickup_date_apple_valley
+        state: "{{ pickup_date }}"
+        attributes:
+          base_wednesday: "{{ base_wed.isoformat() }}"
+          holiday_shift_applied: "{{ holiday_mon_to_wed }}"
+          holiday_events_in_range: "{{ holiday_events | map(attribute='summary') | list }}"

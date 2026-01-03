@@ -17,7 +17,16 @@ esp32:
   board: esp32dev
   framework:
     type: esp-idf
-    # type: arduino
+    version: 5.4.2
+    sdkconfig_options:
+      CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM: '128'
+      CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM: '128'
+      CONFIG_ESP_WIFI_CSI_ENABLED: y
+      CONFIG_ESP_WIFI_AMPDU_TX_ENABLED: n
+      CONFIG_ESP_WIFI_AMPDU_RX_ENABLED: n
+      CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE: n
+      CONFIG_PM_ENABLE: n
+      CONFIG_ESP_TASK_WDT_TIMEOUT_S: '30'
 
 # Enable logging
 logger:
@@ -35,11 +44,20 @@ improv_serial:
 wifi:
   ssid: !secret wifi_ap
   password: !secret wifi_password
+  min_auth_mode: WPA2
+  power_save_mode: NONE
   
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "OfficeBt Fallback Hotspot"
     password: "w6bg4m9c9rY7"
+
+external_components:
+  - source: github://tommy-sense/esphome
+    components: [ sensor_tommy ]
+    refresh: 5min
+
+sensor_tommy:
 
 # Sync time with Home Assistant.
 time:
@@ -87,7 +105,7 @@ esp32_ble_tracker:
 xiaomi_ble:
 
 bluetooth_proxy:
-  # active: true
+  active: true
 
 sensor:
   #Apple Watch Sensors:

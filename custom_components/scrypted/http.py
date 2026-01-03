@@ -1,5 +1,4 @@
 """The Scrypted integration."""
-from __future__ import annotations
 
 import asyncio
 import logging
@@ -9,8 +8,6 @@ from ipaddress import ip_address
 import os
 from typing import Any
 from urllib.parse import quote
-import threading
-
 import aiohttp
 from aiohttp import ClientTimeout, hdrs, web
 from aiohttp.web_exceptions import HTTPBadGateway, HTTPBadRequest
@@ -132,7 +129,7 @@ class ScryptedView(HomeAssistantView):
             if path == "entrypoint.html":
                 body = (await self.entrypoint_html).replace("__DOMAIN__", DOMAIN).replace("__TOKEN__", token)
                 entry: ConfigEntry = self.hass.data[DOMAIN][token]
-                if CONF_SCRYPTED_NVR in entry.data and entry.data[CONF_SCRYPTED_NVR]:
+                if entry.options.get(CONF_SCRYPTED_NVR, entry.data.get(CONF_SCRYPTED_NVR, False)):
                     body = body.replace("core", "nvr")
 
                 response = web.Response(
@@ -177,7 +174,7 @@ class ScryptedView(HomeAssistantView):
             req_protocols = ()
 
         ws_server = web.WebSocketResponse(
-            protocols=req_protocols, autoclose=False, autoping=False
+            protocols=req_protocols, autoclose=False, autoping=False, max_msg_size=4194304 * 4
         )
         await ws_server.prepare(request)
 
@@ -198,6 +195,7 @@ class ScryptedView(HomeAssistantView):
             protocols=req_protocols,
             autoclose=False,
             autoping=False,
+            max_msg_size=4194304 * 4
         ) as ws_client:
             # Proxy requests
             await asyncio.wait(

@@ -34,7 +34,6 @@ homeassistant:
       friendly_name: "Notify Sensor Battery at 10%"
       icon: mdi:battery-charging-wireless-10
 
-
     ################################################
     ## Binary Sensors
     ################################################
@@ -70,7 +69,7 @@ automation:
   - id: notify_battery_dying_20
     alias: notify_battery_dying_20
     trigger:
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id:
           - sensor.arrival_sensor_battery
           - sensor.basement_door_battery
@@ -101,12 +100,12 @@ automation:
         below: 20
         above: 10
     action:
-      - service: persistent_notification.create
+      - action: persistent_notification.create
         data_template:
           title: Low Battery
           message: "Battery {{  trigger.from_state.attributes.friendly_name }} is below 20%"
           notification_id: low-battery-alert
-      - service: notify.all
+      - action: notify.all
         data_template:
           message: >-
             Battery '{{ trigger.from_state.attributes.friendly_name }}' is below 20%.
@@ -114,7 +113,7 @@ automation:
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
     trigger:
-      - platform: numeric_state
+      - trigger: numeric_state
         entity_id:
           - sensor.arrival_sensor_battery
           - sensor.basement_door_battery
@@ -142,12 +141,12 @@ automation:
           - sensor.sw_basement_window_battery
         below: 10
     action:
-      - service: persistent_notification.create
+      - action: persistent_notification.create
         data_template:
           title: Low Battery
           message: "Battery {{  trigger.from_state.attributes.friendly_name }} is below 10%"
           notification_id: low-battery-alert
-      - service: notify.all
+      - action: notify.all
         data_template:
           message: >-
             Battery '{{ trigger.from_state.attributes.friendly_name }}' is below 10%.

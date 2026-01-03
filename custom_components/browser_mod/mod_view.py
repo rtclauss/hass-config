@@ -1,19 +1,14 @@
-import json
 from homeassistant.core import HomeAssistant
 from homeassistant.components.frontend import add_extra_js_url, async_register_built_in_panel
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
 
 from .const import FRONTEND_SCRIPT_URL, SETTINGS_PANEL_URL
+from .helpers import get_version
 
 import logging
 
 _LOGGER = logging.getLogger(__name__)
-
-def get_version(hass: HomeAssistant):
-    with open(hass.config.path("custom_components/browser_mod/manifest.json"), "r") as fp:
-        manifest = json.load(fp)
-        return manifest["version"]
 
 async def async_setup_view(hass: HomeAssistant):
 
@@ -82,10 +77,6 @@ async def async_setup_view(hass: HomeAssistant):
                         r["url"] = resourceUrl
                 
                 continue
-
-            # While going through the resources, also preload card-mod if it is found
-            if "card-mod.js" in r["url"]:
-                add_extra_js_url(hass, r["url"])
 
         if not frontend_added:
             if getattr(resources, "async_create_item", None):
