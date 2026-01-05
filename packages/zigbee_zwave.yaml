@@ -1589,6 +1589,21 @@ script:
         data:
           # value: "623" # enhanced reporting
           value: 0 # default
+      - repeat:
+          for_each: "{{ states.light | selectattr('entity_id', 'search', 'inovelli') | map(attribute='object_id') | list }}"
+          sequence:
+            - service: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/configure_reporting
+                payload: >-
+                  {
+                    "device": "{{ repeat.item }}",
+                    "cluster": "haElectricalMeasurement",
+                    "attribute": "activePower",
+                    "minimumReportInterval": 0,
+                    "maximumReportInterval": 0,
+                    "reportableChange": 0
+                  }
       - delay: 10 # seconds
       - action: select.select_option
         data_template:
