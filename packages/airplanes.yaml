@@ -623,6 +623,28 @@ template:
               {% endif %}
             {% endif %}
 
+rest:
+  - resource: https://adsb.im/api/0/routeset
+    method: POST
+    headers:
+      Accept: application/json
+      Content-Type: application/json; charset=utf-8
+      User-Agent: HomeAssistant routeset
+    payload_template: >-
+      {% set cs = (state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim) %}
+      {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
+      {% set lat = (p.lat if p is mapping and p.lat is defined else none) %}
+      {% set lon = (p.lon if p is mapping and p.lon is defined else none) %}
+      {% if cs == '' or lat is none or lon is none %}
+        {{ {"planes": []} | tojson }}
+      {% else %}
+        {{ {"planes": [{"callsign": cs, "lat": lat|float, "lng": lon|float}]} | tojson }}
+      {% endif %}
+    sensor:
+      - name: Closest Aircraft Routeset Raw1
+        scan_interval: 120
+        # IMPORTANT: store the raw response body (routeset returns a root array)
+        value_template: "{{ value }}"
 ########################
 # Weather
 ########################
