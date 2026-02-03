@@ -369,6 +369,30 @@ template:
                 {{ p.is_military | default(false) }}
               {% endif %}
             {% endfor %}
+- sensor:
+      - name: "Closest Aircraft Photo"
+        state: >-
+          {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
+          {% if photos | length > 0 %}ok{% else %}none{% endif %}
+        attributes:
+          url: >-
+            {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
+            {% if photos | length > 0 %}
+              {# Try a large-ish thumbnail first; fallback to any available #}
+              {% set p = photos[0] %}
+              {{ p.thumbnail_large.src
+                if p.thumbnail_large is defined and p.thumbnail_large.src is defined
+                else (p.thumbnail.src if p.thumbnail is defined and p.thumbnail.src is defined else none) }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          photographer: >-
+            {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
+            {% if photos|length > 0 %}{{ photos[0].photographer | default(none) }}{% else %}{{ none }}{% endif %}
+          link: >-
+            {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
+            {% if photos|length > 0 %}{{ photos[0].link | default(none) }}{% else %}{{ none }}{% endif %}
+
 
 ########################
 # Weather
