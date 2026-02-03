@@ -288,26 +288,22 @@ sensor:
     name: Closest Aircraft Routeset Raw
     resource: "https://adsb.im/api/0/routeset"
     method: POST
-    scan_interval: 15
+    scan_interval: 120
     headers:
       Accept: "application/json"
       Content-Type: "application/json; charset=utf-8"
       User-Agent: "HomeAssistant routeset"
     payload: >-
-      {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim %}
-      {% if cs == '' %}
-      {"planes":[]}
-      {% else %}
+      {% set cs = (state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim) %}
       {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
-      {% set lat = p.lat if p is mapping and p.lat is defined else 0 %}
-      {% set lon = p.lon if p is mapping and p.lon is defined else 0 %}
-      {
-        "planes": [
-          { "callsign": "{{ cs }}", "lat": {{ lat }}, "lng": {{ lon }} }
-        ]
-      }
-      {% endif %}
+      {% set lat = (p.lat if p is mapping and p.lat is defined else none) %}
+      {% set lon = (p.lon if p is mapping and p.lon is defined else none) %}
 
+      {% if cs == '' or lat is none or lon is none %}
+        {{ {"planes": []} | tojson }}
+      {% else %}
+        {{ {"planes": [{"callsign": cs, "lat": lat|float, "lng": lon|float}]} | tojson }}
+      {% endif %}
     value_template: >-
       {{ value | default('') }}
 
