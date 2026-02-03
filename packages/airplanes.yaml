@@ -277,6 +277,8 @@ template:
   - sensor:
       - name: "Closest Aircraft Overhead"
         icon: mdi:airplane
+
+        # State: callsign if present, else HEX, else "none"
         state: >-
           {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
           {% set home_lat = state_attr('zone.home', 'latitude') %}
@@ -285,7 +287,6 @@ template:
           {% set max_alt = 10000 %}
 
           {% set ns = namespace(best=None, best_d=999999) %}
-
           {% for p in planes %}
             {% set lat = p.lat | default(none) %}
             {% set lon = p.lon | default(none) %}
@@ -314,14 +315,15 @@ template:
           {% endif %}
 
         attributes:
-          distance_km: >-
+          # Compute the selected aircraft once as "raw" (hex-based), then all other attrs read from it.
+          raw: >-
             {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
             {% set home_lat = state_attr('zone.home', 'latitude') %}
             {% set home_lon = state_attr('zone.home', 'longitude') %}
             {% set max_km = 5 * 1.609344 %}
             {% set max_alt = 10000 %}
-            {% set ns = namespace(best=None, best_d=999999) %}
 
+            {% set ns = namespace(best=None, best_d=999999) %}
             {% for p in planes %}
               {% set lat = p.lat | default(none) %}
               {% set lon = p.lon | default(none) %}
@@ -337,9 +339,32 @@ template:
                 {% endif %}
               {% endif %}
             {% endfor %}
+            {{ ns.best if ns.best else dict() }}
 
-            {% if ns.best %}
-              {{ ns.best_d | round(3) }}
+          hex: >-
+            {% set p = this.attributes.raw %}
+            {{ p.hex if p and p.hex is defined else none }}
+
+          callsign: >-
+            {% set p = this.attributes.raw %}
+            {% set cs = (p.flight | default('')) | trim if p else '' %}
+            {{ cs if cs != '' else none }}
+
+          altitude_ft: >-
+            {% set p = this.attributes.raw %}
+            {% if p %}
+              {{ p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+          distance_km: >-
+            {# Use computed distance from selection pass, if present in feed; else recompute #}
+            {% set p = this.attributes.raw %}
+            {% if p and p.lat is defined and p.lon is defined %}
+              {% set home_lat = state_attr('zone.home', 'latitude') %}
+              {% set home_lon = state_attr('zone.home', 'longitude') %}
+              {{ distance(home_lat, home_lon, p.lat, p.lon) | round(3) }}
             {% else %}
               {{ none }}
             {% endif %}
@@ -351,60 +376,36 @@ template:
               {{ none }}
             {% endif %}
 
-          callsign: >-
-            {% set cs = states('sensor.closest_aircraft_overhead') | trim %}
-            {% if cs not in ['none','unknown','unavailable'] %}
-              {{ cs }}
+          # Plane description + ICAO type code
+          desc: >-
+            {% set p = this.attributes.raw %}
+            {{ p.desc if p and p.desc is defined else none }}
+
+          type_code: >-
+            {% set p = this.attributes.raw %}
+            {{ p.t if p and p.t is defined else none }}
+
+          # Military flag comes directly from your feed (best)
+          is_military: >-
+            {% set p = this.attributes.raw %}
+            {{ p.is_military | default(false) if p else false }}
+
+          # Route: best-effort from whatever your feed has
+          route: >-
+            {% set p = this.attributes.raw %}
+            {% if not p %}
+              {{ none }}
+            {% elif p.route is defined and (p.route | string | trim) != '' %}
+              {{ p.route }}
+            {% elif p.from is defined and p.to is defined and (p.from | string | trim) != '' and (p.to | string | trim) != '' %}
+              {{ (p.from | string | trim) ~ " → " ~ (p.to | string | trim) }}
+            {% elif p.from_iata is defined and p.to_iata is defined and (p.from_iata | string | trim) != '' and (p.to_iata | string | trim) != '' %}
+              {{ (p.from_iata | string | trim) ~ " → " ~ (p.to_iata | string | trim) }}
+            {% elif p.from_icao is defined and p.to_icao is defined and (p.from_icao | string | trim) != '' and (p.to_icao | string | trim) != '' %}
+              {{ (p.from_icao | string | trim) ~ " → " ~ (p.to_icao | string | trim) }}
             {% else %}
               {{ none }}
             {% endif %}
-
-          hex: >-
-            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
-            {% set cs = states('sensor.closest_aircraft_overhead') | trim %}
-            {% for p in planes %}
-              {% if (p.flight | default('') | trim) == cs %}
-                {{ p.hex | default(none) }}
-              {% endif %}
-            {% endfor %}
-
-          altitude_ft: >-
-            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
-            {% set cs = states('sensor.closest_aircraft_overhead') | trim %}
-            {% for p in planes %}
-              {% if (p.flight | default('') | trim) == cs %}
-                {{ p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) }}
-              {% endif %}
-            {% endfor %}
-
-          # ✅ NEW: aircraft description (e.g. "AIRBUS A-321")
-          desc: >-
-            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
-            {% set cs = states('sensor.closest_aircraft_overhead') | trim %}
-            {% for p in planes %}
-              {% if (p.flight | default('') | trim) == cs %}
-                {{ p.desc | default(none) }}
-              {% endif %}
-            {% endfor %}
-
-          # ✅ NEW: ICAO aircraft type (e.g. "A321")
-          type_code: >-
-            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
-            {% set cs = states('sensor.closest_aircraft_overhead') | trim %}
-            {% for p in planes %}
-              {% if (p.flight | default('') | trim) == cs %}
-                {{ p.t | default(none) }}
-              {% endif %}
-            {% endfor %}
-
-          is_military: >-
-            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
-            {% set cs = states('sensor.closest_aircraft_overhead') | trim %}
-            {% for p in planes %}
-              {% if (p.flight | default('') | trim) == cs %}
-                {{ p.is_military | default(false) }}
-              {% endif %}
-            {% endfor %}
 
   - sensor:
       - name: "Closest Aircraft Photo"
