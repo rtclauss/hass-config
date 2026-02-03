@@ -292,25 +292,23 @@ sensor:
     headers:
       Accept: "application/json"
       Content-Type: "application/json; charset=utf-8"
-      User-Agent: "HomeAssistant (routeset)"
+      User-Agent: "HomeAssistant routeset"
     payload: >-
-      {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}
+      {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim %}
       {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
-      {% set lat = p.lat if p and p.lat is defined else none %}
-      {% set lon = p.lon if p and p.lon is defined else none %}
+      {% set lat = p.lat if p is mapping and p.lat is defined else none %}
+      {% set lon = p.lon if p is mapping and p.lon is defined else none %}
       {
         "planes": [
           {
-            "callsign": "{{ (cs | default('') | trim) }}",
+            "callsign": "{{ cs }}",
             "lat": {{ lat if lat is not none else 0 }},
             "lng": {{ lon if lon is not none else 0 }}
           }
         ]
       }
-    # Store the entire response as a JSON string in the sensor state
     value_template: >-
-      {{ value_json | tojson }}
-
+      {{ value | default('') }}
 
 ########################
 # Switch
@@ -594,7 +592,6 @@ template:
             {% else %}
               {{ none }}
             {% endif %}
-
 
 ########################
 # Weather
