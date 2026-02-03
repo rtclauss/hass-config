@@ -457,6 +457,26 @@ template:
               {{ none }}
             {% endif %}
 
+  - sensor:
+      - name: "Closest Aircraft Route"
+        state: >-
+          {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+          {% if r and r.flightroute is defined %}
+            {% set fr = r.flightroute %}
+            {% set o = fr.origin | default('') %}
+            {% set d = fr.destination | default('') %}
+            {% if o and d %}{{ o ~ " → " ~ d }}{% else %}none{% endif %}
+          {% else %}
+            none
+          {% endif %}
+        attributes:
+          origin: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.origin if r and r.flightroute is defined else none }}
+          destination: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.destination if r and r.flightroute is defined else none }}
+
 ########################
 # Weather
 ########################
