@@ -269,6 +269,21 @@ sensor:
     json_attributes:
       - photos
 
+  - platform: rest
+    name: Closest Aircraft Route Raw
+    resource_template: >-
+      {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}
+      {% if cs %}
+        https://api.adsbdb.com/v0/callsign/{{ cs }}
+      {% else %}
+        https://api.adsbdb.com/v0/callsign/NULL
+      {% endif %}
+    scan_interval: 120
+    value_template: >-
+      {{ value_json.response is defined }}
+    json_attributes:
+      - response
+
 ########################
 # Switch
 ########################
