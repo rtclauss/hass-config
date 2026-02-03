@@ -559,6 +559,43 @@ template:
                if r and r.flightroute is defined and r.flightroute.airline is defined
                else none }}
 
+  - sensor:
+      - name: "Closest Aircraft Route (Routeset)"
+        icon: mdi:map-marker-path
+        state: >-
+          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
+          {% if raw in ['unknown','unavailable','none',''] %}
+            unknown
+          {% else %}
+            {% set j = raw | from_json %}
+            {% if j is sequence and j|length > 0 and j[0]._airport_codes_iata is defined %}
+              {{ j[0]._airport_codes_iata }}
+            {% else %}
+              unknown
+            {% endif %}
+          {% endif %}
+        attributes:
+          plausible: >-
+            {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
+            {% set j = raw | from_json if raw not in ['unknown','unavailable','none',''] else [] %}
+            {{ (j[0].plausible if j is sequence and j|length>0 and j[0].plausible is defined else false) }}
+
+          airport_codes_icao: >-
+            {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
+            {% set j = raw | from_json if raw not in ['unknown','unavailable','none',''] else [] %}
+            {{ (j[0].airport_codes if j is sequence and j|length>0 and j[0].airport_codes is defined else none) }}
+
+          airports_names: >-
+            {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
+            {% set j = raw | from_json if raw not in ['unknown','unavailable','none',''] else [] %}
+            {% if j is sequence and j|length>0 and j[0]._airports is defined %}
+              {% set names = j[0]._airports | map(attribute='name') | list %}
+              {{ names | join(' → ') }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+
+
 ########################
 # Weather
 ########################
