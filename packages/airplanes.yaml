@@ -252,6 +252,19 @@ sensor:
     json_attributes:
       - aircraft
 
+  - platform: rest
+    name: Closest Aircraft Photo Raw
+    resource_template: >-
+      {% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}
+      {% if hx %}https://api.planespotters.net/pub/photos/hex/{{ hx }}{% else %}https://api.planespotters.net/pub/photos/hex/000000{% endif %}
+    scan_interval: 30
+    headers:
+      User-Agent: "HomeAssistant/1.0 (aircraft display)"
+    value_template: >-
+      {{ value_json.photos | count if value_json.photos is defined else 0 }}
+    json_attributes:
+      - photos
+
 ########################
 # Switch
 ########################
