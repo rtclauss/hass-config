@@ -463,19 +463,38 @@ template:
           {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
           {% if r and r.flightroute is defined %}
             {% set fr = r.flightroute %}
-            {% set o = fr.origin | default('') %}
-            {% set d = fr.destination | default('') %}
-            {% if o and d %}{{ o ~ " → " ~ d }}{% else %}none{% endif %}
+            {% set o = fr.origin.icao_code if fr.origin is defined else none %}
+            {% set d = fr.destination.icao_code if fr.destination is defined else none %}
+            {% if o and d %}
+              {{ o ~ " → " ~ d }}
+            {% else %}
+              unknown
+            {% endif %}
           {% else %}
-            none
+            unknown
           {% endif %}
         attributes:
-          origin: >-
+          origin_icao: >-
             {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.origin if r and r.flightroute is defined else none }}
-          destination: >-
+            {{ r.flightroute.origin.icao_code
+              if r and r.flightroute is defined and r.flightroute.origin is defined
+              else none }}
+          origin_name: >-
             {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.destination if r and r.flightroute is defined else none }}
+            {{ r.flightroute.origin.name
+               if r and r.flightroute is defined and r.flightroute.origin is defined
+               else none }}
+          destination_icao: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.destination.icao_code
+               if r and r.flightroute is defined and r.flightroute.destination is defined
+               else none }}
+          destination_name: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.destination.name
+               if r and r.flightroute is defined and r.flightroute.destination is defined
+               else none }}
+
 
 ########################
 # Weather
