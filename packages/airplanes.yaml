@@ -479,6 +479,22 @@ template:
             unknown
           {% endif %}
         attributes:
+          confident: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}
+            {% if not cs %}false
+            {% else %}
+              {% set csu = cs | upper %}
+              {# hide if it looks like a registration #}
+              {% if csu.startswith('N') or csu.startswith('C') or csu.startswith('G') or csu.startswith('D') %}
+                false
+              {% elif r and r.flightroute is defined and r.flightroute.airline is defined and (r.flightroute.airline.name | default('') | trim) != '' %}
+                true
+              {% else %}
+                false
+              {% endif %}
+            {% endif %}
+
           origin_iata: >-
             {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
             {{ r.flightroute.origin.iata_code
