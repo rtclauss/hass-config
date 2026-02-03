@@ -463,10 +463,15 @@ template:
           {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
           {% if r and r.flightroute is defined %}
             {% set fr = r.flightroute %}
-            {% set o = fr.origin.icao_code if fr.origin is defined else none %}
-            {% set d = fr.destination.icao_code if fr.destination is defined else none %}
-            {% if o and d %}
-              {{ o ~ " → " ~ d }}
+            {% set oi = fr.origin.iata_code if fr.origin is defined else none %}
+            {% set di = fr.destination.iata_code if fr.destination is defined else none %}
+            {% set oo = fr.origin.icao_code if fr.origin is defined else none %}
+            {% set dd = fr.destination.icao_code if fr.destination is defined else none %}
+
+            {% if oi and di %}
+              {{ oi ~ " → " ~ di }}
+            {% elif oo and dd %}
+              {{ oo ~ " → " ~ dd }}
             {% else %}
               unknown
             {% endif %}
@@ -474,26 +479,41 @@ template:
             unknown
           {% endif %}
         attributes:
+          origin_iata: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.origin.iata_code
+               if r and r.flightroute is defined and r.flightroute.origin is defined
+               else none }}
+          destination_iata: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.destination.iata_code
+               if r and r.flightroute is defined and r.flightroute.destination is defined
+               else none }}
           origin_icao: >-
             {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
             {{ r.flightroute.origin.icao_code
-              if r and r.flightroute is defined and r.flightroute.origin is defined
-              else none }}
-          origin_name: >-
-            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.origin.name
-              if r and r.flightroute is defined and r.flightroute.origin is defined
-              else none }}
+               if r and r.flightroute is defined and r.flightroute.origin is defined
+               else none }}
           destination_icao: >-
             {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
             {{ r.flightroute.destination.icao_code
-              if r and r.flightroute is defined and r.flightroute.destination is defined
-              else none }}
+               if r and r.flightroute is defined and r.flightroute.destination is defined
+               else none }}
+          origin_name: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.origin.name
+               if r and r.flightroute is defined and r.flightroute.origin is defined
+               else none }}
           destination_name: >-
             {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
             {{ r.flightroute.destination.name
-              if r and r.flightroute is defined and r.flightroute.destination is defined
-              else none }}
+               if r and r.flightroute is defined and r.flightroute.destination is defined
+               else none }}
+          airline: >-
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {{ r.flightroute.airline.name
+               if r and r.flightroute is defined and r.flightroute.airline is defined
+               else none }}
 
 ########################
 # Weather
