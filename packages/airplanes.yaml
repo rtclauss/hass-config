@@ -1,0 +1,388 @@
+################################################################
+## Packages / TEMPLATE
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "TO_CHANGE"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Alarm Panels
+    ################################################
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+
+    ################################################
+    ## Cameras
+    ################################################
+
+    ################################################
+    ## Climate
+    ################################################
+
+    ################################################
+    ## Covers
+    ################################################
+
+    ################################################
+    ## Device Trackers
+    ################################################
+
+    ################################################
+    ## Fans
+    ############
+
+    ################################################
+    ## Frontend
+    ################################################
+
+    ################################################
+    ## Groups
+    ################################################
+
+    ################################################
+    ## Input Boolean
+    ################################################
+
+    ################################################
+    ## Input Numbers
+    ################################################
+
+    ################################################
+    ## Input Select
+    ################################################
+
+    ################################################
+    ## iOS
+    ################################################
+
+    ################################################
+    ## Light
+    ################################################
+
+    ################################################
+    ## Media Player
+    ################################################
+
+    ################################################
+    ##  Notify
+    ################################################
+
+    ################################################
+    ##  Octoprint
+    ################################################
+
+    ################################################
+    ## Plant
+    ################################################
+
+    ################################################
+    ## Proximity
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    ################################################
+    ## Sensors
+    ################################################
+
+    ################################################
+    ## Switches
+    ################################################
+
+    ################################################
+    ## Thermostats
+    ################################################
+
+    ################################################
+    ## Weather
+    ################################################
+
+    ################################################
+    ## Zone
+    ################################################
+
+########################
+# Alarm Panel
+########################
+alarm_control_panel:
+
+########################
+## Automation
+########################
+automation:
+
+########################
+# Binary Sensors
+########################
+binary_sensor:
+
+########################
+# Cameras
+########################
+camera:
+
+########################
+# Climate
+########################
+climate:
+
+########################
+# Covers
+########################
+cover:
+
+########################
+# Device Trackers
+########################
+device_tracker:
+
+########################
+# Fans
+########################
+fan:
+
+########################
+# Frontend
+########################
+frontend:
+
+########################
+# Groups
+########################
+group:
+
+########################
+# Input Booleans
+########################
+input_boolean:
+
+########################
+# Input DateTime
+########################
+input_datetime:
+
+########################
+# Input Numbers
+########################
+input_number:
+
+########################
+# Input Select
+########################
+input_select:
+
+########################
+# iOS
+########################
+ios:
+
+########################
+# Light
+########################
+light:
+
+########################
+# Media Player
+########################
+media_player:
+
+########################
+# Notify
+########################
+notify:
+
+########################
+# Octoprint
+########################
+# YAML Deprecated 2022.2
+# octoprint:
+
+########################
+# Plant
+########################
+plant:
+
+########################
+# REST Sensor
+########################
+
+
+########################
+# Scenes
+########################
+scene:
+
+########################
+# Scripts
+########################
+script:
+
+########################
+# Sensor
+########################
+sensor:
+  - platform: rest
+    name: "ADSB Aircraft Raw"
+    resource: http://10.24.1.188:8080/data/aircraft.json
+    scan_interval: 30
+    value_template: "{{ value_json.now }}"
+    json_attributes:
+      - aircraft
+
+########################
+# Switch
+########################
+switch:
+
+########################
+# Templates
+########################
+template:
+  - sensor:
+      - name: "Closest Aircraft Overhead"
+        icon: mdi:airplane
+        state: >-
+          {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
+          {% set home_lat = state_attr('zone.home', 'latitude') %}
+          {% set home_lon = state_attr('zone.home', 'longitude') %}
+          {% set max_km = 3 * 1.609344 %}
+          {% set max_alt = 10000 %}
+
+          {% set ns = namespace(best=None, best_d=999999) %}
+
+          {% for p in planes %}
+            {% set lat = p.lat if p.lat is defined else none %}
+            {% set lon = p.lon if p.lon is defined else none %}
+            {% set alt = p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) %}
+            {% if lat is not none and lon is not none and alt is not none %}
+              {% if alt != "ground" %}
+                {% set alt_ft = alt | float(-1) %}
+                {% if 0 <= alt_ft < max_alt %}
+                  {% set d_km = distance(home_lat, home_lon, lat, lon) %}
+                  {% if d_km is not none and d_km < max_km and d_km < ns.best_d %}
+                    {% set ns.best_d = d_km %}
+                    {% set ns.best = p %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+
+          {% if ns.best %}
+            {{ (ns.best.flight if ns.best.flight is defined else ns.best.hex) | default('Unknown') | trim }}
+          {% else %}
+            none
+          {% endif %}
+        attributes:
+          distance_mi: >-
+            {% set d = this.attributes.get('distance_km') %}
+            {% if d is not none %}{{ (d | float * 0.621371) | round(2) }}{% else %}{{ none }}{% endif %}
+          distance_km: >-
+            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
+            {% set home_lat = state_attr('zone.home', 'latitude') %}
+            {% set home_lon = state_attr('zone.home', 'longitude') %}
+            {% set max_km = 5 * 1.609344 %}
+            {% set max_alt = 10000 %}
+
+            {% set ns = namespace(best=None, best_d=999999) %}
+
+            {% for p in planes %}
+              {% set lat = p.lat if p.lat is defined else none %}
+              {% set lon = p.lon if p.lon is defined else none %}
+              {% set alt = p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) %}
+              {% if lat is not none and lon is not none and alt is not none %}
+                {% if alt != "ground" %}
+                  {% set alt_ft = alt | float(-1) %}
+                  {% if 0 <= alt_ft < max_alt %}
+                    {% set d_km = distance(home_lat, home_lon, lat, lon) %}
+                    {% if d_km is not none and d_km < max_km and d_km < ns.best_d %}
+                      {% set ns.best_d = d_km %}
+                      {% set ns.best = p %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+
+            {% if ns.best %}{{ ns.best_d | round(3) }}{% else %}{{ none }}{% endif %}
+          altitude_ft: >-
+            {% set p = this.attributes.get('raw') %}
+            {% if p and p.alt_baro is defined %}{{ p.alt_baro }}{% elif p and p.alt_geom is defined %}{{ p.alt_geom }}{% else %}{{ none }}{% endif %}
+          callsign: >-
+            {% set p = this.attributes.get('raw') %}
+            {% if p and p.flight is defined %}{{ p.flight | trim }}{% else %}{{ none }}{% endif %}
+          hex: >-
+            {% set p = this.attributes.get('raw') %}
+            {% if p and p.hex is defined %}{{ p.hex }}{% else %}{{ none }}{% endif %}
+          raw: >-
+            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
+            {% set home_lat = state_attr('zone.home', 'latitude') %}
+            {% set home_lon = state_attr('zone.home', 'longitude') %}
+            {% set max_km = 5 * 1.609344 %}
+            {% set max_alt = 10000 %}
+            {% set ns = namespace(best=None, best_d=999999) %}
+            {% for p in planes %}
+              {% set lat = p.lat if p.lat is defined else none %}
+              {% set lon = p.lon if p.lon is defined else none %}
+              {% set alt = p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) %}
+              {% if lat is not none and lon is not none and alt is not none and alt != "ground" %}
+                {% set alt_ft = alt | float(-1) %}
+                {% if 0 <= alt_ft < max_alt %}
+                  {% set d_km = distance(home_lat, home_lon, lat, lon) %}
+                  {% if d_km is not none and d_km < max_km and d_km < ns.best_d %}
+                    {% set ns.best_d = d_km %}
+                    {% set ns.best = p %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.best if ns.best else dict() }}
+          is_military: >-
+            {# Best-effort: (1) enriched DB flag if present, else (2) callsign prefix heuristic #}
+            {% set p = this.attributes.get('raw') %}
+            {% if not p %}false
+            {% else %}
+              {% set flags = (p.dbFlags if p.dbFlags is defined else '') | string | lower %}
+              {% set cs = (p.flight if p.flight is defined else '') | trim | upper %}
+              {% set prefixes = ['RCH','REACH','HKY','QID','DUKE','PAT','SABR','HUNT','NIGHT','MAFIA','BLUE'] %}
+              {% set match = false %}
+              {% for pref in prefixes %}
+                {% if cs.startswith(pref) %}
+                  {% set match = true %}
+                {% endif %}
+              {% endfor %}
+              {{ ('mil' in flags) or ('military' in flags) or match }}
+            {% endif %}
+########################
+# Weather
+########################
+weather:
+
+########################
+# Zone
+########################
+zone:
