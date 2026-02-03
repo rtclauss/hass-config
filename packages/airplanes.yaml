@@ -295,18 +295,19 @@ sensor:
       User-Agent: "HomeAssistant routeset"
     payload: >-
       {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim %}
+      {% if cs == '' %}
+      {"planes":[]}
+      {% else %}
       {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
-      {% set lat = p.lat if p is mapping and p.lat is defined else none %}
-      {% set lon = p.lon if p is mapping and p.lon is defined else none %}
+      {% set lat = p.lat if p is mapping and p.lat is defined else 0 %}
+      {% set lon = p.lon if p is mapping and p.lon is defined else 0 %}
       {
         "planes": [
-          {
-            "callsign": "{{ cs }}",
-            "lat": {{ lat if lat is not none else 0 }},
-            "lng": {{ lon if lon is not none else 0 }}
-          }
+          { "callsign": "{{ cs }}", "lat": {{ lat }}, "lng": {{ lon }} }
         ]
       }
+      {% endif %}
+
     value_template: >-
       {{ value | default('') }}
 
