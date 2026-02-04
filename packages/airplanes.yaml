@@ -134,6 +134,25 @@ alarm_control_panel:
 ## Automation
 ########################
 automation:
+  - alias: "ADSB: Refresh REST lookups when closest aircraft HEX changes"
+    id: adsb_refresh_rest_on_hex_change
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: sensor.closest_aircraft_overhead
+        attribute: hex
+    action:
+      - delay:
+          seconds: 2
+      - service: homeassistant.update_entity
+        target:
+          entity_id:
+            - sensor.closest_aircraft_routeset_raw
+            - sensor.closest_aircraft_routeset
+            - sensor.closest_aircraft_routeset_names
+            - sensor.closest_aircraft_routeset_plausible
+            - sensor.closest_aircraft_photo_raw
+            - sensor.closest_aircraft_photo
 
 ########################
 # Binary Sensors
