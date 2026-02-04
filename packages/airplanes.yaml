@@ -626,6 +626,7 @@ template:
 rest:
   - resource: https://adsb.im/api/0/routeset
     method: POST
+    scan_interval: 120
     headers:
       Accept: application/json
       Content-Type: application/json; charset=utf-8
@@ -641,10 +642,9 @@ rest:
         {{ {"planes": [{"callsign": cs, "lat": lat|float, "lng": lon|float}]} | tojson }}
       {% endif %}
     sensor:
-      - name: Closest Aircraft Routeset Raw1
-        scan_interval: 120
-        # IMPORTANT: store the raw response body (routeset returns a root array)
+      - name: Closest Aircraft Routeset Raw
         value_template: "{{ value }}"
+
 ########################
 # Weather
 ########################
