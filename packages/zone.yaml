@@ -183,7 +183,8 @@ automation:
           # enabled: false
     action:
       - action: scene.turn_on
-        entity_id: scene.cloudy_arrive_home
+        target:
+          entity_id: scene.cloudy_arrive_home
         data:
           transition: 30
       - action: notify.all
@@ -212,7 +213,8 @@ automation:
           state: "Automotive"
     action:
       - action: scene.turn_on
-        entity_id: scene.arrive_home
+        target:
+          entity_id: scene.arrive_home
       # - alias: "Notify action"
       #   action: notify.mobile_app_wethop
       #   data:
@@ -268,7 +270,8 @@ automation:
         data:
           message: Garage door is still open! Attempting to close...
       - action: cover.close_cover
-        entity_id: cover.garage_door
+        target:
+          entity_id: cover.garage_door
 
   - alias: input_boolean_tracker_on
     id: input_boolean_tracker_on
@@ -320,7 +323,8 @@ automation:
       #     {{ not is_state('media_player.spotify_ryan_claussen', 'playing') }}
     action:
       - action: script.turn_on
-        entity_id: script.spotify_arrival
+        target:
+          entity_id: script.spotify_arrival
       - action: notify.all
         data:
           message: "Welcome Home"
@@ -352,14 +356,16 @@ automation:
               before: sunrise
     action:
       - action: scene.turn_on
-        entity_id: scene.night_arrive_home
+        target:
+          entity_id: scene.night_arrive_home
         data:
           transition: 30
       - action: vacuum.return_to_base
         data:
           entity_id: all
       - action: switch.turn_off
-        entity_id: switch.nigori_maxrange_switch
+        target:
+          entity_id: switch.nigori_maxrange_switch
 
   - id: turn_on_bedroom_lights_at_night_when_i_get_home
     alias: turn_on_bedroom_lights_at_night_when_i_get_home
@@ -387,7 +393,8 @@ automation:
               before: sunrise
     action:
       - action: scene.turn_on
-        entity_id: scene.bedroom_prep
+        target:
+          entity_id: scene.bedroom_prep
       - action: notify.all
         data:
           data:
@@ -483,11 +490,14 @@ automation:
     action:
       parallel:
         - action: lock.lock
-          entity_id: lock.front_door_lock
+          target:
+            entity_id: lock.front_door_lock
         - action: cover.close_cover
-          entity_id: cover.garage_door
+          target:
+            entity_id: cover.garage_door
         - action: scene.turn_on
-          entity_id: scene.leave_home
+          target:
+            entity_id: scene.leave_home
         - action: script.lights_off_except
           data:
             exclude_lights:
@@ -499,14 +509,16 @@ automation:
         # - action: light.turn_off
         #   entity_id: "all"
         - action: fan.turn_off
-          entity_id: "all"
+          target:
+            entity_id: "all"
         # - alias: "Notify action"
         #   action: notify.mobile_app_wethop
         #   data:
         #     message: >-
         #       Leaving home with wethop activity {{ states('sensor.wethop_activity') }}
         - action: scene.turn_on
-          entity_id: scene.turn_on_cameras
+          target:
+            entity_id: scene.turn_on_cameras
         - if:
             - alias: "Haven't vacuumed in more than 2 days"
               condition: template
@@ -558,11 +570,12 @@ automation:
         target:
           entity_id: button.nigori_force_data_update
       - action: homeassistant.update_entity
-        entity_id:
-          - device_tracker.wethop
-          - device_tracker.nigori_location_tracker
-          - binary_sensor.arrival_sensor_presence
-          - device_tracker.wethop_wifi
+        target:
+          entity_id:
+            - device_tracker.wethop
+            - device_tracker.nigori_location_tracker
+            - binary_sensor.arrival_sensor_presence
+            - device_tracker.wethop_wifi
 
   - id: update_trip_origin
     alias: update_trip_origin
@@ -626,9 +639,11 @@ automation:
         data:
           entity_id: all
       - action: switch.turn_off
-        entity_id: switch.living_room_camera
+        target:
+          entity_id: switch.living_room_camera
       - action: switch.turn_off
-        entity_id: switch.basement_camera_power
+        target:
+          entity_id: switch.basement_camera_power
 
 ########################
 # Binary Sensors

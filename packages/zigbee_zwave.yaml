@@ -652,11 +652,12 @@ automation:
                     - input_boolean.master_bed_occupancy
                     # - input_boolean.chatgpt_bed_occupied
               - action: cover.close_cover
-                entity_id:
-                  - cover.owner_suite_blinds_ha
-                  # - cover.owner_suite_blinds when z2m starts working again
-                  # https://github.com/Koenkk/zigbee2mqtt/issues/19124
-                  - cover.garage_door
+                target:
+                  entity_id:
+                    - cover.owner_suite_blinds_ha
+                    # - cover.owner_suite_blinds when z2m starts working again
+                    # https://github.com/Koenkk/zigbee2mqtt/issues/19124
+                    - cover.garage_door
               # if I roll to the other side of the bed, the bedroom switch leds come back on.
               # - action: script.turn_on
               #   entity_id: script.night_tv_mode_switches
@@ -695,7 +696,8 @@ automation:
             state: "off"
     action:
       - action: input_boolean.turn_on
-        entity_id: input_boolean.mail_delivered
+        target:
+          entity_id: input_boolean.mail_delivered
       - action: notify.all
         data:
           message: >-
@@ -809,11 +811,13 @@ automation:
         state: "off"
     action:
       - action: cover.open_cover
-        entity_id: cover.owner_suite_blinds_ha
+        target:
+          entity_id: cover.owner_suite_blinds_ha
       - delay:
           minutes: 3
       - action: cover.set_cover_position
-        entity_id: cover.owner_suite_blinds_ha
+        target:
+          entity_id: cover.owner_suite_blinds_ha
         data:
           position: 50
 
@@ -824,7 +828,8 @@ automation:
         at: "01:00:00"
     action:
       - action: input_boolean.turn_off
-        entity_id: input_boolean.mail_delivered
+        target:
+          entity_id: input_boolean.mail_delivered
 
   - alias: guest_room_switch_actions
     id: guest_room_switch_actions
@@ -878,6 +883,7 @@ automation:
 
   - alias: kitchen_overhead_switch_actions
     id: kitchen_overhead_switch_actions
+    mode: restart
     trigger:
       - trigger: state
         entity_id: sensor.kitchen_overhead_lights_switch_action
@@ -972,6 +978,7 @@ automation:
 
   - alias: laundry_switch_actions
     id: laundry_switch_actions
+    mode: restart
     trigger:
       - trigger: state
         entity_id: sensor.laundry_wall_switch_action
@@ -1184,7 +1191,8 @@ automation:
           action: REBOOT_Z2M_COUNTER
     action:
       - action: counter.reset
-        entity_id: counter.reboot_counter
+        target:
+          entity_id: counter.reboot_counter
 
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
@@ -1218,7 +1226,8 @@ automation:
         value_template: "{{ value_json.state }}"
     action:
       - action: counter.increment
-        entity_id: counter.reboot_counter
+        target:
+          entity_id: counter.reboot_counter
       - action: notify.mobile_app_wethop
         data:
           message: >-

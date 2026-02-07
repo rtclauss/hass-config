@@ -108,6 +108,7 @@ alarm_control_panel:
 automation:
   - id: max_range_charge_handler
     alias: max_range_charge_handler
+    mode: restart
     trigger:
       - trigger: state
         entity_id: binary_sensor.upcoming_trip_charging
@@ -170,7 +171,8 @@ automation:
                   hours: 1
                 continue_on_timeout: false
               - action: number.set_value
-                entity_id: number.nigori_charge_limit
+                target:
+                  entity_id: number.nigori_charge_limit
                 data:
                   value: "100"
               - action: persistent_notification.create
@@ -253,23 +255,27 @@ automation:
                 id: max_range
             sequence:
               - action: number.set_value
-                entity_id: number.nigori_charge_limit
+                target:
+                  entity_id: number.nigori_charge_limit
                 data:
                   value: >-
                     100
               - action: input_boolean.turn_on
-                entity_id: input_boolean.long_range_travel
+                target:
+                  entity_id: input_boolean.long_range_travel
           - conditions:
               - condition: trigger
                 id: normal_range
             sequence:
               - action: number.set_value
-                entity_id: number.nigori_charge_limit
+                target:
+                  entity_id: number.nigori_charge_limit
                 data:
                   value: >-
                     80
               - action: input_boolean.turn_off
-                entity_id: input_boolean.long_range_travel
+                target:
+                  entity_id: input_boolean.long_range_travel
 
   # - id: turn_off_max_range_charge_when_arrive_home
   #   alias: turn_off_max_range_charge_when_arrive_home

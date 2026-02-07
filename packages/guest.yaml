@@ -118,7 +118,8 @@ automation:
     # condition:
     action:
       - action: input_boolean.turn_off
-        entity_id: input_boolean.guest_mode
+        target:
+          entity_id: input_boolean.guest_mode
       - action: notify.all
         data:
           message: Guest Mode Deactivated
@@ -134,6 +135,7 @@ automation:
 
   - id: turn_on_guest_mode_when_guest_wifi_active
     alias: turn_on_guest_mode_when_guest_wifi_active
+    mode: restart
     trigger:
       - trigger: state
         entity_id: binary_sensor.guest_on_wifi
@@ -170,7 +172,8 @@ automation:
           hours: 1
         continue_on_timeout: false
       - action: input_boolean.turn_on
-        entity_id: input_boolean.guest_mode
+        target:
+          entity_id: input_boolean.guest_mode
       - action: media_player.unjoin
         target:
           entity_id:
