@@ -953,8 +953,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: kitchen-occupied
-              - condition: template
-                value_template: "{{ now().hour >= 11 and now().hour < 14 }}"
+              - condition: time
+                after: "11:00:00"
+                before: "14:00:00"
             sequence:
               - action: adaptive_lighting.apply
                 data:
@@ -975,8 +976,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: kitchen-occupied
-              - condition: template
-                value_template: "{{ now().hour >= 17 and now().hour < 20 }}"
+              - condition: time
+                after: "17:00:00"
+                before: "20:00:00"
             sequence:
               - action: adaptive_lighting.apply
                 data:
@@ -989,7 +991,7 @@ automation:
                   turn_on_lights: true
           - conditions:
               - condition: trigger
-                id: kitchen-unoccupied
+                id: kitchen_unoccupied
             sequence:
               - action: light.turn_off
                 target:
@@ -1030,7 +1032,7 @@ automation:
 
   - id: up_enable_owner_bedroom_light_auto_off
     alias: up_enable_owner_bedroom_light_auto_off
-    triggers:
+    trigger:
       - trigger: state
         entity_id:
           - binary_sensor.owner_suite_bathroom_room_occupancy
@@ -1046,14 +1048,14 @@ automation:
         # entity_id: input_boolean.chatgpt_bed_occupied
         state: "off"
         # enabled: false
-    actions:
+    action:
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.owner_suite_bedroom_auto_on
 
   - id: owner_suite_bath_light_auto_off_in_bed
     alias: owner_suite_bath_light_auto_off_in_bed
-    triggers:
+    trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_bed_occupancy
         # entity_id: input_boolean.chatgpt_bed_occupied
@@ -1061,7 +1063,7 @@ automation:
         for:
           minutes: 2
     condition: []
-    actions:
+    action:
       - action: light.turn_off
         data:
           entity_id:
@@ -1073,7 +1075,7 @@ automation:
   - id: owner_suite_bath_light_auto_toggle
     alias: owner_suite_bath_light_auto_toggle
     mode: restart
-    triggers:
+    trigger:
       - trigger: state
         entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
         to: "on"
@@ -1089,7 +1091,7 @@ automation:
     #   conditions:
     #     - condition: sun
     #       after: sunset
-    actions:
+    action:
       - choose:
           - conditions:
               - condition: trigger
@@ -1125,7 +1127,7 @@ automation:
 
   - id: owner_suite_light_auto_off
     alias: owner_suite_light_auto_off
-    triggers:
+    trigger:
       - trigger: state
         entity_id: binary_sensor.bedroom_occupancy
         to: "off"
@@ -1140,7 +1142,7 @@ automation:
           # entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
           # enabled: false
-    actions:
+    action:
       - action: light.turn_off
         data:
           entity_id:
@@ -1341,9 +1343,9 @@ automation:
   - alias: transition_on_lights_when_home_near_sunset
     id: transition_on_lights_when_home_near_sunset
     trigger:
-      platform: sun
-      event: sunset
-      offset: "-02:00:00"
+      - trigger: sun
+        event: sunset
+        offset: "-02:00:00"
     condition:
       condition: and
       conditions:
@@ -1374,9 +1376,9 @@ automation:
   - alias: transition_on_lights_early_when_cloudy_when_home_near_sunset
     id: transition_on_lights_early_when_cloudy_when_home_near_sunset
     trigger:
-      platform: sun
-      event: sunset
-      offset: "-04:00:00"
+      - trigger: sun
+        event: sunset
+        offset: "-04:00:00"
     condition:
       condition: and
       conditions:
@@ -1794,7 +1796,7 @@ automation:
         entity_id: input_number.tikiroom_ani_speed
     action:
       - action: mqtt.publish
-        data_template:
+        data:
           topic: "leds/tikiroom/set"
           payload: '{"transition":{{ trigger.to_state.state | int }}}'
 
