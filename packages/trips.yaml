@@ -203,7 +203,8 @@ automation:
                 {% endif %}
     action:
       - action: switch.turn_on
-        entity_id: switch.vacation_simulation
+        target:
+          entity_id: switch.vacation_simulation
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.trip
@@ -223,7 +224,8 @@ automation:
         state: "on"
     action:
       - action: switch.turn_off
-        entity_id: switch.vacation_simulation
+        target:
+          entity_id: switch.vacation_simulation
       - action: input_boolean.turn_off
         data:
           entity_id: input_boolean.trip
@@ -237,6 +239,7 @@ automation:
 
   - id: garage_opened_on_a_trip
     alias: Garage Door Opened while on a Trip
+    mode: restart
     trigger:
       - trigger: state
         entity_id: cover.garage_door
@@ -285,7 +288,8 @@ automation:
                 id: close_garage_mobile_trigger
             sequence:
               - action: cover.close_cover
-                entity_id: cover.garage_door
+                target:
+                  entity_id: cover.garage_door
       - delay:
           minutes: 5
       - condition: state
@@ -295,7 +299,8 @@ automation:
         data:
           message: Closing garage door while you're on a trip.
       - action: cover.close_cover
-        entity_id: cover.garage_door
+        target:
+          entity_id: cover.garage_door
 
   - id: random_off_time
     alias: random_off_time
@@ -433,13 +438,15 @@ automation:
       # - action: light.turn_off
       #   entity_id: "all"
       - action: fan.turn_off
-        entity_id: "all"
+        target:
+          entity_id: "all"
       - action: notify.all
         data:
           message: Lights off while you're away.
       - delay: 25
       - action: scene.turn_on
-        entity_id: scene.leave_home
+        target:
+          entity_id: scene.leave_home
 
   - id: vacuum_on_trip
     alias: vacuum_on_trip
