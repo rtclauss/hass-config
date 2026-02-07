@@ -1,23 +1,56 @@
-# Only track specific file types
+########################################
 # Ignore everything by default
+########################################
 *
-.storage
-secrets.yaml
 
-
-!*.yaml
-!**/.??*.yaml
-!*.yml
-!**/.??*.yml
-
-# Track lovelace dashboard configuration files
-!.storage/lovelace
-!.storage/lovelace_dashboards
-!.storage/lovelace_resources
-!.storage/lovelace.*
-
+########################################
 # Allow directory traversal
+########################################
 !*/
 
-# Re-ignore macOS metadata files (even if they match allowed extensions)
+########################################
+# Allow Home Assistant config files
+########################################
+!*.yaml
+!*.yml
+
+########################################
+# Explicitly ignore sensitive files
+########################################
+secrets.yaml
+known_devices.yaml
+ip_bans.yaml
+trusted_networks.yaml
+google_calendars.yaml
+
+########################################
+# Ignore HA runtime & auth data
+########################################
+.storage/*
+!.storage/lovelace*
+!.storage/lovelace_dashboards*
+!.storage/lovelace_resources*
+!.storage/lovelace.*
+
+########################################
+# Ignore backups, logs, databases
+########################################
+*.log
+*.db
+*.db-shm
+*.db-wal
+.backup/
+.backups/
+cloud/
+tts/
+deps/
+__pycache__/
+
+########################################
+# Ignore OS / editor junk
+########################################
 ._*
+.DS_Store
+.vscode/*
+!.vscode/settings.json
+.vscode/
