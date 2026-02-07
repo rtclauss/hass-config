@@ -139,12 +139,14 @@ automation:
     condition:
       condition: and
       conditions:
-        - condition: template
-          value_template: >-
-            {{ states('sensor.precip_next_1hr') | int > 50 }}
-        - condition: template
-          value_template: >-
-            {{ not is_state('sensor.season', 'winter') }}
+        - condition: numeric_state
+          entity_id: sensor.precip_next_1hr
+          above: 50
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: sensor.season
+              state: "winter"
     action:
       - action: tesla_custom.api
         data:
@@ -180,16 +182,18 @@ automation:
         - condition: state
           entity_id: group.egress_points
           state: "on"
-        - condition: template
-          value_template: >-
-            {{ states('sensor.precip_next_1hr') | int > 50 }}
-        - condition: template
-          value_template: >-
-            {{ not is_state('sensor.season', 'winter') }}
+        - condition: numeric_state
+          entity_id: sensor.precip_next_1hr
+          above: 50
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: sensor.season
+              state: "winter"
         - "{{ now() - state_attr('automation.alert_house_windows_open_pressure_dropping','last_triggered') > timedelta(hours=4) }}"
     action:
       - action: persistent_notification.create
-        data_template:
+        data:
           title: "Uh Oh"
           message: >
             ![image]({{ [
@@ -203,7 +207,7 @@ automation:
               ] | random }})
             You left a window open at home. Dumbass.
       - action: notify.mobile_app_wethop
-        data_template:
+        data:
           title: "Open Window"
           message: "It's going to rain and you left a window open at home"
           data:
@@ -227,11 +231,13 @@ automation:
         entity_id: sensor.nws_alerts
         above: 0
     condition:
-      condition: template
-      value_template: >-
-        {{ ((state_attr('sensor.nws_alerts','TYPE') == "TOR") or
-        (state_attr('nws_alerts', 'Description') == "Tornado Warning"))
-        and (is_state("binary_sensor.bayesian_zeke_home", 'on')) }}
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ (state_attr('sensor.nws_alerts','TYPE') == "TOR") or
+          (state_attr('nws_alerts', 'Description') == "Tornado Warning") }}
     action:
       - action: light.turn_on
         data:
@@ -253,7 +259,7 @@ automation:
     condition: []
     action:
       - action: notify.all
-        data_template:
+        data:
           message: >-
             {{ state_attr('nws_alerts', 'Description') }}
 
@@ -268,15 +274,16 @@ automation:
     condition:
       - condition: and
         conditions:
-          - condition: template
-            value_template: "{{ states('sensor.nws_dakota_county_alerts_alerts_are_active') == 'Yes' }}"
+          - condition: state
+            entity_id: sensor.nws_dakota_county_alerts_alerts_are_active
+            state: "Yes"
           - condition: template
             value_template: "{{ (as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_sent'))) < 3600 }}"
           - condition: template
             value_template: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') not in states('input_text.nws_dakota_county_alerts_triggered_ui_alert_ids') }}"
     action:
       - action: script.nws_dakota_county_alerts_popup_on_wx_alert
-        data_template:
+        data:
           title: >
             {% if (states('sensor.nws_dakota_county_alerts_alert_1') == 'on') and ((as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_effective'))|float) <= 3600) %}
               {{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'display_title') }}
@@ -319,7 +326,7 @@ automation:
               <hr>Alert: <br>{{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'display_title') }}
             {% endif %}
       - action: input_text.set_value
-        data_template:
+        data:
           entity_id: input_text.nws_dakota_county_alerts_triggered_ui_alert_ids
           value: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_id') }}"
 
@@ -335,8 +342,9 @@ automation:
       - trigger: homeassistant
         event: start
     condition:
-      - condition: template
-        value_template: "{{ states('sensor.nws_dakota_county_alerts_alerts_are_active') == 'No' }}"
+      - condition: state
+        entity_id: sensor.nws_dakota_county_alerts_alerts_are_active
+        state: "No"
     action:
       - action: persistent_notification.dismiss
         data:
@@ -346,13 +354,14 @@ automation:
   ## Disable or remove this automation if you don't use Pushbullet
   - alias: Weather Alerts Pushbullet Notification - 1
     trigger:
-      platform: state
-      entity_id: sensor.nws_dakota_county_alerts_alert_1_last_changed
+      - trigger: state
+        entity_id: sensor.nws_dakota_county_alerts_alert_1_last_changed
     condition:
       - condition: and
         conditions:
-          - condition: template
-            value_template: "{{ states('sensor.nws_dakota_county_alerts_alerts_are_active') == 'Yes' }}"
+          - condition: state
+            entity_id: sensor.nws_dakota_county_alerts_alerts_are_active
+            state: "Yes"
           - condition: template
             value_template: "{{ (as_timestamp(now()) - as_timestamp(state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_sent'))) < 3600 }}"
           - condition: template
@@ -361,7 +370,7 @@ automation:
             value_template: "{{ 'Flood' not in state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_event') }}"
     action:
       - action: notify.mobile_app_wethop
-        data_template:
+        data:
           message: >
             Current NWS Weather Alerts:
               
@@ -388,7 +397,7 @@ automation:
             {{ states.sensor.nws_dakota_county_alerts_alert_5.attributes.display_title }} for {{ state_attr('sensor.nws_dakota_county_alerts', 'friendly_name') }}
             {% endif %}
       - action: input_text.set_value
-        data_template:
+        data:
           entity_id: input_text.nws_dakota_county_alerts_triggered_pushbullet_alert_ids
           value: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_id') }}"
 

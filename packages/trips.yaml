@@ -231,7 +231,7 @@ automation:
         data:
           message: "Back from trip. \U0001F4BA"
       - action: input_number.set_value
-        data_template:
+        data:
           entity_id: input_number.random_vacation_light_group
           value: "{{ (0|int) }}"
 
@@ -313,11 +313,11 @@ automation:
         state: "on"
     action:
       - action: input_datetime.set_datetime
-        data_template:
+        data:
           entity_id: input_datetime.random_vacation_lights_off
           time: "{{ (range(22, 24)|random|int ~ ':' ~ range(0, 59)|random|int ~ ':' ~ range(0, 59)|random|int) }}"
       - action: input_number.set_value
-        data_template:
+        data:
           entity_id: input_number.random_vacation_light_group
           value: "{{ (range(1, 5)|random|int) }}" #one more than group, max not included
       - action: notify.all
@@ -353,7 +353,7 @@ automation:
           resume_all: true
           entity_id: climate.my_ecobee
       - action: notify.all
-        data_template:
+        data:
           data:
             url: "/ryan-new-mushroom/climate"
           message: >-
@@ -384,7 +384,7 @@ automation:
           resume_all: true
           entity_id: climate.my_ecobee
       - action: notify.all
-        data_template:
+        data:
           data: url:"/ryan-new-mushroom/climate"
           message: >-
             Turning off Ecobee Away mode while driving home from MSP
@@ -402,7 +402,7 @@ automation:
     action:
       - delay: 00:{{ (range(5,45)|random|int) }}:00
       - action: scene.turn_on
-        data_template:
+        data:
           target: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
       - action: notify.all
         data:
@@ -475,7 +475,7 @@ automation:
     trigger:
       - entity_id: binary_sensor.flying_home_today
         from: "off"
-        platform: state
+        trigger: state
         to: "on"
     condition: []
     action:
