@@ -44,7 +44,7 @@ homeassistant:
 ########################
 automation:
   - alias: Trash reminder evening before pickup
-    triggers:
+    trigger:
       - trigger: time
         at: "14:30:00"
     condition:
@@ -64,24 +64,24 @@ automation:
   - id: reset_after_holiday
     alias: reset_after_holiday
     # initial_state: false
-    triggers:
+    trigger:
       - trigger: sun
         event: sunrise
         offset: +00:45:00
     action:
       - action: scene.turn_on
-        data_template:
+        data:
           entity_id: scene.reset_front_lights
       - delay:
           seconds: 15
       - action: light.turn_off
-        data_template:
+        data:
           entity_id: light.outside_front_hue
 
   - id: st_andrews_day_light_loop
     alias: st_andrews_day_light_loop
     # initial_state: false
-    triggers:
+    trigger:
       - trigger: sun
         event: sunset
         offset: -00:45:00
@@ -104,7 +104,7 @@ automation:
             before_offset: 00:45:00
     action:
       - action: scene.turn_on
-        data_template:
+        data:
           transition: 30
           entity_id: scene.scene_st_andrews_day_outdoors_{{ now().minute % 4 + 1 | int }}
           # toggle between christmas scenes 1-4
@@ -112,7 +112,7 @@ automation:
   - id: halloween_light_loop
     alias: halloween_light_loop
     # initial_state: false
-    triggers:
+    trigger:
       - trigger: sun
         event: sunset
         offset: -00:45:00
@@ -135,7 +135,7 @@ automation:
             before_offset: 00:45:00
     action:
       - action: scene.turn_on
-        data_template:
+        data:
           transition: 30
           entity_id: scene.scene_halloween_outdoors_{{ now().minute % 4 + 1 | int }}
 
