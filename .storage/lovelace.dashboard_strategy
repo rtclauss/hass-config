@@ -1,0 +1,196 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "lovelace.dashboard_strategy",
+  "data": {
+    "config": {
+      "background": "var(--background-image)",
+      "strategy": {
+        "type": "custom:mushroom-strategy",
+        "options": {
+          "home_view": {
+            "hidden": [
+              "greeting"
+            ]
+          },
+          "areas": {
+            "4927cd530ee44a9e9eefc33f0de6c90e": {
+              "icon": "mdi:home-floor-0"
+            },
+            "owner_suite_bathroom": {
+              "icon": "mdi:bathtub"
+            },
+            "basement_bathroom": {
+              "icon": "mdi:shower"
+            },
+            "garage": {
+              "icon": "mdi:garage"
+            },
+            "den": {
+              "icon": "mdi:fireplace"
+            },
+            "tiki_room": {
+              "icon": "mdi:palm-tree"
+            },
+            "997d5f472a2e4838b40ab9c1c60d85ef": {
+              "icon": "mdi:bed"
+            },
+            "bb7a5b0c18c7427bb10b6f761bb05861": {
+              "icon": "mdi:bed"
+            },
+            "54913feabaa14cf88ff2190e25bef547": {
+              "icon": "mdi:desk"
+            },
+            "laundry_room": {
+              "icon": "mdi:washing-machine"
+            },
+            "7cd73f11a4bf476e839c61b4a3090edd": {
+              "icon": "mdi:stove"
+            },
+            "sonos_move_2": {
+              "hidden": true
+            },
+            "dining_room": {
+              "icon": "mdi:knife"
+            },
+            "72a8db21bc2d457e80748541dc138d07": {
+              "icon": "mdi:television"
+            },
+            "front_door": {
+              "hidden": true
+            },
+            "deck": {
+              "icon": "mdi:tree"
+            }
+          },
+          "chips": {
+            "weather_entity": "weather.my_ecobee",
+            "switch_count": false,
+            "extra_chips": [
+              {
+                "type": "conditional",
+                "conditions": [
+                  {
+                    "entity": "lock.front_door_lock",
+                    "state": "unlocked"
+                  }
+                ],
+                "chip": {
+                  "type": "entity",
+                  "entity": "lock.front_door_lock",
+                  "icon_color": "red",
+                  "content_info": "none",
+                  "tap_action": {
+                    "action": "toggle"
+                  }
+                }
+              },
+              {
+                "type": "conditional",
+                "conditions": [
+                  {
+                    "entity": "cover.garage_door",
+                    "state_not": "closed"
+                  }
+                ],
+                "chip": {
+                  "type": "entity",
+                  "entity": "cover.garage_door",
+                  "icon_color": "red",
+                  "content_info": "none",
+                  "tap_action": {
+                    "action": "toggle"
+                  }
+                }
+              }
+            ]
+          },
+          "extra_views": [
+            {
+              "theme": "Backend-selected",
+              "title": "Media Players",
+              "path": "cool-view",
+              "icon": "mdi:amplifier",
+              "badges": [],
+              "cards": [
+                {
+                  "type": "custom:auto-entities",
+                  "card": {
+                    "type": "entities",
+                    "show_header_toggle": false,
+                    "state_color": true,
+                    "group": false,
+                    "hide": {
+                      "play_pause": true
+                    }
+                  },
+                  "sort": {
+                    "method": "name"
+                  },
+                  "filter": {
+                    "include": [
+                      {
+                        "entity_id": "media_player.*",
+                        "options": {
+                          "sourceicon": "mdi:music",
+                          "type": "custom:mini-media-player",
+                          "group": false,
+                          "artwork": "material",
+                          "idle_view": {
+                            "when_idle": false
+                          },
+                          "hide": {
+                            "controls": false,
+                            "icon": true,
+                            "source": false
+                          },
+                          "speaker_group": {
+                            "platform": "sonos",
+                            "show_group_count": true,
+                            "entities": [
+                              {
+                                "entity_id": "media_player.bedroom",
+                                "name": "Owner Suite"
+                              },
+                              {
+                                "entity_id": "media_player.office",
+                                "name": "Office"
+                              },
+                              {
+                                "entity_id": "media_player.bathroom",
+                                "name": "Bathroom"
+                              },
+                              {
+                                "entity_id": "media_player.bathroom",
+                                "name": "Den"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ],
+                    "exclude": [
+                      {
+                        "entity_id": "media_player.*plex*"
+                      },
+                      {
+                        "state": "idle"
+                      },
+                      {
+                        "state": "standby"
+                      },
+                      {
+                        "state": "off"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "views": []
+    }
+  }
+}
