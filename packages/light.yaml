@@ -788,8 +788,11 @@ automation:
             sequence:
               - delay:
                   minutes: 3
-              # - condition: >-
-              #     {{ states('binary_sensor.hall_upstairs_motion_occupancy') == "off" and states('binary_sensor.hall_main_foyer_motion_occupancy') == "off" }}
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_upstairs_motion_occupancy
+                state: "off"
               - action: light.turn_off
                 data:
                   entity_id:
@@ -807,8 +810,11 @@ automation:
             sequence:
               - delay:
                   minutes: 15
-              # - condition: >-
-              #     {{ states('binary_sensor.hall_upstairs_motion_occupancy') == "off" and states('binary_sensor.hall_main_foyer_motion_occupancy') == "off" }}
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_upstairs_motion_occupancy
+                state: "off"
               - action: light.turn_off
                 data:
                   entity_id:
@@ -858,8 +864,11 @@ automation:
             sequence:
               - delay:
                   minutes: 15
-              # - condition: >-
-              #     {{ states('binary_sensor.hall_upstairs_motion_occupancy') == "off" and states('binary_sensor.hall_main_foyer_motion_occupancy') == "off" }}
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_upstairs_motion_occupancy
+                state: "off"
               - action: light.turn_off
                 data:
                   entity_id:
@@ -876,8 +885,11 @@ automation:
             sequence:
               - delay:
                   minutes: 3
-              # - condition: >-
-              #     {{ states('binary_sensor.hall_upstairs_motion_occupancy') == "off" and states('binary_sensor.hall_main_foyer_motion_occupancy') == "off" }}
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_upstairs_motion_occupancy
+                state: "off"
               - action: light.turn_off
                 data:
                   entity_id:
@@ -1477,8 +1489,11 @@ automation:
               - condition: trigger
                 id: main-motion-not-detected
             sequence:
-              # - condition: >-
-              #     {{ states('binary_sensor.hall_upstairs_motion_occupancy') == "off" and states('binary_sensor.hall_main_foyer_motion_occupancy') == "off" }}
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_upstairs_motion_occupancy
+                state: "off"
               - action: light.turn_off
                 data:
                   entity_id:
@@ -1512,8 +1527,11 @@ automation:
               - condition: trigger
                 id: upstairs-motion-not-detected
             sequence:
-              # - condition: >-
-              #     {{ states('binary_sensor.hall_upstairs_motion_occupancy') == "off" and states('binary_sensor.hall_main_foyer_motion_occupancy') == "off" }}
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_upstairs_motion_occupancy
+                state: "off"
               - action: light.turn_off
                 data:
                   entity_id:
@@ -1773,6 +1791,11 @@ automation:
           state: "off"
         - condition: state
           entity_id: binary_sensor.workday_sensor
+          state: "off"
+        - condition: state
+          entity_id:
+            - binary_sensor.office_motion_occupancy
+            - binary_sensor.office_occupancy
           state: "off"
         - condition: time
           after: "07:00:00"
