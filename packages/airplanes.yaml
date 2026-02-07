@@ -575,45 +575,48 @@ template:
               else none }}
 
   - sensor:
-      airport_codes_icao: >-
-        {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-        {% if raw in ['unknown','unavailable','none',''] %}
-          {{ none }}
-        {% else %}
-          {% set j = raw | from_json %}
-          {% if j is sequence and j is not mapping and (j | length) > 0 %}
-            {{ j[0].airport_codes if j[0].airport_codes is defined else none }}
-          {% else %}
+      - name: airport_codes_icao
+        state: >-
+          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
+          {% if raw in ['unknown','unavailable','none',''] %}
             {{ none }}
+          {% else %}
+            {% set j = raw | from_json %}
+            {% if j is sequence and j is not mapping and (j | length) > 0 %}
+              {{ j[0].airport_codes if j[0].airport_codes is defined else none }}
+            {% else %}
+              {{ none }}
+            {% endif %}
           {% endif %}
-        {% endif %}
 
-      airports_names: >-
-        {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-        {% if raw in ['unknown','unavailable','none',''] %}
-          {{ none }}
-        {% else %}
-          {% set j = raw | from_json %}
-          {% if j is sequence and j is not mapping and (j | length) > 0 and j[0]._airports is defined %}
-            {{ (j[0]._airports | map(attribute='name') | list) | join(' → ') }}
-          {% else %}
+      - name: airports_names
+        state: >-
+          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
+          {% if raw in ['unknown','unavailable','none',''] %}
             {{ none }}
+          {% else %}
+            {% set j = raw | from_json %}
+            {% if j is sequence and j is not mapping and (j | length) > 0 and j[0]._airports is defined %}
+              {{ (j[0]._airports | map(attribute='name') | list) | join(' → ') }}
+            {% else %}
+              {{ none }}
+            {% endif %}
           {% endif %}
-        {% endif %}
 
       # Helpful when debugging: if ADSB.im returns {"detail":[...]} you'll see it here
-      error_detail: >-
-        {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-        {% if raw in ['unknown','unavailable','none',''] %}
-          {{ none }}
-        {% else %}
-          {% set j = raw | from_json %}
-          {% if j is mapping and j.detail is defined %}
-            {{ j.detail | tojson }}
-          {% else %}
+      - name: error_detail
+        state: >-
+          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
+          {% if raw in ['unknown','unavailable','none',''] %}
             {{ none }}
+          {% else %}
+            {% set j = raw | from_json %}
+            {% if j is mapping and j.detail is defined %}
+              {{ j.detail | tojson }}
+            {% else %}
+              {{ none }}
+            {% endif %}
           {% endif %}
-        {% endif %}
 
 rest:
   - resource: https://adsb.im/api/0/routeset
