@@ -674,7 +674,7 @@ automation:
                 data:
                   entity_id:
                     - input_boolean.master_bed_occupancy
-                    # - input_boolean.chatgpt_bed_occupied
+              #       # - input_boolean.chatgpt_bed_occupied
 
   - id: mail_delivered
     alias: mail_delivered
@@ -1984,9 +1984,11 @@ template:
         delay_on: 00:00:30
         device_class: occupancy
         state: >-
-          {{
-            states('sensor.bed_load_cell_1') | int(0) > 20
-          }}
+          {{states('binary_sensor.bayesian_bed_occupancy')}}
+        # state: >-
+        #   {{
+        #     states('sensor.bed_load_cell_1') | int(0) > 20
+        #   }}
         # Or use this once Bed Load Cell 2 has been fixed:
         # {{
         #   states('sensor.bed_load_cell_1') | int(0) > 15
