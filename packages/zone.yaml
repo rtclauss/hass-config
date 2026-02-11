@@ -519,32 +519,13 @@ automation:
         - action: scene.turn_on
           target:
             entity_id: scene.turn_on_cameras
-        - if:
-            - alias: "Haven't vacuumed in more than 2 days"
-              condition: template
-              value_template: >-
-                {{(now()-(states("sensor.vacuum_last_ran")|as_datetime)) > timedelta(hours=48)}}
-          then:
-            # vacuum since it's been longer than two days
-            # Revert back when batteries are all reset/new
-            # including main level vacuum
-            # - alias: Start Vacuums
-            #   action: vacuum.start
-            #   target:
-            #     entity_id: all
-            - action: mqtt.publish
-              data:
-                topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-                payload: >-
-                  {% set segment_id = now().weekday() + 1 %}
-                  {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
-          else:
-            - action: mqtt.publish
-              data:
-                topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-                payload: >-
-                  {% set segment_id = now().weekday() + 1 %}
-                  {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+        # Vacuum request payload is identical for both paths, so keep one action.
+        - action: mqtt.publish
+          data:
+            topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+            payload: >-
+              {% set segment_id = now().weekday() + 1 %}
+              {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
             # - action: notify.all
             #   data:
             #     title: "Auf wiedersehen"
