@@ -161,7 +161,8 @@ automation:
               {{state_attr('device_tracker.nigori_location_tracker', "longitude") }}
       - alias: "Check if we already notified within the last hour"
         condition: template
-        value_template: "{{ now() - state_attr('automation.alert_car_windows_open_pressure_dropping','last_triggered') > timedelta(hours=1) }}"
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
       - action: notify.all
         data:
           message: "It will rain soon. Are your car windows closed? HA will try to close them for you."
@@ -236,8 +237,9 @@ automation:
         state: "on"
       - condition: template
         value_template: >-
-          {{ (state_attr('sensor.nws_alerts','TYPE') == "TOR") or
-          (state_attr('nws_alerts', 'Description') == "Tornado Warning") }}
+          {% set alert_type = state_attr('sensor.nws_alerts', 'TYPE') | default('', true) %}
+          {% set description = state_attr('sensor.nws_alerts', 'Description') | default('', true) %}
+          {{ alert_type == "TOR" or description == "Tornado Warning" }}
     action:
       - action: light.turn_on
         data:
@@ -261,7 +263,7 @@ automation:
       - action: notify.all
         data:
           message: >-
-            {{ state_attr('nws_alerts', 'Description') }}
+            {{ state_attr('sensor.nws_alerts', 'Description') }}
 
   ## Automation to trigger a UI notification when there is an active weather alert.
   ## nws_dakota_county_alerts_alert_1 should always contain most recent alert.
