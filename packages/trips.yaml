@@ -196,11 +196,12 @@ automation:
                 hours: 20
             - condition: template
               value_template: >-
-                {% if trigger.id == "calendar" and (trigger.calendar_event.location == 'Minneapolis-St Paul Intl/Wold-Chamberlain' and ('(Friend' not in trigger.calendar.summary) or ('friend' not in trigger.calendar.summary)) %}
-                  true
-                {% else %}
-                  false
-                {% endif %}
+                {% set summary = trigger.calendar_event.summary | default('') | lower %}
+                {{
+                  trigger.id == "calendar"
+                  and trigger.calendar_event.location == "Minneapolis-St Paul Intl/Wold-Chamberlain"
+                  and "friend" not in summary
+                }}
     action:
       - action: switch.turn_on
         target:
