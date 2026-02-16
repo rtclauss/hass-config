@@ -30,15 +30,15 @@ homeassistant:
       friendly_name: "Initialize Vacation Items"
       icon: mdi:beach
 
-    automation.on_a_trip_trigger:
+    automation.trip_mode_manager:
       <<: *customize
-      friendly_name: "Leaving on a trip"
-      icon: mdi:beach
+      friendly_name: "Trip Mode Manager"
+      icon: mdi:bag-suitcase
 
-    automation.off_trip_trigger:
+    automation.trip_mode_watchdog_home_1h:
       <<: *customize
-      friendly_name: "Back from Trip"
-      icon: mdi:airplane-landing
+      friendly_name: "Trip Mode Watchdog"
+      icon: mdi:home-clock
 
     automation.random_off_time:
       <<: *customize
@@ -149,94 +149,159 @@ automation:
   #   - delay: '00:00:{{ (range(1,90)|random|int) }}'
   #   - action: script.vacation_group_visibility
 
-  - id: on_a_trip_trigger
-    alias: on_a_trip_trigger
+  - id: trip_mode_manager
+    alias: trip_mode_manager
+    mode: single
     trigger:
       - trigger: state
+        id: away_for_20h
         entity_id: binary_sensor.bayesian_zeke_home
         to: "off"
         for:
           hours: 20
       - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        to: "off"
-      - trigger: state
+        id: planned_work_trip
         entity_id: binary_sensor.planned_work_trip_calendar
         to: "on"
       - trigger: state
+        id: planned_vacation
         entity_id: binary_sensor.planned_vacation_calendar
         to: "on"
-      - trigger: state
-        entity_id:
-          - input_boolean.trip
-        to: "on"
       - trigger: calendar
-        id: calendar
+        id: calendar_trip
         entity_id: calendar.ryan_claussen
         event: start
         offset: -00:50:00
-    condition:
-      condition: and
-      conditions:
-        - condition: state
-          entity_id: binary_sensor.bayesian_zeke_home
-          state: "off"
-        - condition: or
-          conditions:
-            - condition: state
-              entity_id: binary_sensor.planned_vacation_calendar
-              state: "on"
-            - condition: state
-              entity_id: binary_sensor.planned_work_trip_calendar
-              state: "on"
-            - condition: state
-              entity_id: binary_sensor.bayesian_zeke_home
-              state: "off"
-              for:
-                hours: 20
-            - condition: template
-              value_template: >-
-                {% set summary = trigger.calendar_event.summary | default('') | lower %}
-                {{
-                  trigger.id == "calendar"
-                  and trigger.calendar_event.location == "Minneapolis-St Paul Intl/Wold-Chamberlain"
-                  and "friend" not in summary
-                }}
+      - trigger: state
+        id: manual_trip_on
+        entity_id: input_boolean.trip
+        to: "on"
+      - trigger: state
+        id: manual_trip_off
+        entity_id: input_boolean.trip
+        to: "off"
+      - trigger: state
+        id: return_home
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
     action:
-      - action: switch.turn_on
-        target:
-          entity_id: switch.vacation_simulation
-      - action: input_boolean.turn_on
-        data:
-          entity_id: input_boolean.trip
-      - action: notify.all
-        data:
-          message: "You're on a trip! \U0001F6EC"
+      - choose:
+          - conditions:
+              - condition: trigger
+                id:
+                  - away_for_20h
+                  - planned_work_trip
+                  - planned_vacation
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: notify.all
+                data:
+                  message: "You're on a trip! \U0001F6EC"
+          - conditions:
+              - condition: trigger
+                id: calendar_trip
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
+              - condition: template
+                value_template: >-
+                  {% set summary = trigger.calendar_event.summary | default('') | lower %}
+                  {{
+                    trigger.calendar_event.location == "Minneapolis-St Paul Intl/Wold-Chamberlain"
+                    and "friend" not in summary
+                  }}
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: notify.all
+                data:
+                  message: "You're on a trip! \U0001F6EC"
+          - conditions:
+              - condition: trigger
+                id: manual_trip_on
+            sequence:
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: notify.all
+                data:
+                  message: "Trip mode enabled."
+          - conditions:
+              - condition: trigger
+                id: manual_trip_off
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: input_number.set_value
+                data:
+                  entity_id: input_number.random_vacation_light_group
+                  value: "{{ (0|int) }}"
+              - action: notify.all
+                data:
+                  message: "Back from trip. \U0001F4BA"
+      - if:
+          - condition: trigger
+            id: return_home
+          - condition: state
+            entity_id: input_boolean.trip
+            state: "on"
+        then:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.vacation_simulation
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.trip
+          - action: input_number.set_value
+            data:
+              entity_id: input_number.random_vacation_light_group
+              value: "{{ (0|int) }}"
+          - action: notify.all
+            data:
+              message: "Back from trip. \U0001F4BA"
 
-  - id: off_trip_trigger
-    alias: off_trip_trigger
+  - id: trip_mode_watchdog_home_1h
+    alias: trip_mode_watchdog_home_1h
     trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
+        for:
+          hours: 1
     condition:
       - condition: state
-        entity_id: binary_sensor.sensed_trip
+        entity_id: input_boolean.trip
         state: "on"
     action:
       - action: switch.turn_off
         target:
           entity_id: switch.vacation_simulation
       - action: input_boolean.turn_off
-        data:
+        target:
           entity_id: input_boolean.trip
-      - action: notify.all
-        data:
-          message: "Back from trip. \U0001F4BA"
       - action: input_number.set_value
         data:
           entity_id: input_number.random_vacation_light_group
           value: "{{ (0|int) }}"
+      - action: notify.all
+        data:
+          message: "Trip mode watchdog cleared vacation mode after 1 hour at home."
 
   - id: garage_opened_on_a_trip
     alias: Garage Door Opened while on a Trip
@@ -255,9 +320,14 @@ automation:
         event_data:
           action: CLOSE_GARAGE
     condition:
-      - condition: state
-        entity_id: binary_sensor.sensed_trip
-        state: "on"
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - condition: state
+          entity_id: binary_sensor.bayesian_zeke_home
+          state: "off"
     action:
       - choose:
           - conditions:
@@ -294,8 +364,11 @@ automation:
       - delay:
           minutes: 5
       - condition: state
-        entity_id: binary_sensor.sensed_trip
+        entity_id: input_boolean.trip
         state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
       - action: notify.all
         data:
           message: Closing garage door while you're on a trip.
@@ -311,11 +384,11 @@ automation:
       - trigger: time
         at: "12:00:00"
       - trigger: state
-        entity_id: binary_sensor.sensed_trip
+        entity_id: input_boolean.trip
         to: "on"
     condition:
       - condition: state
-        entity_id: binary_sensor.sensed_trip
+        entity_id: input_boolean.trip
         state: "on"
     action:
       - action: input_datetime.set_datetime
@@ -402,9 +475,14 @@ automation:
         event: sunset
         offset: -00:30:00
     condition:
-      - condition: state
-        entity_id: binary_sensor.sensed_trip
-        state: "on"
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - condition: state
+          entity_id: binary_sensor.bayesian_zeke_home
+          state: "off"
     action:
       - delay: 00:{{ (range(5,45)|random|int) }}:00
       - action: scene.turn_on
@@ -425,8 +503,11 @@ automation:
       condition: and
       conditions:
         - condition: state
-          entity_id: binary_sensor.sensed_trip
+          entity_id: input_boolean.trip
           state: "on"
+        - condition: state
+          entity_id: binary_sensor.bayesian_zeke_home
+          state: "off"
     action:
       - action: script.lights_off_except
         data:
@@ -455,10 +536,16 @@ automation:
       - trigger: time
         at: "13:00:00"
     condition:
-      - alias: "on a trip"
-        condition: state
-        entity_id: input_boolean.trip
-        state: "on"
+      condition: and
+      conditions:
+        - alias: "on a trip"
+          condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - alias: "not home"
+          condition: state
+          entity_id: binary_sensor.bayesian_zeke_home
+          state: "off"
     action:
       # Revert back when batteries are all reset/new
       # including main level vacuum
@@ -485,7 +572,15 @@ automation:
         from: "off"
         trigger: state
         to: "on"
-    condition: []
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: input_boolean.trip
+          state: "on"
+        - condition: state
+          entity_id: binary_sensor.bayesian_zeke_home
+          state: "off"
     action:
       # Revert back when batteries are all reset/new
       # including main level vacuum
@@ -534,7 +629,7 @@ group:
     entities:
       - binary_sensor.planned_vacation_calendar
       - binary_sensor.planned_work_trip_calendar
-      - binary_sensor.sensed_trip
+      - input_boolean.trip
       - binary_sensor.flying_home_today
 
   vacation_climate:
