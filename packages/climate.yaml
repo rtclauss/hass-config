@@ -738,3 +738,98 @@ template:
         state: >-
           {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
         name: rate_of_house_temp_change_30m
+      - device_class: temperature
+        unit_of_measurement: °F
+        default_entity_id: sensor.ecobee_active_target_temperature
+        availability: "{{ states('climate.my_ecobee') not in ['unknown', 'unavailable'] }}"
+        state: >-
+          {% set action = states('sensor.hvac_activity') %}
+          {% if action == 'heating' %}
+            {% set target = state_attr('climate.my_ecobee', 'target_temp_low') %}
+            {% if target is none %}
+              {% set target = state_attr('climate.my_ecobee', 'temperature') %}
+            {% endif %}
+            {{ target if target is not none else state_attr('climate.my_ecobee', 'temperature') }}
+          {% elif action == 'cooling' %}
+            {% set target = state_attr('climate.my_ecobee', 'target_temp_high') %}
+            {% if target is none %}
+              {% set target = state_attr('climate.my_ecobee', 'temperature') %}
+            {% endif %}
+            {{ target if target is not none else state_attr('climate.my_ecobee', 'temperature') }}
+          {% else %}
+            {{ state_attr('climate.my_ecobee', 'temperature') }}
+          {% endif %}
+        name: ecobee_active_target_temperature
+      - unit_of_measurement: °F/min
+        default_entity_id: sensor.ecobee_modeled_rate_deg_per_min
+        availability: >-
+          {{ has_value('sensor.outside_temperature') and has_value('sensor.rate_of_house_temp_change_10m') and states('sensor.hvac_activity') in ['heating', 'cooling'] }}
+        state: >-
+          {% set action = states('sensor.hvac_activity') %}
+          {% set t_out = states('sensor.outside_temperature') | float(default=0) %}
+          {% set recent_rate = (states('sensor.rate_of_house_temp_change_10m') | float(default=0)) / 5 %}
+
+          {% if action == 'heating' %}
+            {% if is_state('binary_sensor.ecobee_aux', 'on') %}
+              {% set hist_rate = 0.011628 %}
+            {% else %}
+              {% set hist_rate = 0.0015 + (0.00026 * t_out) %}
+              {% if hist_rate < 0.004 %}
+                {% set hist_rate = 0.004 %}
+              {% elif hist_rate > 0.014 %}
+                {% set hist_rate = 0.014 %}
+              {% endif %}
+            {% endif %}
+            {% if recent_rate > 0.002 %}
+              {{ ((hist_rate * 0.6) + (recent_rate * 0.4)) | round(6) }}
+            {% else %}
+              {{ hist_rate | round(6) }}
+            {% endif %}
+          {% elif action == 'cooling' %}
+            {% set hist_rate = -0.028 + (0.00023 * t_out) %}
+            {% if hist_rate > -0.008 %}
+              {% set hist_rate = -0.008 %}
+            {% elif hist_rate < -0.016 %}
+              {% set hist_rate = -0.016 %}
+            {% endif %}
+            {% if recent_rate < -0.002 %}
+              {{ ((hist_rate * 0.6) + (recent_rate * 0.4)) | round(6) }}
+            {% else %}
+              {{ hist_rate | round(6) }}
+            {% endif %}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        attributes:
+          model_version: db_cycle_p50_2026_02_16
+          historical_source_table: public.thermostat
+          historical_outside_sensor: sensor.outside_temperature
+          historical_inside_sensor: sensor.average_house_temp
+        name: ecobee_modeled_rate_deg_per_min
+      - unit_of_measurement: min
+        icon: mdi:timer-sand
+        default_entity_id: sensor.ecobee_time_to_target_minutes
+        availability: >-
+          {{ has_value('sensor.average_house_temp') and has_value('sensor.ecobee_active_target_temperature') and has_value('sensor.ecobee_modeled_rate_deg_per_min') and states('sensor.hvac_activity') in ['heating', 'cooling'] }}
+        state: >-
+          {% set action = states('sensor.hvac_activity') %}
+          {% set current_temp = states('sensor.average_house_temp') | float(default=0) %}
+          {% set target_temp = states('sensor.ecobee_active_target_temperature') | float(default=0) %}
+          {% set rate = states('sensor.ecobee_modeled_rate_deg_per_min') | float(default=0) %}
+
+          {% if action == 'heating' and target_temp > current_temp and rate > 0 %}
+            {% set minutes = (target_temp - current_temp) / rate %}
+            {{ [([minutes, 0] | max), 480] | min | round(0) }}
+          {% elif action == 'cooling' and target_temp < current_temp and rate < 0 %}
+            {% set minutes = (target_temp - current_temp) / rate %}
+            {{ [([minutes, 0] | max), 480] | min | round(0) }}
+          {% else %}
+            {{ 0 }}
+          {% endif %}
+        attributes:
+          model_version: db_cycle_p50_2026_02_16
+          current_temperature: "{{ states('sensor.average_house_temp') }}"
+          target_temperature: "{{ states('sensor.ecobee_active_target_temperature') }}"
+          hvac_action: "{{ states('sensor.hvac_activity') }}"
+          modeled_rate_deg_per_min: "{{ states('sensor.ecobee_modeled_rate_deg_per_min') }}"
+        name: ecobee_time_to_target_minutes
