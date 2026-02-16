@@ -1659,6 +1659,17 @@ automation:
         #   entity_id:
         #     - switch.humidifier
 
+  - id: owner_suite_bed_strip_off_when_lamps_off
+    alias: owner_suite_bed_strip_off_when_lamps_off
+    trigger:
+      - trigger: state
+        entity_id: light.owner_suite_lamps
+        to: "off"
+    action:
+      - action: light.turn_off
+        target:
+          entity_id: light.bed_lightstrip
+
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom
     mode: restart
@@ -1676,10 +1687,8 @@ automation:
           entity_id: device_tracker.bayesian_zeke_home
           zone: zone.home
         - condition: state
-          entity_id:
-            - light.bed_lightstrip
-          state: "off"
-          enabled: false
+          entity_id: light.owner_suite_lamps
+          state: "on"
         - alias: "condition alias (name)"
           condition: numeric_state
           entity_id: sensor.owner_suite_cpap_plug_power
@@ -1735,6 +1744,9 @@ automation:
               - condition: trigger
                 id: motion_on
             sequence:
+              - condition: state
+                entity_id: light.owner_suite_lamps
+                state: "on"
               # TODO maybe don't turn off the lights.
               # - action: light.turn_off
               #   data:
