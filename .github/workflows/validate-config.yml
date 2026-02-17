@@ -1,0 +1,112 @@
+name: Validate Home Assistant Config
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-home-assistant-config-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  yaml-lint:
+    name: YAML Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install yamllint
+        run: python -m pip install --upgrade pip yamllint
+
+      - name: Lint YAML files
+        run: |
+          yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disable, truthy: disable}}" \
+            configuration.yaml \
+            automations.yaml \
+            blueprints \
+            packages \
+            zigbee2mqtt
+
+  home-assistant-check-config:
+    name: Home Assistant Check Config
+    runs-on: ubuntu-latest
+    needs: yaml-lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare test secrets
+        run: |
+          if [[ -f travis_secrets.yaml ]]; then
+            cp travis_secrets.yaml secrets.yaml
+          else
+            touch secrets.yaml
+          fi
+
+      - name: Fill missing secrets with CI placeholders
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          secret_pattern = re.compile(r"!secret\s+([A-Za-z0-9_]+)")
+          key_pattern = re.compile(r"^\s*([A-Za-z0-9_]+)\s*:")
+
+          files = [Path("configuration.yaml"), Path("automations.yaml")]
+
+          for directory in (Path("packages"), Path("blueprints")):
+            if directory.exists():
+              files.extend(directory.rglob("*.yaml"))
+              files.extend(directory.rglob("*.yml"))
+
+          referenced = set()
+          for file_path in files:
+            if not file_path.is_file():
+              continue
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            referenced.update(secret_pattern.findall(content))
+
+          secrets_path = Path("secrets.yaml")
+          existing = set()
+          for line in secrets_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+              continue
+            match = key_pattern.match(line)
+            if match:
+              existing.add(match.group(1))
+
+          missing = sorted(referenced - existing)
+          if missing:
+            with secrets_path.open("a", encoding="utf-8") as file:
+              for key in missing:
+                file.write(f"{key}: ci_placeholder\n")
+          PY
+
+      - name: Run Home Assistant config check
+        run: |
+          set -euo pipefail
+
+          docker run --rm \
+            -v "${{ github.workspace }}:/config" \
+            ghcr.io/home-assistant/home-assistant:stable \
+            python -m homeassistant --config /config --script check_config 2>&1 | tee check-config.log
+
+          if grep -Eq "(Failed config|Incorrect config|ERROR:homeassistant\\.config:Invalid config|ERROR:homeassistant\\.config:Error loading)" check-config.log; then
+            echo "Home Assistant reported configuration errors."
+            exit 1
+          fi
