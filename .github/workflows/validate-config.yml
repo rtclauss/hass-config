@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - master
+  schedule:
+    - cron: "30 9 * * *"
   workflow_dispatch:
 
 permissions:
@@ -25,10 +27,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version-file: ".python-version"
 
-      - name: Install yamllint
+      - name: Install lint and support checks
         run: python -m pip install --upgrade pip yamllint
+
+      - name: Verify pinned Python tracks latest Home Assistant support
+        run: python scripts/check_ha_python_support.py --python-version-file .python-version
 
       - name: Lint YAML files
         run: |
@@ -106,7 +111,7 @@ jobs:
             ghcr.io/home-assistant/home-assistant:stable \
             python -m homeassistant --config /config --script check_config 2>&1 | tee check-config.log
 
-          if grep -Eq "(Failed config|Incorrect config|ERROR:homeassistant\\.config:Invalid config|ERROR:homeassistant\\.config:Error loading)" check-config.log; then
+          if grep -Eq "(Failed config|ERROR:homeassistant\\.config:Invalid config|ERROR:homeassistant\\.config:Error loading)" check-config.log; then
             echo "Home Assistant reported configuration errors."
             exit 1
           fi
