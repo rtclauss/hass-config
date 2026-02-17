@@ -3,6 +3,21 @@
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
+## CI + Local Validation Baseline
+
+- This repo pins local tooling Python in `.python-version`.
+- CI validates that this pinned version is still compatible with the latest official `homeassistant` release from [PyPI](https://pypi.org/project/homeassistant/).
+- Config checks run against `ghcr.io/home-assistant/home-assistant:stable` so validation tracks current Home Assistant stable releases.
+- As of 2026-02-17, latest `homeassistant` requires Python `>=3.13.2`, so `.python-version` is set accordingly.
+
+### Local Setup
+
+```bash
+# Use the pinned interpreter from .python-version (for example via pyenv)
+python -m pip install --upgrade pip yamllint
+python scripts/check_ha_python_support.py --python-version-file .python-version
+```
+
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
 I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/master/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
