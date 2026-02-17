@@ -1247,6 +1247,23 @@ automation:
       - action: rest_command.reload_upstairs_vacuum
       - action: rest_command.reload_main_level_vacuum
 
+  - id: refresh_z2m_router_inventory
+    alias: refresh_z2m_router_inventory
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/30"
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/state
+        payload: online
+    action:
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/devices
+          payload: >-
+            {"id":"z2m_router_health_devices"}
+
   # this automation depends on a HA on RaspberryPi with WOL configured to restart HA after shutdown
   # Sometimes z2m loses communication with the adapter and so the whole server needs to be rebooted.
   - id: shutdown_proxmox_z2m_unavailable
@@ -1270,6 +1287,34 @@ automation:
       - action: counter.increment
         target:
           entity_id: counter.reboot_counter
+      - if:
+          - condition: numeric_state
+            entity_id: sensor.z2m_ota_updates_in_progress
+            above: 0
+        then:
+          - repeat:
+              while:
+                - condition: numeric_state
+                  entity_id: sensor.z2m_ota_updates_in_progress
+                  above: 0
+                - condition: template
+                  value_template: "{{ repeat.index <= 36 }}"
+              sequence:
+                - action: notify.mobile_app_wethop
+                  data:
+                    message: >-
+                      Zigbee2MQTT OTA update(s) in progress ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
+                - delay: "00:10:00"
+          - if:
+              - condition: numeric_state
+                entity_id: sensor.z2m_ota_updates_in_progress
+                above: 0
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: >-
+                    Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping restart/shutdown to avoid interruption.
+              - stop: OTA update still in progress
       - action: notify.mobile_app_wethop
         data:
           message: >-
@@ -1298,7 +1343,7 @@ automation:
         data:
           title: Z2M Failed
           message: >-
-            At least {{states('sensor.z2m_failing')}} Z2M entities are not responding and we've rebooted Z2M {{states('counter.reboot_counter')}} times. Restarting Host.
+            {{ states('sensor.z2m_failing') }} of {{ states('sensor.z2m_router_total') }} Zigbee routers are offline ({{ states('sensor.z2m_router_offline_pct') }}%, threshold {{ states('input_number.z2m_router_offline_threshold_pct') }}%). We've rebooted Z2M {{ states('counter.reboot_counter') }} times. Restarting Host.
           data:
             actions:
               - action: "REBOOT_Z2M_COUNTER"
@@ -1307,6 +1352,34 @@ automation:
                 authenticationRequired: false
                 destructive: false
                 behavior: default
+      - if:
+          - condition: numeric_state
+            entity_id: sensor.z2m_ota_updates_in_progress
+            above: 0
+        then:
+          - repeat:
+              while:
+                - condition: numeric_state
+                  entity_id: sensor.z2m_ota_updates_in_progress
+                  above: 0
+                - condition: template
+                  value_template: "{{ repeat.index <= 36 }}"
+              sequence:
+                - action: notify.mobile_app_wethop
+                  data:
+                    message: >-
+                      Zigbee2MQTT OTA update(s) started while recovery was running ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
+                - delay: "00:10:00"
+          - if:
+              - condition: numeric_state
+                entity_id: sensor.z2m_ota_updates_in_progress
+                above: 0
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: >-
+                    Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping host shutdown.
+              - stop: OTA update still in progress
       - delay:
           minutes: 2
       - action: rest_command.proxmox_shutdown
@@ -1315,10 +1388,16 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: threshold
-    name: z2m_failing
-    entity_id: sensor.z2m_failing
-    upper: 5
+  - platform: template
+    sensors:
+      z2m_failing:
+        friendly_name: z2m_failing
+        device_class: problem
+        value_template: >-
+          {% set total = states('sensor.z2m_router_total') | int(0) %}
+          {% set offline_pct = states('sensor.z2m_router_offline_pct') | float(0) %}
+          {% set threshold_pct = states('input_number.z2m_router_offline_threshold_pct') | float(15) %}
+          {{ total > 0 and offline_pct >= threshold_pct }}
   - platform: bayesian
     name: "Bayesian Bed Occupancy"
     prior: 0.40
@@ -1392,7 +1471,15 @@ input_boolean:
 ########################
 # Input Numbers
 ########################
-input_number: {}
+input_number:
+  z2m_router_offline_threshold_pct:
+    name: Z2M router offline threshold
+    min: 1
+    max: 100
+    step: 1
+    mode: box
+    unit_of_measurement: "%"
+    initial: 15
 
 ########################
 # Input Numbers
@@ -2006,6 +2093,147 @@ template:
             action: input_boolean.turn_on
         state: "{{ is_state('input_boolean.front_door_lock', 'off') }}"
 
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/1"
+    variables:
+      z2m_ota_stats: >-
+        {% set now_ts = as_timestamp(now()) | float(0) %}
+        {% set previous_starts = this.attributes.started_at_map | default({}, true) %}
+        {% set ns = namespace(count=0, entities=[], progress={}, starts={}, eta_ts=[]) %}
+        {% for entity_id in integration_entities('mqtt') | default([], true) %}
+          {% if entity_id.startswith('update.') %}
+            {% set entity_picture = state_attr(entity_id, 'entity_picture') | default('', true) %}
+            {% set in_progress = state_attr(entity_id, 'in_progress') | default(false, true) %}
+            {% if 'koenkk/zigbee2mqtt' in (entity_picture | lower) and in_progress %}
+              {% set ns.count = ns.count + 1 %}
+              {% set ns.entities = ns.entities + [entity_id] %}
+              {% set pct = state_attr(entity_id, 'update_percentage') %}
+              {% set start_ts = previous_starts.get(entity_id, now_ts) %}
+              {% set ns.starts = ns.starts | combine({entity_id: start_ts}, recursive=True) %}
+              {% if pct is number %}
+                {% set ns.progress = ns.progress | combine({entity_id: pct}, recursive=True) %}
+                {% if pct > 0 and pct < 100 and now_ts > start_ts %}
+                  {% set elapsed = now_ts - start_ts %}
+                  {% if elapsed >= 120 %}
+                    {% set eta_ts = now_ts + (elapsed * (100 - pct) / pct) %}
+                    {% set ns.eta_ts = ns.eta_ts + [eta_ts] %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {% set eta_ts = (ns.eta_ts | max) if (ns.eta_ts | count > 0) else none %}
+        {% set eta_minutes = ((eta_ts - now_ts) / 60) | round(0) if eta_ts is not none else none %}
+        {{ {
+            'count': ns.count,
+            'entities': ns.entities | sort,
+            'progress': ns.progress,
+            'started_at_map': ns.starts,
+            'eta_ts': eta_ts,
+            'eta_minutes': eta_minutes
+          } | tojson }}
+    sensor:
+      - name: z2m_ota_updates_in_progress
+        unique_id: z2m_ota_updates_in_progress
+        state: "{{ (z2m_ota_stats | from_json).count }}"
+        attributes:
+          entities: "{{ (z2m_ota_stats | from_json).entities }}"
+          progress_pct: "{{ (z2m_ota_stats | from_json).progress }}"
+          started_at_map: "{{ (z2m_ota_stats | from_json).started_at_map }}"
+          eta_minutes: "{{ (z2m_ota_stats | from_json).eta_minutes }}"
+          estimated_completion_ts: "{{ (z2m_ota_stats | from_json).eta_ts }}"
+
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/devices
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/response/devices
+      - trigger: mqtt
+        topic: zigbee2mqtt/#
+    variables:
+      z2m_router_stats: >-
+        {% set previous = {
+            'routers': this.attributes.routers | default([], true),
+            'availability_map': this.attributes.availability_map | default({}, true),
+            'offline_names': this.attributes.offline_routers | default([], true),
+            'offline': this.attributes.offline_router_count | default(0, true),
+            'total': this.attributes.total_router_count | default(0, true),
+            'pct': this.state | float(0)
+          } %}
+        {% set topic = trigger.topic if trigger is defined and trigger.topic is defined else '' %}
+        {% set is_devices_topic = topic in ['zigbee2mqtt/bridge/devices', 'zigbee2mqtt/bridge/response/devices'] %}
+        {% set is_availability_topic = topic.endswith('/availability') and not topic.startswith('zigbee2mqtt/bridge/') %}
+
+        {% if not is_devices_topic and not is_availability_topic %}
+          {{ previous | tojson }}
+        {% else %}
+          {% set routers = previous.routers %}
+          {% set availability_map = previous.availability_map %}
+
+          {% if is_devices_topic %}
+            {% set payload = trigger.payload_json %}
+            {% if payload is mapping and payload.data is defined %}
+              {% set devices = payload.data %}
+            {% elif payload is sequence and payload is not string %}
+              {% set devices = payload %}
+            {% else %}
+              {% set devices = [] %}
+            {% endif %}
+            {% set routers = devices
+              | selectattr('type', 'eq', 'Router')
+              | rejectattr('friendly_name', 'equalto', 'Coordinator')
+              | rejectattr('disabled', 'eq', true)
+              | map(attribute='friendly_name')
+              | list %}
+          {% endif %}
+
+          {% if is_availability_topic %}
+            {% set friendly_name = topic[12:-13] %}
+            {% if trigger.payload_json is mapping and trigger.payload_json.state is defined %}
+              {% set availability_state = trigger.payload_json.state %}
+            {% else %}
+              {% set availability_state = trigger.payload %}
+            {% endif %}
+            {% set availability_map = availability_map | combine({ friendly_name: (availability_state | string | lower) }) %}
+          {% endif %}
+
+          {% set ns = namespace(offline=[]) %}
+          {% for router in routers %}
+            {% if availability_map.get(router, 'unknown') == 'offline' %}
+              {% set ns.offline = ns.offline + [router] %}
+            {% endif %}
+          {% endfor %}
+
+          {% set total = routers | count %}
+          {% set offline = ns.offline | count %}
+          {% set percent = ((offline / total) * 100) if total > 0 else 0 %}
+          {{ {
+              'routers': routers | sort,
+              'availability_map': availability_map,
+              'offline_names': ns.offline | sort,
+              'offline': offline,
+              'total': total,
+              'pct': percent | round(1)
+            } | tojson }}
+        {% endif %}
+    sensor:
+      - name: z2m_router_offline_pct
+        unique_id: z2m_router_offline_pct
+        unit_of_measurement: "%"
+        state: "{{ (z2m_router_stats | from_json).pct }}"
+        attributes:
+          offline_router_count: "{{ (z2m_router_stats | from_json).offline }}"
+          total_router_count: "{{ (z2m_router_stats | from_json).total }}"
+          offline_routers: "{{ (z2m_router_stats | from_json).offline_names }}"
+          routers: "{{ (z2m_router_stats | from_json).routers }}"
+          availability_map: "{{ (z2m_router_stats | from_json).availability_map }}"
+
   - sensor:
       - unique_id: bedroom_hour_of_day
         unit_of_measurement: h
@@ -2033,74 +2261,16 @@ template:
           {% set s = states('input_boolean.west_bed_occupied') %}
           {% if s == 'on' %}1{% elif s == 'off' %}0{% else %}{{ none }}{% endif %}
 
-      - name: z2m_failing
-        state: >-
-          {% set total = 0 %}
+      - name: z2m_router_total
+        unique_id: z2m_router_total
+        state: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"
 
-          {% if is_state('light.kitchen_sink_light_switch', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.dining_room_overhead', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.guest_room_fan_switch', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.garage_overhead_switch', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.office_fan_switch', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.basement_great_room_2', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.hall_stairway', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('switch.tiki_room_plug', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.den_flood_1', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.deck_string', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.hall_main_foyer', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.hall_transition_switch', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.hall_garage_laundry_switch', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.owner_suite_lamp_bulb_1', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.owner_suite_lamp_bulb_2', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.basement_stair_landing', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.basement_sump_pump', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.deck_string', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.basement_landing_1', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.basement_landing_2', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {% if is_state('light.basement_north_hallway_1', 'unavailable') %}
-            {% set total = total + 1 %}
-          {% endif %}
-          {{total}}
+      - name: z2m_failing
+        state: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_router_count') | int(0) }}"
+        attributes:
+          total_router_count: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"
+          offline_router_pct: "{{ states('sensor.z2m_router_offline_pct') | float(0) }}"
+          offline_routers: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_routers') | default([], true) }}"
 
 ########################
 # Zone
