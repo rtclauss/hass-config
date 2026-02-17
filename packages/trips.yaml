@@ -128,6 +128,9 @@ homeassistant:
     input_number.random_vacation_light_group:
       <<: *customize
       friendly_name: "Random Group of Lights to Turn on"
+    input_number.trip_trigger_radius_miles:
+      <<: *customize
+      friendly_name: "Trip Trigger Radius"
 
     ################################################
     ## Sensors
@@ -159,6 +162,19 @@ automation:
         to: "off"
         for:
           hours: 20
+      - trigger: template
+        id: away_over_radius_mi
+        value_template: >-
+          {% set lat = state_attr('device_tracker.bayesian_zeke_home', 'latitude') %}
+          {% set lon = state_attr('device_tracker.bayesian_zeke_home', 'longitude') %}
+          {% set home_lat = state_attr('zone.home', 'latitude') %}
+          {% set home_lon = state_attr('zone.home', 'longitude') %}
+          {% set trip_radius_mi = states('input_number.trip_trigger_radius_miles') | float(120) %}
+          {{
+            lat is not none and lon is not none and home_lat is not none and home_lon is not none
+            and (distance(lat, lon, home_lat, home_lon) * 0.621371) > trip_radius_mi
+            and is_state('binary_sensor.bayesian_zeke_home', 'off')
+          }}
       - trigger: state
         id: planned_work_trip
         entity_id: binary_sensor.planned_work_trip_calendar
@@ -190,6 +206,7 @@ automation:
               - condition: trigger
                 id:
                   - away_for_20h
+                  - away_over_radius_mi
                   - planned_work_trip
                   - planned_vacation
               - condition: state
@@ -695,6 +712,14 @@ input_number:
     max: 4
     step: 1
     mode: box
+  trip_trigger_radius_miles:
+    name: Trip Trigger Radius (mi)
+    min: 25
+    max: 1000
+    step: 5
+    mode: box
+    unit_of_measurement: mi
+    initial: 120
 
 ########################
 # Scenes
