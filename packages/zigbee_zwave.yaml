@@ -2272,6 +2272,70 @@ template:
           offline_router_pct: "{{ states('sensor.z2m_router_offline_pct') | float(0) }}"
           offline_routers: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_routers') | default([], true) }}"
 
+      - name: z2m_recovery_candidates
+        unique_id: z2m_recovery_candidates
+        icon: mdi:lan-disconnect
+        state: >-
+          {% set ns = namespace(count=0) %}
+          {% for s in states if s.state == 'unavailable' %}
+            {% set eid = s.entity_id %}
+            {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
+              {% set did = device_id(eid) %}
+              {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
+              {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
+                {% set ns.count = ns.count + 1 %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+        attributes:
+          entities: >-
+            {% set ns = namespace(items=[]) %}
+            {% for s in states if s.state == 'unavailable' %}
+              {% set eid = s.entity_id %}
+              {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
+                {% set did = device_id(eid) %}
+                {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
+                {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
+                  {% set ns.items = ns.items + [eid] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | join(', ') }}
+          recovery_hint: "Restart Zigbee2MQTT first when this count stays above threshold."
+
+      - name: localtuya_failing
+        unique_id: localtuya_failing_dynamic
+        icon: mdi:lan-disconnect
+        state: >-
+          {% set ns = namespace(count=0) %}
+          {% for s in states if s.state == 'unavailable' %}
+            {% set eid = s.entity_id %}
+            {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
+              {% set did = device_id(eid) %}
+              {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
+              {% if 'localtuya' in (identifiers | string | lower) %}
+                {% set ns.count = ns.count + 1 %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+        attributes:
+          entities: >-
+            {% set ns = namespace(items=[]) %}
+            {% for s in states if s.state == 'unavailable' %}
+              {% set eid = s.entity_id %}
+              {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
+                {% set did = device_id(eid) %}
+                {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
+                {% if 'localtuya' in (identifiers | string | lower) %}
+                  {% set ns.items = ns.items + [eid] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | join(', ') }}
+          recovery_hint: "Investigate local device/Wi-Fi reachability; MQTT restarts won't fix these."
+
 ########################
 # Zone
 ########################
