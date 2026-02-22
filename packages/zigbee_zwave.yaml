@@ -1249,6 +1249,11 @@ automation:
         to: "off"
         for:
           minutes: 10
+      - trigger: numeric_state
+        entity_id: sensor.z2m_recovery_candidates
+        below: 21
+        for:
+          minutes: 10
     condition:
       - condition: state
         entity_id: binary_sensor.zigbee2mqtt_running
@@ -1256,6 +1261,9 @@ automation:
       - condition: state
         entity_id: binary_sensor.z2m_failing
         state: "off"
+      - condition: numeric_state
+        entity_id: sensor.z2m_recovery_candidates
+        below: 21
       - condition: numeric_state
         entity_id: counter.reboot_counter
         above: 0
@@ -1319,18 +1327,27 @@ automation:
       - trigger: time_pattern
         minutes: "/10"
         id: watchdog_tick
+      - trigger: numeric_state
+        entity_id: sensor.z2m_recovery_candidates
+        above: 20
+        for:
+          minutes: 5
+        id: recovery_candidates_high
     variables:
       max_restart_attempts: 3
       issue_active: >-
         {{
           is_state('binary_sensor.zigbee2mqtt_running', 'off')
           or is_state('binary_sensor.z2m_failing', 'on')
+          or (states('sensor.z2m_recovery_candidates') | int(0) > 20)
         }}
       issue_reason: >-
         {% if is_state('binary_sensor.zigbee2mqtt_running', 'off') %}
           Zigbee2MQTT add-on is not running
         {% elif is_state('binary_sensor.z2m_failing', 'on') %}
           Router offline threshold exceeded
+        {% elif states('sensor.z2m_recovery_candidates') | int(0) > 20 %}
+          Z2M recovery candidates exceeded threshold (20)
         {% else %}
           Unknown
         {% endif %}
@@ -1401,6 +1418,7 @@ automation:
                   {{
                     not is_state('binary_sensor.zigbee2mqtt_running', 'off')
                     and not is_state('binary_sensor.z2m_failing', 'on')
+                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
                   }}
             then:
               - action: notify.mobile_app_wethop
@@ -1417,6 +1435,7 @@ automation:
               {{
                 is_state('binary_sensor.zigbee2mqtt_running', 'off')
                 or is_state('binary_sensor.z2m_failing', 'on')
+                or (states('sensor.z2m_recovery_candidates') | int(0) > 20)
               }}
           - condition: numeric_state
             entity_id: counter.reboot_counter
@@ -1455,6 +1474,7 @@ automation:
                   {{
                     not is_state('binary_sensor.zigbee2mqtt_running', 'off')
                     and not is_state('binary_sensor.z2m_failing', 'on')
+                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
                   }}
             then:
               - action: notify.mobile_app_wethop
