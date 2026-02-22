@@ -1514,16 +1514,6 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
-  - platform: template
-    sensors:
-      z2m_failing:
-        friendly_name: z2m_failing
-        device_class: problem
-        value_template: >-
-          {% set total = states('sensor.z2m_router_total') | int(0) %}
-          {% set offline_pct = states('sensor.z2m_router_offline_pct') | float(0) %}
-          {% set threshold_pct = states('input_number.z2m_router_offline_threshold_pct') | float(15) %}
-          {{ total > 0 and offline_pct >= threshold_pct }}
   - platform: bayesian
     name: "Bayesian Bed Occupancy"
     prior: 0.40
@@ -2214,6 +2204,14 @@ template:
         # Use below when Bed Load Cell 2 has been fixed
         # state: >-
         #   {{ states('sensor.average_bed_load')| int(0) > 20 }}
+
+      - name: z2m_failing
+        device_class: problem
+        state: >-
+          {% set total = states('sensor.z2m_router_total') | int(0) %}
+          {% set offline_pct = states('sensor.z2m_router_offline_pct') | float(0) %}
+          {% set threshold_pct = states('input_number.z2m_router_offline_threshold_pct') | float(15) %}
+          {{ total > 0 and offline_pct >= threshold_pct }}
 
   - lock:
       - name: Front door lock
