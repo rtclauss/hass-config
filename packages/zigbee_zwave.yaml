@@ -1236,6 +1236,34 @@ automation:
         target:
           entity_id: counter.reboot_counter
 
+  - id: reset_z2m_reboot_counter_on_recovery
+    alias: reset_z2m_reboot_counter_on_recovery
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.zigbee2mqtt_running
+        to: "on"
+        for:
+          minutes: 10
+      - trigger: state
+        entity_id: binary_sensor.z2m_failing
+        to: "off"
+        for:
+          minutes: 10
+    condition:
+      - condition: state
+        entity_id: binary_sensor.zigbee2mqtt_running
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.z2m_failing
+        state: "off"
+      - condition: numeric_state
+        entity_id: counter.reboot_counter
+        above: 0
+    action:
+      - action: counter.reset
+        target:
+          entity_id: counter.reboot_counter
+
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
     trigger:
@@ -1268,25 +1296,48 @@ automation:
   # Sometimes z2m loses communication with the adapter and so the whole server needs to be rebooted.
   - id: shutdown_proxmox_z2m_unavailable
     alias: shutdown_proxmox_z2m_unavailable
+    mode: single
+    max_exceeded: silent
     trigger:
       - trigger: state
         entity_id: binary_sensor.z2m_failing
         to: "on"
         for:
           minutes: 5
+        id: routers_offline
       - trigger: state
         entity_id: binary_sensor.zigbee2mqtt_running
         to: "off"
         for:
           minutes: 15
+        id: z2m_not_running
       - trigger: mqtt
         topic: "zigbee2mqtt/bridge/state"
         payload: "offline"
         value_template: "{{ value_json.state }}"
+        id: bridge_offline
+      - trigger: time_pattern
+        minutes: "/10"
+        id: watchdog_tick
+    variables:
+      max_restart_attempts: 3
+      issue_active: >-
+        {{
+          is_state('binary_sensor.zigbee2mqtt_running', 'off')
+          or is_state('binary_sensor.z2m_failing', 'on')
+        }}
+      issue_reason: >-
+        {% if is_state('binary_sensor.zigbee2mqtt_running', 'off') %}
+          Zigbee2MQTT add-on is not running
+        {% elif is_state('binary_sensor.z2m_failing', 'on') %}
+          Router offline threshold exceeded
+        {% else %}
+          Unknown
+        {% endif %}
+    condition:
+      - condition: template
+        value_template: "{{ issue_active }}"
     action:
-      - action: counter.increment
-        target:
-          entity_id: counter.reboot_counter
       - if:
           - condition: numeric_state
             entity_id: sensor.z2m_ota_updates_in_progress
@@ -1315,74 +1366,149 @@ automation:
                   message: >-
                     Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping restart/shutdown to avoid interruption.
               - stop: OTA update still in progress
-      - action: notify.mobile_app_wethop
-        data:
-          message: >-
-            Z2M has lost connection to USB adapter. Restarting Z2M first...
-      - action: hassio.addon_restart
-        data:
-          addon: 45df7312_zigbee2mqtt
-      - delay:
-          minutes: 5
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/options
-          payload: >-
-            {"options": {"homeassistant": true}}
-      - delay:
-          minutes: 2
-      - condition: state
-        entity_id:
-          - binary_sensor.z2m_failing
-        state: "on"
-      # - condition: numeric_state
-      #   entity_id:
-      #     - counter.reboot_counter
-      #   above: 3
-      - action: notify.mobile_app_wethop
-        data:
-          title: Z2M Failed
-          message: >-
-            {{ states('sensor.z2m_failing') }} of {{ states('sensor.z2m_router_total') }} Zigbee routers are offline ({{ states('sensor.z2m_router_offline_pct') }}%, threshold {{ states('input_number.z2m_router_offline_threshold_pct') }}%). We've rebooted Z2M {{ states('counter.reboot_counter') }} times. Restarting Host.
-          data:
-            actions:
-              - action: "REBOOT_Z2M_COUNTER"
-                title: Z2M failed
-                activationMode: background
-                authenticationRequired: false
-                destructive: false
-                behavior: default
       - if:
           - condition: numeric_state
-            entity_id: sensor.z2m_ota_updates_in_progress
-            above: 0
+            entity_id: counter.reboot_counter
+            below: 3
         then:
-          - repeat:
-              while:
-                - condition: numeric_state
-                  entity_id: sensor.z2m_ota_updates_in_progress
-                  above: 0
-                - condition: template
-                  value_template: "{{ repeat.index <= 36 }}"
-              sequence:
-                - action: notify.mobile_app_wethop
-                  data:
-                    message: >-
-                      Zigbee2MQTT OTA update(s) started while recovery was running ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
-                - delay: "00:10:00"
+          - action: counter.increment
+            target:
+              entity_id: counter.reboot_counter
+          - action: notify.mobile_app_wethop
+            data:
+              message: >-
+                Z2M recovery attempt {{ states('counter.reboot_counter') }} of {{ max_restart_attempts }}. Reason: {{ issue_reason }}. Restarting Zigbee2MQTT.
+          - action: hassio.addon_restart
+            data:
+              addon: 45df7312_zigbee2mqtt
+          - delay:
+              minutes: 5
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/options
+              payload: >-
+                {"options": {"homeassistant": true}}
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/devices
+              payload: >-
+                {"id":"z2m_router_health_devices"}
+          - delay:
+              minutes: 2
+          - if:
+              - condition: template
+                value_template: >-
+                  {{
+                    not is_state('binary_sensor.zigbee2mqtt_running', 'off')
+                    and not is_state('binary_sensor.z2m_failing', 'on')
+                  }}
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: >-
+                    Zigbee2MQTT recovered after restart attempt {{ states('counter.reboot_counter') }}. Resetting recovery counter.
+              - action: counter.reset
+                target:
+                  entity_id: counter.reboot_counter
+              - stop: Z2M recovered after restart attempt
+      - if:
+          - condition: template
+            value_template: >-
+              {{
+                is_state('binary_sensor.zigbee2mqtt_running', 'off')
+                or is_state('binary_sensor.z2m_failing', 'on')
+              }}
+          - condition: numeric_state
+            entity_id: counter.reboot_counter
+            above: 2
+        then:
+          - action: notify.mobile_app_wethop
+            data:
+              title: Z2M Recovery Escalation
+              message: >-
+                Z2M is still unhealthy after {{ states('counter.reboot_counter') }} restart attempts. Restarting EMQX, then Zigbee2MQTT, before host shutdown.
+          - action: hassio.addon_restart
+            data:
+              addon: a0d7b954_emqx
+          - delay:
+              minutes: 2
+          - action: hassio.addon_restart
+            data:
+              addon: 45df7312_zigbee2mqtt
+          - delay:
+              minutes: 5
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/options
+              payload: >-
+                {"options": {"homeassistant": true}}
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/devices
+              payload: >-
+                {"id":"z2m_router_health_devices"}
+          - delay:
+              minutes: 2
+          - if:
+              - condition: template
+                value_template: >-
+                  {{
+                    not is_state('binary_sensor.zigbee2mqtt_running', 'off')
+                    and not is_state('binary_sensor.z2m_failing', 'on')
+                  }}
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: >-
+                    Z2M recovered after EMQX + Z2M restart escalation. Resetting recovery counter.
+              - action: counter.reset
+                target:
+                  entity_id: counter.reboot_counter
+              - stop: Z2M recovered before host shutdown
+          - action: notify.mobile_app_wethop
+            data:
+              title: Z2M Failed
+              message: >-
+                {{ states('sensor.z2m_failing') }} of {{ states('sensor.z2m_router_total') }} Zigbee routers are offline ({{ states('sensor.z2m_router_offline_pct') }}%, threshold {{ states('input_number.z2m_router_offline_threshold_pct') }}%). Zigbee2MQTT running: {{ states('binary_sensor.zigbee2mqtt_running') }}. We've rebooted Z2M {{ states('counter.reboot_counter') }} times. Restarting host.
+              data:
+                actions:
+                  - action: "REBOOT_Z2M_COUNTER"
+                    title: Z2M failed
+                    activationMode: background
+                    authenticationRequired: false
+                    destructive: false
+                    behavior: default
           - if:
               - condition: numeric_state
                 entity_id: sensor.z2m_ota_updates_in_progress
                 above: 0
             then:
-              - action: notify.mobile_app_wethop
-                data:
-                  message: >-
-                    Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping host shutdown.
-              - stop: OTA update still in progress
-      - delay:
-          minutes: 2
-      - action: rest_command.proxmox_shutdown
+              - repeat:
+                  while:
+                    - condition: numeric_state
+                      entity_id: sensor.z2m_ota_updates_in_progress
+                      above: 0
+                    - condition: template
+                      value_template: "{{ repeat.index <= 36 }}"
+                  sequence:
+                    - action: notify.mobile_app_wethop
+                      data:
+                        message: >-
+                          Zigbee2MQTT OTA update(s) started while recovery was running ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
+                    - delay: "00:10:00"
+              - if:
+                  - condition: numeric_state
+                    entity_id: sensor.z2m_ota_updates_in_progress
+                    above: 0
+                then:
+                  - action: notify.mobile_app_wethop
+                    data:
+                      message: >-
+                        Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping host shutdown.
+                  - stop: OTA update still in progress
+          - delay:
+              minutes: 2
+          - action: rest_command.proxmox_shutdown
 
 ########################
 # Binary Sensors
@@ -1482,7 +1608,18 @@ input_number:
     initial: 15
 
 ########################
-# Input Numbers
+# Counters
+########################
+counter:
+  reboot_counter:
+    name: Reboot Counter
+    initial: 0
+    step: 1
+    restore: true
+    icon: mdi:restart-alert
+
+########################
+# Input Select
 ########################
 input_select:
   chatgpt_bed_override:
@@ -2101,7 +2238,8 @@ template:
     variables:
       z2m_ota_stats: >-
         {% set now_ts = as_timestamp(now()) | float(0) %}
-        {% set previous_starts = this.attributes.started_at_map | default({}, true) %}
+        {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
+        {% set previous_starts = current_attrs.get('started_at_map', {}) %}
         {% set ns = namespace(count=0, entities=[], progress={}, starts={}, eta_ts=[]) %}
         {% for entity_id in integration_entities('mqtt') | default([], true) %}
           {% if entity_id.startswith('update.') %}
@@ -2155,16 +2293,17 @@ template:
       - trigger: mqtt
         topic: zigbee2mqtt/bridge/response/devices
       - trigger: mqtt
-        topic: zigbee2mqtt/#
+        topic: zigbee2mqtt/+/availability
     variables:
       z2m_router_stats: >-
+        {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
         {% set previous = {
-            'routers': this.attributes.routers | default([], true),
-            'availability_map': this.attributes.availability_map | default({}, true),
-            'offline_names': this.attributes.offline_routers | default([], true),
-            'offline': this.attributes.offline_router_count | default(0, true),
-            'total': this.attributes.total_router_count | default(0, true),
-            'pct': this.state | float(0)
+            'routers': current_attrs.get('routers', []),
+            'availability_map': current_attrs.get('availability_map', {}),
+            'offline_names': current_attrs.get('offline_routers', []),
+            'offline': current_attrs.get('offline_router_count', 0),
+            'total': current_attrs.get('total_router_count', 0),
+            'pct': (this.state | float(0)) if this is defined else 0
           } %}
         {% set topic = trigger.topic if trigger is defined and trigger.topic is defined else '' %}
         {% set is_devices_topic = topic in ['zigbee2mqtt/bridge/devices', 'zigbee2mqtt/bridge/response/devices'] %}
