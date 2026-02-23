@@ -1798,46 +1798,83 @@ automation:
         data:
           entity_id: input_boolean.basement_auto_on
 
-  - id: turn_off_office_light_when_not_occupied
-    alias: turn_off_office_light_when_not_occupied
+  - id: office_lights_morning_on_vacancy_off
+    alias: office_lights_morning_on_vacancy_off
+    description: Turn office lights on with morning occupancy (when not in guest/trip mode), then turn them off after vacancy if auto-on was used.
     mode: restart
     trigger:
       - trigger: state
         entity_id:
           - binary_sensor.office_motion_occupancy
-          - binary_sensor.office_occupancy
+          - binary_sensor.office_occupancy_2
+        to: "on"
+        id: office-occupied
+      - trigger: state
+        entity_id:
+          - binary_sensor.office_motion_occupancy
+          - binary_sensor.office_occupancy_2
         to: "off"
         for:
           minutes: 10
-    condition:
-      condition: and
-      conditions:
-        # Turn off auto-off when on a trip so it looks like I'm working
-        - condition: state
-          entity_id: input_boolean.trip
-          state: "off"
-        - condition: state
-          entity_id: binary_sensor.workday_sensor
-          state: "off"
-        - condition: state
-          entity_id:
-            - binary_sensor.office_motion_occupancy
-            - binary_sensor.office_occupancy
-          state: "off"
-        - condition: time
-          after: "07:00:00"
-          before: "17:00:00"
+        id: office-unoccupied
     action:
-      - action: light.turn_off
-        data:
-          entity_id:
-            - light.office_fan_switch
-            - light.office_all
-            - light.office_ceiling
-          transition: 5
-      - action: input_boolean.turn_off
-        data:
-          entity_id: input_boolean.office_auto_on
+      - choose:
+          # Morning auto-on path.
+          - conditions:
+              - condition: trigger
+                id: office-occupied
+              - condition: time
+                after: "06:00:00"
+                before: "12:00:00"
+              - condition: state
+                entity_id: input_boolean.guest_mode
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.office_auto_on
+                state: "off"
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id:
+                    - light.office_fan_switch
+                    - light.office_ceiling
+                    - light.office_floor_lamp_1
+                    - light.office_floor_lamp_2
+                  transition: 2
+              - action: input_boolean.turn_on
+                data:
+                  entity_id: input_boolean.office_auto_on
+          # Auto-off path: only lights that this automation turned on.
+          - conditions:
+              - condition: trigger
+                id: office-unoccupied
+              - condition: state
+                entity_id: input_boolean.office_auto_on
+                state: "on"
+              # Keep office lights on in trip mode to preserve away-lighting behavior.
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+              - condition: state
+                entity_id:
+                  - binary_sensor.office_motion_occupancy
+                  - binary_sensor.office_occupancy_2
+                state: "off"
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id:
+                    - light.office_fan_switch
+                    - light.office_ceiling
+                    - light.office_floor_lamp_1
+                    - light.office_floor_lamp_2
+                  transition: 5
+              - action: input_boolean.turn_off
+                data:
+                  entity_id: input_boolean.office_auto_on
 
   - alias: "Tiki Room Animation Speed"
     initial_state: True
