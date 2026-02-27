@@ -35,6 +35,11 @@ homeassistant:
       friendly_name: "Trip Mode Manager"
       icon: mdi:bag-suitcase
 
+    automation.sync_ecobee_calendar_vacation:
+      <<: *customize
+      friendly_name: "Sync Ecobee Calendar Vacation"
+      icon: mdi:calendar-sync
+
     automation.trip_mode_watchdog_home_1h:
       <<: *customize
       friendly_name: "Trip Mode Watchdog"
@@ -131,6 +136,12 @@ homeassistant:
     input_number.trip_trigger_radius_miles:
       <<: *customize
       friendly_name: "Trip Trigger Radius"
+    input_number.ecobee_calendar_vacation_heat:
+      <<: *customize
+      friendly_name: "Ecobee Calendar Vacation Heat"
+    input_number.ecobee_calendar_vacation_cool:
+      <<: *customize
+      friendly_name: "Ecobee Calendar Vacation Cool"
 
     ################################################
     ## Sensors
@@ -138,6 +149,9 @@ homeassistant:
     sensor.me_to_home:
       <<: *customize
       friendly_name: "Time to Home"
+    sensor.ecobee_calendar_vacation_schedule:
+      <<: *customize
+      friendly_name: "Ecobee Calendar Vacation Schedule"
 
 ########################
 # Automations
@@ -292,6 +306,45 @@ automation:
           - action: notify.all
             data:
               message: "Back from trip. \U0001F4BA"
+
+  - id: sync_ecobee_calendar_vacation
+    alias: sync_ecobee_calendar_vacation
+    mode: restart
+    trigger:
+      - trigger: state
+        entity_id: sensor.ecobee_calendar_vacation_schedule
+    variables:
+      vacation_name: "Calendar Auto Vacation"
+      vacation_state: "{{ states('sensor.ecobee_calendar_vacation_schedule') }}"
+      schedule_start: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') }}"
+      schedule_end: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') }}"
+      heat_temp: "{{ states('input_number.ecobee_calendar_vacation_heat') | float(60) }}"
+      cool_temp: "{{ states('input_number.ecobee_calendar_vacation_cool') | float(82) }}"
+    action:
+      - action: ecobee.delete_vacation
+        continue_on_error: true
+        data:
+          entity_id: climate.my_ecobee
+          vacation_name: "{{ vacation_name }}"
+      - if:
+          - condition: template
+            value_template: >-
+              {{
+                vacation_state != 'off'
+                and schedule_start not in [none, '', 'unknown', 'unavailable']
+                and schedule_end not in [none, '', 'unknown', 'unavailable']
+              }}
+        then:
+          - action: ecobee.create_vacation
+            data:
+              entity_id: climate.my_ecobee
+              vacation_name: "{{ vacation_name }}"
+              heat_temp: "{{ heat_temp }}"
+              cool_temp: "{{ cool_temp }}"
+              start_date: "{{ (schedule_start | as_datetime | as_local).date().isoformat() }}"
+              start_time: "{{ (schedule_start | as_datetime | as_local).strftime('%H:%M:%S') }}"
+              end_date: "{{ (schedule_end | as_datetime | as_local).date().isoformat() }}"
+              end_time: "{{ (schedule_end | as_datetime | as_local).strftime('%H:%M:%S') }}"
 
   - id: trip_mode_watchdog_home_1h
     alias: trip_mode_watchdog_home_1h
@@ -720,6 +773,22 @@ input_number:
     mode: box
     unit_of_measurement: mi
     initial: 120
+  ecobee_calendar_vacation_heat:
+    name: Ecobee Calendar Vacation Heat
+    min: 45
+    max: 80
+    step: 1
+    mode: box
+    unit_of_measurement: "°F"
+    initial: 60
+  ecobee_calendar_vacation_cool:
+    name: Ecobee Calendar Vacation Cool
+    min: 65
+    max: 95
+    step: 1
+    mode: box
+    unit_of_measurement: "°F"
+    initial: 82
 
 ########################
 # Scenes
@@ -858,6 +927,162 @@ template:
             false
           {% endif %}
         name: flying_home_today
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        hours: "/6"
+      - trigger: state
+        entity_id:
+          - calendar.curling
+          - calendar.ryan_claussen
+          - calendar.work_trip
+    action:
+      - variables:
+          lookahead_start: >-
+            {{ now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat() }}
+          lookahead_end: >-
+            {{ (now() + timedelta(days=180)).replace(hour=23, minute=59, second=59, microsecond=0).isoformat() }}
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.curling
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: curling_event_window
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.ryan_claussen
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: personal_event_window
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.work_trip
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: work_trip_event_window
+      - variables:
+          curling_events: >-
+            {{
+              curling_event_window.events
+              | default(curling_event_window['calendar.curling'].events, true)
+              | default([], true)
+            }}
+          personal_events: >-
+            {{
+              personal_event_window.events
+              | default(personal_event_window['calendar.ryan_claussen'].events, true)
+              | default([], true)
+            }}
+          work_trip_events: >-
+            {{
+              work_trip_event_window.events
+              | default(work_trip_event_window['calendar.work_trip'].events, true)
+              | default([], true)
+            }}
+          vacation_plan_json: >-
+            {% set ns = namespace(curling_event=None, outbound=None, return_home=None) %}
+            {% for event in curling_events %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% set is_all_day = 'T' not in (start_raw | string) %}
+              {% set duration_days = 0 %}
+              {% if start_dt is not none and end_dt is not none %}
+                {% set duration_days = ((as_timestamp(end_dt) - as_timestamp(start_dt)) / 86400) | int(0) %}
+              {% endif %}
+              {% if ns.curling_event is none and start_dt is not none and end_dt is not none and is_all_day and duration_days > 2 %}
+                {% set ns.curling_event = {
+                  'reason': 'calendar',
+                  'summary': event.summary | default('Curling', true),
+                  'start': (start_dt | as_local).isoformat(),
+                  'end': (end_dt | as_local).isoformat(),
+                  'return_summary': ''
+                } %}
+              {% endif %}
+            {% endfor %}
+            {% set travel_events = personal_events + work_trip_events %}
+            {% for event in travel_events %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% if start_dt is not none %}
+                {% set summary = event.summary | default('Flight', true) %}
+                {% set description = event.description | default('', true) %}
+                {% set location = event.location | default('', true) %}
+                {% set flight_text = ([summary, description, location] | join(' ') | lower) %}
+                {% set looks_like_flight = 'airport' in flight_text or 'flight' in flight_text or 'airlines' in flight_text or 'delta' in flight_text or 'united' in flight_text or 'southwest' in flight_text or 'sun country' in flight_text %}
+                {% set is_msp_flight = 'msp' in flight_text or 'minneapolis-st paul' in flight_text or 'minneapolis st paul' in flight_text or 'wold-chamberlain' in flight_text %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% if looks_like_flight and not is_msp_flight and start_ts >= (as_timestamp(now()) - 3600) %}
+                  {% if ns.outbound is none or start_ts < ns.outbound.start_ts %}
+                    {% set ns.outbound = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.outbound is not none %}
+              {% for event in travel_events %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% if start_dt is not none %}
+                  {% set summary = event.summary | default('Flight', true) %}
+                  {% set description = event.description | default('', true) %}
+                  {% set location = event.location | default('', true) %}
+                  {% set flight_text = ([summary, description, location] | join(' ') | lower) %}
+                  {% set looks_like_flight = 'airport' in flight_text or 'flight' in flight_text or 'airlines' in flight_text or 'delta' in flight_text or 'united' in flight_text or 'southwest' in flight_text or 'sun country' in flight_text %}
+                  {% set is_msp_flight = 'msp' in flight_text or 'minneapolis-st paul' in flight_text or 'minneapolis st paul' in flight_text or 'wold-chamberlain' in flight_text %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% if looks_like_flight and is_msp_flight and start_ts > ns.outbound.start_ts %}
+                    {% if ns.return_home is none or start_ts < ns.return_home.start_ts %}
+                      {% set ns.return_home = {
+                        'summary': summary,
+                        'start': (start_dt | as_local).isoformat(),
+                        'start_ts': start_ts
+                      } %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% if ns.outbound is not none and ns.return_home is not none and (ns.return_home.start_ts - 7200) > ns.outbound.start_ts %}
+              {{
+                {
+                  'reason': 'flight',
+                  'summary': ns.outbound.summary,
+                  'start': ns.outbound.start,
+                  'end': ((ns.return_home.start | as_datetime | as_local) - timedelta(hours=2)).isoformat(),
+                  'return_summary': ns.return_home.summary
+                } | to_json
+              }}
+            {% elif ns.curling_event is not none %}
+              {{ ns.curling_event | to_json }}
+            {% else %}
+              {{ {'reason': 'off', 'summary': '', 'start': '', 'end': '', 'return_summary': ''} | to_json }}
+            {% endif %}
+    sensor:
+      - name: Ecobee Calendar Vacation Schedule
+        unique_id: ecobee_calendar_vacation_schedule
+        state: >-
+          {% set plan = vacation_plan_json | from_json %}
+          {% if plan.reason | default('off') == 'off' %}
+            off
+          {% else %}
+            {{ plan.start }} -> {{ plan.end }}
+          {% endif %}
+        attributes:
+          reason: "{{ (vacation_plan_json | from_json).reason | default('off') }}"
+          summary: "{{ (vacation_plan_json | from_json).summary | default('') }}"
+          start: "{{ (vacation_plan_json | from_json).start | default('') }}"
+          end: "{{ (vacation_plan_json | from_json).end | default('') }}"
+          return_summary: "{{ (vacation_plan_json | from_json).return_summary | default('') }}"
   - sensor:
       - name: time_to_home
         default_entity_id: sensor.me_to_home
