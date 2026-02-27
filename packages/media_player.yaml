@@ -1231,7 +1231,12 @@ script:
               - action: media_player.volume_set
                 continue_on_error: true
                 data:
-                  entity_id: media_player.den_sonos
+                  entity_id:
+                    - media_player.bedroom_sonos
+                    - media_player.bathroom_sonos
+                    - media_player.den_sonos
+                    - media_player.office_sonos
+                    - media_player.tiki_room_3
                   volume_level: 0.30
               - alias: "Play arrival music via Spotify"
                 action: media_player.play_media
@@ -1241,6 +1246,18 @@ script:
                   media_content_type: playlist
                   media_content_id: "{{ playlist }}"
         default:
+          - alias: "Join Sonos speakers into all group"
+            continue_on_error: true
+            action: media_player.join
+            target:
+              entity_id:
+                - media_player.den_sonos
+            data:
+              group_members:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+                - media_player.tiki_room_3
           - action: media_player.media_pause
             continue_on_error: true
             data:
@@ -1260,7 +1277,12 @@ script:
           - action: media_player.volume_set
             continue_on_error: true
             data:
-              entity_id: media_player.den_sonos
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.den_sonos
+                - media_player.office_sonos
+                - media_player.tiki_room_3
               volume_level: 0.30
           - alias: "Play arrival music via Sonos"
             action: media_player.play_media
@@ -1272,7 +1294,7 @@ script:
         data:
           entity_id: media_player.den_sonos
           domain: media_player
-          name: Spotify arrival is
+          name: Arrival music is
           message: " playing Arrival playlist: {{ playlist }}"
 
   spotify_bedtime:
