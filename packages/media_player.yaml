@@ -1193,26 +1193,16 @@ script:
     sequence:
       - delay:
           seconds: 90
-      - action: media_player.select_source
-        continue_on_error: true
-        data:
-          entity_id: media_player.spotify_ryan_claussen
-          source: "Everywhere"
-      - delay:
-          seconds: 2
       - action: media_player.media_pause
         continue_on_error: true
         data:
-          entity_id: media_player.spotify_ryan_claussen
+          entity_id: media_player.den_sonos
       - delay:
           seconds: 2
       - action: media_player.shuffle_set
         continue_on_error: true
         data:
-          entity_id:
-            - media_player.spotify_ryan_claussen
-            - media_player.den_sonos
-        data_template:
+          entity_id: media_player.den_sonos
           shuffle: >-
             {%- set shuffle = [true, false] -%}
             {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
@@ -1222,9 +1212,7 @@ script:
       - action: media_player.volume_set
         continue_on_error: true
         data:
-          entity_id:
-            - media_player.spotify_ryan_claussen
-            - media_player.den_sonos
+          entity_id: media_player.den_sonos
           volume_level: 0.30
       - action: logbook.log
         data:
@@ -1234,11 +1222,9 @@ script:
           message: " playing Arrival playlist: {{ playlist }}"
       - alias: "Play arrival music"
         action: media_player.play_media
-        continue_on_error: true
         data:
           entity_id: media_player.den_sonos
           media_content_type: playlist
-        data_template:
           media_content_id: "{{ playlist }}"
 
   spotify_bedtime:
