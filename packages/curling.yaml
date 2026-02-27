@@ -25,29 +25,14 @@ homeassistant:
     ## Automation
     ################################################
 
-    # automation.leave_home_for_curling:
-    #   <<: *customize
-    #   friendly_name: "Leave home for curling"
-    #   icon: mdi:curling
-
-    automation.return_home_from_OCC:
+    automation.leave_home_for_curling:
       <<: *customize
-      friendly_name: "Return home from OCC"
-      icon: mdi:curling
-
-    automation.return_home_from_spcc:
-      <<: *customize
-      friendly_name: "Return home from SPCC"
+      friendly_name: "Leave home for curling"
       icon: mdi:curling
 
     automation.display_curling_tab:
       <<: *customize
       friendly_name: "Display Curling tab"
-      icon: mdi:curling
-
-    automation.toggle_curling_automations_on_season_change:
-      <<: *customize
-      friendly_name: "Toggle Curling season automations"
       icon: mdi:curling
 
     automation.toggle_curling_tab:
@@ -75,13 +60,6 @@ homeassistant:
     group.curling_automations:
       <<: *customize
       friendly_name: "Curling Automations"
-
-    ################################################
-    ## Scripts
-    ################################################
-    script.toggle_curling_automation_on_curling_season:
-      <<: *customize
-      friendly_name: "Toggle Curling Automation Based on Boolean Sensor"
 
     ################################################
     ## Sensors
@@ -138,82 +116,6 @@ automation:
           message: Good Curling!
         action: notify.all
 
-  - id: return_home_from_occ
-    alias: return_home_from_occ
-    trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.occ
-        event: leave
-    condition:
-      condition: and
-      conditions:
-        - condition: time
-          weekday:
-            - thu
-            - sun
-        - condition: state
-          entity_id:
-            - binary_sensor.curling_season
-          state: "on"
-    action:
-      # - action: climate.set_preset_mode
-      #   entity_id: climate.my_ecobee
-      #   data:
-      #     preset_mode: "Home"
-      - action: ecobee.resume_program
-        data:
-          resume_all: true
-          entity_id: climate.my_ecobee
-      - action: notify.all
-        data:
-          message: >-
-            Turning off Ecobee Away mode while driving home from OCC
-
-  - id: return_home_from_spcc
-    alias: return_home_from_spcc
-    trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.spcc
-        event: leave
-    condition:
-      condition: state
-      entity_id:
-        - binary_sensor.curling_season
-      state: "on"
-    action:
-      # - action: climate.set_preset_mode
-      #   entity_id: climate.my_ecobee
-      #   data:
-      #     preset_mode: "Home"
-      - action: ecobee.resume_program
-        data:
-          resume_all: true
-          entity_id: climate.my_ecobee
-      - action: notify.all
-        data:
-          message: >-
-            Turning off Ecobee away mode while driving home from SPCC
-
-  - id: toggle_curling_automations_on_season_change
-    alias: toggle_curling_automations_on_season_change
-    trigger:
-      - trigger: state
-        entity_id: binary_sensor.curling_season
-      - trigger: homeassistant
-        event: start
-    action:
-      - action: script.toggle_curling_automation_on_curling_season
-        data:
-          entity_id: automation.return_home_from_OCC
-      # - action: script.toggle_curling_automation_on_curling_season
-      #   data:
-      #     entity_id: automation.leave_home_for_curling
-      - action: script.toggle_curling_automation_on_curling_season
-        data:
-          entity_id: automation.return_home_from_spcc
-
   # - id: toggle_curling_tab
   #   alias: toggle_curling_tab
   #   trigger:
@@ -251,23 +153,6 @@ group:
   curling_automations:
     entities:
       - automation.leave_home_for_curling
-      - automation.return_home_from_occ
-      - automation.return_home_from_spcc
-
-########################
-# Scripts
-########################
-script:
-  toggle_curling_automation_on_curling_season:
-    sequence:
-      - action: >-
-          {% if is_state("binary_sensor.curling_season", 'on') %}
-            automation.turn_on
-          {% else %}
-            automation.turn_off
-          {% endif %}
-        data_template:
-          entity_id: "{{ entity_id }}"
 
 ########################
 # Sensors
