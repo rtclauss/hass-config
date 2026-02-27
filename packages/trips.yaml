@@ -312,7 +312,11 @@ automation:
     mode: restart
     trigger:
       - trigger: state
+        id: schedule_changed
         entity_id: sensor.ecobee_calendar_vacation_schedule
+      - trigger: time
+        id: daily_refresh
+        at: "03:05:00"
     variables:
       vacation_name: "Calendar Auto Vacation"
       vacation_state: "{{ states('sensor.ecobee_calendar_vacation_schedule') }}"
@@ -931,7 +935,7 @@ template:
       - trigger: homeassistant
         event: start
       - trigger: time_pattern
-        hours: "/6"
+        hours: "/1"
       - trigger: state
         entity_id:
           - calendar.curling
