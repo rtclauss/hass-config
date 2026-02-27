@@ -1193,39 +1193,87 @@ script:
     sequence:
       - delay:
           seconds: 90
-      - action: media_player.media_pause
-        continue_on_error: true
-        data:
-          entity_id: media_player.den_sonos
-      - delay:
-          seconds: 2
-      - action: media_player.shuffle_set
-        continue_on_error: true
-        data:
-          entity_id: media_player.den_sonos
-          shuffle: >-
-            {%- set shuffle = [true, false] -%}
-            {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
-            {{ shuffle[sindex] }}
-      - delay:
-          seconds: 2
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id: media_player.den_sonos
-          volume_level: 0.30
+      - alias: "Pick playback controller"
+        choose:
+          - alias: "Use Spotify Connect when available"
+            conditions:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: media_player.spotify_ryan_claussen
+                    state:
+                      - "unavailable"
+                      - "unknown"
+            sequence:
+              - action: media_player.select_source
+                continue_on_error: true
+                data:
+                  entity_id: media_player.spotify_ryan_claussen
+                  source: "Everywhere"
+              - delay:
+                  seconds: 2
+              - action: media_player.media_pause
+                continue_on_error: true
+                data:
+                  entity_id: media_player.spotify_ryan_claussen
+              - delay:
+                  seconds: 2
+              - action: media_player.shuffle_set
+                continue_on_error: true
+                data:
+                  entity_id: media_player.spotify_ryan_claussen
+                  shuffle: >-
+                    {%- set shuffle = [true, false] -%}
+                    {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+                    {{ shuffle[sindex] }}
+              - delay:
+                  seconds: 2
+              - action: media_player.volume_set
+                continue_on_error: true
+                data:
+                  entity_id: media_player.den_sonos
+                  volume_level: 0.30
+              - alias: "Play arrival music via Spotify"
+                action: media_player.play_media
+                continue_on_error: true
+                data:
+                  entity_id: media_player.spotify_ryan_claussen
+                  media_content_type: playlist
+                  media_content_id: "{{ playlist }}"
+        default:
+          - action: media_player.media_pause
+            continue_on_error: true
+            data:
+              entity_id: media_player.den_sonos
+          - delay:
+              seconds: 2
+          - action: media_player.shuffle_set
+            continue_on_error: true
+            data:
+              entity_id: media_player.den_sonos
+              shuffle: >-
+                {%- set shuffle = [true, false] -%}
+                {% set sindex =  (range(0, (shuffle | length - 1 ) )|random) -%}
+                {{ shuffle[sindex] }}
+          - delay:
+              seconds: 2
+          - action: media_player.volume_set
+            continue_on_error: true
+            data:
+              entity_id: media_player.den_sonos
+              volume_level: 0.30
+          - alias: "Play arrival music via Sonos"
+            action: media_player.play_media
+            data:
+              entity_id: media_player.den_sonos
+              media_content_type: playlist
+              media_content_id: "{{ playlist }}"
       - action: logbook.log
         data:
           entity_id: media_player.den_sonos
           domain: media_player
           name: Spotify arrival is
           message: " playing Arrival playlist: {{ playlist }}"
-      - alias: "Play arrival music"
-        action: media_player.play_media
-        data:
-          entity_id: media_player.den_sonos
-          media_content_type: playlist
-          media_content_id: "{{ playlist }}"
 
   spotify_bedtime:
     alias: "Spotify Bedtime"
