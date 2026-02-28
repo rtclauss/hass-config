@@ -1,0 +1,77 @@
+#!/bin/sh
+
+set -eu
+
+DESK_ADDRESS="${DESK_ADDRESS:-AA:BB:CC:DD:EE:FF}"
+UPLIFT_BLE_BIN="${UPLIFT_BLE_BIN:-/usr/local/bin/uplift-ble-cli}"
+MAX_HEIGHT="${MAX_HEIGHT:-1270mm}"
+MOTION_GUARD_SECONDS="${MOTION_GUARD_SECONDS:-45}"
+LOCK_FILE="${LOCK_FILE:-/tmp/uplift-desk-remote.lock}"
+STAMP_FILE="${STAMP_FILE:-/tmp/uplift-desk-remote.last_move}"
+
+ACTION=""
+
+if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
+  # With a forced command in authorized_keys, SSH passes the original client
+  # command string here. Use the last token as the requested desk action.
+  set -- $SSH_ORIGINAL_COMMAND
+  while [ "$#" -gt 1 ]; do
+    shift
+  done
+  ACTION="${1:-}"
+else
+  ACTION="${1:-}"
+fi
+
+if [ -z "$ACTION" ]; then
+  echo "Usage: $0 <auto-max|auto-preset1|auto-preset2|manual-max|manual-preset1|manual-preset2|stop>" >&2
+  exit 1
+fi
+
+run_cli() {
+  "$UPLIFT_BLE_BIN" --address "$DESK_ADDRESS" "$@"
+}
+
+(
+  flock -n 9 || exit 0
+
+  NOW="$(date +%s)"
+
+  if [ -f "$STAMP_FILE" ]; then
+    LAST_MOVE="$(cat "$STAMP_FILE")"
+    if [ $((NOW - LAST_MOVE)) -lt "$MOTION_GUARD_SECONDS" ]; then
+      exit 0
+    fi
+  fi
+
+  case "$ACTION" in
+    auto-max)
+      printf '%s\n' "$NOW" >"$STAMP_FILE"
+      run_cli move_to_specified_height "$MAX_HEIGHT"
+      ;;
+    auto-preset1)
+      printf '%s\n' "$NOW" >"$STAMP_FILE"
+      run_cli move_to_height_preset_1
+      ;;
+    auto-preset2)
+      printf '%s\n' "$NOW" >"$STAMP_FILE"
+      run_cli move_to_height_preset_2
+      ;;
+    manual-max)
+      run_cli move_to_specified_height "$MAX_HEIGHT"
+      ;;
+    manual-preset1)
+      run_cli move_to_height_preset_1
+      ;;
+    manual-preset2)
+      run_cli move_to_height_preset_2
+      ;;
+    stop)
+      run_cli stop_movement
+      ;;
+    *)
+      echo "Unsupported action: $ACTION" >&2
+      exit 1
+      ;;
+  esac
+) 9>"$LOCK_FILE"
