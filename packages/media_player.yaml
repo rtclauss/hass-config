@@ -599,6 +599,12 @@ automation:
         for:
           seconds: 5
       - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 5
+      - trigger: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
@@ -631,6 +637,11 @@ automation:
         for:
           seconds: 5
       - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        to: "playing"
+        for:
+          seconds: 5
+      - trigger: state
         entity_id: media_player.lg_webos_smart_tv
         #TODO Temporary hack: ADB showing wrong values
         from: "playing"
@@ -640,7 +651,10 @@ automation:
     condition:
       condition: and
       conditions:
-        - "{{'Scotland' in state_attr('media_player.basement', 'media_title')}}"
+        - >-
+          {{ 'Scotland' in (state_attr('media_player.basement', 'media_title') or '')
+          or 'Scotland' in
+          (state_attr('media_player.plex_basement_apple_tv', 'media_title') or '') }}
     action:
       - action: light.turn_on
         target:
@@ -662,6 +676,12 @@ automation:
           minutes: 2
       - trigger: state
         entity_id: media_player.basement
+        from: "paused"
+        to: "playing"
+        for:
+          minutes: 2
+      - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
         from: "paused"
         to: "playing"
         for:
