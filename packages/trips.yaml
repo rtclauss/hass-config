@@ -910,11 +910,16 @@ template:
         name: sensed_trip
       - default_entity_id: binary_sensor.planned_vacation_calendar
         state: >-
-          {% if is_state("calendar.curling_vacation", 'on') or is_state("calendar.personal_vacation",'on')  %}
-            true
-          {% else %}
-            false
-          {% endif %}
+          {% set start = state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') %}
+          {% set end = state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') %}
+          {% set start_dt = as_datetime(start) %}
+          {% set end_dt = as_datetime(end) %}
+          {{
+            start_dt is not none
+            and end_dt is not none
+            and now() >= (start_dt | as_local)
+            and now() < (end_dt | as_local)
+          }}
         name: planned_vacation_calendar
       - default_entity_id: binary_sensor.planned_work_trip_calendar
         state: >-
@@ -972,23 +977,29 @@ template:
         response_variable: work_trip_event_window
       - variables:
           curling_events: >-
-            {{
-              curling_event_window.events
-              | default(curling_event_window['calendar.curling'].events, true)
-              | default([], true)
-            }}
+            {% if curling_event_window is mapping and curling_event_window.events is defined %}
+              {{ curling_event_window.events }}
+            {% elif curling_event_window is mapping and curling_event_window['calendar.curling'] is defined and curling_event_window['calendar.curling'].events is defined %}
+              {{ curling_event_window['calendar.curling'].events }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
           personal_events: >-
-            {{
-              personal_event_window.events
-              | default(personal_event_window['calendar.ryan_claussen'].events, true)
-              | default([], true)
-            }}
+            {% if personal_event_window is mapping and personal_event_window.events is defined %}
+              {{ personal_event_window.events }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.ryan_claussen'] is defined and personal_event_window['calendar.ryan_claussen'].events is defined %}
+              {{ personal_event_window['calendar.ryan_claussen'].events }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
           work_trip_events: >-
-            {{
-              work_trip_event_window.events
-              | default(work_trip_event_window['calendar.work_trip'].events, true)
-              | default([], true)
-            }}
+            {% if work_trip_event_window is mapping and work_trip_event_window.events is defined %}
+              {{ work_trip_event_window.events }}
+            {% elif work_trip_event_window is mapping and work_trip_event_window['calendar.work_trip'] is defined and work_trip_event_window['calendar.work_trip'].events is defined %}
+              {{ work_trip_event_window['calendar.work_trip'].events }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
           vacation_plan_json: >-
             {% set ns = namespace(curling_event=None, outbound=None, return_home=None, target_city='', target_city_ts=None) %}
             {% for event in curling_events %}
@@ -1094,19 +1105,19 @@ template:
       - name: Ecobee Calendar Vacation Schedule
         unique_id: ecobee_calendar_vacation_schedule
         state: >-
-          {% set plan = vacation_plan_json | from_json %}
+          {% set plan = (vacation_plan_json | default('{"reason":"off","summary":"","start":"","end":"","return_summary":"","vacation_name":""}', true)) | from_json %}
           {% if plan.reason | default('off') == 'off' %}
             off
           {% else %}
             {{ plan.start }} -> {{ plan.end }}
           {% endif %}
         attributes:
-          reason: "{{ (vacation_plan_json | from_json).reason | default('off') }}"
-          summary: "{{ (vacation_plan_json | from_json).summary | default('') }}"
-          start: "{{ (vacation_plan_json | from_json).start | default('') }}"
-          end: "{{ (vacation_plan_json | from_json).end | default('') }}"
-          return_summary: "{{ (vacation_plan_json | from_json).return_summary | default('') }}"
-          vacation_name: "{{ (vacation_plan_json | from_json).vacation_name | default('') }}"
+          reason: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).reason | default('off') }}"
+          summary: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).summary | default('') }}"
+          start: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).start | default('') }}"
+          end: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).end | default('') }}"
+          return_summary: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).return_summary | default('') }}"
+          vacation_name: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).vacation_name | default('') }}"
   - sensor:
       - name: time_to_home
         default_entity_id: sensor.me_to_home
