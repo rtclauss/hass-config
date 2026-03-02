@@ -2328,7 +2328,7 @@ template:
         {% set is_availability_topic = topic.endswith('/availability') and not topic.startswith('zigbee2mqtt/bridge/') %}
 
         {% if not is_devices_topic and not is_availability_topic %}
-          {{ previous | tojson }}
+          {{ previous }}
         {% else %}
           {% set routers = previous.routers %}
           {% set availability_map = previous.availability_map %}
@@ -2377,19 +2377,19 @@ template:
               'offline': offline,
               'total': total,
               'pct': percent | round(1)
-            } | tojson }}
+            } }}
         {% endif %}
     sensor:
       - name: z2m_router_offline_pct
         unique_id: z2m_router_offline_pct
         unit_of_measurement: "%"
-        state: "{{ (z2m_router_stats | from_json).pct }}"
+        state: "{{ z2m_router_stats.get('pct', 0) }}"
         attributes:
-          offline_router_count: "{{ (z2m_router_stats | from_json).offline }}"
-          total_router_count: "{{ (z2m_router_stats | from_json).total }}"
-          offline_routers: "{{ (z2m_router_stats | from_json).offline_names }}"
-          routers: "{{ (z2m_router_stats | from_json).routers }}"
-          availability_map: "{{ (z2m_router_stats | from_json).availability_map }}"
+          offline_router_count: "{{ z2m_router_stats.get('offline', 0) }}"
+          total_router_count: "{{ z2m_router_stats.get('total', 0) }}"
+          offline_routers: "{{ z2m_router_stats.get('offline_names', []) }}"
+          routers: "{{ z2m_router_stats.get('routers', []) }}"
+          availability_map: "{{ z2m_router_stats.get('availability_map', {}) }}"
 
   - sensor:
       - unique_id: bedroom_hour_of_day
