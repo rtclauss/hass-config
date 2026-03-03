@@ -211,6 +211,11 @@ automation:
         entity_id: calendar.ryan_claussen
         event: start
         offset: -00:50:00
+      - trigger: calendar
+        id: work_calendar_trip
+        entity_id: calendar.work_trip
+        event: start
+        offset: -00:50:00
       - trigger: state
         id: manual_trip_on
         entity_id: input_boolean.trip
@@ -223,6 +228,10 @@ automation:
         id: return_home
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
+      - trigger: state
+        id: leave_home_on_scheduled_trip
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "off"
     action:
       - choose:
           - conditions:
@@ -251,7 +260,9 @@ automation:
                   message: "You're on a trip! \U0001F6EC"
           - conditions:
               - condition: trigger
-                id: calendar_trip
+                id:
+                  - calendar_trip
+                  - work_calendar_trip
               - condition: state
                 entity_id: input_boolean.trip
                 state: "off"
@@ -262,8 +273,11 @@ automation:
                   {% set summary_lower = summary | lower %}
                   {% set location = trigger.calendar_event.location | default('', true) | string %}
                   {% set location_lower = location | lower %}
+                  {% set start_value = trigger.calendar_event.start | default('', true) | string %}
+                  {% set timed_event = 'T' in start_value %}
                   {% set event_text = [summary, description, location] | join(' ') | lower %}
                   {% set looks_like_flight = 'airport' in event_text or 'flight' in event_text or 'airlines' in event_text or 'delta' in event_text or 'united' in event_text or 'southwest' in event_text or 'sun country' in event_text %}
+                  {% set looks_like_lodging = 'stay at' in event_text or 'hotel' in event_text or 'resort' in event_text or 'airbnb' in event_text or 'vrbo' in event_text or 'lodging' in event_text or 'check-in' in event_text or 'check in' in event_text %}
                   {% set origin_code = '' %}
                   {% if '→' in summary %}
                     {% set origin_code = summary.split('→', 1)[0].replace('✈', '').strip().upper() %}
@@ -271,17 +285,22 @@ automation:
                     {% set origin_code = summary[8:].split(' to ', 1)[0].strip().upper() %}
                   {% endif %}
                   {{
-                    looks_like_flight
-                    and
                     (
-                      origin_code == "MSP"
-                      or (
-                        origin_code == ""
-                        and (
-                          "msp" in location_lower
-                          or ("minneapolis" in location_lower and "paul" in location_lower)
+                      (
+                        looks_like_flight
+                        and
+                        (
+                          origin_code == "MSP"
+                          or (
+                            origin_code == ""
+                            and (
+                              "msp" in location_lower
+                              or ("minneapolis" in location_lower and "paul" in location_lower)
+                            )
+                          )
                         )
                       )
+                      or (looks_like_lodging and timed_event)
                     )
                     and "friend" not in summary_lower
                   }}
@@ -305,6 +324,30 @@ automation:
               - action: notify.all
                 data:
                   message: "Trip mode enabled."
+          - conditions:
+              - condition: trigger
+                id: leave_home_on_scheduled_trip
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.planned_vacation_calendar
+                    state: "on"
+                  - condition: state
+                    entity_id: binary_sensor.planned_work_trip_calendar
+                    state: "on"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: notify.all
+                data:
+                  message: "You're on a trip! \U0001F6EC"
           - conditions:
               - condition: trigger
                 id: manual_trip_off
@@ -1336,7 +1379,8 @@ template:
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
               {% set end_dt = as_datetime(end_raw) %}
-              {% if 'stay at' in text and start_dt is not none and end_dt is not none %}
+              {% set looks_like_lodging = 'stay at' in text or 'hotel' in text or 'resort' in text or 'airbnb' in text or 'vrbo' in text or 'lodging' in text or 'check-in' in text or 'check in' in text %}
+              {% if looks_like_lodging and start_dt is not none and end_dt is not none %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
@@ -1374,7 +1418,9 @@ template:
             {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
             {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
             {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
-            {% set ns = namespace(curling_event=None, outbound=None, return_home=None, target_city='', target_city_ts=None) %}
+            {% set travel_events = personal_events_list + work_trip_events_list %}
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(curling_event=None, lodging_event=None, personal_trip_event=None, fallback_event=None, outbound=None, return_home=None, target_city='', target_city_ts=None) %}
             {% for event in curling_events_list %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
@@ -1382,32 +1428,47 @@ template:
               {% set end_dt = as_datetime(end_raw) %}
               {% set is_all_day = 'T' not in (start_raw | string) %}
               {% set duration_days = 0 %}
+              {% set start_ts = none %}
+              {% set end_ts = none %}
               {% if start_dt is not none and end_dt is not none %}
-                {% set duration_days = ((as_timestamp(end_dt) - as_timestamp(start_dt)) / 86400) | int(0) %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
               {% endif %}
-              {% if ns.curling_event is none and start_dt is not none and end_dt is not none and is_all_day and duration_days > 2 %}
+              {% if ns.curling_event is none and start_dt is not none and end_dt is not none and start_ts is not none and end_ts is not none and end_ts > now_ts and is_all_day and duration_days > 2 %}
                 {% set ns.curling_event = {
                   'reason': 'calendar',
                   'summary': event.summary | default('Curling', true),
                   'start': (start_dt | as_local).isoformat(),
                   'end': (end_dt | as_local).isoformat(),
                   'return_summary': '',
-                  'vacation_name': event.summary | default('Curling', true)
+                  'vacation_name': event.summary | default('Curling', true),
+                  'start_ts': start_ts
                 } %}
               {% endif %}
             {% endfor %}
-            {% set travel_events = personal_events_list + work_trip_events_list %}
             {% for event in travel_events %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
-              {% if start_dt is not none %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if start_dt is not none and end_dt is not none %}
                 {% set summary = event.summary | default('Flight', true) %}
                 {% set description = event.description | default('', true) %}
                 {% set location = event.location | default('', true) %}
                 {% set summary_text = summary | string %}
+                {% set summary_lower = summary_text | lower %}
+                {% set location_lower = location | lower %}
                 {% set flight_text = ([summary, description, location] | join(' ') | lower) %}
                 {% set looks_like_flight = 'airport' in flight_text or 'flight' in flight_text or 'airlines' in flight_text or 'delta' in flight_text or 'united' in flight_text or 'southwest' in flight_text or 'sun country' in flight_text %}
+                {% set looks_like_lodging = 'stay at' in flight_text or 'hotel' in flight_text or 'resort' in flight_text or 'airbnb' in flight_text or 'vrbo' in flight_text or 'lodging' in flight_text or 'check-in' in flight_text or 'check in' in flight_text %}
                 {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set is_all_day = 'T' not in (start_raw | string) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                {% set is_local_location = location_lower == '' or 'minneapolis' in location_lower or 'saint paul' in location_lower or 'st paul' in location_lower or 'apple valley' in location_lower or 'eagan' in location_lower or 'burnsville' in location_lower or 'bloomington' in location_lower %}
+                {% set looks_like_away_location = location_lower != '' and not is_local_location %}
+                {% set looks_like_trip_summary = 'vacation' in summary_lower or 'trip' in summary_lower or 'weekend' in summary_lower or 'cabin' in summary_lower or 'travel' in summary_lower or 'visit' in summary_lower %}
                 {% set destination_name = '' %}
                 {% set destination_code = '' %}
                 {% if summary_text.startswith('Flight to ') %}
@@ -1422,6 +1483,32 @@ template:
                 {% endif %}
                 {% set destination_name_lower = destination_name | lower %}
                 {% set is_homebound_flight = destination_code in ['MSP', 'RST'] or destination_name_lower in ['msp', 'rst', 'minneapolis'] or ('minneapolis' in destination_name_lower and 'paul' in destination_name_lower) or 'rochester' in destination_name_lower %}
+                {% if looks_like_lodging and end_ts > now_ts %}
+                  {% if ns.lodging_event is none or start_ts < ns.lodging_event.start_ts %}
+                    {% set ns.lodging_event = {
+                      'reason': 'lodging',
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'return_summary': '',
+                      'vacation_name': summary,
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+                {% if is_all_day and duration_days > 1 and end_ts > now_ts and (looks_like_trip_summary or looks_like_away_location) %}
+                  {% if ns.personal_trip_event is none or start_ts < ns.personal_trip_event.start_ts %}
+                    {% set ns.personal_trip_event = {
+                      'reason': 'trip_event',
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'return_summary': '',
+                      'vacation_name': summary,
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
                 {% if looks_like_flight and start_ts >= (as_timestamp(now()) - 3600) and destination_name != '' and not is_homebound_flight %}
                   {% if ns.target_city_ts is none or start_ts < ns.target_city_ts or (start_ts == ns.target_city_ts and (destination_name | length) > (ns.target_city | length)) %}
                     {% set ns.target_city = destination_name %}
@@ -1477,6 +1564,13 @@ template:
                 {% endif %}
               {% endfor %}
             {% endif %}
+            {% set ns.fallback_event = ns.curling_event %}
+            {% if ns.lodging_event is not none and (ns.fallback_event is none or ns.lodging_event.start_ts < ns.fallback_event.start_ts) %}
+              {% set ns.fallback_event = ns.lodging_event %}
+            {% endif %}
+            {% if ns.personal_trip_event is not none and (ns.fallback_event is none or ns.personal_trip_event.start_ts < ns.fallback_event.start_ts) %}
+              {% set ns.fallback_event = ns.personal_trip_event %}
+            {% endif %}
             {% if ns.outbound is not none and ns.return_home is not none and (ns.return_home.start_ts - 7200) > ns.outbound.start_ts %}
               {{
                 {
@@ -1488,8 +1582,17 @@ template:
                   'vacation_name': ns.target_city | default(ns.outbound.summary, true)
                 } | to_json
               }}
-            {% elif ns.curling_event is not none %}
-              {{ ns.curling_event | to_json }}
+            {% elif ns.fallback_event is not none %}
+              {{
+                {
+                  'reason': ns.fallback_event.reason,
+                  'summary': ns.fallback_event.summary,
+                  'start': ns.fallback_event.start,
+                  'end': ns.fallback_event.end,
+                  'return_summary': ns.fallback_event.return_summary,
+                  'vacation_name': ns.fallback_event.vacation_name
+                } | to_json
+              }}
             {% else %}
               {{ {'reason': 'off', 'summary': '', 'start': '', 'end': '', 'return_summary': '', 'vacation_name': ''} | to_json }}
             {% endif %}
