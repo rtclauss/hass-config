@@ -935,7 +935,7 @@ template:
         name: planned_vacation_calendar
       - default_entity_id: binary_sensor.planned_work_trip_calendar
         state: >-
-          {% if is_state("calendar.work_trip", 'on') %}
+          {% if is_state("binary_sensor.work_trip_today", 'on') %}
             true
           {% else %}
             false
@@ -944,7 +944,7 @@ template:
       - delay_off: "3:00:00"
         default_entity_id: binary_sensor.flying_home_today
         state: >-
-          {% if is_state("calendar.flight_to_msp_today", 'on') or is_state("calendar.flight_to_rst_today",'on')  %}
+          {% if is_state("binary_sensor.flight_to_msp_today", 'on') or is_state("binary_sensor.flight_to_rst_today",'on')  %}
             true
           {% else %}
             false
@@ -954,7 +954,7 @@ template:
       - trigger: homeassistant
         event: start
       - trigger: time_pattern
-        hours: "/1"
+        minutes: "/15"
       - trigger: state
         entity_id:
           - calendar.curling
@@ -1011,6 +1011,242 @@ template:
               {{ work_trip_event_window['calendar.work_trip'].events | to_json }}
             {% else %}
               {{ [] | to_json }}
+            {% endif %}
+          curling_events_list: >-
+            {{ (curling_events | default('[]', true) | string | trim | from_json) }}
+          personal_events_list: >-
+            {{ (personal_events | default('[]', true) | string | trim | from_json) }}
+          work_trip_events_list: >-
+            {{ (work_trip_events | default('[]', true) | string | trim | from_json) }}
+          curling_vacation_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in curling_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if '#vacation' in text and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          personal_vacation_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if '#vacation' in text and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          flight_to_msp_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if ('msp' in text or 'minneapolis-st paul' in text or 'minneapolis st paul' in text or 'wold-chamberlain' in text) and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          flight_to_rst_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if (' rst ' in (' ' ~ text ~ ' ') or 'rochester' in text) and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
+            {% endif %}
+          work_trip_today_match_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in work_trip_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if 'stay at' in text and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > now_ts %}
+                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                    {% set ns.match = {
+                      'message': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'location': location,
+                      'description': description,
+                      'all_day': ('T' not in (start_raw | string)),
+                      'active': (start_ts <= now_ts and end_ts > now_ts),
+                      'start_ts': start_ts
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'message': '', 'start_time': '', 'end_time': '', 'location': '', 'description': '', 'all_day': false, 'active': false} | to_json }}
+            {% else %}
+              {{
+                {
+                  'message': ns.match.message,
+                  'start_time': ns.match.start_time,
+                  'end_time': ns.match.end_time,
+                  'location': ns.match.location,
+                  'description': ns.match.description,
+                  'all_day': ns.match.all_day,
+                  'active': ns.match.active
+                } | to_json
+              }}
             {% endif %}
           vacation_plan_json: >-
             {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
@@ -1116,6 +1352,62 @@ template:
             {% else %}
               {{ {'reason': 'off', 'summary': '', 'start': '', 'end': '', 'return_summary': '', 'vacation_name': ''} | to_json }}
             {% endif %}
+    binary_sensor:
+      - name: Curling Vacation Today
+        unique_id: curling_vacation
+        default_entity_id: binary_sensor.curling_vacation
+        state: "{{ (curling_vacation_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (curling_vacation_match_json | from_json).message | default('') }}"
+          start_time: "{{ (curling_vacation_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (curling_vacation_match_json | from_json).end_time | default('') }}"
+          location: "{{ (curling_vacation_match_json | from_json).location | default('') }}"
+          description: "{{ (curling_vacation_match_json | from_json).description | default('') }}"
+          all_day: "{{ (curling_vacation_match_json | from_json).all_day | default(false) }}"
+      - name: Personal Vacation Today
+        unique_id: personal_vacation
+        default_entity_id: binary_sensor.personal_vacation
+        state: "{{ (personal_vacation_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (personal_vacation_match_json | from_json).message | default('') }}"
+          start_time: "{{ (personal_vacation_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (personal_vacation_match_json | from_json).end_time | default('') }}"
+          location: "{{ (personal_vacation_match_json | from_json).location | default('') }}"
+          description: "{{ (personal_vacation_match_json | from_json).description | default('') }}"
+          all_day: "{{ (personal_vacation_match_json | from_json).all_day | default(false) }}"
+      - name: Flying to MSP Today
+        unique_id: flight_to_msp_today
+        default_entity_id: binary_sensor.flight_to_msp_today
+        state: "{{ (flight_to_msp_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (flight_to_msp_match_json | from_json).message | default('') }}"
+          start_time: "{{ (flight_to_msp_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (flight_to_msp_match_json | from_json).end_time | default('') }}"
+          location: "{{ (flight_to_msp_match_json | from_json).location | default('') }}"
+          description: "{{ (flight_to_msp_match_json | from_json).description | default('') }}"
+          all_day: "{{ (flight_to_msp_match_json | from_json).all_day | default(false) }}"
+      - name: Flying to RST Today
+        unique_id: flight_to_rst_today
+        default_entity_id: binary_sensor.flight_to_rst_today
+        state: "{{ (flight_to_rst_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (flight_to_rst_match_json | from_json).message | default('') }}"
+          start_time: "{{ (flight_to_rst_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (flight_to_rst_match_json | from_json).end_time | default('') }}"
+          location: "{{ (flight_to_rst_match_json | from_json).location | default('') }}"
+          description: "{{ (flight_to_rst_match_json | from_json).description | default('') }}"
+          all_day: "{{ (flight_to_rst_match_json | from_json).all_day | default(false) }}"
+      - name: Work Trip Today
+        unique_id: work_trip_today
+        default_entity_id: binary_sensor.work_trip_today
+        state: "{{ (work_trip_today_match_json | from_json).active | default(false) }}"
+        attributes:
+          message: "{{ (work_trip_today_match_json | from_json).message | default('') }}"
+          start_time: "{{ (work_trip_today_match_json | from_json).start_time | default('') }}"
+          end_time: "{{ (work_trip_today_match_json | from_json).end_time | default('') }}"
+          location: "{{ (work_trip_today_match_json | from_json).location | default('') }}"
+          description: "{{ (work_trip_today_match_json | from_json).description | default('') }}"
+          all_day: "{{ (work_trip_today_match_json | from_json).all_day | default(false) }}"
     sensor:
       - name: Ecobee Calendar Vacation Schedule
         unique_id: ecobee_calendar_vacation_schedule
