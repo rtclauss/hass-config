@@ -920,14 +920,18 @@ template:
         state: >-
           {% set start = state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') %}
           {% set end = state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') %}
-          {% set start_dt = as_datetime(start) %}
-          {% set end_dt = as_datetime(end) %}
-          {{
-            start_dt is not none
-            and end_dt is not none
-            and now() >= (start_dt | as_local)
-            and now() < (end_dt | as_local)
-          }}
+          {% if start in [none, '', 'unknown', 'unavailable'] or end in [none, '', 'unknown', 'unavailable'] %}
+            false
+          {% else %}
+            {% set start_dt = as_datetime(start) %}
+            {% set end_dt = as_datetime(end) %}
+            {{
+              start_dt is not none
+              and end_dt is not none
+              and now() >= (start_dt | as_local)
+              and now() < (end_dt | as_local)
+            }}
+          {% endif %}
         name: planned_vacation_calendar
       - default_entity_id: binary_sensor.planned_work_trip_calendar
         state: >-
@@ -1113,19 +1117,67 @@ template:
       - name: Ecobee Calendar Vacation Schedule
         unique_id: ecobee_calendar_vacation_schedule
         state: >-
-          {% set plan = (vacation_plan_json | default('{"reason":"off","summary":"","start":"","end":"","return_summary":"","vacation_name":""}', true)) | from_json %}
-          {% if plan.reason | default('off') == 'off' %}
+          {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+          {% set raw_plan_state = raw_plan | lower %}
+          {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
             off
           {% else %}
-            {{ plan.start }} -> {{ plan.end }}
+            {% set plan = raw_plan | from_json %}
+            {% if plan.reason | default('off') == 'off' %}
+              off
+            {% else %}
+              {{ plan.start }} -> {{ plan.end }}
+            {% endif %}
           {% endif %}
         attributes:
-          reason: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).reason | default('off') }}"
-          summary: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).summary | default('') }}"
-          start: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).start | default('') }}"
-          end: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).end | default('') }}"
-          return_summary: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).return_summary | default('') }}"
-          vacation_name: "{{ ((vacation_plan_json | default('{\"reason\":\"off\",\"summary\":\"\",\"start\":\"\",\"end\":\"\",\"return_summary\":\"\",\"vacation_name\":\"\"}', true)) | from_json).vacation_name | default('') }}"
+          reason: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              off
+            {% else %}
+              {{ (raw_plan | from_json).reason | default('off') }}
+            {% endif %}
+          summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).summary | default('') }}
+            {% endif %}
+          start: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).start | default('') }}
+            {% endif %}
+          end: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).end | default('') }}
+            {% endif %}
+          return_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).return_summary | default('') }}
+            {% endif %}
+          vacation_name: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).vacation_name | default('') }}
+            {% endif %}
   - sensor:
       - name: time_to_home
         default_entity_id: sensor.me_to_home
