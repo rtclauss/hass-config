@@ -321,6 +321,14 @@ automation:
       vacation_name: >-
         {% set planned_name = state_attr('sensor.ecobee_calendar_vacation_schedule', 'vacation_name') | default('', true) | trim %}
         {{ planned_name[:12] if planned_name else 'CalAutoVac' }}
+      delete_vacation_name: >-
+        {% set previous_name = '' %}
+        {% if trigger is defined and trigger.platform == 'state' and trigger.from_state is not none %}
+          {% set previous_name = trigger.from_state.attributes.vacation_name | default('', true) | trim %}
+        {% endif %}
+        {% set current_name = state_attr('sensor.ecobee_calendar_vacation_schedule', 'vacation_name') | default('', true) | trim %}
+        {% set delete_name = previous_name if previous_name else current_name %}
+        {{ delete_name[:12] if delete_name else 'CalAutoVac' }}
       vacation_state: "{{ states('sensor.ecobee_calendar_vacation_schedule') }}"
       schedule_start: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') }}"
       schedule_end: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') }}"
@@ -331,7 +339,7 @@ automation:
         continue_on_error: true
         data:
           entity_id: climate.my_ecobee
-          vacation_name: "{{ vacation_name }}"
+          vacation_name: "{{ delete_vacation_name }}"
       - if:
           - condition: template
             value_template: >-
