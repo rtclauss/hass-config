@@ -990,31 +990,34 @@ template:
       - variables:
           curling_events: >-
             {% if curling_event_window is mapping and curling_event_window.events is defined %}
-              {{ curling_event_window.events }}
+              {{ curling_event_window.events | to_json }}
             {% elif curling_event_window is mapping and curling_event_window['calendar.curling'] is defined and curling_event_window['calendar.curling'].events is defined %}
-              {{ curling_event_window['calendar.curling'].events }}
+              {{ curling_event_window['calendar.curling'].events | to_json }}
             {% else %}
-              {{ [] }}
+              {{ [] | to_json }}
             {% endif %}
           personal_events: >-
             {% if personal_event_window is mapping and personal_event_window.events is defined %}
-              {{ personal_event_window.events }}
+              {{ personal_event_window.events | to_json }}
             {% elif personal_event_window is mapping and personal_event_window['calendar.ryan_claussen'] is defined and personal_event_window['calendar.ryan_claussen'].events is defined %}
-              {{ personal_event_window['calendar.ryan_claussen'].events }}
+              {{ personal_event_window['calendar.ryan_claussen'].events | to_json }}
             {% else %}
-              {{ [] }}
+              {{ [] | to_json }}
             {% endif %}
           work_trip_events: >-
             {% if work_trip_event_window is mapping and work_trip_event_window.events is defined %}
-              {{ work_trip_event_window.events }}
+              {{ work_trip_event_window.events | to_json }}
             {% elif work_trip_event_window is mapping and work_trip_event_window['calendar.work_trip'] is defined and work_trip_event_window['calendar.work_trip'].events is defined %}
-              {{ work_trip_event_window['calendar.work_trip'].events }}
+              {{ work_trip_event_window['calendar.work_trip'].events | to_json }}
             {% else %}
-              {{ [] }}
+              {{ [] | to_json }}
             {% endif %}
           vacation_plan_json: >-
+            {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
+            {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
+            {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
             {% set ns = namespace(curling_event=None, outbound=None, return_home=None, target_city='', target_city_ts=None) %}
-            {% for event in curling_events %}
+            {% for event in curling_events_list %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
@@ -1035,7 +1038,7 @@ template:
                 } %}
               {% endif %}
             {% endfor %}
-            {% set travel_events = personal_events + work_trip_events %}
+            {% set travel_events = personal_events_list + work_trip_events_list %}
             {% for event in travel_events %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set start_dt = as_datetime(start_raw) %}
