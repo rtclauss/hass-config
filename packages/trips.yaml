@@ -184,15 +184,14 @@ automation:
       - trigger: template
         id: away_over_radius_mi
         value_template: >-
-          {% set lat = state_attr('device_tracker.bayesian_zeke_home', 'latitude') %}
-          {% set lon = state_attr('device_tracker.bayesian_zeke_home', 'longitude') %}
+          {% set lat = state_attr('person.ryan', 'latitude') %}
+          {% set lon = state_attr('person.ryan', 'longitude') %}
           {% set home_lat = state_attr('zone.home', 'latitude') %}
           {% set home_lon = state_attr('zone.home', 'longitude') %}
-          {% set trip_radius_mi = states('input_number.trip_trigger_radius_miles') | float(120) %}
           {{
             lat is not none and lon is not none and home_lat is not none and home_lon is not none
-            and (distance(lat, lon, home_lat, home_lon) * 0.621371) > trip_radius_mi
-            and is_state('binary_sensor.bayesian_zeke_home', 'off')
+            and (distance(lat, lon, home_lat, home_lon) * 0.621371) > 240
+            and is_state('input_boolean.trip', 'off')
           }}
       - trigger: state
         id: planned_work_trip
@@ -228,6 +227,18 @@ automation:
         id: return_home
         entity_id: binary_sensor.bayesian_zeke_home
         to: "on"
+      - trigger: template
+        id: return_within_home_radius_mi
+        value_template: >-
+          {% set lat = state_attr('person.ryan', 'latitude') %}
+          {% set lon = state_attr('person.ryan', 'longitude') %}
+          {% set home_lat = state_attr('zone.home', 'latitude') %}
+          {% set home_lon = state_attr('zone.home', 'longitude') %}
+          {{
+            lat is not none and lon is not none and home_lat is not none and home_lon is not none
+            and (distance(lat, lon, home_lat, home_lon) * 0.621371) <= 30
+            and is_state('input_boolean.trip', 'on')
+          }}
       - trigger: state
         id: leave_home_on_scheduled_trip
         entity_id: binary_sensor.bayesian_zeke_home
@@ -238,13 +249,28 @@ automation:
               - condition: trigger
                 id:
                   - away_for_20h
-                  - away_over_radius_mi
                   - planned_work_trip
                   - planned_vacation
                   - planned_depart_msp
               - condition: state
                 entity_id: binary_sensor.bayesian_zeke_home
                 state: "off"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: notify.all
+                data:
+                  message: "You're on a trip! \U0001F6EC"
+          - conditions:
+              - condition: trigger
+                id: away_over_radius_mi
               - condition: state
                 entity_id: input_boolean.trip
                 state: "off"
@@ -367,7 +393,9 @@ automation:
                   message: "Back from trip. \U0001F4BA"
       - if:
           - condition: trigger
-            id: return_home
+            id:
+              - return_home
+              - return_within_home_radius_mi
           - condition: state
             entity_id: input_boolean.trip
             state: "on"
