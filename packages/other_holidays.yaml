@@ -43,24 +43,6 @@ homeassistant:
 # Automations
 ########################
 automation:
-  - alias: Trash reminder evening before pickup
-    trigger:
-      - trigger: time
-        at: "14:30:00"
-    condition:
-      - condition: template
-        value_template: >
-          {% set p = states('sensor.garbage_pickup_date') %}
-          {% if p in ['unknown','unavailable',''] %}
-            false
-          {% else %}
-            {{ (as_datetime(p) - timedelta(days=1)).date() == now().date() }}
-          {% endif %}
-    action:
-      - action: notify.all
-        data:
-          message: >
-            Trash pickup is tomorrow ({{ states('sensor.garbage_pickup_date') }}).
   - id: reset_after_holiday
     alias: reset_after_holiday
     # initial_state: false
