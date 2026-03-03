@@ -186,6 +186,10 @@ automation:
         value_template: >-
           {% set lat = state_attr('person.ryan', 'latitude') %}
           {% set lon = state_attr('person.ryan', 'longitude') %}
+          {% if lat is none or lon is none %}
+            {% set lat = state_attr('device_tracker.bayesian_zeke_home', 'latitude') %}
+            {% set lon = state_attr('device_tracker.bayesian_zeke_home', 'longitude') %}
+          {% endif %}
           {% set home_lat = state_attr('zone.home', 'latitude') %}
           {% set home_lon = state_attr('zone.home', 'longitude') %}
           {{
@@ -232,6 +236,10 @@ automation:
         value_template: >-
           {% set lat = state_attr('person.ryan', 'latitude') %}
           {% set lon = state_attr('person.ryan', 'longitude') %}
+          {% if lat is none or lon is none %}
+            {% set lat = state_attr('device_tracker.bayesian_zeke_home', 'latitude') %}
+            {% set lon = state_attr('device_tracker.bayesian_zeke_home', 'longitude') %}
+          {% endif %}
           {% set home_lat = state_attr('zone.home', 'latitude') %}
           {% set home_lon = state_attr('zone.home', 'longitude') %}
           {{
@@ -1287,7 +1295,7 @@ template:
           flight_to_msp_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in personal_events_list %}
+            {% for event in personal_events_list + curling_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1297,25 +1305,38 @@ template:
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
               {% set end_dt = as_datetime(end_raw) %}
+              {% set specificity = 0 %}
               {% set destination_name = '' %}
               {% set destination_code = '' %}
               {% if '→' in summary %}
+                {% set specificity = 3 %}
                 {% set destination_name = summary.split('→', 1)[1].split('•', 1)[0].strip() %}
                 {% set destination_code = destination_name.strip().upper() %}
               {% elif summary.startswith('Flight: ') and ' to ' in summary %}
+                {% set specificity = 3 %}
                 {% set destination_name = summary.split(' to ', 1)[1].strip() %}
                 {% set destination_code = destination_name.split(' ', 1)[0].strip().upper() %}
               {% elif summary.startswith('Flight to ') %}
+                {% set specificity = 2 %}
                 {% set destination_name = summary.split('Flight to ', 1)[1].split(' (', 1)[0].strip() %}
                 {% set destination_code = destination_name.split(' ', 1)[0].strip().upper() %}
+              {% elif ' - FLIGHT - ' in summary and ' TO ' in summary %}
+                {% set specificity = 3 %}
+                {% set destination_segment = summary.split(' TO ', 1)[1].rsplit(' - ', 1)[0].strip() %}
+                {% set destination_name = destination_segment %}
+                {% if '(' in destination_segment and ')' in destination_segment %}
+                  {% set destination_code = destination_segment.rsplit('(', 1)[1].split(')', 1)[0].strip().upper() %}
+                {% else %}
+                  {% set destination_code = destination_name.split(' ', 1)[0].strip().upper() %}
+                {% endif %}
               {% endif %}
               {% set destination_lower = destination_name | lower %}
               {% set going_to_msp = destination_code == 'MSP' or destination_lower in ['msp', 'minneapolis'] or ('minneapolis' in destination_lower and 'paul' in destination_lower) %}
-              {% if looks_like_flight and going_to_msp and start_dt is not none and end_dt is not none %}
+              {% if looks_like_flight and going_to_msp and start_dt is not none and end_dt is not none and 'friend' not in (summary | lower) %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
-                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                  {% if ns.match is none or specificity > ns.match.specificity or (specificity == ns.match.specificity and start_ts < ns.match.start_ts) %}
                     {% set ns.match = {
                       'message': summary,
                       'start_time': (start_dt | as_local).isoformat(),
@@ -1324,7 +1345,8 @@ template:
                       'description': description,
                       'all_day': ('T' not in (start_raw | string)),
                       'active': (start_ts <= now_ts and end_ts > now_ts),
-                      'start_ts': start_ts
+                      'start_ts': start_ts,
+                      'specificity': specificity
                     } %}
                   {% endif %}
                 {% endif %}
@@ -1348,7 +1370,7 @@ template:
           flight_to_rst_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in personal_events_list %}
+            {% for event in personal_events_list + curling_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1358,25 +1380,38 @@ template:
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
               {% set end_dt = as_datetime(end_raw) %}
+              {% set specificity = 0 %}
               {% set destination_name = '' %}
               {% set destination_code = '' %}
               {% if '→' in summary %}
+                {% set specificity = 3 %}
                 {% set destination_name = summary.split('→', 1)[1].split('•', 1)[0].strip() %}
                 {% set destination_code = destination_name.strip().upper() %}
               {% elif summary.startswith('Flight: ') and ' to ' in summary %}
+                {% set specificity = 3 %}
                 {% set destination_name = summary.split(' to ', 1)[1].strip() %}
                 {% set destination_code = destination_name.split(' ', 1)[0].strip().upper() %}
               {% elif summary.startswith('Flight to ') %}
+                {% set specificity = 2 %}
                 {% set destination_name = summary.split('Flight to ', 1)[1].split(' (', 1)[0].strip() %}
                 {% set destination_code = destination_name.split(' ', 1)[0].strip().upper() %}
+              {% elif ' - FLIGHT - ' in summary and ' TO ' in summary %}
+                {% set specificity = 3 %}
+                {% set destination_segment = summary.split(' TO ', 1)[1].rsplit(' - ', 1)[0].strip() %}
+                {% set destination_name = destination_segment %}
+                {% if '(' in destination_segment and ')' in destination_segment %}
+                  {% set destination_code = destination_segment.rsplit('(', 1)[1].split(')', 1)[0].strip().upper() %}
+                {% else %}
+                  {% set destination_code = destination_name.split(' ', 1)[0].strip().upper() %}
+                {% endif %}
               {% endif %}
               {% set destination_lower = destination_name | lower %}
               {% set going_to_rst = destination_code == 'RST' or destination_lower == 'rst' or 'rochester' in destination_lower %}
-              {% if looks_like_flight and going_to_rst and start_dt is not none and end_dt is not none %}
+              {% if looks_like_flight and going_to_rst and start_dt is not none and end_dt is not none and 'friend' not in (summary | lower) %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
-                  {% if ns.match is none or start_ts < ns.match.start_ts %}
+                  {% if ns.match is none or specificity > ns.match.specificity or (specificity == ns.match.specificity and start_ts < ns.match.start_ts) %}
                     {% set ns.match = {
                       'message': summary,
                       'start_time': (start_dt | as_local).isoformat(),
@@ -1385,7 +1420,8 @@ template:
                       'description': description,
                       'all_day': ('T' not in (start_raw | string)),
                       'active': (start_ts <= now_ts and end_ts > now_ts),
-                      'start_ts': start_ts
+                      'start_ts': start_ts,
+                      'specificity': specificity
                     } %}
                   {% endif %}
                 {% endif %}
@@ -1458,6 +1494,7 @@ template:
             {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
             {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
             {% set travel_events = personal_events_list + work_trip_events_list %}
+            {% set return_candidate_events = travel_events + curling_events_list %}
             {% set now_ts = as_timestamp(now()) %}
             {% set trip_end_buffer = timedelta(minutes=50) %}
             {% set trip_end_buffer_seconds = 3000 %}
@@ -1569,7 +1606,7 @@ template:
                 {% set departs_home = origin_code in ['MSP', 'RST'] or (origin_code == '' and ('msp' in location_lower or 'rst' in location_lower or ('minneapolis' in location_lower and 'paul' in location_lower) or ('rochester' in location_lower and 'mn' in location_lower))) %}
                 {% if looks_like_flight and departs_home and not is_homebound_flight and 'friend' not in summary_lower %}
                   {% set trip = namespace(return_home=None, target_city='', target_city_ts=None) %}
-                  {% for return_event in travel_events %}
+                  {% for return_event in return_candidate_events %}
                     {% set return_start_raw = return_event.start.dateTime | default(return_event.start.date, true) | default(return_event.start, true) %}
                     {% set return_end_raw = return_event.end.dateTime | default(return_event.end.date, true) | default(return_event.end, true) %}
                     {% set return_start_dt = as_datetime(return_start_raw) %}
@@ -1582,18 +1619,23 @@ template:
                       {% set return_summary_lower = return_summary_text | lower %}
                       {% set return_text = ([return_summary, return_description, return_location] | join(' ') | lower) %}
                       {% set return_looks_like_flight = 'airport' in return_text or 'flight' in return_text or 'airlines' in return_text or 'delta' in return_text or 'united' in return_text or 'southwest' in return_text or 'sun country' in return_text or 'westjet' in return_text or 'air canada' in return_text %}
+                      {% set return_specificity = 0 %}
                       {% set return_destination_name = '' %}
                       {% set return_destination_code = '' %}
                       {% if '→' in return_summary_text %}
+                        {% set return_specificity = 3 %}
                         {% set return_destination_name = return_summary_text.split('→', 1)[1].split('•', 1)[0].strip() %}
                         {% set return_destination_code = return_destination_name.strip().upper() %}
                       {% elif return_summary_text.startswith('Flight: ') and ' to ' in return_summary_text %}
+                        {% set return_specificity = 3 %}
                         {% set return_destination_name = return_summary_text.split(' to ', 1)[1].strip() %}
                         {% set return_destination_code = return_destination_name.split(' ', 1)[0].strip().upper() %}
                       {% elif return_summary_text.startswith('Flight to ') %}
+                        {% set return_specificity = 2 %}
                         {% set return_destination_name = return_summary_text.split('Flight to ', 1)[1].split(' (', 1)[0].strip() %}
                         {% set return_destination_code = return_destination_name.split(' ', 1)[0].strip().upper() %}
                       {% elif ' - FLIGHT - ' in return_summary_text and ' TO ' in return_summary_text %}
+                        {% set return_specificity = 3 %}
                         {% set return_destination_segment = return_summary_text.split(' TO ', 1)[1].rsplit(' - ', 1)[0].strip() %}
                         {% set return_destination_name = return_destination_segment %}
                         {% if '(' in return_destination_segment and ')' in return_destination_segment %}
@@ -1606,13 +1648,14 @@ template:
                       {% set return_is_homebound = return_destination_code in ['MSP', 'RST'] or return_destination_lower in ['msp', 'rst', 'minneapolis'] or ('minneapolis' in return_destination_lower and 'paul' in return_destination_lower) or 'rochester' in return_destination_lower %}
                       {% set return_start_ts = as_timestamp(return_start_dt) %}
                       {% if return_looks_like_flight and return_is_homebound and return_start_ts > start_ts and 'friend' not in return_summary_lower %}
-                        {% if trip.return_home is none or return_start_ts < trip.return_home.start_ts %}
+                        {% if trip.return_home is none or return_specificity > trip.return_home.specificity or (return_specificity == trip.return_home.specificity and return_start_ts < trip.return_home.start_ts) %}
                           {% set trip.return_home = {
                             'summary': return_summary,
                             'start': (return_start_dt | as_local).isoformat(),
                             'end': ((return_end_dt | as_local) + trip_end_buffer).isoformat(),
                             'start_ts': return_start_ts,
-                            'end_ts': as_timestamp(return_end_dt) + trip_end_buffer_seconds
+                            'end_ts': as_timestamp(return_end_dt) + trip_end_buffer_seconds,
+                            'specificity': return_specificity
                           } %}
                         {% endif %}
                       {% endif %}
