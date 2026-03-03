@@ -377,69 +377,46 @@ automation:
 
             The sump pump ran {{states("sensor.sump_runs")}}x for {{ values | join(',') }} in the last 24 hours.
 
-  # - alias: Notify Garbage Tomorrow
-  #   id: notify_garbage_day_tomorrow
-  #   description: Notify garbage day is tomorrow
-  #   trigger:
-  #     - platform: time
-  #       at: "14:30:00"
-  #   condition:
-  #     - alias: "Garbage day tomorrow"
-  #       condition: state
-  #       entity_id: sensor.waste_management
-  #       state: "1"
-  #   action:
-  #     - action: notify.all
-  #       data:
-  #         message: >-
-  #           Put out bins tonight. Garbage tomorrow.
-
-  # - alias: Notify Garbage Day Changed
-  #   id: notify_garbage_day_changed
-  #   description: Notify garbage day is NOT tomorrow
-  #   trigger:
-  #     - platform: time
-  #       at: "14:30:00"
-  #   condition:
-  #     - alias: Only on Tuesdays (Day before Garbage Day/Wednesday)
-  #       condition: time
-  #       weekday:
-  #         - tue
-  #     - alias: Garbage day tomorrow
-  #       condition: state
-  #       entity_id: sensor.waste_management
-  #       state: "2"
-  #   action:
-  #     - action: notify.all
-  #       data:
-  #         message: DON't put out bins tonight. Garbage day has changed!
-
   - alias: Notify Garbage
     id: notify_garbage_day
     description: Notify garbage day
     trigger:
-      - trigger: time
-        at: "14:30:00"
+      - trigger: calendar
+        id: day_changed
+        entity_id: calendar.garbage_collection
+        event: start
+        offset: "-33:30:00"
+      - trigger: calendar
+        id: pickup_tomorrow
+        entity_id: calendar.garbage_collection
+        event: start
+        offset: "-09:30:00"
+    variables:
+      garbage_summary: "{{ state_attr('sensor.waste_management', 'friendly_name') | default('Waste Management', true) }}"
     action:
       - choose:
           - conditions:
+              - condition: trigger
+                id: day_changed
               - alias: Only on Tuesdays (Day before Garbage Day/Wednesday)
                 condition: time
                 weekday:
                   - tue
-              - alias: Garbage day tomorrow
-                condition: state
-                entity_id: sensor.waste_management
-                state: "2"
+              - alias: Waste Management event
+                condition: template
+                value_template: >-
+                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
             sequence:
               - action: notify.all
                 data:
                   message: DO NOT put out bins tonight. Garbage day has changed!
           - conditions:
-              - alias: "Garbage day tomorrow"
-                condition: state
-                entity_id: sensor.waste_management
-                state: "1"
+              - condition: trigger
+                id: pickup_tomorrow
+              - alias: Waste Management event
+                condition: template
+                value_template: >-
+                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
             sequence:
               - action: notify.all
                 data:
