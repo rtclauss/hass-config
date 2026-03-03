@@ -141,6 +141,9 @@ homeassistant:
     input_number.trip_trigger_radius_miles:
       <<: *customize
       friendly_name: "Trip Trigger Radius"
+    input_number.trip_connection_window_hours:
+      <<: *customize
+      friendly_name: "Trip Connection Window"
     input_number.ecobee_calendar_vacation_heat:
       <<: *customize
       friendly_name: "Ecobee Calendar Vacation Heat"
@@ -242,10 +245,17 @@ automation:
           {% endif %}
           {% set home_lat = state_attr('zone.home', 'latitude') %}
           {% set home_lon = state_attr('zone.home', 'longitude') %}
+          {% set connection_window_seconds = ((states('input_number.trip_connection_window_hours') | float(8)) * 3600) | int %}
+          {% set next_departure = state_attr('binary_sensor.departing_msp_today', 'start_time') %}
+          {% set next_departure_dt = as_datetime(next_departure) if next_departure not in [none, '', 'unknown', 'unavailable'] else none %}
+          {% set next_departure_ts = as_timestamp(next_departure_dt) if next_departure_dt is not none else none %}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set next_departure_soon = next_departure_ts is not none and next_departure_ts > now_ts and (next_departure_ts - now_ts) <= connection_window_seconds %}
           {{
             lat is not none and lon is not none and home_lat is not none and home_lon is not none
             and (distance(lat, lon, home_lat, home_lon) * 0.621371) <= 30
             and is_state('input_boolean.trip', 'on')
+            and not next_departure_soon
           }}
       - trigger: state
         id: leave_home_on_scheduled_trip
@@ -913,6 +923,14 @@ input_number:
     mode: box
     unit_of_measurement: mi
     initial: 120
+  trip_connection_window_hours:
+    name: Trip Connection Window (h)
+    min: 1
+    max: 24
+    step: 1
+    mode: box
+    unit_of_measurement: h
+    initial: 8
   ecobee_calendar_vacation_heat:
     name: Ecobee Calendar Vacation Heat
     min: 45
@@ -1070,11 +1088,16 @@ template:
       - delay_off: "3:00:00"
         default_entity_id: binary_sensor.flying_home_today
         state: >-
-          {% if is_state("binary_sensor.flight_to_msp_today", 'on') or is_state("binary_sensor.flight_to_rst_today",'on')  %}
-            true
-          {% else %}
-            false
-          {% endif %}
+          {% set connection_window_seconds = ((states('input_number.trip_connection_window_hours') | float(8)) * 3600) | int %}
+          {% set next_departure = state_attr('binary_sensor.departing_msp_today', 'start_time') %}
+          {% set next_departure_dt = as_datetime(next_departure) if next_departure not in [none, '', 'unknown', 'unavailable'] else none %}
+          {% set next_departure_ts = as_timestamp(next_departure_dt) if next_departure_dt is not none else none %}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set next_departure_soon = next_departure_ts is not none and next_departure_ts > now_ts and (next_departure_ts - now_ts) <= connection_window_seconds %}
+          {{
+            (is_state("binary_sensor.flight_to_msp_today", 'on') or is_state("binary_sensor.flight_to_rst_today",'on'))
+            and not next_departure_soon
+          }}
         name: flying_home_today
   - trigger:
       - trigger: homeassistant
@@ -1239,7 +1262,7 @@ template:
           departing_msp_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in personal_events_list %}
+            {% for event in personal_events_list + work_trip_events_list + curling_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1498,6 +1521,7 @@ template:
             {% set now_ts = as_timestamp(now()) %}
             {% set trip_end_buffer = timedelta(minutes=50) %}
             {% set trip_end_buffer_seconds = 3000 %}
+            {% set trip_connection_window_seconds = ((states('input_number.trip_connection_window_hours') | float(8)) * 3600) | int %}
             {% set ns = namespace(curling_event=None, lodging_event=None, personal_trip_event=None, fallback_event=None, flight_trip=None) %}
             {% for event in curling_events_list %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
@@ -1647,7 +1671,40 @@ template:
                       {% set return_destination_lower = return_destination_name | lower %}
                       {% set return_is_homebound = return_destination_code in ['MSP', 'RST'] or return_destination_lower in ['msp', 'rst', 'minneapolis'] or ('minneapolis' in return_destination_lower and 'paul' in return_destination_lower) or 'rochester' in return_destination_lower %}
                       {% set return_start_ts = as_timestamp(return_start_dt) %}
+                      {% set return_end_ts = as_timestamp(return_end_dt) %}
+                      {% set connection = namespace(has_departure=false) %}
                       {% if return_looks_like_flight and return_is_homebound and return_start_ts > start_ts and 'friend' not in return_summary_lower %}
+                        {% for connection_event in return_candidate_events %}
+                          {% set connection_start_raw = connection_event.start.dateTime | default(connection_event.start.date, true) | default(connection_event.start, true) %}
+                          {% set connection_start_dt = as_datetime(connection_start_raw) %}
+                          {% if connection_start_dt is not none %}
+                            {% set connection_summary = connection_event.summary | default('', true) | string %}
+                            {% set connection_description = connection_event.description | default('', true) | string %}
+                            {% set connection_location = connection_event.location | default('', true) | string %}
+                            {% set connection_summary_lower = connection_summary | lower %}
+                            {% set connection_location_lower = connection_location | lower %}
+                            {% set connection_text = ([connection_summary, connection_description, connection_location] | join(' ') | lower) %}
+                            {% set connection_looks_like_flight = 'airport' in connection_text or 'flight' in connection_text or 'airlines' in connection_text or 'delta' in connection_text or 'united' in connection_text or 'southwest' in connection_text or 'sun country' in connection_text or 'westjet' in connection_text or 'air canada' in connection_text %}
+                            {% set connection_origin_code = '' %}
+                            {% if '→' in connection_summary %}
+                              {% set connection_origin_code = connection_summary.split('→', 1)[0].replace('✈', '').strip().upper() %}
+                            {% elif connection_summary.startswith('Flight: ') and ' to ' in connection_summary %}
+                              {% set connection_origin_code = connection_summary.split('Flight: ', 1)[1].split(' to ', 1)[0].strip().upper() %}
+                            {% elif ' - FLIGHT - ' in connection_summary and ' TO ' in connection_summary %}
+                              {% set connection_origin_segment = connection_summary.split(' - FLIGHT - ', 1)[1].split(' TO ', 1)[0].strip() %}
+                              {% if '(' in connection_origin_segment and ')' in connection_origin_segment %}
+                                {% set connection_origin_code = connection_origin_segment.rsplit('(', 1)[1].split(')', 1)[0].strip().upper() %}
+                              {% endif %}
+                            {% endif %}
+                            {% set connection_departs_home = connection_origin_code in ['MSP', 'RST'] or (connection_origin_code == '' and ('msp' in connection_location_lower or 'rst' in connection_location_lower or ('minneapolis' in connection_location_lower and 'paul' in connection_location_lower) or ('rochester' in connection_location_lower and 'mn' in connection_location_lower))) %}
+                            {% set connection_start_ts = as_timestamp(connection_start_dt) %}
+                            {% if connection_looks_like_flight and connection_departs_home and connection_start_ts > return_end_ts and connection_start_ts <= (return_end_ts + trip_connection_window_seconds) and 'friend' not in connection_summary_lower %}
+                              {% set connection.has_departure = true %}
+                            {% endif %}
+                          {% endif %}
+                        {% endfor %}
+                      {% endif %}
+                      {% if return_looks_like_flight and return_is_homebound and return_start_ts > start_ts and 'friend' not in return_summary_lower and not connection.has_departure %}
                         {% if trip.return_home is none or return_specificity > trip.return_home.specificity or (return_specificity == trip.return_home.specificity and return_start_ts < trip.return_home.start_ts) %}
                           {% set trip.return_home = {
                             'summary': return_summary,
