@@ -414,11 +414,15 @@ automation:
       heat_temp: "{{ states('input_number.ecobee_calendar_vacation_heat') | float(60) }}"
       cool_temp: "{{ states('input_number.ecobee_calendar_vacation_cool') | float(82) }}"
     action:
-      - action: ecobee.delete_vacation
-        continue_on_error: true
-        data:
-          entity_id: climate.my_ecobee
-          vacation_name: "{{ delete_vacation_name }}"
+      - if:
+          - condition: template
+            value_template: "{{ trigger.id != 'daily_refresh' }}"
+        then:
+          - action: ecobee.delete_vacation
+            continue_on_error: true
+            data:
+              entity_id: climate.my_ecobee
+              vacation_name: "{{ delete_vacation_name }}"
       - if:
           - condition: template
             value_template: >-
@@ -429,6 +433,7 @@ automation:
               }}
         then:
           - action: ecobee.create_vacation
+            continue_on_error: true
             data:
               entity_id: climate.my_ecobee
               vacation_name: "{{ vacation_name }}"
