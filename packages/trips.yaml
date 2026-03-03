@@ -321,6 +321,14 @@ automation:
       vacation_name: >-
         {% set planned_name = state_attr('sensor.ecobee_calendar_vacation_schedule', 'vacation_name') | default('', true) | trim %}
         {{ planned_name[:12] if planned_name else 'CalAutoVac' }}
+      delete_vacation_name: >-
+        {% set previous_name = '' %}
+        {% if trigger is defined and trigger.platform == 'state' and trigger.from_state is not none %}
+          {% set previous_name = trigger.from_state.attributes.vacation_name | default('', true) | trim %}
+        {% endif %}
+        {% set current_name = state_attr('sensor.ecobee_calendar_vacation_schedule', 'vacation_name') | default('', true) | trim %}
+        {% set delete_name = previous_name if previous_name else current_name %}
+        {{ delete_name[:12] if delete_name else 'CalAutoVac' }}
       vacation_state: "{{ states('sensor.ecobee_calendar_vacation_schedule') }}"
       schedule_start: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') }}"
       schedule_end: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') }}"
@@ -331,7 +339,7 @@ automation:
         continue_on_error: true
         data:
           entity_id: climate.my_ecobee
-          vacation_name: "{{ vacation_name }}"
+          vacation_name: "{{ delete_vacation_name }}"
       - if:
           - condition: template
             value_template: >-
@@ -910,10 +918,19 @@ template:
         name: sensed_trip
       - default_entity_id: binary_sensor.planned_vacation_calendar
         state: >-
-          {% if is_state("binary_sensor.curling_vacation", 'on') or is_state("binary_sensor.personal_vacation",'on')  %}
-            true
-          {% else %}
+          {% set start = state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') %}
+          {% set end = state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') %}
+          {% if start in [none, '', 'unknown', 'unavailable'] or end in [none, '', 'unknown', 'unavailable'] %}
             false
+          {% else %}
+            {% set start_dt = as_datetime(start) %}
+            {% set end_dt = as_datetime(end) %}
+            {{
+              start_dt is not none
+              and end_dt is not none
+              and now() >= (start_dt | as_local)
+              and now() < (end_dt | as_local)
+            }}
           {% endif %}
         name: planned_vacation_calendar
       - default_entity_id: binary_sensor.planned_work_trip_calendar
@@ -972,27 +989,39 @@ template:
         response_variable: work_trip_event_window
       - variables:
           curling_events: >-
-            {{
-              curling_event_window.events
-              | default(curling_event_window['calendar.curling'].events, true)
-              | default([], true)
-            }}
+            {% if curling_event_window is mapping and curling_event_window.events is defined %}
+              {{ curling_event_window.events | to_json }}
+            {% elif curling_event_window is mapping and curling_event_window['calendar.curling'] is defined and curling_event_window['calendar.curling'].events is defined %}
+              {{ curling_event_window['calendar.curling'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
           personal_events: >-
-            {{
-              personal_event_window.events
-              | default(personal_event_window['calendar.ryan_claussen'].events, true)
-              | default([], true)
-            }}
+            {% if personal_event_window is mapping and personal_event_window.events is defined %}
+              {{ personal_event_window.events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.ryan_claussen'] is defined and personal_event_window['calendar.ryan_claussen'].events is defined %}
+              {{ personal_event_window['calendar.ryan_claussen'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
           work_trip_events: >-
-            {{
-              work_trip_event_window.events
-              | default(work_trip_event_window['calendar.work_trip'].events, true)
-              | default([], true)
-            }}
+            {% if work_trip_event_window is mapping and work_trip_event_window.events is defined %}
+              {{ work_trip_event_window.events | to_json }}
+            {% elif work_trip_event_window is mapping and work_trip_event_window['calendar.work_trip'] is defined and work_trip_event_window['calendar.work_trip'].events is defined %}
+              {{ work_trip_event_window['calendar.work_trip'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+          curling_events_list: >-
+            {{ (curling_events | default('[]', true) | string | trim | from_json) }}
+          personal_events_list: >-
+            {{ (personal_events | default('[]', true) | string | trim | from_json) }}
+          work_trip_events_list: >-
+            {{ (work_trip_events | default('[]', true) | string | trim | from_json) }}
           curling_vacation_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in curling_events %}
+            {% for event in curling_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1038,7 +1067,7 @@ template:
           personal_vacation_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in personal_events %}
+            {% for event in personal_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1084,7 +1113,7 @@ template:
           flight_to_msp_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in personal_events %}
+            {% for event in personal_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1130,7 +1159,7 @@ template:
           flight_to_rst_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in personal_events %}
+            {% for event in personal_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1176,7 +1205,7 @@ template:
           work_trip_today_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
-            {% for event in work_trip_events %}
+            {% for event in work_trip_events_list %}
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
@@ -1220,8 +1249,11 @@ template:
               }}
             {% endif %}
           vacation_plan_json: >-
+            {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
+            {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
+            {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
             {% set ns = namespace(curling_event=None, outbound=None, return_home=None, target_city='', target_city_ts=None) %}
-            {% for event in curling_events %}
+            {% for event in curling_events_list %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
@@ -1242,7 +1274,7 @@ template:
                 } %}
               {% endif %}
             {% endfor %}
-            {% set travel_events = personal_events + work_trip_events %}
+            {% set travel_events = personal_events_list + work_trip_events_list %}
             {% for event in travel_events %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set start_dt = as_datetime(start_raw) %}
@@ -1380,19 +1412,67 @@ template:
       - name: Ecobee Calendar Vacation Schedule
         unique_id: ecobee_calendar_vacation_schedule
         state: >-
-          {% set plan = vacation_plan_json | from_json %}
-          {% if plan.reason | default('off') == 'off' %}
+          {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+          {% set raw_plan_state = raw_plan | lower %}
+          {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
             off
           {% else %}
-            {{ plan.start }} -> {{ plan.end }}
+            {% set plan = raw_plan | from_json %}
+            {% if plan.reason | default('off') == 'off' %}
+              off
+            {% else %}
+              {{ plan.start }} -> {{ plan.end }}
+            {% endif %}
           {% endif %}
         attributes:
-          reason: "{{ (vacation_plan_json | from_json).reason | default('off') }}"
-          summary: "{{ (vacation_plan_json | from_json).summary | default('') }}"
-          start: "{{ (vacation_plan_json | from_json).start | default('') }}"
-          end: "{{ (vacation_plan_json | from_json).end | default('') }}"
-          return_summary: "{{ (vacation_plan_json | from_json).return_summary | default('') }}"
-          vacation_name: "{{ (vacation_plan_json | from_json).vacation_name | default('') }}"
+          reason: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              off
+            {% else %}
+              {{ (raw_plan | from_json).reason | default('off') }}
+            {% endif %}
+          summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).summary | default('') }}
+            {% endif %}
+          start: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).start | default('') }}
+            {% endif %}
+          end: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).end | default('') }}
+            {% endif %}
+          return_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).return_summary | default('') }}
+            {% endif %}
+          vacation_name: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).vacation_name | default('') }}
+            {% endif %}
   - sensor:
       - name: time_to_home
         default_entity_id: sensor.me_to_home
