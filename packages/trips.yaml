@@ -244,11 +244,18 @@ automation:
                 state: "off"
               - condition: template
                 value_template: >-
-                  {% set summary = trigger.calendar_event.summary | default('') | lower %}
-                  {{
-                    trigger.calendar_event.location == "Minneapolis-St Paul Intl/Wold-Chamberlain"
-                    and "friend" not in summary
-                  }}
+                  {% set summary = trigger.calendar_event.summary | default('', true) | lower %}
+                  {% set description = trigger.calendar_event.description | default('', true) | lower %}
+                  {% set location = trigger.calendar_event.location | default('', true) | lower %}
+                  {% set trip_text = [summary, description, location] | join(' ') %}
+                  {% set is_example_zone_04_departure = (
+                    location == "examplemetro-example district intl/example-airfield"
+                    or "example_zone_04 airport" in location
+                    or "examplemetro example_zone_04" in location
+                    or ("examplemetro" in location and ("example district" in location or "example district" in location))
+                    or "example-airfield" in location
+                  ) %}
+                  {{ is_example_zone_04_departure and "friend" not in trip_text }}
             sequence:
               - action: input_boolean.turn_on
                 target:
