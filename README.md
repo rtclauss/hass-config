@@ -8,7 +8,7 @@
 - This repo pins local tooling Python in `.python-version`.
 - CI validates that this pinned version is still compatible with the latest official `homeassistant` release from [PyPI](https://pypi.org/project/homeassistant/).
 - Config checks run against `ghcr.io/home-assistant/home-assistant:stable` so validation tracks current Home Assistant stable releases.
-- As of 2026-02-17, latest `homeassistant` requires Python `>=3.13.2`, so `.python-version` is set accordingly.
+- As of 2026-03-15, latest `homeassistant` requires Python `>=3.14.2`, so `.python-version` is set to `3.14.3`.
 
 ### Local Setup
 
