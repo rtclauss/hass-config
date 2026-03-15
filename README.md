@@ -18,6 +18,101 @@ python -m pip install --upgrade pip yamllint
 python scripts/check_ha_python_support.py --python-version-file .python-version
 ```
 
+## Music Assistant Media Flow
+
+Music playback automations now target the Music Assistant-backed Sonos entities, which are the `_2` media players:
+
+- `media_player.bedroom_sonos_2`
+- `media_player.bathroom_sonos_2`
+- `media_player.office_sonos_2`
+- `media_player.den_sonos_2`
+- `media_player.tiki_room_2`
+
+The reusable media helpers live in `packages/media_player.yaml`:
+
+- `script.music_assistant_prepare_bedroom_group`: regroup bedroom/bathroom and optionally office/den depending on guest mode.
+- `script.music_assistant_prepare_arrival_group`: regroup the arrival playback zone.
+- `script.music_assistant_play_spotify_uri`: accepts a Spotify URI or `open.spotify.com` URL and converts it into the Music Assistant provider URI used by `music_assistant.play_media`.
+- `script.music_assistant_radio_wake_up`: shared wake-up flow for radio stations.
+
+### Adding Another Playlist
+
+If an existing script already picks from a list, the normal change is just to append one more Spotify URI to that script's `plists` array in `packages/media_player.yaml`.
+
+Examples:
+
+- `script.bedroom_playlist_0` through `script.bedroom_playlist_5` for cube-triggered bedroom playlists
+- `script.spotify_arrival` for arrival music
+- `script.spotify_bedtime` for bedtime music
+- `script.spotify_wake_up` for morning music
+
+Accepted playlist values:
+
+- `spotify:playlist:...`
+- `spotify:album:...`
+- `spotify:artist:...`
+- `https://open.spotify.com/playlist/...`
+- `https://open.spotify.com/album/...`
+- `https://open.spotify.com/artist/...`
+- `https://open.spotify.com/track/...`
+
+If you are creating a brand new script, prefer calling the helper instead of using `media_player.play_media` directly:
+
+```yaml
+- action: script.music_assistant_play_spotify_uri
+  data:
+    entity_id: media_player.bedroom_sonos_2
+    spotify_uri: "spotify:playlist:37i9dQZF1DX4WYpdgoIcn6"
+```
+
+Notes:
+
+- The helper currently builds provider URIs with the active Spotify provider id in Music Assistant. If Spotify is removed and re-added in Music Assistant, re-check `script.music_assistant_play_spotify_uri` in `packages/media_player.yaml`.
+- The helper determines `track` vs `album` vs `artist` vs `playlist` automatically from the URI.
+
+### Adding Another Radio Station
+
+Radio wake-up scripts now use Music Assistant item URIs instead of Sonos favorites or Spotify Connect source selection.
+
+Current examples:
+
+- `library://radio/12`
+- `tunein--S3NwgspV://radio/s34350`
+- `tunein--S3NwgspV://radio/s20620`
+
+Recommended workflow:
+
+1. Find the station in Music Assistant first.
+2. Copy the Music Assistant radio item URI.
+3. Pass that URI to `script.music_assistant_radio_wake_up`.
+
+Example wrapper script:
+
+```yaml
+my_new_radio_wake_up:
+  alias: My New Radio Wake Up
+  sequence:
+    - action: script.music_assistant_radio_wake_up
+      data:
+        radio_uri: "tunein--S3NwgspV://radio/s12345"
+        initial_delay: 5
+```
+
+If you need to discover a station URI from Home Assistant, use Music Assistant search/library tools or the `music_assistant.search` / `music_assistant.get_library` services in Developer Tools and copy the returned item id.
+
+### Validation
+
+After changing media scripts, validate the config the same way CI does:
+
+```bash
+yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disable, truthy: disable}}" \
+  configuration.yaml automations.yaml blueprints packages zigbee2mqtt
+
+# If Docker is available
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
+  python -m homeassistant --config /config --script check_config
+```
+
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
 I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/master/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
@@ -29,6 +124,7 @@ Software on the NUC:
   * [AppDaemon](https://github.com/hassio-addons/addon-appdaemon)
   * [VSCode](https://github.com/hassio-addons/addon-vscode)
   * [Mosquitto Broker](https://home-assistant.io/addons/mosquitto/)
+  * [Music Assistant](https://music-assistant.io/) - Main playback engine for Sonos/Spotify/radio automations
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
   * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/master/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/master/esphome/bluetoothproxy1.yaml)
@@ -50,9 +146,9 @@ Software on the NUC:
 * Sonos One Speakers
 * Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
 * Xiaomi MiFlora
-* ESP8266 with [VL53L0X](https://www.amazon.com/gp/product/B07F3RH7TC/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1) to measure salt level in [water softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml). See [this commit](https://github.com/rtclauss/hass-config/commit/85b1eade336c0fc94031241b494203fb55b3a7d8) for more info. 
+* ESP8266 with [VL53L0X](https://www.amazon.com/gp/product/B07F3RH7TC/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1) to measure salt level in [water softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml). See [this commit](https://github.com/rtclauss/hass-config/commit/85b1eade336c0fc94031241b494203fb55b3a7d8) for more info.
 * ~~HUSBZB-1 Zigbee/Z-Wave Stick (for Z-Wave and Zigbee~~)
-  * ~~Z-Wave~~ 
+  * ~~Z-Wave~~
     * ~~[GoControl Z-Wave Thermostat](https://www.amazon.com/GoControl-Thermostat-Z-Wave-Battery-Powered-Works/dp/B00ZIRV40K)~~
     * ~~[Leviton Switch Vizia RF+ VRS05-1LZ](https://www.amazon.com/gp/product/B001HT6NKO/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1) - 3 wire 3-way switch.~~
     * ~~[Leviton Vizia + Digital Coordinating Remote Switch](https://www.amazon.com/gp/product/B001HT4M70/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1)~~
@@ -100,7 +196,7 @@ Software on the NUC:
 * [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting)
 
 **AppDaemon Apps:**
-* [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location tracking.  Uses bayesian data to eliminate red-herrings when arriving at home.  Could be extended to other zones if you have multiple `device_tracker`s 
+* [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location tracking.  Uses bayesian data to eliminate red-herrings when arriving at home.  Could be extended to other zones if you have multiple `device_tracker`s
 * [Lighting Fade-In](appdaemon/apps/brighten_lights.py) - Fades in lights from `off` over a pre-defined interval on a work (non-weekend, non-holiday) day.
 * [Music Fade-in](appdaemon/apps/fade_in_music.py) - Fades in music when I wake up in the morning
 * [deConz button events](appdaemon/apps/deconz_helper.py) - Translates Xiaomi button events into a generic sensor.
