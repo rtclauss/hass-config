@@ -238,7 +238,7 @@ automation:
     action:
       - action: media_player.media_stop
         data:
-          entity_id: media_player.bedroom_sonos
+          entity_id: media_player.bedroom_sonos_2
 
   - id: reset_lighting_on_start
     alias: reset_lighting_on_start
@@ -351,26 +351,25 @@ automation:
                   entity_id: script.wake_up_script
               - action: media_player.media_pause
                 data:
-                  entity_id: media_player.bedroom_sonos
+                  entity_id: media_player.bedroom_sonos_2
               - delay:
                   seconds: 2
               - action: media_player.shuffle_set
                 data:
-                  entity_id: media_player.bedroom_sonos
+                  entity_id: media_player.bedroom_sonos_2
                   shuffle: false
               - delay:
                   seconds: 2
               - action: media_player.volume_set
                 data:
-                  entity_id: media_player.bedroom_sonos
+                  entity_id: media_player.bedroom_sonos_2
                   volume_level: 0.2
               - delay:
                   seconds: 2
-              - action: media_player.play_media
+              - action: script.music_assistant_play_spotify_uri
                 data:
-                  entity_id: media_player.bedroom_sonos
-                  media_content_type: music
-                  media_content_id: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ" # Surfin' Bird
+                  entity_id: media_player.bedroom_sonos_2
+                  spotify_uri: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ"
 
   - id: toggle_lava_lamp_workday
     alias: toggle_lava_lamp_workday
@@ -536,205 +535,24 @@ script:
   sonos_ksdj_wake_up:
     alias: Sonos KSDJ Wake Up
     sequence:
-      - if:
-          - alias: "Check if no guests are here."
-            condition: state
-            entity_id: input_boolean.guest_mode
-            state: "off"
-        then:
-          - alias: "Join Sonos speakers into all group"
-            continue_on_error: true
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-            data:
-              group_members:
-                - media_player.bathroom_sonos
-                - media_player.den_sonos
-                - media_player.office_sonos
-        else:
-          - alias: "Unjoin all Sonos speakers into bedroom group"
-            action: media_player.unjoin
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-                - media_player.den_sonos
-                - media_player.office_sonos
-          - alias: "Join Sonos speakers into bedroom group"
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-            data:
-              group_members:
-                - media_player.bathroom_sonos
-      - action: media_player.volume_set
-        continue_on_error: true
+      - action: script.music_assistant_radio_wake_up
         data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-          volume_level: 0.01
-      - action: media_player.select_source
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-          source: "KSDJ"
-      - repeat:
-          sequence:
-            - alias: "Increase Volume by 0.01"
-              continue_on_error: true
-              action: media_player.volume_set
-              data:
-                volume_level: "{{ 0.01 * repeat.index }}"
-              target:
-                entity_id:
-                  - media_player.bedroom_sonos
-                  - media_player.bathroom_sonos
-            - delay:
-                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
-                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
-          until: "{{repeat.index == 30}}"
+          radio_uri: "library://radio/12"
 
   sonos_mpr_news_wake_up:
     alias: Sonos MPR News Wake Up
     sequence:
-      - if:
-          - alias: "Check if guests are here."
-            condition: state
-            entity_id: input_boolean.guest_mode
-            state: "off"
-        then:
-          - alias: "Join Sonos speakers into all group"
-            continue_on_error: true
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-            data:
-              group_members:
-                - media_player.bathroom_sonos
-                - media_player.den_sonos
-                - media_player.office_sonos
-        else:
-          - alias: "Unjoin allSonos speakers into bedroom group"
-            action: media_player.unjoin
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-                - media_player.den_sonos
-                - media_player.office_sonos
-          - alias: "Join Sonos speakers into bedroom group"
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-            data:
-              group_members:
-                - media_player.bathroom_sonos
-      - action: media_player.volume_set
-        continue_on_error: true
+      - action: script.music_assistant_radio_wake_up
         data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-          volume_level: 0.01
-      - delay:
-          seconds: 5
-      - action: media_player.select_source
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-          source: "MPR News"
-      - repeat:
-          sequence:
-            - alias: "Increase Volume by 0.01"
-              continue_on_error: true
-              action: media_player.volume_set
-              data:
-                volume_level: "{{ 0.01 * repeat.index }}"
-              target:
-                entity_id:
-                  - media_player.bedroom_sonos
-                  - media_player.bathroom_sonos
-            - delay:
-                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
-                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
-          until: "{{repeat.index == 30}}"
+          radio_uri: "tunein--S3NwgspV://radio/s34350"
+          initial_delay: 5
 
   sonos_the_current_wake_up:
     alias: Sonos The Current Wake Up
     sequence:
-      - if:
-          - alias: "Check if guests are here."
-            condition: state
-            entity_id: input_boolean.guest_mode
-            state: "off"
-        then:
-          - alias: "Join Sonos speakers into all group"
-            continue_on_error: true
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-            data:
-              group_members:
-                - media_player.bathroom_sonos
-                - media_player.den_sonos
-                - media_player.office_sonos
-        else:
-          - alias: "Unjoin allSonos speakers into bedroom group"
-            action: media_player.unjoin
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-                - media_player.den_sonos
-                - media_player.office_sonos
-          - alias: "Join Sonos speakers into bedroom group"
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos
-            data:
-              group_members:
-                - media_player.bathroom_sonos
-      - action: media_player.volume_set
-        continue_on_error: true
+      - action: script.music_assistant_radio_wake_up
         data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-          volume_level: 0.01
-      - action: media_player.select_source
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-          source: "The Current"
-      - repeat:
-          sequence:
-            - alias: "Increase Volume by 0.01"
-              continue_on_error: true
-              action: media_player.volume_set
-              data:
-                volume_level: "{{ 0.01 * repeat.index }}"
-              target:
-                entity_id:
-                  - media_player.bedroom_sonos
-                  - media_player.bathroom_sonos
-            - delay:
-                # As time passes, the delay gets smaller and smaller. 120s, 60s, 40s, 30s, 24s,..., 4s
-                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
-          until: "{{repeat.index == 30}}"
+          radio_uri: "tunein--S3NwgspV://radio/s20620"
 
   # sonos_update_alarm:
   #   alias: Update Sonos Alarm
@@ -777,7 +595,7 @@ script:
       - action: media_player.media_stop
         continue_on_error: true
         data:
-          entity_id: media_player.bedroom_sonos
+          entity_id: media_player.bedroom_sonos_2
       - delay:
           minutes: 8
       - action: script.turn_on
@@ -785,7 +603,7 @@ script:
       - action: media_player.media_play
         continue_on_error: true
         data:
-          entity_id: media_player.bedroom_sonos
+          entity_id: media_player.bedroom_sonos_2
 
   wake_up_script:
     alias: Common Wake Up Tasks
