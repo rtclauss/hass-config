@@ -105,7 +105,8 @@ automation:
     description: >-
       Set backend-preferred light and dark themes without tying light/dark mode
       to the house timezone. Clients that use User Profile theme mode "Auto"
-      will follow their own local device settings instead.
+      will follow their own local device settings instead, while dark mode
+      keeps a random theme choice at Home Assistant startup.
     trigger:
       - trigger: homeassistant
         event: start
@@ -113,7 +114,8 @@ automation:
       - action: frontend.set_theme
         data:
           name: ios-light-mode-dark-green
-          name_dark: ios-dark-mode-dark-green
+          name_dark: >-
+            {{ ["ios-dark-mode-dark-green", "midnight_blue", "noctis-solarized", "oxfordblue", "slate_red", "synthwave"] | random }}
 
 ########################
 # Binary Sensors
