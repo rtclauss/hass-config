@@ -30,7 +30,7 @@ homeassistant:
     ################################################
     automation.automatic_theme_change:
       <<: *customize
-      friendly_name: "Change theme at sunset and sunrise"
+      friendly_name: "Set backend light and dark themes"
     ################################################
     ## Binary Sensors
     ################################################
@@ -102,25 +102,18 @@ alarm_control_panel: []
 automation:
   - alias: automatic_theme_change
     id: automatic_theme_change
+    description: >-
+      Set backend-preferred light and dark themes without tying light/dark mode
+      to the house timezone. Clients that use User Profile theme mode "Auto"
+      will follow their own local device settings instead.
     trigger:
       - trigger: homeassistant
         event: start
-      - trigger: state
-        entity_id: sun.sun
-        to: above_horizon
-      - trigger: state
-        entity_id: sun.sun
-        to: below_horizon
     action:
       - action: frontend.set_theme
         data:
-          name: >-
-            {% if states.sun.sun.state == "above_horizon" %}
-              ios-light-mode-dark-green
-            {% else %}
-              {{ ["ios-dark-mode-dark-green", "midnight_blue", "noctis-solarized", "oxfordblue", "slate_red", "synthwave"] | random }}
-            {% endif %}
-          # mode: dark
+          name: ios-light-mode-dark-green
+          name_dark: ios-dark-mode-dark-green
 
 ########################
 # Binary Sensors
