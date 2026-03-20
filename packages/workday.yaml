@@ -51,6 +51,11 @@ homeassistant:
       friendly_name: "Set Wakeup From Phone Alarm"
       icon: mdi:cellphone
 
+    script.set_next_work_meeting_from_phone:
+      <<: *customize
+      friendly_name: "Set Next Work Meeting From Phone"
+      icon: mdi:briefcase-clock
+
     ################################################
     ## Binary Sensors
     ################################################
@@ -287,6 +292,77 @@ script:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.weekend_alarm_on
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.special_meeting
+
+  set_next_work_meeting_from_phone:
+    alias: Set Next Work Meeting From Phone
+    description: Set the next work meeting reminder time from an iPhone shortcut such as Outlook Next Meeting.
+    mode: single
+    fields:
+      meeting_time:
+        description: Next work meeting start time from iOS, in HH:mm or HH:mm:ss format.
+        example: "09:00"
+      meeting_enabled:
+        description: Whether there is a next work meeting to schedule for tomorrow.
+        example: "true"
+    sequence:
+      - variables:
+          meeting_time_text: "{{ meeting_time | default('') | string | trim }}"
+          sync_meeting_enabled: >-
+            {% set raw = meeting_enabled | default('') %}
+            {% set has_meeting_time = meeting_time | default('') | string | trim != '' %}
+            {% if raw is boolean %}
+              {{ raw }}
+            {% elif raw | string | trim != '' %}
+              {{ raw | string | lower | trim in ['true', '1', 'on', 'yes'] }}
+            {% else %}
+              {{ has_meeting_time }}
+            {% endif %}
+          normalized_meeting_time: >-
+            {% if meeting_time_text != '' %}
+              {% set parts = meeting_time_text.split(':') %}
+              {{ '%02d:%02d' | format(parts[0] | int, parts[1] | int) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          meeting_alarm_time: >-
+            {% if normalized_meeting_time != '' %}
+              {% set reminder_time = today_at(normalized_meeting_time) - timedelta(minutes=5) %}
+              {{ reminder_time.strftime('%H:%M:%S') }}
+            {% else %}
+              00:00:00
+            {% endif %}
+          tomorrow_start: "{{ (now().date() + timedelta(days=1)).isoformat() }}T00:00:00"
+          day_after_tomorrow_start: "{{ (now().date() + timedelta(days=2)).isoformat() }}T00:00:00"
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.mn_holidays
+        data:
+          start_date_time: "{{ tomorrow_start }}"
+          end_date_time: "{{ day_after_tomorrow_start }}"
+        response_variable: tomorrow_holidays
+      - variables:
+          tomorrow_is_weekday: "{{ (now() + timedelta(days=1)).weekday() < 5 }}"
+          tomorrow_is_holiday: >-
+            {{ (tomorrow_holidays.events | default([]) | length) > 0 }}
+          tomorrow_is_workday: >-
+            {{ tomorrow_is_weekday and not tomorrow_is_holiday }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ tomorrow_is_workday and sync_meeting_enabled and normalized_meeting_time != '' }}"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.next_work_meeting
+                data:
+                  time: "{{ meeting_alarm_time }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.special_meeting
+        default:
           - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.special_meeting

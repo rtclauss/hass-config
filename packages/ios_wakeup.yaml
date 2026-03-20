@@ -63,6 +63,28 @@ automation:
           {% set alarm_enabled = trigger.query.alarm_enabled %}
         {% endif %}
         {{ alarm_enabled }}
+      meeting_time_raw: >-
+        {% set meeting_time = '' %}
+        {% if trigger.json is defined and trigger.json.meeting_time is defined %}
+          {% set meeting_time = trigger.json.meeting_time %}
+        {% elif trigger.data is defined and trigger.data.meeting_time is defined %}
+          {% set meeting_time = trigger.data.meeting_time %}
+        {% elif trigger.query is defined and trigger.query.meeting_time is defined %}
+          {% set meeting_time = trigger.query.meeting_time %}
+        {% endif %}
+        {{ meeting_time | string | trim }}
+      meeting_enabled_raw: >-
+        {% set meeting_enabled = '' %}
+        {% if trigger.json is defined and trigger.json.meeting_enabled is defined %}
+          {% set meeting_enabled = trigger.json.meeting_enabled %}
+        {% elif trigger.data is defined and trigger.data.meeting_enabled is defined %}
+          {% set meeting_enabled = trigger.data.meeting_enabled %}
+        {% elif trigger.query is defined and trigger.query.meeting_enabled is defined %}
+          {% set meeting_enabled = trigger.query.meeting_enabled %}
+        {% endif %}
+        {{ meeting_enabled }}
+      alarm_state_provided: >-
+        {{ alarm_time_raw != '' or (alarm_enabled_raw | string | trim) != '' }}
       alarm_time: >-
         {% set raw = alarm_time_raw %}
         {% if raw %}
@@ -77,16 +99,46 @@ automation:
         {% else %}
           {{ alarm_time_raw != '' }}
         {% endif %}
+      meeting_state_provided: >-
+        {{ meeting_time_raw != '' or (meeting_enabled_raw | string | trim) != '' }}
+      meeting_time: >-
+        {% set raw = meeting_time_raw %}
+        {% if raw %}
+          {{ raw[0:5] }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+      meeting_enabled: >-
+        {% set raw = meeting_enabled_raw | string | lower | trim %}
+        {% if raw != '' %}
+          {{ raw in ['true', '1', 'on', 'yes'] }}
+        {% else %}
+          {{ meeting_time_raw != '' }}
+        {% endif %}
     action:
-      - action: input_text.set_value
-        target:
-          entity_id: input_text.phone_wakeup_alarm_time
-        data:
-          value: "{{ alarm_time_raw if alarm_enabled else '' }}"
-      - action: script.set_wakeup_from_phone_alarm
-        data:
-          alarm_time: "{{ alarm_time }}"
-          alarm_enabled: "{{ alarm_enabled }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ alarm_state_provided }}"
+            sequence:
+              - action: input_text.set_value
+                target:
+                  entity_id: input_text.phone_wakeup_alarm_time
+                data:
+                  value: "{{ alarm_time_raw if alarm_enabled else '' }}"
+              - action: script.set_wakeup_from_phone_alarm
+                data:
+                  alarm_time: "{{ alarm_time }}"
+                  alarm_enabled: "{{ alarm_enabled }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ meeting_state_provided }}"
+            sequence:
+              - action: script.set_next_work_meeting_from_phone
+                data:
+                  meeting_time: "{{ meeting_time }}"
+                  meeting_enabled: "{{ meeting_enabled }}"
 
 ################################################
 ## Input Text
