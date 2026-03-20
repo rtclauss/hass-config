@@ -208,3 +208,58 @@ Software on the NUC:
 
 **Apple Shortcuts**
 * [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/master/packages/workday.yaml#L107)
+* iOS personal automation: run every day at `9:00 PM`, find the wake-up alarm you want to mirror on the phone, format its time as `HH:mm`, and `POST` JSON to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync` with `{"alarm_time":"07:30"}`. If there is no enabled alarm for the next day, send `{"alarm_enabled": false}` instead. If JSON is awkward, the webhook also accepts query parameters.
+
+Shortcut recipe:
+
+1. In `Shortcuts` create a `Personal Automation`.
+2. Choose `Time of Day`, set it to `9:00 PM`, select `Daily`, and disable `Run After Confirmation`.
+3. Add `Find Alarms` and filter to the alarm you want Home Assistant to mirror.
+4. Recommended filter: `Label is Wake Up` and `Is Enabled is On`.
+5. If you only keep one wake-up alarm on the phone, using the first enabled alarm is fine.
+6. Add `If` and branch on whether `Find Alarms` has any value.
+7. In the `If` branch, add `Get Item from List` and choose the `First Item`.
+8. Add `Get Details of Alarm` and select `Time`.
+9. Add `Format Date` and use custom format `HH:mm`.
+10. Add `Dictionary` with one key: `alarm_time`.
+11. Set the `alarm_time` value to the formatted date output from the previous step.
+12. In the `Otherwise` branch, add `Dictionary` with one key: `alarm_enabled`.
+13. Set the `alarm_enabled` value to `false`.
+14. After the `If`, add `Get Contents of URL`.
+15. Set the URL to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync`.
+16. Set `Method` to `POST`.
+17. Set `Request Body` to `JSON`.
+18. Set the JSON payload to the dictionary output from the `If`.
+
+Expected payload when an alarm exists:
+
+```json
+{
+  "alarm_time": "07:30"
+}
+```
+
+Expected payload when there is no alarm:
+
+```json
+{
+  "alarm_enabled": false
+}
+```
+
+Suggested Shortcut action flow:
+
+```text
+Find Alarms
+If Find Alarms has any value
+  Get Item from List (First Item)
+  Get Details of Alarm (Time)
+  Format Date (HH:mm)
+  Dictionary
+    alarm_time: Formatted Date
+Otherwise
+  Dictionary
+    alarm_enabled: false
+End If
+Get Contents of URL
+```
