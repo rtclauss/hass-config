@@ -1838,15 +1838,6 @@ script:
         {%- for device in states.number | select('match', '.*brightnesslevelfordoubletapup.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_bindingofftoonsynclevel_mode: >
         {%- for device in states.select | select('match', '.*bindingofftoonsynclevel.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
-      all_inovelli_switches_switchtype_mode: >
-        {%- for device in states.select
-          | selectattr('entity_id', 'search', 'switchtype')
-          | rejectattr('entity_id', 'search', 'exhaust')
-          | rejectattr('entity_id', 'equalto', 'select.hall_transition_switch_switchtype')
-          | rejectattr('entity_id', 'equalto', 'select.kitchen_switch_switchtype')
-          | rejectattr('entity_id', 'equalto', 'select.kitchen_bay_switch_switchtype') -%}
-          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
-        {%- endfor %}
     sequence:
       - action: logbook.log
         data:
@@ -1957,35 +1948,43 @@ script:
           option: "Exhaust Fan (On/Off)"
       - delay: 10 # seconds
       - action: select.select_option
-        data_template:
-          entity_id: >
-            {{all_inovelli_switches_switchtype_mode}}
         data:
-          option: "Single-Pole Full Sine Wave"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data_template:
           entity_id:
             - select.owner_suite_bathroom_exhaust_switchtype
             - select.basement_bathroom_exhaust_switchtype
             - select.guest_bathroom_exhaust_switchtype
-            - select.hall_transition_switch_switchtype
-            - select.kitchen_switch_switchtype
+            - select.basement_great_room_landing_switch_2_switchtype
+            - select.basement_great_room_west_switch_switchtype
+            - select.basement_landing_switch_switchtype
+            - select.basement_north_hallway_switch_switchtype
+            - select.basement_overhead_outlet_switchtype
+            - select.deck_flood_lights_switchtype
+            - select.dining_room_wall_switch_switchtype
+            - select.garage_overhead_switch_switchtype
             - select.kitchen_bay_switch_switchtype
-        data:
+            - select.kitchen_sink_overhead_switch_switchtype
+            - select.kitchen_switch_switchtype
+            - select.kitchen_under_cabinet_switchtype
+            - select.laundry_wall_switch_switchtype
+            - select.office_fan_switch_switchtype
+            - select.owner_suite_bathroom_shower_switch_switchtype
+            - select.owner_suite_bathroom_tub_switch_switchtype
+            - select.owner_suite_bathroom_vanity_switchtype
+            - select.owner_suite_closet_switchtype
+            - select.owner_suite_fan_switch_switchtype
           option: "Single Pole"
       - delay: 10 # seconds
       - action: select.select_option
-        data_template:
-          entity_id:
-            - select.basement_landing_switch_switchtype
-            - select.deck_flood_lights_switchtype
-            - select.hall_garage_laundry_switch_switchtype
-            - select.hall_upstairs_switch_switchtype
-            - select.hall_stairway_switchtype
-            - select.garage_overhead_switch_switchtype
         data:
+          entity_id:
+            - select.hall_garage_laundry_switch_switchtype
+            - select.hall_stairway_switchtype
+            - select.hall_upstairs_switch_switchtype
           option: "3-Way Aux Switch"
+      - action: select.select_option
+        data:
+          entity_id: select.hall_transition_switch_switchtype
+          option: "Aux Switch"
       # Now redo the bindings of switches to bulbs/etc
       - delay: 10 # seconds
       # TODO: Z2M 2.0 I need to update these bindings: https://github.com/Koenkk/zigbee2mqtt/pull/24432
