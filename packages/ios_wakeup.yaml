@@ -53,6 +53,16 @@ automation:
           {% set alarm_time = trigger.query.alarm_time %}
         {% endif %}
         {{ alarm_time | string | trim }}
+      alarm_enabled_raw: >-
+        {% set alarm_enabled = '' %}
+        {% if trigger.json is defined and trigger.json.alarm_enabled is defined %}
+          {% set alarm_enabled = trigger.json.alarm_enabled %}
+        {% elif trigger.data is defined and trigger.data.alarm_enabled is defined %}
+          {% set alarm_enabled = trigger.data.alarm_enabled %}
+        {% elif trigger.query is defined and trigger.query.alarm_enabled is defined %}
+          {% set alarm_enabled = trigger.query.alarm_enabled %}
+        {% endif %}
+        {{ alarm_enabled }}
       alarm_time: >-
         {% set raw = alarm_time_raw %}
         {% if raw %}
@@ -60,18 +70,23 @@ automation:
         {% else %}
           {{ '' }}
         {% endif %}
-    condition:
-      - condition: template
-        value_template: "{{ alarm_time != '' }}"
+      alarm_enabled: >-
+        {% set raw = alarm_enabled_raw | string | lower | trim %}
+        {% if raw != '' %}
+          {{ raw in ['true', '1', 'on', 'yes'] }}
+        {% else %}
+          {{ alarm_time_raw != '' }}
+        {% endif %}
     action:
       - action: input_text.set_value
         target:
           entity_id: input_text.phone_wakeup_alarm_time
         data:
-          value: "{{ alarm_time_raw }}"
+          value: "{{ alarm_time_raw if alarm_enabled else '' }}"
       - action: script.set_wakeup_from_phone_alarm
         data:
           alarm_time: "{{ alarm_time }}"
+          alarm_enabled: "{{ alarm_enabled }}"
 
 ################################################
 ## Input Text
@@ -80,4 +95,3 @@ automation:
 input_text:
   phone_wakeup_alarm_time:
     max: 16
-
