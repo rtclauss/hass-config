@@ -1842,7 +1842,9 @@ script:
         {%- for device in states.select
           | selectattr('entity_id', 'search', 'switchtype')
           | rejectattr('entity_id', 'search', 'exhaust')
-          | rejectattr('entity_id', 'equalto', 'select.hall_transition_switch_switchtype') -%}
+          | rejectattr('entity_id', 'equalto', 'select.hall_transition_switch_switchtype')
+          | rejectattr('entity_id', 'equalto', 'select.kitchen_switch_switchtype')
+          | rejectattr('entity_id', 'equalto', 'select.kitchen_bay_switch_switchtype') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
     sequence:
@@ -1917,15 +1919,12 @@ script:
             select.owner_suite_bathroom_exhaust_smartbulbmode,
             select.owner_suite_bathroom_vanity_smartbulbmode,
             select.owner_suite_closet_smartbulbmode,
-            select.kitchen_bay_switch_smartbulbmode,
             select.hall_stairway_smartbulbmode,
             select.garage_overhead_switch_smartbulbmode,
             select.deck_flood_lights_smartbulbmode,
             select.laundry_wall_switch_smartbulbmode,
             select.kitchen_under_cabinet_smartbulbmode,
-            select.basement_overhead_outlet_smartbulbmode,
-            select.hall_transition_switch_smartbulbmode,
-            select.kitchen_switch_smartbulbmode
+            select.basement_overhead_outlet_smartbulbmode
         data:
           option: "Disabled"
       - delay: 10 # seconds
@@ -1970,6 +1969,9 @@ script:
             - select.owner_suite_bathroom_exhaust_switchtype
             - select.basement_bathroom_exhaust_switchtype
             - select.guest_bathroom_exhaust_switchtype
+            - select.hall_transition_switch_switchtype
+            - select.kitchen_switch_switchtype
+            - select.kitchen_bay_switch_switchtype
         data:
           option: "Single Pole"
       - delay: 10 # seconds
@@ -1979,19 +1981,11 @@ script:
             - select.basement_landing_switch_switchtype
             - select.deck_flood_lights_switchtype
             - select.hall_garage_laundry_switch_switchtype
-            - select.kitchen_switch_switchtype
             - select.hall_upstairs_switch_switchtype
             - select.hall_stairway_switchtype
             - select.garage_overhead_switch_switchtype
-            - select.kitchen_bay_switch_switchtype
         data:
           option: "3-Way Aux Switch"
-      - action: select.select_option
-        data_template:
-          entity_id: >
-            select.hall_transition_switch_switchtype
-        data:
-          option: "Aux Switch"
       # Now redo the bindings of switches to bulbs/etc
       - delay: 10 # seconds
       # TODO: Z2M 2.0 I need to update these bindings: https://github.com/Koenkk/zigbee2mqtt/pull/24432
