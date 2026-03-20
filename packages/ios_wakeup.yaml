@@ -1,0 +1,83 @@
+################################################################
+## Packages / iOS Wakeup
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "ios_wakeup"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    automation.sync_phone_wakeup_alarm_from_ios_shortcut:
+      <<: *customize
+      friendly_name: "Sync Phone Wake-up Alarm"
+      icon: mdi:cellphone-message
+
+    input_text.phone_wakeup_alarm_time:
+      <<: *customize
+      friendly_name: "Phone Wake-up Alarm Time"
+      icon: mdi:alarm
+
+################################################
+## Automation
+################################################
+
+automation:
+  - id: sync_phone_wakeup_alarm_from_ios_shortcut
+    alias: sync_phone_wakeup_alarm_from_ios_shortcut
+    description: Receive the nightly iOS Shortcut wake-up alarm sync and forward it to the wake-up scheduler.
+    trigger:
+      - trigger: webhook
+        webhook_id: ios_phone_wakeup_alarm_sync
+        allowed_methods:
+          - POST
+        local_only: false
+    mode: single
+    variables:
+      alarm_time_raw: >-
+        {% set alarm_time = '' %}
+        {% if trigger.json is defined and trigger.json.alarm_time is defined %}
+          {% set alarm_time = trigger.json.alarm_time %}
+        {% elif trigger.data is defined and trigger.data.alarm_time is defined %}
+          {% set alarm_time = trigger.data.alarm_time %}
+        {% elif trigger.query is defined and trigger.query.alarm_time is defined %}
+          {% set alarm_time = trigger.query.alarm_time %}
+        {% endif %}
+        {{ alarm_time | string | trim }}
+      alarm_time: >-
+        {% set raw = alarm_time_raw %}
+        {% if raw %}
+          {{ raw[0:5] }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+    condition:
+      - condition: template
+        value_template: "{{ alarm_time != '' }}"
+    action:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.phone_wakeup_alarm_time
+        data:
+          value: "{{ alarm_time_raw }}"
+      - action: script.set_wakeup_from_phone_alarm
+        data:
+          alarm_time: "{{ alarm_time }}"
+
+################################################
+## Input Text
+################################################
+
+input_text:
+  phone_wakeup_alarm_time:
+    max: 16
+
