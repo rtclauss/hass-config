@@ -1773,12 +1773,20 @@ script:
         {%- for device in states.number | select('match', '.*ledintensitywhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_switches_led_intensity_off: >
         {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_day_mode_singletapbehavior_switches: >
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', 'singletapbehavior')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'search', 'fan_switch')
+          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
       - action: logbook.log
         data:
           entity_id: script.day_mode_switches
           name: Exclude log
-          message: "Setting all light switch colors to blue"
+          message: "Setting light switch day mode colors and full-brightness single tap"
           domain: script
       - action: number.set_value
         data_template:
@@ -1804,6 +1812,12 @@ script:
             {{all_on_led_switches}}
         data:
           value: "170"
+      - action: select.select_option
+        data_template:
+          entity_id: >
+            {{all_day_mode_singletapbehavior_switches}}
+        data:
+          option: "New Behavior"
 
   reset_inovelli_switches:
     icon: mdi:light-switch
@@ -1825,7 +1839,12 @@ script:
       all_inovelli_switches_bindingofftoonsynclevel_mode: >
         {%- for device in states.select | select('match', '.*bindingofftoonsynclevel.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_switchtype_mode: >
-        {%- for device in states.select | select('match', '.*switchtype.*') | reject('match','.*exhaust.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', 'switchtype')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'equalto', 'select.hall_transition_switch_switchtype') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
       - action: logbook.log
         data:
@@ -1893,20 +1912,20 @@ script:
       - delay: 10 # seconds
       - action: select.select_option
         data_template:
-          entity_id:
-            - select.hall_stairway_smartbulbmode
-            - select.owner_suite_bathroom_exhaust_smartbulbmode
-            - select.owner_suite_bathroom_vanity_smartbulbmode
-            - select.owner_suite_closet_smartbulbmode
-            - select.kitchen_nook_switch_smartbulbmode # TODO Maybe remove this
-            - select.hall_stairway_smartbulbmode # TODO Maybe remove this when new light installed
-            - select.garage_overhead_switch_smartbulbmode
-            # - select.deck_kitchen_door_smartbulbmode
-            - select.deck_flood_lights_smartbulbmode
-            - select.laundry_wall_switch_smartbulbmode
-            - select.kitchen_under_cabinet_smartbulbmode
-            - select.basement_overhead_outlet_smartbulbmode # Todo maybe remove this when something is plugged in?
-            # -
+          entity_id: >
+            select.hall_stairway_smartbulbmode,
+            select.owner_suite_bathroom_exhaust_smartbulbmode,
+            select.owner_suite_bathroom_vanity_smartbulbmode,
+            select.owner_suite_closet_smartbulbmode,
+            select.kitchen_bay_switch_smartbulbmode,
+            select.hall_stairway_smartbulbmode,
+            select.garage_overhead_switch_smartbulbmode,
+            select.deck_flood_lights_smartbulbmode,
+            select.laundry_wall_switch_smartbulbmode,
+            select.kitchen_under_cabinet_smartbulbmode,
+            select.basement_overhead_outlet_smartbulbmode,
+            select.hall_transition_switch_smartbulbmode,
+            select.kitchen_switch_smartbulbmode
         data:
           option: "Disabled"
       - delay: 10 # seconds
@@ -1961,12 +1980,18 @@ script:
             - select.deck_flood_lights_switchtype
             - select.hall_garage_laundry_switch_switchtype
             - select.kitchen_switch_switchtype
-            - select.hall_transition_switch_switchtype
             - select.hall_upstairs_switch_switchtype
             - select.hall_stairway_switchtype
             - select.garage_overhead_switch_switchtype
+            - select.kitchen_bay_switch_switchtype
         data:
           option: "3-Way Aux Switch"
+      - action: select.select_option
+        data_template:
+          entity_id: >
+            select.hall_transition_switch_switchtype
+        data:
+          option: "Aux Switch"
       # Now redo the bindings of switches to bulbs/etc
       - delay: 10 # seconds
       # TODO: Z2M 2.0 I need to update these bindings: https://github.com/Koenkk/zigbee2mqtt/pull/24432
