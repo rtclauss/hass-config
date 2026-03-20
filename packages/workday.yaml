@@ -43,6 +43,15 @@ homeassistant:
       friendly_name: "Turn on Rear Office Lamp when Camera Off"
 
     ################################################
+    ## Scripts
+    ################################################
+
+    script.set_wakeup_from_phone_alarm:
+      <<: *customize
+      friendly_name: "Set Wakeup From Phone Alarm"
+      icon: mdi:cellphone
+
+    ################################################
     ## Binary Sensors
     ################################################
 
@@ -168,6 +177,119 @@ automation:
           payload: >-
             {% set segment_id = now().weekday() + 1 %}
             {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+
+########################
+# Scripts
+########################
+script:
+  set_wakeup_from_phone_alarm:
+    alias: Set Wakeup From Phone Alarm
+    description: Set the next wakeup time from the phone alarm synced by iOS.
+    mode: single
+    fields:
+      alarm_time:
+        description: Alarm time from iOS, in HH:mm or HH:mm:ss format.
+        example: "07:30"
+      alarm_enabled:
+        description: Whether the phone has a wake-up alarm enabled for tomorrow.
+        example: "true"
+    sequence:
+      - variables:
+          alarm_time_text: "{{ alarm_time | default('') | string | trim }}"
+          sync_alarm_enabled: >-
+            {% set raw = alarm_enabled | default('') %}
+            {% set has_alarm_time = alarm_time | default('') | string | trim != '' %}
+            {% if raw is boolean %}
+              {{ raw }}
+            {% elif raw | string | trim != '' %}
+              {{ raw | string | lower | trim in ['true', '1', 'on', 'yes'] }}
+            {% else %}
+              {{ has_alarm_time }}
+            {% endif %}
+          normalized_alarm_time: >-
+            {% if alarm_time_text != '' %}
+              {% set parts = alarm_time_text.split(':') %}
+              {{ '%02d:%02d' | format(parts[0] | int, parts[1] | int) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          meeting_alarm_time: >-
+            {% if alarm_time_text != '' %}
+              {% set meeting_time = today_at(normalized_alarm_time) - timedelta(minutes=5) %}
+              {{ meeting_time.strftime('%H:%M:%S') }}
+            {% else %}
+              00:00:00
+            {% endif %}
+          tomorrow_start: "{{ (now().date() + timedelta(days=1)).isoformat() }}T00:00:00"
+          day_after_tomorrow_start: "{{ (now().date() + timedelta(days=2)).isoformat() }}T00:00:00"
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.mn_holidays
+        data:
+          start_date_time: "{{ tomorrow_start }}"
+          end_date_time: "{{ day_after_tomorrow_start }}"
+        response_variable: tomorrow_holidays
+      - variables:
+          tomorrow_is_weekday: "{{ (now() + timedelta(days=1)).weekday() < 5 }}"
+          tomorrow_is_holiday: >-
+            {{ (tomorrow_holidays.events | default([]) | length) > 0 }}
+          tomorrow_is_workday: >-
+            {{ tomorrow_is_weekday and not tomorrow_is_holiday }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ sync_alarm_enabled and tomorrow_is_workday }}"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.weekday_alarm
+                data:
+                  time: "{{ normalized_alarm_time }}"
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.next_work_meeting
+                data:
+                  time: "{{ meeting_alarm_time }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.weekday_alarm_on
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.special_meeting
+          - conditions:
+              - condition: template
+                value_template: "{{ sync_alarm_enabled and not tomorrow_is_workday }}"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.weekend_alarm
+                data:
+                  time: "{{ normalized_alarm_time }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.weekend_alarm_on
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.special_meeting
+        default:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tomorrow_is_workday }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.weekday_alarm_on
+              - conditions:
+                  - condition: template
+                    value_template: "{{ not tomorrow_is_workday }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.weekend_alarm_on
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.special_meeting
 
 ########################
 # Binary Sensors
