@@ -208,3 +208,4 @@ Software on the NUC:
 
 **Apple Shortcuts**
 * [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/master/packages/workday.yaml#L107)
+* iOS personal automation: run every day at `9:00 PM`, find the wake-up alarm you want to mirror on the phone, format its time as `HH:mm`, and `POST` JSON to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync` with `{"alarm_time":"07:30"}`. If JSON is awkward, the webhook also accepts `?alarm_time=07:30`. If you only keep one wake-up alarm, use the first enabled alarm; otherwise filter by a stable label such as `Wake Up`.
