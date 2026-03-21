@@ -87,22 +87,37 @@ cards:
         cards:
           - type: button
             entity: input_boolean.long_range_travel
-            name: "Charge to Max Range?"
+            name: "Max Range Override"
             icon: mdi:backup-restore
+            show_state: false
+            state_color: true
+            tap_action:
+              action: call-service
+              service: input_boolean.turn_on
+              service_data:
+                entity_id: input_boolean.long_range_travel
+          - type: button
+            entity: input_boolean.long_range_travel
+            name: "Use Daily Plan"
+            icon: mdi:ev-station
             show_state: false
             tap_action:
               action: call-service
-              service: input_boolean.toggle
+              service: input_boolean.turn_off
               service_data:
                 entity_id: input_boolean.long_range_travel
           - type: markdown
             entity_id: binary_sensor.upcoming_trip_charging
             title: "Reason"
             content: >-
-              {% if states('binary_sensor.upcoming_trip_charging') is on %}
+              {% if is_state('input_boolean.long_range_travel', 'on') %}
+                ### Max-range override is active
+                #### Charge limit pinned to 100% until you return to the daily plan
+              {% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}
                 ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}
                 #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}
                 #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int }} mi
               {% else %}
-                
+                ### Daily planner is active
+                #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and tariff inputs
               {% endif %}
