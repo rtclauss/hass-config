@@ -38,6 +38,11 @@ homeassistant:
       friendly_name: "Trip Mode Manager"
       icon: mdi:bag-suitcase
 
+    automation.trip_mode_startup_reconcile:
+      <<: *customize
+      friendly_name: "Trip Mode Startup Reconcile"
+      icon: mdi:restart-alert
+
     automation.sync_ecobee_calendar_vacation:
       <<: *customize
       friendly_name: "Sync Ecobee Calendar Vacation"
@@ -169,10 +174,151 @@ automation:
   #   - delay: '00:00:{{ (range(1,90)|random|int) }}'
   #   - action: script.vacation_group_visibility
 
+  - id: trip_mode_startup_reconcile
+    alias: trip_mode_startup_reconcile
+    mode: restart
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - delay:
+          seconds: 30
+      - variables:
+          trip_mode_on: "{{ is_state('input_boolean.trip', 'on') }}"
+          vacation_sim_on: "{{ is_state('switch.vacation_simulation', 'on') }}"
+          states_mismatch: "{{ trip_mode_on != vacation_sim_on }}"
+          notification_tag: "trip-mode-startup-reconcile"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "on"
+              - condition: template
+                value_template: "{{ trip_mode_on or vacation_sim_on }}"
+            sequence:
+              # Emit an event so trip_mode_manager stays the single owner of trip-state writes.
+              - event: trip_mode_resolution_requested
+                event_data:
+                  desired_state: "off"
+                  reason: startup_reconcile
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
+              - condition: template
+                value_template: "{{ states_mismatch }}"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "Trip Mode Needs Confirmation"
+                  message: >-
+                    Home Assistant restarted while you were away and trip mode is out of sync.
+                    Should trip mode be enabled?
+                  data:
+                    tag: "{{ notification_tag }}"
+                    persistent: true
+                    actions:
+                      - action: "TRIP_STARTUP_ENABLE"
+                        title: "Enable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "TRIP_STARTUP_DISABLE"
+                        title: "Disable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+              - action: notify.mobile_app_faro
+                data:
+                  title: "Trip Mode Needs Confirmation"
+                  message: >-
+                    Home Assistant restarted while you were away and trip mode is out of sync.
+                    Should trip mode be enabled?
+                  data:
+                    tag: "{{ notification_tag }}"
+                    persistent: true
+                    actions:
+                      - action: "TRIP_STARTUP_ENABLE"
+                        title: "Enable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: "TRIP_STARTUP_DISABLE"
+                        title: "Disable"
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+              - wait_for_trigger:
+                  - trigger: event
+                    id: startup_enable
+                    event_type: mobile_app_notification_action
+                    event_data:
+                      action: TRIP_STARTUP_ENABLE
+                  - trigger: event
+                    id: startup_disable
+                    event_type: mobile_app_notification_action
+                    event_data:
+                      action: TRIP_STARTUP_DISABLE
+                timeout:
+                  hours: 4
+                continue_on_timeout: true
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{
+                            wait.completed
+                            and wait.trigger is not none
+                            and wait.trigger.id == 'startup_disable'
+                          }}
+                    sequence:
+                      - event: trip_mode_resolution_requested
+                        event_data:
+                          desired_state: "off"
+                          reason: startup_reconcile
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{
+                            not wait.completed
+                            or (wait.trigger is not none and wait.trigger.id == 'startup_enable')
+                          }}
+                    sequence:
+                      - event: trip_mode_resolution_requested
+                        event_data:
+                          desired_state: "on"
+                          reason: startup_reconcile
+              - action: notify.mobile_app_wethop
+                data:
+                  message: "clear_notification"
+                  data:
+                    tag: "{{ notification_tag }}"
+              - action: notify.mobile_app_faro
+                data:
+                  message: "clear_notification"
+                  data:
+                    tag: "{{ notification_tag }}"
+
   - id: trip_mode_manager
     alias: trip_mode_manager
     mode: single
     trigger:
+      - trigger: event
+        id: startup_reconcile_enable
+        event_type: trip_mode_resolution_requested
+        event_data:
+          desired_state: "on"
+          reason: startup_reconcile
+      - trigger: event
+        id: startup_reconcile_disable
+        event_type: trip_mode_resolution_requested
+        event_data:
+          desired_state: "off"
+          reason: startup_reconcile
       - trigger: state
         id: away_for_20h
         entity_id: binary_sensor.bayesian_zeke_home
@@ -219,6 +365,36 @@ automation:
         to: "on"
     action:
       - choose:
+          - conditions:
+              - condition: trigger
+                id: startup_reconcile_enable
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: notify.all
+                data:
+                  message: "Trip mode enabled."
+          - conditions:
+              - condition: trigger
+                id: startup_reconcile_disable
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.vacation_simulation
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.trip
+              - action: input_number.set_value
+                data:
+                  entity_id: input_number.random_vacation_light_group
+                  value: "{{ (0|int) }}"
+              - action: notify.all
+                data:
+                  message: "Back from trip. \U0001F4BA"
           - conditions:
               - condition: trigger
                 id:
