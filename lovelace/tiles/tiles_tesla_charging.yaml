@@ -122,5 +122,47 @@ cards:
                 #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int }} mi
               {% else %}
                 ### Daily planner is active
-                #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and tariff inputs
+                #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and EV tariff inputs
               {% endif %}
+
+      - type: horizontal-stack
+        title:
+        show_header_toggle: false
+        cards:
+          - type: markdown
+            title: "Planner Decision"
+            content: >-
+              {% set tariff = states('sensor.ev_charging_tariff') %}
+              {% set rate = states('sensor.ev_charging_tariff_rate') | float(default=0) %}
+              {% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}
+              {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
+              {% set cold_weather = states('sensor.outside_temperature') | float(default=999) <= 20 %}
+              ### {{ charge_limit }}% target
+              {% if is_state('input_boolean.long_range_travel', 'on') %}
+                #### Manual override is forcing max range
+              {% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}
+                #### Planner is following the next trip
+              {% elif alarm_enabled and cold_weather %}
+                #### Planner is following tomorrow's alarm and cold-weather preconditioning
+              {% elif alarm_enabled %}
+                #### Planner is following tomorrow's alarm and EV TOU pricing
+              {% else %}
+                #### No next-day departure plan is active
+              {% endif %}
+              #### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh
+          - type: entities
+            title: "EV TOU"
+            show_header_toggle: false
+            entities:
+              - entity: sensor.ev_charging_tariff
+                name: Current Tariff
+              - entity: sensor.ev_charging_tariff_rate
+                name: Current Rate
+              - entity: sensor.daily_ev_charging_energy
+                name: Today's EV Energy
+              - entity: sensor.daily_ev_charging_cost
+                name: Today's EV Cost
+              - entity: sensor.monthly_ev_charging_energy
+                name: This Month EV Energy
+              - entity: sensor.monthly_ev_charging_cost
+                name: This Month EV Cost
