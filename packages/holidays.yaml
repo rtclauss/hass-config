@@ -1,0 +1,642 @@
+################################################################
+## Packages / Holidays
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "holidays"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+
+    automation.christmas_tree_on:
+      <<: *customize
+      friendly_name: "Turn on Christmas Tree"
+
+    automation.christmas_tree_off_midnight:
+      <<: *customize
+      friendly_name: "Turn off Christmas Tree"
+
+    automation.christmas_lights_off_bedroom_off:
+      <<: *customize
+      friendly_name: "Turn off Christmas Tree if bedroom lights turned off"
+
+    automation.toggle_christmas_automations_on_season_change:
+      <<: *customize
+      friendly_name: "Display Christmas tab"
+
+    automation.toggle_christmas_tab:
+      <<: *customize
+      friendly_name: "Display Christmas tab"
+
+    automation.reset_after_holiday:
+      <<: *customize
+      friendly_name: "Reset lights after holiday"
+
+    automation.st_andrews_day_light_loop:
+      <<: *customize
+      friendly_name: "St Andrews Day lights"
+
+    automation.halloween_light_loop:
+      <<: *customize
+      friendly_name: "Halloween lights"
+
+    binary_sensor.christmas_season:
+      <<: *customize
+      friendly_name: "Christmas Season"
+      icon: mdi:calendar
+
+    binary_sensor.st_andrews_day:
+      <<: *customize
+      friendly_name: "St Andrews Day"
+      icon: mdi:calendar
+
+    binary_sensor.halloween:
+      <<: *customize
+      friendly_name: "Halloween"
+      icon: mdi:calendar
+
+    ################################################
+    ## Groups
+    ################################################
+
+    group.christmas_lights:
+      <<: *customize
+      friendly_name: "Christmas Sensors"
+
+    group.christmas_automations:
+      <<: *customize
+      friendly_name: "Christmas Automations"
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    script.toggle_christmas_automation_during_christmas_season:
+      <<: *customize
+      friendly_name: "Toggle Christmas Automation Based on Boolean Sensor"
+
+    switch.christmas_tree:
+      <<: *customize
+      friendly_name: "Christmas Tree"
+      icon: mdi:pine-tree
+
+########################
+# Automations
+########################
+automation:
+  - id: christmas_tree_on
+    alias: christmas_tree_on
+    initial_state: false
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.christmas_tree
+      - action: light.turn_on
+        target:
+          entity_id: light.christmas_lights
+      - action: notify.all
+        data:
+          message: Turning on Christmas Tree.
+
+  - id: christmas_tree_off_midnight
+    alias: christmas_tree_off_midnight
+    initial_state: false
+    trigger:
+      - trigger: time
+        at: 00:00:00
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.christmas_tree
+      - action: light.turn_off
+        target:
+          entity_id: light.christmas_lights
+      - action: notify.all
+        data:
+          message: Turning off Christmas Tree.
+
+  - id: christmas_lights_off_bedroom_off
+    alias: christmas_lights_off_bedroom_off
+    initial_state: false
+    trigger:
+      - trigger: state
+        entity_id: light.bedroom_lamp, light.bedroom_lamp_2
+        to: "off"
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.christmas_tree
+      - action: light.turn_off
+        target:
+          entity_id: light.christmas_lights
+
+  - id: christmas_outside_light_loop_1
+    alias: christmas_outside_light_loop_1
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+      - trigger: time_pattern
+        minutes: "/1"
+    condition:
+      - alias: "Christmas-time"
+        condition: state
+        entity_id: binary_sensor.christmas_season
+        state: "on"
+      - condition: or
+        conditions:
+          - alias: "Sunset"
+            condition: sun
+            after: sunset
+            after_offset: -00:45:00
+          - alias: "Sunrise"
+            condition: sun
+            before: sunrise
+            before_offset: 00:45:00
+    action:
+      - action: scene.turn_on
+        data:
+          transition: 30
+          entity_id: scene.scene_christmas_outdoors_{{ now().minute % 4 + 1 | int }}
+
+  - id: toggle_christmas_automations_on_season_change
+    alias: toggle_christmas_automations_on_season_change
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.christmas_season
+      - trigger: homeassistant
+        event: start
+    condition:
+      - alias: "It's christmas"
+        condition: state
+        entity_id: binary_sensor.christmas_season
+        state: "on"
+    action:
+      - action: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_tree_on
+      - action: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_tree_off_midnight
+      - action: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_lights_off_bedroom_off
+      - action: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_outside_light_loop_1
+
+  - id: reset_after_holiday
+    alias: reset_after_holiday
+    trigger:
+      - trigger: sun
+        event: sunrise
+        offset: +00:45:00
+    action:
+      - action: scene.turn_on
+        data:
+          entity_id: scene.reset_front_lights
+      - delay:
+          seconds: 15
+      - action: light.turn_off
+        data:
+          entity_id: light.outside_front_hue
+
+  - id: st_andrews_day_light_loop
+    alias: st_andrews_day_light_loop
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+      - trigger: time_pattern
+        minutes: "/2"
+    condition:
+      - alias: "St Andrews Day"
+        condition: state
+        entity_id: binary_sensor.st_andrews_day
+        state: "on"
+      - condition: or
+        conditions:
+          - alias: "Sunset"
+            condition: sun
+            after: sunset
+            after_offset: -00:45:00
+          - alias: "Sunrise"
+            condition: sun
+            before: sunrise
+            before_offset: 00:45:00
+    action:
+      - action: scene.turn_on
+        data:
+          transition: 30
+          entity_id: scene.scene_st_andrews_day_outdoors_{{ now().minute % 4 + 1 | int }}
+
+  - id: halloween_light_loop
+    alias: halloween_light_loop
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+      - trigger: time_pattern
+        minutes: "/2"
+    condition:
+      - alias: "Halloween"
+        condition: state
+        entity_id: binary_sensor.halloween
+        state: "on"
+      - condition: or
+        conditions:
+          - alias: "Sunset"
+            condition: sun
+            after: sunset
+            after_offset: -00:45:00
+          - alias: "Sunrise"
+            condition: sun
+            before: sunrise
+            before_offset: 00:45:00
+    action:
+      - action: scene.turn_on
+        data:
+          transition: 30
+          entity_id: scene.scene_halloween_outdoors_{{ now().minute % 4 + 1 | int }}
+
+  - alias: Garbage Holiday Update
+    id: garbage_holiday_update
+    trigger:
+      - trigger: event
+        event_type: garbage_collection_loaded
+        event_data:
+          entity_id: sensor.waste_management
+    action:
+      - variables:
+          holiday_entity: calendar.mn_holidays
+      - alias: "Iterate through the dates"
+        repeat:
+          for_each: "{{ trigger.event.data.collection_dates }}"
+          sequence:
+            - alias: "Is there a public holiday on the week?"
+              condition: template
+              value_template: >-
+                {%- set collection_date = as_datetime(repeat.item) %}
+                {%- set ns = namespace(found=false) %}
+                {%- for i in range(collection_date.weekday()+1) %}
+                  {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                  {%- if d in state_attr(holiday_entity,'holidays') %}
+                    {%- set ns.found = true %}
+                  {%- endif %}
+                {%- endfor %}
+                {{ ns.found }}
+            - alias: "Move the date"
+              action: garbage_collection.offset_date
+              data:
+                entity_id: "{{ trigger.event.data.entity_id }}"
+                date: "{{ repeat.item }}"
+                offset: >-
+                  {%- set collection_date = as_datetime(repeat.item) %}
+                  {%- set ns = namespace(found_free=false, offset=0) %}
+                  {# Count holidays in the week, increase offset for each found public holiday #}
+                  {%- for i in range(collection_date.weekday()+1) %}
+                    {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                    {%- if d in state_attr(holiday_entity,'holidays') %}
+                      {%- set ns.offset = ns.offset + 1 %}
+                    {%- endif %}
+                  {%- endfor %}
+                  {# Increase offset until we find a date that is not public holiday #}
+                  {%- for _ in range(7) if not ns.found_free %}
+                    {%- set d = ( collection_date + timedelta( days=ns.offset) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                    {%- if d in state_attr(holiday_entity,'holidays') %}
+                      {%- set ns.offset = ns.offset + 1 %}
+                    {% else %}
+                      {%- set ns.found_free = true %}
+                    {%- endif %}
+                  {% endfor %}
+                  {{ ns.offset }}
+      - alias: "Update the garbage_collection entity"
+        action: garbage_collection.update_state
+        data:
+          entity_id: "{{ trigger.event.data.entity_id }}"
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Groups
+########################
+group:
+  christmas_lights:
+    entities:
+      - switch.christmas_tree
+      - light.christmas_lights
+  christmas_automations:
+    entities:
+      - automation.christmas_tree_on
+      - automation.christmas_tree_off_midnight
+      - automation.christmas_lights_off_bedroom_off
+
+########################
+# Scenes
+########################
+scene:
+  - name: scene_christmas_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+  - name: scene_christmas_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+  - name: scene_christmas_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+  - name: scene_christmas_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+  - name: reset_front_lights
+    entities:
+      light.outside_front_door:
+        state: "on"
+        color_temp_kelvin: 2732
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        color_temp_kelvin: 2732
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        color_temp_kelvin: 2732
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 0, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 0, 255]
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 0, 255]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0]
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [30, 144, 255]
+        brightness: 255
+  - name: scene_halloween_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 50, 50]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [120, 0, 0]
+        brightness: 255
+  - name: scene_halloween_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 120, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 180, 50]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [180, 60, 0]
+        brightness: 255
+  - name: scene_halloween_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [60, 0, 120]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [180, 0, 255]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [30, 0, 60]
+        brightness: 255
+  - name: scene_halloween_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 100]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 120, 40]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 60, 20]
+        brightness: 255
+
+########################
+# Scripts
+########################
+script:
+  toggle_christmas_automation_during_christmas_season:
+    sequence:
+      - action: >-
+          {% if is_state("binary_sensor.christmas_season", 'on') %}
+            automation.turn_on
+          {% else %}
+            automation.turn_off
+          {% endif %}
+        data_template:
+          entity_id: "{{ entity_id }}"
+
+########################
+# Template
+########################
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.christmas_season
+        state: '{{ now().strftime("%m") |int in [12] }}'
+        name: christmas_season
+
+      - name: st_andrews_day
+        unique_id: st_andrews_day
+        state: "{{ now().month == 11 and now().day == 30 }}"
+
+      - name: halloween
+        unique_id: halloween
+        state: "{{ now().month == 10 and now().day == 31 }}"
+
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time
+        at: "00:05:00"
+      - trigger: time
+        at: "12:05:00"
+      - trigger: state
+        entity_id: calendar.mn_holidays
+    action:
+      - variables:
+          today: "{{ now().date() }}"
+          is_wed: "{{ today.weekday() == 2 }}"
+          after_pickup_time: "{{ now().hour >= 12 }}"
+          days_until_wed: >
+            {% set d = 2 - today.weekday() %}
+            {% if d < 0 %}{% set d = d + 7 %}{% endif %}
+            {{ d }}
+          base_wed: >
+            {% if is_wed and not after_pickup_time %}
+              {{ today }}
+            {% else %}
+              {{ today + timedelta(days=days_until_wed if (not is_wed) else 7) }}
+            {% endif %}
+          week_mon: "{{ base_wed - timedelta(days=base_wed.weekday()) }}"
+          range_start: "{{ week_mon.isoformat() }}T00:00:00"
+          range_end: "{{ (base_wed + timedelta(days=1)).isoformat() }}T23:59:59"
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.mn_holidays
+        data:
+          start_date_time: "{{ range_start }}"
+          end_date_time: "{{ range_end }}"
+        response_variable: hols
+      - variables:
+          holiday_events: "{{ hols.events | default([]) }}"
+          holiday_mon_to_wed: >
+            {% set ws = week_mon %}
+            {% set we = base_wed %}
+            {% set hit = false %}
+            {% for e in holiday_events %}
+              {% set d = as_datetime(e.start).date() %}
+              {% if d >= ws and d <= we %}
+                {% set hit = true %}
+              {% endif %}
+            {% endfor %}
+            {{ hit }}
+          pickup_date: >
+            {% if holiday_mon_to_wed %}
+              {{ (base_wed + timedelta(days=1)).isoformat() }}
+            {% else %}
+              {{ base_wed.isoformat() }}
+            {% endif %}
+    sensor:
+      - name: Garbage pickup date
+        unique_id: garbage_pickup_date_apple_valley
+        state: "{{ pickup_date }}"
+        attributes:
+          base_wednesday: "{{ base_wed.isoformat() }}"
+          holiday_shift_applied: "{{ holiday_mon_to_wed }}"
+          holiday_events_in_range: "{{ holiday_events | map(attribute='summary') | list }}"
+
+########################
+# Zone
+########################
+zone: {}
