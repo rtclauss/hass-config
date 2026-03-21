@@ -129,13 +129,12 @@ automation:
         entity_id:
           - input_boolean.weekday_alarm_on
           - input_boolean.weekend_alarm_on
-          - input_boolean.special_meeting
           - input_boolean.long_range_travel
           - input_datetime.weekday_alarm
           - input_datetime.weekend_alarm
-          - select.daily_electricity
-          - select.hourly_electricity
-          - input_number.electrical_rate
+          - select.daily_ev_charging
+          - select.hourly_ev_charging
+          - input_number.ev_electrical_rate
         id: planner_input
       - trigger: state
         entity_id: binary_sensor.nigori_parking_brake
@@ -164,7 +163,6 @@ automation:
             {% set manual_override = is_state('input_boolean.long_range_travel', 'on') %}
             {% set weekday_alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') %}
             {% set weekend_alarm_enabled = is_state('input_boolean.weekend_alarm_on', 'on') %}
-            {% set special_meeting = is_state('input_boolean.special_meeting', 'on') %}
             {% if weekday_alarm_enabled %}
               {% set alarm_time_raw = states('input_datetime.weekday_alarm') %}
               {% set alarm_source = 'weekday alarm' %}
@@ -184,14 +182,15 @@ automation:
             {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
             {% set trip_all_day = state_attr('binary_sensor.upcoming_trip_charging', 'all_day') in [true, 'true', 'True', 'on'] %}
             {% set has_upcoming_trip = is_state('binary_sensor.upcoming_trip_charging', 'on') and trip_start_raw not in [none, '', 'None'] %}
-            {% if states('select.daily_electricity') not in ['unknown', 'unavailable'] %}
-              {% set tariff = states('select.daily_electricity') %}
+            {% if states('select.daily_ev_charging') not in ['unknown', 'unavailable'] %}
+              {% set tariff = states('select.daily_ev_charging') %}
             {% else %}
-              {% set tariff = states('select.hourly_electricity') %}
+              {% set tariff = states('select.hourly_ev_charging') %}
             {% endif %}
-            {% set electrical_rate = states('input_number.electrical_rate') | float(default=0) %}
+            {% set electrical_rate = states('input_number.ev_electrical_rate') | float(default=0) %}
             {% set tariff_name = tariff | lower %}
-            {% set high_tariff = 'summer' in tariff_name or tariff_name in ['peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
+            {% set tariff_display = tariff | replace('_', '-') | title %}
+            {% set high_tariff = tariff_name in ['on_peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
             {% set departure_dt = none %}
             {% if has_upcoming_trip %}
               {% set trip_start_dt = trip_start_raw | as_datetime | as_local %}
@@ -199,7 +198,7 @@ automation:
               {% set departure_dt = trip_start_dt - timedelta(minutes=trip_duration_min + trip_buffer_min) %}
             {% elif alarm_enabled %}
               {% set alarm_base_dt = today_at(alarm_time_raw[:5]) %}
-              {% set prep_buffer_min = 45 + (15 if special_meeting else 0) + (10 if cold_weather else 0) %}
+              {% set prep_buffer_min = 45 + (10 if cold_weather else 0) %}
               {% set candidate_departure = alarm_base_dt + timedelta(minutes=prep_buffer_min) %}
               {% if candidate_departure < now() + timedelta(minutes=15) %}
                 {% set departure_dt = candidate_departure + timedelta(days=1) %}
@@ -211,7 +210,7 @@ automation:
               {% set charge_limit = 100 %}
             {% elif has_upcoming_trip %}
               {% set charge_limit = 90 %}
-            {% elif alarm_enabled and (cold_weather or special_meeting) %}
+            {% elif alarm_enabled and cold_weather %}
               {% set charge_limit = 90 %}
             {% elif alarm_enabled and not high_tariff %}
               {% set charge_limit = 85 %}
@@ -223,7 +222,7 @@ automation:
             {% if manual_override %}
               {% set charge_limit = 100 %}
             {% endif %}
-            {% set precondition = has_upcoming_trip or (alarm_enabled and (cold_weather or special_meeting)) %}
+            {% set precondition = has_upcoming_trip or (alarm_enabled and cold_weather) %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
@@ -247,14 +246,14 @@ automation:
             {% if manual_override and not has_upcoming_trip and not alarm_enabled %}
               {% set summary = 'Manual max-range override is on. Keep the Tesla at 100% charge.' %}
             {% elif has_upcoming_trip %}
-              {% set summary = 'Plan Tesla for ' ~ (trip_entry if trip_entry else 'upcoming trip') ~ '. Set charge limit to ' ~ charge_limit ~ '% and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Distance ' ~ (trip_distance_mi | round(0)) ~ ' mi. Tariff ' ~ tariff ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
+              {% set summary = 'Plan Tesla for ' ~ (trip_entry if trip_entry else 'upcoming trip') ~ '. Set charge limit to ' ~ charge_limit ~ '% and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Distance ' ~ (trip_distance_mi | round(0)) ~ ' mi. EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
             {% elif alarm_enabled %}
-              {% if charge_limit == 80 and high_tariff and not (cold_weather or special_meeting) %}
-                {% set charge_limit_phrase = 'Keep the default 80% charge limit because the current tariff is higher' %}
+              {% if charge_limit == 80 and high_tariff and not cold_weather %}
+                {% set charge_limit_phrase = 'Keep the default 80% charge limit because the current EV tariff is higher' %}
               {% else %}
                 {% set charge_limit_phrase = 'Set charge limit to ' ~ charge_limit ~ '%' %}
               {% endif %}
-              {% set summary = 'Plan Tesla for ' ~ source ~ '. ' ~ charge_limit_phrase ~ ' and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Outside ' ~ (outside_temp_f | round(0)) ~ 'F. Tariff ' ~ tariff ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
+              {% set summary = 'Plan Tesla for ' ~ source ~ '. ' ~ charge_limit_phrase ~ ' and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Outside ' ~ (outside_temp_f | round(0)) ~ 'F. EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
             {% else %}
               {% set summary = 'No next-day departure plan detected. Restore the Tesla default charge limit to 80%.' %}
             {% endif %}

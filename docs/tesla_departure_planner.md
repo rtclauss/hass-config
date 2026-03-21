@@ -9,7 +9,7 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 - upcoming trips
 - weekday/weekend alarm settings
 - weather
-- electricity tariff/rate
+- EV charging tariff/rate
 - a manual max-range override
 
 ## Inputs
@@ -30,22 +30,6 @@ If an upcoming trip exists, the planner uses trip start time plus Waze duration 
 
 These drive non-trip next-morning departure planning.
 
-### `special_meeting`
-
-`special_meeting` is a UI helper, not a calendar entity.
-
-- Entity: `input_boolean.special_meeting`
-- Defined in `packages/workday.yaml`
-- Exposed in the weekday alarm UI tile at `lovelace/tiles/tiles_weekday_alarm.yaml`
-
-When `special_meeting` is on, the planner treats the next alarm like a higher-priority morning:
-
-- adds extra prep time before departure
-- allows a higher charge target
-- enables preconditioning even if the weather is not cold
-
-The workday alarm flow also uses it as a dedicated `meeting-alarm` path and turns it back off after that alarm runs.
-
 ### Weather inputs
 
 - `sensor.outside_temperature`
@@ -54,19 +38,34 @@ Cold weather currently means `<= 20F`.
 
 Cold weather increases departure buffer time and can justify preconditioning or a higher charge target.
 
-### Tariff inputs
+### EV tariff inputs
 
-- `select.daily_electricity`
-- `select.hourly_electricity`
-- `input_number.electrical_rate`
+- `select.daily_ev_charging`
+- `select.hourly_ev_charging`
+- `input_number.ev_electrical_rate`
+- `sensor.ev_charging_tariff`
+- `sensor.ev_charging_tariff_rate`
+
+The EV charging tariff is separate from the rest of the house. It follows the Dakota Electric time-of-use schedule from the EV packet provided by the user:
+
+- off-peak: `$0.0755/kWh`
+- mid-peak non-summer: `$0.1238/kWh`
+- mid-peak summer: `$0.1377/kWh`
+- on-peak: `$0.4420/kWh`
+
+Schedule:
+
+- weekdays before `08:00` and from `21:00` onward: off-peak
+- weekdays `08:00` to `16:00`: mid-peak
+- weekdays `16:00` to `21:00`: on-peak
+- weekends and Minnesota holidays: off-peak all day
 
 The planner treats the tariff as "higher" when:
 
-- the tariff name includes `summer`
-- the tariff name is `peak`, `on-peak`, or `onpeak`
+- the EV tariff is `on_peak`
 - the numeric electrical rate is `>= 0.13`
 
-This only affects the non-trip alarm top-off case. Trip charging and cold-weather/special-meeting cases still take priority.
+This only affects the non-trip alarm top-off case. Trip charging and cold-weather cases still take priority.
 
 ### Manual override
 
@@ -86,9 +85,9 @@ Decision summary:
 
 - long trip (`>= 90 mi`): `100%`
 - other trip: `90%`
-- alarm + cold weather or `special_meeting`: `90%`
-- alarm + lower tariff: `85%`
-- alarm + higher tariff: `80%`
+- alarm + cold weather: `90%`
+- alarm + lower EV tariff: `85%`
+- alarm + higher EV tariff: `80%`
 - no plan: `80%`
 - manual max-range override: `100%`
 
@@ -117,11 +116,17 @@ Storage-mode dashboard:
 
 - `.storage/lovelace.ryan_new_mushroom`
 - view path: `tesla-v2`
+- companion storage energy view path: `energy`
 
 Controls:
 
 - `Max Range Override`
 - `Use Daily Plan`
+- `Planner Decision`
+- `sensor.ev_charging_tariff`
+- `sensor.ev_charging_tariff_rate`
+- `sensor.daily_ev_charging_energy`
+- `sensor.daily_ev_charging_cost`
 
 ### Alarm dashboard
 
@@ -130,7 +135,8 @@ The weekday alarm tile includes:
 - `input_datetime.weekday_alarm`
 - `input_boolean.weekday_alarm_on`
 - `input_datetime.next_work_meeting`
-- `input_boolean.special_meeting`
+
+`input_boolean.special_meeting` still exists for the workday alarm flow, but the Tesla planner does not use it.
 
 ## Validation
 
