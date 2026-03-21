@@ -1303,15 +1303,39 @@
                 },
                 {
                   "type": "markdown",
-                  "content": "{% if state_attr('sensor.nigori_charging_rate','time_left') > 0 %}\n  {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}\n{% else %}\n  Charging Complete\n{% endif %}\n\n{% if is_state('binary_sensor.upcoming_trip_charging', \"on\") %}\n  ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}\n  #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}\n  #### Distance: {{ state_attr(\"sensor.waze_next_trip_distance\", \"distance\")| int }} mi\n{% else %}\n  Default Schedule\n{% endif %}",
+                  "content": "{% if state_attr('sensor.nigori_charging_rate','time_left') > 0 %}\n  {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}\n{% else %}\n  Charging Complete\n{% endif %}\n\n{% if is_state('input_boolean.long_range_travel', 'on') %}\n  ### Max-range override is active\n  #### Charge limit pinned to 100% until you return to the daily plan\n{% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}\n  ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}\n  #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}\n  #### Distance: {{ state_attr(\"sensor.waze_next_trip_distance\", \"distance\")| int }} mi\n{% else %}\n  ### Daily planner is active\n  #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and tariff inputs\n{% endif %}",
                   "title": "Status and Reason"
                 },
                 {
                   "type": "tile",
                   "entity": "input_boolean.long_range_travel",
                   "tap_action": {
-                    "action": "toggle"
+                    "action": "call-service",
+                    "service": "input_boolean.turn_on",
+                    "data": {},
+                    "target": {
+                      "entity_id": "input_boolean.long_range_travel"
+                    }
                   },
+                  "name": "Max Range Override",
+                  "icon": "mdi:backup-restore",
+                  "show_entity_picture": false,
+                  "vertical": true,
+                  "hide_state": true
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_boolean.long_range_travel",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "input_boolean.turn_off",
+                    "data": {},
+                    "target": {
+                      "entity_id": "input_boolean.long_range_travel"
+                    }
+                  },
+                  "name": "Use Daily Plan",
+                  "icon": "mdi:ev-station",
                   "show_entity_picture": false,
                   "vertical": true,
                   "hide_state": true
