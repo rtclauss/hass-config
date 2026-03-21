@@ -280,10 +280,12 @@ sensor: []
 template:
   - binary_sensor:
       - default_entity_id: binary_sensor.curling_season
+        unique_id: curling_season
         state: '{{ now().strftime("%m") |int in [1,2,3,10,11,12] }}'
         name: curling_season
   - sensor:
       - name: OCC Time
+        unique_id: occ_time
         state: >-
           {% if states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed is defined %}
              {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
@@ -293,6 +295,7 @@ template:
         unit_of_measurement: "minutes"
         device_class: duration
       - name: SPCC Time
+        unique_id: spcc_time
         state: >-
           {% if states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed is defined %}
              {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
