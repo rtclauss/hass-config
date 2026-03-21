@@ -1222,6 +1222,9 @@ automation:
 
   - id: owner_suite_light_auto_on
     alias: owner_suite_light_auto_on
+    description: >
+      Turn on the owner suite lights to the current adaptive lighting target
+      with a soft transition after bed occupancy clears.
     trace:
       stored_traces: 20
     trigger:
@@ -1251,6 +1254,11 @@ automation:
           entity_id:
             - light.owner_suite_lamps
             - light.bed_lightstrip
+          brightness_pct: >-
+            {{ state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct') | int(100) }}
+          color_temp_kelvin: >-
+            {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin') | int(4000) }}
+          transition: 45
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.owner_suite_bedroom_auto_on
