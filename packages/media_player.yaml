@@ -253,6 +253,11 @@ automation:
       - trigger: state
         entity_id:
           - sensor.den_sonos_controls_action
+        to: "play_pause"
+        id: play_pause
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
         to: "track_next"
         id: track_next
       - trigger: state
@@ -265,27 +270,31 @@ automation:
           - sensor.den_sonos_controls_action
         to: "volume_up"
         id: volume_up
-      # - platform: state
-      #   entity_id:
-      #     - sensor.den_sonos_controls_action
-      #   to: "volume_up_hold"
-      #   id: volume_up_hold
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_up_hold"
+        id: volume_up_hold
       - trigger: state
         entity_id:
           - sensor.den_sonos_controls_action
         to: "volume_down"
         id: volume_down
-      # - platform: state
-      #   entity_id:
-      #     - sensor.den_sonos_controls_action
-      #   to: "volume_down_hold"
-      #   id: volume_down_hold
+      - trigger: state
+        entity_id:
+          - sensor.den_sonos_controls_action
+        to: "volume_down_hold"
+        id: volume_down_hold
       # TODO Use Dots for shuffle and repeat
     action:
       - choose:
           - conditions:
-              - condition: trigger
-                id: toggle_play_pause
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: toggle_play_pause
+                  - condition: trigger
+                    id: play_pause
             sequence:
               - action: media_player.media_play_pause
                 target:
@@ -305,15 +314,23 @@ automation:
                 target:
                   entity_id: media_player.den_sonos_2
           - conditions:
-              - condition: trigger
-                id: volume_up
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: volume_up
+                  - condition: trigger
+                    id: volume_up_hold
             sequence:
               - action: media_player.volume_up
                 target:
                   entity_id: media_player.den_sonos_2
           - conditions:
-              - condition: trigger
-                id: volume_down
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: volume_down
+                  - condition: trigger
+                    id: volume_down_hold
             sequence:
               - action: media_player.volume_down
                 target:
