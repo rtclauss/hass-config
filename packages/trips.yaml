@@ -922,6 +922,7 @@ sensor: []
 template:
   - binary_sensor:
       - default_entity_id: binary_sensor.sensed_trip
+        unique_id: sensed_trip
         state: >-
           {% if is_state("input_boolean.trip", 'on') %}
             True
@@ -930,6 +931,7 @@ template:
           {% endif %}
         name: sensed_trip
       - default_entity_id: binary_sensor.planned_vacation_calendar
+        unique_id: planned_vacation_calendar
         state: >-
           {% set start = state_attr('sensor.ecobee_calendar_vacation_schedule', 'start') %}
           {% set end = state_attr('sensor.ecobee_calendar_vacation_schedule', 'end') %}
@@ -947,6 +949,7 @@ template:
           {% endif %}
         name: planned_vacation_calendar
       - default_entity_id: binary_sensor.planned_work_trip_calendar
+        unique_id: planned_work_trip_calendar
         state: >-
           {% if is_state("binary_sensor.work_trip_today", 'on') %}
             true
@@ -956,6 +959,7 @@ template:
         name: planned_work_trip_calendar
       - delay_off: "3:00:00"
         default_entity_id: binary_sensor.flying_home_today
+        unique_id: flying_home_today
         state: >-
           {% if is_state("binary_sensor.flight_to_msp_today", 'on') or is_state("binary_sensor.flight_to_rst_today",'on')  %}
             true
@@ -1489,6 +1493,7 @@ template:
   - sensor:
       - name: time_to_home
         default_entity_id: sensor.me_to_home
+        unique_id: me_to_home
         state: >-
           {% set to_home = states.sensor.me_to_home.state | int %}
           {% set minutes = ((to_home % 60) / 1) | int %}

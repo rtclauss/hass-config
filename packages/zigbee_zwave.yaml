@@ -1536,6 +1536,7 @@ automation:
 binary_sensor:
   - platform: bayesian
     name: "Bayesian Bed Occupancy"
+    unique_id: bayesian_bed_occupancy
     prior: 0.40
     probability_threshold: 0.60
     observations:
@@ -2225,6 +2226,7 @@ sensor: []
 template:
   - binary_sensor:
       - name: master_bed_occupancy
+        unique_id: master_bed_occupancy
         delay_on: 00:00:30
         device_class: occupancy
         state: >-
@@ -2244,6 +2246,7 @@ template:
         #   {{ states('sensor.average_bed_load')| int(0) > 20 }}
 
       - name: z2m_failing
+        unique_id: z2m_failing_binary
         device_class: problem
         state: >-
           {% set total = states('sensor.z2m_router_total') | int(0) %}
@@ -2253,6 +2256,7 @@ template:
 
   - lock:
       - name: Front door lock
+        unique_id: front_door_lock_template
         optimistic: true
         lock:
           - target:
@@ -2441,6 +2445,7 @@ template:
         state: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"
 
       - name: z2m_failing
+        unique_id: z2m_failing_count
         state: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_router_count') | int(0) }}"
         attributes:
           total_router_count: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"

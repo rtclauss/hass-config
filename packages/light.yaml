@@ -1874,6 +1874,7 @@ automation:
                   entity_id: input_boolean.office_auto_on
 
   - alias: "Tiki Room Animation Speed"
+    id: tiki_room_animation_speed
     initial_state: True
     trigger:
       - trigger: state
@@ -1924,6 +1925,7 @@ input_number:
 light:
   - platform: group
     name: laundry_room
+    unique_id: laundry_room
     entities:
       - light.laundry_room_north
       - light.laundry_room_south
@@ -1982,6 +1984,7 @@ light:
 mqtt:
   light:
     - name: "Tiki Room Strip"
+      unique_id: tiki_room_strip
       schema: json
       state_topic: "leds/tikiroom"
       command_topic: "leds/tikiroom/set"
@@ -2181,10 +2184,12 @@ switch: []
 template:
   - sensor:
       - name: circadian_brightness
+        unique_id: circadian_brightness
         unit_of_measurement: "%"
         state: >-
           {{ state_attr('switch.adaptive_lighting_hallway', 'brightness_pct') |int }}
       - name: circadian_temperature
+        unique_id: circadian_temperature
         unit_of_measurement: "°K"
         state: >-
           {{ state_attr('switch.adaptive_lighting_hallway', 'color_temp_kelvin') }}
