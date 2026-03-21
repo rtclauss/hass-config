@@ -113,6 +113,10 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
   python -m homeassistant --config /config --script check_config
 ```
 
+## Feature Docs
+
+- [Tesla Departure Planner](docs/tesla_departure_planner.md)
+
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
 I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/master/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
