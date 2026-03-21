@@ -328,6 +328,7 @@ switch: []
 template:
   - binary_sensor:
       - default_entity_id: binary_sensor.guest_on_wifi
+        unique_id: guest_on_wifi
         state: >-
           {% set state = states('sensor.barley_guest') %} {% if is_number(state) and state | float >= 1 %}
             True
@@ -337,6 +338,7 @@ template:
         name: guest_on_wifi
   - sensor:
       - name: guests_on_wifi
+        unique_id: guests_on_wifi
         state: >-
           {{ (states.device_tracker | selectattr('state','eq','home') | selectattr('attributes.is_guest', 'eq', true) | list) }}
 

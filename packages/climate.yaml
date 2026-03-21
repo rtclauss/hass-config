@@ -650,6 +650,7 @@ sensor:
 template:
   - binary_sensor:
       - default_entity_id: binary_sensor.bathroom_humidity_high
+        unique_id: bathroom_humidity_high
         state: >-
           {% if (states('sensor.owner_suite_bathroom_tph_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10) %}
             True
@@ -658,6 +659,7 @@ template:
           {% endif %}
         name: bathroom_humidity_high
       - default_entity_id: binary_sensor.basement_bathroom_humidity_high
+        unique_id: basement_bathroom_humidity_high
         state: >-
           {% if(states('sensor.basement_bathroom_tph_humidity')|float(default=0))> (states('sensor.average_house_humidity')|float(default=0) + 10) %}
             True
@@ -666,6 +668,7 @@ template:
           {% endif %}
         name: basement_bathroom_humidity_high
       - default_entity_id: binary_sensor.guest_bathroom_humidity_high
+        unique_id: guest_bathroom_humidity_high
         state: >-
           {% if(states('sensor.guest_bathroom_tph_humidity')|float(default=0))> (states('sensor.average_house_humidity')|float(default=0) + 10) %}
             True
@@ -675,6 +678,7 @@ template:
         name: guest_bathroom_humidity_high
       - device_class: heat
         default_entity_id: binary_sensor.ecobee_aux
+        unique_id: ecobee_aux
         state: >-
           {% if 'aux' in state_attr('climate.my_ecobee', 'equipment_running') %}
             True
@@ -684,6 +688,7 @@ template:
         name: ecobee_aux
       - device_class: presence
         default_entity_id: binary_sensor.ecobee_home
+        unique_id: ecobee_home
         state: >-
           {% if is_state_attr('climate.my_ecobee', 'preset_mode', 'away_indefinitely') or is_state_attr('climate.my_ecobee', 'preset_mode', 'Away') %}
             False
@@ -693,6 +698,7 @@ template:
         name: ecobee_home
       - device_class: window
         default_entity_id: binary_sensor.fresh_air_open
+        unique_id: fresh_air_open
         state: >-
           {{ is_state('binary_sensor.ene_window_contact', 'on') or is_state('binary_sensor.ese_window_contact',
           'on') or is_state('binary_sensor.nne_window_contact', 'on') or is_state('binary_sensor.north_kitchen_sink_window_contact',
@@ -703,15 +709,18 @@ template:
         name: fresh_air_open
   - sensor:
       - name: HVAC Activity
+        unique_id: hvac_activity
         state: "{{ state_attr('climate.my_ecobee', 'hvac_action') }}"
       - device_class: temperature
         unit_of_measurement: °F
         default_entity_id: sensor.ecobee_temperature
+        unique_id: ecobee_temperature
         availability: '{{ states("climate.my_ecobee") != None }}'
         state: "{{ state_attr('climate.my_ecobee', 'current_temperature') }}"
         name: ecobee_temperature
       - unit_of_measurement: °F/5 minute
         default_entity_id: sensor.rate_of_house_temp_change_5m
+        unique_id: rate_of_house_temp_change_5m
         availability: >-
           {{ states("sensor.rate_of_house_temp_change_5m", "change_rate") != None }}
         state: >-
@@ -719,6 +728,7 @@ template:
         name: rate_of_house_temp_change_5m
       - unit_of_measurement: °F/5 minute
         default_entity_id: sensor.rate_of_house_temp_change_10m
+        unique_id: rate_of_house_temp_change_10m
         availability: >-
           {{ states("sensor.rate_of_house_temp_change_10m", "change_rate") != None }}
         state: >-
@@ -726,6 +736,7 @@ template:
         name: rate_of_house_temp_change_10m
       - unit_of_measurement: °F/5 minute
         default_entity_id: sensor.rate_of_house_temp_change_1h
+        unique_id: rate_of_house_temp_change_1h
         availability: >-
           {{ states("sensor.house_temperature_stats_1h", "change_rate") != None }}
         state: >-
@@ -733,6 +744,7 @@ template:
         name: rate_of_house_temp_change_1h
       - unit_of_measurement: °F/5 minute
         default_entity_id: sensor.rate_of_house_temp_change_30m
+        unique_id: rate_of_house_temp_change_30m
         availability: >-
           {{ states("sensor.house_temperature_stats_30m", "change_rate") != None }}
         state: >-
@@ -741,6 +753,7 @@ template:
       - device_class: temperature
         unit_of_measurement: °F
         default_entity_id: sensor.ecobee_active_target_temperature
+        unique_id: ecobee_active_target_temperature
         availability: "{{ states('climate.my_ecobee') not in ['unknown', 'unavailable'] }}"
         state: >-
           {% set action = states('sensor.hvac_activity') %}
@@ -762,6 +775,7 @@ template:
         name: ecobee_active_target_temperature
       - unit_of_measurement: °F/min
         default_entity_id: sensor.ecobee_modeled_rate_deg_per_min
+        unique_id: ecobee_modeled_rate_deg_per_min
         availability: >-
           {{ has_value('sensor.outside_temperature') and has_value('sensor.rate_of_house_temp_change_10m') and states('sensor.hvac_activity') in ['heating', 'cooling'] }}
         state: >-
