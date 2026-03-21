@@ -216,6 +216,7 @@ media_player: []
 mqtt:
   - sensor:
       - name: "Garden Birds"
+        unique_id: garden_birds
         state_topic: "birdpi/apprise"
         json_attributes_topic: "birdpi/apprise"
         value_template: "{{ value_json.common_name }}"
@@ -252,6 +253,7 @@ script: {}
 sensor:
   - platform: rest
     name: Top 50 Bird Species
+    unique_id: top_50_bird_species
     resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/species/?period=day&limit=50
 
     value_template: "{{ value_json.species[0].commonName }}"
@@ -260,6 +262,7 @@ sensor:
 
   - platform: rest
     name: Latest Bird Detection
+    unique_id: latest_bird_detection
     resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/detections/?limit=1
     value_template: >
       {% if value_json.detections and value_json.detections | length > 0 %}
@@ -281,6 +284,7 @@ switch: []
 template:
   - image:
       - name: Bird-Pi Photo
+        unique_id: bird_pi_photo
         verify_ssl: false
         url: "{{ state_attr('sensor.garden_birds','image') }}"
 ########################

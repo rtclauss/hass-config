@@ -266,6 +266,7 @@ script: {}
 sensor:
   - platform: rest
     name: "ADSB Aircraft Raw"
+    unique_id: adsb_aircraft_raw
     resource: http://10.24.1.188:8080/data/aircraft.json
     scan_interval: 15
     value_template: "{{ value_json.now }}"
@@ -274,6 +275,7 @@ sensor:
 
   - platform: rest
     name: Closest Aircraft Photo Raw
+    unique_id: closest_aircraft_photo_raw
     resource_template: >-
       {% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}
       {% if hx %}
@@ -291,6 +293,7 @@ sensor:
 
   - platform: rest
     name: Closest Aircraft Route Raw
+    unique_id: closest_aircraft_route_raw
     resource_template: >-
       {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}
       {% if cs %}
@@ -338,6 +341,7 @@ switch: []
 template:
   - sensor:
       - name: "Closest Aircraft Overhead"
+        unique_id: closest_aircraft_overhead
         icon: mdi:airplane
 
         # State: callsign if present, else HEX, else "none"
@@ -471,6 +475,7 @@ template:
 
   - sensor:
       - name: "Closest Aircraft Photo"
+        unique_id: closest_aircraft_photo
         state: >-
           {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
           {{ 'ok' if (photos | length) > 0 else 'none' }}
@@ -502,6 +507,7 @@ template:
 
   - sensor:
       - name: "Closest Aircraft Route"
+        unique_id: closest_aircraft_route
         state: >-
           {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
           {% if r and r.flightroute is defined %}
@@ -576,6 +582,7 @@ template:
 
   - sensor:
       - name: airport_codes_icao
+        unique_id: airport_codes_icao
         state: >-
           {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
           {% if raw in ['unknown','unavailable','none',''] %}
@@ -590,6 +597,7 @@ template:
           {% endif %}
 
       - name: airports_names
+        unique_id: airports_names
         state: >-
           {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
           {% if raw in ['unknown','unavailable','none',''] %}
@@ -605,6 +613,7 @@ template:
 
       # Helpful when debugging: if ADSB.im returns {"detail":[...]} you'll see it here
       - name: error_detail
+        unique_id: closest_aircraft_error_detail
         state: >-
           {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
           {% if raw in ['unknown','unavailable','none',''] %}
@@ -643,6 +652,7 @@ rest:
       {% endif %}
     sensor:
       - name: Closest Aircraft Routeset
+        unique_id: closest_aircraft_routeset
         value_template: >-
           {% set j = value | from_json %}
           {% if j is sequence and j|length > 0 and j[0]._airport_codes_iata is defined %}
@@ -675,6 +685,7 @@ rest:
       {% endif %}
     sensor:
       - name: Closest Aircraft Routeset Names
+        unique_id: closest_aircraft_routeset_names
         value_template: >-
           {% set j = value | from_json %}
           {% if j is sequence and j|length > 0 and j[0]._airports is defined %}

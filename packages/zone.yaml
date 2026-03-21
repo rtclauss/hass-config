@@ -860,6 +860,7 @@ sensor: []
 template:
   - binary_sensor:
       - name: test_homeward
+        unique_id: test_homeward
         availability: >-
           {{ states.sensor.the_brewery_nearest_direction_of_travel.last_changed is defined }}
         state: >-
@@ -871,14 +872,17 @@ template:
           {% endif %}
   - sensor:
       - name: home_time
+        unique_id: home_time
         state: >-
           {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.the_brewery_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
         unit_of_measurement: "minutes"
       - name: zeke_speed
+        unique_id: zeke_speed
         unit_of_measurement: "mph"
         state: >-
           {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int(-1) }}
       - name: zeke_direction
+        unique_id: zeke_direction
         state: >-
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int(-1)) >=0 -%}
             {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int(-1) }}
