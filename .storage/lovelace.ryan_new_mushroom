@@ -1390,8 +1390,13 @@
                 },
                 {
                   "type": "markdown",
-                  "content": "{% if state_attr('sensor.nigori_charging_rate','time_left') > 0 %}\n  {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}\n{% else %}\n  Charging Complete\n{% endif %}\n\n{% if is_state('input_boolean.long_range_travel', 'on') %}\n  ### Max-range override is active\n  #### Charge limit pinned to 100% until you return to the daily plan\n{% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}\n  ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}\n  #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}\n  #### Distance: {{ state_attr(\"sensor.waze_next_trip_distance\", \"distance\")| int }} mi\n{% else %}\n  ### Daily planner is active\n  #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and tariff inputs\n{% endif %}",
+                  "content": "{% if state_attr('sensor.nigori_charging_rate','time_left') > 0 %}\n  {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}\n{% else %}\n  Charging Complete\n{% endif %}\n\n{% if is_state('input_boolean.long_range_travel', 'on') %}\n  ### Max-range override is active\n  #### Charge limit pinned to 100% until you return to the daily plan\n{% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}\n  ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}\n  #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}\n  #### Distance: {{ state_attr('sensor.waze_next_trip_distance', 'distance')| int }} mi\n{% else %}\n  ### Daily planner is active\n  #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and EV tariff inputs\n{% endif %}",
                   "title": "Status and Reason"
+                },
+                {
+                  "type": "markdown",
+                  "content": "{% set tariff = states('sensor.ev_charging_tariff') %}\n{% set rate = states('sensor.ev_charging_tariff_rate') | float(default=0) %}\n{% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}\n{% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}\n{% set cold_weather = states('sensor.outside_temperature') | float(default=999) <= 20 %}\n### {{ charge_limit }}% target\n{% if is_state('input_boolean.long_range_travel', 'on') %}\n  #### Manual override is forcing max range\n{% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}\n  #### Planner is following the next trip\n{% elif alarm_enabled and cold_weather %}\n  #### Planner is following tomorrow's alarm and cold-weather preconditioning\n{% elif alarm_enabled %}\n  #### Planner is following tomorrow's alarm and EV TOU pricing\n{% else %}\n  #### No next-day departure plan is active\n{% endif %}\n#### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh",
+                  "title": "Planner Decision"
                 },
                 {
                   "type": "tile",
@@ -1430,6 +1435,30 @@
                 {
                   "type": "tile",
                   "entity": "number.nigori_charge_limit"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff_rate"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_cost"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_cost"
                 }
               ]
             },
@@ -1458,6 +1487,82 @@
                   "type": "custom:mushroom-cover-card",
                   "entity": "cover.nigori_trunk",
                   "show_buttons_control": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Energy",
+          "path": "energy",
+          "icon": "mdi:transmission-tower",
+          "type": "sections",
+          "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "House Electricity"
+                },
+                {
+                  "type": "tile",
+                  "entity": "select.daily_electricity",
+                  "name": "Current House Tariff"
+                },
+                {
+                  "type": "tile",
+                  "entity": "input_number.electrical_rate",
+                  "name": "Current House Rate"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.house_electrical_meter",
+                  "name": "House Meter"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "EV Charging"
+                },
+                {
+                  "type": "markdown",
+                  "title": "Dakota Electric EV TOU",
+                  "content": "### Off-peak before 08:00 and after 21:00\n#### Weekends and Minnesota holidays stay off-peak all day"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff",
+                  "name": "Current EV Tariff"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff_rate",
+                  "name": "Current EV Rate"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_energy",
+                  "name": "Today's EV Energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_cost",
+                  "name": "Today's EV Cost"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_energy",
+                  "name": "This Month EV Energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_cost",
+                  "name": "This Month EV Cost"
                 }
               ]
             }

@@ -260,6 +260,76 @@ automation:
               .1258
             {% endif %}
 
+  - id: switch_ev_charging_tariff
+    alias: switch_ev_charging_tariff
+    description: >
+      Keep the EV charging utility meters on Dakota Electric's time-of-use
+      schedule. Weekends and holidays stay off-peak all day.
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: binary_sensor.workday_sensor
+      - trigger: time
+        at: "00:05:00"
+      - trigger: time
+        at: "08:00:00"
+      - trigger: time
+        at: "16:00:00"
+      - trigger: time
+        at: "21:00:00"
+    variables:
+      ev_season: >-
+        {% set seasonal_tariff = states('select.daily_electricity') %}
+        {% if seasonal_tariff in ['summer', 'non-summer'] %}
+          {{ seasonal_tariff }}
+        {% elif now().month in [6, 7, 8, 9] %}
+          summer
+        {% else %}
+          non-summer
+        {% endif %}
+      ev_tariff: >-
+        {% if is_state('binary_sensor.workday_sensor', 'off') %}
+          off_peak
+        {% elif now().hour < 8 or now().hour >= 21 %}
+          off_peak
+        {% elif now().hour < 16 %}
+          mid_peak
+        {% else %}
+          on_peak
+        {% endif %}
+      ev_rate: >-
+        {% if ev_tariff == 'off_peak' %}
+          0.0755
+        {% elif ev_tariff == 'on_peak' %}
+          0.4420
+        {% elif ev_season == 'summer' %}
+          0.1377
+        {% else %}
+          0.1238
+        {% endif %}
+    action:
+      - action: select.select_option
+        target:
+          entity_id: select.hourly_ev_charging
+        data:
+          option: "{{ ev_tariff }}"
+      - action: select.select_option
+        target:
+          entity_id: select.daily_ev_charging
+        data:
+          option: "{{ ev_tariff }}"
+      - action: select.select_option
+        target:
+          entity_id: select.monthly_ev_charging
+        data:
+          option: "{{ ev_tariff }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.ev_electrical_rate
+        data:
+          value: "{{ ev_rate }}"
+
   - id: switch_water_tariff
     alias: switch_water_tariff
     trigger:
@@ -544,6 +614,13 @@ input_number:
     mode: box
     # TODO update the unit of measure
     unit_of_measurement: USD/kWh
+  ev_electrical_rate:
+    name: EV Electrical Rate
+    min: .00001
+    max: 1.00000
+    step: 0.00001
+    mode: box
+    unit_of_measurement: USD/kWh
 
 ########################
 # Input Select
@@ -671,6 +748,91 @@ template:
         icon: mdi:cash-minus
         unit_of_measurement: $/gal
         state: "0.00497"
+      - name: ev_charging_tariff
+        unique_id: ev_charging_tariff
+        icon: mdi:cash-clock
+        state: >-
+          {% set tariff = states('select.daily_ev_charging') %}
+          {% if tariff in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set tariff = states('select.hourly_ev_charging') %}
+          {% endif %}
+          {% set labels = {
+            'off_peak': 'Off-Peak',
+            'mid_peak': 'Mid-Peak',
+            'on_peak': 'On-Peak'
+          } %}
+          {{ labels.get(tariff, 'Unknown') }}
+      - name: ev_charging_tariff_rate
+        unique_id: ev_charging_tariff_rate
+        icon: mdi:currency-usd
+        unit_of_measurement: USD/kWh
+        state: "{{ states('input_number.ev_electrical_rate') }}"
+      - name: daily_ev_charging_energy
+        unique_id: daily_ev_charging_energy
+        icon: mdi:car-electric
+        device_class: energy
+        unit_of_measurement: kWh
+        state: >-
+          {{
+            (
+              states('sensor.daily_ev_charging_off_peak') | float(default=0)
+              + states('sensor.daily_ev_charging_mid_peak') | float(default=0)
+              + states('sensor.daily_ev_charging_on_peak') | float(default=0)
+            ) | round(2)
+          }}
+      - name: monthly_ev_charging_energy
+        unique_id: monthly_ev_charging_energy
+        icon: mdi:car-electric
+        device_class: energy
+        unit_of_measurement: kWh
+        state: >-
+          {{
+            (
+              states('sensor.monthly_ev_charging_off_peak') | float(default=0)
+              + states('sensor.monthly_ev_charging_mid_peak') | float(default=0)
+              + states('sensor.monthly_ev_charging_on_peak') | float(default=0)
+            ) | round(2)
+          }}
+      - name: daily_ev_charging_cost
+        unique_id: daily_ev_charging_cost
+        icon: mdi:cash
+        unit_of_measurement: USD
+        state: >-
+          {% set season = states('select.daily_electricity') %}
+          {% if season in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set season = 'summer' if now().month in [6, 7, 8, 9] else 'non-summer' %}
+          {% endif %}
+          {% set off_peak_kwh = states('sensor.daily_ev_charging_off_peak') | float(default=0) %}
+          {% set mid_peak_kwh = states('sensor.daily_ev_charging_mid_peak') | float(default=0) %}
+          {% set on_peak_kwh = states('sensor.daily_ev_charging_on_peak') | float(default=0) %}
+          {% set mid_peak_rate = 0.1377 if season == 'summer' else 0.1238 %}
+          {{
+            (
+              (off_peak_kwh * 0.0755)
+              + (mid_peak_kwh * mid_peak_rate)
+              + (on_peak_kwh * 0.4420)
+            ) | round(2)
+          }}
+      - name: monthly_ev_charging_cost
+        unique_id: monthly_ev_charging_cost
+        icon: mdi:cash-multiple
+        unit_of_measurement: USD
+        state: >-
+          {% set season = states('select.daily_electricity') %}
+          {% if season in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set season = 'summer' if now().month in [6, 7, 8, 9] else 'non-summer' %}
+          {% endif %}
+          {% set off_peak_kwh = states('sensor.monthly_ev_charging_off_peak') | float(default=0) %}
+          {% set mid_peak_kwh = states('sensor.monthly_ev_charging_mid_peak') | float(default=0) %}
+          {% set on_peak_kwh = states('sensor.monthly_ev_charging_on_peak') | float(default=0) %}
+          {% set mid_peak_rate = 0.1377 if season == 'summer' else 0.1238 %}
+          {{
+            (
+              (off_peak_kwh * 0.0755)
+              + (mid_peak_kwh * mid_peak_rate)
+              + (on_peak_kwh * 0.4420)
+            ) | round(2)
+          }}
 
 ########################
 # Utility Meter
@@ -694,6 +856,31 @@ utility_meter:
     tariffs:
       - non-summer
       - summer
+  # Dakota Electric EV TOU is modeled from the Tesla integration's cumulative
+  # energy-added sensor. This tracks energy added to the car battery, not
+  # utility-side wall losses, but it is the best EV-specific counter available
+  # in the current configuration.
+  hourly_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: hourly
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
+  daily_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: daily
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
+  monthly_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: monthly
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
   # hourly_water:
   #   source: sensor.watermeter_value
   #   name: Hourly Water Usage
