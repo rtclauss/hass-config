@@ -616,14 +616,39 @@ automation:
         to: "on"
     action:
       - action: vacuum.return_to_base
-        data:
-          entity_id: all
+        target:
+          entity_id:
+            - vacuum.valetudo_den
+            - vacuum.valetudo_mainlevel
+            - vacuum.valetudo_upstairs_vacuum
       - action: switch.turn_off
         target:
           entity_id: switch.living_room_camera
       - action: switch.turn_off
         target:
           entity_id: switch.basement_camera_power
+
+  - id: vacuum_leave_home
+    alias: vacuum_leave_home
+    description: Start the den, main level, and upstairs vacuums when Ryan leaves home.
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
+        to: "off"
+    action:
+      - action: vacuum.start
+        target:
+          entity_id: vacuum.valetudo_mainlevel
+        continue_on_error: true
+      - action: vacuum.start
+        target:
+          entity_id: vacuum.valetudo_den
+        continue_on_error: true
+      - action: vacuum.start
+        target:
+          entity_id: vacuum.valetudo_upstairs_vacuum
+        continue_on_error: true
 
 ########################
 # Binary Sensors
