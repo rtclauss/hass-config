@@ -1,0 +1,658 @@
+################################################################
+## Packages / TV
+################################################################
+
+################################################
+## Automation
+################################################
+
+automation:
+  - id: tv_off
+    alias: tv_off
+    trigger:
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "off"
+        for:
+          seconds: 15
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "unavailable"
+        for:
+          seconds: 15
+    action:
+      - action: scene.turn_on
+        target:
+          entity_id: scene.scene_reset_basement
+        data:
+          transition: 1.5
+      - action: light.turn_off
+        target:
+          entity_id: light.basement_tv_bias
+
+  - id: tv_on
+    alias: tv_on
+    trigger:
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        to: "on"
+        for:
+          seconds: 10
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          state: "off"
+    action:
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_tv_bias
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  - id: tv_off_at_night_bed_prep
+    alias: tv_off_at_night_bed_prep
+    trigger:
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "off"
+        for:
+          seconds: 20
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "unavailable"
+        for:
+          seconds: 20
+      - trigger: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:12:fc:ff"
+          command: "attribute_updated"
+      - trigger: state
+        entity_id:
+          - sensor.hall_button_action
+        to: "single"
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "20:00:00"
+          before: "04:00:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          state: "off"
+    action:
+      - action: cover.close_cover
+        target:
+          entity_id:
+            - cover.garage_door
+      - action: media_player.turn_off
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+      - action: media_player.volume_set
+        data:
+          entity_id:
+            - media_player.bedroom_sonos_2
+            - media_player.bathroom_sonos_2
+          volume_level: 0.02
+      - action: scene.turn_on
+        target:
+          entity_id: scene.bedroom_prep
+        data:
+          transition: 60
+      - action: script.turn_on
+        target:
+          entity_id: script.spotify_bedtime
+      - delay: "00:20:00"
+      - action: switch.turn_off
+        target:
+          entity_id: switch.sleep_mode
+
+  - id: tv_paused
+    alias: tv_paused
+    initial_state: true
+    trigger:
+      - trigger: state
+        entity_id: media_player.basement
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 2
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "19:30:00"
+          before: "23:59:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+    action:
+      - action: scene.turn_on
+        target:
+          entity_id: scene.tv_paused
+        data:
+          transition: 5
+
+  - id: tv_watching_scotland
+    alias: tv_watching_scotland
+    initial_state: true
+    trigger:
+      - trigger: state
+        entity_id: media_player.basement
+        to: "playing"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        to: "playing"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 2
+    condition:
+      condition: and
+      conditions:
+        - >-
+          {{ 'Scotland' in (state_attr('media_player.basement', 'media_title') or '')
+          or 'Scotland' in
+          (state_attr('media_player.plex_basement_apple_tv', 'media_title') or '') }}
+    action:
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_tv_bias
+        data:
+          rgb_color:
+            - 254
+            - 11
+            - 255
+
+  - id: tv_resumed
+    alias: tv_resumed
+    initial_state: true
+    trigger:
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        to: "playing"
+        for:
+          minutes: 2
+      - trigger: state
+        entity_id: media_player.basement
+        from: "paused"
+        to: "playing"
+        for:
+          minutes: 2
+      - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        from: "paused"
+        to: "playing"
+        for:
+          minutes: 2
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "19:30:00"
+          before: "23:59:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+    action:
+      - action: media_player.media_pause
+        data:
+          entity_id:
+            - media_player.office_sonos_2
+            - media_player.den_sonos_2
+      - action: script.lights_off_except
+        data:
+          exclude_lights:
+            - light.outside_front_hue
+            - light.outside_north_west_garage
+            - light.outside_south_west_garage
+            - light.outside_front_door
+            - light.basement_tv_bias
+          transition: 20
+      - action: script.turn_on
+        target:
+          entity_id: script.night_tv_mode_switches
+      - action: media_player.media_pause
+        data:
+          entity_id:
+            - media_player.den_sonos_2
+      - action: script.music_assistant_pause_house_audio
+
+################################################
+## Scenes
+################################################
+
+scene:
+  - name: tv_paused
+    entities:
+      light.basement_great_room:
+        state: "on"
+        brightness: 128
+      light.kitchen_sink_overhead:
+        state: "on"
+        brightness: 255
+      light.den_floods:
+        state: "on"
+        brightness: 255
+
+  - name: tv_resumed
+    entities:
+      light.basement_great_room:
+        state: "off"
+      light.kitchen_all:
+        state: "off"
+      light.hall_all:
+        state: "off"
+      light.den_all:
+        state: "off"
+      light.office_all:
+        state: "off"
+      light.office_floor_lamp_1:
+        state: "off"
+      light.office_floor_lamp_2:
+        state: "off"
+      light.deck_string:
+        state: "off"
+
+################################################
+## Scripts
+################################################
+
+script:
+  watch_tv:
+    alias: "Watch TV"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "YouTube TV"
+
+  watch_youtube:
+    alias: "Watch YouTube"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "YouTube"
+
+  watch_netflix:
+    alias: "Watch Netflix"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Netflix"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_plex:
+    alias: "Watch Plex"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_f1:
+    alias: "Watch F1"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "F1 TV"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_letterkenny:
+    alias: "Watch Letterkenny"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: '{ "library_name": "TV", "show_name": "Letterkenny", "shuffle": "1" }'
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_the_simpsons:
+    alias: "Watch The Simpsons"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: '{ "library_name": "TV", "show_name": "The Simpsons", "shuffle": "1" }'
+      - action: script.music_assistant_pause_house_audio
+
+  watch_american_dad:
+    alias: "Watch American Dad"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: '{ "library_name": "TV", "show_name": "American Dad", "shuffle": "1" }'
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_aqua_teen:
+    alias: "Watch Aqua Teen"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: '{ "library_name": "TV", "show_name": "Aqua Teen Hunger Force", "shuffle": "1" }'
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_bobs_burgers:
+    alias: "Watch Bobs Burgers"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: >-
+            { "library_name": "TV", "show_name": "Bob's Burgers", "shuffle": "1" }
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_ds9:
+    alias: "Watch DS9"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: '{ "library_name": "TV", "show_name": "Star Trek: Deep Space Nine", "shuffle": "1" }'
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_rick_and_morty:
+    alias: "Watch Rick and Morty"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: '{ "library_name": "TV", "show_name": "Rick and Morty", "shuffle": "1" }'
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  watch_tng:
+    alias: "Watch TNG"
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: '{ "library_name": "TV", "show_name": "Star Trek: The Next Generation", "shuffle": "1" }'
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
