@@ -130,6 +130,9 @@ automation:
           - input_boolean.long_range_travel
           - input_datetime.weekday_alarm
           - input_datetime.weekend_alarm
+          - select.daily_electricity
+          - select.hourly_electricity
+          - input_number.electrical_rate
         id: planner_input
       - trigger: state
         entity_id: binary_sensor.nigori_parking_brake
@@ -184,6 +187,8 @@ automation:
               {% set tariff = states('select.hourly_electricity') %}
             {% endif %}
             {% set electrical_rate = states('input_number.electrical_rate') | float(default=0) %}
+            {% set tariff_name = tariff | lower %}
+            {% set high_tariff = 'summer' in tariff_name or tariff_name in ['peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
             {% set departure_dt = none %}
             {% if has_upcoming_trip %}
               {% set trip_start_dt = trip_start_raw | as_datetime | as_local %}
@@ -205,8 +210,10 @@ automation:
               {% set charge_limit = 90 %}
             {% elif alarm_enabled and (cold_weather or special_meeting) %}
               {% set charge_limit = 90 %}
-            {% elif alarm_enabled %}
+            {% elif alarm_enabled and not high_tariff %}
               {% set charge_limit = 85 %}
+            {% elif alarm_enabled %}
+              {% set charge_limit = 80 %}
             {% else %}
               {% set charge_limit = 80 %}
             {% endif %}
@@ -239,7 +246,12 @@ automation:
             {% elif has_upcoming_trip %}
               {% set summary = 'Plan Tesla for ' ~ (trip_entry if trip_entry else 'upcoming trip') ~ '. Set charge limit to ' ~ charge_limit ~ '% and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Distance ' ~ (trip_distance_mi | round(0)) ~ ' mi. Tariff ' ~ tariff ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
             {% elif alarm_enabled %}
-              {% set summary = 'Plan Tesla for ' ~ source ~ '. Set charge limit to ' ~ charge_limit ~ '% and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Outside ' ~ (outside_temp_f | round(0)) ~ 'F. Tariff ' ~ tariff ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
+              {% if charge_limit == 80 and high_tariff and not (cold_weather or special_meeting) %}
+                {% set charge_limit_phrase = 'Keep the default 80% charge limit because the current tariff is higher' %}
+              {% else %}
+                {% set charge_limit_phrase = 'Set charge limit to ' ~ charge_limit ~ '%' %}
+              {% endif %}
+              {% set summary = 'Plan Tesla for ' ~ source ~ '. ' ~ charge_limit_phrase ~ ' and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Outside ' ~ (outside_temp_f | round(0)) ~ 'F. Tariff ' ~ tariff ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
             {% else %}
               {% set summary = 'No next-day departure plan detected. Restore the Tesla default charge limit to 80%.' %}
             {% endif %}
@@ -254,7 +266,8 @@ automation:
               'electrical_rate': electrical_rate,
               'trip_distance_mi': trip_distance_mi,
               'trip_duration_min': trip_duration_min,
-              'outside_temp_f': outside_temp_f
+              'outside_temp_f': outside_temp_f,
+              'high_tariff': high_tariff
             } | to_json }}
           tesla_plan: "{{ tesla_plan_json | from_json }}"
       - choose:
@@ -276,6 +289,11 @@ automation:
                 data:
                   departure_time: "{{ tesla_plan.departure_time }}"
                   reason: "{{ tesla_plan.summary }}"
+        default:
+          - action: script.tesla_set_precondition_schedule_time
+            data:
+              enabled: false
+              reason: "{{ tesla_plan.summary }}"
       - choose:
           - conditions:
               - condition: template
@@ -594,6 +612,9 @@ script:
     alias: Tesla Set Precondition Schedule Time
     mode: restart
     fields:
+      enabled:
+        description: Whether Tesla scheduled departure should be enabled or disabled.
+        example: true
       departure_time:
         description: Desired Tesla departure time from home in ISO datetime format.
         example: "2026-03-21T08:05:00-05:00"
@@ -602,6 +623,7 @@ script:
         example: "Weekday alarm departure plan"
     sequence:
       - variables:
+          schedule_enabled: "{{ enabled | default(true) not in [false, 'false', 'False', 'off', 0, '0'] }}"
           requested_departure_text: "{{ departure_time | default('', true) | string | trim }}"
           effective_departure_text: >-
             {% if requested_departure_text != '' %}
@@ -624,39 +646,59 @@ script:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ requested_departure_text == '' }}"
+                value_template: "{{ not schedule_enabled }}"
             sequence:
-              - alias: Check if this is not an all-day event
-                condition: state
-                entity_id: binary_sensor.upcoming_trip_charging
-                attribute: all_day
-                state: off
-      - alias: Check that a departure time exists
-        condition: template
-        value_template: "{{ effective_departure_text != '' }}"
-      - action: logbook.log
-        data:
-          entity_id: script.tesla_set_precondition_schedule_time
-          domain: script
-          name: Tesla scheduled departure planner
-          message: >-
-            {% set effective_departure_dt = effective_departure_text | as_datetime | as_local %}
-            {{ effective_reason }} Departure at {{ effective_departure_dt.strftime('%a %H:%M') }}.
-      - alias: Set Scheduled Departure Time
-        action: tesla_custom.api
-        data:
-          command: SCHEDULED_DEPARTURE
-          parameters:
-            path_vars:
-              vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
-            enable: true
-            departure_time: "{{ departure_offset_from_midnight }}"
-            preconditioning_enabled: true
-            preconditioning_weekdays_only: false
-            off_peak_charging_enabled: true
-            off_peak_charging_weekdays_only: true
-            end_off_peak_time: 360
-            wake_if_asleep: true
+              - action: logbook.log
+                data:
+                  entity_id: script.tesla_set_precondition_schedule_time
+                  domain: script
+                  name: Tesla scheduled departure planner
+                  message: "{{ effective_reason }} Clearing Tesla scheduled departure."
+              - action: tesla_custom.api
+                data:
+                  command: SCHEDULED_DEPARTURE
+                  parameters:
+                    path_vars:
+                      vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
+                    enable: false
+                    wake_if_asleep: true
+        default:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ requested_departure_text == '' }}"
+                sequence:
+                  - alias: Check if this is not an all-day event
+                    condition: state
+                    entity_id: binary_sensor.upcoming_trip_charging
+                    attribute: all_day
+                    state: off
+          - alias: Check that a departure time exists
+            condition: template
+            value_template: "{{ effective_departure_text != '' }}"
+          - action: logbook.log
+            data:
+              entity_id: script.tesla_set_precondition_schedule_time
+              domain: script
+              name: Tesla scheduled departure planner
+              message: >-
+                {% set effective_departure_dt = effective_departure_text | as_datetime | as_local %}
+                {{ effective_reason }} Departure at {{ effective_departure_dt.strftime('%a %H:%M') }}.
+          - alias: Set Scheduled Departure Time
+            action: tesla_custom.api
+            data:
+              command: SCHEDULED_DEPARTURE
+              parameters:
+                path_vars:
+                  vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
+                enable: true
+                departure_time: "{{ departure_offset_from_midnight }}"
+                preconditioning_enabled: true
+                preconditioning_weekdays_only: false
+                off_peak_charging_enabled: true
+                off_peak_charging_weekdays_only: true
+                end_off_peak_time: 360
+                wake_if_asleep: true
 
   # tesla_set_charge_limit_soc:
   #   alias: Tesla Set Charge Limit SOC
