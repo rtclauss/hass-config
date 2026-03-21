@@ -1681,6 +1681,19 @@ script:
             {{ devices
               | selectattr('friendly_name', 'defined')
               | rejectattr('friendly_name', 'equalto', 'Coordinator')
+              | rejectattr('disabled', 'eq', true)
+              | rejectattr('type', 'eq', 'EndDevice')
+              | map(attribute='friendly_name')
+              | unique
+              | list }}
+          z2m_skipped_end_devices: >
+            {% set payload = wait.trigger.payload_json %}
+            {% set devices = payload.data if payload and payload.data is defined else [] %}
+            {{ devices
+              | selectattr('friendly_name', 'defined')
+              | rejectattr('friendly_name', 'equalto', 'Coordinator')
+              | rejectattr('disabled', 'eq', true)
+              | selectattr('type', 'eq', 'EndDevice')
               | map(attribute='friendly_name')
               | unique
               | list }}
@@ -1689,7 +1702,17 @@ script:
         data:
           name: Zigbee2MQTT Reset
           message: >
-            Resetting {{ z2m_devices | count }} devices: {{ z2m_devices | join(', ') }}
+            Resetting {{ z2m_devices | count }} mains-powered devices: {{ z2m_devices | join(', ') }}
+      - if:
+          - condition: template
+            value_template: "{{ z2m_skipped_end_devices | count > 0 }}"
+        then:
+          - alias: Log skipped sleepy end devices
+            service: logbook.log
+            data:
+              name: Zigbee2MQTT Reset
+              message: >
+                Skipped {{ z2m_skipped_end_devices | count }} Zigbee end devices because sleeping remotes can miss unbind/rebind requests: {{ z2m_skipped_end_devices | join(', ') }}
       - condition: template
         value_template: "{{ z2m_devices | count > 0 }}"
       - repeat:
