@@ -1,0 +1,316 @@
+# Home Assistant package for shared house mode transitions.
+# It centralizes arrival, departure, night, guest, and trip side effects so
+# existing automations can delegate to one script entrypoint.
+
+################################################################
+## Packages / House Mode
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "house_mode"
+
+    ################################################
+    ## Input Select
+    ################################################
+    input_select.house_mode:
+      <<: *customize
+      friendly_name: "House Mode"
+      icon: mdi:home-switch-outline
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.house_transition:
+      <<: *customize
+      friendly_name: "House Transition"
+      icon: mdi:home-switch
+
+########################
+# Automation
+########################
+automation: []
+
+########################
+# Input Select
+########################
+input_select:
+  house_mode:
+    options:
+      - home
+      - away
+      - night
+    initial: home
+
+########################
+# Scripts
+########################
+script:
+  house_transition:
+    alias: house_transition
+    description: >-
+      Shared entrypoint for house mode transitions. Base arrival/departure
+      automations can reapply lights, security, and climate, while guest/trip
+      callers can selectively reapply only media, climate, or travel policy.
+    mode: queued
+    max: 10
+    fields:
+      mode:
+        description: "Base house mode to apply: home, away, or night."
+        example: away
+      reason:
+        description: Optional logbook reason for the transition request.
+        example: departure
+      light_scene:
+        description: Optional scene override for home or night lighting.
+        example: scene.cloudy_arrive_home
+      light_transition:
+        description: Transition seconds for the requested light scene.
+        example: 30
+      extra_scene:
+        description: Optional extra scene to apply after the primary mode scene.
+        example: scene.bedroom_prep
+      notify_message:
+        description: Optional notify.all message for the transition.
+        example: Welcome home
+      guest_mode:
+        description: Explicit guest override state. Defaults to input_boolean.guest_mode.
+        example: "on"
+      trip_mode:
+        description: Explicit trip override state. Defaults to input_boolean.trip.
+        example: "off"
+      apply_lights:
+        description: Apply light scenes and light shutdown behavior.
+        example: true
+      apply_security:
+        description: Apply locks, covers, and camera policy.
+        example: false
+      apply_climate:
+        description: Apply climate presets or resume the Ecobee program.
+        example: true
+      apply_media:
+        description: Apply guest-aware Sonos grouping policy.
+        example: true
+      apply_trip_policy:
+        description: Apply trip-mode vacation simulation state.
+        example: true
+    variables:
+      requested_mode: >-
+        {% set normalized = (mode | default(states('input_select.house_mode'), true) | string | lower | trim) %}
+        {% if normalized in ['away', 'night'] %}
+          {{ normalized }}
+        {% else %}
+          home
+        {% endif %}
+      guest_mode_enabled: >-
+        {% set normalized = (guest_mode if guest_mode is defined else states('input_boolean.guest_mode')) | string | lower | trim %}
+        {{ normalized in ['on', 'true', '1', 'yes'] }}
+      trip_mode_enabled: >-
+        {% set normalized = (trip_mode if trip_mode is defined else states('input_boolean.trip')) | string | lower | trim %}
+        {{ normalized in ['on', 'true', '1', 'yes'] }}
+      should_apply_lights: >-
+        {% set normalized = (apply_lights if apply_lights is defined else true) | string | lower | trim %}
+        {{ normalized not in ['off', 'false', '0', 'no'] }}
+      should_apply_security: >-
+        {% set normalized = (apply_security if apply_security is defined else true) | string | lower | trim %}
+        {{ normalized not in ['off', 'false', '0', 'no'] }}
+      should_apply_climate: >-
+        {% set normalized = (apply_climate if apply_climate is defined else true) | string | lower | trim %}
+        {{ normalized not in ['off', 'false', '0', 'no'] }}
+      should_apply_media: >-
+        {% set normalized = (apply_media if apply_media is defined else false) | string | lower | trim %}
+        {{ normalized not in ['off', 'false', '0', 'no'] }}
+      should_apply_trip_policy: >-
+        {% set normalized = (apply_trip_policy if apply_trip_policy is defined else false) | string | lower | trim %}
+        {{ normalized not in ['off', 'false', '0', 'no'] }}
+      resolved_light_scene: >-
+        {% if light_scene is defined and light_scene | string | trim %}
+          {{ light_scene }}
+        {% elif requested_mode == 'home' %}
+          scene.arrive_home
+        {% elif requested_mode == 'night' %}
+          scene.night_arrive_home
+        {% else %}
+          none
+        {% endif %}
+      resolved_extra_scene: >-
+        {% if extra_scene is defined and extra_scene | string | trim %}
+          {{ extra_scene }}
+        {% else %}
+          none
+        {% endif %}
+      resolved_light_transition: "{{ light_transition | default(30, true) | int(30) }}"
+      guest_climate_preset: >-
+        {% if now().hour < 7 %}
+          Guest Sleep
+        {% else %}
+          Guest Day
+        {% endif %}
+    sequence:
+      - action: logbook.log
+        data:
+          name: House Transition
+          entity_id: script.house_transition
+          message: >-
+            Applying {{ requested_mode }} mode
+            (guest={{ guest_mode_enabled }}, trip={{ trip_mode_enabled }},
+            reason={{ reason | default('unspecified', true) }}).
+          domain: script
+      - continue_on_error: true
+        action: input_select.select_option
+        target:
+          entity_id: input_select.house_mode
+        data:
+          option: "{{ requested_mode }}"
+      - parallel:
+          - choose:
+              - conditions:
+                  - "{{ should_apply_lights and requested_mode in ['home', 'night'] and resolved_light_scene != 'none' }}"
+                sequence:
+                  - continue_on_error: true
+                    action: scene.turn_on
+                    data:
+                      entity_id: "{{ resolved_light_scene }}"
+                      transition: "{{ resolved_light_transition }}"
+              - conditions:
+                  - "{{ should_apply_lights and requested_mode == 'away' and not guest_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: scene.turn_on
+                    target:
+                      entity_id: scene.leave_home
+                  - continue_on_error: true
+                    action: script.lights_off_except
+                    data:
+                      exclude_lights:
+                        - light.outside_front_hue
+                        - light.outside_north_west_garage
+                        - light.outside_south_west_garage
+                        - light.outside_front_door
+                      transition: 240
+          - choose:
+              - conditions:
+                  - "{{ should_apply_lights and resolved_extra_scene != 'none' }}"
+                sequence:
+                  - continue_on_error: true
+                    action: scene.turn_on
+                    data:
+                      entity_id: "{{ resolved_extra_scene }}"
+          - choose:
+              - conditions:
+                  - "{{ should_apply_security and requested_mode == 'away' and not guest_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: lock.lock
+                    target:
+                      entity_id: lock.front_door_lock
+                  - continue_on_error: true
+                    action: cover.close_cover
+                    target:
+                      entity_id: cover.garage_door
+                  - continue_on_error: true
+                    action: fan.turn_off
+                    target:
+                      entity_id: all
+                  - continue_on_error: true
+                    action: scene.turn_on
+                    target:
+                      entity_id: scene.turn_on_cameras
+              - conditions:
+                  - "{{ should_apply_security and requested_mode in ['home', 'night'] }}"
+                sequence:
+                  - continue_on_error: true
+                    action: switch.turn_off
+                    target:
+                      entity_id:
+                        - switch.living_room_camera
+                        - switch.basement_camera_power
+          - choose:
+              - conditions:
+                  - "{{ should_apply_climate and guest_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: climate.set_preset_mode
+                    target:
+                      entity_id: climate.my_ecobee
+                    data:
+                      preset_mode: "{{ guest_climate_preset }}"
+              - conditions:
+                  - "{{ should_apply_climate and requested_mode in ['home', 'night'] }}"
+                sequence:
+                  - continue_on_error: true
+                    action: ecobee.resume_program
+                    data:
+                      resume_all: true
+                      entity_id: climate.my_ecobee
+          - choose:
+              - conditions:
+                  - "{{ should_apply_media and guest_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: media_player.unjoin
+                    target:
+                      entity_id:
+                        - media_player.bedroom_sonos_2
+                        - media_player.bathroom_sonos_2
+                        - media_player.office_sonos_2
+                        - media_player.den_sonos_2
+                  - continue_on_error: true
+                    action: media_player.join
+                    target:
+                      entity_id:
+                        - media_player.bedroom_sonos_2
+                    data:
+                      group_members:
+                        - media_player.bathroom_sonos_2
+              - conditions:
+                  - "{{ should_apply_media and not guest_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: media_player.join
+                    target:
+                      entity_id:
+                        - media_player.bedroom_sonos_2
+                    data:
+                      group_members:
+                        - media_player.bathroom_sonos_2
+                        - media_player.office_sonos_2
+                        - media_player.den_sonos_2
+          - choose:
+              - conditions:
+                  - "{{ should_apply_trip_policy and trip_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: switch.turn_on
+                    target:
+                      entity_id: switch.vacation_simulation
+              - conditions:
+                  - "{{ should_apply_trip_policy and not trip_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: switch.turn_off
+                    target:
+                      entity_id: switch.vacation_simulation
+                  - continue_on_error: true
+                    action: input_number.set_value
+                    data:
+                      entity_id: input_number.random_vacation_light_group
+                      value: 0
+      - if:
+          - condition: template
+            value_template: "{{ notify_message is defined and notify_message | string | trim != '' }}"
+        then:
+          - continue_on_error: true
+            action: notify.all
+            data:
+              message: "{{ notify_message }}"
