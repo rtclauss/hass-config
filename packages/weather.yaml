@@ -74,6 +74,10 @@ homeassistant:
       <<: *customize
       friendly_name: Precipitation % in next 6 hours
       icon: mdi:weather-pouring
+    sensor.nigori_precip_next_2hr:
+      <<: *customize
+      friendly_name: Tesla Precipitation % in next 2 hours
+      icon: mdi:weather-pouring
     sensor.dark_sky_temperature:
       <<: *customize
       friendly_name: Outside Temperature
@@ -125,32 +129,33 @@ homeassistant:
 automation:
   - id: alert_car_windows_open_pressure_dropping
     alias: alert_car_windows_open_pressure_dropping
+    mode: single
     trigger:
-      - trigger: state
-        entity_id:
-          - binary_sensor.pressure_falling_v_rapidly
-        from: "off"
-        to: "on"
-        for:
-          minutes: 30
       - trigger: numeric_state
-        entity_id:
-          - sensor.precip_next_1hr
+        entity_id: sensor.nigori_precip_next_2hr
         above: 50
         for:
           minutes: 5
     condition:
-      condition: and
-      conditions:
-        - condition: numeric_state
-          entity_id: sensor.precip_next_1hr
-          above: 50
-        - condition: not
-          conditions:
-            - condition: state
-              entity_id: sensor.season
-              state: "winter"
+      - condition: numeric_state
+        entity_id: sensor.nigori_precip_next_2hr
+        above: 50
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.season
+            state: "winter"
+      - alias: "Check if we already notified within the last hour"
+        condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
     action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Tesla Windows"
+          message: >-
+            Rain is expected near the Tesla within the next two hours. Home Assistant
+            is closing the windows using the vehicle's current location forecast.
       - action: tesla_custom.api
         data:
           command: WINDOW_CONTROL
@@ -161,14 +166,7 @@ automation:
             lat: >-
               {{ state_attr('device_tracker.nigori_location_tracker', "latitude") }}
             long: >-
-              {{state_attr('device_tracker.nigori_location_tracker', "longitude") }}
-      - alias: "Check if we already notified within the last hour"
-        condition: template
-        value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
-      - action: notify.all
-        data:
-          message: "It will rain soon. Are your car windows closed? HA will try to close them for you."
+              {{ state_attr('device_tracker.nigori_location_tracker', "longitude") }}
 
   - id: alert_house_windows_open_pressure_dropping
     alias: alert_house_windows_open_pressure_dropping
@@ -516,6 +514,31 @@ sensor:
     state: !secret home_state
     zone: !secret nws_zone
     county: !secret nws_county
+
+  # Follow the Tesla's coordinates so rain detection works away from home.
+  - platform: rest
+    name: nigori_precip_next_2hr
+    unique_id: nigori_precip_next_2hr
+    resource_template: >-
+      {% set latitude = state_attr('device_tracker.nigori_location_tracker', 'latitude') | float(default=none) %}
+      {% set longitude = state_attr('device_tracker.nigori_location_tracker', 'longitude') | float(default=none) %}
+      {% if latitude is number and longitude is number %}
+        https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(latitude) }}&longitude={{ '%.4f' | format(longitude) }}&hourly=precipitation_probability&forecast_hours=2&timezone=auto
+      {% else %}
+        https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&hourly=precipitation_probability&forecast_hours=2&timezone=UTC
+      {% endif %}
+    scan_interval: 900
+    unit_of_measurement: "%"
+    value_template: >-
+      {% set probabilities = value_json.hourly.precipitation_probability if value_json.hourly is defined and value_json.hourly.precipitation_probability is defined else [] %}
+      {% set ns = namespace(max_probability = -1) %}
+      {% for probability in probabilities %}
+        {% set probability_value = probability | int(default=-1) %}
+        {% if probability_value > ns.max_probability %}
+          {% set ns.max_probability = probability_value %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.max_probability }}
 
 ################################################
 ## Templates
