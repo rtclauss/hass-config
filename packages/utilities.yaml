@@ -725,6 +725,7 @@ template:
       - name: house_electrical_meter
         unique_id: house_electrical_meter
         device_class: energy
+        state_class: total_increasing
         unit_of_measurement: kWh
         availability: >
           {% if is_state("sensor.filtered_raw_electrical_sensor", "unavailable") %}
@@ -738,6 +739,28 @@ template:
           {% else %}
             unavailable
           {% endif %}
+      - name: house_electrical_meter_non_ev
+        unique_id: house_electrical_meter_non_ev
+        device_class: energy
+        state_class: total_increasing
+        unit_of_measurement: kWh
+        availability: >
+          {{
+            states('sensor.house_electrical_meter') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+            and states('sensor.nigori_energy_added') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+          }}
+        state: >-
+          {% set house_kwh = states('sensor.house_electrical_meter') | float(default=0) %}
+          {% set ev_kwh = states('sensor.nigori_energy_added') | float(default=0) %}
+          {% set calculated = [house_kwh - ev_kwh, 0] | max %}
+          {% set previous = this.state | float(default=calculated) %}
+          {{ [calculated, previous] | max | round(3) }}
+      - name: house_electrical_rate
+        unique_id: house_electrical_rate
+        icon: mdi:currency-usd
+        state_class: measurement
+        unit_of_measurement: USD/kWh
+        state: "{{ states('input_number.electrical_rate') }}"
       - name: tariff_under_15k_water
         unique_id: tariff_under_15k_water
         icon: mdi:cash-minus
@@ -765,6 +788,7 @@ template:
       - name: ev_charging_tariff_rate
         unique_id: ev_charging_tariff_rate
         icon: mdi:currency-usd
+        state_class: measurement
         unit_of_measurement: USD/kWh
         state: "{{ states('input_number.ev_electrical_rate') }}"
       - name: daily_ev_charging_energy

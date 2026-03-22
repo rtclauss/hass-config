@@ -94,6 +94,27 @@ The Tesla dashboards now show:
 - monthly EV energy and cost
 - a planner-decision summary card
 
+## Built-in Energy Panel
+
+Home Assistant's built-in Energy panel can use the EV tariff, but it should be configured as two separate grid-consumption sources.
+
+Use these entities in `Settings > Dashboards > Energy`:
+
+- house without EV:
+  - energy: `sensor.house_electrical_meter_non_ev`
+  - current price: `sensor.house_electrical_rate`
+- EV charging:
+  - energy: `sensor.nigori_energy_added`
+  - current price: `sensor.ev_charging_tariff_rate`
+
+Important:
+
+- do not use `sensor.house_electrical_meter` for grid consumption if you add the EV source separately, or EV charging will be counted twice
+- `sensor.house_electrical_meter_non_ev` is derived as whole-house energy minus `sensor.nigori_energy_added`
+- this keeps the built-in Energy panel aligned with the EV tariff, but it still reflects battery-added EV energy rather than wall-side charging losses
+
+The built-in Energy panel preferences are not tracked in this repository, so the panel still needs to be updated manually in the Home Assistant UI after this config is deployed.
+
 ## Validation
 
 Recommended validation after EV tariff changes:
