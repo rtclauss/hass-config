@@ -290,13 +290,43 @@ scene:
 ################################################
 
 script:
+  wait_for_basement_media_player_ready:
+    alias: "Wait for Basement Media Player"
+    mode: parallel
+    sequence:
+      - if:
+          - condition: state
+            entity_id: media_player.basement
+            state: "off"
+        then:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: media_player.basement
+                from: "off"
+
+  wait_for_basement_plex_client_ready:
+    alias: "Wait for Basement Plex Client"
+    mode: parallel
+    sequence:
+      - if:
+          - condition: state
+            entity_id: media_player.plex_basement_apple_tv
+            state: "unavailable"
+        then:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: media_player.plex_basement_apple_tv
+                from: "unavailable"
+            timeout: "00:00:10"
+            continue_on_timeout: false
+
   watch_tv:
     alias: "Watch TV"
     sequence:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -314,7 +344,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -332,7 +362,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -353,7 +383,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -374,7 +404,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -395,7 +425,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -411,9 +441,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -429,7 +457,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -445,9 +473,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -461,7 +487,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -477,9 +503,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -495,7 +519,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -511,9 +535,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -529,7 +551,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -545,9 +567,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -564,7 +584,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -580,9 +600,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -598,7 +616,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -614,9 +632,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
@@ -632,7 +648,7 @@ script:
       - action: media_player.turn_on
         data:
           entity_id: media_player.basement
-      - wait_template: "{{ is_state('media_player.basement','off') != True }}"
+      - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
@@ -648,9 +664,7 @@ script:
       - action: button.press
         target:
           entity_id: button.fermentor_scan_clients
-      - wait_template: "{{ not is_state('media_player.plex_basement_apple_tv', 'unavailable') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: false
+      - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
         data:
           entity_id: media_player.plex_basement_apple_tv
