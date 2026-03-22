@@ -25,5 +25,5 @@ This note tracks the first-pass cleanup for issue #119 and the highest-value rem
 
 ## Behavioral notes
 
-- The new wait helper scripts preserve the prior "continue immediately if already ready" behavior by checking current state before waiting for a state change.
+- The new wait helper scripts preserve the prior "continue immediately if already ready" behavior and use a short re-check loop to avoid missing fast state transitions between the readiness check and trigger registration.
 - The Plex wait still fails after 10 seconds if the client stays unavailable, matching the prior `continue_on_timeout: false` behavior.
