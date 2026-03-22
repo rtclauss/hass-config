@@ -21,6 +21,8 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 
 If an upcoming trip exists, the planner uses trip start time plus Waze duration to determine a departure window.
 
+The planner now normalizes Waze/Tesla duration inputs with Home Assistant's `as_timedelta` helper, so legacy numeric values still work and string durations such as `00:35:00` or `PT35M` are accepted as well.
+
 ### Alarm inputs
 
 - `input_boolean.weekday_alarm_on`
@@ -149,3 +151,10 @@ yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disab
 uv run --python 3.14.2 --with homeassistant==2026.3.3 \
   python -m homeassistant --config "$PWD" --script check_config
 ```
+
+Manual regression cases worth checking in Template Developer Tools or against live entities:
+
+- Waze `duration` as a numeric minute count still produces the same planned departure.
+- Waze `duration` as `HH:MM:SS` or ISO8601 (for example `PT42M`) still produces the same planned departure.
+- Tesla `sensor.nigori_charging_rate` `time_left` as fractional hours still produces a valid `charge_complete` timestamp.
+- Tesla `sensor.nigori_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
