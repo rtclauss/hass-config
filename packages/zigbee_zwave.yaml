@@ -518,14 +518,15 @@ automation:
         to: "on"
         for:
           seconds: 30
-        id: "west_bed_light_on"
-      - trigger: state
-        # entity_id: binary_sensor.bayesian_bed_occupancy
-        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
-        to: "on"
-        for:
-          seconds: 30
         id: "west_bed_on"
+      - trigger: state
+        # Turn on the west bedside lamp after leaving bed for a bit.
+        # Keep this delay/window easy to tune if the sensor still feels jumpy.
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        to: "off"
+        for:
+          seconds: 10
+        id: "west_bed_left_bed"
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
@@ -539,14 +540,15 @@ automation:
         to: "off"
         for:
           seconds: 30
-        id: "west_bed_light_off"
-      - trigger: state
-        # entity_id: binary_sensor.bayesian_bed_occupancy
-        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
-        to: "off"
-        for:
-          seconds: 30
         id: "west_bed_off"
+      - trigger: state
+        # Turn the west bedside lamp back off after settling into bed.
+        # Adjust this delay alongside west_bed_left_bed if nighttime behavior needs refinement.
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        to: "on"
+        for:
+          seconds: 10
+        id: "west_bed_back_in_bed"
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
@@ -630,6 +632,32 @@ automation:
               - action: input_boolean.turn_off
                 data:
                   entity_id: input_boolean.west_bed_occupied
+          - conditions:
+              - condition: trigger
+                id: west_bed_left_bed
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_1
+          - conditions:
+              - condition: trigger
+                id: west_bed_back_in_bed
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_1
           # control the lights
           - conditions:
               - condition: trigger
