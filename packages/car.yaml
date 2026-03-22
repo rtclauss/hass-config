@@ -178,7 +178,15 @@ automation:
             {% set cold_weather = outside_temp_f <= 20 %}
             {% set trip_entry = state_attr('binary_sensor.upcoming_trip_charging', 'entry') | default('', true) %}
             {% set trip_distance_mi = state_attr('sensor.waze_next_trip_distance', 'distance') | float(default=0) %}
-            {% set trip_duration_min = state_attr('sensor.waze_next_trip_distance', 'duration') | int(default=0) %}
+            {% set trip_duration_raw = state_attr('sensor.waze_next_trip_distance', 'duration') %}
+            {% if trip_duration_raw is number %}
+              {% set trip_duration = timedelta(minutes=trip_duration_raw) %}
+            {% elif trip_duration_raw is string and trip_duration_raw | trim not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
+              {% set trip_duration = trip_duration_raw | as_timedelta %}
+            {% else %}
+              {% set trip_duration = timedelta() %}
+            {% endif %}
+            {% set trip_duration_min = (trip_duration.days * 1440) + (trip_duration.seconds // 60) %}
             {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
             {% set trip_all_day = state_attr('binary_sensor.upcoming_trip_charging', 'all_day') in [true, 'true', 'True', 'on'] %}
             {% set has_upcoming_trip = is_state('binary_sensor.upcoming_trip_charging', 'on') and trip_start_raw not in [none, '', 'None'] %}
@@ -195,7 +203,7 @@ automation:
             {% if has_upcoming_trip %}
               {% set trip_start_dt = trip_start_raw | as_datetime | as_local %}
               {% set trip_buffer_min = 20 + (10 if cold_weather else 0) %}
-              {% set departure_dt = trip_start_dt - timedelta(minutes=trip_duration_min + trip_buffer_min) %}
+              {% set departure_dt = trip_start_dt - trip_duration - timedelta(minutes=trip_buffer_min) %}
             {% elif alarm_enabled %}
               {% set alarm_base_dt = today_at(alarm_time_raw[:5]) %}
               {% set prep_buffer_min = 45 + (10 if cold_weather else 0) %}
@@ -632,8 +640,15 @@ script:
               {{ (requested_departure_text | as_datetime | as_local).isoformat() }}
             {% elif state_attr('binary_sensor.upcoming_trip_charging', 'start_time') not in [none, '', 'None'] %}
               {% set upcoming_start = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') | as_datetime | as_local %}
-              {% set travel_minutes = state_attr('sensor.waze_next_trip_distance', 'duration') | int(default=0) %}
-              {{ (upcoming_start - timedelta(minutes=travel_minutes + 19)).isoformat() }}
+              {% set travel_duration_raw = state_attr('sensor.waze_next_trip_distance', 'duration') %}
+              {% if travel_duration_raw is number %}
+                {% set travel_duration = timedelta(minutes=travel_duration_raw) %}
+              {% elif travel_duration_raw is string and travel_duration_raw | trim not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
+                {% set travel_duration = travel_duration_raw | as_timedelta %}
+              {% else %}
+                {% set travel_duration = timedelta() %}
+              {% endif %}
+              {{ (upcoming_start - travel_duration - timedelta(minutes=19)).isoformat() }}
             {% else %}
               {{ '' }}
             {% endif %}
@@ -894,12 +909,19 @@ template:
         unique_id: charge_complete
         device_class: timestamp
         availability: >-
-          {{ states.sensor.nigori_charging_rate.last_updated is defined and state_attr('sensor.nigori_charging_rate','time_left') != None }}
+          {% set charge_time_left_raw = state_attr('sensor.nigori_charging_rate','time_left') %}
+          {{ states.sensor.nigori_charging_rate.last_updated is defined and charge_time_left_raw not in [none, '', 'None', 'unknown', 'unavailable'] }}
         state: >-
-          {% if states.sensor.nigori_charging_rate.last_updated is defined and state_attr('sensor.nigori_charging_rate','time_left') != None %}
-            {{ (states.sensor.nigori_charging_rate.last_updated + timedelta(hours=state_attr('sensor.nigori_charging_rate','time_left'))).isoformat() }}
+          {% set charge_time_left_raw = state_attr('sensor.nigori_charging_rate','time_left') %}
+          {% if states.sensor.nigori_charging_rate.last_updated is defined and charge_time_left_raw not in [none, '', 'None', 'unknown', 'unavailable'] %}
+            {% if charge_time_left_raw is number %}
+              {% set charge_time_left = timedelta(hours=charge_time_left_raw) %}
+            {% else %}
+              {% set charge_time_left = charge_time_left_raw | as_timedelta %}
+            {% endif %}
+            {{ (states.sensor.nigori_charging_rate.last_updated + charge_time_left).isoformat() }}
           {% else %}
-            {{ now() }}
+            {{ now().isoformat() }}
           {% endif %}
       # I don't think this is used by anything.
       # - name: next_trip_distance
