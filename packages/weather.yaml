@@ -140,6 +140,12 @@ automation:
       - condition: numeric_state
         entity_id: sensor.nigori_precip_next_2hr
         above: 50
+      - condition: state
+        entity_id: binary_sensor.nigori_parking_brake
+        state: "on"
+      - condition: state
+        entity_id: cover.nigori_windows
+        state: "open"
       - condition: not
         conditions:
           - condition: state
@@ -154,19 +160,12 @@ automation:
         data:
           title: "Tesla Windows"
           message: >-
-            Rain is expected near the Tesla within the next two hours. Home Assistant
-            is closing the windows using the vehicle's current location forecast.
-      - action: tesla_custom.api
-        data:
-          command: WINDOW_CONTROL
-          parameters:
-            path_vars:
-              vehicle_id: !secret tesla_vehicle_id
-            command: close
-            lat: >-
-              {{ state_attr('device_tracker.nigori_location_tracker', "latitude") }}
-            long: >-
-              {{ state_attr('device_tracker.nigori_location_tracker', "longitude") }}
+            Rain is expected near the parked Tesla within the next two hours. Home
+            Assistant is closing the open windows using the vehicle's current location
+            forecast.
+      - action: cover.close_cover
+        target:
+          entity_id: cover.nigori_windows
 
   - id: alert_house_windows_open_pressure_dropping
     alias: alert_house_windows_open_pressure_dropping
