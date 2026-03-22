@@ -123,18 +123,22 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.guest_mode
+      - action: script.house_transition
+        data:
+          mode: >-
+            {% if is_state('binary_sensor.bayesian_zeke_home', 'off') %}
+              away
+            {% else %}
+              {{ states('input_select.house_mode') }}
+            {% endif %}
+          reason: guest_mode_disabled
+          apply_lights: false
+          apply_security: false
+          apply_media: true
+          apply_trip_policy: false
       - action: notify.all
         data:
           message: Guest Mode Deactivated
-      - action: media_player.join
-        target:
-          entity_id:
-            - media_player.bedroom_sonos_2
-        data:
-          group_members:
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
-            - media_player.den_sonos_2
 
   - id: turn_on_guest_mode_when_guest_wifi_active
     alias: turn_on_guest_mode_when_guest_wifi_active
@@ -177,27 +181,19 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.guest_mode
-      - action: media_player.unjoin
-        target:
-          entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
-            - media_player.den_sonos_2
-      - action: media_player.join
-        target:
-          entity_id:
-            - media_player.bedroom_sonos_2
+      - action: script.house_transition
         data:
-          group_members:
-            - media_player.bathroom_sonos_2
-      # - action: media_player.join
-      #   target:
-      #     entity_id:
-      #       - media_player.office
-      #   data:
-      #     group_members:
-      #       - media_player.den
+          mode: >-
+            {% if is_state('binary_sensor.bayesian_zeke_home', 'off') %}
+              away
+            {% else %}
+              {{ states('input_select.house_mode') }}
+            {% endif %}
+          reason: guest_mode_enabled
+          apply_lights: false
+          apply_security: false
+          apply_media: true
+          apply_trip_policy: false
 
   - id: climate_guest_mode_day
     alias: climate_guest_mode_day
@@ -218,11 +214,19 @@ automation:
           - input_boolean.guest_mode
         state: "on"
     action:
-      - action: climate.set_preset_mode
+      - action: script.house_transition
         data:
-          preset_mode: "Guest Day"
-        target:
-          entity_id: climate.my_ecobee
+          mode: >-
+            {% if is_state('binary_sensor.bayesian_zeke_home', 'off') %}
+              away
+            {% else %}
+              {{ states('input_select.house_mode') }}
+            {% endif %}
+          reason: guest_climate_day_refresh
+          apply_lights: false
+          apply_security: false
+          apply_media: false
+          apply_trip_policy: false
 
   - id: climate_guest_mode_night
     alias: climate_guest_mode_night
@@ -243,11 +247,19 @@ automation:
           - input_boolean.guest_mode
         state: "on"
     action:
-      - action: climate.set_preset_mode
+      - action: script.house_transition
         data:
-          preset_mode: "Guest Sleep"
-        target:
-          entity_id: climate.my_ecobee
+          mode: >-
+            {% if is_state('binary_sensor.bayesian_zeke_home', 'off') %}
+              away
+            {% else %}
+              {{ states('input_select.house_mode') }}
+            {% endif %}
+          reason: guest_climate_night_refresh
+          apply_lights: false
+          apply_security: false
+          apply_media: false
+          apply_trip_policy: false
 
 ########################
 # Binary Sensors

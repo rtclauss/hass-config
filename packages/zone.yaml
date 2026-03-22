@@ -185,14 +185,13 @@ automation:
           state: "off"
           # enabled: false
     action:
-      - service: scene.turn_on
-        target:
-          entity_id: scene.cloudy_arrive_home
+      - action: script.house_transition
         data:
-          transition: 30
-      - service: notify.all
-        data:
-          message: Cloudy day arrival.
+          mode: home
+          reason: cloudy_home_arrival
+          light_scene: scene.cloudy_arrive_home
+          light_transition: 30
+          notify_message: Cloudy day arrival.
 
   - id: default_arrive_home
     alias: default_arrive_home
@@ -215,9 +214,10 @@ automation:
           entity_id: sensor.wethop_activity
           state: "Automotive"
     action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.arrive_home
+      - action: script.house_transition
+        data:
+          mode: home
+          reason: default_arrive_home
       # - alias: "Notify action"
       #   action: notify.mobile_app_wethop
       #   data:
@@ -357,11 +357,11 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.night_arrive_home
+      - action: script.house_transition
         data:
-          transition: 30
+          mode: night
+          reason: night_arrival
+          light_transition: 30
       - action: vacuum.return_to_base
         data:
           entity_id: all
@@ -394,16 +394,18 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.bedroom_prep
+      - action: script.house_transition
+        data:
+          mode: night
+          reason: bedroom_prep_arrival
+          extra_scene: scene.bedroom_prep
       - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/owner-suite"
           message: "Bedroom Prep Activated"
 
-          # Use Ecobee Vacation mode now.
+  # Use Ecobee Vacation mode now.
   # - id: return_from_road_trip
   #   alias: return_from_road_trip
   #   trigger:
@@ -490,56 +492,29 @@ automation:
         state: "Automotive"
         # Todo add biking here?
     action:
-      parallel:
-        - action: lock.lock
-          target:
-            entity_id: lock.front_door_lock
-        - action: cover.close_cover
-          target:
-            entity_id: cover.garage_door
-        - action: scene.turn_on
-          target:
-            entity_id: scene.leave_home
-        - action: script.lights_off_except
-          data:
-            exclude_lights:
-              - light.outside_front_hue
-              - light.outside_north_west_garage
-              - light.outside_south_west_garage
-              - light.outside_front_door
-            transition: 240
-        # - action: light.turn_off
-        #   entity_id: "all"
-        - action: fan.turn_off
-          target:
-            entity_id: "all"
-        # - alias: "Notify action"
-        #   action: notify.mobile_app_wethop
-        #   data:
-        #     message: >-
-        #       Leaving home with wethop activity {{ states('sensor.wethop_activity') }}
-        - action: scene.turn_on
-          target:
-            entity_id: scene.turn_on_cameras
-        # Vacuum request payload is identical for both paths, so keep one action.
-        - action: mqtt.publish
-          data:
-            topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-            payload: >-
-              {% set segment_id = now().weekday() + 1 %}
-              {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
-            # - action: notify.all
-            #   data:
-            #     title: "Auf wiedersehen"
-            #     message: "Vacuum the house?"
-            #     data:
-            #       actions:
-            #         - action: "VACUUM_HOUSE"
-            #           title: "Vacuum House"
-            #           activationMode: background
-            #           authenticationRequired: false
-            #           destructive: false
-            #           behavior: default
+      - action: script.house_transition
+        data:
+          mode: away
+          reason: leave_home
+      # Vacuum request payload is identical for both paths, so keep one action.
+      - action: mqtt.publish
+        data:
+          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+          payload: >-
+            {% set segment_id = now().weekday() + 1 %}
+            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+          # - action: notify.all
+          #   data:
+          #     title: "Auf wiedersehen"
+          #     message: "Vacuum the house?"
+          #     data:
+          #       actions:
+          #         - action: "VACUUM_HOUSE"
+          #           title: "Vacuum House"
+          #           activationMode: background
+          #           authenticationRequired: false
+          #           destructive: false
+          #           behavior: default
 
   - alias: Update Bayesian Device tracker on start
     description: When HA starts up, update bayesian device tracker GPS items
