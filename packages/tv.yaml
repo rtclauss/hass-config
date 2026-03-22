@@ -295,30 +295,62 @@ script:
     mode: parallel
     sequence:
       - if:
-          - condition: state
-            entity_id: media_player.basement
-            state: "off"
-        then:
-          - wait_for_trigger:
-              - trigger: state
+          - condition: not
+            conditions:
+              - condition: state
                 entity_id: media_player.basement
-                from: "off"
+                state: "off"
+        then:
+          - stop: Basement player already ready
+      - repeat:
+          sequence:
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id: media_player.basement
+                  from: "off"
+              timeout: "00:00:01"
+              continue_on_timeout: true
+          until:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: media_player.basement
+                  state: "off"
 
   wait_for_basement_plex_client_ready:
     alias: "Wait for Basement Plex Client"
     mode: parallel
     sequence:
       - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: media_player.plex_basement_apple_tv
+                state: "unavailable"
+        then:
+          - stop: Plex client already ready
+      - repeat:
+          count: 10
+          sequence:
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id: media_player.plex_basement_apple_tv
+                  from: "unavailable"
+              timeout: "00:00:01"
+              continue_on_timeout: true
+            - if:
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: media_player.plex_basement_apple_tv
+                      state: "unavailable"
+              then:
+                - stop: Plex client ready
+      - condition: not
+        conditions:
           - condition: state
             entity_id: media_player.plex_basement_apple_tv
             state: "unavailable"
-        then:
-          - wait_for_trigger:
-              - trigger: state
-                entity_id: media_player.plex_basement_apple_tv
-                from: "unavailable"
-            timeout: "00:00:10"
-            continue_on_timeout: false
 
   watch_tv:
     alias: "Watch TV"
