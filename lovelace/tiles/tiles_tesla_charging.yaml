@@ -113,13 +113,15 @@ cards:
             entity_id: binary_sensor.upcoming_trip_charging
             title: "Reason"
             content: >-
+              {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
+              {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 ### Max-range override is active
                 #### Charge limit pinned to 100% until you return to the daily plan
-              {% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}
+              {% elif has_calendar_departure %}
                 ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}
-                #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}
-                #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int }} mi
+                #### Departure plan: {{ trip_start_raw }}
+                #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int(0) }} mi
               {% else %}
                 ### Daily planner is active
                 #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and EV tariff inputs
@@ -136,16 +138,17 @@ cards:
               {% set rate = states('sensor.ev_charging_tariff_rate') | float(default=0) %}
               {% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}
               {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
-              {% set cold_weather = states('sensor.outside_temperature') | float(default=999) <= 20 %}
+              {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
+              {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
               ### {{ charge_limit }}% target
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 #### Manual override is forcing max range
               {% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}
                 #### Planner is following the next trip
-              {% elif alarm_enabled and cold_weather %}
-                #### Planner is following tomorrow's alarm and cold-weather preconditioning
+              {% elif has_calendar_departure %}
+                #### Planner is following the next calendar departure
               {% elif alarm_enabled %}
-                #### Planner is following tomorrow's alarm and EV TOU pricing
+                #### Planner is following tomorrow's alarm with cabin preconditioning enabled
               {% else %}
                 #### No next-day departure plan is active
               {% endif %}
