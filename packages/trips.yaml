@@ -443,18 +443,40 @@ automation:
                 state: "off"
               - condition: template
                 value_template: >-
-                  {% set summary = trigger.calendar_event.summary | default('', true) | lower %}
-                  {% set description = trigger.calendar_event.description | default('', true) | lower %}
-                  {% set location = trigger.calendar_event.location | default('', true) | lower %}
-                  {% set trip_text = [summary, description, location] | join(' ') %}
+                  {% set summary = trigger.calendar_event.summary | default('', true) | string %}
+                  {% set description = trigger.calendar_event.description | default('', true) | string %}
+                  {% set location = trigger.calendar_event.location | default('', true) | string %}
+                  {% set summary_lower = summary | lower %}
+                  {% set location_lower = location | lower %}
+                  {% set trip_text = [summary, description, location] | join(' ') | lower %}
+                  {% set route_summary = '→' in summary %}
+                  {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+                  {% set itinerary_marker = 'synced by flighty' in trip_text or 'created from an email you received in gmail' in trip_text or 'booking code:' in trip_text or 'flight time ' in trip_text %}
+                  {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                  {% set origin_code = '' %}
+                  {% set destination_code = '' %}
+                  {% if route_summary %}
+                    {% set origin_code = summary.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% elif summary_lower.startswith('flight to ') %}
+                    {% set destination_code = summary.split('Flight to ', 1)[1].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                    {% set destination_code = summary.split('Flight: ', 1)[1].split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% endif %}
                   {% set is_msp_departure = (
-                    location == "minneapolis-st paul intl/wold-chamberlain"
-                    or "msp airport" in location
-                    or "minneapolis msp" in location
-                    or ("minneapolis" in location and ("saint paul" in location or "st paul" in location))
-                    or "wold-chamberlain" in location
+                    origin_code == "MSP"
+                    or location_lower == "minneapolis-st paul intl/wold-chamberlain"
+                    or "msp airport" in location_lower
+                    or "minneapolis msp" in location_lower
+                    or ("minneapolis" in location_lower and ("saint paul" in location_lower or "st paul" in location_lower))
+                    or "wold-chamberlain" in location_lower
                   ) %}
-                  {{ is_msp_departure and "friend" not in trip_text }}
+                  {{
+                    looks_like_flight
+                    and is_msp_departure
+                    and destination_code not in ["", "MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER"]
+                    and "friend" not in trip_text
+                  }}
             sequence:
               - action: input_boolean.turn_on
                 target:
@@ -1336,6 +1358,8 @@ template:
                 } | to_json
               }}
             {% endif %}
+          # Only explicit flight summaries qualify here. Generic calendar locations like
+          # "United States" or "Rochester" must not be treated as flights.
           flight_to_msp_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}
@@ -1343,12 +1367,25 @@ template:
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
+              {% set summary_lower = summary | lower %}
               {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set route_summary = '→' in summary %}
+              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+              {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
+              {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
               {% set end_dt = as_datetime(end_raw) %}
-              {% if ('msp' in text or 'minneapolis-st paul' in text or 'minneapolis st paul' in text or 'wold-chamberlain' in text) and start_dt is not none and end_dt is not none %}
+              {% set destination_code = '' %}
+              {% if route_summary %}
+                {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% elif summary_lower.startswith('flight to ') %}
+                {% set destination_code = summary.split('Flight to ', 1)[1].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                {% set destination_code = summary.split('Flight: ', 1)[1].split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% endif %}
+              {% if looks_like_flight and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL'] and start_dt is not none and end_dt is not none %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
@@ -1389,12 +1426,25 @@ template:
               {% set summary = event.summary | default('', true) | string %}
               {% set description = event.description | default('', true) | string %}
               {% set location = event.location | default('', true) | string %}
+              {% set summary_lower = summary | lower %}
               {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set route_summary = '→' in summary %}
+              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+              {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
+              {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
               {% set end_dt = as_datetime(end_raw) %}
-              {% if (' rst ' in (' ' ~ text ~ ' ') or 'rochester' in text) and start_dt is not none and end_dt is not none %}
+              {% set destination_code = '' %}
+              {% if route_summary %}
+                {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% elif summary_lower.startswith('flight to ') %}
+                {% set destination_code = summary.split('Flight to ', 1)[1].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                {% set destination_code = summary.split('Flight: ', 1)[1].split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+              {% endif %}
+              {% if looks_like_flight and destination_code in ['RST', 'ROCHESTER'] and start_dt is not none and end_dt is not none %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
@@ -1478,7 +1528,7 @@ template:
             {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
             {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
             {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
-            {% set ns = namespace(curling_event=None, outbound=None, return_home=None, target_city='', target_city_ts=None) %}
+            {% set ns = namespace(curling_event=None, outbound=None, return_home=None) %}
             {% for event in curling_events_list %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
@@ -1508,31 +1558,41 @@ template:
                 {% set summary = event.summary | default('Flight', true) %}
                 {% set description = event.description | default('', true) %}
                 {% set location = event.location | default('', true) %}
+                {% set summary_lower = summary | lower %}
                 {% set summary_text = summary | string %}
                 {% set flight_text = ([summary, description, location] | join(' ') | lower) %}
-                {% set looks_like_flight = 'airport' in flight_text or 'flight' in flight_text or 'airlines' in flight_text or 'delta' in flight_text or 'united' in flight_text or 'southwest' in flight_text or 'sun country' in flight_text %}
-                {% set is_msp_flight = 'msp' in flight_text or 'minneapolis-st paul' in flight_text or 'minneapolis st paul' in flight_text or 'wold-chamberlain' in flight_text %}
+                {% set route_summary = '→' in summary_text %}
+                {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+                {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
+                {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
                 {% set start_ts = as_timestamp(start_dt) %}
+                {% set origin_code = '' %}
                 {% set destination_name = '' %}
-                {% if summary_text.startswith('Flight to ') %}
+                {% set destination_code = '' %}
+                {% if route_summary %}
+                  {% set origin_code = summary_text.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% set destination_code = summary_text.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                {% elif summary_lower.startswith('flight to ') %}
                   {% set destination_name = summary_text.split('Flight to ', 1)[1].split(' (', 1)[0].strip() %}
-                {% elif summary_text.startswith('Flight: ') and ' to ' in summary_text %}
-                  {% set destination_name = summary_text.split(' to ', 1)[1].strip() %}
-                {% elif '→' in summary_text %}
-                  {% set destination_name = summary_text.split('→', 1)[1].split('•', 1)[0].strip() %}
+                  {% set destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
+                {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                  {% set destination_name = summary_text.split('Flight: ', 1)[1].split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0].strip() %}
+                  {% set destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
                 {% endif %}
-                {% if looks_like_flight and start_ts >= (as_timestamp(now()) - 3600) and destination_name not in ['', 'MSP'] %}
-                  {% if ns.target_city_ts is none or start_ts < ns.target_city_ts or (start_ts == ns.target_city_ts and (destination_name | length) > (ns.target_city | length)) %}
-                    {% set ns.target_city = destination_name %}
-                    {% set ns.target_city_ts = start_ts %}
-                  {% endif %}
+                {% if destination_name == '' and destination_code not in ['', 'MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] %}
+                  {% set destination_name = destination_code %}
                 {% endif %}
-                {% if looks_like_flight and not is_msp_flight and start_ts >= (as_timestamp(now()) - 3600) %}
-                  {% if ns.outbound is none or start_ts < ns.outbound.start_ts %}
+                {% set is_home_origin = origin_code in ['MSP', 'RST'] %}
+                {% set is_home_destination = destination_code in ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] %}
+                {% set outbound_priority = 0 if is_home_origin else 1 if named_flight else 9 %}
+                {% if looks_like_flight and start_ts >= (as_timestamp(now()) - 3600) and destination_name != '' and not is_home_destination and outbound_priority < 9 %}
+                  {% if ns.outbound is none or outbound_priority < ns.outbound.priority or (outbound_priority == ns.outbound.priority and start_ts < ns.outbound.start_ts) %}
                     {% set ns.outbound = {
                       'summary': summary,
                       'start': (start_dt | as_local).isoformat(),
-                      'start_ts': start_ts
+                      'start_ts': start_ts,
+                      'priority': outbound_priority,
+                      'destination_name': destination_name
                     } %}
                   {% endif %}
                 {% endif %}
@@ -1546,11 +1606,23 @@ template:
                   {% set summary = event.summary | default('Flight', true) %}
                   {% set description = event.description | default('', true) %}
                   {% set location = event.location | default('', true) %}
+                  {% set summary_lower = summary | lower %}
+                  {% set summary_text = summary | string %}
                   {% set flight_text = ([summary, description, location] | join(' ') | lower) %}
-                  {% set looks_like_flight = 'airport' in flight_text or 'flight' in flight_text or 'airlines' in flight_text or 'delta' in flight_text or 'united' in flight_text or 'southwest' in flight_text or 'sun country' in flight_text %}
-                  {% set is_msp_flight = 'msp' in flight_text or 'minneapolis-st paul' in flight_text or 'minneapolis st paul' in flight_text or 'wold-chamberlain' in flight_text %}
+                  {% set route_summary = '→' in summary_text %}
+                  {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+                  {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
+                  {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                  {% set destination_code = '' %}
+                  {% if route_summary %}
+                    {% set destination_code = summary_text.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% elif summary_lower.startswith('flight to ') %}
+                    {% set destination_code = summary_text.split('Flight to ', 1)[1].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                    {% set destination_code = summary_text.split('Flight: ', 1)[1].split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% endif %}
                   {% set start_ts = as_timestamp(start_dt) %}
-                  {% if looks_like_flight and is_msp_flight and start_ts > ns.outbound.start_ts %}
+                  {% if looks_like_flight and destination_code in ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] and start_ts > ns.outbound.start_ts %}
                     {% if ns.return_home is none or start_ts < ns.return_home.start_ts %}
                       {% set ns.return_home = {
                         'summary': summary,
@@ -1570,7 +1642,7 @@ template:
                   'start': ns.outbound.start,
                   'end': ((ns.return_home.start | as_datetime | as_local) - timedelta(hours=2)).isoformat(),
                   'return_summary': ns.return_home.summary,
-                  'vacation_name': ns.target_city | default(ns.outbound.summary, true)
+                  'vacation_name': ns.outbound.destination_name | default(ns.outbound.summary, true)
                 } | to_json
               }}
             {% elif ns.curling_event is not none %}
