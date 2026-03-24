@@ -1924,6 +1924,8 @@ script:
   reset_inovelli_switches:
     icon: mdi:light-switch
     variables:
+      ha_write_delay: "00:00:01"
+      mqtt_bind_delay: "00:00:03"
       all_inovelli_switches_sb_mode: >
         {%- for device in states.select | select('match', '.*_smartbulbmode.*')  | reject('match','.*exhaust.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_ouput_mode: >
@@ -1952,7 +1954,7 @@ script:
           entity_id: >
             {{all_inovelli_switches_active_energy_report_rate}}
           value: "0"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: number.set_value
         data:
           entity_id: >
@@ -1964,19 +1966,19 @@ script:
             {{all_inovelli_switches_energy_report_rate}}
           # value: "623" # enhanced reporting
           value: 0 # default
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id: >
             {{all_inovelli_switches_double_tap_up_mode}}
           option: "Enabled"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: number.set_value
         data:
           entity_id: >
             {{all_inovelli_switches_double_tap_up_brightness}}
           value: "254"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
         enabled: false
       - action: select.select_option
         enabled: false
@@ -1984,19 +1986,19 @@ script:
           entity_id: >
             {{all_inovelli_switches_sb_mode}}
           option: "Disabled"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id: >
             {{all_inovelli_switches_sb_mode}}
           option: "Smart Bulb Mode"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id: >
             {{all_inovelli_switches_bindingofftoonsynclevel_mode}}
           option: "Enabled"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id: >
@@ -2011,13 +2013,13 @@ script:
             select.kitchen_under_cabinet_smartbulbmode,
             select.basement_overhead_outlet_smartbulbmode
           option: "Disabled"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id: >
             {{all_inovelli_switches_ouput_mode}}
           option: "Dimmer"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id:
@@ -2028,7 +2030,7 @@ script:
             - select.basement_overhead_outlet_outputmode # Todo maybe remove this when something is plugged in?
             # - select.hall_stairway_outputmode
           option: "On/Off"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id:
@@ -2036,7 +2038,7 @@ script:
             - select.guest_bathroom_exhaust_outputmode
             - select.owner_suite_bathroom_exhaust_outputmode
           option: "Exhaust Fan (On/Off)"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id:
@@ -2065,7 +2067,7 @@ script:
             - select.owner_suite_closet_switchtype
             - select.owner_suite_fan_switch_switchtype
           option: "Single Pole"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id:
@@ -2078,7 +2080,7 @@ script:
           entity_id: select.hall_transition_switch_switchtype
           option: "Aux Switch"
       # Now redo the bindings of switches to bulbs/etc
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       # TODO: Z2M 2.0 I need to update these bindings: https://github.com/Koenkk/zigbee2mqtt/pull/24432
       - action: mqtt.publish
         data:
@@ -2086,77 +2088,77 @@ script:
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Deck/Kitchen Door/2","to":"Deck/Hue"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Outside/Front Lights/2","to":"Outside/Front Hue"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Owner Suite/Bathroom/Tub Switch/2","to":"Owner Suite/Bathroom/Bathtub Lights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Kitchen/Sink Light Switch/2","to":"Kitchen/Sink"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Upstairs/Switch/2","to":"Hall/Upstairs Lights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Living Room/Wall Switch/2","to":"Living Room/Lamps"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Transition Switch/2","to":"Hall/Transition Lights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Transition Switch/2","to":"Hall/Main Foyer"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Garage Laundry Switch/2","to":"Hall/Transition Lights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Foyer Switch/2","to":"Hall/Main Foyer"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Hall/Foyer Switch/2","to":"Hall/Front Door"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/group/members/add
@@ -2164,21 +2166,21 @@ script:
             {"group":"Dining Room/Over Table",
               "device":"Dining Room/Table Switch",
               "endpoint":2}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Dining Room/Table Switch/2","to":"Dining Room/Over Table"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Dining Room/Overhead/2","to":"Dining Room/Over Table"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/group/members/add
@@ -2186,77 +2188,77 @@ script:
             {"group":"Den/Floods",
               "device":"Den/Flood Switch",
               "endpoint":2}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Den/Flood Switch/2","to":"Den/Floods"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Den/Wall Switch/2","to":"Den/All"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Deck/Flood Lights/2","to":"Deck/All"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/North Hallway Switch/2","to":"Basement/All Down Lights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/North Hallway Switch/2","to":"Basement/North Hallway"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Landing Switch/2","to":"Basement/Landing Group"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room West Switch/2","to":"Basement/All Down Lights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room West Switch/2","to":"Basement/West Downlights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/All Down Lights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
           payload: >-
             {"clusters":["genGroups","genLevelCtrl","genOnOff"],
               "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/East Downlights"}
-      - delay: 10 # seconds
+      - delay: "{{ mqtt_bind_delay }}"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/bind
