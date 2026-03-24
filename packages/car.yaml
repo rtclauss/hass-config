@@ -126,6 +126,14 @@ automation:
         entity_id: binary_sensor.upcoming_trip_charging
         id: trip_change
       - trigger: state
+        entity_id: binary_sensor.upcoming_trip_charging
+        attribute: start_time
+        id: trip_details_change
+      - trigger: state
+        entity_id: binary_sensor.upcoming_trip_charging
+        attribute: all_day
+        id: trip_details_change
+      - trigger: state
         entity_id:
           - input_boolean.weekday_alarm_on
           - input_boolean.weekend_alarm_on
@@ -181,7 +189,8 @@ automation:
             {% set trip_duration_min = state_attr('sensor.waze_next_trip_distance', 'duration') | int(default=0) %}
             {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
             {% set trip_all_day = state_attr('binary_sensor.upcoming_trip_charging', 'all_day') in [true, 'true', 'True', 'on'] %}
-            {% set has_upcoming_trip = is_state('binary_sensor.upcoming_trip_charging', 'on') and trip_start_raw not in [none, '', 'None'] %}
+            {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
+            {% set has_upcoming_trip = is_state('binary_sensor.upcoming_trip_charging', 'on') and has_calendar_departure %}
             {% if states('select.daily_ev_charging') not in ['unknown', 'unavailable'] %}
               {% set tariff = states('select.daily_ev_charging') %}
             {% else %}
@@ -192,7 +201,7 @@ automation:
             {% set tariff_display = tariff | replace('_', '-') | title %}
             {% set high_tariff = tariff_name in ['on_peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
             {% set departure_dt = none %}
-            {% if has_upcoming_trip %}
+            {% if has_calendar_departure %}
               {% set trip_start_dt = trip_start_raw | as_datetime | as_local %}
               {% set trip_buffer_min = 20 + (10 if cold_weather else 0) %}
               {% set departure_dt = trip_start_dt - timedelta(minutes=trip_duration_min + trip_buffer_min) %}
@@ -222,13 +231,15 @@ automation:
             {% if manual_override %}
               {% set charge_limit = 100 %}
             {% endif %}
-            {% set precondition = has_upcoming_trip or (alarm_enabled and cold_weather) %}
+            {% set precondition = has_calendar_departure or alarm_enabled %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
-            {% set active = manual_override or has_upcoming_trip or alarm_enabled %}
+            {% set active = manual_override or has_calendar_departure or alarm_enabled %}
             {% if has_upcoming_trip %}
               {% set source = 'calendar trip' %}
+            {% elif has_calendar_departure %}
+              {% set source = 'calendar departure' %}
             {% elif alarm_enabled %}
               {% set source = alarm_source %}
             {% elif manual_override %}
@@ -247,6 +258,8 @@ automation:
               {% set summary = 'Manual max-range override is on. Keep the Tesla at 100% charge.' %}
             {% elif has_upcoming_trip %}
               {% set summary = 'Plan Tesla for ' ~ (trip_entry if trip_entry else 'upcoming trip') ~ '. Set charge limit to ' ~ charge_limit ~ '% and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Distance ' ~ (trip_distance_mi | round(0)) ~ ' mi. EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
+            {% elif has_calendar_departure %}
+              {% set summary = 'Plan Tesla for ' ~ (trip_entry if trip_entry else 'upcoming calendar departure') ~ '. Keep the default ' ~ charge_limit ~ '% charge limit and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Distance ' ~ (trip_distance_mi | round(0)) ~ ' mi. EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
             {% elif alarm_enabled %}
               {% if charge_limit == 80 and high_tariff and not cold_weather %}
                 {% set charge_limit_phrase = 'Keep the default 80% charge limit because the current EV tariff is higher' %}
@@ -269,7 +282,8 @@ automation:
               'trip_distance_mi': trip_distance_mi,
               'trip_duration_min': trip_duration_min,
               'outside_temp_f': outside_temp_f,
-              'high_tariff': high_tariff
+              'high_tariff': high_tariff,
+              'has_calendar_departure': has_calendar_departure
             } | to_json }}
           tesla_plan: "{{ tesla_plan_json | from_json }}"
       - choose:
