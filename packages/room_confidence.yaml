@@ -102,14 +102,17 @@ template:
               {% set score.value = score.value + 70 %}
             {% endif %}
             {% if phone_area == 'bedroom' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 45 %}
             {% elif phone_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 25 %}
             {% endif %}
             {% if watch_area == 'bedroom' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 10 %}
             {% elif watch_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'bedroom' and watch_area == 'bedroom' %}
+              {% set score.value = score.value + 5 %}
             {% endif %}
             {{ [[score.value, 0] | max, 100] | min }}
           {% endif %}
@@ -146,14 +149,17 @@ template:
               {% set score.value = score.value + 30 %}
             {% endif %}
             {% if phone_area == 'office' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 45 %}
             {% elif phone_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 25 %}
             {% endif %}
             {% if watch_area == 'office' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 10 %}
             {% elif watch_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'office' and watch_area == 'office' %}
+              {% set score.value = score.value + 5 %}
             {% endif %}
             {{ [[score.value, 0] | max, 100] | min }}
           {% endif %}
@@ -185,14 +191,17 @@ template:
               {% set score.value = score.value + 55 %}
             {% endif %}
             {% if phone_area == 'den' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 45 %}
             {% elif phone_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 25 %}
             {% endif %}
             {% if watch_area == 'den' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 10 %}
             {% elif watch_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'den' and watch_area == 'den' %}
+              {% set score.value = score.value + 5 %}
             {% endif %}
             {{ [[score.value, 0] | max, 100] | min }}
           {% endif %}
@@ -225,14 +234,14 @@ template:
               {% set score.value = score.value + 55 %}
             {% endif %}
             {% if phone_area == 'unfinished basement' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 35 %}
             {% elif phone_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 25 %}
             {% endif %}
             {% if watch_area == 'unfinished basement' %}
-              {% set score.value = score.value + 25 %}
+              {% set score.value = score.value + 10 %}
             {% elif watch_area not in unknown_states %}
-              {% set score.value = score.value - 15 %}
+              {% set score.value = score.value - 5 %}
             {% endif %}
             {% if phone_floor == 'basement' %}
               {% set score.value = score.value + 10 %}
@@ -240,9 +249,12 @@ template:
               {% set score.value = score.value - 10 %}
             {% endif %}
             {% if watch_floor == 'basement' %}
-              {% set score.value = score.value + 10 %}
+              {% set score.value = score.value + 5 %}
             {% elif watch_floor not in unknown_states %}
-              {% set score.value = score.value - 10 %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'unfinished basement' and watch_area == 'unfinished basement' %}
+              {% set score.value = score.value + 5 %}
             {% endif %}
             {{ [[score.value, 0] | max, 100] | min }}
           {% endif %}
