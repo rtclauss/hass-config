@@ -173,8 +173,8 @@ def test_route_summaries_keep_departure_and_return_directions_distinct() -> None
 
 
 def test_named_flights_extract_clean_destination_codes() -> None:
-    direct = parse_flight_signals("Flight to CLT (DL 2819)")
-    verbose = parse_flight_signals("Flight: MSP to CLT (DL 2819)")
+    direct = parse_flight_signals("flight to CLT (DL 2819)")
+    verbose = parse_flight_signals("Flight: MSP TO CLT (DL 2819)")
 
     assert direct.destination_name == "CLT"
     assert direct.destination_code == "CLT"
