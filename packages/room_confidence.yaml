@@ -135,27 +135,31 @@ template:
           {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
           {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
           {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
+          {% set local_signal_count = namespace(value=0) %}
           {% set score = namespace(value=0) %}
           {% if not home_present %}
             0
           {% else %}
             {% if is_state('binary_sensor.office_occupancy_2', 'on') %}
+              {% set local_signal_count.value = local_signal_count.value + 1 %}
               {% set score.value = score.value + 55 %}
             {% endif %}
             {% if is_state('binary_sensor.office_motion_occupancy', 'on') %}
+              {% set local_signal_count.value = local_signal_count.value + 1 %}
               {% set score.value = score.value + 20 %}
             {% endif %}
             {% if is_state('binary_sensor.ryan_office_presence', 'on') %}
+              {% set local_signal_count.value = local_signal_count.value + 1 %}
               {% set score.value = score.value + 30 %}
             {% endif %}
             {% if phone_area == 'office' %}
               {% set score.value = score.value + 45 %}
-            {% elif phone_area not in unknown_states %}
+            {% elif phone_area not in unknown_states and local_signal_count.value < 2 %}
               {% set score.value = score.value - 25 %}
             {% endif %}
             {% if watch_area == 'office' %}
               {% set score.value = score.value + 10 %}
-            {% elif watch_area not in unknown_states %}
+            {% elif watch_area not in unknown_states and local_signal_count.value < 2 %}
               {% set score.value = score.value - 5 %}
             {% endif %}
             {% if phone_area == 'office' and watch_area == 'office' %}
@@ -174,6 +178,18 @@ template:
           phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
           watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
           office_proxy_presence: "{{ states('binary_sensor.ryan_office_presence') }}"
+          local_signal_count: >-
+            {% set count = 0 %}
+            {% if is_state('binary_sensor.office_occupancy_2', 'on') %}
+              {% set count = count + 1 %}
+            {% endif %}
+            {% if is_state('binary_sensor.office_motion_occupancy', 'on') %}
+              {% set count = count + 1 %}
+            {% endif %}
+            {% if is_state('binary_sensor.ryan_office_presence', 'on') %}
+              {% set count = count + 1 %}
+            {% endif %}
+            {{ count }}
 
       - name: den_room_confidence
         unique_id: den_room_confidence
