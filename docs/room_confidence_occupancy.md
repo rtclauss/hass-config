@@ -47,6 +47,12 @@ That mismatch penalty is intentional. It prevents stale motion/occupancy
 booleans from winning outright when both Bermuda devices agree that Ryan is in
 another room.
 
+For the office specifically, that disagreement penalty is suppressed once two
+local office signals agree (`binary_sensor.office_occupancy_2`,
+`binary_sensor.office_motion_occupancy`, or `binary_sensor.ryan_office_presence`).
+That keeps a bad phone/watch room hint from forcing a false vacancy while the
+office sensors still corroborate each other.
+
 That also means a watch left on a charger or nightstand should not keep a room
 in the `likely` band by itself.
 
@@ -62,10 +68,13 @@ Binary sensors such as `binary_sensor.office_confident_occupancy` switch on at
 
 ## Downstream Usage
 
-`automation.office_lights_morning_on_vacancy_off` now keys off
-`binary_sensor.office_confident_occupancy` instead of raw office occupancy
-signals. That lets Bermuda disagreement suppress obvious false positives while
-still allowing BLE-only and motion-only occupancy to count.
+`automation.office_lights_morning_on_vacancy_off` uses
+`binary_sensor.office_confident_occupancy` to decide when morning auto-on is
+allowed, but the vacancy-off path now also requires
+`binary_sensor.office_occupancy_2` and `binary_sensor.office_motion_occupancy`
+to be clear. That keeps the confidence model useful for avoiding false auto-on
+events without letting a stale Bermuda room hint shut the lights off while the
+office sensors still see occupancy.
 
 ## Manual Validation
 
@@ -82,6 +91,9 @@ still allowing BLE-only and motion-only occupancy to count.
    to `0`.
 6. Signal loss: mark one Bermuda room sensor unavailable and confirm the score
    drops but does not collapse to `0` when another positive signal remains.
+7. Office false-vacancy guard: leave the office occupancy sensors on while BLE
+   room hints disagree, then confirm the office light auto-off path does not
+   fire until both office occupancy sensors are also clear.
 
 ## Notification Guidance
 
