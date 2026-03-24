@@ -982,6 +982,34 @@ automation:
                 data:
                   entity_id: fan.guest_room
 
+  - alias: hall_garage_laundry_switch_actions
+    id: hall_garage_laundry_switch_actions
+    trigger:
+      - trigger: state
+        entity_id: sensor.hall_garage_laundry_switch_action
+        to: "up_double"
+        id: up-double
+      - trigger: state
+        entity_id: sensor.hall_garage_laundry_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - action: cover.open_cover
+                target:
+                  entity_id: cover.garage_door
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - action: cover.close_cover
+                target:
+                  entity_id: cover.garage_door
+
   - alias: kitchen_overhead_switch_actions
     id: kitchen_overhead_switch_actions
     mode: restart
