@@ -1884,18 +1884,6 @@ automation:
                 data:
                   entity_id: input_boolean.office_auto_on
 
-  - alias: "Tiki Room Animation Speed"
-    id: tiki_room_animation_speed
-    initial_state: True
-    trigger:
-      - trigger: state
-        entity_id: input_number.tikiroom_ani_speed
-    action:
-      - action: mqtt.publish
-        data:
-          topic: "leds/tikiroom/set"
-          payload: '{"transition":{{ trigger.to_state.state | int }}}'
-
 ########################
 # Binary Sensors
 ########################
@@ -1920,16 +1908,6 @@ input_boolean:
   basement_auto_on:
   office_auto_on:
   owner_suite_bedroom_auto_on:
-########################
-# Input Numbers
-########################
-input_number:
-  tikiroom_ani_speed:
-    name: Tiki Room Animation Speed
-    initial: 150
-    min: 1
-    max: 150
-    step: 10
 ########################
 # Light
 ########################
@@ -1988,47 +1966,6 @@ light:
   #   rgb: true
   #   optimistic: false
   #   qos: 0
-
-########################
-# MQTT
-########################
-mqtt:
-  light:
-    - name: "Tiki Room Strip"
-      unique_id: tiki_room_strip
-      schema: json
-      state_topic: "leds/tikiroom"
-      command_topic: "leds/tikiroom/set"
-      # command_off_template: '{"state": "OFF"}'
-      # command_on_template: '{"state": "ON"}'
-      # effect: true
-      brightness: true
-      effect: true
-      effect_list:
-        - bpm
-        - candy cane
-        - confetti
-        - cyclon rainbow
-        - dots
-        - fire
-        - glitter
-        - juggle
-        - lightning
-        - noise
-        - police all
-        - police one
-        - rainbow
-        - rainbow with glitter
-        - ripple
-        - sinelon
-        - solid
-        - twinkle
-      #brightness: true
-      #flash: true
-      # color_mode: true
-      supported_color_modes: ["rgb", "color_temp"]
-      optimistic: false
-      qos: 0
 
 ########################
 # Scenes
@@ -2139,6 +2076,215 @@ script:
           entity_id: scene.scene_reset_basement
         data:
           transition: 15
+
+  tiki_room_solid:
+    alias: "Tiki Room Solid"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: solid
+
+  tiki_room_bpm:
+    alias: "Tiki Room BPM"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: bpm
+
+  tiki_room_candy_cane:
+    alias: "Tiki Room Candy Cane"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: candy cane
+
+  tiki_room_christmas:
+    alias: "Tiki Room Christmas"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: christmas
+
+  tiki_room_confetti:
+    alias: "Tiki Room Confetti"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: confetti
+
+  tiki_room_cyclon_rainbow:
+    alias: "Tiki Room Cyclon Rainbow"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: cyclon rainbow
+
+  tiki_room_dots:
+    alias: "Tiki Room Dots"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: dots
+
+  tiki_room_fire:
+    alias: "Tiki Room Fire"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: fire
+
+  tiki_room_glitter:
+    alias: "Tiki Room Glitter"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: glitter
+
+  tiki_room_juggle:
+    alias: "Tiki Room Juggle"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: juggle
+
+  tiki_room_lightning:
+    alias: "Tiki Room Lightning"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: lightning
+
+  tiki_room_noise:
+    alias: "Tiki Room Noise"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: noise
+
+  tiki_room_police_all:
+    alias: "Tiki Room Police All"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: police all
+
+  tiki_room_police_one:
+    alias: "Tiki Room Police One"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: police one
+
+  tiki_room_rainbow:
+    alias: "Tiki Room Rainbow"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: rainbow
+
+  tiki_room_rainbow_with_glitter:
+    alias: "Tiki Room Rainbow With Glitter"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: rainbow with glitter
+
+  tiki_room_ripple:
+    alias: "Tiki Room Ripple"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: ripple
+
+  tiki_room_sinelon:
+    alias: "Tiki Room Sinelon"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: sinelon
+
+  tiki_room_twinkle:
+    alias: "Tiki Room Twinkle"
+    icon: mdi:led-strip-variant
+    mode: single
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: light.tiki_room_strip
+        data:
+          effect: twinkle
 
   lights_off_except:
     icon: mdi:home-lightbulb
