@@ -34,14 +34,21 @@ Signals currently blended:
 - Room occupancy is the strongest generic signal and contributes `55`.
 - Bedroom bed occupancy contributes `70` so bed-only presence still reaches a
   confident score.
-- Matching Bermuda room hints contribute `25` per device.
-- Matching Bermuda basement floor hints contribute `10` per device for the
-  basement score.
-- Known Bermuda disagreement subtracts confidence instead of being ignored.
+- The phone is the primary BLE room signal and contributes `45` for modeled
+  room matches (`35` area + `10` floor in the basement).
+- The watch is corroboration only and contributes `10` for area matches (`5`
+  floor in the basement).
+- When both phone and watch agree on the same room, the score gets a small `+5`
+  corroboration bump.
+- Phone disagreement is penalized harder than watch disagreement because the
+  phone is assumed to be carried more consistently.
 
 That mismatch penalty is intentional. It prevents stale motion/occupancy
 booleans from winning outright when both Bermuda devices agree that Ryan is in
 another room.
+
+That also means a watch left on a charger or nightstand should not keep a room
+in the `likely` band by itself.
 
 ## Thresholds
 
@@ -64,14 +71,16 @@ still allowing BLE-only and motion-only occupancy to count.
 
 1. BLE only: move both Bermuda devices into a modeled room with motion clear and
    confirm the room reaches `50+`.
-2. Motion only: trigger a room occupancy sensor with Bermuda room hints absent
+2. Watch only: leave the watch in a room without the phone and confirm the room
+   stays below `50`.
+3. Motion only: trigger a room occupancy sensor with Bermuda room hints absent
    and confirm the score still reaches `50+`.
-3. Bed only: confirm bedroom confidence reaches `50+` when only
+4. Bed only: confirm bedroom confidence reaches `50+` when only
    `binary_sensor.bayesian_bed_occupancy` is on.
-4. Empty house: set `person.ryan` to `not_home` and
+5. Empty house: set `person.ryan` to `not_home` and
    `binary_sensor.bayesian_zeke_home` to `off`, then confirm all room scores go
    to `0`.
-5. Signal loss: mark one Bermuda room sensor unavailable and confirm the score
+6. Signal loss: mark one Bermuda room sensor unavailable and confirm the score
    drops but does not collapse to `0` when another positive signal remains.
 
 ## Notification Guidance
