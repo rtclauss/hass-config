@@ -7,6 +7,7 @@ This document describes the Tesla departure planner added in `packages/car.yaml`
 The planner sets the Tesla charge limit and scheduled departure behavior based on:
 
 - upcoming trips
+- upcoming calendar departures
 - weekday/weekend alarm settings
 - weather
 - EV charging tariff/rate
@@ -19,7 +20,9 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 - `binary_sensor.upcoming_trip_charging`
 - `sensor.waze_next_trip_distance`
 
-If an upcoming trip exists, the planner uses trip start time plus Waze duration to determine a departure window.
+If an upcoming calendar departure exists, the planner uses trip start time plus Waze duration to determine a departure window.
+
+The `binary_sensor.upcoming_trip_charging` state still represents the longer-distance charging case. The planner also uses that sensor's `start_time` attribute for shorter calendar departures that should precondition but do not need a higher charge limit.
 
 The planner now normalizes Waze/Tesla duration inputs with Home Assistant's `as_timedelta` helper, so legacy numeric values still work and string durations such as `00:35:00` or `PT35M` are accepted as well.
 
@@ -32,13 +35,15 @@ The planner now normalizes Waze/Tesla duration inputs with Home Assistant's `as_
 
 These drive non-trip next-morning departure planning.
 
+When an alarm-based departure is active, the planner now schedules cabin preconditioning regardless of outdoor temperature.
+
 ### Weather inputs
 
 - `sensor.outside_temperature`
 
 Cold weather currently means `<= 20F`.
 
-Cold weather increases departure buffer time and can justify preconditioning or a higher charge target.
+Cold weather increases departure buffer time and can justify a higher charge target.
 
 ### EV tariff inputs
 
@@ -87,6 +92,7 @@ Decision summary:
 
 - long trip (`>= 90 mi`): `100%`
 - other trip: `90%`
+- shorter calendar departure: keep the default `80%`
 - alarm + cold weather: `90%`
 - alarm + lower EV tariff: `85%`
 - alarm + higher EV tariff: `80%`
@@ -101,8 +107,9 @@ Script:
 
 Behavior:
 
-- enables Tesla scheduled departure when preconditioning is needed and a departure time exists
+- enables Tesla scheduled departure for any planned calendar departure or enabled alarm when a departure time exists
 - disables Tesla scheduled departure when the planner no longer has a preconditioning plan to keep
+- skips scheduled departure for all-day calendar events
 
 ### Notifications
 
