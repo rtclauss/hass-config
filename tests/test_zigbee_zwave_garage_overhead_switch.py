@@ -25,11 +25,11 @@ def _automation_block(alias: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_hall_garage_laundry_switch_double_taps_control_garage_door() -> None:
-    block = _automation_block("hall_garage_laundry_switch_actions")
+def test_garage_overhead_switch_double_taps_control_garage_door() -> None:
+    block = _automation_block("garage_overhead_switch_actions")
 
-    assert "id: hall_garage_laundry_switch_actions" in block
-    assert block.count("entity_id: sensor.hall_garage_laundry_switch_action") == 2
+    assert "id: garage_overhead_switch_actions" in block
+    assert block.count("entity_id: sensor.garage_overhead_switch_action") == 2
     assert 'to: "up_double"' in block
     assert 'to: "down_double"' in block
     assert "id: up-double" in block
