@@ -1888,6 +1888,22 @@ script:
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
+      all_day_mode_defaultlevellocal_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'defaultlevellocal')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'search', 'fan_switch')
+          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      all_day_mode_defaultlevelremote_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'defaultlevelremote')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'search', 'fan_switch')
+          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
       - action: logbook.log
         data:
@@ -1920,6 +1936,16 @@ script:
           entity_id: >
             {{all_day_mode_singletapbehavior_switches}}
           option: "New Behavior"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{all_day_mode_defaultlevellocal_switches}}
+          value: "254"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{all_day_mode_defaultlevelremote_switches}}
+          value: "254"
 
   reset_inovelli_switches:
     icon: mdi:light-switch
