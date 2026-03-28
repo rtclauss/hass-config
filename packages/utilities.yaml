@@ -621,6 +621,17 @@ input_number:
     step: 0.00001
     mode: box
     unit_of_measurement: USD/kWh
+  # Seeded from the current Woodbury, MN regular "Week Ago Avg." value on
+  # https://www.way.com/gas/prices/minnesota/woodbury and used as a manual
+  # fallback if the live scrape ever fails. Woodbury is the city for ZIP 55125.
+  weekly_regular_gas_price_55125_fallback:
+    name: 55125 Weekly Gas Price Fallback
+    min: 0.50000
+    max: 8.00000
+    step: 0.01000
+    mode: box
+    unit_of_measurement: USD/gal
+    initial: 3.76
 
 ########################
 # Input Select
@@ -671,6 +682,29 @@ rest_command:
   trigger_flow_watermeter_light:
     url: http://watermeter.iot.rtclauss.org/flow_start
     method: GET
+
+########################
+# REST
+########################
+rest:
+  - resource: https://www.way.com/gas/prices/minnesota/woodbury
+    scan_interval: 43200
+    timeout: 30
+    headers:
+      Accept: text/html
+      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0
+    sensor:
+      - name: Woodbury Weekly Regular Gas Price Live
+        unique_id: woodbury_weekly_regular_gas_price_live
+        icon: mdi:gas-station
+        unit_of_measurement: USD/gal
+        value_template: >-
+          {% set match = value | regex_findall_index('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)', 0) %}
+          {% if match not in [none, ''] %}
+            {{ match | float(default=0) | round(2) }}
+          {% else %}
+            {{ 'unknown' }}
+          {% endif %}
 
 ########################
 # Scenes
@@ -857,6 +891,84 @@ template:
               + (on_peak_kwh * 0.4420)
             ) | round(2)
           }}
+      - name: weekly_ev_charging_cost
+        unique_id: weekly_ev_charging_cost
+        icon: mdi:cash-clock
+        unit_of_measurement: USD
+        state: >-
+          {% set season = states('select.daily_electricity') %}
+          {% if season in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set season = 'summer' if now().month in [6, 7, 8, 9] else 'non-summer' %}
+          {% endif %}
+          {% set off_peak_kwh = states('sensor.weekly_ev_charging_off_peak') | float(default=0) %}
+          {% set mid_peak_kwh = states('sensor.weekly_ev_charging_mid_peak') | float(default=0) %}
+          {% set on_peak_kwh = states('sensor.weekly_ev_charging_on_peak') | float(default=0) %}
+          {% set mid_peak_rate = 0.1377 if season == 'summer' else 0.1238 %}
+          {{
+            (
+              (off_peak_kwh * 0.0755)
+              + (mid_peak_kwh * mid_peak_rate)
+              + (on_peak_kwh * 0.4420)
+            ) | round(2)
+          }}
+      - name: average_daily_ev_charging_cost
+        unique_id: average_daily_ev_charging_cost
+        icon: mdi:cash-fast
+        state_class: measurement
+        unit_of_measurement: USD/day
+        state: >-
+          {% set elapsed_days = [now().weekday() + 1, 1] | max %}
+          {% set weekly_cost = states('sensor.weekly_ev_charging_cost') | float(default=0) %}
+          {{ (weekly_cost / elapsed_days) | round(2) }}
+      - name: weekly_regular_gas_price_55125
+        unique_id: weekly_regular_gas_price_55125
+        icon: mdi:gas-station
+        state_class: measurement
+        unit_of_measurement: USD/gal
+        attributes:
+          source: >-
+            {% set live = states('sensor.woodbury_weekly_regular_gas_price_live') %}
+            {% if live not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+              live
+            {% else %}
+              fallback
+            {% endif %}
+          source_url: https://www.way.com/gas/prices/minnesota/woodbury
+          coverage_area: Woodbury, Minnesota (ZIP 55125 local market)
+        state: >-
+          {% set live = states('sensor.woodbury_weekly_regular_gas_price_live') %}
+          {% if live not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ live | float(default=0) | round(2) }}
+          {% else %}
+            {{ states('input_number.weekly_regular_gas_price_55125_fallback') | float(default=0) | round(2) }}
+          {% endif %}
+      - name: average_daily_vehicle_miles
+        unique_id: average_daily_vehicle_miles
+        icon: mdi:map-marker-distance
+        state_class: measurement
+        unit_of_measurement: mi/day
+        state: >-
+          {% set elapsed_days = [now().weekday() + 1, 1] | max %}
+          {% set weekly_miles = states('sensor.weekly_vehicle_mileage') | float(default=0) %}
+          {{ (weekly_miles / elapsed_days) | round(1) }}
+      - name: average_daily_gas_car_cost_30mpg
+        unique_id: average_daily_gas_car_cost_30mpg
+        icon: mdi:gas-station-outline
+        state_class: measurement
+        unit_of_measurement: USD/day
+        state: >-
+          {% set daily_miles = states('sensor.average_daily_vehicle_miles') | float(default=0) %}
+          {% set gas_price = states('sensor.weekly_regular_gas_price_55125') | float(default=0) %}
+          {{ ((daily_miles / 30) * gas_price) | round(2) }}
+      - name: average_daily_ev_savings_vs_30mpg
+        unique_id: average_daily_ev_savings_vs_30mpg
+        icon: mdi:piggy-bank
+        state_class: measurement
+        unit_of_measurement: USD/day
+        state: >-
+          {% set gas_cost = states('sensor.average_daily_gas_car_cost_30mpg') | float(default=0) %}
+          {% set ev_cost = states('sensor.average_daily_ev_charging_cost') | float(default=0) %}
+          {{ (gas_cost - ev_cost) | round(2) }}
 
 ########################
 # Utility Meter
@@ -898,6 +1010,13 @@ utility_meter:
       - off_peak
       - mid_peak
       - on_peak
+  weekly_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: weekly
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
   monthly_ev_charging:
     source: sensor.nigori_energy_added
     cycle: monthly
@@ -905,6 +1024,9 @@ utility_meter:
       - off_peak
       - mid_peak
       - on_peak
+  weekly_vehicle_mileage:
+    source: sensor.nigori_odometer
+    cycle: weekly
   # hourly_water:
   #   source: sensor.watermeter_value
   #   name: Hourly Water Usage
