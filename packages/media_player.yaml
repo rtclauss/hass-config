@@ -1,5 +1,5 @@
 # Home Assistant package for Music Assistant, Sonos, and whole-home media behavior.
-# Complex areas: it handles cube/button media controls, group preparation, wake-up and bedtime playback, and reusable scripts for Spotify and radio playback.
+# Complex areas: it handles cube/button media controls, group preparation, wake-up and bedtime playback, and reusable scripts for generic Music Assistant search/playback flows.
 
 ################################################################
 ## Packages / Media Players
@@ -532,9 +532,38 @@ input_boolean: {}
 input_number: {}
 
 ########################
+# Input Text
+########################
+input_text:
+  music_assistant_search_query:
+    name: "Music Assistant search query"
+    icon: mdi:magnify
+    max: 255
+  music_assistant_provider_filter:
+    name: "Music Assistant provider filter"
+    icon: mdi:database-search
+    max: 80
+
+########################
 # Input Select
 ########################
-input_select: {}
+input_select:
+  music_assistant_search_media_type:
+    name: "Music Assistant search type"
+    icon: mdi:music-note-search
+    options:
+      - track
+      - album
+      - artist
+      - playlist
+      - radio
+    initial: track
+  music_assistant_search_results:
+    name: "Music Assistant search results"
+    icon: mdi:playlist-music
+    options:
+      - "No results found"
+    initial: "No results found"
 
 ########################
 # iOS
@@ -706,60 +735,37 @@ script:
       entity_id:
         description: "Music Assistant media_player entity"
       media_item:
-        description: "Spotify URI, open.spotify.com URL, or Music Assistant radio item name"
+        description: "Music Assistant URI, open.spotify.com URL, or plain item name"
+      media_type:
+        description: "Optional Music Assistant media type"
       enqueue:
         description: "Music Assistant enqueue mode"
     variables:
       raw_item: "{{ media_item | trim }}"
-      normalized_uri: >-
-        {% if raw_item.startswith('https://open.spotify.com/') %}
-          {% set path = raw_item.split('open.spotify.com/')[1].split('?')[0] %}
-          {{ 'spotify:' ~ path.replace('/', ':') }}
-        {% else %}
-          {{ raw_item }}
-        {% endif %}
-      media_type: >-
-        {% if raw_item.startswith('spotify:') or raw_item.startswith('https://open.spotify.com/') %}
-          {% set parts = normalized_uri.split(':') %}
-          {% if 'track' in parts %}
-            track
-          {% elif 'album' in parts %}
-            album
-          {% elif 'artist' in parts %}
-            artist
-          {% else %}
-            playlist
-          {% endif %}
-        {% else %}
-          radio
-        {% endif %}
-      # NOTE: The `spotify--Tviw9k66` provider id is tied to the current
-      # Spotify provider in Music Assistant. If Spotify is removed and
-      # re-added, re-check the provider URI format below.
-      media_id: >-
-        {% if raw_item.startswith('spotify:') or raw_item.startswith('https://open.spotify.com/') %}
-          {% set parts = normalized_uri.split(':') %}
-          {% if 'track' in parts %}
-            spotify--Tviw9k66://track/{{ parts[-1] }}
-          {% elif 'album' in parts %}
-            spotify--Tviw9k66://album/{{ parts[-1] }}
-          {% elif 'artist' in parts %}
-            spotify--Tviw9k66://artist/{{ parts[-1] }}
-          {% else %}
-            spotify--Tviw9k66://playlist/{{ parts[-1] }}
-          {% endif %}
-        {% else %}
-          {{ raw_item }}
-        {% endif %}
+      raw_media_type: "{{ media_type | default('') | trim }}"
+      raw_enqueue: "{{ enqueue | default('replace') }}"
     sequence:
-      - action: music_assistant.play_media
-        continue_on_error: true
-        target:
-          entity_id: "{{ entity_id }}"
-        data:
-          media_id: "{{ media_id }}"
-          media_type: "{{ media_type }}"
-          enqueue: "{{ enqueue | default('replace') }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ raw_media_type != '' }}"
+            sequence:
+              - action: music_assistant.play_media
+                continue_on_error: true
+                target:
+                  entity_id: "{{ entity_id }}"
+                data:
+                  media_id: "{{ raw_item }}"
+                  media_type: "{{ raw_media_type }}"
+                  enqueue: "{{ raw_enqueue }}"
+        default:
+          - action: music_assistant.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ entity_id }}"
+            data:
+              media_id: "{{ raw_item }}"
+              enqueue: "{{ raw_enqueue }}"
 
   music_assistant_play_spotify_uri:
     alias: "Play Spotify item via Music Assistant"
@@ -770,12 +776,120 @@ script:
         description: "Spotify URI or open.spotify.com URL"
       enqueue:
         description: "Music Assistant enqueue mode"
+    variables:
+      raw_uri: "{{ spotify_uri | trim }}"
+      normalized_uri: >-
+        {% if raw_uri.startswith('https://open.spotify.com/') %}
+          {% set path = raw_uri.split('open.spotify.com/')[1].split('?')[0] %}
+          {{ 'spotify:' ~ path.replace('/', ':') }}
+        {% else %}
+          {{ raw_uri }}
+        {% endif %}
     sequence:
       - action: script.music_assistant_play_item
         data:
           entity_id: "{{ entity_id }}"
-          media_item: "{{ spotify_uri }}"
+          media_item: "{{ normalized_uri }}"
           enqueue: "{{ enqueue | default('replace') }}"
+
+  music_assistant_search_music:
+    alias: "Search Music Assistant"
+    sequence:
+      - variables:
+          query: "{{ states('input_text.music_assistant_search_query') | trim }}"
+          provider_filter: "{{ states('input_text.music_assistant_provider_filter') | trim | lower }}"
+          media_type: "{{ states('input_select.music_assistant_search_media_type') | trim }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ query == '' }}"
+            sequence:
+              - action: input_select.set_options
+                target:
+                  entity_id: input_select.music_assistant_search_results
+                data:
+                  options:
+                    - "No results found"
+          - conditions:
+              - condition: template
+                value_template: "{{ query.startswith('spotify:') or query.startswith('http') or '://' in query }}"
+            sequence:
+              - variables:
+                  direct_options: >-
+                    {% if provider_filter == '' or provider_filter in (query | lower) %}
+                      {{ ['Direct URI || ' ~ query] }}
+                    {% else %}
+                      {{ ['No results found'] }}
+                    {% endif %}
+              - action: input_select.set_options
+                target:
+                  entity_id: input_select.music_assistant_search_results
+                data:
+                  options: "{{ direct_options }}"
+        default:
+          - action: music_assistant.search
+            continue_on_error: true
+            response_variable: search_results
+            data:
+              name: "{{ query }}"
+              media_type: "{{ media_type }}"
+              limit: 20
+          - variables:
+              search_options: >-
+                {% set search_response = search_results | default({}, true) %}
+                {% set ns = namespace(options=[], seen=[]) %}
+                {% for bucket in ['tracks', 'albums', 'artists', 'playlists', 'radio', 'items'] %}
+                  {% for item in search_response.get(bucket, []) %}
+                    {% set uri = item.uri | default(item.media_id | default('')) %}
+                    {% if uri and uri not in ns.seen %}
+                      {% set provider_token = uri.split('://')[0] | lower %}
+                      {% set provider_name = provider_token.split('--', 1)[0] %}
+                      {% set provider_blob = provider_token ~ ' ' ~ provider_name ~ ' ' ~ (item.name | default('') | lower) %}
+                      {% if provider_filter == '' or provider_filter in provider_blob %}
+                        {% set label = item.name | default(uri) %}
+                        {% if item.artists is defined and item.artists %}
+                          {% set label = (item.artists | map(attribute='name') | join(', ')) ~ ' - ' ~ label %}
+                        {% endif %}
+                        {% set ns.options = ns.options + ['[' ~ provider_name ~ '] ' ~ label ~ ' || ' ~ uri] %}
+                        {% set ns.seen = ns.seen + [uri] %}
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
+                {{ ns.options if ns.options else ['No results found'] }}
+          - action: input_select.set_options
+            target:
+              entity_id: input_select.music_assistant_search_results
+            data:
+              options: "{{ search_options }}"
+
+  music_assistant_play_selected_search_result:
+    alias: "Play selected Music Assistant search result"
+    fields:
+      entity_id:
+        description: "Music Assistant media_player entity"
+      enqueue:
+        description: "Music Assistant enqueue mode"
+    variables:
+      target_entity: "{{ entity_id | default('media_player.bedroom_sonos_2') }}"
+      selected_option: "{{ states('input_select.music_assistant_search_results') | trim }}"
+      selected_uri: >-
+        {% if ' || ' in selected_option %}
+          {{ selected_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ selected_option }}
+        {% endif %}
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ selected_uri not in ['', 'No results found'] }}"
+            sequence:
+              - action: script.music_assistant_play_item
+                data:
+                  entity_id: "{{ target_entity }}"
+                  media_item: "{{ selected_uri }}"
+                  enqueue: "{{ enqueue | default('add') }}"
 
   music_assistant_radio_wake_up:
     alias: "Radio wake-up via Music Assistant"
