@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 
+LIGHT_PATH = Path(__file__).resolve().parents[1] / "packages" / "light.yaml"
 ZIGBEE_ZWAVE_PATH = Path(__file__).resolve().parents[1] / "packages" / "zigbee_zwave.yaml"
 
 
@@ -43,15 +44,15 @@ def _device_binding_topic(block: str, payload_fragment: str) -> str:
     return lines[topic_index].strip()
 
 
-def test_reset_script_clears_den_wall_switch_whole_room_binding() -> None:
+def test_reset_script_keeps_den_flood_switch_whole_room_binding() -> None:
     block = _script_block("reset_inovelli_switches")
-    payload = '"from":"Den/Wall Switch/2","to":"Den/All"}'
+    payload = '"from":"Den/Flood Switch/2","to":"Den/All"}'
 
     assert block.count(payload) == 1
-    assert "Remove stale Den wall-switch whole-room binding" in block
     assert _device_binding_topic(block, payload) == (
-        "topic: zigbee2mqtt/bridge/request/device/unbind"
+        "topic: zigbee2mqtt/bridge/request/device/bind"
     )
+    assert "Den/Wall Switch" not in block
 
 
 def test_reset_script_keeps_den_flood_switch_group_binding() -> None:
@@ -63,3 +64,10 @@ def test_reset_script_keeps_den_flood_switch_group_binding() -> None:
         "topic: zigbee2mqtt/bridge/request/device/bind"
     )
     assert '"group":"Den/Floods"' in block
+
+
+def test_light_package_uses_den_flood_switch_entity_name() -> None:
+    text = LIGHT_PATH.read_text(encoding="utf-8")
+
+    assert "light.den_flood_switch" in text
+    assert "light.den_wall_switch" not in text
