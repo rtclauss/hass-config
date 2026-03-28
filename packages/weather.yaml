@@ -37,6 +37,21 @@ homeassistant:
       friendly_name: "Close house window rain alert"
       icon: mdi:window-closed
 
+    automation.window_open_departure_rain_warning:
+      <<: *customize
+      friendly_name: "Departure rain warning"
+      icon: mdi:weather-pouring
+
+    automation.window_open_home_rain_warning:
+      <<: *customize
+      friendly_name: "Home rain warning"
+      icon: mdi:weather-pouring
+
+    automation.window_open_cool_weather_reminder:
+      <<: *customize
+      friendly_name: "Check for open windows"
+      icon: mdi:window-open-variant
+
     automation.notify_tornado_warning_alert:
       <<: *customize
       friendly_name: Tornado Warning
@@ -73,6 +88,18 @@ homeassistant:
     sensor.precip_next_6h:
       <<: *customize
       friendly_name: Precipitation % in next 6 hours
+      icon: mdi:weather-pouring
+    sensor.active_weather_entity_id:
+      <<: *customize
+      friendly_name: Active weather entity
+      icon: mdi:weather-partly-cloudy
+    sensor.precip_next_15m:
+      <<: *customize
+      friendly_name: Precipitation % in next 15 minutes
+      icon: mdi:weather-pouring
+    sensor.precip_next_12h:
+      <<: *customize
+      friendly_name: Precipitation % in next 12 hours
       icon: mdi:weather-pouring
     sensor.nigori_precip_next_2hr:
       <<: *customize
@@ -172,58 +199,28 @@ automation:
     trigger:
       - trigger: state
         entity_id:
-          - binary_sensor.pressure_falling
           - binary_sensor.pressure_falling_quickly
           - binary_sensor.pressure_falling_v_rapidly
         from: "off"
         to: "on"
     condition:
-      condition: and
-      conditions:
-        - condition: state
-          entity_id: group.egress_points
-          state: "on"
-        - condition: numeric_state
-          entity_id: sensor.precip_next_1hr
-          above: 50
-        - condition: not
-          conditions:
-            - condition: state
-              entity_id: sensor.season
-              state: "winter"
-        - "{{ now() - state_attr('automation.alert_house_windows_open_pressure_dropping','last_triggered') > timedelta(hours=4) }}"
+      - condition: state
+        entity_id: binary_sensor.any_window_open
+        state: "on"
+      - alias: "Check if we already notified within the last 4 hours"
+        condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_house_windows_open_pressure_dropping', 'last_triggered'), 0)) > 14400 }}
     action:
-      - action: persistent_notification.create
-        data:
-          title: "Uh Oh"
-          message: >
-            ![image]({{ [
-            "https://media1.tenor.com/images/2c7e865ab2e4d8084356b9f306011a1d/tenor.gif?itemid=5043009",
-            "https://i.imgur.com/0Y9CfFt.gif",
-            "https://media0.giphy.com/media/3orieNWYPMcSvsbL9e/giphy.gif",
-            "https://media.giphy.com/media/3orieZMmRdBlKk5nY4/giphy.gif",
-            "https://media3.giphy.com/media/c1izstLXX1nxu/giphy.gif",
-            "https://media2.giphy.com/media/xT5LMq3JLEak50YXHG/giphy.gif",
-            "http://s2.quickmeme.com/img/2b/2bacb9823bbf1efd53d3e8f5c9133814bfad9fd59c53c13f793d6fe9292ba1be.jpg"
-              ] | random }})
-            You left a window open at home. Dumbass.
       - action: notify.mobile_app_wethop
         data:
           title: "Open Window"
-          message: "It's going to rain and you left a window open at home"
+          message: "Pressure is dropping quickly and a window is open. Close the windows."
           data:
-            attachment:
-              url: >-
-                {{ [
-                "https://media1.tenor.com/images/2c7e865ab2e4d8084356b9f306011a1d/tenor.gif?itemid=5043009",
-                "https://i.imgur.com/0Y9CfFt.gif",
-                "https://media0.giphy.com/media/3orieNWYPMcSvsbL9e/giphy.gif",
-                "https://media.giphy.com/media/3orieZMmRdBlKk5nY4/giphy.gif",
-                "https://media3.giphy.com/media/c1izstLXX1nxu/giphy.gif",
-                "https://media2.giphy.com/media/xT5LMq3JLEak50YXHG/giphy.gif",
-                ] | random }}
-              content-type: gif
-              hide-thumbnail: false
+            tag: window-pressure-drop
+            persistent: true
+            ttl: 0
+            priority: high
 
   - id: notify_tornado_warning_alert
     alias: notify_tornado_warning_alert
@@ -232,25 +229,58 @@ automation:
         entity_id: sensor.nws_alerts
         above: 0
     condition:
-      - condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        state: "on"
       - condition: template
         value_template: >-
           {% set alert_type = state_attr('sensor.nws_alerts', 'TYPE') | default('', true) %}
           {% set description = state_attr('sensor.nws_alerts', 'Description') | default('', true) %}
           {{ alert_type == "TOR" or description == "Tornado Warning" }}
     action:
-      - action: light.turn_on
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "on"
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id:
+                    - light.dining_room_all
+                    - light.basement_great_room
+                    - light.owner_suite_all
+                  flash: long
+              - action: light.turn_on
+                data:
+                  entity_id: all
+      - action: notify.mobile_app_wethop
         data:
-          entity_id:
-            - light.dining_room_all
-            - light.basement_great_room
-            - light.owner_suite_all
-          flash: long
-      - action: light.turn_on
+          title: "Tornado Warning"
+          message: "Go to the basement now."
+          data:
+            tag: tornado-warning
+            persistent: true
+            ttl: 0
+            priority: high
+            channel: alarm_stream
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+      - action: notify.mobile_app_faro
         data:
-          entity_id: all
+          title: "Tornado Warning"
+          message: "Go to the basement now."
+          data:
+            tag: tornado-warning
+            persistent: true
+            ttl: 0
+            priority: high
+            channel: alarm_stream
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
 
   - id: notify_weather_alert
     alias: notify_weather_alert
@@ -258,15 +288,165 @@ automation:
       - trigger: numeric_state
         entity_id: sensor.nws_alerts
         above: 0
-    condition: []
+    condition:
+      - condition: template
+        value_template: >-
+          {% set alert_type = state_attr('sensor.nws_alerts', 'TYPE') | default('', true) %}
+          {% set description = state_attr('sensor.nws_alerts', 'Description') | default('', true) %}
+          {{ not (alert_type == "TOR" or description == "Tornado Warning") }}
     action:
       - action: notify.all
         data:
           message: >-
             {{ state_attr('sensor.nws_alerts', 'Description') }}
 
-  ## Automation to trigger a UI notification when there is an active weather alert.
-  ## nws_dakota_county_alerts_alert_1 should always contain most recent alert.
+  - id: window_open_departure_rain_warning
+    alias: window_open_departure_rain_warning
+    mode: single
+    trigger:
+      - id: trip_on
+        trigger: state
+        entity_id: input_boolean.trip
+        to: "on"
+      - id: leave_home
+        trigger: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
+      - id: leave_neighborhood
+        trigger: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.neighborhood
+        event: leave
+    condition:
+      - condition: state
+        entity_id: binary_sensor.any_window_open
+        state: "on"
+      - condition: numeric_state
+        entity_id: sensor.precip_next_12h
+        above: 40
+      - alias: "Check if we already notified within the last hour"
+        condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.window_open_departure_rain_warning', 'last_triggered'), 0)) > 3600 }}
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Rain warning"
+          message: >-
+            {% if trigger.id == 'trip_on' %}
+              Trip mode is on and
+            {% elif trigger.id == 'leave_home' %}
+              You're leaving home and
+            {% else %}
+              You're leaving the neighborhood and
+            {% endif %}
+            rain is likely in the next 12 hours. Close the windows before you go.
+          data:
+            tag: window-rain-departure
+            persistent: true
+            ttl: 0
+            priority: high
+
+  - id: window_open_home_rain_warning
+    alias: window_open_home_rain_warning
+    mode: single
+    trigger:
+      - id: rain_soon
+        trigger: numeric_state
+        entity_id: sensor.precip_next_15m
+        above: 40
+      - id: window_opened
+        trigger: state
+        entity_id: binary_sensor.any_window_open
+        to: "on"
+        for:
+          minutes: 1
+    condition:
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.any_window_open
+        state: "on"
+      - condition: numeric_state
+        entity_id: sensor.precip_next_15m
+        above: 40
+      - alias: "Check if we already notified within the last hour"
+        condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.window_open_home_rain_warning', 'last_triggered'), 0)) > 3600 }}
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Rain warning"
+          message: "Rain is likely in the next 15 minutes and a window is open. Close the windows."
+          data:
+            tag: window-rain-home
+            persistent: true
+            ttl: 0
+            priority: high
+
+  - id: window_open_cool_weather_reminder
+    alias: window_open_cool_weather_reminder
+    mode: single
+    trigger:
+      - id: outside_cool
+        trigger: numeric_state
+        entity_id: sensor.outside_temperature
+        below: 65
+      - id: window_open
+        trigger: state
+        entity_id: binary_sensor.any_window_open
+        to: "on"
+        for:
+          minutes: 5
+      - id: aux_on
+        trigger: state
+        entity_id: binary_sensor.ecobee_aux
+        to: "on"
+        for:
+          minutes: 10
+      - id: time_high
+        trigger: numeric_state
+        entity_id: sensor.ecobee_time_to_target_minutes
+        above: 90
+    condition:
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+      - condition: numeric_state
+        entity_id: sensor.outside_temperature
+        below: 65
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.any_window_open
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.ecobee_aux
+            state: "on"
+          - condition: numeric_state
+            entity_id: sensor.ecobee_time_to_target_minutes
+            above: 90
+      - alias: "Check if we already reminded within the last 2 hours"
+        condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.window_open_cool_weather_reminder', 'last_triggered'), 0)) > 7200 }}
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Check windows"
+          message: "It's cool outside and either a window is open or the climate is working hard. Check for open windows."
+
+    ## Automation to trigger a UI notification when there is an active weather alert.
+    ## nws_dakota_county_alerts_alert_1 should always contain most recent alert.
   - alias: Weather Alert UI Notification - 1
     trigger:
       - trigger: state
@@ -369,7 +549,9 @@ automation:
           - condition: template
             value_template: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') not in states('input_text.nws_dakota_county_alerts_triggered_pushbullet_alert_ids') }}"
           - condition: template
-            value_template: "{{ 'Flood' not in state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_event') }}"
+            value_template: >-
+              {% set alert_type = state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_event') | default('', true) %}
+              {{ 'Flood' not in alert_type and 'Tornado Warning' not in alert_type }}
     action:
       - action: notify.mobile_app_wethop
         data:
@@ -3133,26 +3315,129 @@ template:
           No
         {% endif %}
 
+    - name: active_weather_entity_id
+      unique_id: active_weather_entity_id
+      icon: mdi:weather-partly-cloudy
+      state: >-
+        {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+        {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
+        {% if preferred_forecast | count > 0 %}
+          {{ preferred }}
+        {% else %}
+          {% set chosen = namespace(entity_id='') %}
+          {% for weather in states.weather %}
+            {% set forecast = state_attr(weather.entity_id, 'forecast') or [] %}
+            {% if forecast | count > 0 and chosen.entity_id == '' %}
+              {% set chosen.entity_id = weather.entity_id %}
+            {% endif %}
+          {% endfor %}
+          {{ chosen.entity_id or preferred }}
+        {% endif %}
+      attributes:
+        temperature: >-
+          {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+          {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
+          {% if preferred_forecast | count > 0 %}
+            {% set weather_entity = preferred %}
+          {% else %}
+            {% set chosen = namespace(entity_id='') %}
+            {% for weather in states.weather %}
+              {% set forecast = state_attr(weather.entity_id, 'forecast') or [] %}
+              {% if forecast | count > 0 and chosen.entity_id == '' %}
+                {% set chosen.entity_id = weather.entity_id %}
+              {% endif %}
+            {% endfor %}
+            {% set weather_entity = chosen.entity_id or preferred %}
+          {% endif %}
+          {{ state_attr(weather_entity, 'temperature') | int(default=0) }}
+        humidity: >-
+          {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+          {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
+          {% if preferred_forecast | count > 0 %}
+            {% set weather_entity = preferred %}
+          {% else %}
+            {% set chosen = namespace(entity_id='') %}
+            {% for weather in states.weather %}
+              {% set forecast = state_attr(weather.entity_id, 'forecast') or [] %}
+              {% if forecast | count > 0 and chosen.entity_id == '' %}
+                {% set chosen.entity_id = weather.entity_id %}
+              {% endif %}
+            {% endfor %}
+            {% set weather_entity = chosen.entity_id or preferred %}
+          {% endif %}
+          {{ state_attr(weather_entity, 'humidity') | int(default=0) }}
+        forecast_json: >-
+          {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+          {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
+          {% if preferred_forecast | count > 0 %}
+            {% set weather_entity = preferred %}
+          {% else %}
+            {% set chosen = namespace(entity_id='') %}
+            {% for weather in states.weather %}
+              {% set forecast = state_attr(weather.entity_id, 'forecast') or [] %}
+              {% if forecast | count > 0 and chosen.entity_id == '' %}
+                {% set chosen.entity_id = weather.entity_id %}
+              {% endif %}
+            {% endfor %}
+            {% set weather_entity = chosen.entity_id or preferred %}
+          {% endif %}
+          {{ (state_attr(weather_entity, 'forecast') or []) | tojson }}
+
     - name: outside_humidity
       unique_id: outside_humidity
       device_class: humidity
-      state: "{{ int(state_attr('weather.tomorrow_io_the_brewery_daily', 'humidity')) }}"
+      state: "{{ state_attr('sensor.active_weather_entity_id', 'humidity') | int(default=0) }}"
 
     - name: outside_temperature
       unique_id: outside_temperature
       device_class: temperature
       unit_of_measurement: "°F"
-      state: "{{ int(state_attr('weather.tomorrow_io_the_brewery_daily', 'temperature')) }}"
+      state: "{{ state_attr('sensor.active_weather_entity_id', 'temperature') | int(default=0) }}"
+
+    - name: precip_next_15m
+      unique_id: precip_next_15m
+      unit_of_measurement: "%"
+      state: >-
+        {% set forecasts = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+        {% set ns = namespace(probability = -1) %}
+        {% for forecast in forecasts %}
+          {% if as_datetime(forecast.datetime) < (utcnow() + timedelta(minutes=15)) %}
+            {% if forecast.precipitation_probability | int(default=-1) > ns.probability %}
+              {% set ns.probability = forecast.precipitation_probability | int(default=-1) %}
+            {% endif %}
+          {% else %}
+            {% break %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.probability }}
+
+    - name: precip_next_12h
+      unique_id: precip_next_12h
+      unit_of_measurement: "%"
+      state: >-
+        {% set forecasts = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+        {% set window_start = utcnow() + timedelta(minutes=5) %}
+        {% set window_end = utcnow() + timedelta(hours=12) %}
+        {% set ns = namespace(probability = -1) %}
+        {% for forecast in forecasts %}
+          {% if as_datetime(forecast.datetime) >= window_start and as_datetime(forecast.datetime) < window_end %}
+            {% if forecast.precipitation_probability | int(default=-1) > ns.probability %}
+              {% set ns.probability = forecast.precipitation_probability | int(default=-1) %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.probability }}
 
     - name: precip_next_1hr
       unique_id: precip_next_1hr
       unit_of_measurement: "%"
       state: >-
-        {% set ns = namespace(probability = int(-1)) %}
-        {% for forecast in state_attr("weather.tomorrow_io_the_brewery_daily", "forecast") %}
+        {% set forecasts = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+        {% set ns = namespace(probability = -1) %}
+        {% for forecast in forecasts %}
           {% if as_datetime(forecast.datetime) < (utcnow() + timedelta(hours=2)) %}
-            {% if int(forecast.precipitation_probability) > ns.probability %}
-              {% set ns.probability = int(forecast.precipitation_probability) %}
+            {% if forecast.precipitation_probability | int(default=-1) > ns.probability %}
+              {% set ns.probability = forecast.precipitation_probability | int(default=-1) %}
             {% endif %}
           {% else %}
             {% break %}
@@ -3164,11 +3449,12 @@ template:
       unique_id: precip_next_6hr
       unit_of_measurement: "%"
       state: >-
-        {% set ns = namespace(probability = int(-1)) %}
-        {% for forecast in state_attr("weather.tomorrow_io_the_brewery_daily", "forecast") %}
+        {% set forecasts = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+        {% set ns = namespace(probability = -1) %}
+        {% for forecast in forecasts %}
           {% if as_datetime(forecast.datetime) < (utcnow() + timedelta(hours=6)) %}
-            {% if int(forecast.precipitation_probability) > ns.probability %}
-              {% set ns.probability = int(forecast.precipitation_probability) %}
+            {% if forecast.precipitation_probability | int(default=-1) > ns.probability %}
+              {% set ns.probability = forecast.precipitation_probability | int(default=-1) %}
             {% endif %}
           {% else %}
             {% break %}
