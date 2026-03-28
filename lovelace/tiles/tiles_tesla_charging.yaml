@@ -116,10 +116,14 @@ cards:
             content: >-
               {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
               {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
+              {% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}
+              {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
               {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
               {% set home_planner = location_name == 'home' %}
+              {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
+              {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 ### Max-range override is active
                 #### Charge limit pinned to 100% until you return to the daily plan
@@ -133,10 +137,10 @@ cards:
                 #### Home Assistant departure planning currently runs only at Home
               {% else %}
                 ### Daily planner is active
-                #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and EV tariff inputs
+                #### Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs
               {% endif %}
               {% if protected_location and home_planner %}
-                #### Tesla-app charging schedule stays authoritative at {{ location_label }}
+                #### {% if home_schedule_override_needed %}Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed{% else %}Tesla-app charging schedule stays authoritative at {{ location_label }}{% endif %}
               {% endif %}
 
       - type: horizontal-stack
@@ -156,11 +160,15 @@ cards:
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
               {% set home_planner = location_name == 'home' %}
+              {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
+              {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
               ### {{ charge_limit }}% target
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 #### Manual override is forcing max range
               {% elif home_planner and is_state('binary_sensor.upcoming_trip_charging', 'on') %}
                 #### Planner is following the next trip
+              {% elif home_planner and planned_departure and charge_limit == 80 %}
+                #### Planner is keeping the Tesla app home schedule because no extra home charging is needed
               {% elif home_planner and has_calendar_departure %}
                 #### Planner is following the next calendar departure
               {% elif home_planner and alarm_enabled %}
@@ -171,7 +179,7 @@ cards:
                 #### No next-day departure plan is active
               {% endif %}
               #### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh
-              #### Charging schedule: {% if protected_location %}Preserve Tesla app default at {{ location_label }}{% else %}Allow Home Assistant off-peak charging management{% endif %}
+              #### Charging schedule: {% if protected_location and not home_planner %}Preserve Tesla app default at {{ location_label }}{% elif home_schedule_override_needed %}Allow a temporary Home Assistant schedule override at {{ location_label }} because extra home charging is needed{% elif home_planner %}Preserve Tesla app default at {{ location_label }} because no extra home charging is needed{% else %}Allow Home Assistant off-peak charging management{% endif %}
           - type: entities
             title: "EV TOU"
             show_header_toggle: false
