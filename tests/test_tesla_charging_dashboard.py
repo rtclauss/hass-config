@@ -39,3 +39,27 @@ def test_storage_dashboard_uses_inverse_sensor_for_daily_plan_tile() -> None:
         '                    "action": "call-service",\n'
         '                    "service": "input_boolean.turn_off"'
     ) not in dashboard_text
+
+
+def test_home_default_charge_plan_skips_extra_tesla_schedule_override() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "{% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}" in package_text
+    assert "tesla_plan.manage_tesla_schedule" in package_text
+    assert "No extra home charging override is needed." in package_text
+
+
+def test_yaml_dashboard_explains_when_home_schedule_is_preserved_or_overridden() -> None:
+    tile_text = TESLA_TILE_PATH.read_text(encoding="utf-8")
+
+    assert "Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed" in tile_text
+    assert "Planner is keeping the Tesla app home schedule because no extra home charging is needed" in tile_text
+    assert "Preserve Tesla app default at {{ location_label }} because no extra home charging is needed" in tile_text
+
+
+def test_storage_dashboard_matches_home_schedule_override_copy() -> None:
+    dashboard_text = DASHBOARD_PATH.read_text(encoding="utf-8")
+
+    assert "Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed" in dashboard_text
+    assert "Planner is keeping the Tesla app home schedule because no extra home charging is needed" in dashboard_text
+    assert "Preserve Tesla app default at {{ location_label }} because no extra home charging is needed" in dashboard_text
