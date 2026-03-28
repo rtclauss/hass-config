@@ -98,6 +98,7 @@ def test_configured_battery_rows_cover_live_battery_devices() -> None:
         ("IKEA", "SYMFONISK sound remote, gen 2"): ("2", "AAA", "2"),
         ("IKEA", "FYRTUR roller blind, block-out"): ("2", "FYRTUR battery pack", "1"),
         ("SmartThings", "Arrival sensor"): ("1", "AA", "2"),
+        ("Schlage", "Encode Plus Smart WiFi Deadbolt (BE499WB)"): ("1", "AA", "4"),
         ("ecobee Inc.", "Remote occupancy and temperature sensor (EBERS41)"): ("5", "CR2477", "1"),
         ("Xiaomi", "MiFlora plant sensor"): ("12", "CR2032", "1"),
     }
@@ -133,7 +134,7 @@ def test_battery_planning_totals_match_inventory_rows() -> None:
 
     expected_plan = {
         "AAA": ("Rechargeable cylindrical", 16, 15, 16, 47),
-        "AA": ("Rechargeable cylindrical", 0, 2, 2, 4),
+        "AA": ("Rechargeable cylindrical", 0, 6, 4, 10),
         "FYRTUR battery pack": ("Rechargeable pack", 0, 2, 1, 3),
         "CR2450": ("Primary coin cell", 16, 8, 6, 30),
         "CR2032": ("Primary coin cell", 16, 25, 11, 52),
@@ -182,6 +183,7 @@ def test_inventory_documents_battery_assumptions_for_ambiguous_models() -> None:
         "`TRADFRI remote control` in Home Assistant is counted as the older `CR2032`-powered remote",
         "`MiFlora plant sensor` assumes the current plant-monitor fleet behind `packages/plants.yaml` still uses the Xiaomi MiFlora / Flower Care battery profile",
         "`SmartThings Arrival sensor` uses the README-documented `2 x AA` battery mod",
+        "`Schlage` model `be499WB` from the Home app screenshot is treated as the Encode Plus family, which Schlage documents as using `4 x AA` batteries",
         "`MKZQ01LM` in issue #202 appears to refer to the Aqara cube controller family",
         "`FireFighter` row reflects the Ecolink FireFighter battery family",
     ):

@@ -57,6 +57,7 @@ This table summarizes battery-powered devices that are already represented in th
 | 2 | IKEA | SYMFONISK sound remote, gen 2 | Zigbee | `button` | `AAA` | 2 | The installed Sonos remotes are explicitly the Gen 2 model, so each uses `2 x AAA`. |
 | 2 | IKEA | FYRTUR roller blind, block-out | Zigbee | `cover` | `FYRTUR battery pack` | 1 | Counted as one removable rechargeable pack per blind. |
 | 1 | SmartThings | Arrival sensor | Zigbee | `binary_sensor` | `AA` | 2 | README documents this sensor as modified to use `2 x AA` instead of the stock coin cell. |
+| 1 | Schlage | Encode Plus Smart WiFi Deadbolt (BE499WB) | HomeKit over Thread | `lock` | `AA` | 4 | Counted from the Home app screenshot you provided (`Schlage`, model `be499WB`). Schlage documents the BE499WB family as using `4 x AA` alkaline batteries. |
 | 5 | ecobee Inc. | Remote occupancy and temperature sensor (EBERS41) | Proprietary RF / HomeKit | `sensor` | `CR2477` | 1 | Guest room, bedroom, den, basement, and office sensors report battery through HomeKit Controller. |
 | 12 | Xiaomi | MiFlora plant sensor | Bluetooth LE | `plant` | `CR2032` | 1 | Counted from the twelve active plant definitions in `packages/plants.yaml`; assumes the current plant-monitor fleet is still MiFlora-family hardware. |
 
@@ -67,14 +68,14 @@ This table combines the spare inventory above with the currently configured batt
 | Battery | Kind | Inventory Cells | Configured Cells | Swap / Charge Overhead | Total To Keep Ready | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | `AAA` | Rechargeable cylindrical | 16 | 15 | 16 | 47 | Covers deployed window sensors and remotes plus a half-set rechargeable buffer for same-day swaps. |
-| `AA` | Rechargeable cylindrical | 0 | 2 | 2 | 4 | Keep one charged pair ready for the modified arrival sensor. |
+| `AA` | Rechargeable cylindrical | 0 | 6 | 4 | 10 | Covers the modified arrival sensor plus one full replacement set for the Schlage lock so a low-battery alert does not leave the front door waiting on a charger cycle or a store run. |
 | `FYRTUR battery pack` | Rechargeable pack | 0 | 2 | 1 | 3 | One charged spare pack keeps a blind online while the other pack recharges. |
 | `CR2450` | Primary coin cell | 16 | 8 | 6 | 30 | Shared across the legacy motion sensors, the cube, and the Matter P2 motion sensor. |
 | `CR2032` | Primary coin cell | 16 | 25 | 11 | 52 | This becomes the largest family once the installed climate sensors, plant sensors, TRADFRI remotes, and small Aqara/Xiaomi nodes are included. |
 | `CR1632` | Primary coin cell | 4 | 1 | 3 | 8 | Small but easy-to-forget door-sensor cell; keep a few ahead of failures. |
 | `CR2477` | Primary coin cell | 0 | 5 | 3 | 8 | Niche ecobee sensor cell that is worth stocking instead of special-ordering after a failure. |
 | `CR123A` | Primary cylindrical lithium | 4 | 0 | 4 | 8 | Keep a full spare round for the FireFighter stock because this cell is less interchangeable with the rest of the house. |
-| `TOTAL` | 8 battery families / 4 kinds | 56 | 58 | 46 | 160 | Kinds in use: rechargeable cylindrical cells, rechargeable packs, primary coin cells, and primary cylindrical lithium cells. |
+| `TOTAL` | 8 battery families / 4 kinds | 56 | 62 | 48 | 166 | Kinds in use: rechargeable cylindrical cells, rechargeable packs, primary coin cells, and primary cylindrical lithium cells. |
 
 ## Battery Assumptions
 
@@ -82,6 +83,7 @@ This table combines the spare inventory above with the currently configured batt
 - `TRADFRI remote control` in Home Assistant is counted as the older `CR2032`-powered remote, not a later `AAA`-powered STYRBAR-style remote.
 - `MiFlora plant sensor` assumes the current plant-monitor fleet behind `packages/plants.yaml` still uses the Xiaomi MiFlora / Flower Care battery profile (`1 x CR2032` each).
 - `SmartThings Arrival sensor` uses the README-documented `2 x AA` battery mod in the current setup.
+- `Schlage` model `be499WB` from the Home app screenshot is treated as the Encode Plus family, which Schlage documents as using `4 x AA` batteries.
 - `FYRTUR` is counted as one removable rechargeable battery pack per blind, with one extra charged pack kept as swap coverage.
 - `MKZQ01LM` in issue #202 appears to refer to the Aqara cube controller family (`MKZQ01LM` CN / `MFKZQ01LM` global), which uses a single `CR2450`.
 - The `FireFighter` row reflects the Ecolink FireFighter battery family (`CR123A`), but the exact protocol and SKU should be verified because issue #202 labeled it as Zigbee.
