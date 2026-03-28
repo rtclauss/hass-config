@@ -118,18 +118,23 @@ cards:
               {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+              {% set home_planner = location_name == 'home' %}
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 ### Max-range override is active
                 #### Charge limit pinned to 100% until you return to the daily plan
-              {% elif has_calendar_departure %}
+              {% elif has_calendar_departure and home_planner %}
                 ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}
                 #### Departure plan: {{ trip_start_raw }}
                 #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int(0) }} mi
+              {% elif protected_location and not home_planner %}
+                ### Protected location
+                #### Tesla-app charging schedule stays authoritative at {{ location_label }}
+                #### Home Assistant departure planning currently runs only at Home
               {% else %}
                 ### Daily planner is active
                 #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and EV tariff inputs
               {% endif %}
-              {% if protected_location %}
+              {% if protected_location and home_planner %}
                 #### Tesla-app charging schedule stays authoritative at {{ location_label }}
               {% endif %}
 
@@ -149,15 +154,18 @@ cards:
               {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+              {% set home_planner = location_name == 'home' %}
               ### {{ charge_limit }}% target
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 #### Manual override is forcing max range
-              {% elif is_state('binary_sensor.upcoming_trip_charging', 'on') %}
+              {% elif home_planner and is_state('binary_sensor.upcoming_trip_charging', 'on') %}
                 #### Planner is following the next trip
-              {% elif has_calendar_departure %}
+              {% elif home_planner and has_calendar_departure %}
                 #### Planner is following the next calendar departure
-              {% elif alarm_enabled %}
+              {% elif home_planner and alarm_enabled %}
                 #### Planner is following tomorrow's alarm with cabin preconditioning enabled
+              {% elif protected_location and not home_planner %}
+                #### Tesla-app charging defaults are preserved here
               {% else %}
                 #### No next-day departure plan is active
               {% endif %}

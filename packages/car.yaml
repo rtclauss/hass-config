@@ -756,6 +756,15 @@ script:
               0
             {% endif %}
           preserve_default_charging_schedule: "{{ location_name in ['home', 'parents', 'occ', 'spcc'] }}"
+          stored_managed_departure_text: "{{ states('input_text.tesla_managed_departure_time') | default('', true) | string | trim }}"
+          stored_managed_departure_ts: "{{ as_timestamp(stored_managed_departure_text, default=0) | int(0) }}"
+          tesla_departure_ts: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Departure timestamp') | int(0) }}"
+          tesla_scheduled_charging_active: "{{ is_state('binary_sensor.nigori_scheduled_charging', 'on') }}"
+          tesla_off_peak_charging_enabled: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Off peak charging enabled') in [true, 'true', 'True', 'on'] }}"
+          tesla_managed_departure_matches: >-
+            {{ stored_managed_departure_ts > 0 and tesla_departure_ts > 0 and ((stored_managed_departure_ts - tesla_departure_ts) | abs) <= 300 }}
+          safe_to_clear_tesla_schedule: >-
+            {{ preserve_default_charging_schedule not in [true, 'true', 'True'] or (tesla_managed_departure_matches in [true, 'true', 'True'] and tesla_scheduled_charging_active not in [true, 'true', 'True'] and tesla_off_peak_charging_enabled not in [true, 'true', 'True']) }}
       - choose:
           - conditions:
               - condition: template
@@ -766,15 +775,21 @@ script:
                   entity_id: script.tesla_set_precondition_schedule_time
                   domain: script
                   name: Tesla scheduled departure planner
-                  message: "{{ effective_reason }} Clearing Tesla scheduled departure."
-              - action: tesla_custom.api
-                data:
-                  command: SCHEDULED_DEPARTURE
-                  parameters:
-                    path_vars:
-                      vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
-                    enable: false
-                    wake_if_asleep: true
+                  message: >-
+                    {{ effective_reason }}{% if safe_to_clear_tesla_schedule in [true, 'true', 'True'] %} Clearing Tesla scheduled departure.{% else %} Preserve the Tesla app charging schedule at {{ location_label }} and skip clearing Tesla schedule state because the live Tesla schedule does not match the last HA-managed protected-location departure.{% endif %}
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ safe_to_clear_tesla_schedule in [true, 'true', 'True'] }}"
+                    sequence:
+                      - action: tesla_custom.api
+                        data:
+                          command: SCHEDULED_DEPARTURE
+                          parameters:
+                            path_vars:
+                              vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
+                            enable: false
+                            wake_if_asleep: true
         default:
           - choose:
               - conditions:
