@@ -1,6 +1,3 @@
-# ESPHome Bluetooth proxy for the office with custom Apple Watch advertisement parsing.
-# Complex areas: besides proxying BLE traffic, this node inspects nearby Apple Watch packets and derives RSSI-based presence helpers for office automations.
-
 esphome:
   name: office-bt-proxy
   project: 
@@ -58,9 +55,9 @@ dashboard_import:
 
 esp32_ble_tracker:
   scan_parameters:
-    interval: 300ms
-    window: 300ms
     active: true
+    interval: 320ms
+    window: 320ms
   on_ble_advertise:
     - then:
       # Look for manufacturer data of form: 4c00 10 05 YY 98 XXXXXX
@@ -91,8 +88,12 @@ esp32_ble_tracker:
 
 xiaomi_ble:
 
+esp32_ble:
+  max_connections: 4
+
 bluetooth_proxy:
   active: true
+  connection_slots: 4
 
 sensor:
   #Apple Watch Sensors:
