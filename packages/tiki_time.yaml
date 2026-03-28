@@ -41,11 +41,267 @@ homeassistant:
 ########################
 
 script:
+  tiki_time_tropical_color_cycle:
+    alias: "Tiki Time Tropical Color Cycle"
+    description: >-
+      Continuously rotate Tiki Time-capable lights through a tropical palette
+      while the Tiki Time station is still playing.
+    icon: mdi:palette
+    mode: restart
+    sequence:
+      - if:
+          - condition: not
+            conditions:
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: media_player.den_sonos_2
+                    state: "playing"
+                  - condition: state
+                    entity_id: media_player.den_sonos_2
+                    state: "buffering"
+        then:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: media_player.den_sonos_2
+                to: "playing"
+              - trigger: state
+                entity_id: media_player.den_sonos_2
+                to: "buffering"
+            timeout: "00:00:10"
+            continue_on_timeout: true
+      - repeat:
+          while:
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: media_player.den_sonos_2
+                  state: "playing"
+                - condition: state
+                  entity_id: media_player.den_sonos_2
+                  state: "buffering"
+          sequence:
+            - variables:
+                cycle_index: "{{ repeat.index0 }}"
+                tropical_palette:
+                  - [18, 86]
+                  - [34, 90]
+                  - [52, 82]
+                  - [108, 70]
+                  - [166, 74]
+                  - [196, 76]
+                  - [286, 62]
+                  - [338, 68]
+            - parallel:
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_east_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_east_room_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_middle_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_middle_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_west_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_west_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_west_3
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_tv_bias
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 35
+                        transition: 18
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_3
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_4
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_5
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_6
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_7
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_sink_overhead
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.east_table_lamp
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 65
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.west_table_lamp
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 65
+                        transition: 18
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.tiki_room_floor_lamp
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 70
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.tiki_room_strip
+                      data:
+                        effect: rainbow
+                        brightness_pct: 80
+            - delay:
+                seconds: 20
   tiki_time:
     alias: "Tiki Time"
     description: >-
       Start the Tiki Time party mode: flash the lights, start SomaFM Tiki Time
-      on the Sonos group, and move the basement display into Photos.
+      on the Sonos group, move the basement display into Photos, and start the
+      tropical light rotation.
     icon: mdi:palm-tree
     mode: restart
     sequence:
@@ -55,6 +311,9 @@ script:
           entity_id: script.tiki_time
           domain: script
           message: "Starting the Tiki Time party mode."
+      - action: script.turn_off
+        target:
+          entity_id: script.tiki_time_tropical_color_cycle
       - parallel:
           - sequence:
               - repeat:
@@ -116,32 +375,6 @@ script:
           brightness_pct: 25
           color_temp_kelvin: 2000
           transition: 45
-      - parallel:
-          - action: light.turn_on
-            continue_on_error: true
-            target:
-              entity_id:
-                - light.basement_great_room
-                - light.kitchen_all
-            data:
-              effect: colorloop
-              brightness_pct: 60
-          - action: light.turn_on
-            continue_on_error: true
-            target:
-              entity_id: light.tiki_room_strip
-            data:
-              effect: rainbow
-              brightness_pct: 80
-          - action: light.turn_on
-            continue_on_error: true
-            target:
-              entity_id:
-                - light.office_all
-                - light.basement_tv_bias
-            data:
-              hs_color:
-                - 178
-                - 72
-              brightness_pct: 40
-              transition: 30
+      - action: script.turn_on
+        target:
+          entity_id: script.tiki_time_tropical_color_cycle
