@@ -36,21 +36,53 @@ This file tracks available or unused smart-home devices that can be repurposed f
 | 4 | IKEA | PARASOLL door/window sensor | Zigbee | `binary_sensor` | `AAA` | 1 | Contact sensor for doors, windows, closets, and away-mode checks. Useful for open-window alerts and entry-point lighting. |
 | 8 | Espressif | ESP32 development board | Wi-Fi, Bluetooth | `sensor` | `n/a` | 0 | General-purpose MCU for ESPHome nodes, BLE proxies, or custom sensor and switch firmware. Best domain depends on what you flash onto it. |
 
+## Configured Battery Devices
+
+This table summarizes battery-powered devices that are already represented in the active Home Assistant configuration. Counts come from live battery entities where available plus the currently defined MiFlora-backed plant package entries.
+
+| Quantity | Brand | Model | Technology | Possible Home Assistant Domain | Battery | Cells / Device | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 6 | Aqara | Motion Sensor (RTCGQ11LM) | Zigbee | `binary_sensor` | `CR2450` | 1 | Six installed Zigbee motion sensors currently expose battery percentages in Home Assistant. |
+| 1 | Aqara | Motion and Light Sensor P2 | Matter | `binary_sensor` | `CR2450` | 1 | Counted from `sensor.aqara_motion_and_light_sensor_p2_battery`; Home Assistant also exposes a `battery_type` entity confirming `CR2450`. |
+| 1 | Aqara | Cube Controller (MKZQ01LM / MFKZQ01LM) | Zigbee | `sensor` | `CR2450` | 1 | Live Home Assistant device reports model `Cube`; counted with the Aqara cube family used in the spare inventory section. |
+| 8 | Aqara | Temperature and Humidity Sensor (WSDCGQ11LM) | Zigbee | `sensor` | `CR2032` | 1 | Eight configured room climate sensors currently report battery values in Home Assistant. |
+| 1 | Aqara | Vibration Sensor (DJT11LM) | Zigbee | `binary_sensor` | `CR2032` | 1 | Laundry washer vibration node. |
+| 1 | Aqara | Water Leak Sensor (SJCGQ11LM) | Zigbee | `binary_sensor` | `CR2032` | 1 | Basement unfinished leak node. |
+| 1 | Aqara | Door and Window Sensor (MCCGQ11LM) | Zigbee | `binary_sensor` | `CR1632` | 1 | Hall garage entry contact sensor. |
+| 1 | Xiaomi | Mi Wireless Switch (WXKG01LM) | Zigbee | `button` | `CR2032` | 1 | Hall button scene trigger. |
+| 8 | IKEA | PARASOLL door/window sensor | Zigbee | `binary_sensor` | `AAA` | 1 | Kitchen, dining room, powder room, and mailbox contact sensors are already installed. |
+| 1 | IKEA | RODRET wireless dimmer | Zigbee | `button` | `AAA` | 1 | One live RODRET dimmer is paired today; the spare inventory section tracks four more. |
+| 2 | IKEA | SOMRIG shortcut button | Zigbee | `button` | `AAA` | 1 | East and west bedside shortcut buttons. |
+| 2 | IKEA | TRADFRI remote control | Zigbee | `button` | `CR2032` | 1 | Office light buttons are the older CR2032-powered TRADFRI remote generation, not STYRBAR. |
+| 2 | IKEA | SYMFONISK sound remote, gen 2 | Zigbee | `button` | `AAA` | 2 | The installed Sonos remotes are explicitly the Gen 2 model, so each uses `2 x AAA`. |
+| 2 | IKEA | FYRTUR roller blind, block-out | Zigbee | `cover` | `FYRTUR battery pack` | 1 | Counted as one removable rechargeable pack per blind. |
+| 1 | SmartThings | Arrival sensor | Zigbee | `binary_sensor` | `AA` | 2 | README documents this sensor as modified to use `2 x AA` instead of the stock coin cell. |
+| 5 | ecobee Inc. | Remote occupancy and temperature sensor (EBERS41) | Proprietary RF / HomeKit | `sensor` | `CR2477` | 1 | Guest room, bedroom, den, basement, and office sensors report battery through HomeKit Controller. |
+| 12 | Xiaomi | MiFlora plant sensor | Bluetooth LE | `plant` | `CR2032` | 1 | Counted from the twelve active plant definitions in `packages/plants.yaml`; assumes the current plant-monitor fleet is still MiFlora-family hardware. |
+
 ## Battery Planning
 
-This table turns the per-device battery metadata into a stock plan. The `buffer` column is the extra pool to keep ready for hot-swaps while rechargeables are charging or while replacements are in transit.
+This table combines the spare inventory above with the currently configured battery fleet. The `swap / charge overhead` column is the extra stock to keep ready so a low-battery alert never has to wait on a charger cycle, shipping delay, or a special-order cell.
 
-| Battery | Devices / Rows | Installed Cells | Buffer | Total To Keep Ready | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `AAA` | `RODRET`, `BADRING`, `BILRESA`, `PARASOLL` | 16 | 8 | 24 | IKEA explicitly recommends rechargeable `AAA` cells for several of these devices, so a half-set buffer is practical. |
-| `CR2450` | `RTCGQ11LM`, `RTCGQ01LM`, cube controller | 16 | 8 | 24 | Use this as spare stock unless you verify a compatible rechargeable `2450` workflow for every affected device. |
-| `CR2032` | `DJT11LM`, `WSDCGQ11LM`, `WXKG11LM`, `WXKG01LM`, `SJCGQ11LM`, `SYMFONISK` | 16 | 8 | 24 | Rechargeable `2032`-format cells exist, but standard primary `CR2032` cells are not rechargeable. Verify voltage, thickness, and charge method before substituting chemistries. |
-| `CR1632` | `MCCGQ11LM`, `MCCGQ01LM` | 4 | 4 | 8 | Smaller coin cell used by the door sensors. Keeping a full spare round avoids scattered one-off replacements. |
-| `CR123A` | `FireFighter` | 4 | 4 | 8 | Treat as disposable primary lithium stock unless the exact Ecolink SKU and charger plan support something else. |
+| Battery | Kind | Inventory Cells | Configured Cells | Swap / Charge Overhead | Total To Keep Ready | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `AAA` | Rechargeable cylindrical | 16 | 15 | 16 | 47 | Covers deployed window sensors and remotes plus a half-set rechargeable buffer for same-day swaps. |
+| `AA` | Rechargeable cylindrical | 0 | 2 | 2 | 4 | Keep one charged pair ready for the modified arrival sensor. |
+| `FYRTUR battery pack` | Rechargeable pack | 0 | 2 | 1 | 3 | One charged spare pack keeps a blind online while the other pack recharges. |
+| `CR2450` | Primary coin cell | 16 | 8 | 6 | 30 | Shared across the legacy motion sensors, the cube, and the Matter P2 motion sensor. |
+| `CR2032` | Primary coin cell | 16 | 25 | 11 | 52 | This becomes the largest family once the installed climate sensors, plant sensors, TRADFRI remotes, and small Aqara/Xiaomi nodes are included. |
+| `CR1632` | Primary coin cell | 4 | 1 | 3 | 8 | Small but easy-to-forget door-sensor cell; keep a few ahead of failures. |
+| `CR2477` | Primary coin cell | 0 | 5 | 3 | 8 | Niche ecobee sensor cell that is worth stocking instead of special-ordering after a failure. |
+| `CR123A` | Primary cylindrical lithium | 4 | 0 | 4 | 8 | Keep a full spare round for the FireFighter stock because this cell is less interchangeable with the rest of the house. |
+| `TOTAL` | 8 battery families / 4 kinds | 56 | 58 | 46 | 160 | Kinds in use: rechargeable cylindrical cells, rechargeable packs, primary coin cells, and primary cylindrical lithium cells. |
 
 ## Battery Assumptions
 
-- `SYMFONISK` is counted as the original Zigbee sound remote (`1 x CR2032`). If these are Gen 2 remotes, move `2` installed cells from `CR2032` to `AAA`.
+- `SYMFONISK` spare inventory row is still counted as the original Zigbee sound remote (`1 x CR2032`), but the currently configured Home Assistant devices are Gen 2 remotes (`2 x AAA` each).
+- `TRADFRI remote control` in Home Assistant is counted as the older `CR2032`-powered remote, not a later `AAA`-powered STYRBAR-style remote.
+- `MiFlora plant sensor` assumes the current plant-monitor fleet behind `packages/plants.yaml` still uses the Xiaomi MiFlora / Flower Care battery profile (`1 x CR2032` each).
+- `SmartThings Arrival sensor` uses the README-documented `2 x AA` battery mod in the current setup.
+- `FYRTUR` is counted as one removable rechargeable battery pack per blind, with one extra charged pack kept as swap coverage.
 - `MKZQ01LM` in issue #202 appears to refer to the Aqara cube controller family (`MKZQ01LM` CN / `MFKZQ01LM` global), which uses a single `CR2450`.
 - The `FireFighter` row reflects the Ecolink FireFighter battery family (`CR123A`), but the exact protocol and SKU should be verified because issue #202 labeled it as Zigbee.
 
