@@ -320,6 +320,219 @@
           ]
         },
         {
+          "title": "Presence",
+          "path": "presence",
+          "icon": "mdi:home-account",
+          "type": "sections",
+          "max_columns": 4,
+          "badges": [
+            {
+              "type": "entity",
+              "entity": "person.ryan",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            },
+            {
+              "type": "entity",
+              "entity": "binary_sensor.bayesian_zeke_home",
+              "name": "Home",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            },
+            {
+              "type": "entity",
+              "entity": "sensor.iphone_17_pro_area",
+              "name": "Phone",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            },
+            {
+              "type": "entity",
+              "entity": "sensor.apple_watch_ultra_2_area",
+              "name": "Watch",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            }
+          ],
+          "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Current Guess",
+                  "icon": "mdi:crosshairs-gps"
+                },
+                {
+                  "type": "custom:mushroom-template-card",
+                  "entity": "person.ryan",
+                  "primary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Room confidence pending{% elif ns.best_score == 0 %}No likely room{% else %}{{ ns.best_name }}{% endif %}",
+                  "secondary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Deploy or reload the room confidence template sensors to populate this view.{% elif ns.best_score == 0 %}No room has positive confidence right now.{% else %}Score {{ ns.best_score }}{% if ns.best_binary %} • confident occupancy on{% else %} • below confident threshold{% endif %}{% endif %}",
+                  "icon": "mdi:crosshairs-gps",
+                  "icon_color": "{% set rooms = ['sensor.bedroom_room_confidence', 'sensor.office_room_confidence', 'sensor.den_room_confidence', 'sensor.basement_room_confidence'] %} {% set ns = namespace(best_score=-1) %} {% for entity_id in rooms %}{% set score = states(entity_id) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_score = score %}{% endif %}{% endfor %} {% if ns.best_score >= 70 %}green{% elif ns.best_score >= 50 %}teal{% elif ns.best_score > 0 %}amber{% else %}grey{% endif %}",
+                  "multiline_secondary": true,
+                  "fill_container": true,
+                  "tap_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "entities",
+                  "title": "Location Inputs",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "person.ryan"
+                    },
+                    {
+                      "entity": "binary_sensor.bayesian_zeke_home"
+                    },
+                    {
+                      "entity": "sensor.iphone_17_pro_area"
+                    },
+                    {
+                      "entity": "sensor.iphone_17_pro_floor"
+                    },
+                    {
+                      "entity": "sensor.apple_watch_ultra_2_area"
+                    },
+                    {
+                      "entity": "sensor.apple_watch_ultra_2_floor"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Room Scores",
+                  "icon": "mdi:chart-box"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.bedroom_room_confidence",
+                  "name": "Bedroom",
+                  "icon": "mdi:bed-queen",
+                  "features_position": "bottom",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.office_room_confidence",
+                  "name": "Office",
+                  "icon": "mdi:desk",
+                  "features_position": "bottom",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.den_room_confidence",
+                  "name": "Den",
+                  "icon": "mdi:sofa",
+                  "features_position": "bottom",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.basement_room_confidence",
+                  "name": "Basement",
+                  "icon": "mdi:stairs-down",
+                  "features_position": "bottom",
+                  "vertical": false
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Confident Rooms",
+                  "icon": "mdi:check-decagram"
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.bedroom_confident_occupancy",
+                  "name": "Bedroom",
+                  "icon": "mdi:bed-queen",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.office_confident_occupancy",
+                  "name": "Office",
+                  "icon": "mdi:desk",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.den_confident_occupancy",
+                  "name": "Den",
+                  "icon": "mdi:sofa",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.basement_confident_occupancy",
+                  "name": "Basement",
+                  "icon": "mdi:stairs-down",
+                  "vertical": false
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Evidence",
+                  "icon": "mdi:home-search"
+                },
+                {
+                  "type": "markdown",
+                  "content": "Watch location is corroboration only. Phone location and room-native sensors are weighted higher.",
+                  "title": "Priority"
+                },
+                {
+                  "type": "entities",
+                  "title": "Room Sensors",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.bedroom_occupancy"
+                    },
+                    {
+                      "entity": "binary_sensor.bayesian_bed_occupancy"
+                    },
+                    {
+                      "entity": "binary_sensor.office_occupancy_2"
+                    },
+                    {
+                      "entity": "binary_sensor.office_motion_occupancy"
+                    },
+                    {
+                      "entity": "binary_sensor.ryan_office_presence"
+                    },
+                    {
+                      "entity": "binary_sensor.den_occupancy_2"
+                    },
+                    {
+                      "entity": "binary_sensor.basement_occupancy_2"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
           "title": "Owner Suite",
           "path": "owner-suite",
           "icon": "mdi:bed-queen",
@@ -1915,7 +2128,7 @@
                   "show_color_temp_control": true,
                   "collapsible_controls": true,
                   "name": "Flood Lights",
-                  "entity": "light.den_flood_lights"
+                  "entity": "light.den_floods"
                 },
                 {
                   "type": "custom:mushroom-light-card",
@@ -1988,14 +2201,14 @@
                 },
                 {
                   "type": "custom:mushroom-light-card",
-                  "entity": "light.tiki_room_strip",
                   "name": "Light Strip",
                   "fill_container": true,
                   "use_light_color": true,
                   "show_brightness_control": true,
                   "show_color_control": true,
                   "show_color_temp_control": true,
-                  "collapsible_controls": true
+                  "collapsible_controls": true,
+                  "entity": "light.tiki_room_lights_tiki_room_strip"
                 },
                 {
                   "type": "custom:mushroom-light-card",
@@ -2155,6 +2368,10 @@
                 {
                   "type": "custom:mushroom-light-card",
                   "entity": "light.guest_room_ceiling"
+                },
+                {
+                  "type": "custom:mushroom-fan-card",
+                  "entity": "fan.guest_bathroom_exhaust"
                 }
               ]
             }
