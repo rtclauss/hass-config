@@ -364,7 +364,7 @@ automation:
       - variables:
           stored_departure_text: "{{ states('input_text.tesla_managed_departure_time') | default('', true) | string | trim }}"
           cleanup_reason: >-
-            {% if stored_departure_text != '' %}
+            {% if stored_departure_text not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
               {% set stored_departure_dt = stored_departure_text | as_datetime | as_local %}
               Tesla-managed schedule for {{ stored_departure_dt.strftime('%a %I:%M %p') }} has passed.
             {% else %}
