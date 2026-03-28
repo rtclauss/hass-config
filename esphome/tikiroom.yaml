@@ -1,6 +1,13 @@
 # ESPHome migration for the Tiki Room LED strip.
 # This keeps the existing GPIO14 wiring, exposes the light natively to Home Assistant,
 # and adds device-native effect/speed helpers so Lovelace and HomeKit can control them.
+#
+# GPIO14 forces the ESP8266 onto NeoPixelBus bit-banging. With a 579 LED strip, a 16ms
+# frame interval monopolizes the MCU long enough to starve the ESPHome API, so the
+# node now boots dark and caps effect refreshes to a slower, stable cadence.
+
+substitutions:
+  tikiroom_effect_frame_interval: 50ms
 
 esphome:
   name: tikiroomlights
@@ -187,7 +194,7 @@ light:
     method:
       type: bit_bang
     num_leds: 579
-    restore_mode: RESTORE_DEFAULT_OFF
+    restore_mode: ALWAYS_OFF
     default_transition_length: 1s
     flash_transition_length: 0s
     on_turn_on:
@@ -221,96 +228,96 @@ light:
     effects:
       - addressable_lambda:
           name: solid
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_solid(it, current_color, initial_run);
       - addressable_lambda:
           name: bpm
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_bpm(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: candy cane
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_candy_cane(it, id(tikiroom_effect_speed), tikiroom::candy_cane_palette(), initial_run);
       - addressable_lambda:
           name: christmas
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_candy_cane(it, id(tikiroom_effect_speed), tikiroom::christmas_palette(), initial_run);
       - addressable_lambda:
           name: confetti
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_confetti(it, current_color, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: cyclon rainbow
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_cyclon_rainbow(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: dots
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_dots(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: fire
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_fire(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: glitter
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_glitter(it, current_color, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: juggle
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_juggle(it, current_color, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: lightning
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_lightning(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: noise
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_noise(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: police all
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_police_all(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: police one
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_police_one(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: rainbow
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_rainbow(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: rainbow with glitter
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_rainbow_with_glitter(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: ripple
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_ripple(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: sinelon
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_sinelon(it, current_color, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
           name: twinkle
-          update_interval: 16ms
+          update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_twinkle(it, id(tikiroom_effect_speed), initial_run);
