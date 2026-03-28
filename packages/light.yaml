@@ -1814,13 +1814,17 @@ automation:
 
   - id: office_lights_morning_on_vacancy_off
     alias: office_lights_morning_on_vacancy_off
-    description: Turn office lights on with morning occupancy (when not in guest/trip mode), then turn them off only after the confidence model and local office sensors all show vacancy.
+    description: Turn office lights on with morning motion/occupancy (when not in guest/trip mode), then turn them off only after the confidence model and local office sensors all show vacancy.
     mode: restart
     trigger:
       - trigger: state
-        entity_id: binary_sensor.office_confident_occupancy
+        entity_id: binary_sensor.office_motion_occupancy
         to: "on"
-        id: office-occupied
+        id: office-occupied-motion
+      - trigger: state
+        entity_id: binary_sensor.office_occupancy_2
+        to: "on"
+        id: office-occupied-homekit
       - trigger: state
         entity_id: binary_sensor.office_confident_occupancy
         to: "off"
@@ -1832,7 +1836,7 @@ automation:
         to: "off"
         for:
           minutes: 10
-        id: office-unoccupied-mmwave
+        id: office-unoccupied-homekit
       - trigger: state
         entity_id: binary_sensor.office_motion_occupancy
         to: "off"
@@ -1844,7 +1848,9 @@ automation:
           # Morning auto-on path.
           - conditions:
               - condition: trigger
-                id: office-occupied
+                id:
+                  - office-occupied-motion
+                  - office-occupied-homekit
               - condition: time
                 after: "06:00:00"
                 before: "12:00:00"
@@ -1871,7 +1877,7 @@ automation:
               - condition: trigger
                 id:
                   - office-unoccupied-confidence
-                  - office-unoccupied-mmwave
+                  - office-unoccupied-homekit
                   - office-unoccupied-motion
               - condition: state
                 entity_id: input_boolean.office_auto_on
