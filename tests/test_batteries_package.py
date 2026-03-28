@@ -58,13 +58,21 @@ def test_battery_automations_update_notifications_from_dynamic_sensor_summaries(
         block = _automation_block(automation_id)
 
         assert "mode: queued" in block
+        assert "id: summary_change" in block
         assert "attribute: summary" in block
+        assert "trigger: homeassistant" in block
+        assert "id: startup_sync" in block
+        assert "event: start" in block
         assert "persistent_notification.create" in block
         assert "persistent_notification.dismiss" in block
         assert "notify.all" in block
+        assert f"states('sensor.battery_low_{threshold}')" in block
+        assert f"state_attr('sensor.battery_low_{threshold}', 'summary')" in block
+        assert "trigger.id == 'summary_change'" in block
+        assert "count_increased" in block
         assert f"notification_id: low-battery-{threshold}" in block
         assert f"Battery Sensors Below {threshold}%" in block
-        assert "trigger.from_state.state not in ['unknown', 'unavailable']" in block
+        assert "trigger.from_state is not none" in block
 
 
 def test_logbook_excludes_current_battery_monitor_entities_instead_of_stale_ones() -> None:

@@ -177,20 +177,30 @@ automation:
     max: 10
     trigger:
       - trigger: state
+        id: summary_change
         entity_id: sensor.battery_low_20
         attribute: summary
-    condition:
-      - condition: template
-        value_template: >-
-          {{ trigger.from_state is not none
-             and trigger.from_state.state not in ['unknown', 'unavailable']
-             and trigger.to_state.state not in ['unknown', 'unavailable'] }}
+      - trigger: homeassistant
+        id: startup_sync
+        event: start
+    variables:
+      battery_count: >-
+        {{ states('sensor.battery_low_20') | int(0) }}
+      battery_summary: >-
+        {{ state_attr('sensor.battery_low_20', 'summary') | default('', true) }}
+      count_increased: >-
+        {{ trigger.id == 'summary_change'
+           and trigger.from_state is not none
+           and trigger.to_state is not none
+           and trigger.from_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
       - choose:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ trigger.to_state.state | int(0) == 0 }}
+                  {{ battery_count == 0 }}
             sequence:
               - action: persistent_notification.dismiss
                 data:
@@ -199,22 +209,22 @@ automation:
           - action: persistent_notification.create
             data:
               title: >-
-                Battery Sensors Below 20% ({{ trigger.to_state.state | int(0) }})
+                Battery Sensors Below 20% ({{ battery_count }})
               message: >-
-                {{ trigger.to_state.attributes.summary }}
+                {{ battery_summary }}
               notification_id: low-battery-20
           - choose:
               - conditions:
                   - condition: template
                     value_template: >-
-                      {{ trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
+                      {{ count_increased }}
                 sequence:
                   - action: notify.all
                     data:
                       title: >-
-                        Battery Sensors Below 20% ({{ trigger.to_state.state | int(0) }})
+                        Battery Sensors Below 20% ({{ battery_count }})
                       message: >-
-                        {{ trigger.to_state.attributes.summary }}
+                        {{ battery_summary }}
 
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
@@ -223,20 +233,30 @@ automation:
     max: 10
     trigger:
       - trigger: state
+        id: summary_change
         entity_id: sensor.battery_low_10
         attribute: summary
-    condition:
-      - condition: template
-        value_template: >-
-          {{ trigger.from_state is not none
-             and trigger.from_state.state not in ['unknown', 'unavailable']
-             and trigger.to_state.state not in ['unknown', 'unavailable'] }}
+      - trigger: homeassistant
+        id: startup_sync
+        event: start
+    variables:
+      battery_count: >-
+        {{ states('sensor.battery_low_10') | int(0) }}
+      battery_summary: >-
+        {{ state_attr('sensor.battery_low_10', 'summary') | default('', true) }}
+      count_increased: >-
+        {{ trigger.id == 'summary_change'
+           and trigger.from_state is not none
+           and trigger.to_state is not none
+           and trigger.from_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
       - choose:
           - conditions:
               - condition: template
                 value_template: >-
-                  {{ trigger.to_state.state | int(0) == 0 }}
+                  {{ battery_count == 0 }}
             sequence:
               - action: persistent_notification.dismiss
                 data:
@@ -245,22 +265,22 @@ automation:
           - action: persistent_notification.create
             data:
               title: >-
-                Battery Sensors Below 10% ({{ trigger.to_state.state | int(0) }})
+                Battery Sensors Below 10% ({{ battery_count }})
               message: >-
-                {{ trigger.to_state.attributes.summary }}
+                {{ battery_summary }}
               notification_id: low-battery-10
           - choose:
               - conditions:
                   - condition: template
                     value_template: >-
-                      {{ trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
+                      {{ count_increased }}
                 sequence:
                   - action: notify.all
                     data:
                       title: >-
-                        Battery Sensors Below 10% ({{ trigger.to_state.state | int(0) }})
+                        Battery Sensors Below 10% ({{ battery_count }})
                       message: >-
-                        {{ trigger.to_state.attributes.summary }}
+                        {{ battery_summary }}
 
 ########################
 # Binary Sensors
