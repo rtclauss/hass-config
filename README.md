@@ -82,10 +82,12 @@ Notes:
 The `Music Assistant` section on the dashboard includes a small search flow:
 
 1. Enter a plain-text query in `input_text.music_assistant_search_query`.
-2. Optionally enter a provider token such as `spotify`, `tunein`, or `library` in `input_text.music_assistant_provider_filter`.
+2. Optionally pick a provider token from `input_select.music_assistant_provider_filter`.
 3. Choose the media type from `input_select.music_assistant_search_media_type`.
 4. Press `script.music_assistant_search_music` to populate `input_select.music_assistant_search_results`.
 5. Use `script.music_assistant_play_selected_search_result` to play the selected result now or add it to the current queue.
+
+The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.bedroom_sonos_2`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
 
 This flow appends to the live Music Assistant queue on `media_player.bedroom_sonos_2`, which is the current "playlist" target in the dashboard.
 
