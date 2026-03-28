@@ -246,7 +246,7 @@ automation:
             {% endif %}
             {% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}
             {% set departure_window_open = departure_dt is not none and departure_dt > now() %}
-            {% set precondition = (has_calendar_departure or alarm_enabled) and departure_window_open and manage_tesla_schedule %}
+            {% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
@@ -281,7 +281,12 @@ automation:
               {% else %}
                 {% set charge_limit_phrase = 'Set charge limit to ' ~ charge_limit ~ '%' %}
               {% endif %}
-              {% set summary = 'Plan Tesla for ' ~ source ~ '. ' ~ charge_limit_phrase ~ ' and ' ~ ('enable' if precondition else 'skip') ~ ' preconditioning for ' ~ departure_label ~ '. Outside ' ~ (outside_temp_f | round(0)) ~ 'F. EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
+              {% if precondition %}
+                {% set precondition_phrase = 'enable preconditioning for ' ~ departure_label %}
+              {% else %}
+                {% set precondition_phrase = 'skip cabin preconditioning until a real next-day departure is scheduled' %}
+              {% endif %}
+              {% set summary = 'Plan Tesla for ' ~ source ~ '. ' ~ charge_limit_phrase ~ ' and ' ~ precondition_phrase ~ '. Outside ' ~ (outside_temp_f | round(0)) ~ 'F. EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
             {% else %}
               {% set summary = 'No next-day departure plan detected. Restore the Tesla default charge limit to 80%.' %}
             {% endif %}
