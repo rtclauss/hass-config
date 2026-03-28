@@ -86,7 +86,7 @@ def test_general_day_mode_script_excludes_delayed_owner_suite_office_and_guest_s
         "all_day_mode_singletapbehavior_switches",
         "all_day_mode_defaultlevellocal_switches",
         "all_day_mode_defaultlevelremote_switches",
-        'message: "Setting light switch day mode colors and full-brightness single tap"',
+        'message: "Setting light switch day mode colors and full-brightness defaults"',
     ):
         assert token in block
 

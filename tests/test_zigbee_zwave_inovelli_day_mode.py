@@ -26,7 +26,7 @@ def _script_block(name: str) -> str:
 
 
 def test_day_mode_switches_restores_old_single_tap_behavior() -> None:
-    block = _script_block("day_mode_switches")
+    block = _script_block("day_mode_switches_general")
 
     assert "all_day_mode_singletapbehavior_switches" in block
     assert 'option: "Old Behavior"' in block
@@ -34,7 +34,7 @@ def test_day_mode_switches_restores_old_single_tap_behavior() -> None:
 
 
 def test_day_mode_switches_keeps_full_brightness_defaults() -> None:
-    block = _script_block("day_mode_switches")
+    block = _script_block("day_mode_switches_general")
 
     assert "all_day_mode_defaultlevellocal_switches" in block
     assert "all_day_mode_defaultlevelremote_switches" in block
