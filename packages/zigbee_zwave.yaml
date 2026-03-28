@@ -1,5 +1,5 @@
 # Home Assistant package for Zigbee and legacy Z-Wave device normalization.
-# Complex areas: it gives contact, motion, and battery entities stable names and keeps the button, group, and device-health logic that many other packages rely on.
+# Complex areas: it gives contact, motion, and battery entities stable names and keeps the button and device-health logic that many other packages rely on.
 
 ################################################################
 ## Packages / Zigbee
@@ -1678,11 +1678,12 @@ device_tracker: []
 group:
   egress_points:
     entities:
-      # The doors
-      - binary_sensor.den_doors_contact
-      - binary_sensor.kitchen_deck_contact
+      # Compatibility helper for older consumers. Windows are rolled up
+      # through the dynamic window sensor; doors remain explicit.
+      - binary_sensor.any_window_open
+      - binary_sensor.basement_door_contact
+      - binary_sensor.deck_door_contact
       - binary_sensor.main_foyer_front_door_contact
-      - binary_sensor.tiki_room_deck_contact
       - binary_sensor.hall_garage_entry_contact
 
 ########################
