@@ -18,7 +18,7 @@ schedy_heating: # This is our app instance name.
       return is_on("input_boolean.guest_mode")
 
     def egress_open():
-      return is_on("group.egress_points")
+      return is_on("binary_sensor.any_window_open")
 
   schedule_snippets:
     # only heat for tiki
@@ -69,7 +69,7 @@ schedy_heating: # This is our app instance name.
   #   - v: 'OFF'
 
   schedule_prepend:
-    - x: "Mark(OFF, Mark.OVERLAY) if is_on('group.egress_points') else Next()"
+    - x: "Mark(OFF, Mark.OVERLAY) if is_on('binary_sensor.any_window_open') else Next()"
 
   rooms:
     tiki_room:
@@ -108,6 +108,6 @@ schedy_heating: # This is our app instance name.
     - input_boolean.trip
     - person.ryan
     - binary_sensor.workday_sensor
-    - group.egress_points
+    - binary_sensor.any_window_open
     - sensor.time
     - input_boolean.guest_mode

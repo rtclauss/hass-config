@@ -138,6 +138,7 @@ cards:
               {% else %}
                 ### Daily planner is active
                 #### Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs
+                #### Cabin preconditioning only runs when a real next-day departure is scheduled
               {% endif %}
               {% if protected_location and home_planner %}
                 #### {% if home_schedule_override_needed %}Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed{% else %}Tesla-app charging schedule stays authoritative at {{ location_label }}{% endif %}
@@ -172,7 +173,7 @@ cards:
               {% elif home_planner and has_calendar_departure %}
                 #### Planner is following the next calendar departure
               {% elif home_planner and alarm_enabled %}
-                #### Planner is following tomorrow's alarm with cabin preconditioning enabled
+                #### Planner is following tomorrow's alarm for charge-limit planning only
               {% elif protected_location and not home_planner %}
                 #### Tesla-app charging defaults are preserved here
               {% else %}
@@ -192,6 +193,16 @@ cards:
                 name: Today's EV Energy
               - entity: sensor.daily_ev_charging_cost
                 name: Today's EV Cost
+              - entity: sensor.average_daily_ev_charging_cost
+                name: Avg EV Cost / Day
+              - entity: sensor.average_daily_vehicle_miles
+                name: Avg Miles / Day
+              - entity: sensor.weekly_regular_gas_price_55125
+                name: 55125 Gas Price / Gal
+              - entity: sensor.average_daily_gas_car_cost_30mpg
+                name: Avg Gas Cost / Day @ 30 MPG
+              - entity: sensor.average_daily_ev_savings_vs_30mpg
+                name: EV Savings / Day vs 30 MPG
               - entity: sensor.monthly_ev_charging_energy
                 name: This Month EV Energy
               - entity: sensor.monthly_ev_charging_cost
