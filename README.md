@@ -30,7 +30,9 @@ Music playback automations now target the Music Assistant-backed Sonos entities,
 
 The reusable media helpers live in `packages/media_player.yaml`:
 
-- `script.music_assistant_play_item`: accepts Spotify URIs/URLs or Music Assistant radio item names and converts them into the `music_assistant.play_media` payload.
+- `script.music_assistant_play_item`: thin wrapper around `music_assistant.play_media` for any Music Assistant URI, URL, or plain item name. Pass `media_type` explicitly when you need to disambiguate a track, album, artist, playlist, or radio item.
+- `script.music_assistant_search_music`: searches Music Assistant from the dashboard controls and populates the result picker.
+- `script.music_assistant_play_selected_search_result`: plays or queues the selected Music Assistant search result.
 - `script.music_assistant_prepare_bedroom_group`: regroup bedroom/bathroom and optionally office/den depending on guest mode.
 - `script.music_assistant_prepare_arrival_group`: regroup the arrival playback zone.
 - `script.music_assistant_prepare_house_party_group`: regroup all Sonos players for party modes.
@@ -41,7 +43,7 @@ The Siri/Homebridge entrypoint for the Tiki Time party mode is `script.tiki_time
 
 ### Adding Another Playlist
 
-If an existing script already picks from a list, the normal change is just to append one more Spotify URI or Music Assistant radio item to that script's `plists` array in `packages/media_player.yaml`.
+If an existing script already picks from a list, the normal change is just to append one more URI or plain Music Assistant item name to that script's `plists` array in `packages/media_player.yaml`.
 
 Examples:
 
@@ -59,7 +61,7 @@ Accepted playlist values:
 - `https://open.spotify.com/album/...`
 - `https://open.spotify.com/artist/...`
 - `https://open.spotify.com/track/...`
-- Music Assistant radio item names or URIs, for mixed lists that call `script.music_assistant_play_item`
+- Music Assistant URIs or plain item names, for mixed lists that call `script.music_assistant_play_item`
 
 If you are creating a brand new script, prefer calling the helper instead of using `media_player.play_media` directly:
 
@@ -72,8 +74,20 @@ If you are creating a brand new script, prefer calling the helper instead of usi
 
 Notes:
 
-- The helper currently builds provider URIs with the active Spotify provider id in Music Assistant. If Spotify is removed and re-added in Music Assistant, re-check `script.music_assistant_play_spotify_uri` in `packages/media_player.yaml`.
-- The helper determines `track` vs `album` vs `artist` vs `playlist` automatically from the URI.
+- The generic helper now passes Music Assistant URIs and plain item names through directly. Use `media_type` when a name is ambiguous.
+- `script.music_assistant_play_spotify_uri` remains as a compatibility wrapper for Spotify URLs and URIs.
+
+### Searching and Queuing Music Assistant Items
+
+The `Music Assistant` section on the dashboard includes a small search flow:
+
+1. Enter a plain-text query in `input_text.music_assistant_search_query`.
+2. Optionally enter a provider token such as `spotify`, `tunein`, or `library` in `input_text.music_assistant_provider_filter`.
+3. Choose the media type from `input_select.music_assistant_search_media_type`.
+4. Press `script.music_assistant_search_music` to populate `input_select.music_assistant_search_results`.
+5. Use `script.music_assistant_play_selected_search_result` to play the selected result now or add it to the current queue.
+
+This flow appends to the live Music Assistant queue on `media_player.bedroom_sonos_2`, which is the current "playlist" target in the dashboard.
 
 ### Adding Another Radio Station
 
