@@ -1,5 +1,5 @@
 # Home Assistant package for low-battery monitoring.
-# It groups battery status helpers and staged notifications so sensor maintenance shows up consistently across the house.
+# It dynamically scans battery sensors, keeps an explicit exclusion list, and stages notifications consistently across the house.
 
 ################################################################
 ## Packages / Batteries
@@ -29,13 +29,13 @@ homeassistant:
     ################################################
     automation.notify_battery_dying_20:
       <<: *customize
-      friendly_name: "Notify Sensor Battery at 20%"
-      icon: mdi:battery-charging-wireless-20
+      friendly_name: "Notify Battery Sensors Below 20%"
+      icon: mdi:battery-alert
 
     automation.notify_battery_dying_10:
       <<: *customize
-      friendly_name: "Notify Sensor Battery at 10%"
-      icon: mdi:battery-charging-wireless-10
+      friendly_name: "Notify Battery Sensors Below 10%"
+      icon: mdi:battery-alert
 
     ################################################
     ## Binary Sensors
@@ -60,10 +60,111 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
+    sensor.battery_low_20:
+      <<: *customize
+      friendly_name: "Battery Sensors Below 20%"
+      icon: mdi:battery-20
+
+    sensor.battery_low_10:
+      <<: *customize
+      friendly_name: "Battery Sensors Below 10%"
+      icon: mdi:battery-10
 
     ################################################
     ## Thermostats
     ################################################
+
+################################################
+## Template
+################################################
+template:
+  - sensor:
+      - name: battery_low_20
+        unique_id: battery_low_20
+        default_entity_id: sensor.battery_low_20
+        icon: mdi:battery-20
+        variables: &battery_monitor_exclusions
+          # Exact entity_ids that should never appear in the low-battery monitor.
+          # Leave this list empty for the default include-all behavior.
+          battery_exclude_entities: []
+        state: >-
+          {% set monitored_batteries = states.sensor
+            | selectattr('attributes.device_class', 'eq', 'battery')
+            | rejectattr('entity_id', 'in', battery_exclude_entities)
+            | sort(attribute='entity_id')
+            | list %}
+          {% set ns = namespace(low_count=0) %}
+          {% for battery in monitored_batteries %}
+            {% set value = battery.state | float(9999) %}
+            {% if value < 20 %}
+              {% set ns.low_count = ns.low_count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.low_count }}
+        attributes:
+          tracked_count: >-
+            {% set monitored_batteries = states.sensor
+              | selectattr('attributes.device_class', 'eq', 'battery')
+              | rejectattr('entity_id', 'in', battery_exclude_entities)
+              | sort(attribute='entity_id')
+              | list %}
+            {{ monitored_batteries | count }}
+          summary: >-
+            {% set monitored_batteries = states.sensor
+              | selectattr('attributes.device_class', 'eq', 'battery')
+              | rejectattr('entity_id', 'in', battery_exclude_entities)
+              | sort(attribute='entity_id')
+              | list %}
+            {% set ns = namespace(lines=[]) %}
+            {% for battery in monitored_batteries %}
+              {% set value = battery.state | float(9999) %}
+              {% if value < 20 %}
+                {% set ns.lines = ns.lines + ['- ' ~ (battery.name | default(battery.entity_id, true)) ~ ': ' ~ battery.state ~ '%'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
+
+      - name: battery_low_10
+        unique_id: battery_low_10
+        default_entity_id: sensor.battery_low_10
+        icon: mdi:battery-10
+        variables: *battery_monitor_exclusions
+        state: >-
+          {% set monitored_batteries = states.sensor
+            | selectattr('attributes.device_class', 'eq', 'battery')
+            | rejectattr('entity_id', 'in', battery_exclude_entities)
+            | sort(attribute='entity_id')
+            | list %}
+          {% set ns = namespace(low_count=0) %}
+          {% for battery in monitored_batteries %}
+            {% set value = battery.state | float(9999) %}
+            {% if value < 10 %}
+              {% set ns.low_count = ns.low_count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.low_count }}
+        attributes:
+          tracked_count: >-
+            {% set monitored_batteries = states.sensor
+              | selectattr('attributes.device_class', 'eq', 'battery')
+              | rejectattr('entity_id', 'in', battery_exclude_entities)
+              | sort(attribute='entity_id')
+              | list %}
+            {{ monitored_batteries | count }}
+          summary: >-
+            {% set monitored_batteries = states.sensor
+              | selectattr('attributes.device_class', 'eq', 'battery')
+              | rejectattr('entity_id', 'in', battery_exclude_entities)
+              | sort(attribute='entity_id')
+              | list %}
+            {% set ns = namespace(lines=[]) %}
+            {% for battery in monitored_batteries %}
+              {% set value = battery.state | float(9999) %}
+              {% if value < 10 %}
+                {% set ns.lines = ns.lines + ['- ' ~ (battery.name | default(battery.entity_id, true)) ~ ': ' ~ battery.state ~ '%'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
 
 ################################################
 ## Automation
@@ -71,88 +172,115 @@ homeassistant:
 automation:
   - id: notify_battery_dying_20
     alias: notify_battery_dying_20
+    description: Keep the 20 percent battery notification current and send a push message when the situation gets worse.
+    mode: queued
+    max: 10
     trigger:
-      - trigger: numeric_state
-        entity_id:
-          - sensor.arrival_sensor_battery
-          - sensor.basement_door_battery
-          - sensor.bathroom_battery
-          - sensor.deck_door_battery
-          - sensor.downstairs_motion_battery
-          - sensor.ene_window_battery
-          - sensor.ese_window_battery
-          - sensor.front_door_battery
-          - sensor.guest_room_button_battery
-          - sensor.guest_room_battery
-          - sensor.kitchen_battery
-          - sensor.kitchen_button_battery
-          - sensor.living_room_battery
-          - sensor.living_room_button_battery
-          - sensor.master_bedroom_battery
-          - sensor.master_bedroom_motion_battery
-          - sensor.motion_sensor_battery
-          - sensor.north_kitchen_sink_window_battery
-          - sensor.north_master_bedroom_window_battery
-          - sensor.nne_window_battery
-          - sensor.nw_basement_window_battery
-          - sensor.office_button_battery
-          - sensor.office_motion_battery
-          - sensor.office_north_window_battery
-          - sensor.se_basement_window_battery
-          - sensor.sw_basement_window_battery
-        below: 20
-        above: 10
+      - trigger: state
+        id: summary_change
+        entity_id: sensor.battery_low_20
+        attribute: summary
+      - trigger: homeassistant
+        id: startup_sync
+        event: start
+    variables:
+      battery_count: >-
+        {{ states('sensor.battery_low_20') | int(0) }}
+      battery_summary: >-
+        {{ state_attr('sensor.battery_low_20', 'summary') | default('', true) }}
+      count_increased: >-
+        {{ trigger.id == 'summary_change'
+           and trigger.from_state is not none
+           and trigger.to_state is not none
+           and trigger.from_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
-      - action: persistent_notification.create
-        data:
-          title: Low Battery
-          message: "Battery {{  trigger.from_state.attributes.friendly_name }} is below 20%"
-          notification_id: low-battery-alert
-      - action: notify.all
-        data:
-          message: >-
-            Battery '{{ trigger.from_state.attributes.friendly_name }}' is below 20%.
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ battery_count == 0 }}
+            sequence:
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: low-battery-20
+        default:
+          - action: persistent_notification.create
+            data:
+              title: >-
+                Battery Sensors Below 20% ({{ battery_count }})
+              message: >-
+                {{ battery_summary }}
+              notification_id: low-battery-20
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ count_increased }}
+                sequence:
+                  - action: notify.all
+                    data:
+                      title: >-
+                        Battery Sensors Below 20% ({{ battery_count }})
+                      message: >-
+                        {{ battery_summary }}
 
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
+    description: Keep the 10 percent battery notification current and send a push message when the situation gets worse.
+    mode: queued
+    max: 10
     trigger:
-      - trigger: numeric_state
-        entity_id:
-          - sensor.arrival_sensor_battery
-          - sensor.basement_door_battery
-          - sensor.bathroom_battery
-          - sensor.deck_door_battery
-          - sensor.downstairs_motion_battery
-          - sensor.ene_window_battery
-          - sensor.ese_window_battery
-          - sensor.front_door_battery
-          - sensor.guest_room_button_battery
-          - sensor.guest_room_battery
-          - sensor.kitchen_battery
-          - sensor.living_room_battery
-          - sensor.living_room_button_battery
-          - sensor.master_bedroom_battery
-          - sensor.master_bedroom_motion_battery
-          - sensor.motion_sensor_battery
-          - sensor.north_kitchen_sink_window_battery
-          - sensor.north_master_bedroom_window_battery
-          - sensor.nne_window_battery
-          - sensor.nw_basement_window_battery
-          - sensor.office_motion_battery
-          - sensor.office_north_window_battery
-          - sensor.se_basement_window_battery
-          - sensor.sw_basement_window_battery
-        below: 10
+      - trigger: state
+        id: summary_change
+        entity_id: sensor.battery_low_10
+        attribute: summary
+      - trigger: homeassistant
+        id: startup_sync
+        event: start
+    variables:
+      battery_count: >-
+        {{ states('sensor.battery_low_10') | int(0) }}
+      battery_summary: >-
+        {{ state_attr('sensor.battery_low_10', 'summary') | default('', true) }}
+      count_increased: >-
+        {{ trigger.id == 'summary_change'
+           and trigger.from_state is not none
+           and trigger.to_state is not none
+           and trigger.from_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state not in ['unknown', 'unavailable']
+           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
-      - action: persistent_notification.create
-        data:
-          title: Low Battery
-          message: "Battery {{  trigger.from_state.attributes.friendly_name }} is below 10%"
-          notification_id: low-battery-alert
-      - action: notify.all
-        data:
-          message: >-
-            Battery '{{ trigger.from_state.attributes.friendly_name }}' is below 10%.
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ battery_count == 0 }}
+            sequence:
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: low-battery-10
+        default:
+          - action: persistent_notification.create
+            data:
+              title: >-
+                Battery Sensors Below 10% ({{ battery_count }})
+              message: >-
+                {{ battery_summary }}
+              notification_id: low-battery-10
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: >-
+                      {{ count_increased }}
+                sequence:
+                  - action: notify.all
+                    data:
+                      title: >-
+                        Battery Sensors Below 10% ({{ battery_count }})
+                      message: >-
+                        {{ battery_summary }}
 
 ########################
 # Binary Sensors
@@ -174,34 +302,6 @@ input_number: {}
 ########################
 group:
   {}
-  # battery_status:
-  #   name: Battery Status
-  #   entities:
-  #     - sensor.arrival_sensor_battery
-  #     - sensor.basement_door_battery
-  #     - sensor.bathroom_battery
-  #     - sensor.deck_door_battery
-  #     - sensor.downstairs_motion_battery
-  #     - sensor.ene_window_battery
-  #     - sensor.ese_window_battery
-  #     - sensor.front_door_battery
-  #     - sensor.guest_room_button_battery
-  #     - sensor.guest_room_battery
-  #     - sensor.hallway_motion_battery
-  #     - sensor.kitchen_battery
-  #     - sensor.living_room_battery
-  #     - sensor.living_room_button_battery
-  #     - sensor.master_bedroom_battery
-  #     - sensor.master_bedroom_motion_battery
-  #     - sensor.motion_sensor_battery
-  #     - sensor.north_kitchen_sink_window_battery
-  #     - sensor.north_master_bedroom_window_battery
-  #     - sensor.nne_window_battery
-  #     - sensor.nw_basement_window_battery
-  #     - sensor.office_motion_battery
-  #     - sensor.office_north_window_battery
-  #     - sensor.se_basement_window_battery
-  #     - sensor.sw_basement_window_battery
 
 ########################
 # Scenes

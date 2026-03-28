@@ -1,6 +1,3 @@
-# ESPHome Bluetooth proxy node that extends Bluetooth coverage for Home Assistant.
-# It improves BLE device discovery and room-level presence resolution away from the main coordinator host.
-
 esphome:
   name: denbluetoothproxy
   project: 
@@ -34,6 +31,7 @@ wifi:
   ssid: !secret wifi_ap
   password: !secret wifi_password
   min_auth_mode: WPA2
+  power_save_mode: NONE
   
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -48,9 +46,12 @@ dashboard_import:
 
 esp32_ble_tracker:
   scan_parameters:
-    interval: 300ms
-    window: 300ms
-    active: false
+    active: true
+
+esp32_ble:
+  max_connections: 4
 
 bluetooth_proxy:
+  active: true
+  connection_slots: 4
 xiaomi_ble:
