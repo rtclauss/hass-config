@@ -1,0 +1,147 @@
+# Home Assistant package for the Tiki Time party mode.
+# It exposes a Siri/Homebridge-friendly entrypoint that flashes the house,
+# starts SomaFM Tiki Time across the Sonos group, and moves the basement display
+# into a photo-friendly mode.
+
+################################################################
+## Packages / Tiki Time
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "tiki_time"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.tiki_time:
+      <<: *customize
+      friendly_name: "Tiki Time"
+      icon: mdi:palm-tree
+      haaska_hidden: false
+      homebridge_hidden: false
+
+########################
+# Scripts
+########################
+
+script:
+  tiki_time:
+    alias: "Tiki Time"
+    description: >-
+      Start the Tiki Time party mode: flash the lights, start SomaFM Tiki Time
+      on the Sonos group, and move the basement display into Photos.
+    icon: mdi:palm-tree
+    mode: restart
+    sequence:
+      - action: logbook.log
+        data:
+          name: Tiki Time
+          entity_id: script.tiki_time
+          domain: script
+          message: "Starting the Tiki Time party mode."
+      - parallel:
+          - sequence:
+              - repeat:
+                  count: 3
+                  sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      data:
+                        entity_id: all
+                        flash: short
+                    - delay:
+                        seconds: 1
+          - sequence:
+              - delay:
+                  milliseconds: 300
+              - action: script.music_assistant_pause_house_audio
+              - action: script.music_assistant_prepare_house_party_group
+              - action: media_player.volume_set
+                continue_on_error: true
+                target:
+                  entity_id:
+                    - media_player.bedroom_sonos_2
+                    - media_player.bathroom_sonos_2
+                    - media_player.office_sonos_2
+                    - media_player.den_sonos_2
+                    - media_player.tiki_room_2
+                data:
+                  volume_level: 0.30
+              - action: script.music_assistant_play_item
+                continue_on_error: true
+                data:
+                  entity_id: media_player.den_sonos_2
+                  media_item: "somafm://radio/tikitime"
+                  enqueue: replace
+              - action: media_player.turn_on
+                continue_on_error: true
+                target:
+                  entity_id: media_player.basement
+              - action: script.wait_for_basement_media_player_ready
+              - action: media_player.volume_set
+                continue_on_error: true
+                target:
+                  entity_id:
+                    - media_player.basement
+                    - media_player.lg_webos_smart_tv
+                    - media_player.plex_basement_apple_tv
+                data:
+                  volume_level: 0
+              - action: media_player.select_source
+                continue_on_error: true
+                target:
+                  entity_id: media_player.basement
+                data:
+                  source: Photos
+      - action: light.turn_on
+        continue_on_error: true
+        data:
+          entity_id: all
+          brightness_pct: 25
+          color_temp_kelvin: 2000
+          transition: 45
+      - parallel:
+          - action: light.turn_on
+            continue_on_error: true
+            target:
+              entity_id:
+                - light.basement_great_room
+                - light.kitchen_all
+            data:
+              effect: colorloop
+              brightness_pct: 60
+          - action: light.turn_on
+            continue_on_error: true
+            target:
+              entity_id: light.tiki_room_strip
+            data:
+              effect: rainbow
+              brightness_pct: 80
+          - action: light.turn_on
+            continue_on_error: true
+            target:
+              entity_id:
+                - light.office_all
+                - light.basement_tv_bias
+            data:
+              hs_color:
+                - 178
+                - 72
+              brightness_pct: 40
+              transition: 30
