@@ -41,6 +41,46 @@ def test_tiki_time_uses_shared_music_assistant_helpers() -> None:
     assert "media_player.basement" in block
     assert "source: Photos" in block
     assert "flash: short" in block
+    assert "script.tiki_time_tropical_color_cycle" in block
+
+
+def test_tiki_time_color_cycle_loops_while_party_music_is_active() -> None:
+    block = _script_block("tiki_time_tropical_color_cycle")
+
+    assert "Continuously rotate Tiki Time-capable lights" in block
+    assert "wait_for_trigger:" in block
+    assert "repeat:" in block
+    assert "while:" in block
+    assert 'state: "playing"' in block
+    assert 'state: "buffering"' in block
+    assert "tropical_palette:" in block
+    assert "seconds: 20" in block
+
+
+def test_tiki_time_color_cycle_targets_individual_color_lights() -> None:
+    block = _script_block("tiki_time_tropical_color_cycle")
+
+    for entity_id in (
+        "light.basement_great_room_east_1",
+        "light.basement_great_east_room_2",
+        "light.basement_great_room_middle_1",
+        "light.basement_great_room_middle_2",
+        "light.basement_great_room_west_1",
+        "light.basement_great_room_west_2",
+        "light.basement_great_room_west_3",
+        "light.basement_tv_bias",
+        "light.kitchen_overhead_1",
+        "light.kitchen_overhead_7",
+        "light.kitchen_sink_overhead",
+        "light.east_table_lamp",
+        "light.west_table_lamp",
+        "light.tiki_room_floor_lamp",
+    ):
+        assert entity_id in block
+
+    assert "effect: rainbow" in block
+    assert "entity_id: light.kitchen_all" not in block
+    assert "entity_id: light.office_all" not in block
 
 
 def test_tiki_time_is_exposed_to_voice_assistants() -> None:
