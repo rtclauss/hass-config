@@ -60,6 +60,20 @@ def test_music_assistant_search_helpers_populate_dashboard_results() -> None:
         assert token in block
 
 
+def test_music_assistant_selected_result_can_be_added_to_playlist_targets() -> None:
+    block = _script_block("music_assistant_add_selected_search_result_to_playlist")
+
+    for token in (
+        "input_select.music_assistant_search_results",
+        "input_select.music_assistant_playlist_target",
+        "selected_option.split(' || ', 1)[1]",
+        "target_option.split(' || ', 1)[1]",
+        "shell_command.music_assistant_append_playlist_item",
+        "script.reload",
+    ):
+        assert token in block
+
+
 def test_music_assistant_selected_result_can_be_queued_or_played() -> None:
     block = _script_block("music_assistant_play_selected_search_result")
 
@@ -121,10 +135,12 @@ def test_music_assistant_dashboard_exposes_search_controls() -> None:
         "Music Assistant",
         "input_text.music_assistant_search_query",
         "input_select.music_assistant_provider_filter",
+        "input_select.music_assistant_playlist_target",
         "input_select.music_assistant_search_media_type",
         "input_select.music_assistant_search_results",
         "script.music_assistant_search_music",
         "script.music_assistant_play_selected_search_result",
+        "script.music_assistant_add_selected_search_result_to_playlist",
     ):
         assert token in dashboard
 
@@ -138,5 +154,9 @@ def test_music_assistant_search_helpers_are_restart_safe() -> None:
         'music_assistant_provider_filter:',
         '- All providers',
         'initial: All providers',
+        'music_assistant_playlist_target:',
+        'Bedtime || spotify_bedtime',
+        'shell_command:',
+        'music_assistant_append_playlist_item:',
     ):
         assert token in package
