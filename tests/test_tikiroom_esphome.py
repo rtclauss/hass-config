@@ -47,3 +47,11 @@ def test_tikiroom_esphome_logs_light_commands() -> None:
     assert 'format: "Light turned on with effect %s"' in text
     assert 'format: "Light turned off"' in text
     assert 'format: "Light state updated; active effect %s"' in text
+
+
+def test_tikiroom_esphome_limits_frame_rate_for_gpio14_bit_bang() -> None:
+    text = TIKIROOM_ESPHOME_PATH.read_text(encoding="utf-8")
+
+    assert "tikiroom_effect_frame_interval: 50ms" in text
+    assert "restore_mode: ALWAYS_OFF" in text
+    assert text.count("update_interval: ${tikiroom_effect_frame_interval}") == 19
