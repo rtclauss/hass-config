@@ -1871,15 +1871,49 @@ script:
 
   day_mode_switches:
     icon: mdi:light-switch
+    sequence:
+      - action: script.turn_on
+        target:
+          entity_id:
+            - script.day_mode_switches_general
+            - script.day_mode_switches_owner_suite_bedroom
+            - script.day_mode_switches_office_guest_room
+
+  day_mode_switches_general:
+    icon: mdi:light-switch
     variables:
       all_off_led_switches: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_on_led_switches: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_on: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_off: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_day_mode_singletapbehavior_switches: >
         {%- for device in states.select
           | selectattr('entity_id', 'search', 'singletapbehavior')
@@ -1907,7 +1941,7 @@ script:
     sequence:
       - action: logbook.log
         data:
-          entity_id: script.day_mode_switches
+          entity_id: script.day_mode_switches_general
           name: Exclude log
           message: "Setting light switch day mode colors and full-brightness defaults"
           domain: script
@@ -1946,6 +1980,116 @@ script:
           entity_id: >
             {{all_day_mode_defaultlevelremote_switches}}
           value: "254"
+
+  day_mode_switches_owner_suite_bedroom:
+    icon: mdi:light-switch
+    variables:
+      owner_suite_bedroom_off_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bedroom_on_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bedroom_led_intensity_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bedroom_led_intensity_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+    sequence:
+      - action: logbook.log
+        data:
+          entity_id: script.day_mode_switches_owner_suite_bedroom
+          name: Exclude log
+          message: "Setting owner suite bedroom switch day mode colors"
+          domain: script
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_off_led_switches}}
+          value: "170"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_led_intensity_off_switches}}
+          value: "1"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_led_intensity_on_switches}}
+          value: "75"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_on_led_switches}}
+          value: "170"
+
+  day_mode_switches_office_guest_room:
+    icon: mdi:light-switch
+    variables:
+      office_guest_room_off_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      office_guest_room_on_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      office_guest_room_led_intensity_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      office_guest_room_led_intensity_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+    sequence:
+      - action: logbook.log
+        data:
+          entity_id: script.day_mode_switches_office_guest_room
+          name: Exclude log
+          message: "Setting office and guest room switch day mode colors"
+          domain: script
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{office_guest_room_off_led_switches}}
+          value: "170"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{office_guest_room_led_intensity_off_switches}}
+          value: "1"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{office_guest_room_led_intensity_on_switches}}
+          value: "75"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{office_guest_room_on_led_switches}}
+          value: "170"
 
   reset_inovelli_switches:
     icon: mdi:light-switch
