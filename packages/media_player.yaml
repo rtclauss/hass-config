@@ -551,6 +551,20 @@ input_select:
     options:
       - All providers
     initial: All providers
+  music_assistant_playlist_target:
+    name: "Music Assistant playlist target"
+    icon: mdi:playlist-edit
+    options:
+      - Bedtime || spotify_bedtime
+      - Wake Up || spotify_wake_up
+      - Arrival || spotify_arrival
+      - Bedroom Playlist 0 || bedroom_playlist_0
+      - Bedroom Playlist 1 || bedroom_playlist_1
+      - Bedroom Playlist 2 || bedroom_playlist_2
+      - Bedroom Playlist 3 || bedroom_playlist_3
+      - Bedroom Playlist 4 || bedroom_playlist_4
+      - Bedroom Playlist 5 || bedroom_playlist_5
+    initial: Bedtime || spotify_bedtime
   music_assistant_search_media_type:
     name: "Music Assistant search type"
     icon: mdi:music-note-search
@@ -616,6 +630,16 @@ plant: {}
 # Scenes
 ########################
 scene: []
+
+########################
+# Shell Command
+########################
+shell_command:
+  music_assistant_append_playlist_item: >-
+    python3 /config/scripts/update_music_assistant_playlist.py
+    --config /config/packages/media_player.yaml
+    --target '{{ target_script | replace("'", "'\"'\"'") }}'
+    --item '{{ item_uri | replace("'", "'\"'\"'") }}'
 
 ########################
 # Scripts
@@ -962,6 +986,46 @@ script:
                   entity_id: "{{ target_entity }}"
                   media_item: "{{ selected_uri }}"
                   enqueue: "{{ enqueue | default('add') }}"
+
+  music_assistant_add_selected_search_result_to_playlist:
+    alias: "Add selected Music Assistant search result to playlist"
+    fields:
+      playlist_target:
+        description: "Playlist target script id or option label"
+    variables:
+      selected_option: "{{ states('input_select.music_assistant_search_results') | trim }}"
+      selected_uri: >-
+        {% if ' || ' in selected_option %}
+          {{ selected_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ selected_option }}
+        {% endif %}
+      target_option: "{{ playlist_target | default(states('input_select.music_assistant_playlist_target')) | trim }}"
+      target_script: >-
+        {% if ' || ' in target_option %}
+          {{ target_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ target_option }}
+        {% endif %}
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ selected_uri not in ['', 'No results found'] and target_script != '' }}"
+            sequence:
+              - action: shell_command.music_assistant_append_playlist_item
+                data:
+                  target_script: "{{ target_script }}"
+                  item_uri: "{{ selected_uri }}"
+              - delay:
+                  seconds: 1
+              - action: script.reload
+              - action: logbook.log
+                data:
+                  entity_id: "script.{{ target_script }}"
+                  domain: script
+                  name: Music Assistant Playlist Builder
+                  message: "Added {{ selected_uri }} to {{ target_script }}"
 
   music_assistant_radio_wake_up:
     alias: "Radio wake-up via Music Assistant"
