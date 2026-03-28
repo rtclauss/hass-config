@@ -39,3 +39,10 @@ def test_day_mode_switches_keeps_full_brightness_defaults() -> None:
     assert "all_day_mode_defaultlevellocal_switches" in block
     assert "all_day_mode_defaultlevelremote_switches" in block
     assert block.count('value: "254"') >= 2
+
+
+def test_reset_inovelli_switches_restores_old_single_tap_behavior() -> None:
+    block = _script_block("reset_inovelli_switches")
+
+    assert "all_inovelli_switches_singletapbehavior_mode" in block
+    assert 'option: "Old Behavior"' in block
