@@ -37,14 +37,33 @@ homeassistant:
       friendly_name: "Turn On Nest When All Egresses Close"
       icon: mdi:window-closed
 
+    automation.window_climate_action_handler:
+      <<: *customize
+      friendly_name: "Window Climate Action Handler"
+      icon: mdi:thermostat-auto
+
+    automation.window_climate_open_prompt:
+      <<: *customize
+      friendly_name: "Window Climate Pause Prompt"
+      icon: mdi:window-open-variant
+
+    automation.window_climate_resume_prompt:
+      <<: *customize
+      friendly_name: "Window Climate Resume Prompt"
+      icon: mdi:window-closed-variant
+
     ################################################
     ## Binary Sensors
     ################################################
+    binary_sensor.any_window_open:
+      <<: *customize
+      friendly_name: "Any window open"
+      device_class: window
+
     binary_sensor.fresh_air_open:
       <<: *customize
       friendly_name: "Window open"
-      device_class: opening
-      #icon: mdi:window-open
+      device_class: window
 
     binary_sensor.ecobee_home:
       <<: *customize
@@ -100,6 +119,33 @@ homeassistant:
     ################################################
     ## Input Boolean
     ################################################
+    input_boolean.window_climate_paused_by_windows:
+      <<: *customize
+      friendly_name: "Climate paused by windows"
+      icon: mdi:air-conditioner
+
+    input_boolean.window_open_followup_2h:
+      <<: *customize
+      friendly_name: "Remind to pause climate after 2h"
+      icon: mdi:timer-outline
+
+    input_boolean.window_resume_followup_4h:
+      <<: *customize
+      friendly_name: "Remind to resume climate after 4h"
+      icon: mdi:timer
+
+    ################################################
+    ## Input Text
+    ################################################
+    input_text.any_window_open_exclude_entities:
+      <<: *customize
+      friendly_name: "Window open exclusions"
+      icon: mdi:filter-variant
+
+    input_text.window_climate_restore_preset_mode:
+      <<: *customize
+      friendly_name: "Window climate restore preset"
+      icon: mdi:thermostat-box
 
     ################################################
     ## Input Numbers
@@ -141,6 +187,11 @@ homeassistant:
       friendly_name: "Average House Pressure"
       device_class: pressure
       icon: mdi:gauge
+
+    sensor.any_window_open_today_duration:
+      <<: *customize
+      friendly_name: "Window open today duration"
+      icon: mdi:timer-outline
 
     ################################################
     ## Thermostats
@@ -292,6 +343,264 @@ automation:
               - action: fan.turn_off
                 data:
                   entity_id: fan.guest_bathroom_exhaust
+
+  - id: window_climate_action_handler
+    alias: window_climate_action_handler
+    mode: queued
+    trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: WINDOW_CLIMATE_PAUSE
+        id: pause
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: WINDOW_CLIMATE_IGNORE
+        id: ignore_open
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: WINDOW_CLIMATE_RESUME
+        id: resume
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: WINDOW_CLIMATE_KEEP_PAUSED
+        id: keep_paused
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: pause
+              - condition: state
+                entity_id: binary_sensor.ecobee_home
+                state: "on"
+            sequence:
+              - action: input_text.set_value
+                data:
+                  entity_id: input_text.window_climate_restore_preset_mode
+                  value: "{{ state_attr('climate.my_ecobee', 'preset_mode') | default('', true) }}"
+              - action: input_boolean.turn_on
+                data:
+                  entity_id: input_boolean.window_climate_paused_by_windows
+              - action: climate.set_preset_mode
+                data:
+                  entity_id: climate.my_ecobee
+                  preset_mode: away_indefinitely
+          - conditions:
+              - condition: trigger
+                id: resume
+              - condition: state
+                entity_id: input_boolean.window_climate_paused_by_windows
+                state: "on"
+            sequence:
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {% set preset = states('input_text.window_climate_restore_preset_mode') | lower %}
+                          {{ preset in ['unknown', 'unavailable', 'none', ''] }}
+                    sequence:
+                      - action: ecobee.resume_program
+                        data:
+                          entity_id: climate.my_ecobee
+                          resume_all: true
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ states('input_text.window_climate_restore_preset_mode') | length > 0 }}
+                    sequence:
+                      - action: climate.set_preset_mode
+                        data:
+                          entity_id: climate.my_ecobee
+                          preset_mode: "{{ states('input_text.window_climate_restore_preset_mode') }}"
+              - action: input_boolean.turn_off
+                data:
+                  entity_id: input_boolean.window_climate_paused_by_windows
+              - action: input_text.set_value
+                data:
+                  entity_id: input_text.window_climate_restore_preset_mode
+                  value: ""
+      - action: notify.mobile_app_wethop
+        data:
+          message: clear_notification
+          data:
+            tag: window-climate-open
+      - action: notify.mobile_app_wethop
+        data:
+          message: clear_notification
+          data:
+            tag: window-climate-resume
+
+  - id: window_climate_open_prompt
+    alias: window_climate_open_prompt
+    mode: single
+    trigger:
+      - id: initial
+        trigger: state
+        entity_id: binary_sensor.any_window_open
+        to: "on"
+        for:
+          minutes: 5
+      - id: followup
+        trigger: state
+        entity_id: binary_sensor.any_window_open
+        to: "on"
+        for:
+          hours: 2
+    condition:
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.any_window_open
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.ecobee_home
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.window_climate_paused_by_windows
+        state: "off"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: initial
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "Windows open"
+                  message: "A window has been open for 5 minutes. Pause the climate?"
+                  data:
+                    tag: window-climate-open
+                    persistent: true
+                    actions:
+                      - action: WINDOW_CLIMATE_PAUSE
+                        title: Pause climate
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: WINDOW_CLIMATE_IGNORE
+                        title: Ignore
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+          - conditions:
+              - condition: trigger
+                id: followup
+              - condition: state
+                entity_id: input_boolean.window_open_followup_2h
+                state: "on"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "Windows still open"
+                  message: "A window is still open after 2 hours. Pause the climate?"
+                  data:
+                    tag: window-climate-open
+                    persistent: true
+                    actions:
+                      - action: WINDOW_CLIMATE_PAUSE
+                        title: Pause climate
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: WINDOW_CLIMATE_IGNORE
+                        title: Ignore
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+
+  - id: window_climate_resume_prompt
+    alias: window_climate_resume_prompt
+    mode: single
+    trigger:
+      - id: initial
+        trigger: state
+        entity_id: binary_sensor.any_window_open
+        to: "off"
+        for:
+          minutes: 60
+      - id: followup
+        trigger: state
+        entity_id: binary_sensor.any_window_open
+        to: "off"
+        for:
+          hours: 4
+    condition:
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.any_window_open
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.window_climate_paused_by_windows
+        state: "on"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: initial
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "Windows closed"
+                  message: "All windows have been closed for 1 hour. Resume the climate?"
+                  data:
+                    tag: window-climate-resume
+                    persistent: true
+                    actions:
+                      - action: WINDOW_CLIMATE_RESUME
+                        title: Resume climate
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: WINDOW_CLIMATE_KEEP_PAUSED
+                        title: Keep paused
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+          - conditions:
+              - condition: trigger
+                id: followup
+              - condition: state
+                entity_id: input_boolean.window_resume_followup_4h
+                state: "on"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "Windows still closed"
+                  message: "Windows have been closed for 4 hours. Resume the climate?"
+                  data:
+                    tag: window-climate-resume
+                    persistent: true
+                    actions:
+                      - action: WINDOW_CLIMATE_RESUME
+                        title: Resume climate
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
+                      - action: WINDOW_CLIMATE_KEEP_PAUSED
+                        title: Keep paused
+                        activationMode: background
+                        authenticationRequired: false
+                        destructive: false
+                        behavior: default
 
 # Implemented in Schedy
 # - id: turn_off_nest_when_windows_open
@@ -448,7 +757,37 @@ group:
 ########################
 # Input Booleans
 ########################
-input_boolean: {}
+input_boolean:
+  window_climate_paused_by_windows:
+    name: Climate paused by windows
+    icon: mdi:air-conditioner
+    initial: off
+
+  window_open_followup_2h:
+    name: Remind to pause climate after 2h
+    icon: mdi:timer-outline
+    initial: off
+
+  window_resume_followup_4h:
+    name: Remind to resume climate after 4h
+    icon: mdi:timer
+    initial: on
+
+########################
+# Input Text
+########################
+input_text:
+  any_window_open_exclude_entities:
+    name: Window open exclusions
+    icon: mdi:filter-variant
+    max: 1024
+    initial: binary_sensor.mailbox_contact
+
+  window_climate_restore_preset_mode:
+    name: Window climate restore preset
+    icon: mdi:thermostat-box
+    max: 64
+    initial: ""
 
 ########################
 # Input Numbers
@@ -535,6 +874,14 @@ sensor:
     name: Cooling Today
     entity_id: sensor.hvac_activity
     state: "cooling"
+    type: time
+    start: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Window Open Today Duration
+    entity_id: binary_sensor.any_window_open
+    state: "on"
     type: time
     start: "{{ now().replace(hour=0).replace(minute=0).replace(second=0) }}"
     end: "{{ now() }}"
@@ -700,15 +1047,48 @@ template:
           {% endif %}
         name: ecobee_home
       - device_class: window
+        default_entity_id: binary_sensor.any_window_open
+        unique_id: any_window_open
+        state: >-
+          {% set excluded = states('input_text.any_window_open_exclude_entities').replace('\n', ',').split(',') | map('trim') | reject('equalto', '') | list %}
+          {% set matches = namespace(count=0) %}
+          {% for sensor in states.binary_sensor %}
+            {% set entity_id = sensor.entity_id %}
+            {% if entity_id not in ['binary_sensor.any_window_open', 'binary_sensor.fresh_air_open'] %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% set did = device_id(entity_id) %}
+              {% set model = '' %}
+              {% if did is not none and did != '' %}
+                {% set model = device_attr(did, 'model') | default('', true) | lower %}
+              {% endif %}
+              {% if sensor.state == 'on' and device_class in ['opening', 'window'] and 'parasoll' in model and entity_id not in excluded %}
+                {% set matches.count = matches.count + 1 %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ matches.count > 0 }}
+        name: any_window_open
+      - device_class: window
         default_entity_id: binary_sensor.fresh_air_open
         unique_id: fresh_air_open
         state: >-
-          {{ is_state('binary_sensor.ene_window_contact', 'on') or is_state('binary_sensor.ese_window_contact',
-          'on') or is_state('binary_sensor.nne_window_contact', 'on') or is_state('binary_sensor.north_kitchen_sink_window_contact',
-          'on') or is_state('binary_sensor.north_master_bedroom_window_contact', 'on')
-          or is_state('binary_sensor.office_north_window_contact', 'on')  or is_state('binary_sensor.se_basement_window_contact',
-          'on')  or is_state('binary_sensor.sse_window_contact', 'on')  or is_state('binary_sensor.sw_basement_window_contact',
-          'on') }}
+          {% set excluded = states('input_text.any_window_open_exclude_entities').replace('\n', ',').split(',') | map('trim') | reject('equalto', '') | list %}
+          {% set matches = namespace(count=0) %}
+          {% for sensor in states.binary_sensor %}
+            {% set entity_id = sensor.entity_id %}
+            {% if entity_id not in ['binary_sensor.any_window_open', 'binary_sensor.fresh_air_open'] %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% set did = device_id(entity_id) %}
+              {% set model = '' %}
+              {% if did is not none and did != '' %}
+                {% set model = device_attr(did, 'model') | default('', true) | lower %}
+              {% endif %}
+              {% if sensor.state == 'on' and device_class in ['opening', 'window'] and 'parasoll' in model and entity_id not in excluded %}
+                {% set matches.count = matches.count + 1 %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ matches.count > 0 }}
         name: fresh_air_open
   - sensor:
       - name: HVAC Activity
