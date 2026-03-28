@@ -58,6 +58,14 @@ homeassistant:
       <<: *customize
       friendly_name: Office room confidence
       icon: mdi:signal-distance-variant
+    sensor.last_motion_area:
+      <<: *customize
+      friendly_name: Last motion area
+      icon: mdi:home-map-marker
+    sensor.last_motion_floor:
+      <<: *customize
+      friendly_name: Last motion floor
+      icon: mdi:home-floor-b
 
 ################################################
 ## Template
@@ -286,6 +294,71 @@ template:
           watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
           phone_floor: "{{ states('sensor.iphone_17_pro_floor') }}"
           watch_floor: "{{ states('sensor.apple_watch_ultra_2_floor') }}"
+
+  - trigger:
+      - trigger: event
+        event_type: state_changed
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: last_motion_area
+        unique_id: last_motion_area
+        state: >-
+          {% set previous = this.state if this is defined and this.state not in ['unknown', 'unavailable', 'none', ''] else 'unknown' %}
+          {% if trigger.platform == 'event' %}
+            {% set entity_id = trigger.event.data.entity_id | default('') %}
+            {% set old_state = trigger.event.data.old_state %}
+            {% set new_state = trigger.event.data.new_state %}
+            {% set device_class = new_state.attributes.device_class | default('', true) | lower if new_state is not none else '' %}
+            {% if entity_id.startswith('binary_sensor.') and new_state is not none and new_state.state == 'on' and (old_state is none or old_state.state != 'on') and device_class in ['motion', 'occupancy'] %}
+              {{ area_name(entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% else %}
+            {% set active = namespace(entities=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on' and device_class in ['motion', 'occupancy'] %}
+                {% set active.entities = active.entities + [sensor] %}
+              {% endif %}
+            {% endfor %}
+            {% if active.entities | count > 0 %}
+              {% set newest = active.entities | sort(attribute='last_changed') | last %}
+              {{ area_name(newest.entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% endif %}
+      - name: last_motion_floor
+        unique_id: last_motion_floor
+        state: >-
+          {% set previous = this.state if this is defined and this.state not in ['unknown', 'unavailable', 'none', ''] else 'unknown' %}
+          {% if trigger.platform == 'event' %}
+            {% set entity_id = trigger.event.data.entity_id | default('') %}
+            {% set old_state = trigger.event.data.old_state %}
+            {% set new_state = trigger.event.data.new_state %}
+            {% set device_class = new_state.attributes.device_class | default('', true) | lower if new_state is not none else '' %}
+            {% if entity_id.startswith('binary_sensor.') and new_state is not none and new_state.state == 'on' and (old_state is none or old_state.state != 'on') and device_class in ['motion', 'occupancy'] %}
+              {{ floor_name(entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% else %}
+            {% set active = namespace(entities=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on' and device_class in ['motion', 'occupancy'] %}
+                {% set active.entities = active.entities + [sensor] %}
+              {% endif %}
+            {% endfor %}
+            {% if active.entities | count > 0 %}
+              {% set newest = active.entities | sort(attribute='last_changed') | last %}
+              {{ floor_name(newest.entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% endif %}
 
   - binary_sensor:
       - name: bedroom_confident_occupancy
