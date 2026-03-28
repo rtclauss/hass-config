@@ -1588,7 +1588,62 @@ automation:
             - switch.sleep_mode
       - action: script.turn_on
         target:
-          entity_id: script.day_mode_switches
+          entity_id: script.day_mode_switches_general
+      - if:
+          - condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
+        then:
+          - action: script.turn_on
+            target:
+              entity_id: script.day_mode_switches_office_guest_room
+
+  - alias: enable_office_guest_room_switch_day_mode_for_guest_mode
+    id: enable_office_guest_room_switch_day_mode_for_guest_mode
+    description: Keep the office and guest room switch LEDs in night mode until noon while guest mode is active.
+    trigger:
+      - trigger: time
+        at: "12:00:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "on"
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.day_mode_switches_office_guest_room
+
+  - alias: enable_owner_suite_bedroom_switch_day_mode_after_morning_activity
+    id: enable_owner_suite_bedroom_switch_day_mode_after_morning_activity
+    description: Apply owner suite bedroom switch day mode after 8 AM once bed occupancy clears and both the bathroom and hallway have seen motion.
+    trigger:
+      - trigger: time
+        at: "08:00:00"
+      - trigger: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        to: "off"
+      - trigger: state
+        entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.hallway_motion
+        to: "on"
+    condition:
+      - condition: time
+        after: "07:59:59"
+      - condition: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        state: "off"
+      - >-
+        {{ is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
+           or states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed >= today_at('08:00') }}
+      - >-
+        {{ is_state('binary_sensor.hallway_motion', 'on')
+           or states.binary_sensor.hallway_motion.last_changed >= today_at('08:00') }}
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.day_mode_switches_owner_suite_bedroom
 
   - alias: button_reset_basement
     id: button_reset_basement
