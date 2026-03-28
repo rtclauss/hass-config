@@ -1484,6 +1484,76 @@
                     "when_standby": true
                   },
                   "group": false
+                },
+                {
+                  "type": "vertical-stack",
+                  "cards": [
+                    {
+                      "type": "entities",
+                      "title": "Search Music Assistant",
+                      "show_header_toggle": false,
+                      "entities": [
+                        {
+                          "entity": "input_text.music_assistant_search_query",
+                          "name": "Query"
+                        },
+                        {
+                          "entity": "input_text.music_assistant_provider_filter",
+                          "name": "Provider filter"
+                        },
+                        {
+                          "entity": "input_select.music_assistant_search_media_type",
+                          "name": "Type"
+                        },
+                        {
+                          "entity": "input_select.music_assistant_search_results",
+                          "name": "Results"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "button",
+                          "name": "Search",
+                          "icon": "mdi:magnify",
+                          "tap_action": {
+                            "action": "call-service",
+                            "service": "script.music_assistant_search_music"
+                          }
+                        },
+                        {
+                          "type": "button",
+                          "name": "Play now",
+                          "icon": "mdi:play",
+                          "tap_action": {
+                            "action": "call-service",
+                            "service": "script.music_assistant_play_selected_search_result",
+                            "service_data": {
+                              "enqueue": "replace"
+                            }
+                          }
+                        },
+                        {
+                          "type": "button",
+                          "name": "Add to queue",
+                          "icon": "mdi:playlist-plus",
+                          "tap_action": {
+                            "action": "call-service",
+                            "service": "script.music_assistant_play_selected_search_result",
+                            "service_data": {
+                              "enqueue": "add"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "markdown",
+                      "content": "Search by name, then narrow results with a provider token like `spotify`, `tunein`, or `library`."
+                    }
+                  ]
                 }
               ]
             }
