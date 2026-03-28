@@ -85,11 +85,13 @@ The `Music Assistant` section on the dashboard includes a small search flow:
 2. Optionally pick a provider token from `input_select.music_assistant_provider_filter`.
 3. Choose the media type from `input_select.music_assistant_search_media_type`.
 4. Press `script.music_assistant_search_music` to populate `input_select.music_assistant_search_results`.
-5. Use `script.music_assistant_play_selected_search_result` to play the selected result now or add it to the current queue.
+5. Optionally choose a target playlist script from `input_select.music_assistant_playlist_target`.
+6. Use `script.music_assistant_play_selected_search_result` to play the selected result now or add it to the current queue.
+7. Use `script.music_assistant_add_selected_search_result_to_playlist` to append the selected Music Assistant URI to the chosen `plists`-based script and reload scripts.
 
 The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.bedroom_sonos_2`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
 
-This flow appends to the live Music Assistant queue on `media_player.bedroom_sonos_2`, which is the current "playlist" target in the dashboard.
+The supported playlist-script targets are `spotify_bedtime`, `spotify_wake_up`, `spotify_arrival`, and `bedroom_playlist_0` through `bedroom_playlist_5`. Appending a result updates `packages/media_player.yaml` in place and then reloads Home Assistant scripts so the change is immediately available.
 
 ### Adding Another Radio Station
 
