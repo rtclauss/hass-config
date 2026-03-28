@@ -47,6 +47,20 @@ def test_spotify_wrapper_delegates_to_generic_music_assistant_helper() -> None:
     assert 'media_item: "{{ spotify_uri }}"' in block
 
 
+def test_house_party_helper_joins_every_sonos_zone() -> None:
+    block = _script_block("music_assistant_prepare_house_party_group")
+
+    assert "Join the whole Sonos house group" in block
+    for media_player in (
+        "media_player.den_sonos_2",
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.office_sonos_2",
+        "media_player.tiki_room_2",
+    ):
+        assert media_player in block
+
+
 def test_bedtime_playlist_includes_somafm_station_names() -> None:
     block = _script_block("spotify_bedtime")
 
