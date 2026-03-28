@@ -59,5 +59,6 @@ def test_bedtime_playlist_includes_somafm_station_names() -> None:
     ):
         assert f'"{station}"' in block
 
+    assert "range(0, (plists | length))" in block
     assert "action: script.music_assistant_play_item" in block
     assert 'media_item: "{{ playlist }}"' in block
