@@ -115,6 +115,9 @@ cards:
             content: >-
               {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
               {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
+              {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
+              {% set location_label = location_name | replace('_', ' ') | title %}
+              {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 ### Max-range override is active
                 #### Charge limit pinned to 100% until you return to the daily plan
@@ -125,6 +128,9 @@ cards:
               {% else %}
                 ### Daily planner is active
                 #### Charge limit and preconditioning follow tomorrow's trip, alarm, weather, and EV tariff inputs
+              {% endif %}
+              {% if protected_location %}
+                #### Tesla-app charging schedule stays authoritative at {{ location_label }}
               {% endif %}
 
       - type: horizontal-stack
@@ -140,6 +146,9 @@ cards:
               {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
               {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
               {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
+              {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
+              {% set location_label = location_name | replace('_', ' ') | title %}
+              {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
               ### {{ charge_limit }}% target
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 #### Manual override is forcing max range
@@ -153,6 +162,7 @@ cards:
                 #### No next-day departure plan is active
               {% endif %}
               #### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh
+              #### Charging schedule: {% if protected_location %}Preserve Tesla app default at {{ location_label }}{% else %}Allow Home Assistant off-peak charging management{% endif %}
           - type: entities
             title: "EV TOU"
             show_header_toggle: false
