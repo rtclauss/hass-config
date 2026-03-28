@@ -13,6 +13,65 @@ esphome:
   name: tikiroomlights
   includes:
     - tikiroom_effects.h
+  on_boot:
+    - priority: 800
+      then:
+        - logger.log:
+            level: INFO
+            tag: tikiroom.boot
+            format: "Boot stage=hardware priority=800"
+    - priority: 250
+      then:
+        - logger.log:
+            level: INFO
+            tag: tikiroom.boot
+            format: "Boot stage=wifi priority=250 wifi_status=%d"
+            args:
+              - WiFi.status()
+    - priority: 200
+      then:
+        - logger.log:
+            level: INFO
+            tag: tikiroom.boot
+            format: "Boot stage=api priority=200 wifi_status=%d api_any=%s api_state_sub=%s"
+            args:
+              - WiFi.status()
+              - 'id(tikiroom_api).is_connected() ? "yes" : "no"'
+              - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
+    - priority: -100
+      then:
+        - logger.log:
+            level: INFO
+            tag: tikiroom.boot
+            format: "Boot stage=ready priority=-100 effect=%s speed=%.0f api_any=%s api_state_sub=%s"
+            args:
+              - id(tiki_room_strip).get_effect_name().c_str()
+              - id(tikiroom_effect_speed)
+              - 'id(tikiroom_api).is_connected() ? "yes" : "no"'
+              - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
+        - logger.log:
+            level: INFO
+            tag: tikiroom.boot
+            format: "Waiting up to 30s for a state-subscribing API client so entities can register"
+        - wait_until:
+            condition:
+              api.connected:
+                state_subscription_only: true
+            timeout: 30s
+        - if:
+            condition:
+              api.connected:
+                state_subscription_only: true
+            then:
+              - logger.log:
+                  level: INFO
+                  tag: tikiroom.boot
+                  format: "State-subscribing API client connected; entity registration should now be active"
+            else:
+              - logger.log:
+                  level: WARN
+                  tag: tikiroom.boot
+                  format: "No state-subscribing API client connected within 30s; entities will remain unavailable"
 
 esp8266:
   board: esp01_1m
@@ -48,28 +107,73 @@ logger:
   esp8266_store_log_strings_in_flash: false
 
 api:
+  id: tikiroom_api
   on_client_connected:
     - logger.log:
         level: INFO
         tag: tikiroom.api
-        format: "API client %s connected from %s"
+        format: "API client %s connected from %s (state_subscriber=%s)"
         args:
           - client_info.c_str()
           - client_address.c_str()
+          - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
+    - if:
+        condition:
+          lambda: |-
+            return id(tikiroom_api).is_connected(true);
+        then:
+          - logger.log:
+              level: INFO
+              tag: tikiroom.api
+              format: "State-subscribing API client connected; Home Assistant should be able to control entities"
+        else:
+          - logger.log:
+              level: WARN
+              tag: tikiroom.api
+              format: "API client connected without state subscription; entity registration is still pending"
   on_client_disconnected:
     - logger.log:
         level: WARN
         tag: tikiroom.api
-        format: "API client %s disconnected from %s"
+        format: "API client %s disconnected from %s (state_subscriber=%s)"
         args:
           - client_info.c_str()
           - client_address.c_str()
+          - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
+    - if:
+        condition:
+          lambda: |-
+            return !id(tikiroom_api).is_connected(true);
+        then:
+          - logger.log:
+              level: WARN
+              tag: tikiroom.api
+              format: "No state-subscribing API clients remain; Home Assistant entities will go unavailable"
 
 ota:
   - platform: esphome
 
 debug:
   update_interval: 60s
+
+interval:
+  - interval: 30s
+    startup_delay: 45s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return !id(tikiroom_api).is_connected(true);
+          then:
+            - logger.log:
+                level: WARN
+                tag: tikiroom.boot
+                format: "Runtime registration check missing state-subscribing API client; wifi_status=%d api_any=%s effect=%s speed=%.0f"
+                args:
+                  - WiFi.status()
+                  - 'id(tikiroom_api).is_connected() ? "yes" : "no"'
+                  - id(tiki_room_strip).get_effect_name().c_str()
+                  - id(tikiroom_effect_speed)
 
 binary_sensor:
   - platform: status
