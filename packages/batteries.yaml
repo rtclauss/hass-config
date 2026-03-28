@@ -188,6 +188,12 @@ automation:
         {{ states('sensor.battery_low_20') | int(0) }}
       battery_summary: >-
         {{ state_attr('sensor.battery_low_20', 'summary') | default('', true) }}
+      battery_label: >-
+        {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
+      battery_title: >-
+        {{ battery_count }} {{ battery_label }} below 20%
+      battery_message: >-
+        {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
       count_increased: >-
         {{ trigger.id == 'summary_change'
            and trigger.from_state is not none
@@ -208,10 +214,8 @@ automation:
         default:
           - action: persistent_notification.create
             data:
-              title: >-
-                Battery Sensors Below 20% ({{ battery_count }})
-              message: >-
-                {{ battery_summary }}
+              title: "{{ battery_title }}"
+              message: "{{ battery_message }}"
               notification_id: low-battery-20
           - choose:
               - conditions:
@@ -221,10 +225,8 @@ automation:
                 sequence:
                   - action: notify.all
                     data:
-                      title: >-
-                        Battery Sensors Below 20% ({{ battery_count }})
-                      message: >-
-                        {{ battery_summary }}
+                      title: "{{ battery_title }}"
+                      message: "{{ battery_message }}"
 
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
@@ -244,6 +246,12 @@ automation:
         {{ states('sensor.battery_low_10') | int(0) }}
       battery_summary: >-
         {{ state_attr('sensor.battery_low_10', 'summary') | default('', true) }}
+      battery_label: >-
+        {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
+      battery_title: >-
+        {{ battery_count }} {{ battery_label }} below 10%
+      battery_message: >-
+        {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
       count_increased: >-
         {{ trigger.id == 'summary_change'
            and trigger.from_state is not none
@@ -264,10 +272,8 @@ automation:
         default:
           - action: persistent_notification.create
             data:
-              title: >-
-                Battery Sensors Below 10% ({{ battery_count }})
-              message: >-
-                {{ battery_summary }}
+              title: "{{ battery_title }}"
+              message: "{{ battery_message }}"
               notification_id: low-battery-10
           - choose:
               - conditions:
@@ -277,10 +283,8 @@ automation:
                 sequence:
                   - action: notify.all
                     data:
-                      title: >-
-                        Battery Sensors Below 10% ({{ battery_count }})
-                      message: >-
-                        {{ battery_summary }}
+                      title: "{{ battery_title }}"
+                      message: "{{ battery_message }}"
 
 ########################
 # Binary Sensors
