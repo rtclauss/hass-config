@@ -1,6 +1,3 @@
-# ESPHome Bluetooth proxy for the living room.
-# This node improves BLE reach in the main living area so trackers and Bluetooth sensors remain visible from that part of the house.
-
 esphome:
   name: diningroom-bt-proxy
   project: 
@@ -34,6 +31,7 @@ wifi:
   ssid: !secret wifi_ap
   password: !secret wifi_password
   min_auth_mode: WPA2
+  power_save_mode: NONE
 
   # manual_ip:
   #   # Set this to the IP of the ESP
@@ -56,10 +54,13 @@ dashboard_import:
 
 esp32_ble_tracker:
   scan_parameters:
-    interval: 300ms
-    window: 300ms
-    active: false
+    active: true
+
+esp32_ble:
+  max_connections: 4
 
 bluetooth_proxy:
+  active: true
+  connection_slots: 4
 
 xiaomi_ble:
