@@ -244,8 +244,9 @@ automation:
             {% if manual_override %}
               {% set charge_limit = 100 %}
             {% endif %}
+            {% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}
             {% set departure_window_open = departure_dt is not none and departure_dt > now() %}
-            {% set precondition = (has_calendar_departure or alarm_enabled) and departure_window_open %}
+            {% set precondition = (has_calendar_departure or alarm_enabled) and departure_window_open and manage_tesla_schedule %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
@@ -287,6 +288,9 @@ automation:
             {% if preserve_default_charging_schedule %}
               {% set summary = summary ~ ' Preserve the Tesla app charging schedule at ' ~ location_label ~ '.' %}
             {% endif %}
+            {% if preserve_default_charging_schedule and not manage_tesla_schedule and departure_time != '' %}
+              {% set summary = summary ~ ' No extra home charging override is needed.' %}
+            {% endif %}
             {{ {
               'active': active,
               'source': source,
@@ -296,6 +300,7 @@ automation:
               'summary': summary,
               'location': location_name,
               'preserve_default_charging_schedule': preserve_default_charging_schedule,
+              'manage_tesla_schedule': manage_tesla_schedule,
               'tariff': tariff,
               'electrical_rate': electrical_rate,
               'trip_distance_mi': trip_distance_mi,
@@ -318,7 +323,7 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' }}"
+                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' and tesla_plan.manage_tesla_schedule }}"
             sequence:
               - action: script.tesla_set_precondition_schedule_time
                 data:
