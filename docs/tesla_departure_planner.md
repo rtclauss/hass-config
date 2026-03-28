@@ -26,6 +26,8 @@ The `binary_sensor.upcoming_trip_charging` state still represents the longer-dis
 
 The planner now normalizes Waze/Tesla duration inputs with Home Assistant's `as_timedelta` helper, so legacy numeric values still work and string durations such as `00:35:00` or `PT35M` are accepted as well.
 
+The trip-selection template now only considers future departures inside the next 24 hours. Once a calendar departure is in the past, its `start_time` drops out of the planner inputs and the next planner recompute clears Tesla scheduled departure instead of leaving stale preconditioning or off-peak charging events behind.
+
 ### Alarm inputs
 
 - `input_boolean.weekday_alarm_on`
@@ -109,6 +111,9 @@ Behavior:
 
 - enables Tesla scheduled departure for any planned calendar departure or enabled alarm when a departure time exists
 - disables Tesla scheduled departure when the planner no longer has a preconditioning plan to keep
+- refuses to schedule preconditioning when the computed departure window is already in the past
+- stores the last Home Assistant-managed Tesla departure in `input_text.tesla_managed_departure_time`
+- clears that Home Assistant-managed Tesla schedule as soon as the stored departure time passes, even if the car is no longer at home
 - skips scheduled departure for all-day calendar events
 
 ### Notifications
@@ -165,3 +170,5 @@ Manual regression cases worth checking in Template Developer Tools or against li
 - Waze `duration` as `HH:MM:SS` or ISO8601 (for example `PT42M`) still produces the same planned departure.
 - Tesla `sensor.nigori_charging_rate` `time_left` as fractional hours still produces a valid `charge_complete` timestamp.
 - Tesla `sensor.nigori_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
+- A just-finished calendar departure disappears from `binary_sensor.upcoming_trip_charging` and clears Tesla scheduled departure on the next planner recompute.
+- A calendar event that is still upcoming but already inside the departure buffer skips scheduled preconditioning instead of creating a stale past-due Tesla schedule.
