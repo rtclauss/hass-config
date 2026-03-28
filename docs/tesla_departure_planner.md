@@ -11,6 +11,7 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 - weekday/weekend alarm settings
 - weather
 - EV charging tariff/rate
+- vehicle location
 - a manual max-range override
 
 ## Inputs
@@ -76,6 +77,19 @@ The planner treats the tariff as "higher" when:
 
 This only affects the non-trip alarm top-off case. Trip charging and cold-weather cases still take priority.
 
+### Location input
+
+- `device_tracker.nigori_location_tracker`
+
+The schedule helper preserves the Tesla app's own charging schedule when the car is at:
+
+- `home`
+- `parents`
+- `OCC`
+- `SPCC`
+
+At those locations, Home Assistant still sets charge limit and can schedule departure preconditioning, but it omits the Tesla off-peak charging fields so the Tesla-app charging defaults remain authoritative.
+
 ### Manual override
 
 - `input_boolean.long_range_travel`
@@ -110,11 +124,12 @@ Script:
 Behavior:
 
 - enables Tesla scheduled departure for any planned calendar departure or enabled alarm when a departure time exists
-- disables Tesla scheduled departure when the planner no longer has a preconditioning plan to keep
+- disables Tesla scheduled departure when the planner no longer has a Home Assistant-managed preconditioning plan to keep
 - refuses to schedule preconditioning when the computed departure window is already in the past
 - stores the last Home Assistant-managed Tesla departure in `input_text.tesla_managed_departure_time`
 - clears that Home Assistant-managed Tesla schedule as soon as the stored departure time passes, even if the car is no longer at home
 - skips scheduled departure for all-day calendar events
+- preserves Tesla-app charging schedules at `home`, `parents`, `OCC`, and `SPCC` by omitting the off-peak charging parameters from the Tesla API call there
 
 ### Notifications
 
@@ -172,3 +187,5 @@ Manual regression cases worth checking in Template Developer Tools or against li
 - Tesla `sensor.nigori_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
 - A just-finished calendar departure disappears from `binary_sensor.upcoming_trip_charging` and clears Tesla scheduled departure on the next planner recompute.
 - A calendar event that is still upcoming but already inside the departure buffer skips scheduled preconditioning instead of creating a stale past-due Tesla schedule.
+- At `home`, `parents`, `OCC`, and `SPCC`, enabling a planner-managed departure only changes Tesla preconditioning and does not create or rewrite Tesla charging schedules.
+- When there is no stored `input_text.tesla_managed_departure_time`, the planner does not send a redundant Tesla disable call.
