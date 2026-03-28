@@ -30,6 +30,7 @@ Music playback automations now target the Music Assistant-backed Sonos entities,
 
 The reusable media helpers live in `packages/media_player.yaml`:
 
+- `script.music_assistant_play_item`: accepts Spotify URIs/URLs or Music Assistant radio item names and converts them into the `music_assistant.play_media` payload.
 - `script.music_assistant_prepare_bedroom_group`: regroup bedroom/bathroom and optionally office/den depending on guest mode.
 - `script.music_assistant_prepare_arrival_group`: regroup the arrival playback zone.
 - `script.music_assistant_prepare_house_party_group`: regroup all Sonos players for party modes.
@@ -40,7 +41,7 @@ The Siri/Homebridge entrypoint for the Tiki Time party mode is `script.tiki_time
 
 ### Adding Another Playlist
 
-If an existing script already picks from a list, the normal change is just to append one more Spotify URI to that script's `plists` array in `packages/media_player.yaml`.
+If an existing script already picks from a list, the normal change is just to append one more Spotify URI or Music Assistant radio item to that script's `plists` array in `packages/media_player.yaml`.
 
 Examples:
 
@@ -58,6 +59,7 @@ Accepted playlist values:
 - `https://open.spotify.com/album/...`
 - `https://open.spotify.com/artist/...`
 - `https://open.spotify.com/track/...`
+- Music Assistant radio item names or URIs, for mixed lists that call `script.music_assistant_play_item`
 
 If you are creating a brand new script, prefer calling the helper instead of using `media_player.play_media` directly:
 
