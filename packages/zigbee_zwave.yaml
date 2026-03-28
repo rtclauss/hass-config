@@ -1909,7 +1909,7 @@ script:
         data:
           entity_id: script.day_mode_switches
           name: Exclude log
-          message: "Setting light switch day mode colors and full-brightness single tap"
+          message: "Setting light switch day mode colors and full-brightness defaults"
           domain: script
       - action: number.set_value
         data:
@@ -1935,7 +1935,7 @@ script:
         data:
           entity_id: >
             {{all_day_mode_singletapbehavior_switches}}
-          option: "New Behavior"
+          option: "Old Behavior"
       - action: number.set_value
         data:
           entity_id: >
@@ -1968,6 +1968,14 @@ script:
         {%- for device in states.number | select('match', '.*brightnesslevelfordoubletapup.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_bindingofftoonsynclevel_mode: >
         {%- for device in states.select | select('match', '.*bindingofftoonsynclevel.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_inovelli_switches_singletapbehavior_mode: >
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', 'singletapbehavior')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'search', 'fan_switch')
+          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
       - action: logbook.log
         data:
@@ -2004,6 +2012,12 @@ script:
           entity_id: >
             {{all_inovelli_switches_double_tap_up_brightness}}
           value: "254"
+      - delay: "{{ ha_write_delay }}"
+      - action: select.select_option
+        data:
+          entity_id: >
+            {{all_inovelli_switches_singletapbehavior_mode}}
+          option: "Old Behavior"
       - delay: "{{ ha_write_delay }}"
         enabled: false
       - action: select.select_option
