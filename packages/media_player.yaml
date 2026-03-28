@@ -700,6 +700,64 @@ script:
             - media_player.office_sonos_2
             - media_player.tiki_room_2
 
+  music_assistant_play_item:
+    alias: "Play Music Assistant item"
+    fields:
+      entity_id:
+        description: "Music Assistant media_player entity"
+      media_item:
+        description: "Spotify URI, open.spotify.com URL, or Music Assistant radio item name"
+      enqueue:
+        description: "Music Assistant enqueue mode"
+    variables:
+      raw_item: "{{ media_item | trim }}"
+      normalized_uri: >-
+        {% if raw_item.startswith('https://open.spotify.com/') %}
+          {% set path = raw_item.split('open.spotify.com/')[1].split('?')[0] %}
+          {{ 'spotify:' ~ path.replace('/', ':') }}
+        {% else %}
+          {{ raw_item }}
+        {% endif %}
+      media_type: >-
+        {% if raw_item.startswith('spotify:') or raw_item.startswith('https://open.spotify.com/') %}
+          {% set parts = normalized_uri.split(':') %}
+          {% if 'track' in parts %}
+            track
+          {% elif 'album' in parts %}
+            album
+          {% elif 'artist' in parts %}
+            artist
+          {% else %}
+            playlist
+          {% endif %}
+        {% else %}
+          radio
+        {% endif %}
+      media_id: >-
+        {% if raw_item.startswith('spotify:') or raw_item.startswith('https://open.spotify.com/') %}
+          {% set parts = normalized_uri.split(':') %}
+          {% if 'track' in parts %}
+            spotify--Tviw9k66://track/{{ parts[-1] }}
+          {% elif 'album' in parts %}
+            spotify--Tviw9k66://album/{{ parts[-1] }}
+          {% elif 'artist' in parts %}
+            spotify--Tviw9k66://artist/{{ parts[-1] }}
+          {% else %}
+            spotify--Tviw9k66://playlist/{{ parts[-1] }}
+          {% endif %}
+        {% else %}
+          {{ raw_item }}
+        {% endif %}
+    sequence:
+      - action: music_assistant.play_media
+        continue_on_error: true
+        target:
+          entity_id: "{{ entity_id }}"
+        data:
+          media_id: "{{ media_id }}"
+          media_type: "{{ media_type }}"
+          enqueue: "{{ enqueue | default('replace') }}"
+
   music_assistant_play_spotify_uri:
     alias: "Play Spotify item via Music Assistant"
     fields:
@@ -709,37 +767,11 @@ script:
         description: "Spotify URI or open.spotify.com URL"
       enqueue:
         description: "Music Assistant enqueue mode"
-    variables:
-      raw_uri: "{{ spotify_uri | trim }}"
-      normalized_uri: >-
-        {% if raw_uri.startswith('https://open.spotify.com/') %}
-          {% set path = raw_uri.split('open.spotify.com/')[1].split('?')[0] %}
-          {{ 'spotify:' ~ path.replace('/', ':') }}
-        {% else %}
-          {{ raw_uri }}
-        {% endif %}
-      media_type: >-
-        {% set parts = normalized_uri.split(':') %}
-        {% if 'track' in parts %}
-          track
-        {% elif 'album' in parts %}
-          album
-        {% elif 'artist' in parts %}
-          artist
-        {% else %}
-          playlist
-        {% endif %}
-      provider_uri: >-
-        {% set parts = normalized_uri.split(':') %}
-        {{ 'spotify--Tviw9k66://' ~ media_type ~ '/' ~ parts[-1] }}
     sequence:
-      - action: music_assistant.play_media
-        continue_on_error: true
-        target:
-          entity_id: "{{ entity_id }}"
+      - action: script.music_assistant_play_item
         data:
-          media_id: "{{ provider_uri }}"
-          media_type: "{{ media_type }}"
+          entity_id: "{{ entity_id }}"
+          media_item: "{{ spotify_uri }}"
           enqueue: "{{ enqueue | default('replace') }}"
 
   music_assistant_radio_wake_up:
@@ -810,7 +842,7 @@ script:
           "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
           "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
             ] -%}
-          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {% set pindex =  (range(0, (plists | length) )|random) -%}
           {{ plists[pindex] }}
     sequence:
       - action: logbook.log
@@ -854,7 +886,7 @@ script:
         "spotify:playlist:2pkBoRddjDNLJgElp0rl45",
         "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
         ] -%}
-          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {% set pindex =  (range(0, (plists | length))|random) -%}
           {{ plists[pindex] }}
     sequence:
       - action: logbook.log
@@ -1236,6 +1268,11 @@ script:
         ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
         ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
         ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
+        ## SomaFM Groove Salad
+        ## SomaFM Deep Space One
+        ## SomaFM Mission Control
+        ## SomaFM Space Station Soma
+        ## SomaFM Vaporwaves
         #}
         {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu",
           "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
@@ -1290,9 +1327,14 @@ script:
           "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
           "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV",
           "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
-          "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
+          "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2",
+          "Groove Salad",
+          "Deep Space One",
+          "Mission Control",
+          "Space Station Soma",
+          "Vaporwaves"
           ] -%}
-          {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
+          {% set pindex =  (range(0, (plists | length))|random) -%}
           {{ plists[pindex] }}
     sequence:
       # - action: media_player.join
@@ -1340,10 +1382,10 @@ script:
           name: Spotify Bedtime is
           message: " playing Bedtime playlist: {{ playlist }}"
       - alias: "Play bedtime music"
-        action: script.music_assistant_play_spotify_uri
+        action: script.music_assistant_play_item
         data:
           entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          media_item: "{{ playlist }}"
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
