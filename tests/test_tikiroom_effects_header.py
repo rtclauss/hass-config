@@ -30,6 +30,8 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
 def test_lava_field_layers_heat_and_blends_toward_a_bounded_target() -> None:
     block = _function_block("apply_lava_field")
 
+    assert "std::array<float, 8> cluster_centers{};" in block
+    assert "std::array<float, 8> cluster_activity{};" in block
     assert "std::array<Color, LAVA_FIELD_CELLS> lava_cells{};" in block
     assert "cluster_phases" in block
     assert "cluster_radii" in block
@@ -40,6 +42,8 @@ def test_lava_field_layers_heat_and_blends_toward_a_bounded_target() -> None:
     assert "hotspot" in block
     assert "smoothstep(0.26f, 0.97f, molten_mix)" in block
     assert "const Color crust_tint(" in block
+    assert "cluster_centers[cluster]" in block
+    assert "cluster_activity[cluster]" in block
     assert "lava_cells[cell] = pixel;" in block
     assert "const Color target = sample_coarse_cells(lava_cells, i);" in block
     assert "rt.leds[i] = blend(rt.leds[i], target, LAVA_FIELD_BLEND_AMOUNT);" in block
