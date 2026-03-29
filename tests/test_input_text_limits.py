@@ -7,6 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_GLOBS = ("*.yaml", "packages/*.yaml")
 MAX_INPUT_TEXT_STATE_LENGTH = 255
+CAR_PACKAGE_PATH = ROOT / "packages" / "car.yaml"
+WEATHER_PACKAGE_PATH = ROOT / "packages" / "weather.yaml"
 
 
 def _input_text_maxima(path: Path) -> list[tuple[str, int]]:
@@ -51,3 +53,20 @@ def test_window_open_exclusions_helper_uses_the_supported_limit_boundary() -> No
     climate_maxima = dict(_input_text_maxima(ROOT / "packages" / "climate.yaml"))
 
     assert climate_maxima["any_window_open_exclude_entities"] == MAX_INPUT_TEXT_STATE_LENGTH
+
+
+def test_home_address_input_text_is_seeded_after_startup_instead_of_at_parse_time() -> None:
+    package = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "home_address:\n    max: 255\n    initial: \"\"" in package
+    assert "id: hydrate_home_address_input_text" in package
+    assert "entity_id: input_text.home_address" in package
+    assert "value: !secret home_address" in package
+
+
+def test_weather_alert_tracking_helpers_use_blank_initial_values() -> None:
+    package = WEATHER_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "nws_dakota_county_alerts_triggered_ui_alert_ids:" in package
+    assert "nws_dakota_county_alerts_triggered_pushbullet_alert_ids:" in package
+    assert "initial: None" not in package
