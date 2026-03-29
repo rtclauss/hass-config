@@ -755,7 +755,11 @@ template:
         availability: >
           {{ states('sensor.filtered_raw_electrical_sensor') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
         state: >-
-          {{ (states('sensor.filtered_raw_electrical_sensor') | float(default=0)) / 100.0 }}
+          {% if states('sensor.filtered_raw_electrical_sensor') in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ none }}
+          {% else %}
+            {{ (states('sensor.filtered_raw_electrical_sensor') | float(default=0)) / 100.0 }}
+          {% endif %}
       - name: house_electrical_meter_non_ev
         unique_id: house_electrical_meter_non_ev
         device_class: energy

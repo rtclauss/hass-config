@@ -223,10 +223,12 @@ mqtt:
         state_topic: "birdpi/apprise"
         json_attributes_topic: "birdpi/apprise"
         value_template: >-
-          {% if value_json is mapping and value_json.common_name is defined %}
+          {% if value_json is defined and value_json is mapping and value_json.common_name is defined %}
             {{ value_json.common_name }}
+          {% elif value | default('', true) | trim != '' %}
+            {{ value }}
           {% else %}
-            unknown
+            {{ states('sensor.garden_birds') | default('unknown', true) }}
           {% endif %}
 
 ########################
@@ -265,7 +267,7 @@ sensor:
     resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/species/?period=day&limit=50
 
     value_template: >-
-      {% if value_json is mapping and value_json.species is defined and value_json.species | count > 0 %}
+      {% if value_json is defined and value_json is mapping and value_json.species is defined and value_json.species | count > 0 %}
         {{ value_json.species[0].commonName }}
       {% else %}
         No detections
@@ -278,7 +280,7 @@ sensor:
     unique_id: latest_bird_detection
     resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/detections/?limit=1
     value_template: >
-      {% if value_json is mapping and value_json.detections is defined and value_json.detections | length > 0 %}
+      {% if value_json is defined and value_json is mapping and value_json.detections is defined and value_json.detections | length > 0 %}
         {{ value_json.detections[0].species.commonName }}
       {% else %}
         No detections
