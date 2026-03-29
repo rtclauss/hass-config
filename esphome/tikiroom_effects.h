@@ -234,6 +234,15 @@ inline void add_glitter(uint8_t chance, const Color &color) {
   }
 }
 
+inline uint16_t wrap_led_index(int32_t index) {
+  const auto led_count = static_cast<int32_t>(NUM_LEDS);
+  index %= led_count;
+  if (index < 0) {
+    index += led_count;
+  }
+  return static_cast<uint16_t>(index);
+}
+
 inline void fill_rainbow(uint8_t start_hue, uint8_t delta_hue) {
   auto &rt = state();
   uint8_t hue = start_hue;
@@ -390,6 +399,83 @@ inline void apply_fire(AddressableLight &it, float speed, bool initial_run) {
   for (uint16_t j = 0; j < NUM_LEDS; j++) {
     rt.leds[j] = heat_color(rt.heat[j]);
   }
+  copy_to_output(it);
+}
+
+inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
+  struct CarSpec {
+    Color color;
+    float base_pace;
+    float start_offset;
+    float variation_rate;
+    float variation_amount;
+  };
+
+  static const std::array<CarSpec, 5> cars{{
+      {Color(255, 32, 32), 1.00f, 0.00f, 0.55f, 0.018f},
+      {Color(255, 140, 0), 0.99f, 0.19f, 0.47f, 0.016f},
+      {Color(0, 180, 255), 0.98f, 0.38f, 0.61f, 0.021f},
+      {Color(0, 96, 255), 1.01f, 0.57f, 0.43f, 0.014f},
+      {Color(0, 220, 120), 0.97f, 0.76f, 0.52f, 0.019f},
+  }};
+
+  static uint32_t last_update = 0;
+  static uint32_t race_start_ms = 0;
+  auto &rt = state();
+
+  if (initial_run) {
+    race_start_ms = now_ms();
+    clear_leds();
+  }
+
+  if (!due(last_update, clamp_interval(speed, 90, 14))) {
+    copy_to_output(it);
+    return;
+  }
+
+  if (race_start_ms == 0) {
+    race_start_ms = now_ms();
+  }
+
+  const float elapsed_s = (now_ms() - race_start_ms) / 1000.0f;
+  const float laps_per_second = 0.025f + ((speed / 150.0f) * 0.110f);
+  const uint8_t tarmac_level = beatsin8(10, 6, 12);
+
+  fill_all(Color(tarmac_level, tarmac_level, tarmac_level));
+
+  for (uint16_t i = 12; i < NUM_LEDS; i += 24) {
+    rt.leds[i] = Color(20, 20, 20);
+  }
+
+  for (uint8_t i = 0; i < 10; i++) {
+    rt.leds[i] = (i % 2 == 0) ? Color(60, 60, 60) : Color(4, 4, 4);
+  }
+
+  for (uint8_t i = 0; i < 5; i++) {
+    const uint8_t brightness = static_cast<uint8_t>(((std::sin((elapsed_s * 2.3f) - (i * 0.45f)) + 1.0f) * 0.5f) * 170.0f);
+    rt.leds[wrap_led_index(16 + (i * 3))] = Color(brightness, 0, 0);
+  }
+
+  const uint16_t sector_one = NUM_LEDS / 3;
+  const uint16_t sector_two = (NUM_LEDS * 2) / 3;
+  for (uint8_t i = 0; i < 6; i++) {
+    rt.leds[wrap_led_index(sector_one + i)] = Color(0, 80, 0);
+    rt.leds[wrap_led_index(sector_two + i)] = Color(110, 0, 110);
+  }
+
+  for (const auto &car : cars) {
+    const float variation = std::sin((elapsed_s * car.variation_rate * 2.0f * PI_F) + (car.start_offset * 2.0f * PI_F));
+    const float progress = (elapsed_s * laps_per_second * car.base_pace) + car.start_offset + (variation * car.variation_amount);
+    const int32_t nose = static_cast<int32_t>(progress * NUM_LEDS);
+
+    add_inplace(rt.leds[wrap_led_index(nose)], Color(255, 255, 255));
+    add_inplace(rt.leds[wrap_led_index(nose - 1)], scale_color(car.color, 255));
+    add_inplace(rt.leds[wrap_led_index(nose - 2)], scale_color(car.color, 192));
+    add_inplace(rt.leds[wrap_led_index(nose - 3)], scale_color(car.color, 128));
+    add_inplace(rt.leds[wrap_led_index(nose - 4)], scale_color(car.color, 72));
+    add_inplace(rt.leds[wrap_led_index(nose - 5)], scale_color(car.color, 32));
+  }
+
   copy_to_output(it);
 }
 
