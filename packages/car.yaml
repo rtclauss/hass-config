@@ -229,7 +229,7 @@ automation:
             {% set tariff_name = tariff | lower %}
             {% set tariff_display = tariff | replace('_', '-') | title %}
             {% set high_tariff = tariff_name in ['on_peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
-            {% set tpms_reminder_threshold_psi = 41 %}
+            {% set tpms_reminder_threshold_psi = states('input_number.tesla_tpms_air_threshold_psi') | float(default=38) %}
             {% set tpms_readings = [
               {'label': 'front left', 'psi': states('sensor.nigori_tpms_front_left') | float(default=999)},
               {'label': 'front right', 'psi': states('sensor.nigori_tpms_front_right') | float(default=999)},
@@ -724,6 +724,15 @@ input_number:
     mode: box
     unit_of_measurement: s
     icon: mdi:calendar-clock
+  tesla_tpms_air_threshold_psi:
+    name: Tesla TPMS Air Threshold
+    initial: 38
+    min: 30
+    max: 50
+    step: 1
+    mode: slider
+    unit_of_measurement: psi
+    icon: mdi:gauge-low
   # nigori_charge_limit:
   #   name: Nigori Charge Limit
   #   min: 0
