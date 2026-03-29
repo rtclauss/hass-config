@@ -15,7 +15,8 @@
 - `main` is stable/live.
 - `develop` is the integration branch used for Home Assistant soak testing.
 - Start feature work in a worktree from `origin/develop`.
-- Open feature/fix PRs to `develop`.
+- Open feature/fix PRs to `develop`, explicitly setting the base branch.
+- `main` only accepts promotion PRs from `develop`.
 - After HA validation, open a promotion PR from `develop` to `main`.
 
 ### Local Setup
