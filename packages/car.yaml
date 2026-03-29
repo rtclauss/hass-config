@@ -352,26 +352,32 @@ automation:
                 data:
                   departure_time: "{{ tesla_plan.departure_time }}"
                   reason: "{{ tesla_plan.summary }}"
-              - action: input_text.set_value
+              - action: input_number.set_value
                 target:
-                  entity_id: input_text.tesla_managed_departure_time
+                  entity_id: input_number.tesla_managed_departure_ts
                 data:
-                  value: "{{ tesla_plan.departure_time }}"
+                  value: "{{ tesla_plan.departure_time | as_timestamp(default=0) | int(0) }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.tesla_managed_departure_active
         default:
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ states('input_text.tesla_managed_departure_time') not in ['', 'unknown', 'unavailable', 'none', 'None'] }}"
+                    value_template: "{{ is_state('input_boolean.tesla_managed_departure_active', 'on') }}"
                 sequence:
                   - action: script.tesla_set_precondition_schedule_time
                     data:
                       enabled: false
                       reason: "{{ tesla_plan.summary }}"
-          - action: input_text.set_value
+          - action: input_boolean.turn_off
             target:
-              entity_id: input_text.tesla_managed_departure_time
+              entity_id: input_boolean.tesla_managed_departure_active
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.tesla_managed_departure_ts
             data:
-              value: ""
+              value: 0
       - choose:
           - conditions:
               - condition: template
@@ -390,8 +396,8 @@ automation:
       - trigger: template
         id: departure_passed
         value_template: >-
-          {% set stored_departure_text = states('input_text.tesla_managed_departure_time') | default('', true) | string | trim %}
-          {{ stored_departure_text not in ['', 'unknown', 'unavailable', 'none', 'None'] and (stored_departure_text | as_datetime | as_local) <= now() }}
+          {% set stored_departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
+          {{ is_state('input_boolean.tesla_managed_departure_active', 'on') and stored_departure_ts > 0 and stored_departure_ts | timestamp_local | as_datetime <= now() }}
       - trigger: homeassistant
         event: start
         id: startup
@@ -403,26 +409,28 @@ automation:
             sequence:
               - delay: "00:00:30"
       - variables:
-          stored_departure_text: "{{ states('input_text.tesla_managed_departure_time') | default('', true) | string | trim }}"
+          stored_departure_ts: "{{ states('input_number.tesla_managed_departure_ts') | int(0) }}"
           cleanup_reason: >-
-            {% if stored_departure_text not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
-              {% set stored_departure_dt = stored_departure_text | as_datetime | as_local %}
-              Tesla-managed schedule for {{ stored_departure_dt.strftime('%a %I:%M %p') }} has passed.
+            {% if stored_departure_ts > 0 %}
+              Tesla-managed schedule for {{ stored_departure_ts | timestamp_custom('%a %I:%M %p', true) }} has passed.
             {% else %}
               Tesla-managed schedule has passed.
             {% endif %}
       - condition: template
         value_template: >-
-          {{ stored_departure_text not in ['', 'unknown', 'unavailable', 'none', 'None'] and (stored_departure_text | as_datetime | as_local) <= now() }}
+          {{ is_state('input_boolean.tesla_managed_departure_active', 'on') and stored_departure_ts > 0 and stored_departure_ts | timestamp_local | as_datetime <= now() }}
       - action: script.tesla_set_precondition_schedule_time
         data:
           enabled: false
           reason: "{{ cleanup_reason }}"
-      - action: input_text.set_value
+      - action: input_boolean.turn_off
         target:
-          entity_id: input_text.tesla_managed_departure_time
+          entity_id: input_boolean.tesla_managed_departure_active
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.tesla_managed_departure_ts
         data:
-          value: ""
+          value: 0
 
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
@@ -671,21 +679,30 @@ group: {}
 ########################
 # Input Booleans
 ########################
-input_boolean: {}
+input_boolean:
+  tesla_managed_departure_active:
+    initial: off
   # car_in_motion:
 
 ########################
 # Input Numbers
 ########################
 # Tesla Custom Integration v3 has this built in
-# input_number:
-#   nigori_charge_limit:
-#     name: Nigori Charge Limit
-#     min: 0
-#     max: 100
-#     step: 5
-#     icon: mdi:battery
-#     unit_of_measurement: "%"
+input_number:
+  tesla_managed_departure_ts:
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+    unit_of_measurement: s
+    icon: mdi:calendar-clock
+  # nigori_charge_limit:
+  #   name: Nigori Charge Limit
+  #   min: 0
+  #   max: 100
+  #   step: 5
+  #   icon: mdi:battery
+  #   unit_of_measurement: "%"
 
 ########################
 # Input Select
@@ -698,8 +715,6 @@ input_select: {}
 input_text:
   home_address:
     max: 255
-    initial: ""
-  tesla_managed_departure_time:
     initial: ""
 
 ########################
@@ -785,13 +800,13 @@ script:
               0
             {% endif %}
           preserve_default_charging_schedule: "{{ location_name in ['home', 'parents', 'occ', 'spcc'] }}"
-          stored_managed_departure_text: "{{ states('input_text.tesla_managed_departure_time') | default('', true) | string | trim }}"
-          stored_managed_departure_ts: "{{ as_timestamp(stored_managed_departure_text, default=0) | int(0) }}"
+          stored_managed_departure_ts: "{{ states('input_number.tesla_managed_departure_ts') | int(0) }}"
+          stored_managed_departure_active: "{{ is_state('input_boolean.tesla_managed_departure_active', 'on') }}"
           tesla_departure_ts: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Departure timestamp') | int(0) }}"
           tesla_scheduled_charging_active: "{{ is_state('binary_sensor.nigori_scheduled_charging', 'on') }}"
           tesla_off_peak_charging_enabled: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Off peak charging enabled') in [true, 'true', 'True', 'on'] }}"
           tesla_managed_departure_matches: >-
-            {{ stored_managed_departure_ts > 0 and tesla_departure_ts > 0 and ((stored_managed_departure_ts - tesla_departure_ts) | abs) <= 300 }}
+            {{ stored_managed_departure_active in [true, 'true', 'True', 'on'] and stored_managed_departure_ts > 0 and tesla_departure_ts > 0 and ((stored_managed_departure_ts - tesla_departure_ts) | abs) <= 300 }}
           safe_to_clear_tesla_schedule: >-
             {{ preserve_default_charging_schedule not in [true, 'true', 'True'] or (tesla_managed_departure_matches in [true, 'true', 'True'] and tesla_scheduled_charging_active not in [true, 'true', 'True'] and tesla_off_peak_charging_enabled not in [true, 'true', 'True']) }}
       - choose:
