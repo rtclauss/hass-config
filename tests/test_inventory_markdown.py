@@ -8,7 +8,10 @@ INVENTORY_PATH = ROOT / "inventory.md"
 
 
 def _clean_cell(value: str) -> str:
-    return value.strip().strip("`")
+    value = value.strip().strip("`")
+    if value.startswith("FYRTUR battery pack"):
+        return "FYRTUR battery pack"
+    return value
 
 
 def _normalize_header(value: str) -> str:
@@ -58,7 +61,7 @@ def test_inventory_rows_cover_issue_201_and_202_updates() -> None:
         ("Aqara", "Cube Controller (MKZQ01LM / MFKZQ01LM)"): ("8", "CR2450", "1"),
         ("Aqara", "Vibration Sensor (DJT11LM)"): ("2", "CR2032", "1"),
         ("Aqara", "Temperature and Humidity Sensor (WSDCGQ11LM)"): ("6", "CR2032", "1"),
-        ("Ecolink", "FireFighter"): ("4", "CR123A", "1"),
+        ("Ecolink", "Firefighter (FFZB1-SM-ECO)"): ("4", "CR123A", "1"),
         ("Aqara", "Door and Window Sensor (MCCGQ11LM)"): ("3", "CR1632", "1"),
         ("Xiaomi", "Door and Window Sensor (MCCGQ01LM)"): ("1", "CR1632", "1"),
         ("Aqara", "Wireless Mini Switch (WXKG11LM)"): ("1", "CR2032", "1"),
