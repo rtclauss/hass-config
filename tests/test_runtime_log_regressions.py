@@ -44,10 +44,10 @@ def test_bedroom_hour_of_day_remains_numeric() -> None:
 def test_bird_templates_guard_missing_json_fields() -> None:
     text = _read(BIRDS_PATH)
 
-    assert "value_json is mapping and value_json.common_name is defined" in text
-    assert "unknown" in text
-    assert "value_json is mapping and value_json.species is defined and value_json.species | count > 0" in text
-    assert "value_json is mapping and value_json.detections is defined and value_json.detections | length > 0" in text
+    assert "value_json is defined and value_json is mapping and value_json.common_name is defined" in text
+    assert "{{ value }}" in text
+    assert "value_json is defined and value_json is mapping and value_json.species is defined and value_json.species | count > 0" in text
+    assert "value_json is defined and value_json is mapping and value_json.detections is defined and value_json.detections | length > 0" in text
 
 
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
@@ -64,7 +64,7 @@ def test_house_electrical_meter_never_emits_literal_unavailable() -> None:
     text = _read(UTILITIES_PATH)
 
     assert "name: house_electrical_meter" in text
-    assert "states('sensor.filtered_raw_electrical_sensor') | float(default=0)" in text
+    assert "{{ none }}" in text
     assert "unavailable\n" not in text.split("name: house_electrical_meter", 1)[1].split("name: house_electrical_meter_non_ev", 1)[0]
 
 
@@ -74,4 +74,6 @@ def test_garbage_pickup_template_keeps_dates_serializable() -> None:
     assert "garbage_pickup_window_json" in text
     assert "garbage_pickup_window.range_start" in text
     assert "as_datetime(garbage_pickup_window.week_mon).date()" in text
+    assert "ns = namespace(hit=false)" in text
+    assert "holiday_mon_to_wed in [true, 'true', 'True', 'on']" in text
     assert 'base_wednesday: "{{ garbage_pickup_window.base_wed }}"' in text
