@@ -1,0 +1,204 @@
+# Canonical room-purpose and privacy policy for room-sensitive automations.
+# This file is for humans and future Codex runs. Home Assistant does not
+# consume it directly, but automations and docs should stay aligned with it.
+
+version: 1
+last_updated: "2026-03-29"
+owner: rtclauss
+summary: >
+  Treat room purpose as durable context, not chat memory. Guest-capable rooms
+  need privacy-first behavior, even when their default daytime use is
+  something else.
+
+global_policies:
+  - id: guest_privacy_first
+    statement: >
+      Never let automations or managed items intrude into rooms where guests
+      might be sleeping or having private time.
+    automation_implications:
+      - Avoid disruptive automations in guest-capable rooms unless explicitly requested.
+      - Treat audio, bright lighting, vacuuming, announcements, and similar actions as intrusive by default.
+      - Favor privacy over convenience when guest context is ambiguous.
+
+  - id: room_purpose_overrides_default_behavior
+    statement: >
+      A room's default purpose can be temporarily overridden by guest use, and
+      automations should respect that override immediately.
+    automation_implications:
+      - Do not assume the office is safe for normal workday automations when guests may be staying there.
+      - Treat dedicated guest spaces as private at all times, not only overnight.
+
+  - id: broad_guest_mode_controls_intrusive_automation
+    statement: >
+      Keep a broad guest mode. When guest mode is on, intrusive automations
+      should default to off unless explicitly allowed.
+    automation_implications:
+      - Skip automatic vacuuming while guest mode is on.
+      - Suppress convenience automations that assume owner-only use of guest-capable rooms.
+
+rooms:
+  owner_suite_bedroom:
+    primary_purpose: owner sleeping space
+    privacy_policy:
+      baseline: always private
+      priority: high
+    automation_guidance:
+      safe_defaults:
+        - owner-suite bathroom logic should follow bedroom sleep behavior
+
+  owner_suite_bathroom:
+    primary_purpose: owner bathroom
+    privacy_policy:
+      baseline: private bathroom associated with the owner suite
+      follow_sleep_logic_of:
+        - owner_suite_bedroom
+      priority: high
+    automation_guidance:
+      safe_defaults:
+        - humidity-driven exhaust control is acceptable
+        - sleep-related automation should follow owner-suite bedroom state
+
+  office:
+    primary_purpose: daytime workspace
+    secondary_purposes:
+      - overflow guest sleeping space
+    guest_use:
+      guests_may_sleep_here: true
+      guests_may_need_private_time_here: true
+      possible_times:
+        - day
+        - night
+    privacy_policy:
+      baseline: owner workspace during the day
+      override_when_guest_present: treat as guest-private room at any time
+      priority: high
+    automation_guidance:
+      avoid_without_explicit_request:
+        - bright automatic lighting changes
+        - media regrouping, playback, or announcements
+        - vacuum runs or other physical intrusions
+        - actions that assume the room is available for work use
+      safe_defaults:
+        - use normal office behavior only when there is no guest-stay context
+
+  den:
+    primary_purpose: shared room
+    secondary_purposes:
+      - guest sleeping space
+    guest_use:
+      guests_may_sleep_here: true
+      guests_may_need_private_time_here: true
+      possible_times:
+        - day
+        - night
+    privacy_policy:
+      baseline: shared-use room
+      override_when_guest_present: treat as guest-private room at any time
+      priority: high
+    automation_guidance:
+      avoid_without_explicit_request:
+        - vacuum runs or other physical intrusions
+        - bright disruptive lighting changes while guests may be sleeping
+
+  guest_room:
+    primary_purpose: dedicated guest sleeping space
+    guest_use:
+      guests_may_sleep_here: true
+      guests_may_need_private_time_here: true
+      possible_times:
+        - day
+        - night
+    privacy_policy:
+      baseline: always treat as guest-private room
+      priority: high
+    automation_guidance:
+      avoid_without_explicit_request:
+        - bright automatic lighting changes
+        - media playback or announcements
+        - vacuum runs or other physical intrusions
+      safe_defaults:
+        - assume the room may be occupied privately at any time
+
+  guest_bathroom:
+    primary_purpose: guest bathroom
+    guest_use:
+      guests_may_need_private_time_here: true
+      possible_times:
+        - day
+        - night
+    privacy_policy:
+      baseline: always treat as guest-private room
+      priority: high
+    automation_guidance:
+      safe_defaults:
+        - humidity-driven exhaust control is acceptable
+
+  basement_great_room:
+    primary_purpose: shared great room
+    secondary_purposes:
+      - guest sleeping space
+    guest_use:
+      guests_may_sleep_here: true
+      guests_may_need_private_time_here: false
+      possible_times:
+        - day
+        - night
+    privacy_policy:
+      baseline: shared media space
+      override_when_guest_present: treat physical intrusions as guest-sensitive
+      priority: medium
+    automation_guidance:
+      allowed_during_guest_mode:
+        - tv automations
+        - media automations
+      avoid_without_explicit_request:
+        - vacuum runs or other physical intrusions
+
+  kitchen:
+    primary_purpose: shared food-prep space
+    privacy_policy:
+      baseline: shared-use room
+      priority: low
+    automation_guidance:
+      disabled_automations:
+        - kitchen motion lighting
+
+  outside:
+    primary_purpose: exterior circulation and outdoor use
+    privacy_policy:
+      baseline: not privacy-sensitive for guest sleeping rules
+      priority: low
+    automation_guidance:
+      notes:
+        - deck and outside automations do not need extra guest-privacy handling
+
+  dining_room:
+    primary_purpose: dining room
+    privacy_policy:
+      baseline: shared-use room
+      priority: low
+    automation_guidance:
+      notes:
+        - legacy living-room references should be audited and renamed here where appropriate
+
+decision_rules:
+  guest_capable_rooms:
+    - office
+    - den
+    - guest_room
+    - guest_bathroom
+    - basement_great_room
+  treat_as_private_when:
+    - guest mode is on
+    - a guest is known or expected to be staying
+    - the room is marked as a dedicated or overflow guest space
+  broad_guest_mode: true
+  vacuum_policy:
+    when_guest_mode_on: skip_all_automatic_vacuuming
+  legacy_room_mapping:
+    living_room:
+      replacement: dining_room
+      note: Great-room style media behavior now belongs to the basement great room, not the former living room.
+  notes:
+    - This file is the canonical place to add future room-purpose rules.
+    - If runtime helpers or sensors are added later, keep their names and behavior aligned with this policy.
