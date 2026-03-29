@@ -592,39 +592,34 @@ template:
         entity_id: calendar.mn_holidays
     action:
       - variables:
-          garbage_pickup_window_json: >-
-            {% set today = now().date() %}
-            {% set is_wed = today.weekday() == 2 %}
-            {% set after_pickup_time = now().hour >= 12 %}
-            {% set days_until_wed = 2 - today.weekday() %}
-            {% if days_until_wed < 0 %}
-              {% set days_until_wed = days_until_wed + 7 %}
-            {% endif %}
+          today: "{{ now().date() }}"
+          is_wed: "{{ today.weekday() == 2 }}"
+          after_pickup_time: "{{ now().hour >= 12 }}"
+          days_until_wed: >
+            {% set d = 2 - today.weekday() %}
+            {% if d < 0 %}{% set d = d + 7 %}{% endif %}
+            {{ d }}
+          base_wed: >
             {% if is_wed and not after_pickup_time %}
-              {% set base_wed = today %}
+              {{ today }}
             {% else %}
-              {% set base_wed = today + timedelta(days=days_until_wed if not is_wed else 7) %}
+              {{ today + timedelta(days=days_until_wed if (not is_wed) else 7) }}
             {% endif %}
-            {% set week_mon = base_wed - timedelta(days=base_wed.weekday()) %}
-            {{ {
-              'base_wed': base_wed.isoformat(),
-              'week_mon': week_mon.isoformat(),
-              'range_start': week_mon.isoformat() ~ 'T00:00:00',
-              'range_end': (base_wed + timedelta(days=1)).isoformat() ~ 'T23:59:59'
-            } | to_json }}
-          garbage_pickup_window: "{{ garbage_pickup_window_json | from_json }}"
+          week_mon: "{{ base_wed - timedelta(days=base_wed.weekday()) }}"
+          range_start: "{{ week_mon.isoformat() }}T00:00:00"
+          range_end: "{{ (base_wed + timedelta(days=1)).isoformat() }}T23:59:59"
       - action: calendar.get_events
         target:
           entity_id: calendar.mn_holidays
         data:
-          start_date_time: "{{ garbage_pickup_window.range_start }}"
-          end_date_time: "{{ garbage_pickup_window.range_end }}"
+          start_date_time: "{{ range_start }}"
+          end_date_time: "{{ range_end }}"
         response_variable: hols
       - variables:
           holiday_events: "{{ hols.events | default([]) }}"
           holiday_mon_to_wed: >
-            {% set ws = as_datetime(garbage_pickup_window.week_mon).date() %}
-            {% set we = as_datetime(garbage_pickup_window.base_wed).date() %}
+            {% set ws = week_mon %}
+            {% set we = base_wed %}
             {% set ns = namespace(hit=false) %}
             {% for e in holiday_events %}
               {% set d = as_datetime(e.start).date() %}
@@ -634,7 +629,6 @@ template:
             {% endfor %}
             {{ ns.hit }}
           pickup_date: >
-            {% set base_wed = as_datetime(garbage_pickup_window.base_wed).date() %}
             {% if holiday_mon_to_wed in [true, 'true', 'True', 'on'] %}
               {{ (base_wed + timedelta(days=1)).isoformat() }}
             {% else %}
@@ -645,7 +639,7 @@ template:
         unique_id: garbage_pickup_date_apple_valley
         state: "{{ pickup_date }}"
         attributes:
-          base_wednesday: "{{ garbage_pickup_window.base_wed }}"
+          base_wednesday: "{{ base_wed.isoformat() }}"
           holiday_shift_applied: "{{ holiday_mon_to_wed in [true, 'true', 'True', 'on'] }}"
           holiday_events_in_range: "{{ holiday_events | map(attribute='summary') | list }}"
 
