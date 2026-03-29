@@ -459,9 +459,10 @@ automation:
                     {% set origin_code = summary.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                     {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                   {% elif summary_lower.startswith('flight to ') %}
-                    {% set destination_code = summary.split('Flight to ', 1)[1].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set destination_code = summary_lower[10:].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                   {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
-                    {% set destination_code = summary.split('Flight: ', 1)[1].split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set flight_tail_lower = summary_lower[8:] %}
+                    {% set destination_code = flight_tail_lower.split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                   {% endif %}
                   {% set is_msp_departure = (
                     origin_code == "MSP"
