@@ -654,6 +654,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: west_bed_left_bed
+              - condition: state
+                entity_id: input_boolean.west_bed_occupied
+                state: "on"
               - condition: or
                 conditions:
                   - condition: sun
@@ -1413,19 +1416,24 @@ automation:
         id: recovery_candidates_high
     variables:
       max_restart_attempts: 3
+      recovery_candidates_high: >-
+        {{
+          states('sensor.z2m_recovery_candidates') | int(0) > 20
+          and (as_timestamp(now()) - as_timestamp(states.sensor.z2m_recovery_candidates.last_changed, 0)) >= 300
+        }}
       issue_active: >-
         {{
           is_state('binary_sensor.zigbee2mqtt_running', 'off')
           or is_state('binary_sensor.z2m_failing', 'on')
-          or (states('sensor.z2m_recovery_candidates') | int(0) > 20)
+          or recovery_candidates_high
         }}
       issue_reason: >-
         {% if is_state('binary_sensor.zigbee2mqtt_running', 'off') %}
           Zigbee2MQTT add-on is not running
         {% elif is_state('binary_sensor.z2m_failing', 'on') %}
           Router offline threshold exceeded
-        {% elif states('sensor.z2m_recovery_candidates') | int(0) > 20 %}
-          Z2M recovery candidates exceeded threshold (20)
+        {% elif recovery_candidates_high %}
+          Z2M recovery candidates exceeded threshold (20) for at least 5 minutes
         {% else %}
           Unknown
         {% endif %}
