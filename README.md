@@ -139,6 +139,7 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
 ## Feature Docs
 
 - [House Transition Framework](docs/house_transition_framework.md)
+- [Room Intent Policy](docs/room_intent.yaml)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
 - [Tesla Departure Planner](docs/tesla_departure_planner.md)
 
@@ -149,7 +150,6 @@ I use the new dashboards in 0.107 to create a [dashboard for guests](https://git
 Software on the NUC:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
 * Running in Hass.io
-  * ~~[ADB](https://github.com/hassio-addons/addon-adb)~~ Removed FireTVs
   * [AppDaemon](https://github.com/hassio-addons/addon-appdaemon)
   * [VSCode](https://github.com/hassio-addons/addon-vscode)
   * [Mosquitto Broker](https://home-assistant.io/addons/mosquitto/)
@@ -171,7 +171,6 @@ Software on the NUC:
 * [Ecobee Premium](https://www.ecobee.com/en-us/smart-thermostats/smart-thermostat-premium/) Love those remote sensors!
 * [Amazon Echo](http://amzn.to/2i6mShX)
 * [Amazon Echo Dot Gen 2](http://amzn.to/2hvCexj)
-* ~~[Amazon Fire TV](http://amzn.to/2iD9uPx)~~
 * Sonos One Speakers
 * Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
 * Xiaomi MiFlora
