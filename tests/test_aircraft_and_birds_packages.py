@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 AIRPLANES_PATH = ROOT / "packages" / "airplanes.yaml"
 BIRDS_PATH = ROOT / "packages" / "birds.yaml"
+LOVELACE_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
 
 
 def test_garden_birds_sensor_handles_missing_common_name_without_template_errors() -> None:
@@ -42,3 +43,19 @@ def test_aircraft_refresh_automation_updates_a_single_routeset_sensor() -> None:
     assert "- sensor.closest_aircraft_route_raw" in text
     assert "- sensor.closest_aircraft_photo_raw" in text
     assert "- sensor.closest_aircraft_photo" in text
+
+
+def test_aircraft_overhead_selection_has_no_altitude_ceiling() -> None:
+    text = AIRPLANES_PATH.read_text(encoding="utf-8")
+
+    assert "{% set max_alt = 10000 %}" not in text
+    assert "{% if 0 <= alt_ft < max_alt %}" not in text
+    assert text.count("{% if 0 <= alt_ft %}") == 2
+
+
+def test_aircraft_overhead_ui_copy_mentions_unlimited_altitude() -> None:
+    text = LOVELACE_PATH.read_text(encoding="utf-8")
+
+    assert "Aircraft Overhead (≤5 mi, unlimited altitude)" in text
+    assert "No aircraft currently within 5 mi at any altitude." in text
+    assert "Aircraft Overhead (≤5 mi, <10k ft)" not in text
