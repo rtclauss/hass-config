@@ -151,19 +151,18 @@ def test_reset_script_replays_current_live_group_memberships_and_bindings() -> N
         ("Basement/Great Room", "Basement/North Hallway Switch", 1),
         ("Deck/All", "Deck/Kitchen Door", 2),
         ("Deck/Hue", "Deck/Kitchen Door", 1),
-        ("Den/Floods", "Den/Flood Switch", 2),
+        ("Den/Floods", "Den/Flood Switch", 1),
         ("Dining Room/Over Table", "Dining Room/Table Switch", 1),
-        ("Dining Room/Over Table", "Dining Room/Table Switch", 2),
         ("Dining Room/Over Table", "Dining Room/Wall Switch", 1),
-        ("Hall/All", "Hall/Foyer Switch", 2),
-        ("Hall/All", "Hall/Garage Laundry Switch", 2),
+        ("Hall/All", "Hall/Foyer Switch", 1),
+        ("Hall/All", "Hall/Garage Laundry Switch", 1),
         ("Hall/All", "Hall/Transition Switch", 1),
         ("Hall/All", "Hall/Upstairs/Switch", 1),
         ("Kitchen/All", "Kitchen/Bay Switch", 1),
         ("Kitchen/All", "Kitchen/Switch", 1),
-        ("Outside/Front Hue", "Outside/Front Lights", 2),
-        ("Owner Suite/Bathroom/Lights", "Owner Suite/Bathroom/Shower Switch", 2),
-        ("Owner Suite/Bathroom/Lights", "Owner Suite/Bathroom/Tub Switch", 2),
+        ("Outside/Front Hue", "Outside/Front Lights", 1),
+        ("Owner Suite/Bathroom/Lights", "Owner Suite/Bathroom/Shower Switch", 1),
+        ("Owner Suite/Bathroom/Lights", "Owner Suite/Bathroom/Tub Switch", 1),
     }
     expected_bindings = {
         (
@@ -281,6 +280,18 @@ def test_reset_script_replays_current_live_group_memberships_and_bindings() -> N
 
     assert _parse_group_memberships(block) == expected_memberships
     assert _parse_bindings(block) == expected_bindings
+
+
+def test_reset_script_replays_endpoint_1_membership_for_group_bound_switch_sync() -> None:
+    block = _script_block("reset_inovelli_switches")
+
+    memberships = _parse_group_memberships(block)
+    for device, from_endpoint, group, to_endpoint, _clusters in _parse_bindings(block):
+        if from_endpoint != 2 or to_endpoint is not None:
+            continue
+
+        assert (group, device, 1) in memberships
+        assert (group, device, 2) not in memberships
 
 
 def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
