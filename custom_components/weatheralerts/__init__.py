@@ -110,9 +110,9 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
         name = entry.data.get(CONF_NAME, "").strip()
 
     if CONF_ZONE_NAME in entry.options:
-        name = entry.options[CONF_ZONE_NAME].strip()
+        zone_name = entry.options[CONF_ZONE_NAME].strip()
     else:
-        name = entry.data.get(CONF_ZONE_NAME, "").strip()
+        zone_name = entry.data.get(CONF_ZONE_NAME, "").strip()
 
     if CONF_ENTITY_NAME in entry.options:
         entity_name = entry.options[CONF_ENTITY_NAME].strip()
@@ -129,7 +129,7 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
     if marine_zones:
         parts.extend(z.strip() for z in marine_zones.split(",") if z.strip())
     feed_id = ",".join(parts)
-    title = name or f"NWS {feed_id}"
+    title = name or zone_name or f"NWS {feed_id}"
 
     # Build the new static data dict
     new_data: dict[str, str] = {
