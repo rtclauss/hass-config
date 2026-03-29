@@ -1,5 +1,5 @@
 # The Brewery Home Assistant Configuration 🍺
-[![Build Status](https://api.travis-ci.com/rtclauss/hass-config.svg?branch=master)](https://app.travis-ci.com/github/rtclauss/hass-config)
+[![Build Status](https://api.travis-ci.com/rtclauss/hass-config.svg?branch=main)](https://app.travis-ci.com/github/rtclauss/hass-config)
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
@@ -9,6 +9,14 @@
 - CI validates that this pinned version is still compatible with the latest official `homeassistant` release from [PyPI](https://pypi.org/project/homeassistant/).
 - Config checks run against `ghcr.io/home-assistant/home-assistant:stable` so validation tracks current Home Assistant stable releases.
 - As of 2026-03-15, latest `homeassistant` requires Python `>=3.14.2`, so `.python-version` is set to `3.14.3`.
+
+## Branch Flow
+
+- `main` is stable/live.
+- `develop` is the integration branch used for Home Assistant soak testing.
+- Start feature work in a worktree from `origin/develop`.
+- Open feature/fix PRs to `develop`.
+- After HA validation, open a promotion PR from `develop` to `main`.
 
 ### Local Setup
 
@@ -145,7 +153,7 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
 
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
-I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/master/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
+I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/main/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
 
 Software on the NUC:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
@@ -156,7 +164,7 @@ Software on the NUC:
   * [Music Assistant](https://music-assistant.io/) - Main playback engine for Sonos/Spotify/radio automations
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
-  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/master/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/master/esphome/bluetoothproxy1.yaml)
+  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/main/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
   * ~~[Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)~~ Moving to Zigbee/Thread/Matter
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
@@ -167,14 +175,14 @@ Software on the NUC:
 
 **Devices in Use:**
 * Apple/iOS Devices including AppleTV and HomePod Mini
-* ~~[Nest Thermostat]()~~ ~~Replaced with Z-wave Thermostat and [Schedy](https://github.com/rtclauss/hass-config/blob/master/appdaemon/apps/schedy_heating.yaml)~~
+* ~~[Nest Thermostat]()~~ ~~Replaced with Z-wave Thermostat and [Schedy](https://github.com/rtclauss/hass-config/blob/main/appdaemon/apps/schedy_heating.yaml)~~
 * [Ecobee Premium](https://www.ecobee.com/en-us/smart-thermostats/smart-thermostat-premium/) Love those remote sensors!
 * [Amazon Echo](http://amzn.to/2i6mShX)
 * [Amazon Echo Dot Gen 2](http://amzn.to/2hvCexj)
 * Sonos One Speakers
 * Xiaomi Dafang Cameras running [custom firmware](https://github.com/EliasKotlyar/Xiaomi-Dafang-Hacks)
 * Xiaomi MiFlora
-* ESP8266 with [VL53L0X](https://www.amazon.com/gp/product/B07F3RH7TC/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1) to measure salt level in [water softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml). See [this commit](https://github.com/rtclauss/hass-config/commit/85b1eade336c0fc94031241b494203fb55b3a7d8) for more info.
+* ESP8266 with [VL53L0X](https://www.amazon.com/gp/product/B07F3RH7TC/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1) to measure salt level in [water softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml). See [this commit](https://github.com/rtclauss/hass-config/commit/85b1eade336c0fc94031241b494203fb55b3a7d8) for more info.
 * ~~HUSBZB-1 Zigbee/Z-Wave Stick (for Z-Wave and Zigbee~~)
   * ~~Z-Wave~~
     * ~~[GoControl Z-Wave Thermostat](https://www.amazon.com/GoControl-Thermostat-Z-Wave-Battery-Powered-Works/dp/B00ZIRV40K)~~
@@ -186,7 +194,7 @@ Software on the NUC:
     * ~~[Bed Occupancy Sensor](https://community.home-assistant.io/t/bed-occupancy-sensor-using-parts-you-have/189490) Following N-I1's design but using a large, closed-cell foam sheet covered with copper foil on both sides.~~
     * [GoControl Z-Wave Plug-in Dimmer](https://www.amazon.com/GoControl-Z-Wave-Plug-Dimmer-Module/dp/B00E1OXK3A/)
     * ~~[Zooz Z-Wave Plus S2/ZEN26](https://www.amazon.com/gp/product/B07K1T8Z74/ref=ppx_yo_dt_b_asin_title_o00_s00?ie=UTF8&psc=1)~~
-    * ~~[Inovelli ZSW31-SN Dimmer Switches](https://support.inovelli.com/portal/en/kb/articles/products-switches-dimmer-lzw31-sn-spec-sheet): These are great multifunctional dimmers which have disableable relays so you can control smart bulbs which are plugged in to the controlled socket. To disable the relay, click the Control button 8 times.  Then you use Z-Wave events to control the lights as you see fit.  I use this in my guest room to control the ceiling fan light (ceiling fan is controllable by chain) which is on the circuit and to control the two side lamps (separate control). [See here for how I control these lights in HA](https://github.com/rtclauss/hass-config/blob/master/packages/zigbee_zwave.yaml)~~
+    * ~~[Inovelli ZSW31-SN Dimmer Switches](https://support.inovelli.com/portal/en/kb/articles/products-switches-dimmer-lzw31-sn-spec-sheet): These are great multifunctional dimmers which have disableable relays so you can control smart bulbs which are plugged in to the controlled socket. To disable the relay, click the Control button 8 times.  Then you use Z-Wave events to control the lights as you see fit.  I use this in my guest room to control the ceiling fan light (ceiling fan is controllable by chain) which is on the circuit and to control the two side lamps (separate control). [See here for how I control these lights in HA](https://github.com/rtclauss/hass-config/blob/main/packages/zigbee_zwave.yaml)~~
 * [Electro Llama ZZH Stick](https://electrolama.com/projects/zig-a-zig-ah/) for Zigbee2MQTT
     * Philips Hue (bulbs and light strip)
     * [Ealon Halo LED Downlights](https://www.zigbee2mqtt.io/devices/RL460WHZHA69.html#eaton%252Fhalo%2520led-rl460whzha69)
@@ -232,10 +240,10 @@ Software on the NUC:
 * [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates matic events into a generic sensor.
 * ~~[Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.~~
 * ~~[Schedy](appdaemon/apps/schedy_heating.yaml) - Replacement for Nest. Work in Progress.~~
-* [Thermostat Stats](https://github.com/rtclauss/hass-config/blob/master/appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
+* [Thermostat Stats](https://github.com/rtclauss/hass-config/blob/main/appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
 
 **Apple Shortcuts**
-* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/master/packages/workday.yaml#L107)
+* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/main/packages/workday.yaml#L107)
 * iOS personal automation: run every day at `9:00 PM`, find the wake-up alarm you want to mirror on the phone, format its time as `HH:mm`, and `POST` JSON to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync` with `{"alarm_time":"07:30"}`. If there is no enabled alarm for the next day, send `{"alarm_enabled": false}` instead. If JSON is awkward, the webhook also accepts query parameters.
 
 Shortcut recipe:
