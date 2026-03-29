@@ -122,6 +122,122 @@ automation:
                 data:
                   entity_id: fan.den_ceiling
 
+
+  - alias: den_ceiling_bond_state_reconcile
+    id: den_ceiling_bond_state_reconcile
+    description: >
+      Keep Bond's tracked state for the Den ceiling light aligned with the
+      room's overnight lighting reality. When the den is occupied at night and
+      illuminance is bright while the nearby spill-light sources stay off, mark
+      the ceiling light as on in Bond. When the room goes dark, mark it off.
+      After midnight, if the room has been vacant for an hour and still reads
+      bright with those spill-light sources off, force the ceiling light off so
+      it cannot stay on all night.
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.den_motion_occupancy
+        to: "on"
+      - trigger: numeric_state
+        entity_id: sensor.den_motion_illuminance
+        above: 100
+        for:
+          minutes: 1
+      - trigger: numeric_state
+        entity_id: sensor.den_motion_illuminance
+        below: 10
+        for:
+          minutes: 5
+      - trigger: time_pattern
+        minutes: "/30"
+    action:
+      - choose:
+          - conditions:
+              - condition: time
+                after: "00:30:00"
+              - condition: sun
+                before: sunrise
+              - condition: state
+                entity_id: binary_sensor.den_motion_occupancy
+                state: "off"
+                for:
+                  hours: 1
+              - &den_ceiling_spill_lights_off
+                condition: state
+                entity_id: light.den_flood_switch
+                state: "off"
+              - condition: state
+                entity_id: light.den_lamp
+                state: "off"
+              - condition: state
+                entity_id: light.kitchen_all
+                state: "off"
+              - condition: state
+                entity_id: light.tiki_room_lights_tiki_room_strip
+                state: "off"
+              - condition: numeric_state
+                entity_id: sensor.den_motion_illuminance
+                above: 100
+            sequence:
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: true
+              - delay:
+                  seconds: 2
+              - action: light.turn_off
+                target:
+                  entity_id: light.den_ceiling
+              - delay:
+                  seconds: 2
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: false
+          - conditions:
+              - condition: sun
+                after: sunset
+                before: sunrise
+              - condition: state
+                entity_id: binary_sensor.den_motion_occupancy
+                state: "on"
+              - condition: state
+                entity_id: light.den_ceiling
+                state: "off"
+              - *den_ceiling_spill_lights_off
+              - condition: state
+                entity_id: light.den_lamp
+                state: "off"
+              - condition: state
+                entity_id: light.kitchen_all
+                state: "off"
+              - condition: state
+                entity_id: light.tiki_room_lights_tiki_room_strip
+                state: "off"
+              - condition: numeric_state
+                entity_id: sensor.den_motion_illuminance
+                above: 100
+            sequence:
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: true
+          - conditions:
+              - condition: sun
+                after: sunset
+                before: sunrise
+              - condition: state
+                entity_id: light.den_ceiling
+                state: "on"
+              - condition: numeric_state
+                entity_id: sensor.den_motion_illuminance
+                below: 10
+            sequence:
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: false
+    mode: restart
+
   # - alias: turn_off_fan_if_den_unoccupied
   #   id: turn_off_fan_if_den_unoccupied
   #   trigger:
