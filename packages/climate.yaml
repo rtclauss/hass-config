@@ -1071,24 +1071,7 @@ template:
       - device_class: window
         default_entity_id: binary_sensor.fresh_air_open
         unique_id: fresh_air_open
-        state: >-
-          {% set excluded = states('input_text.any_window_open_exclude_entities').replace('\n', ',').split(',') | map('trim') | reject('equalto', '') | list %}
-          {% set matches = namespace(count=0) %}
-          {% for sensor in states.binary_sensor %}
-            {% set entity_id = sensor.entity_id %}
-            {% if entity_id not in ['binary_sensor.any_window_open', 'binary_sensor.fresh_air_open'] %}
-              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
-              {% set did = device_id(entity_id) %}
-              {% set model = '' %}
-              {% if did is not none and did != '' %}
-                {% set model = device_attr(did, 'model') | default('', true) | lower %}
-              {% endif %}
-              {% if sensor.state == 'on' and device_class in ['opening', 'window'] and 'parasoll' in model and entity_id not in excluded %}
-                {% set matches.count = matches.count + 1 %}
-              {% endif %}
-            {% endif %}
-          {% endfor %}
-          {{ matches.count > 0 }}
+        state: "{{ is_state('binary_sensor.any_window_open', 'on') }}"
         name: fresh_air_open
   - sensor:
       - name: HVAC Activity
