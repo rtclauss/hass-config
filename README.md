@@ -173,6 +173,8 @@ verifiably live in the current Home Assistant instance. When an older device was
 replaced rather than simply removed, the retired row links to the live
 replacement below.
 
+Follow-up for item-level and model-level inventory work: [Issue #247](https://github.com/rtclauss/hass-config/issues/247).
+
 ## Retired Devices
 
 | README entry | Outcome | Replacement | Notes |
