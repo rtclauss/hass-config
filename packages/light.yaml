@@ -607,9 +607,16 @@ automation:
         offset: "00:00:00"
         id: sunrise
       - trigger: sun
+        event: sunrise
+        offset: "-00:45:00"
+        id: pre_sunrise
+      - trigger: sun
         event: sunset
         offset: "-01:45:00"
         id: sunset
+      - trigger: time
+        at: "02:00:00"
+        id: late_night_dim
     action:
       - choose:
           - conditions:
@@ -625,7 +632,34 @@ automation:
                     - light.outside_north_west_garage
                     - light.outside_south_west_garage
                     - light.outside_front_door
-      - choose:
+          - conditions:
+              - condition: trigger
+                id: pre_sunrise
+            sequence:
+              - action: light.turn_on
+                data:
+                  transition: 300
+                  brightness_pct: 100
+                target:
+                  entity_id:
+                    - light.outside_front_hue
+                    - light.outside_north_west_garage
+                    - light.outside_south_west_garage
+                    - light.outside_front_door
+          - conditions:
+              - condition: trigger
+                id: late_night_dim
+            sequence:
+              - action: light.turn_on
+                data:
+                  transition: 300
+                  brightness_pct: 25
+                target:
+                  entity_id:
+                    - light.outside_front_hue
+                    - light.outside_north_west_garage
+                    - light.outside_south_west_garage
+                    - light.outside_front_door
           - conditions:
               - condition: trigger
                 id: sunset
@@ -2069,6 +2103,18 @@ scene:
   - name: night_arrive_home
     entities:
       light.hall_upstairs_switch:
+        state: "on"
+        brightness: 255
+      light.outside_front_hue:
+        state: "on"
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        brightness: 255
+      light.outside_front_door:
         state: "on"
         brightness: 255
       light.den_all:
