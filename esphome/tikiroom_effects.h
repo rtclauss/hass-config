@@ -19,6 +19,9 @@ constexpr uint8_t MAX_RIPPLE_STEPS = 16;
 constexpr uint8_t COOLING = 55;
 constexpr uint8_t SPARKING = 120;
 constexpr uint8_t GLITTER_FADE_AMOUNT = 20;
+constexpr uint8_t F1_CRASH_MIN_FRAMES = 30;
+constexpr uint8_t F1_CRASH_MAX_FRAMES = 50;
+constexpr uint8_t F1_CRASH_DURATION_FRAMES = 18;
 constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 64;
 constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;
 constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;
@@ -564,18 +567,35 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
   static uint32_t race_start_ms = 0;
   static uint32_t last_motion_ms = 0;
   static uint32_t next_overtake_ms = 0;
+  static uint8_t frames_until_crash = F1_CRASH_MIN_FRAMES;
+  static bool crash_active = false;
+  static uint8_t crash_frame = 0;
+  static uint8_t crash_car = 0;
+  static float crash_progress = 0.0f;
+  static uint8_t active_cars = static_cast<uint8_t>(cars.size());
+  static std::array<bool, cars.size()> car_active{};
   static std::array<float, 5> car_progress{};
   static std::array<float, 5> pace_delta{};
   auto &rt = state();
-
-  if (initial_run) {
-    race_start_ms = now_ms();
-    last_motion_ms = race_start_ms;
-    next_overtake_ms = race_start_ms + 3500;
+  const auto reset_race = [&](uint32_t base_now) {
+    race_start_ms = base_now;
+    last_motion_ms = base_now;
+    next_overtake_ms = base_now + 3500;
+    frames_until_crash = random_u8(F1_CRASH_MIN_FRAMES, static_cast<uint8_t>(F1_CRASH_MAX_FRAMES + 1));
+    crash_active = false;
+    crash_frame = 0;
+    crash_car = 0;
+    crash_progress = 0.0f;
+    active_cars = static_cast<uint8_t>(cars.size());
+    car_active.fill(true);
+    pace_delta.fill(0.0f);
     for (size_t i = 0; i < cars.size(); i++) {
       car_progress[i] = cars[i].start_offset;
     }
-    pace_delta.fill(0.0f);
+  };
+
+  if (initial_run) {
+    reset_race(now_ms());
     clear_leds();
   }
 
@@ -585,7 +605,7 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
   }
 
   if (race_start_ms == 0) {
-    race_start_ms = now_ms();
+    reset_race(now_ms());
   }
 
   const auto now = now_ms();
@@ -601,8 +621,25 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
   const uint8_t tarmac_level = beatsin8(10, 6, 12);
   std::array<float, cars.size()> position_ratio{};
   std::array<float, cars.size()> effective_pace{};
+  std::array<uint8_t, cars.size()> active_indices{};
+  size_t active_count = 0;
 
   for (size_t i = 0; i < cars.size(); i++) {
+    if (!car_active[i]) {
+      pace_delta[i] = 0.0f;
+      position_ratio[i] = car_progress[i];
+      effective_pace[i] = cars[i].base_pace;
+      continue;
+    }
+
+    active_indices[active_count++] = static_cast<uint8_t>(i);
+
+    if (crash_active) {
+      position_ratio[i] = car_progress[i];
+      effective_pace[i] = cars[i].base_pace;
+      continue;
+    }
+
     pace_delta[i] *= 0.988f;
     if (std::fabs(pace_delta[i]) < 0.0003f) {
       pace_delta[i] = 0.0f;
@@ -620,11 +657,12 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     position_ratio[i] = car_progress[i];
   }
 
-  if (now >= next_overtake_ms) {
-    const uint8_t attacker = random_u8(static_cast<uint8_t>(cars.size()));
+  if (!crash_active && active_count > 1 && now >= next_overtake_ms) {
+    const uint8_t attacker = active_indices[random_u8(static_cast<uint8_t>(active_count))];
     float smallest_gap = 2.0f;
     int defender = -1;
-    for (size_t i = 0; i < cars.size(); i++) {
+    for (size_t active_index = 0; active_index < active_count; active_index++) {
+      const size_t i = active_indices[active_index];
       if (i == attacker) {
         continue;
       }
@@ -645,6 +683,20 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     }
 
     next_overtake_ms = now + 3500U + random_u16(6500);
+  }
+
+  if (!crash_active && active_count > 0) {
+    if (frames_until_crash > 0) {
+      frames_until_crash--;
+    }
+
+    if (frames_until_crash == 0) {
+      crash_car = active_indices[random_u8(static_cast<uint8_t>(active_count))];
+      crash_progress = car_progress[crash_car];
+      crash_active = true;
+      crash_frame = 0;
+      pace_delta[crash_car] = 0.0f;
+    }
   }
 
   fill_all(Color(tarmac_level, tarmac_level, tarmac_level));
@@ -670,10 +722,18 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
   }
 
   for (size_t i = 0; i < cars.size(); i++) {
+    if (!car_active[i] || (crash_active && i == crash_car)) {
+      continue;
+    }
+
     const auto &car = cars[i];
-    const float variation = std::sin((elapsed_s * car.variation_rate * 2.0f * PI_F) + (car.start_offset * 2.0f * PI_F));
-    float progress = car_progress[i] + (variation * car.variation_amount);
-    progress -= std::floor(progress);
+    float progress = car_progress[i];
+    if (!crash_active) {
+      const float variation =
+          std::sin((elapsed_s * car.variation_rate * 2.0f * PI_F) + (car.start_offset * 2.0f * PI_F));
+      progress += variation * car.variation_amount;
+      progress -= std::floor(progress);
+    }
     const int32_t nose = static_cast<int32_t>(progress * NUM_LEDS);
 
     add_inplace(rt.leds[wrap_led_index(nose)], Color(255, 255, 255));
@@ -682,6 +742,50 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     add_inplace(rt.leds[wrap_led_index(nose - 3)], scale_color(car.color, 128));
     add_inplace(rt.leds[wrap_led_index(nose - 4)], scale_color(car.color, 72));
     add_inplace(rt.leds[wrap_led_index(nose - 5)], scale_color(car.color, 32));
+  }
+
+  if (crash_active) {
+    const float blast = static_cast<float>(crash_frame) / static_cast<float>(F1_CRASH_DURATION_FRAMES - 1);
+    const float fade = 1.0f - blast;
+    const int16_t center = static_cast<int16_t>(crash_progress * NUM_LEDS);
+    const int16_t radius = static_cast<int16_t>(2 + (blast * 18.0f));
+
+    for (int16_t offset = -radius; offset <= radius; offset++) {
+      const float distance = std::fabs(static_cast<float>(offset));
+      const float intensity = clamp_unit(1.0f - (distance / static_cast<float>(radius + 1)));
+      Color fireball(
+          clamp_u8(static_cast<int>((120.0f + (fade * 135.0f)) * intensity)),
+          clamp_u8(static_cast<int>((48.0f + (fade * 190.0f)) * intensity)),
+          clamp_u8(static_cast<int>((fade > 0.6f ? (fade - 0.6f) * 240.0f : 0.0f) * intensity)));
+      add_inplace(rt.leds[wrap_led_index(center + offset)], fireball);
+    }
+
+    for (uint8_t spark = 0; spark < 6; spark++) {
+      const int16_t spark_offset =
+          static_cast<int16_t>((spark * (radius + 2)) / 2) * (spark % 2 == 0 ? 1 : -1);
+      add_inplace(
+          rt.leds[wrap_led_index(center + spark_offset)],
+          Color(
+              clamp_u8(static_cast<int>(180.0f * fade)),
+              clamp_u8(static_cast<int>(90.0f + (120.0f * fade))),
+              0));
+    }
+
+    crash_frame++;
+    if (crash_frame >= F1_CRASH_DURATION_FRAMES) {
+      car_active[crash_car] = false;
+      if (active_cars > 0) {
+        active_cars--;
+      }
+      crash_active = false;
+      crash_frame = 0;
+      if (active_cars == 0) {
+        reset_race(now);
+      } else {
+        frames_until_crash = random_u8(F1_CRASH_MIN_FRAMES, static_cast<uint8_t>(F1_CRASH_MAX_FRAMES + 1));
+        next_overtake_ms = now + 2500U + random_u16(3500);
+      }
+    }
   }
 
   copy_to_output(it);
