@@ -55,7 +55,7 @@ This table summarizes battery-powered devices that are already represented in th
 | 2 | IKEA | SOMRIG shortcut button | Zigbee | `button` | `AAA` | 1 | East and west bedside shortcut buttons. |
 | 2 | IKEA | TRADFRI remote control | Zigbee | `button` | `CR2032` | 1 | Office light buttons are the older CR2032-powered TRADFRI remote generation, not STYRBAR. |
 | 2 | IKEA | SYMFONISK sound remote, gen 2 | Zigbee | `button` | `AAA` | 2 | The installed Sonos remotes are explicitly the Gen 2 model, so each uses `2 x AAA`. |
-| 2 | IKEA | FYRTUR roller blind, block-out | Zigbee | `cover` | `FYRTUR battery pack` | 1 | Counted as one removable rechargeable pack per blind. |
+| 2 | IKEA | FYRTUR roller blind, block-out | Zigbee | `cover` | `FYRTUR battery pack (BRAUNIT)` | 1 | Counted as one removable rechargeable pack per blind. |
 | 1 | SmartThings | Arrival sensor | Zigbee | `binary_sensor` | `AA` | 2 | README documents this sensor as modified to use `2 x AA` instead of the stock coin cell. |
 | 1 | Schlage | Encode Plus Smart WiFi Deadbolt (BE499WB) | HomeKit over Thread | `lock` | `AA` | 4 | Counted from the Home app screenshot you provided (`Schlage`, model `be499WB`). Schlage documents the BE499WB family as using `4 x AA` alkaline batteries. |
 | 5 | ecobee Inc. | Remote occupancy and temperature sensor (EBERS41) | Proprietary RF / HomeKit | `sensor` | `CR2477` | 1 | Guest room, bedroom, den, basement, and office sensors report battery through HomeKit Controller. |
