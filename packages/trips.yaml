@@ -1810,8 +1810,10 @@ template:
       - name: time_to_home
         default_entity_id: sensor.me_to_home
         unique_id: me_to_home
+        availability: >-
+          {{ states('sensor.me_to_home') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
         state: >-
-          {% set to_home = states.sensor.me_to_home.state | int %}
-          {% set minutes = ((to_home % 60) / 1) | int %}
-          {% set hours = ((to_home % 1440) / 60) | int %}
-          {{hours}}:{{minutes}}:00
+          {% set to_home = states('sensor.me_to_home') | int(default=0) %}
+          {% set minutes = to_home % 60 %}
+          {% set hours = (to_home % 1440) // 60 %}
+          {{ '%02d:%02d:00' | format(hours, minutes) }}

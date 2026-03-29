@@ -454,42 +454,33 @@ automation:
     id: notify_garbage_day
     description: Notify garbage day
     trigger:
-      - trigger: calendar
-        id: day_changed
-        entity_id: calendar.garbage_collection
-        event: start
-        offset: "-33:30:00"
-      - trigger: calendar
-        id: pickup_tomorrow
-        entity_id: calendar.garbage_collection
-        event: start
-        offset: "-09:30:00"
-    variables:
-      garbage_summary: "{{ state_attr('sensor.waste_management', 'friendly_name') | default('Waste Management', true) }}"
+      - trigger: time
+        at: "14:30:00"
+    condition:
+      - condition: template
+        value_template: "{{ states('sensor.garbage_pickup_date') not in ['unknown', 'unavailable', 'none', 'None', ''] }}"
     action:
       - choose:
           - conditions:
-              - condition: trigger
-                id: day_changed
               - alias: Only on Tuesdays (Day before Garbage Day/Wednesday)
                 condition: time
                 weekday:
                   - tue
-              - alias: Waste Management event
+              - alias: Pickup shifted to Thursday this week
                 condition: template
                 value_template: >-
-                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
+                  {% set pickup_date = as_datetime(states('sensor.garbage_pickup_date')).date() %}
+                  {{ pickup_date == (now().date() + timedelta(days=2)) }}
             sequence:
               - action: notify.all
                 data:
                   message: DO NOT put out bins tonight. Garbage day has changed!
           - conditions:
-              - condition: trigger
-                id: pickup_tomorrow
-              - alias: Waste Management event
+              - alias: Pickup is tomorrow
                 condition: template
                 value_template: >-
-                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
+                  {% set pickup_date = as_datetime(states('sensor.garbage_pickup_date')).date() %}
+                  {{ pickup_date == (now().date() + timedelta(days=1)) }}
             sequence:
               - action: notify.all
                 data:
@@ -762,17 +753,9 @@ template:
         state_class: total_increasing
         unit_of_measurement: kWh
         availability: >
-          {% if is_state("sensor.filtered_raw_electrical_sensor", "unavailable") %}
-            false
-          {% else %}
-            true
-          {%- endif %}
+          {{ states('sensor.filtered_raw_electrical_sensor') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
         state: >-
-          {% if not states('sensor.filtered_raw_electrical_sensor') in ['unavailable','unknown','Unavailable','Unknown'] %}
-            {{(states("sensor.filtered_raw_electrical_sensor")| int)/100.0}}
-          {% else %}
-            unavailable
-          {% endif %}
+          {{ (states('sensor.filtered_raw_electrical_sensor') | float(default=0)) / 100.0 }}
       - name: house_electrical_meter_non_ev
         unique_id: house_electrical_meter_non_ev
         device_class: energy
