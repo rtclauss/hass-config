@@ -30,11 +30,6 @@ homeassistant:
       friendly_name: "Log Level"
       icon: mdi:bug
 
-    input_boolean.esphome_debug_logging:
-      <<: *customize
-      friendly_name: "ESPHome Debug Logging"
-      icon: mdi:lan-connect
-
   customize_glob:
     "input_select.log_*":
       icon: mdi:bug
@@ -57,11 +52,6 @@ input_select:
       - notset
     initial: warn
 
-input_boolean:
-  esphome_debug_logging:
-    name: ESPHome Debug Logging
-    initial: off
-
 ###################################
 ##  Dynamically set the log levels without having to restart HASS or edit configuration.yaml
 #- Thanks @VDRainer
@@ -78,62 +68,3 @@ automation:
       - action: logger.set_level
         data:
           homeassistant.components: "{{ states.input_select.log_level.state }}"
-
-  - id: esphome_debug_logging
-    alias: esphome_debug_logging
-    mode: single
-    trigger:
-      - trigger: homeassistant
-        event: start
-      - trigger: state
-        entity_id:
-          - input_boolean.esphome_debug_logging
-    variables:
-      esphome_debug_level: >-
-        {{ 'debug' if is_state('input_boolean.esphome_debug_logging', 'on') else 'error' }}
-    action:
-      - action: logger.set_level
-        data:
-          # Subscribe to logs from the ESPHome device in the integration options to
-          # surface device-side logs here under homeassistant.components.esphome.
-          homeassistant.components.esphome: "{{ esphome_debug_level }}"
-          homeassistant.components.zeroconf: "{{ esphome_debug_level }}"
-          homeassistant.config_entries: "{{ esphome_debug_level }}"
-          homeassistant.helpers.device_registry: "{{ esphome_debug_level }}"
-          homeassistant.helpers.entity_registry: "{{ esphome_debug_level }}"
-          aioesphomeapi: "{{ esphome_debug_level }}"
-          zeroconf: "{{ esphome_debug_level }}"
-
-  - id: tikiroom_esphome_availability_trace
-    alias: tikiroom_esphome_availability_trace
-    mode: queued
-    trigger:
-      - trigger: homeassistant
-        event: start
-        id: startup
-      - trigger: state
-        entity_id:
-          - light.tiki_room_lights_tiki_room_strip
-          - select.tiki_room_lights_tiki_room_strip_effect
-          - number.tiki_room_lights_tiki_room_strip_animation_speed
-          - update.tikiroomlights_firmware
-        id: entity_state_change
-    condition:
-      - condition: state
-        entity_id: input_boolean.esphome_debug_logging
-        state: "on"
-    action:
-      - action: system_log.write
-        data:
-          level: info
-          logger: packages.logger.tikiroom_esphome
-          message: >-
-            Tiki Room ESPHome trace trigger={{ trigger.id }}
-            changed={{ trigger.entity_id | default('homeassistant.start') }}
-            from={{ trigger.from_state.state if trigger.from_state is not none else 'n/a' }}
-            to={{ trigger.to_state.state if trigger.to_state is not none else 'n/a' }}
-            light={{ states('light.tiki_room_lights_tiki_room_strip') }}
-            effect={{ states('select.tiki_room_lights_tiki_room_strip_effect') }}
-            speed={{ states('number.tiki_room_lights_tiki_room_strip_animation_speed') }}
-            firmware={{ states('update.tikiroomlights_firmware') }}
-            wifi_client={{ states('device_tracker.tikiroom_esp8266_led_string') }}

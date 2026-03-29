@@ -13,65 +13,6 @@ esphome:
   name: tikiroomlights
   includes:
     - tikiroom_effects.h
-  on_boot:
-    - priority: 800
-      then:
-        - logger.log:
-            level: INFO
-            tag: tikiroom.boot
-            format: "Boot stage=hardware priority=800"
-    - priority: 250
-      then:
-        - logger.log:
-            level: INFO
-            tag: tikiroom.boot
-            format: "Boot stage=wifi priority=250 wifi_status=%d"
-            args:
-              - WiFi.status()
-    - priority: 200
-      then:
-        - logger.log:
-            level: INFO
-            tag: tikiroom.boot
-            format: "Boot stage=api priority=200 wifi_status=%d api_any=%s api_state_sub=%s"
-            args:
-              - WiFi.status()
-              - 'id(tikiroom_api).is_connected() ? "yes" : "no"'
-              - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
-    - priority: -100
-      then:
-        - logger.log:
-            level: INFO
-            tag: tikiroom.boot
-            format: "Boot stage=ready priority=-100 effect=%s speed=%.0f api_any=%s api_state_sub=%s"
-            args:
-              - id(tiki_room_strip).get_effect_name().c_str()
-              - id(tikiroom_effect_speed)
-              - 'id(tikiroom_api).is_connected() ? "yes" : "no"'
-              - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
-        - logger.log:
-            level: INFO
-            tag: tikiroom.boot
-            format: "Waiting up to 30s for a state-subscribing API client so entities can register"
-        - wait_until:
-            condition:
-              api.connected:
-                state_subscription_only: true
-            timeout: 30s
-        - if:
-            condition:
-              api.connected:
-                state_subscription_only: true
-            then:
-              - logger.log:
-                  level: INFO
-                  tag: tikiroom.boot
-                  format: "State-subscribing API client connected; entity registration should now be active"
-            else:
-              - logger.log:
-                  level: WARN
-                  tag: tikiroom.boot
-                  format: "No state-subscribing API client connected within 30s; entities will remain unavailable"
 
 esp8266:
   board: esp01_1m
@@ -81,20 +22,6 @@ wifi:
   ssid: !secret wifi_ap
   password: !secret wifi_password
   min_auth_mode: WPA2
-  on_connect:
-    - logger.log:
-        level: INFO
-        tag: tikiroom.net
-        format: "WiFi connected to %s"
-        args:
-          - WiFi.SSID().c_str()
-  on_disconnect:
-    - logger.log:
-        level: WARN
-        tag: tikiroom.net
-        format: "WiFi disconnected with status=%d"
-        args:
-          - WiFi.status()
 
   ap:
     ssid: "Tikiroom Fallback Hotspot"
@@ -104,118 +31,12 @@ captive_portal:
 
 logger:
   level: INFO
-  esp8266_store_log_strings_in_flash: false
 
 api:
-  id: tikiroom_api
-  on_client_connected:
-    - logger.log:
-        level: INFO
-        tag: tikiroom.api
-        format: "API client %s connected from %s (state_subscriber=%s)"
-        args:
-          - client_info.c_str()
-          - client_address.c_str()
-          - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
-    - if:
-        condition:
-          lambda: |-
-            return id(tikiroom_api).is_connected(true);
-        then:
-          - logger.log:
-              level: INFO
-              tag: tikiroom.api
-              format: "State-subscribing API client connected; Home Assistant should be able to control entities"
-        else:
-          - logger.log:
-              level: WARN
-              tag: tikiroom.api
-              format: "API client connected without state subscription; entity registration is still pending"
-  on_client_disconnected:
-    - logger.log:
-        level: WARN
-        tag: tikiroom.api
-        format: "API client %s disconnected from %s (state_subscriber=%s)"
-        args:
-          - client_info.c_str()
-          - client_address.c_str()
-          - 'id(tikiroom_api).is_connected(true) ? "yes" : "no"'
-    - if:
-        condition:
-          lambda: |-
-            return !id(tikiroom_api).is_connected(true);
-        then:
-          - logger.log:
-              level: WARN
-              tag: tikiroom.api
-              format: "No state-subscribing API clients remain; Home Assistant entities will go unavailable"
+  reboot_timeout: 15min
 
 ota:
   - platform: esphome
-
-debug:
-  update_interval: 60s
-
-interval:
-  - interval: 30s
-    startup_delay: 45s
-    then:
-      - if:
-          condition:
-            lambda: |-
-              return !id(tikiroom_api).is_connected(true);
-          then:
-            - logger.log:
-                level: WARN
-                tag: tikiroom.boot
-                format: "Runtime registration check missing state-subscribing API client; wifi_status=%d api_any=%s effect=%s speed=%.0f"
-                args:
-                  - WiFi.status()
-                  - 'id(tikiroom_api).is_connected() ? "yes" : "no"'
-                  - id(tiki_room_strip).get_effect_name().c_str()
-                  - id(tikiroom_effect_speed)
-
-binary_sensor:
-  - platform: status
-    name: "Tiki Room Strip Status"
-    entity_category: diagnostic
-
-sensor:
-  - platform: wifi_signal
-    name: "Tiki Room Strip WiFi Signal"
-    update_interval: 60s
-    entity_category: diagnostic
-
-  - platform: debug
-    free:
-      name: "Tiki Room Strip Heap Free"
-      entity_category: diagnostic
-    block:
-      name: "Tiki Room Strip Heap Max Block"
-      entity_category: diagnostic
-    fragmentation:
-      name: "Tiki Room Strip Heap Fragmentation"
-      entity_category: diagnostic
-    loop_time:
-      name: "Tiki Room Strip Loop Time"
-      entity_category: diagnostic
-
-text_sensor:
-  - platform: wifi_info
-    ip_address:
-      name: "Tiki Room Strip IP Address"
-      entity_category: diagnostic
-    ssid:
-      name: "Tiki Room Strip Connected SSID"
-      entity_category: diagnostic
-    bssid:
-      name: "Tiki Room Strip Connected BSSID"
-      entity_category: diagnostic
-
-  - platform: debug
-    reset_reason:
-      name: "Tiki Room Strip Reset Reason"
-      entity_category: diagnostic
 
 globals:
   - id: tikiroom_effect_speed
@@ -235,12 +56,6 @@ number:
       return id(tikiroom_effect_speed);
     update_interval: 1s
     set_action:
-      - logger.log:
-          level: INFO
-          tag: tikiroom.light
-          format: "Animation speed changed to %.0f"
-          args:
-            - x
       - lambda: |-
           id(tikiroom_effect_speed) = x;
 
@@ -281,12 +96,6 @@ select:
       return std::string(effect.c_str());
     update_interval: 1s
     set_action:
-      - logger.log:
-          level: INFO
-          tag: tikiroom.light
-          format: "Effect changed to %s"
-          args:
-            - x.c_str()
       - lambda: |-
           auto call = id(tiki_room_strip).turn_on();
           call.set_effect(x.c_str());
@@ -315,24 +124,6 @@ light:
               - light.turn_on:
                   id: tiki_room_strip
                   effect: solid
-        - logger.log:
-            level: INFO
-            tag: tikiroom.light
-            format: "Light turned on with effect %s"
-            args:
-              - id(tiki_room_strip).get_effect_name().c_str()
-    on_turn_off:
-      - logger.log:
-          level: INFO
-          tag: tikiroom.light
-          format: "Light turned off"
-    on_state:
-      - logger.log:
-          level: INFO
-          tag: tikiroom.light
-          format: "Light state updated; active effect %s"
-          args:
-            - id(tiki_room_strip).get_effect_name().c_str()
     effects:
       - addressable_lambda:
           name: solid
