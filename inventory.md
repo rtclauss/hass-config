@@ -24,7 +24,7 @@ This file tracks available or unused smart-home devices that can be repurposed f
 | 8 | Aqara | Cube Controller (MKZQ01LM / MFKZQ01LM) | Zigbee | `sensor` | `CR2450` | 1 | Gesture-based scene controller. Issue #202 listed `mkzq01lm`; this row maps it to the Aqara cube family. |
 | 2 | Aqara | Vibration Sensor (DJT11LM) | Zigbee | `binary_sensor` | `CR2032` | 1 | Vibration, knock, and tilt sensor for mailbox, drawer, appliance, or tamper automations. |
 | 6 | Aqara | Temperature and Humidity Sensor (WSDCGQ11LM) | Zigbee | `sensor` | `CR2032` | 1 | Compact room climate sensor for HVAC balancing, humidity alerts, and occupancy context. |
-| 4 | Ecolink | FireFighter | Non-Zigbee RF / verify SKU | `binary_sensor` | `CR123A` | 1 | Audio listener for existing smoke and CO alarms. Issue #202 labeled this Zigbee, but Ecolink FireFighter devices are typically not Zigbee. |
+| 4 | Ecolink | Firefighter (FFZB1-SM-ECO) | Non-Zigbee RF / verify SKU | `binary_sensor` | `CR123A` | 1 | Audio listener for existing smoke and CO alarms. Issue #202 labeled this Zigbee |
 | 3 | Aqara | Door and Window Sensor (MCCGQ11LM) | Zigbee | `binary_sensor` | `CR1632` | 1 | Contact sensor for doors, windows, drawers, closets, and gate-style state tracking. |
 | 1 | Xiaomi | Door and Window Sensor (MCCGQ01LM) | Zigbee | `binary_sensor` | `CR1632` | 1 | Legacy Xiaomi contact sensor for smaller door and window openings. |
 | 1 | Aqara | Wireless Mini Switch (WXKG11LM) | Zigbee | `button` | `CR2032` | 1 | Single-button trigger source for scenes, shortcuts, bedside controls, or alerts. |
