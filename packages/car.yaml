@@ -633,7 +633,11 @@ automation:
       - trigger: numeric_state
         entity_id: sensor.example_vehicle_odometer
         value_template: >-
-          {{ state | int % 6250  }}
+          {% if has_value('sensor.example_vehicle_odometer') %}
+            {{ (states('sensor.example_vehicle_odometer') | float(default=0)) % 6250 }}
+          {% else %}
+            6250
+          {% endif %}
         below: 20
     condition:
     action:
