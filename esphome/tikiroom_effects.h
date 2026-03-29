@@ -19,6 +19,8 @@ constexpr uint8_t MAX_RIPPLE_STEPS = 16;
 constexpr uint8_t COOLING = 55;
 constexpr uint8_t SPARKING = 120;
 constexpr uint8_t GLITTER_FADE_AMOUNT = 20;
+constexpr size_t LAVA_FIELD_CELLS = 48;
+constexpr size_t THUNDERSTORM_CELLS = 40;
 constexpr float PI_F = 3.14159265f;
 
 struct RuntimeState {
@@ -116,6 +118,14 @@ inline Color scale_color(const Color &color, uint8_t scale) {
 
 inline void add_scaled_inplace(Color &base, const Color &added, uint8_t scale) {
   add_inplace(base, scale_color(added, scale));
+}
+
+template<size_t CELL_COUNT>
+inline Color sample_coarse_cells(const std::array<Color, CELL_COUNT> &cells, uint16_t led_index) {
+  const uint32_t scaled = (static_cast<uint32_t>(led_index) * CELL_COUNT * 256U) / NUM_LEDS;
+  const size_t base = (scaled >> 8) % CELL_COUNT;
+  const uint8_t amount = static_cast<uint8_t>(scaled & 0xFF);
+  return blend(cells[base], cells[(base + 1) % CELL_COUNT], amount);
 }
 
 inline Color hsv_to_rgb(uint8_t h, uint8_t s, uint8_t v) {
@@ -439,6 +449,7 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
   static uint32_t last_update = 0;
   static uint16_t flow_offset = 0;
   static uint16_t ember_offset = 173;
+  std::array<Color, LAVA_FIELD_CELLS> lava_cells{};
   auto &rt = state();
 
   if (initial_run) {
@@ -461,14 +472,15 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
   const uint16_t vent_b = beatsin16(4, 0, NUM_LEDS - 1, 2.1f);
   const uint16_t vent_c = beatsin16(3, 0, NUM_LEDS - 1, 4.2f);
 
-  for (uint16_t i = 0; i < NUM_LEDS; i++) {
-    const float base_flow = pseudo_noise(i * 12, flow_offset + (i * 2));
-    const float ember_wave = pseudo_noise((i * 21) + 97, ember_offset + (i * 5));
+  for (size_t cell = 0; cell < LAVA_FIELD_CELLS; cell++) {
+    const uint16_t coarse_led = static_cast<uint16_t>((cell * NUM_LEDS) / LAVA_FIELD_CELLS);
+    const float base_flow = pseudo_noise(static_cast<uint16_t>(cell * 53), flow_offset + static_cast<uint16_t>(cell * 7));
+    const float ember_wave = pseudo_noise(static_cast<uint16_t>((cell * 71) + 97), ember_offset + static_cast<uint16_t>(cell * 11));
 
     float vent_heat = 0.0f;
-    const float dist_a = static_cast<float>(wrapped_distance(i, vent_a));
-    const float dist_b = static_cast<float>(wrapped_distance(i, vent_b));
-    const float dist_c = static_cast<float>(wrapped_distance(i, vent_c));
+    const float dist_a = static_cast<float>(wrapped_distance(coarse_led, vent_a));
+    const float dist_b = static_cast<float>(wrapped_distance(coarse_led, vent_b));
+    const float dist_c = static_cast<float>(wrapped_distance(coarse_led, vent_c));
     vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_a / 168.0f));
     vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_b / 138.0f));
     vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_c / 112.0f));
@@ -502,7 +514,11 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
               0));
     }
 
-    add_scaled_inplace(rt.leds[i], pixel, GLITTER_FADE_AMOUNT);
+    lava_cells[cell] = pixel;
+  }
+
+  for (uint16_t i = 0; i < NUM_LEDS; i++) {
+    add_scaled_inplace(rt.leds[i], sample_coarse_cells(lava_cells, i), GLITTER_FADE_AMOUNT);
   }
 
   copy_to_output(it);
@@ -816,6 +832,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
   static uint16_t flash_center = 0;
   static uint16_t flash_width = 0;
   static uint8_t flash_level = 0;
+  std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};
   auto &rt = state();
   const auto now = now_ms();
 
@@ -878,9 +895,9 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
 
   const uint8_t ambient_roll = beatsin8(6, 6, 20);
 
-  for (uint16_t i = 0; i < NUM_LEDS; i++) {
-    const float cloud = pseudo_noise(i * 14, cloud_offset + (i * 3));
-    const float canopy = pseudo_noise((i * 9) + 71, canopy_offset + i);
+  for (size_t cell = 0; cell < THUNDERSTORM_CELLS; cell++) {
+    const float cloud = pseudo_noise(static_cast<uint16_t>(cell * 41), cloud_offset + static_cast<uint16_t>(cell * 6));
+    const float canopy = pseudo_noise(static_cast<uint16_t>((cell * 23) + 71), canopy_offset + static_cast<uint16_t>(cell * 4));
     const float undergrowth = smoothstep(0.08f, 0.92f, (canopy * 0.68f) + ((1.0f - cloud) * 0.32f));
 
     Color pixel(
@@ -893,6 +910,12 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
         clamp_u8(static_cast<int>(8 + (cloud * 26.0f))),
         clamp_u8(static_cast<int>(14 + ambient_roll + (cloud * 48.0f))));
     pixel = blend(pixel, storm_haze, clamp_u8(static_cast<int>(48 + (smoothstep(0.16f, 0.96f, cloud) * 104.0f))));
+
+    ambient_cells[cell] = pixel;
+  }
+
+  for (uint16_t i = 0; i < NUM_LEDS; i++) {
+    Color pixel = sample_coarse_cells(ambient_cells, i);
 
     const uint8_t phase_a = static_cast<uint8_t>((i * 17 + rain_offset_a) % 101);
     if (phase_a < 7) {
