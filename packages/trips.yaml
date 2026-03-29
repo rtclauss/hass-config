@@ -861,6 +861,7 @@ automation:
 
   - id: vacuum_on_trip
     alias: vacuum_on_trip
+    description: Run one full-floor pass on the main and upstairs levels during trips.
     trigger:
       - trigger: time
         at: "13:00:00"
@@ -880,26 +881,16 @@ automation:
           entity_id: input_boolean.guest_mode
           state: "off"
     action:
-      # Revert back when batteries are all reset/new
-      # including main level vacuum
-      # - alias: Start Vacuums
-      #   action: vacuum.start
-      #   target:
-      #     entity_id: all
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: script.vacuum_main_and_upstairs_levels
       - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/cleaning"
-          message: "Vacuuming part of the house while you're away \U0001F4BA"
+          message: "Vacuuming the main and upstairs levels while you're away \U0001F4BA"
 
   - id: vacuum_flying_home
     alias: vacuum_flying_home
+    description: Run one full-floor pass on the main and upstairs levels before Ryan flies home.
     trigger:
       - entity_id: binary_sensor.flying_home_today
         from: "off"
@@ -918,23 +909,12 @@ automation:
           entity_id: input_boolean.guest_mode
           state: "off"
     action:
-      # Revert back when batteries are all reset/new
-      # including main level vacuum
-      # - alias: Start Vacuums
-      #   action: vacuum.start
-      #   target:
-      #     entity_id: all
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: script.vacuum_main_and_upstairs_levels
       - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/cleaning"
-          message: "Vacuuming the house while you fly home \U0001F4BA"
+          message: "Vacuuming the main and upstairs levels while you fly home \U0001F4BA"
 
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab
