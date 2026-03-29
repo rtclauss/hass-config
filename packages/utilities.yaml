@@ -759,7 +759,7 @@ template:
       - name: house_electrical_meter
         unique_id: house_electrical_meter
         device_class: energy
-        state_class: total_increasing
+        state_class: measurement
         unit_of_measurement: kWh
         availability: >
           {% if is_state("sensor.filtered_raw_electrical_sensor", "unavailable") %}
@@ -781,12 +781,17 @@ template:
         availability: >
           {{
             states('sensor.house_electrical_meter') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
-            and states('sensor.nigori_energy_added') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+            and (
+              states('device_tracker.nigori_location_tracker') | default('', true) | lower != 'home'
+              or states('sensor.nigori_energy_added') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+            )
           }}
         state: >-
           {% set house_kwh = states('sensor.house_electrical_meter') | float(default=0) %}
           {% set ev_kwh = states('sensor.nigori_energy_added') | float(default=0) %}
-          {% set calculated = [house_kwh - ev_kwh, 0] | max %}
+          {% set home_charging = (states('device_tracker.nigori_location_tracker') | default('', true) | lower) == 'home' %}
+          {% set calculated = house_kwh - ev_kwh if home_charging else house_kwh %}
+          {% set calculated = [calculated, 0] | max %}
           {% set previous = this.state | float(default=calculated) %}
           {{ [calculated, previous] | max | round(3) }}
       - name: house_electrical_rate

@@ -178,18 +178,21 @@ automation:
           - condition: state
             entity_id: sensor.season
             state: "winter"
-      - alias: "Check if we already notified within the last hour"
-        condition: template
-        value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
     action:
-      - action: notify.mobile_app_wethop
-        data:
-          title: "Tesla Windows"
-          message: >-
-            Rain is expected near the parked Tesla within the next two hours. Home
-            Assistant is closing the open windows using the vehicle's current location
-            forecast.
+      - choose:
+          - conditions:
+              - alias: "Check if we already notified within the last hour"
+                condition: template
+                value_template: >-
+                  {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "Tesla Windows"
+                  message: >-
+                    Rain is expected near the parked Tesla within the next two hours. Home
+                    Assistant is closing the open windows using the vehicle's current location
+                    forecast.
       - action: cover.close_cover
         target:
           entity_id: cover.nigori_windows
@@ -706,7 +709,11 @@ sensor:
       {% if latitude is number and longitude is number %}
         https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(latitude) }}&longitude={{ '%.4f' | format(longitude) }}&hourly=precipitation_probability&forecast_hours=2&timezone=auto
       {% else %}
-        https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&hourly=precipitation_probability&forecast_hours=2&timezone=UTC
+        {% set home_lat = state_attr('zone.home', 'latitude') | float(default=none) %}
+        {% set home_lon = state_attr('zone.home', 'longitude') | float(default=none) %}
+        {% if home_lat is number and home_lon is number %}
+          https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(home_lat) }}&longitude={{ '%.4f' | format(home_lon) }}&hourly=precipitation_probability&forecast_hours=2&timezone=auto
+        {% endif %}
       {% endif %}
     scan_interval: 900
     unit_of_measurement: "%"

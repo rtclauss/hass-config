@@ -56,3 +56,14 @@ def test_storage_dashboard_exposes_ev_vs_gas_comparison_tiles() -> None:
         '"entity": "sensor.average_daily_ev_savings_vs_30mpg"',
     ):
         assert token in text
+
+
+def test_utilities_package_keeps_the_raw_meter_as_measurement_only() -> None:
+    text = UTILITIES_PATH.read_text(encoding="utf-8")
+
+    assert "name: house_electrical_meter" in text
+    assert "state_class: measurement" in text
+    assert "name: house_electrical_meter_non_ev" in text
+    assert "state_class: total_increasing" in text
+    assert "states('device_tracker.nigori_location_tracker') | default('', true) | lower != 'home'" in text
+    assert "home_charging = (states('device_tracker.nigori_location_tracker') | default('', true) | lower) == 'home'" in text
