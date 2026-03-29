@@ -3,8 +3,10 @@
 ## Branching
 - `main` is stable/live.
 - `develop` is the HA test branch.
-- Start local work in a worktree from `origin/develop`.
-- Feature/fix PRs target `develop`.
+- Start every Codex worktree and feature branch from `origin/develop`; never branch from `main`.
+- Feature/fix PRs must explicitly target `develop`; never rely on the repo default branch.
+- `main` only accepts promotion PRs from `develop`.
+- Do not push directly to `main`.
 - After HA soak testing, promote with a PR from `develop` to `main`.
 - Run `uv run --with pytest pytest` before PRs and merges.
 
