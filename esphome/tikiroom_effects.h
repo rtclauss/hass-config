@@ -263,6 +263,14 @@ inline float clamp_unit(float value) {
   return value;
 }
 
+inline float smoothstep(float edge0, float edge1, float value) {
+  if (edge0 == edge1) {
+    return value < edge0 ? 0.0f : 1.0f;
+  }
+  const float scaled = clamp_unit((value - edge0) / (edge1 - edge0));
+  return scaled * scaled * (3.0f - (2.0f * scaled));
+}
+
 inline void fill_rainbow(uint8_t start_hue, uint8_t delta_hue) {
   auto &rt = state();
   uint8_t hue = start_hue;
@@ -425,10 +433,12 @@ inline void apply_fire(AddressableLight &it, float speed, bool initial_run) {
 inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run) {
   static uint32_t last_update = 0;
   static uint16_t flow_offset = 0;
+  static uint16_t ember_offset = 173;
   auto &rt = state();
 
   if (initial_run) {
     flow_offset = 0;
+    ember_offset = 173;
     clear_leds();
   }
 
@@ -437,48 +447,55 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
     return;
   }
 
-  flow_offset += 2 + static_cast<uint16_t>(speed / 24.0f);
+  flow_offset += 1 + static_cast<uint16_t>(speed / 34.0f);
+  ember_offset += 1 + static_cast<uint16_t>(speed / 52.0f);
 
   const uint16_t vent_a = beatsin16(5, 0, NUM_LEDS - 1);
   const uint16_t vent_b = beatsin16(4, 0, NUM_LEDS - 1, 2.1f);
   const uint16_t vent_c = beatsin16(3, 0, NUM_LEDS - 1, 4.2f);
 
   for (uint16_t i = 0; i < NUM_LEDS; i++) {
-    const float crust = pseudo_noise(i * 18, flow_offset + (i * 4));
+    const float base_flow = pseudo_noise(i * 12, flow_offset + (i * 2));
+    const float ember_wave = pseudo_noise((i * 21) + 97, ember_offset + (i * 5));
 
     float vent_heat = 0.0f;
     const float dist_a = static_cast<float>(wrapped_distance(i, vent_a));
     const float dist_b = static_cast<float>(wrapped_distance(i, vent_b));
     const float dist_c = static_cast<float>(wrapped_distance(i, vent_c));
-    vent_heat = std::max(vent_heat, clamp_unit(1.0f - (dist_a / 135.0f)));
-    vent_heat = std::max(vent_heat, clamp_unit(1.0f - (dist_b / 105.0f)));
-    vent_heat = std::max(vent_heat, clamp_unit(1.0f - (dist_c / 82.0f)));
+    vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_a / 168.0f));
+    vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_b / 138.0f));
+    vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_c / 112.0f));
 
-    float heat = clamp_unit((crust * 0.55f) + (vent_heat * 0.70f));
-    heat *= heat;
+    const float molten_mix = clamp_unit((base_flow * 0.34f) + (ember_wave * 0.28f) + (vent_heat * 0.64f));
+    const float flare = smoothstep(0.22f, 0.94f, molten_mix);
 
     Color pixel(
-        clamp_u8(static_cast<int>(10 + (crust * 18.0f))),
-        clamp_u8(static_cast<int>(2 + (crust * 8.0f))),
+        clamp_u8(static_cast<int>(8 + (base_flow * 16.0f) + (ember_wave * 6.0f))),
+        clamp_u8(static_cast<int>(3 + (base_flow * 6.0f) + (ember_wave * 10.0f))),
         0);
 
-    if (heat > 0.18f) {
-      const float flare = clamp_unit((heat - 0.18f) / 0.82f);
+    if (flare > 0.0f) {
       const Color magma(
           clamp_u8(static_cast<int>(70 + (flare * 185.0f))),
           clamp_u8(static_cast<int>(
               flare < 0.65f
                   ? flare * 120.0f
                   : 78.0f + (((flare - 0.65f) / 0.35f) * 155.0f))),
-          clamp_u8(static_cast<int>(flare > 0.88f ? ((flare - 0.88f) / 0.12f) * 80.0f : 0.0f)));
-      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(flare * 255.0f)));
+          clamp_u8(static_cast<int>(flare > 0.84f ? ((flare - 0.84f) / 0.16f) * 72.0f : 0.0f)));
+      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(64 + (flare * 191.0f))));
     }
 
-    if (vent_heat > 0.85f && crust > 0.68f) {
-      add_inplace(pixel, Color(28, 12, 0));
+    const float seam_glow = smoothstep(0.54f, 0.92f, ember_wave * vent_heat);
+    if (seam_glow > 0.0f) {
+      add_inplace(
+          pixel,
+          Color(
+              clamp_u8(static_cast<int>(10 + (seam_glow * 26.0f))),
+              clamp_u8(static_cast<int>(4 + (seam_glow * 18.0f))),
+              0));
     }
 
-    rt.leds[i] = pixel;
+    rt.leds[i] = blend(rt.leds[i], pixel, 92);
   }
 
   copy_to_output(it);
@@ -715,6 +732,7 @@ inline void apply_lightning(AddressableLight &it, float speed, bool initial_run)
 inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_run) {
   static uint32_t last_update = 0;
   static uint16_t cloud_offset = 0;
+  static uint16_t canopy_offset = 113;
   static uint16_t rain_offset_a = 0;
   static uint16_t rain_offset_b = 47;
   static bool burst_active = false;
@@ -729,6 +747,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
 
   if (initial_run) {
     cloud_offset = 0;
+    canopy_offset = 113;
     rain_offset_a = 0;
     rain_offset_b = 47;
     burst_active = false;
@@ -776,30 +795,39 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     }
   }
 
-  cloud_offset += 1 + static_cast<uint16_t>(speed / 40.0f);
-  rain_offset_a += 7 + static_cast<uint16_t>(speed / 20.0f);
-  rain_offset_b += 11 + static_cast<uint16_t>(speed / 16.0f);
+  cloud_offset += 1 + static_cast<uint16_t>(speed / 44.0f);
+  canopy_offset += 1 + static_cast<uint16_t>(speed / 58.0f);
+  rain_offset_a += 6 + static_cast<uint16_t>(speed / 24.0f);
+  rain_offset_b += 9 + static_cast<uint16_t>(speed / 20.0f);
 
   const uint8_t ambient_roll = beatsin8(6, 6, 20);
 
   for (uint16_t i = 0; i < NUM_LEDS; i++) {
     const float cloud = pseudo_noise(i * 14, cloud_offset + (i * 3));
+    const float canopy = pseudo_noise((i * 9) + 71, canopy_offset + i);
+    const float undergrowth = smoothstep(0.08f, 0.92f, (canopy * 0.68f) + ((1.0f - cloud) * 0.32f));
 
     Color pixel(
-        clamp_u8(static_cast<int>(2 + (cloud * 10.0f))),
-        clamp_u8(static_cast<int>(4 + ambient_roll + (cloud * 18.0f))),
-        clamp_u8(static_cast<int>(12 + ambient_roll + (cloud * 36.0f))));
+        clamp_u8(static_cast<int>(1 + (canopy * 5.0f))),
+        clamp_u8(static_cast<int>(10 + ambient_roll + (undergrowth * 34.0f))),
+        clamp_u8(static_cast<int>(4 + (cloud * 18.0f) + (canopy * 10.0f))));
+
+    const Color storm_haze(
+        clamp_u8(static_cast<int>(cloud * 5.0f)),
+        clamp_u8(static_cast<int>(8 + (cloud * 26.0f))),
+        clamp_u8(static_cast<int>(14 + ambient_roll + (cloud * 48.0f))));
+    pixel = blend(pixel, storm_haze, clamp_u8(static_cast<int>(48 + (smoothstep(0.16f, 0.96f, cloud) * 104.0f))));
 
     const uint8_t phase_a = static_cast<uint8_t>((i * 17 + rain_offset_a) % 101);
     if (phase_a < 7) {
       const uint8_t streak = static_cast<uint8_t>((7 - phase_a) * 16);
-      add_inplace(pixel, Color(0, streak / 2, streak));
+      add_inplace(pixel, Color(0, clamp_u8(6 + (streak / 2)), clamp_u8(14 + streak)));
     }
 
     const uint8_t phase_b = static_cast<uint8_t>((i * 29 + rain_offset_b) % 137);
     if (phase_b < 10) {
       const uint8_t streak = static_cast<uint8_t>((10 - phase_b) * 11);
-      add_inplace(pixel, Color(0, streak / 3, streak));
+      add_inplace(pixel, Color(0, clamp_u8(5 + (streak / 3)), clamp_u8(10 + streak)));
     }
 
     if (flash_on) {
@@ -813,7 +841,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
       }
     }
 
-    rt.leds[i] = pixel;
+    rt.leds[i] = blend(rt.leds[i], pixel, 108);
   }
 
   copy_to_output(it);
