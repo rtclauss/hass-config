@@ -330,6 +330,7 @@ template:
           {% set max_km = 5 * 1.609344 %}
 
           {% set ns = namespace(best=None, best_d=999999) %}
+          {% if home_lat is not none and home_lon is not none %}
           {% for p in planes %}
             {% set lat = p.lat | default(none) %}
             {% set lon = p.lon | default(none) %}
@@ -345,6 +346,7 @@ template:
               {% endif %}
             {% endif %}
           {% endfor %}
+          {% endif %}
 
           {% if ns.best %}
             {% set cs = (ns.best.flight | default('')) | trim %}
@@ -366,6 +368,7 @@ template:
             {% set max_km = 5 * 1.609344 %}
 
             {% set ns = namespace(best=None, best_d=999999) %}
+            {% if home_lat is not none and home_lon is not none %}
             {% for p in planes %}
               {% set lat = p.lat | default(none) %}
               {% set lon = p.lon | default(none) %}
@@ -381,19 +384,20 @@ template:
                 {% endif %}
               {% endif %}
             {% endfor %}
+            {% endif %}
             {{ ns.best if ns.best else dict() }}
 
           hex: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.hex if p and p.hex is defined else none }}
 
           callsign: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {% set cs = (p.flight | default('')) | trim if p else '' %}
             {{ cs if cs != '' else none }}
 
           altitude_ft: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {% if p %}
               {{ p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) }}
             {% else %}
@@ -402,39 +406,41 @@ template:
 
           distance_km: >-
             {# Use computed distance from selection pass, if present in feed; else recompute #}
-            {% set p = this.attributes.raw %}
-            {% if p and p.lat is defined and p.lon is defined %}
-              {% set home_lat = state_attr('zone.home', 'latitude') %}
-              {% set home_lon = state_attr('zone.home', 'longitude') %}
-              {{ distance(home_lat, home_lon, p.lat, p.lon) | round(3) }}
+            {% set p = this.attributes.get('raw') %}
+            {% set home_lat = state_attr('zone.home', 'latitude') %}
+            {% set home_lon = state_attr('zone.home', 'longitude') %}
+            {% if p and p.lat is defined and p.lon is defined and home_lat is not none and home_lon is not none %}
+              {% set d_km = distance(home_lat, home_lon, p.lat, p.lon) %}
+              {{ d_km | round(3) if d_km is not none else none }}
             {% else %}
               {{ none }}
             {% endif %}
 
           distance_mi: >-
-            {% if this.attributes.distance_km is not none %}
-              {{ (this.attributes.distance_km | float * 0.621371) | round(2) }}
+            {% set distance_km = this.attributes.get('distance_km') %}
+            {% if distance_km is not none %}
+              {{ (distance_km | float(default=0)) * 0.621371 | round(2) }}
             {% else %}
               {{ none }}
             {% endif %}
 
           # Plane description + ICAO type code
           desc: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.desc if p and p.desc is defined else none }}
 
           type_code: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.t if p and p.t is defined else none }}
 
           # Military flag comes directly from your feed (best)
           is_military: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.is_military | default(false) if p else false }}
 
           # Route: best-effort from whatever your feed has
           route: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {% if not p %}
               {{ none }}
             {% elif p.route is defined and (p.route | string | trim) != '' %}
