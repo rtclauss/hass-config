@@ -109,6 +109,18 @@ alarm_control_panel: []
 ## Automation
 ########################
 automation:
+  - id: hydrate_home_address_input_text
+    alias: hydrate_home_address_input_text
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.home_address
+        data:
+          value: !secret home_address
+
   - id: tesla_departure_planner_apply
     alias: tesla_departure_planner_apply
     mode: restart
@@ -679,7 +691,8 @@ input_select: {}
 ########################
 input_text:
   home_address:
-    initial: !secret home_address
+    max: 255
+    initial: ""
   tesla_managed_departure_time:
     initial: ""
 
