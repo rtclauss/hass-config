@@ -222,7 +222,12 @@ mqtt:
         unique_id: garden_birds
         state_topic: "birdpi/apprise"
         json_attributes_topic: "birdpi/apprise"
-        value_template: "{{ value_json.common_name }}"
+        value_template: >-
+          {% if value_json is mapping and value_json.common_name is defined %}
+            {{ value_json.common_name }}
+          {% else %}
+            unknown
+          {% endif %}
 
 ########################
 # Notify
