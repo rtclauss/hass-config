@@ -117,7 +117,7 @@ def test_owner_suite_bedroom_day_mode_waits_for_bed_bathroom_and_hallway_activit
     for entity_id in (
         "binary_sensor.bayesian_bed_occupancy",
         "binary_sensor.owner_suite_bathroom_room_occupancy",
-        "binary_sensor.hallway_motion",
+        "binary_sensor.hall_upstairs_motion_occupancy",
     ):
         assert entity_id in block
 
