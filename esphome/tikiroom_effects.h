@@ -522,13 +522,19 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
 
   static uint32_t last_update = 0;
   static uint32_t race_start_ms = 0;
+  static uint32_t last_motion_ms = 0;
   static uint32_t next_overtake_ms = 0;
+  static std::array<float, 5> car_progress{};
   static std::array<float, 5> pace_delta{};
   auto &rt = state();
 
   if (initial_run) {
     race_start_ms = now_ms();
+    last_motion_ms = race_start_ms;
     next_overtake_ms = race_start_ms + 3500;
+    for (size_t i = 0; i < cars.size(); i++) {
+      car_progress[i] = cars[i].start_offset;
+    }
     pace_delta.fill(0.0f);
     clear_leds();
   }
@@ -542,8 +548,16 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     race_start_ms = now_ms();
   }
 
-  const float elapsed_s = (now_ms() - race_start_ms) / 1000.0f;
+  const auto now = now_ms();
+  const float elapsed_s = (now - race_start_ms) / 1000.0f;
   const float laps_per_second = 0.025f + ((speed / 150.0f) * 0.110f);
+  float delta_s = (now - last_motion_ms) / 1000.0f;
+  if (delta_s < 0.0f) {
+    delta_s = 0.0f;
+  } else if (delta_s > 0.25f) {
+    delta_s = 0.25f;
+  }
+  last_motion_ms = now;
   const uint8_t tarmac_level = beatsin8(10, 6, 12);
   std::array<float, cars.size()> position_ratio{};
   std::array<float, cars.size()> effective_pace{};
@@ -561,16 +575,11 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
       effective_pace[i] = 1.09f;
     }
 
-    const float variation = std::sin((elapsed_s * cars[i].variation_rate * 2.0f * PI_F) + (cars[i].start_offset * 2.0f * PI_F));
-    float progress =
-        (elapsed_s * laps_per_second * effective_pace[i]) +
-        cars[i].start_offset +
-        (variation * cars[i].variation_amount);
-    progress -= std::floor(progress);
-    position_ratio[i] = progress;
+    car_progress[i] += delta_s * laps_per_second * effective_pace[i];
+    car_progress[i] -= std::floor(car_progress[i]);
+    position_ratio[i] = car_progress[i];
   }
 
-  const auto now = now_ms();
   if (now >= next_overtake_ms) {
     const uint8_t attacker = random_u8(static_cast<uint8_t>(cars.size()));
     float smallest_gap = 2.0f;
@@ -623,10 +632,8 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
   for (size_t i = 0; i < cars.size(); i++) {
     const auto &car = cars[i];
     const float variation = std::sin((elapsed_s * car.variation_rate * 2.0f * PI_F) + (car.start_offset * 2.0f * PI_F));
-    const float progress =
-        (elapsed_s * laps_per_second * effective_pace[i]) +
-        car.start_offset +
-        (variation * car.variation_amount);
+    float progress = car_progress[i] + (variation * car.variation_amount);
+    progress -= std::floor(progress);
     const int32_t nose = static_cast<int32_t>(progress * NUM_LEDS);
 
     add_inplace(rt.leds[wrap_led_index(nose)], Color(255, 255, 255));

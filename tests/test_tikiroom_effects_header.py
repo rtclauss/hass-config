@@ -43,7 +43,10 @@ def test_thunderstorm_uses_jungle_canopy_palette_and_fade_carryover() -> None:
 def test_f1_race_can_trigger_random_overtakes() -> None:
     block = _function_block("apply_f1_race")
 
+    assert "static uint32_t last_motion_ms = 0;" in block
     assert "static uint32_t next_overtake_ms = 0;" in block
+    assert "static std::array<float, 5> car_progress{};" in block
     assert "static std::array<float, 5> pace_delta{};" in block
+    assert "car_progress[i] += delta_s * laps_per_second * effective_pace[i];" in block
     assert "const uint8_t attacker = random_u8(static_cast<uint8_t>(cars.size()));" in block
     assert "pace_delta[attacker] += attack_boost;" in block
