@@ -18,6 +18,7 @@ constexpr uint8_t DENSITY = 80;
 constexpr uint8_t MAX_RIPPLE_STEPS = 16;
 constexpr uint8_t COOLING = 55;
 constexpr uint8_t SPARKING = 120;
+constexpr uint8_t GLITTER_FADE_AMOUNT = 20;
 constexpr float PI_F = 3.14159265f;
 
 struct RuntimeState {
@@ -111,6 +112,10 @@ inline Color scale_color(const Color &color, uint8_t scale) {
       static_cast<uint8_t>((color.r * scale) / 255),
       static_cast<uint8_t>((color.g * scale) / 255),
       static_cast<uint8_t>((color.b * scale) / 255));
+}
+
+inline void add_scaled_inplace(Color &base, const Color &added, uint8_t scale) {
+  add_inplace(base, scale_color(added, scale));
 }
 
 inline Color hsv_to_rgb(uint8_t h, uint8_t s, uint8_t v) {
@@ -447,7 +452,7 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
     return;
   }
 
-  fade_to_black(10);
+  fade_to_black(GLITTER_FADE_AMOUNT);
 
   flow_offset += 1 + static_cast<uint16_t>(speed / 88.0f);
   ember_offset += 1 + static_cast<uint16_t>(speed / 124.0f);
@@ -497,7 +502,7 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
               0));
     }
 
-    rt.leds[i] = blend(rt.leds[i], pixel, 52);
+    add_scaled_inplace(rt.leds[i], pixel, GLITTER_FADE_AMOUNT);
   }
 
   copy_to_output(it);
@@ -717,7 +722,7 @@ inline void apply_glitter(AddressableLight &it, const Color &current_color, floa
     copy_to_output(it);
     return;
   }
-  fade_to_black(20);
+  fade_to_black(GLITTER_FADE_AMOUNT);
   add_glitter(80, current_color);
   copy_to_output(it);
 }
@@ -834,7 +839,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     return;
   }
 
-  fade_to_black(12);
+  fade_to_black(GLITTER_FADE_AMOUNT);
 
   if (!burst_active && now >= next_event_ms) {
     burst_active = true;
@@ -901,18 +906,20 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
       add_inplace(pixel, Color(0, clamp_u8(5 + (streak / 3)), clamp_u8(10 + streak)));
     }
 
+    add_scaled_inplace(rt.leds[i], pixel, GLITTER_FADE_AMOUNT);
+
     if (flash_on) {
+      Color flash_overlay(0, 0, 0);
       const uint16_t distance = wrapped_distance(i, flash_center);
       if (distance < flash_width) {
         const float factor = 1.0f - (static_cast<float>(distance) / static_cast<float>(flash_width));
         const uint8_t flash = clamp_u8(static_cast<int>(flash_level * factor));
-        add_inplace(pixel, Color(flash, flash, clamp_u8(static_cast<int>(flash * 0.9f))));
+        flash_overlay = Color(flash, flash, clamp_u8(static_cast<int>(flash * 0.9f)));
       } else {
-        add_inplace(pixel, Color(flash_level / 18, flash_level / 18, flash_level / 10));
+        flash_overlay = Color(flash_level / 18, flash_level / 18, flash_level / 10);
       }
+      add_scaled_inplace(rt.leds[i], flash_overlay, 60);
     }
-
-    rt.leds[i] = blend(rt.leds[i], pixel, 60);
   }
 
   copy_to_output(it);
