@@ -1,10 +1,10 @@
 esphome:
   name: office-bt-proxy
-  project: 
+  project:
     name: rtclauss.bluetoothproxy
     version: 1.0.0
   platformio_options:
-    build_flags: 
+    build_flags:
       - -Wno-maybe-uninitialized
 
 substitutions:
@@ -36,7 +36,6 @@ wifi:
   password: !secret wifi_password
   min_auth_mode: WPA2
   power_save_mode: NONE
-  
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "OfficeBt Fallback Hotspot"
@@ -58,33 +57,33 @@ esp32_ble_tracker:
     active: true
     interval: 320ms
     window: 320ms
-  on_ble_advertise:
-    - then:
-      # Look for manufacturer data of form: 4c00 10 05 YY 98 XXXXXX
-      # Where YY can be 01..0F or 20..2F; and XXXXXX is ignored
-      - lambda: |-
-          optional<int16_t> best_rssi = nullopt;
-          for (auto data : x.get_manufacturer_datas()) {
-            // Guard against non-Apple datagrams, or those that are too small.
-            if (data.data.size() < 4 || data.uuid.to_string() != "0x004C" || data.data[0] != 0x10 || data.data[1] < 5) {
-              continue;
-            }
-            const int16_t rssi = x.get_rssi();
-            const uint8_t status_flags = data.data[2] >> 4;  // High nibble
-            const uint8_t data_flags = data.data[3];
-            
-            if (data_flags == 0x98) {  // Match unlocked Apple Watch. To also match locked watch use: if (data_flags == 0x98 || data_flags == 0x18) {
-              if (status_flags == 0 || status_flags == 2) {
-                best_rssi = max(rssi, best_rssi.value_or(rssi));
-                ESP_LOGD("ble_adv", "Found Apple Watch (mac %s) rssi %i", x.address_str().c_str(), rssi);
-              } else {
-                ESP_LOGD("ble_adv", "Possible Apple Watch? (mac %s) rssi %i, unrecognised status/action flags %#04x", x.address_str().c_str(), rssi, data.data[2]);
+    on_ble_advertise:
+      - then:
+          # Look for manufacturer data of form: 4c00 10 05 YY 98 XXXXXX
+          # Where YY can be 01..0F or 20..2F; and XXXXXX is ignored
+          - lambda: |-
+              optional<int16_t> best_rssi = nullopt;
+              for (auto data : x.get_manufacturer_datas()) {
+                // Guard against non-Apple datagrams, or those that are too small.
+                if (data.data.size() < 4 || data.uuid.to_string() != "0x004C" || data.data[0] != 0x10 || data.data[1] < 5) {
+                  continue;
+                }
+                const int16_t rssi = x.get_rssi();
+                const uint8_t status_flags = data.data[2] >> 4;  // High nibble
+                const uint8_t data_flags = data.data[3];
+
+                if (data_flags == 0x98) {  // Match unlocked Apple Watch. To also match locked watch use: if (data_flags == 0x98 || data_flags == 0x18) {
+                  if (status_flags == 0 || status_flags == 2) {
+                    best_rssi = max(rssi, best_rssi.value_or(rssi));
+                    ESP_LOGD("ble_adv", "Found Apple Watch (mac %s) rssi %i", x.address_str().c_str(), rssi);
+                  } else {
+                    ESP_LOGD("ble_adv", "Possible Apple Watch? (mac %s) rssi %i, unrecognised status/action flags %#04x", x.address_str().c_str(), rssi, data.data[2]);
+                  }
+                }
               }
-            }
-          }
-          if (best_rssi) {
-            id(apple_watch_rssi).publish_state(*best_rssi);
-          }
+              if (best_rssi) {
+                id(apple_watch_rssi).publish_state(*best_rssi);
+              }
 
 xiaomi_ble:
 
@@ -116,14 +115,14 @@ sensor:
               id(room_presence_debounce).publish_state(0);
             }
         - script.execute: presence_timeout # Publish 0 if no rssi received
-  
+
   - platform: template
     id: room_presence_debounce
     filters:
       - sliding_window_moving_average:
           window_size: 3
           send_every: 1
-          
+
   - platform: homeassistant
     name: HA RSSI Present Value
     entity_id: input_number.rssi_present
