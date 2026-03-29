@@ -621,17 +621,17 @@ template:
           holiday_mon_to_wed: >
             {% set ws = as_datetime(garbage_pickup_window.week_mon).date() %}
             {% set we = as_datetime(garbage_pickup_window.base_wed).date() %}
-            {% set hit = false %}
+            {% set ns = namespace(hit=false) %}
             {% for e in holiday_events %}
               {% set d = as_datetime(e.start).date() %}
               {% if d >= ws and d <= we %}
-                {% set hit = true %}
+                {% set ns.hit = true %}
               {% endif %}
             {% endfor %}
-            {{ hit }}
+            {{ ns.hit }}
           pickup_date: >
             {% set base_wed = as_datetime(garbage_pickup_window.base_wed).date() %}
-            {% if holiday_mon_to_wed %}
+            {% if holiday_mon_to_wed in [true, 'true', 'True', 'on'] %}
               {{ (base_wed + timedelta(days=1)).isoformat() }}
             {% else %}
               {{ base_wed.isoformat() }}
@@ -642,7 +642,7 @@ template:
         state: "{{ pickup_date }}"
         attributes:
           base_wednesday: "{{ garbage_pickup_window.base_wed }}"
-          holiday_shift_applied: "{{ holiday_mon_to_wed }}"
+          holiday_shift_applied: "{{ holiday_mon_to_wed in [true, 'true', 'True', 'on'] }}"
           holiday_events_in_range: "{{ holiday_events | map(attribute='summary') | list }}"
 
 ########################
