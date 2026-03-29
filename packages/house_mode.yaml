@@ -41,6 +41,11 @@ homeassistant:
       friendly_name: "House Transition"
       icon: mdi:home-switch
 
+    script.goodnight_integrity:
+      <<: *customize
+      friendly_name: "Goodnight Integrity"
+      icon: mdi:shield-moon
+
 ########################
 # Automation
 ########################
@@ -319,3 +324,211 @@ script:
             action: notify.all
             data:
               message: "{{ notify_message }}"
+
+  goodnight_integrity:
+    alias: goodnight_integrity
+    description: >-
+      Quietly verify the house is in a sleep-safe state by shutting down
+      straggler lights, fans, and common-area media, then checking the lock,
+      covers, and climate for exceptions.
+    mode: queued
+    max: 5
+    fields:
+      reason:
+        description: Optional reason for the bedtime integrity run.
+        example: bed_lamps_off
+    variables:
+      guest_mode_enabled: "{{ is_state('input_boolean.guest_mode', 'on') }}"
+      guest_room_occupied: "{{ is_state('binary_sensor.guest_room_occupancy_2', 'on') }}"
+      guest_context_enabled: "{{ guest_mode_enabled or guest_room_occupied }}"
+    sequence:
+      - parallel:
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ guest_mode_enabled }}"
+                sequence:
+                  - action: script.lights_off_except
+                    data:
+                      exclude_lights:
+                        - light.outside_front_hue
+                        - light.outside_north_west_garage
+                        - light.outside_south_west_garage
+                        - light.outside_front_door
+                        - light.office_all
+                        - light.den_all
+                        - light.guest_room_ceiling
+                      transition: 30
+              - conditions:
+                  - condition: template
+                    value_template: "{{ guest_room_occupied }}"
+                sequence:
+                  - action: script.lights_off_except
+                    data:
+                      exclude_lights:
+                        - light.outside_front_hue
+                        - light.outside_north_west_garage
+                        - light.outside_south_west_garage
+                        - light.outside_front_door
+                        - light.guest_room_ceiling
+                      transition: 30
+            default:
+              - action: script.lights_off_except
+                data:
+                  exclude_lights:
+                    - light.outside_front_hue
+                    - light.outside_north_west_garage
+                    - light.outside_south_west_garage
+                    - light.outside_front_door
+                  transition: 30
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ guest_mode_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: fan.turn_off
+                    target:
+                      entity_id:
+                        - fan.den_ceiling
+              - conditions:
+                  - condition: template
+                    value_template: "{{ guest_room_occupied }}"
+                sequence:
+                  - continue_on_error: true
+                    action: fan.turn_off
+                    target:
+                      entity_id:
+                        - fan.den_ceiling
+                        - fan.office_ceiling_fan
+            default:
+              - continue_on_error: true
+                action: fan.turn_off
+                target:
+                  entity_id:
+                    - fan.den_ceiling
+                    - fan.office_ceiling_fan
+                    - fan.guest_room
+          - continue_on_error: true
+            action: switch.turn_off
+            target:
+              entity_id:
+                - switch.office_red_lava_lamp
+                - switch.northern_light_lava_lamp
+          - continue_on_error: true
+            action: media_player.turn_off
+            target:
+              entity_id:
+                - media_player.lg_webos_smart_tv
+                - media_player.basement
+          - continue_on_error: true
+            action: script.turn_off_owner_suite_inovelli_switch_leds
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ not guest_context_enabled }}"
+                sequence:
+                  - variables:
+                      bedroom_audio_pause_targets: >-
+                        {%- set bedroom_entity = 'media_player.bedroom_sonos_2' -%}
+                        {%- set candidate_players = [
+                          'media_player.bathroom_sonos_2',
+                          'media_player.office_sonos_2',
+                          'media_player.den_sonos_2',
+                          'media_player.tiki_room_2'
+                        ] -%}
+                        {%- set ns = namespace(
+                          protected=[bedroom_entity],
+                          pause_targets=[]
+                        ) -%}
+                        {%- for member in state_attr(bedroom_entity, 'group_members') or [] -%}
+                          {%- if member not in ns.protected -%}
+                            {%- set ns.protected = ns.protected + [member] -%}
+                          {%- endif -%}
+                        {%- endfor -%}
+                        {%- for entity_id in candidate_players -%}
+                          {%- set members = state_attr(entity_id, 'group_members') or [] -%}
+                          {%- if bedroom_entity in members -%}
+                            {%- if entity_id not in ns.protected -%}
+                              {%- set ns.protected = ns.protected + [entity_id] -%}
+                            {%- endif -%}
+                            {%- for member in members -%}
+                              {%- if member not in ns.protected -%}
+                                {%- set ns.protected = ns.protected + [member] -%}
+                              {%- endif -%}
+                            {%- endfor -%}
+                          {%- endif -%}
+                        {%- endfor -%}
+                        {%- for entity_id in candidate_players -%}
+                          {%- if entity_id not in ns.protected -%}
+                            {%- set ns.pause_targets = ns.pause_targets + [entity_id] -%}
+                          {%- endif -%}
+                        {%- endfor -%}
+                        {{ ns.pause_targets | join(', ') }}
+                  - if:
+                      - condition: template
+                        value_template: "{{ bedroom_audio_pause_targets | trim != '' }}"
+                    then:
+                      - continue_on_error: true
+                        action: media_player.media_pause
+                        data:
+                          entity_id: "{{ bedroom_audio_pause_targets }}"
+          - continue_on_error: true
+            action: lock.lock
+            target:
+              entity_id: lock.front_door_lock
+          - continue_on_error: true
+            action: cover.close_cover
+            target:
+              entity_id:
+                - cover.garage_door
+                - cover.owner_suite_blinds_ha
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ guest_context_enabled }}"
+                sequence:
+                  - continue_on_error: true
+                    action: climate.set_preset_mode
+                    target:
+                      entity_id: climate.my_ecobee
+                    data:
+                      preset_mode: Guest Sleep
+            default:
+              - continue_on_error: true
+                action: ecobee.resume_program
+                data:
+                  resume_all: true
+                  entity_id: climate.my_ecobee
+      - delay:
+          seconds: 30
+      - variables:
+          goodnight_integrity_issues: >-
+            {%- set ns = namespace(issues=[]) -%}
+            {%- if states('lock.front_door_lock') != 'locked' -%}
+              {%- set ns.issues = ns.issues + ['Front door lock is still ' ~ states('lock.front_door_lock') ~ '.'] -%}
+            {%- endif -%}
+            {%- if states('cover.garage_door') not in ['closed', 'closing'] -%}
+              {%- set ns.issues = ns.issues + ['Garage door is still ' ~ states('cover.garage_door') ~ '.'] -%}
+            {%- endif -%}
+            {%- if states('cover.owner_suite_blinds_ha') not in ['closed', 'closing'] -%}
+              {%- set ns.issues = ns.issues + ['Owner suite blinds are still ' ~ states('cover.owner_suite_blinds_ha') ~ '.'] -%}
+            {%- endif -%}
+            {%- if states('climate.my_ecobee') in ['unknown', 'unavailable'] -%}
+              {%- set ns.issues = ns.issues + ['Ecobee is unavailable for bedtime verification.'] -%}
+            {%- elif guest_context_enabled and state_attr('climate.my_ecobee', 'preset_mode') != 'Guest Sleep' -%}
+              {%- set ns.issues = ns.issues + ['Ecobee preset is ' ~ (state_attr('climate.my_ecobee', 'preset_mode') | default('unknown', true)) ~ ' instead of Guest Sleep.'] -%}
+            {%- elif (not guest_context_enabled) and state_attr('climate.my_ecobee', 'preset_mode') in ['Away', 'away', 'away_indefinitely'] -%}
+              {%- set ns.issues = ns.issues + ['Ecobee is still in an away preset during bedtime.'] -%}
+            {%- endif -%}
+            {{ ns.issues | join('\n') }}
+      - if:
+          - condition: template
+            value_template: "{{ goodnight_integrity_issues | trim != '' }}"
+        then:
+          - action: notify.all
+            data:
+              message: >-
+                Goodnight integrity found exceptions{% if reason is defined and reason | string | trim %} ({{ reason }}){% endif %}:
+
+                {{ goodnight_integrity_issues }}

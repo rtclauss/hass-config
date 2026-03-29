@@ -1674,41 +1674,13 @@ automation:
             - input_boolean.guest_mode
           state: "off"
     action:
-      - parallel:
-          # - action: scene.turn_on
-          #   entity_id: scene.good_night
-          - action: script.lights_off_except
-            data:
-              exclude_lights:
-                - light.outside_front_hue
-                - light.outside_north_west_garage
-                - light.outside_south_west_garage
-                - light.outside_front_door
-              transition: 30
-          # - action: light.turn_off
-          #   entity_id: "all"
-          - action: fan.turn_off
-            target:
-              entity_id:
-                - fan.den_ceiling
-          - action: switch.turn_on
-            data:
-              entity_id:
-                - switch.sleep_mode
-          - action: switch.turn_off
-            target:
-              entity_id:
-                - switch.office_red_lava_lamp
-          - action: switch.turn_off
-            target:
-              entity_id:
-                - switch.northern_light_lava_lamp
-          - action: media_player.turn_off
-            target:
-              entity_id:
-                - media_player.lg_webos_smart_tv
-                - media_player.basement
-          - action: script.turn_off_owner_suite_inovelli_switch_leds
+      - action: switch.turn_on
+        data:
+          entity_id:
+            - switch.sleep_mode
+      - action: script.goodnight_integrity
+        data:
+          reason: bed_lamps_off
         # Only turn on the humidifier when it's winter
         # Not used with whole-home humidifier
         # - condition: and
