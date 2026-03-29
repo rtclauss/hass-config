@@ -19,6 +19,9 @@ constexpr uint8_t MAX_RIPPLE_STEPS = 16;
 constexpr uint8_t COOLING = 55;
 constexpr uint8_t SPARKING = 120;
 constexpr uint8_t GLITTER_FADE_AMOUNT = 20;
+constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;
+constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;
+constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;
 constexpr size_t LAVA_FIELD_CELLS = 48;
 constexpr size_t THUNDERSTORM_CELLS = 40;
 constexpr float PI_F = 3.14159265f;
@@ -466,8 +469,6 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
     return;
   }
 
-  fade_to_black(GLITTER_FADE_AMOUNT);
-
   drift_offset += 1 + static_cast<uint16_t>(speed / 92.0f);
   ember_offset += 1 + static_cast<uint16_t>(speed / 124.0f);
   const float elapsed_s = now_ms() / 1000.0f;
@@ -514,7 +515,8 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
   }
 
   for (uint16_t i = 0; i < NUM_LEDS; i++) {
-    add_scaled_inplace(rt.leds[i], sample_coarse_cells(lava_cells, i), GLITTER_FADE_AMOUNT);
+    const Color target = sample_coarse_cells(lava_cells, i);
+    rt.leds[i] = blend(rt.leds[i], target, LAVA_FIELD_BLEND_AMOUNT);
   }
 
   copy_to_output(it);
@@ -850,8 +852,6 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     return;
   }
 
-  fade_to_black(GLITTER_FADE_AMOUNT);
-
   if (!burst_active && now >= next_event_ms) {
     burst_active = true;
     flash_on = true;
@@ -941,7 +941,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
   }
 
   for (uint16_t i = 0; i < NUM_LEDS; i++) {
-    add_scaled_inplace(rt.leds[i], sample_coarse_cells(ambient_cells, i), GLITTER_FADE_AMOUNT);
+    Color pixel = sample_coarse_cells(ambient_cells, i);
 
     if (flash_on) {
       const uint8_t texture = static_cast<uint8_t>(176 + ((i * 19 + (now >> 3)) % 64));
@@ -949,8 +949,11 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
           clamp_u8(static_cast<int>((flash_level * texture) / 255)),
           clamp_u8(static_cast<int>((flash_level * texture) / 255)),
           clamp_u8(static_cast<int>((flash_level * (texture - 18)) / 255)));
-      add_scaled_inplace(rt.leds[i], flash_overlay, 88);
+      add_inplace(pixel, scale_color(flash_overlay, 88));
     }
+
+    const uint8_t blend_amount = flash_on ? THUNDERSTORM_FLASH_BLEND_AMOUNT : THUNDERSTORM_BLEND_AMOUNT;
+    rt.leds[i] = blend(rt.leds[i], pixel, blend_amount);
   }
 
   copy_to_output(it);
