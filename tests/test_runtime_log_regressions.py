@@ -71,9 +71,11 @@ def test_house_electrical_meter_never_emits_literal_unavailable() -> None:
 def test_garbage_pickup_template_keeps_dates_serializable() -> None:
     text = _read(HOLIDAYS_PATH)
 
-    assert "garbage_pickup_window_json" in text
-    assert "garbage_pickup_window.range_start" in text
-    assert "as_datetime(garbage_pickup_window.week_mon).date()" in text
+    assert "garbage_pickup_window_json" not in text
+    assert "garbage_pickup_window.range_start" not in text
+    assert 'start_date_time: "{{ range_start }}"' in text
+    assert 'end_date_time: "{{ range_end }}"' in text
+    assert 'week_mon: "{{ base_wed - timedelta(days=base_wed.weekday()) }}"' in text
     assert "ns = namespace(hit=false)" in text
     assert "holiday_mon_to_wed in [true, 'true', 'True', 'on']" in text
-    assert 'base_wednesday: "{{ garbage_pickup_window.base_wed }}"' in text
+    assert 'base_wednesday: "{{ base_wed.isoformat() }}"' in text
