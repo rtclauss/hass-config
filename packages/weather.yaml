@@ -643,15 +643,19 @@ script:
       - action: persistent_notification.dismiss
         data:
           notification_id: "nws_dakota_county_alerts_alert"
-        ## Create a new persistant notification in the UI for a new alert
-      - action: >
-          {% if states.sensor.nws_dakota_county_alerts.state != '0' %}
-            persistent_notification.create
-          {% endif %}
-        data_template:
-          notification_id: "nws_dakota_county_alerts_alert"
-          message: "{{ message }}"
-          title: "{{ title }}"
+      ## Create a new persistent notification only while at least one alert is active.
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.nws_dakota_county_alerts
+                state: "0"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: "nws_dakota_county_alerts_alert"
+              message: "{{ message }}"
+              title: "{{ title }}"
 
 ################################################
 ## Sensors
