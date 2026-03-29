@@ -2370,10 +2370,10 @@
                   "type": "entities",
                   "entities": [
                     {
-                      "entity": "sensor.front_load_washer"
+                      "entity": "binary_sensor.washing_machine_running"
                     },
                     {
-                      "entity": "sensor.dryer"
+                      "entity": "binary_sensor.dryer_running"
                     }
                   ]
                 },
@@ -2398,8 +2398,15 @@
                   "chips": [
                     {
                       "type": "entity",
-                      "entity": "binary_sensor.laundry_washer_vibration_vibration",
+                      "entity": "binary_sensor.washing_machine_running",
+                      "name": "Washer",
                       "icon": "mdi:washing-machine"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "binary_sensor.dryer_running",
+                      "name": "Dryer",
+                      "icon": "mdi:tumble-dryer"
                     }
                   ]
                 }
@@ -3215,11 +3222,11 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Washer",
-                  "secondary": "{% if is_state(\"sensor.front_load_washer\", \"on\") %}\nRunning {{ state_attr(\"sensor.front_load_washer\", \"current_course\") }}\nCurrently {{ state_attr(\"sensor.front_load_washer\", \"run_state\") }}\n{{ state_attr(\"sensor.front_load_washer\", \"initial_time\") }} total, {{ state_attr(\"sensor.front_load_washer\", \"remain_time\") }} to go\n{% elif state_attr(\"sensor.front_load_washer\", \"run_completed\") == \"on\" %}\nReady to unload\n{% else %}\nOff\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_washing_machine_power\") %}\n{% set current = states(\"sensor.laundry_room_washing_machine_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.washing_machine_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:washing-machine",
-                  "entity": "sensor.front_load_washer",
+                  "entity": "binary_sensor.washing_machine_running",
                   "multiline_secondary": true,
-                  "icon_color": "{{ \"indigo\" if is_state(\"sensor.front_load_washer\", \"on\") else \"\" }}",
+                  "icon_color": "{{ \"indigo\" if is_state(\"binary_sensor.washing_machine_running\", \"on\") else \"\" }}",
                   "tap_action": {
                     "action": "more-info"
                   }
@@ -3227,11 +3234,11 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Dryer",
-                  "secondary": "{% if is_state(\"sensor.dryer\", \"on\") %}\nRunning {{ state_attr(\"sensor.dryer\", \"current_course\") }}\nCurrently {{ state_attr(\"sensor.dryer\", \"run_state\") }}\n{{ state_attr(\"sensor.dryer\", \"initial_time\") }} total, {{ state_attr(\"sensor.dryer\", \"remain_time\") }} to go\n{% elif state_attr(\"sensor.front_load_washer\", \"run_completed\") == \"on\" %}\nReady to unload\n{% else %}\nOff\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_dryer_power\") %}\n{% set current = states(\"sensor.laundry_room_dryer_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.dryer_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:tumble-dryer",
-                  "entity": "sensor.dryer",
+                  "entity": "binary_sensor.dryer_running",
                   "multiline_secondary": true,
-                  "icon_color": "{{ \"indigo\" if is_state(\"sensor.dryer\", \"on\") else \"\" }}",
+                  "icon_color": "{{ \"indigo\" if is_state(\"binary_sensor.dryer_running\", \"on\") else \"\" }}",
                   "tap_action": {
                     "action": "more-info"
                   }
