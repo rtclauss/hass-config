@@ -349,9 +349,25 @@ script:
                   media_item: "somafm://radio/tikitime"
                   enqueue: replace
               - action: media_player.turn_on
-                continue_on_error: true
                 target:
                   entity_id: media_player.basement
+              - if:
+                  - condition: state
+                    entity_id: media_player.basement
+                    state: "off"
+                then:
+                  - wait_for_trigger:
+                      - trigger: state
+                        entity_id: media_player.basement
+                        from: "off"
+                    timeout: "00:00:05"
+                    continue_on_timeout: true
+                  - if:
+                      - condition: state
+                        entity_id: media_player.basement
+                        state: "off"
+                    then:
+                      - stop: Basement player failed to turn on
               - action: script.wait_for_basement_media_player_ready
               - action: media_player.volume_set
                 continue_on_error: true
