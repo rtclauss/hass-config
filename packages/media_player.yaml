@@ -539,15 +539,32 @@ input_text:
     name: "Music Assistant search query"
     icon: mdi:magnify
     max: 255
-  music_assistant_provider_filter:
-    name: "Music Assistant provider filter"
-    icon: mdi:database-search
-    max: 80
+    initial: ""
 
 ########################
 # Input Select
 ########################
 input_select:
+  music_assistant_provider_filter:
+    name: "Music Assistant provider filter"
+    icon: mdi:database-search
+    options:
+      - All providers
+    initial: All providers
+  music_assistant_playlist_target:
+    name: "Music Assistant playlist target"
+    icon: mdi:playlist-edit
+    options:
+      - Bedtime || spotify_bedtime
+      - Wake Up || spotify_wake_up
+      - Arrival || spotify_arrival
+      - Bedroom Playlist 0 || bedroom_playlist_0
+      - Bedroom Playlist 1 || bedroom_playlist_1
+      - Bedroom Playlist 2 || bedroom_playlist_2
+      - Bedroom Playlist 3 || bedroom_playlist_3
+      - Bedroom Playlist 4 || bedroom_playlist_4
+      - Bedroom Playlist 5 || bedroom_playlist_5
+    initial: Bedtime || spotify_bedtime
   music_assistant_search_media_type:
     name: "Music Assistant search type"
     icon: mdi:music-note-search
@@ -613,6 +630,16 @@ plant: {}
 # Scenes
 ########################
 scene: []
+
+########################
+# Shell Command
+########################
+shell_command:
+  music_assistant_append_playlist_item: >-
+    python3 /config/scripts/update_music_assistant_playlist.py
+    --config /config/packages/media_player.yaml
+    --target '{{ target_script | replace("'", "'\"'\"'") }}'
+    --item '{{ item_uri | replace("'", "'\"'\"'") }}'
 
 ########################
 # Scripts
@@ -797,8 +824,15 @@ script:
     sequence:
       - variables:
           query: "{{ states('input_text.music_assistant_search_query') | trim }}"
-          provider_filter: "{{ states('input_text.music_assistant_provider_filter') | trim | lower }}"
           media_type: "{{ states('input_select.music_assistant_search_media_type') | trim }}"
+          config_entry: "{{ config_entry_id('media_player.bedroom_sonos_2') }}"
+          selected_provider: "{{ states('input_select.music_assistant_provider_filter') | trim }}"
+          requested_provider_filter: >-
+            {% if selected_provider in ['', 'unknown', 'unavailable', 'All providers'] %}
+              {{ '' }}
+            {% else %}
+              {{ selected_provider | lower }}
+            {% endif %}
       - choose:
           - conditions:
               - condition: template
@@ -815,8 +849,18 @@ script:
                 value_template: "{{ query.startswith('spotify:') or query.startswith('http') or '://' in query }}"
             sequence:
               - variables:
+                  direct_provider_token: >-
+                    {% if query.startswith('spotify:') %}
+                      spotify
+                    {% elif '://' in query %}
+                      {{ query.split('://', 1)[0] | lower }}
+                    {% else %}
+                      {{ '' }}
+                    {% endif %}
+                  direct_provider_name: "{{ direct_provider_token.split('--', 1)[0] }}"
                   direct_options: >-
-                    {% if provider_filter == '' or provider_filter in (query | lower) %}
+                    {% set requested_provider_name = requested_provider_filter.split('--', 1)[0] %}
+                    {% if requested_provider_filter == '' or requested_provider_filter == direct_provider_token or requested_provider_name == direct_provider_name %}
                       {{ ['Direct URI || ' ~ query] }}
                     {% else %}
                       {{ ['No results found'] }}
@@ -831,21 +875,52 @@ script:
             continue_on_error: true
             response_variable: search_results
             data:
+              config_entry_id: "{{ config_entry }}"
               name: "{{ query }}"
               media_type: "{{ media_type }}"
               limit: 20
           - variables:
+              provider_tokens: >-
+                {% set search_response = search_results | default({}, true) %}
+                {% set ns = namespace(tokens=[]) %}
+                {% for bucket in ['tracks', 'albums', 'artists', 'playlists', 'radio', 'audiobooks', 'podcasts', 'items'] %}
+                  {% for item in search_response.get(bucket, []) %}
+                    {% set uri = item.uri | default(item.media_id | default('')) %}
+                    {% if uri %}
+                      {% if uri.startswith('library://') %}
+                        {% set provider_token = 'library' %}
+                      {% else %}
+                        {% set provider_token = uri.split('://', 1)[0] | lower %}
+                      {% endif %}
+                      {% if provider_token not in ns.tokens %}
+                        {% set ns.tokens = ns.tokens + [provider_token] %}
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
+                {{ ns.tokens }}
+              effective_provider_filter: >-
+                {% if requested_provider_filter in provider_tokens %}
+                  {{ requested_provider_filter }}
+                {% else %}
+                  {{ '' }}
+                {% endif %}
+              provider_options: "{{ ['All providers'] + provider_tokens }}"
               search_options: >-
                 {% set search_response = search_results | default({}, true) %}
                 {% set ns = namespace(options=[], seen=[]) %}
-                {% for bucket in ['tracks', 'albums', 'artists', 'playlists', 'radio', 'items'] %}
+                {% set requested_provider_name = effective_provider_filter.split('--', 1)[0] %}
+                {% for bucket in ['tracks', 'albums', 'artists', 'playlists', 'radio', 'audiobooks', 'podcasts', 'items'] %}
                   {% for item in search_response.get(bucket, []) %}
                     {% set uri = item.uri | default(item.media_id | default('')) %}
                     {% if uri and uri not in ns.seen %}
-                      {% set provider_token = uri.split('://')[0] | lower %}
+                      {% if uri.startswith('library://') %}
+                        {% set provider_token = 'library' %}
+                      {% else %}
+                        {% set provider_token = uri.split('://', 1)[0] | lower %}
+                      {% endif %}
                       {% set provider_name = provider_token.split('--', 1)[0] %}
-                      {% set provider_blob = provider_token ~ ' ' ~ provider_name ~ ' ' ~ (item.name | default('') | lower) %}
-                      {% if provider_filter == '' or provider_filter in provider_blob %}
+                      {% if effective_provider_filter == '' or effective_provider_filter == provider_token or requested_provider_name == provider_name %}
                         {% set label = item.name | default(uri) %}
                         {% if item.artists is defined and item.artists %}
                           {% set label = (item.artists | map(attribute='name') | join(', ')) ~ ' - ' ~ label %}
@@ -857,6 +932,27 @@ script:
                   {% endfor %}
                 {% endfor %}
                 {{ ns.options if ns.options else ['No results found'] }}
+          - action: input_select.set_options
+            target:
+              entity_id: input_select.music_assistant_provider_filter
+            data:
+              options: "{{ provider_options }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ requested_provider_filter != '' and requested_provider_filter in provider_tokens }}"
+                sequence:
+                  - action: input_select.select_option
+                    target:
+                      entity_id: input_select.music_assistant_provider_filter
+                    data:
+                      option: "{{ requested_provider_filter }}"
+            default:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.music_assistant_provider_filter
+                data:
+                  option: "All providers"
           - action: input_select.set_options
             target:
               entity_id: input_select.music_assistant_search_results
@@ -890,6 +986,46 @@ script:
                   entity_id: "{{ target_entity }}"
                   media_item: "{{ selected_uri }}"
                   enqueue: "{{ enqueue | default('add') }}"
+
+  music_assistant_add_selected_search_result_to_playlist:
+    alias: "Add selected Music Assistant search result to playlist"
+    fields:
+      playlist_target:
+        description: "Playlist target script id or option label"
+    variables:
+      selected_option: "{{ states('input_select.music_assistant_search_results') | trim }}"
+      selected_uri: >-
+        {% if ' || ' in selected_option %}
+          {{ selected_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ selected_option }}
+        {% endif %}
+      target_option: "{{ playlist_target | default(states('input_select.music_assistant_playlist_target')) | trim }}"
+      target_script: >-
+        {% if ' || ' in target_option %}
+          {{ target_option.split(' || ', 1)[1] | trim }}
+        {% else %}
+          {{ target_option }}
+        {% endif %}
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ selected_uri not in ['', 'No results found'] and target_script != '' }}"
+            sequence:
+              - action: shell_command.music_assistant_append_playlist_item
+                data:
+                  target_script: "{{ target_script }}"
+                  item_uri: "{{ selected_uri }}"
+              - delay:
+                  seconds: 1
+              - action: script.reload
+              - action: logbook.log
+                data:
+                  entity_id: "script.{{ target_script }}"
+                  domain: script
+                  name: Music Assistant Playlist Builder
+                  message: "Added {{ selected_uri }} to {{ target_script }}"
 
   music_assistant_radio_wake_up:
     alias: "Radio wake-up via Music Assistant"
