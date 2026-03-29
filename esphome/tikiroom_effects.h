@@ -455,6 +455,8 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
   const std::array<float, 8> cluster_phases{{0.1f, 0.7f, 1.5f, 2.1f, 2.9f, 3.6f, 4.3f, 5.0f}};
   const std::array<float, 8> cluster_rates{{0.11f, 0.08f, 0.13f, 0.09f, 0.12f, 0.07f, 0.10f, 0.06f}};
   const std::array<float, 8> cluster_radii{{2.1f, 3.0f, 1.8f, 2.6f, 2.2f, 3.4f, 2.0f, 2.8f}};
+  std::array<float, 8> cluster_centers{};
+  std::array<float, 8> cluster_activity{};
   std::array<Color, LAVA_FIELD_CELLS> lava_cells{};
   auto &rt = state();
 
@@ -472,6 +474,19 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
   drift_offset += 1 + static_cast<uint16_t>(speed / 92.0f);
   ember_offset += 1 + static_cast<uint16_t>(speed / 124.0f);
   const float elapsed_s = now_ms() / 1000.0f;
+  const float coarse_limit = static_cast<float>(LAVA_FIELD_CELLS - 1);
+
+  for (size_t cluster = 0; cluster < cluster_phases.size(); cluster++) {
+    cluster_centers[cluster] =
+        ((std::sin((elapsed_s * cluster_rates[cluster] * 2.0f * PI_F) + cluster_phases[cluster]) + 1.0f) * 0.5f) *
+        coarse_limit;
+    cluster_activity[cluster] = smoothstep(
+        0.30f,
+        0.96f,
+        pseudo_noise(
+            static_cast<uint16_t>(cluster * 73 + 19),
+            drift_offset + static_cast<uint16_t>(cluster * 53)));
+  }
 
   for (size_t cell = 0; cell < LAVA_FIELD_CELLS; cell++) {
     const float crust_noise =
@@ -483,19 +498,9 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
     float clump_heat = 0.0f;
 
     for (size_t cluster = 0; cluster < cluster_phases.size(); cluster++) {
-      const float center =
-          ((std::sin((elapsed_s * cluster_rates[cluster] * 2.0f * PI_F) + cluster_phases[cluster]) + 1.0f) * 0.5f) *
-          static_cast<float>(LAVA_FIELD_CELLS - 1);
-      const float activity =
-          smoothstep(
-              0.30f,
-              0.96f,
-              pseudo_noise(
-                  static_cast<uint16_t>(cluster * 73 + 19),
-                  drift_offset + static_cast<uint16_t>(cluster * 53)));
-      const float distance = std::fabs(static_cast<float>(cell) - center);
+      const float distance = std::fabs(static_cast<float>(cell) - cluster_centers[cluster]);
       const float influence = smoothstep(1.0f, 0.0f, distance / cluster_radii[cluster]);
-      clump_heat = std::max(clump_heat, influence * (0.14f + (activity * 0.86f)));
+      clump_heat = std::max(clump_heat, influence * (0.14f + (cluster_activity[cluster] * 0.86f)));
     }
 
     const float cooled_crust = smoothstep(0.18f, 0.90f, 1.0f - ((clump_heat * 0.82f) + (ember_wave * 0.18f)));
