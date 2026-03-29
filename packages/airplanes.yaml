@@ -150,7 +150,7 @@ automation:
       - action: homeassistant.update_entity
         target:
           entity_id:
-            - sensor.closest_aircraft_routeset_raw
+            - sensor.closest_aircraft_routeset
             - sensor.closest_aircraft_route_raw
 
             - sensor.closest_aircraft_photo_raw
@@ -307,34 +307,6 @@ sensor:
       {{ value_json.response is defined }}
     json_attributes:
       - response
-
-  - platform: rest
-    name: Closest Aircraft Routeset Raw
-    unique_id: closest_aircraft_routeset_raw
-    resource: https://adsb.im/api/0/routeset
-    method: POST
-    scan_interval: 60
-    headers:
-      Accept: application/json
-      Content-Type: application/json; charset=utf-8
-      Origin: http://10.24.1.188:8080
-      Referer: http://10.24.1.188:8080/
-      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0
-      Sec-Fetch-Dest: empty
-      Sec-Fetch-Mode: cors
-      Sec-Fetch-Site: cross-site
-    payload_template: >-
-      {% set cs = (state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim) %}
-      {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
-      {% set lat = (p.lat if p is mapping and p.lat is defined else none) %}
-      {% set lon = (p.lon if p is mapping and p.lon is defined else none) %}
-      {% if cs == '' or lat is none or lon is none %}
-        {{ {"planes": []} | tojson }}
-      {% else %}
-        {{ {"planes": [{"callsign": cs, "lat": lat|float, "lng": lon|float}]} | tojson }}
-      {% endif %}
-    value_template: >-
-      {{ value | trim }}
 
 ########################
 # Switch
@@ -585,52 +557,60 @@ template:
             {{ r.flightroute.airline.name
               if r and r.flightroute is defined and r.flightroute.airline is defined
               else none }}
-
-  - sensor:
+rest:
+  - resource: https://adsb.im/api/0/routeset
+    method: POST
+    scan_interval: 60
+    headers:
+      Accept: application/json
+      Content-Type: application/json; charset=utf-8
+      Origin: http://10.24.1.188:8080
+      Referer: http://10.24.1.188:8080/
+      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0
+      Sec-Fetch-Dest: empty
+      Sec-Fetch-Mode: cors
+      Sec-Fetch-Site: cross-site
+    payload_template: >-
+      {% set cs = (state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim) %}
+      {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
+      {% set lat = (p.lat if p is mapping and p.lat is defined else none) %}
+      {% set lon = (p.lon if p is mapping and p.lon is defined else none) %}
+      {% if cs == '' or lat is none or lon is none %}
+        {{ {"planes": []} | tojson }}
+      {% else %}
+        {{ {"planes": [{"callsign": cs, "lat": lat|float, "lng": lon|float}]} | tojson }}
+      {% endif %}
+    sensor:
       - name: Closest Aircraft Routeset
         unique_id: closest_aircraft_routeset
-        state: >-
-          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-          {% if raw in ['unknown','unavailable','none',''] %}
-            {{ none }}
+        value_template: >-
+          {% set j = value | from_json %}
+          {% if j is sequence and j | length > 0 and j[0]._airport_codes_iata is defined %}
+            {{ j[0]._airport_codes_iata }}
           {% else %}
-            {% set j = raw | from_json %}
-            {% if j is sequence and j is not mapping and (j | length) > 0 and j[0]._airport_codes_iata is defined %}
-              {{ j[0]._airport_codes_iata }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {{ none }}
           {% endif %}
 
       - name: Closest Aircraft Routeset Names
         unique_id: closest_aircraft_routeset_names
-        state: >-
-          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-          {% if raw in ['unknown','unavailable','none',''] %}
-            {{ none }}
+        value_template: >-
+          {% set j = value | from_json %}
+          {% if j is sequence and j | length > 0 and j[0]._airports is defined %}
+            {% set s = (j[0]._airports | map(attribute='name') | list) | join(' → ') %}
+            {{ s[:250] }}
           {% else %}
-            {% set j = raw | from_json %}
-            {% if j is sequence and j is not mapping and (j | length) > 0 and j[0]._airports is defined %}
-              {{ (j[0]._airports | map(attribute='name') | list) | join(' → ') }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {{ none }}
           {% endif %}
 
-      # Helpful when debugging: if ADSB.im returns {"detail":[...]} you'll see it here
       - name: error_detail
         unique_id: closest_aircraft_error_detail
-        state: >-
-          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-          {% if raw in ['unknown','unavailable','none',''] %}
-            {{ none }}
+        value_template: >-
+          {% set j = value | from_json %}
+          {% if j is mapping and j.detail is defined %}
+            {% set detail = j.detail | tojson %}
+            {{ detail[:250] }}
           {% else %}
-            {% set j = raw | from_json %}
-            {% if j is mapping and j.detail is defined %}
-              {{ j.detail | tojson }}
-            {% else %}
-              {{ none }}
-            {% endif %}
+            {{ none }}
           {% endif %}
 
 ########################
