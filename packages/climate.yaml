@@ -1076,17 +1076,19 @@ template:
         default_entity_id: sensor.rate_of_house_temp_change_1h
         unique_id: rate_of_house_temp_change_1h
         availability: >-
-          {{ states("sensor.house_temperature_stats_1h", "change_rate") != None }}
+          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') is not none }}
         state: >-
-          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
+          {% set change_rate = state_attr('sensor.house_temperature_stats_1h', 'change_rate') %}
+          {{ (change_rate | float(default=0)) * 60.0 * 5.0 }}
         name: rate_of_house_temp_change_1h
       - unit_of_measurement: °F/5 minute
         default_entity_id: sensor.rate_of_house_temp_change_30m
         unique_id: rate_of_house_temp_change_30m
         availability: >-
-          {{ states("sensor.house_temperature_stats_30m", "change_rate") != None }}
+          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') is not none }}
         state: >-
-          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') * 60.0 * 5.0 |float(default=0)}}
+          {% set change_rate = state_attr('sensor.house_temperature_stats_30m', 'change_rate') %}
+          {{ (change_rate | float(default=0)) * 60.0 * 5.0 }}
         name: rate_of_house_temp_change_30m
       - device_class: temperature
         unit_of_measurement: °F
