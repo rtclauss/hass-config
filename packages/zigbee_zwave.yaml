@@ -31,6 +31,11 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
+    binary_sensor.any_egress_open:
+      <<: *customize
+      friendly_name: "Any egress open"
+      device_class: opening
+
     binary_sensor.basement_window_contact:
       <<: *customize
       device_class: window
@@ -233,27 +238,13 @@ homeassistant:
     ################################################
 
     ################################################
-    ## Groups
-    ################################################
-    group.egress_points:
-      <<: *customize
-      friendly_name: Sensors on Doors and Windows
-
-    ################################################
-    ## Input Boolean
-    ################################################
-
-    ################################################
-    ## Input Numbers
-    ################################################
-
-    ################################################
-    ## Scripts
-    ################################################
-
-    ################################################
     ## Sensors
     ################################################
+    sensor.open_egress_points:
+      <<: *customize
+      friendly_name: "Open egress points"
+      icon: mdi:door-open
+
     sensor.arrival_sensor_battery:
       <<: *customize
       friendly_name: "Arrival Sensor Battery"
@@ -1767,47 +1758,6 @@ binary_sensor:
 device_tracker: []
 
 ########################
-# Groups
-########################
-group:
-  egress_points:
-    entities:
-      # Canonical egress inventory for security and leave-home automations.
-      - binary_sensor.basement_window_contact
-      - binary_sensor.unfinished_basement_window_contact
-      - binary_sensor.se_basement_window_contact
-      - binary_sensor.sw_basement_window_contact
-      - binary_sensor.deck_door_contact
-      - binary_sensor.dining_room_north_window_contact
-      - binary_sensor.dining_room_south_window_contact
-      - binary_sensor.ene_window_contact
-      - binary_sensor.ese_window_contact
-      - binary_sensor.guest_bathroom_window_contact
-      - binary_sensor.guest_room_window_contact
-      - binary_sensor.hall_garage_entry_contact
-      - binary_sensor.kitchen_bay_middle_window_contact
-      - binary_sensor.kitchen_bay_north_window_contact
-      - binary_sensor.kitchen_bay_south_window_contact
-      - binary_sensor.kitchen_north_window_contact
-      - binary_sensor.kitchen_south_window_contact
-      - binary_sensor.main_foyer_front_door_contact
-      - binary_sensor.nne_window_contact
-      - binary_sensor.north_kitchen_sink_window_contact
-      - binary_sensor.north_master_bedroom_window_contact
-      - binary_sensor.nw_basement_window_contact
-      - binary_sensor.office_window_contact
-      - binary_sensor.office_north_window_contact
-      - binary_sensor.owner_suite_bathroom_bay_north_middle_window_contact
-      - binary_sensor.owner_suite_bathroom_bay_north_window_contact
-      - binary_sensor.owner_suite_bathroom_bay_south_middle_window_contact
-      - binary_sensor.owner_suite_bathroom_bay_south_window_contact
-      - binary_sensor.owner_suite_north_window_contact
-      - binary_sensor.owner_suite_south_window_contact
-      - binary_sensor.powder_room_window_contact
-      - binary_sensor.sse_window_contact
-      - binary_sensor.tiki_room_deck_contact
-
-########################
 # Input Booleans
 ########################
 input_boolean:
@@ -2828,6 +2778,12 @@ sensor: []
 ########################
 template:
   - binary_sensor:
+      - name: any_egress_open
+        unique_id: any_egress_open
+        default_entity_id: binary_sensor.any_egress_open
+        device_class: opening
+        state: "{{ states('sensor.open_egress_points') | int(0) > 0 }}"
+
       - name: master_bed_occupancy
         unique_id: master_bed_occupancy
         delay_on: 00:00:30
@@ -2856,6 +2812,60 @@ template:
           {% set offline_pct = states('sensor.z2m_router_offline_pct') | float(0) %}
           {% set threshold_pct = states('input_number.z2m_router_offline_threshold_pct') | float(15) %}
           {{ total > 0 and offline_pct >= threshold_pct }}
+
+  - sensor:
+      # Build the egress inventory from live contact entities so stale IDs do
+      # not accumulate in a manually maintained group.
+      - name: open_egress_points
+        unique_id: open_egress_points
+        default_entity_id: sensor.open_egress_points
+        icon: mdi:door-open
+        state: >-
+          {% set excluded = ['binary_sensor.mailbox_contact'] %}
+          {% set open_entities = namespace(entity_ids=[]) %}
+          {% for sensor in states.binary_sensor %}
+            {% set entity_id = sensor.entity_id %}
+            {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+            {% if sensor.state == 'on'
+                  and entity_id.endswith('_contact')
+                  and entity_id not in excluded
+                  and not entity_id.startswith('binary_sensor.0x')
+                  and device_class in ['door', 'window', 'opening'] %}
+              {% set open_entities.entity_ids = open_entities.entity_ids + [entity_id] %}
+            {% endif %}
+          {% endfor %}
+          {{ open_entities.entity_ids | count }}
+        attributes:
+          entity_ids: >-
+            {% set excluded = ['binary_sensor.mailbox_contact'] %}
+            {% set open_entities = namespace(entity_ids=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set entity_id = sensor.entity_id %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on'
+                    and entity_id.endswith('_contact')
+                    and entity_id not in excluded
+                    and not entity_id.startswith('binary_sensor.0x')
+                    and device_class in ['door', 'window', 'opening'] %}
+                {% set open_entities.entity_ids = open_entities.entity_ids + [entity_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ open_entities.entity_ids | sort | join(', ') }}
+          friendly_names: >-
+            {% set excluded = ['binary_sensor.mailbox_contact'] %}
+            {% set open_entities = namespace(names=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set entity_id = sensor.entity_id %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on'
+                    and entity_id.endswith('_contact')
+                    and entity_id not in excluded
+                    and not entity_id.startswith('binary_sensor.0x')
+                    and device_class in ['door', 'window', 'opening'] %}
+                {% set open_entities.names = open_entities.names + [sensor.name] %}
+              {% endif %}
+            {% endfor %}
+            {{ open_entities.names | sort | join(', ') }}
 
   - lock:
       - name: Front door lock
