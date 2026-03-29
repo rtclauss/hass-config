@@ -2347,6 +2347,8 @@ script:
             - select.hall_upstairs_switch_switchtype
             - select.hall_stairway_switchtype
       # Recreate switch endpoint memberships in Zigbee groups after a reset.
+      # For smart-bulb groups, endpoint 1 receives group state so the switch
+      # load/LED stays in sync while endpoint 2 remains the bound controller.
       inovelli_group_membership_replay:
         - group: "Basement/Great Room"
           members:
@@ -2371,21 +2373,19 @@ script:
         - group: "Den/Floods"
           members:
             - device: "Den/Flood Switch"
-              endpoint: 2
+              endpoint: 1
         - group: "Dining Room/Over Table"
           members:
             - device: "Dining Room/Table Switch"
               endpoint: 1
-            - device: "Dining Room/Table Switch"
-              endpoint: 2
             - device: "Dining Room/Wall Switch"
               endpoint: 1
         - group: "Hall/All"
           members:
             - device: "Hall/Foyer Switch"
-              endpoint: 2
+              endpoint: 1
             - device: "Hall/Garage Laundry Switch"
-              endpoint: 2
+              endpoint: 1
             - device: "Hall/Transition Switch"
               endpoint: 1
             - device: "Hall/Upstairs/Switch"
@@ -2399,13 +2399,13 @@ script:
         - group: "Outside/Front Hue"
           members:
             - device: "Outside/Front Lights"
-              endpoint: 2
+              endpoint: 1
         - group: "Owner Suite/Bathroom/Lights"
           members:
             - device: "Owner Suite/Bathroom/Shower Switch"
-              endpoint: 2
+              endpoint: 1
             - device: "Owner Suite/Bathroom/Tub Switch"
-              endpoint: 2
+              endpoint: 1
       # Recreate custom switch bindings to bulbs or Zigbee groups after a reset.
       inovelli_binding_replay:
         - from: "Basement/Bathroom/Shower Switch"
