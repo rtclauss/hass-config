@@ -94,7 +94,7 @@ def test_configured_battery_rows_cover_live_battery_devices() -> None:
         ("Aqara", "Water Leak Sensor (SJCGQ11LM)"): ("1", "CR2032", "1"),
         ("Aqara", "Door and Window Sensor (MCCGQ11LM)"): ("1", "CR1632", "1"),
         ("Xiaomi", "Mi Wireless Switch (WXKG01LM)"): ("1", "CR2032", "1"),
-        ("IKEA", "PARASOLL door/window sensor"): ("8", "AAA", "1"),
+        ("IKEA", "PARASOLL door/window sensor"): ("20", "AAA", "1"),
         ("IKEA", "RODRET wireless dimmer"): ("1", "AAA", "1"),
         ("IKEA", "SOMRIG shortcut button"): ("2", "AAA", "1"),
         ("IKEA", "TRADFRI remote control"): ("2", "CR2032", "1"),
@@ -112,6 +112,16 @@ def test_configured_battery_rows_cover_live_battery_devices() -> None:
         assert row["quantity"] == quantity
         assert _clean_cell(row["battery"]) == battery
         assert row["cells_device"] == cells_per_device
+
+
+def test_loose_battery_stock_tracks_spare_aaa_cells() -> None:
+    rows = _table_rows("Loose Battery Stock")
+    stock = {_clean_cell(row["battery"]): row for row in rows}
+
+    aaa = stock.get("AAA")
+    assert aaa is not None
+    assert aaa["quantity"] == "8"
+    assert "Loose spare cells on hand" in aaa["notes"]
 
 
 def test_battery_planning_totals_match_inventory_rows() -> None:
@@ -136,7 +146,7 @@ def test_battery_planning_totals_match_inventory_rows() -> None:
         actual_configured[battery] = actual_configured.get(battery, 0) + installed
 
     expected_plan = {
-        "AAA": ("Rechargeable cylindrical", 16, 15, 16, 47),
+        "AAA": ("Rechargeable cylindrical", 16, 27, 16, 59),
         "AA": ("Rechargeable cylindrical", 0, 6, 4, 10),
         "FYRTUR battery pack": ("Rechargeable pack", 0, 2, 1, 3),
         "CR2450": ("Primary coin cell", 16, 8, 6, 30),
