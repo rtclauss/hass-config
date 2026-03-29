@@ -19,7 +19,7 @@ constexpr uint8_t MAX_RIPPLE_STEPS = 16;
 constexpr uint8_t COOLING = 55;
 constexpr uint8_t SPARKING = 120;
 constexpr uint8_t GLITTER_FADE_AMOUNT = 20;
-constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;
+constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 64;
 constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;
 constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;
 constexpr size_t LAVA_FIELD_CELLS = 48;
@@ -452,9 +452,9 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
   static uint32_t last_update = 0;
   static uint16_t drift_offset = 0;
   static uint16_t ember_offset = 173;
-  const std::array<float, 5> cluster_phases{{0.1f, 1.4f, 2.3f, 3.5f, 4.6f}};
-  const std::array<float, 5> cluster_rates{{0.11f, 0.08f, 0.13f, 0.09f, 0.12f}};
-  const std::array<float, 5> cluster_radii{{5.5f, 7.0f, 4.5f, 6.0f, 5.0f}};
+  const std::array<float, 8> cluster_phases{{0.1f, 0.7f, 1.5f, 2.1f, 2.9f, 3.6f, 4.3f, 5.0f}};
+  const std::array<float, 8> cluster_rates{{0.11f, 0.08f, 0.13f, 0.09f, 0.12f, 0.07f, 0.10f, 0.06f}};
+  const std::array<float, 8> cluster_radii{{2.1f, 3.0f, 1.8f, 2.6f, 2.2f, 3.4f, 2.0f, 2.8f}};
   std::array<Color, LAVA_FIELD_CELLS> lava_cells{};
   auto &rt = state();
 
@@ -478,6 +478,8 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
         pseudo_noise(static_cast<uint16_t>(cell * 37), drift_offset + static_cast<uint16_t>(cell * 7));
     const float ember_wave =
         pseudo_noise(static_cast<uint16_t>((cell * 61) + 97), ember_offset + static_cast<uint16_t>(cell * 11));
+    const float color_shift =
+        pseudo_noise(static_cast<uint16_t>((cell * 47) + 151), ember_offset + static_cast<uint16_t>(cell * 17));
     float clump_heat = 0.0f;
 
     for (size_t cluster = 0; cluster < cluster_phases.size(); cluster++) {
@@ -486,29 +488,43 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
           static_cast<float>(LAVA_FIELD_CELLS - 1);
       const float activity =
           smoothstep(
-              0.18f,
-              0.92f,
+              0.30f,
+              0.96f,
               pseudo_noise(
                   static_cast<uint16_t>(cluster * 73 + 19),
                   drift_offset + static_cast<uint16_t>(cluster * 53)));
       const float distance = std::fabs(static_cast<float>(cell) - center);
       const float influence = smoothstep(1.0f, 0.0f, distance / cluster_radii[cluster]);
-      clump_heat = std::max(clump_heat, influence * (0.28f + (activity * 0.72f)));
+      clump_heat = std::max(clump_heat, influence * (0.14f + (activity * 0.86f)));
     }
 
-    const float molten_mix = clamp_unit((crust_noise * 0.24f) + (ember_wave * 0.30f) + (clump_heat * 0.96f));
-    const float flare = smoothstep(0.18f, 0.96f, molten_mix);
+    const float cooled_crust = smoothstep(0.18f, 0.90f, 1.0f - ((clump_heat * 0.82f) + (ember_wave * 0.18f)));
+    const float molten_mix = clamp_unit((clump_heat * 1.08f) + (ember_wave * 0.34f) - (cooled_crust * 0.20f));
+    const float flare = smoothstep(0.26f, 0.97f, molten_mix);
+    const float hotspot = smoothstep(0.74f, 0.99f, molten_mix);
 
     Color pixel(
-        clamp_u8(static_cast<int>(6 + (crust_noise * 12.0f) + (ember_wave * 10.0f))),
-        clamp_u8(static_cast<int>(2 + (crust_noise * 4.0f) + (ember_wave * 6.0f))),
+        clamp_u8(static_cast<int>(1 + (crust_noise * 4.0f))),
+        clamp_u8(static_cast<int>(crust_noise * 2.0f)),
         0);
+    const Color crust_tint(
+        clamp_u8(static_cast<int>(6 + (crust_noise * 14.0f))),
+        clamp_u8(static_cast<int>(1 + (ember_wave * 3.0f))),
+        0);
+    pixel = blend(pixel, crust_tint, clamp_u8(static_cast<int>((1.0f - clump_heat) * 132.0f)));
 
     if (flare > 0.0f) {
-      Color magma = blend(Color(92, 12, 0), Color(255, 72, 0), clamp_u8(static_cast<int>(flare * 255.0f)));
-      magma = blend(magma, Color(255, 178, 28), clamp_u8(static_cast<int>(smoothstep(0.38f, 0.92f, flare) * 255.0f)));
-      magma = blend(magma, Color(255, 242, 180), clamp_u8(static_cast<int>(smoothstep(0.82f, 1.0f, flare) * 180.0f)));
-      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(54 + (flare * 201.0f))));
+      Color magma = blend(
+          Color(84, 8, 0),
+          Color(210, 34, 0),
+          clamp_u8(static_cast<int>(((flare * 0.58f) + (color_shift * 0.42f)) * 255.0f)));
+      magma = blend(magma, Color(255, 94, 0), clamp_u8(static_cast<int>(smoothstep(0.24f, 0.76f, flare) * 255.0f)));
+      magma = blend(
+          magma,
+          Color(255, 170, 18),
+          clamp_u8(static_cast<int>(smoothstep(0.52f, 0.90f, flare) * (180.0f + (color_shift * 60.0f)))));
+      magma = blend(magma, Color(255, 235, 132), clamp_u8(static_cast<int>(hotspot * 144.0f)));
+      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(32 + (flare * 223.0f))));
     }
 
     lava_cells[cell] = pixel;
