@@ -485,17 +485,18 @@ automation:
         state: "Automotive"
         # Todo add biking here?
     action:
-      - action: script.house_transition
-        data:
-          mode: away
-          reason: leave_home
-      # Vacuum request payload is identical for both paths, so keep one action.
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - parallel:
+          - action: script.house_transition
+            data:
+              mode: away
+              reason: leave_home
+          # Vacuum request payload is identical for both paths, so keep one action.
+          - action: mqtt.publish
+            data:
+              topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
+              payload: >-
+                {% set segment_id = now().weekday() + 1 %}
+                {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
           # - action: notify.all
           #   data:
           #     title: "Auf wiedersehen"
