@@ -25,6 +25,13 @@ def _normalize_header(value: str) -> str:
     return value
 
 
+def _normalize_battery_family(value: str) -> str:
+    value = _clean_cell(value)
+    if value == "FYRTUR battery pack":
+        return "FYRTUR battery pack (BRAUNIT)"
+    return value
+
+
 def _table_rows(heading: str) -> list[dict[str, str]]:
     text = INVENTORY_PATH.read_text(encoding="utf-8")
     marker = f"## {heading}\n"
@@ -121,7 +128,7 @@ def test_battery_planning_totals_match_inventory_rows() -> None:
 
     actual_inventory: dict[str, int] = {}
     for row in inventory_rows:
-        battery = _clean_cell(row["battery"])
+        battery = _normalize_battery_family(row["battery"])
         if battery == "n/a":
             continue
         installed = int(row["quantity"]) * int(row["cells_device"])
@@ -129,7 +136,7 @@ def test_battery_planning_totals_match_inventory_rows() -> None:
 
     actual_configured: dict[str, int] = {}
     for row in configured_rows:
-        battery = _clean_cell(row["battery"])
+        battery = _normalize_battery_family(row["battery"])
         if battery == "n/a":
             continue
         installed = int(row["quantity"]) * int(row["cells_device"])
@@ -138,7 +145,7 @@ def test_battery_planning_totals_match_inventory_rows() -> None:
     expected_plan = {
         "AAA": ("Rechargeable cylindrical", 16, 15, 16, 47),
         "AA": ("Rechargeable cylindrical", 0, 6, 4, 10),
-        "FYRTUR battery pack": ("Rechargeable pack", 0, 2, 1, 3),
+        "FYRTUR battery pack (BRAUNIT)": ("Rechargeable pack", 0, 2, 1, 3),
         "CR2450": ("Primary coin cell", 16, 8, 6, 30),
         "CR2032": ("Primary coin cell", 16, 25, 11, 52),
         "CR1632": ("Primary coin cell", 4, 1, 3, 8),
@@ -147,7 +154,7 @@ def test_battery_planning_totals_match_inventory_rows() -> None:
     }
 
     plan = {
-        _clean_cell(row["battery"]): (
+        _normalize_battery_family(row["battery"]): (
             row["kind"],
             int(row["inventory_cells"]),
             int(row["configured_cells"]),
