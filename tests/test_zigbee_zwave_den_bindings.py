@@ -31,39 +31,21 @@ def _script_block(script_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def _device_binding_topic(block: str, payload_fragment: str) -> str:
-    lines = block.splitlines()
-    payload_index = next(
-        index for index, line in enumerate(lines) if payload_fragment in line
-    )
-    topic_index = max(
-        index
-        for index in range(payload_index)
-        if "topic: zigbee2mqtt/bridge/request/device/" in lines[index]
-    )
-    return lines[topic_index].strip()
-
-
-def test_reset_script_keeps_den_flood_switch_whole_room_binding() -> None:
+def test_reset_script_keeps_den_flood_switch_group_membership() -> None:
     block = _script_block("reset_inovelli_switches")
-    payload = '"from":"Den/Flood Switch/2","to":"Den/All"}'
 
-    assert block.count(payload) == 1
-    assert _device_binding_topic(block, payload) == (
-        "topic: zigbee2mqtt/bridge/request/device/bind"
-    )
-    assert "Den/Wall Switch" not in block
+    assert 'group: "Den/Floods"' in block
+    assert 'device: "Den/Flood Switch"' in block
+    assert "endpoint: 2" in block
 
 
-def test_reset_script_keeps_den_flood_switch_group_binding() -> None:
+def test_reset_script_keeps_den_flood_switch_bindings_to_group_and_lamp() -> None:
     block = _script_block("reset_inovelli_switches")
-    payload = '"from":"Den/Flood Switch/2","to":"Den/Floods"}'
 
-    assert block.count(payload) == 1
-    assert _device_binding_topic(block, payload) == (
-        "topic: zigbee2mqtt/bridge/request/device/bind"
-    )
-    assert '"group":"Den/Floods"' in block
+    assert 'from: "Den/Flood Switch"' in block
+    assert 'to: "Den/Floods"' in block
+    assert 'to: "Den/Lamp"' in block
+    assert "genScenes" in block
 
 
 def test_light_package_uses_den_flood_switch_entity_name() -> None:

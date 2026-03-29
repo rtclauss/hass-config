@@ -2087,10 +2087,10 @@ script:
     variables:
       ha_write_delay: "00:00:01"
       mqtt_bind_delay: "00:00:03"
-      all_inovelli_switches_sb_mode: >
-        {%- for device in states.select | select('match', '.*_smartbulbmode.*')  | reject('match','.*exhaust.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
-      all_inovelli_switches_ouput_mode: >
-        {%- for device in states.select | select('match', '.*outputmode.*') | reject('match','.*exhaust.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      aurora_effect: aurora
+      aurora_color: 187
+      aurora_level: 51
+      aurora_duration: 255
       all_inovelli_switches_energy_report_rate: >
         {%- for device in states.number | select('match', '.*periodicpowerandenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_active_energy_report_rate: >
@@ -2111,12 +2111,362 @@ script:
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
+      # Snapshot captured from the live Zigbee2MQTT MQTT bridge on 2026-03-28.
+      inovelli_led_notification_targets:
+        - Basement/Bathroom/Exhaust
+        - Basement/Bathroom/Shower Switch
+        - Basement/Great Room East and Middle Switch
+        - Basement/Great Room Landing Switch 2
+        - Basement/Great Room West Switch
+        - Basement/Landing Switch
+        - Basement/North Hallway Switch
+        - Basement/Overhead Outlet
+        - Deck/Flood Lights
+        - Deck/Kitchen Door
+        - Den/Flood Switch
+        - Dining Room/Table Switch
+        - Dining Room/Wall Switch
+        - Garage/Overhead Switch
+        - Guest Bathroom/Exhaust
+        - Guest Room/Fan Switch
+        - Hall/Foyer Switch
+        - Hall/Garage Laundry Switch
+        - Hall/Stairway
+        - Hall/Transition Switch
+        - Hall/Upstairs/Switch
+        - Kitchen/Bay Switch
+        - Kitchen/Sink Overhead Switch
+        - Kitchen/Switch
+        - Kitchen/Under Cabinet
+        - Laundry/Wall Switch
+        - Office/Fan Switch
+        - Outside/Front Lights
+        - Owner Suite/Bathroom/Exhaust
+        - Owner Suite/Bathroom/Shower Switch
+        - Owner Suite/Bathroom/Tub Switch
+        - Owner Suite/Bathroom/Vanity
+        - Owner Suite/Closet
+        - Owner Suite/Fan Switch
+      inovelli_smart_bulb_mode_replay:
+        - option: "Smart Bulb Mode"
+          entities:
+            - select.owner_suite_fan_switch_smartbulbmode
+            - select.basement_great_room_west_switch_smartbulbmode
+            - select.basement_great_room_landing_switch_2_smartbulbmode
+            - select.hall_transition_switch_smartbulbmode
+            - select.hall_foyer_switch_smartbulbmode
+            - select.kitchen_sink_overhead_switch_smartbulbmode
+            - select.deck_flood_lights_smartbulbmode
+            - select.deck_kitchen_door_smartbulbmode
+            - select.dining_room_wall_switch_smartbulbmode
+            - select.office_fan_switch_smartbulbmode
+            - select.owner_suite_bathroom_tub_switch_smartbulbmode
+            - select.basement_great_room_east_and_middle_switch_smartbulbmode
+            - select.hall_garage_laundry_switch_smartbulbmode
+            - select.basement_north_hallway_switch_smartbulbmode
+            - select.basement_bathroom_shower_switch_smartbulbmode
+            - select.basement_landing_switch_smartbulbmode
+            - select.hall_upstairs_switch_smartbulbmode
+            - select.guest_room_fan_switch_smartbulbmode
+            - select.outside_front_lights_smartbulbmode
+            - select.owner_suite_bathroom_shower_switch_smartbulbmode
+            - select.dining_room_table_switch_smartbulbmode
+            - select.den_flood_switch_smartbulbmode
+            - select.kitchen_switch_smartbulbmode
+            - select.kitchen_bay_switch_smartbulbmode
+        - option: "Disabled"
+          entities:
+            - select.guest_bathroom_exhaust_smartbulbmode
+            - select.owner_suite_bathroom_exhaust_smartbulbmode
+            - select.basement_bathroom_exhaust_smartbulbmode
+            - select.basement_overhead_outlet_smartbulbmode
+            - select.garage_overhead_switch_smartbulbmode
+            - select.laundry_wall_switch_smartbulbmode
+            - select.owner_suite_closet_smartbulbmode
+            - select.owner_suite_bathroom_vanity_smartbulbmode
+            - select.hall_stairway_smartbulbmode
+            - select.kitchen_under_cabinet_smartbulbmode
+      inovelli_output_mode_replay:
+        - option: "Dimmer"
+          entities:
+            - select.owner_suite_fan_switch_outputmode
+            - select.basement_great_room_west_switch_outputmode
+            - select.basement_great_room_landing_switch_2_outputmode
+            - select.hall_transition_switch_outputmode
+            - select.hall_foyer_switch_outputmode
+            - select.kitchen_sink_overhead_switch_outputmode
+            - select.deck_kitchen_door_outputmode
+            - select.dining_room_wall_switch_outputmode
+            - select.office_fan_switch_outputmode
+            - select.owner_suite_bathroom_tub_switch_outputmode
+            - select.basement_great_room_east_and_middle_switch_outputmode
+            - select.hall_garage_laundry_switch_outputmode
+            - select.basement_north_hallway_switch_outputmode
+            - select.basement_bathroom_shower_switch_outputmode
+            - select.owner_suite_closet_outputmode
+            - select.basement_landing_switch_outputmode
+            - select.hall_upstairs_switch_outputmode
+            - select.guest_room_fan_switch_outputmode
+            - select.outside_front_lights_outputmode
+            - select.owner_suite_bathroom_shower_switch_outputmode
+            - select.owner_suite_bathroom_vanity_outputmode
+            - select.hall_stairway_outputmode
+            - select.dining_room_table_switch_outputmode
+            - select.den_flood_switch_outputmode
+            - select.kitchen_switch_outputmode
+            - select.kitchen_bay_switch_outputmode
+        - option: "Exhaust Fan (On/Off)"
+          entities:
+            - select.guest_bathroom_exhaust_outputmode
+            - select.owner_suite_bathroom_exhaust_outputmode
+            - select.basement_bathroom_exhaust_outputmode
+        - option: "On/Off"
+          entities:
+            - select.deck_flood_lights_outputmode
+            - select.basement_overhead_outlet_outputmode
+            - select.garage_overhead_switch_outputmode
+            - select.laundry_wall_switch_outputmode
+            - select.kitchen_under_cabinet_outputmode
+      inovelli_switch_type_replay:
+        - option: "Single Pole"
+          entities:
+            - select.owner_suite_fan_switch_switchtype
+            - select.basement_great_room_west_switch_switchtype
+            - select.basement_great_room_landing_switch_2_switchtype
+            - select.guest_bathroom_exhaust_switchtype
+            - select.owner_suite_bathroom_exhaust_switchtype
+            - select.basement_bathroom_exhaust_switchtype
+            - select.kitchen_sink_overhead_switch_switchtype
+            - select.deck_flood_lights_switchtype
+            - select.basement_overhead_outlet_switchtype
+            - select.deck_kitchen_door_switchtype
+            - select.dining_room_wall_switch_switchtype
+            - select.office_fan_switch_switchtype
+            - select.owner_suite_bathroom_tub_switch_switchtype
+            - select.laundry_wall_switch_switchtype
+            - select.basement_north_hallway_switch_switchtype
+            - select.owner_suite_closet_switchtype
+            - select.basement_landing_switch_switchtype
+            - select.outside_front_lights_switchtype
+            - select.owner_suite_bathroom_shower_switch_switchtype
+            - select.owner_suite_bathroom_vanity_switchtype
+            - select.kitchen_under_cabinet_switchtype
+            - select.dining_room_table_switch_switchtype
+            - select.den_flood_switch_switchtype
+            - select.kitchen_switch_switchtype
+            - select.kitchen_bay_switch_switchtype
+        - option: "Aux Switch"
+          entities:
+            - select.hall_transition_switch_switchtype
+        - option: "3-Way Aux Switch"
+          entities:
+            - select.hall_foyer_switch_switchtype
+            - select.garage_overhead_switch_switchtype
+            - select.hall_garage_laundry_switch_switchtype
+            - select.hall_upstairs_switch_switchtype
+            - select.hall_stairway_switchtype
+      # Recreate switch endpoint memberships in Zigbee groups after a reset.
+      inovelli_group_membership_replay:
+        - group: "Basement/Great Room"
+          members:
+            - device: "Basement/Great Room East and Middle Switch"
+              endpoint: 1
+            - device: "Basement/Great Room Landing Switch 2"
+              endpoint: 1
+            - device: "Basement/Great Room West Switch"
+              endpoint: 1
+            - device: "Basement/Landing Switch"
+              endpoint: 1
+            - device: "Basement/North Hallway Switch"
+              endpoint: 1
+        - group: "Deck/All"
+          members:
+            - device: "Deck/Kitchen Door"
+              endpoint: 2
+        - group: "Deck/Hue"
+          members:
+            - device: "Deck/Kitchen Door"
+              endpoint: 1
+        - group: "Den/Floods"
+          members:
+            - device: "Den/Flood Switch"
+              endpoint: 2
+        - group: "Dining Room/Over Table"
+          members:
+            - device: "Dining Room/Table Switch"
+              endpoint: 1
+            - device: "Dining Room/Table Switch"
+              endpoint: 2
+            - device: "Dining Room/Wall Switch"
+              endpoint: 1
+        - group: "Hall/All"
+          members:
+            - device: "Hall/Foyer Switch"
+              endpoint: 2
+            - device: "Hall/Garage Laundry Switch"
+              endpoint: 2
+            - device: "Hall/Transition Switch"
+              endpoint: 1
+            - device: "Hall/Upstairs/Switch"
+              endpoint: 1
+        - group: "Kitchen/All"
+          members:
+            - device: "Kitchen/Bay Switch"
+              endpoint: 1
+            - device: "Kitchen/Switch"
+              endpoint: 1
+        - group: "Outside/Front Hue"
+          members:
+            - device: "Outside/Front Lights"
+              endpoint: 2
+        - group: "Owner Suite/Bathroom/Lights"
+          members:
+            - device: "Owner Suite/Bathroom/Shower Switch"
+              endpoint: 2
+            - device: "Owner Suite/Bathroom/Tub Switch"
+              endpoint: 2
+      # Recreate custom switch bindings to bulbs or Zigbee groups after a reset.
+      inovelli_binding_replay:
+        - from: "Basement/Bathroom/Shower Switch"
+          from_endpoint: 2
+          to: "Basement/Bathroom Shower"
+          to_endpoint: 1
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Great Room East and Middle Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Great Room Landing Switch 2"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Great Room West Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Landing Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/North Hallway Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Deck/Kitchen Door"
+          from_endpoint: 2
+          to: "Deck/Hue"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Den/Flood Switch"
+          from_endpoint: 2
+          to: "Den/Floods"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+            - genScenes
+        - from: "Den/Flood Switch"
+          from_endpoint: 2
+          to: "Den/Lamp"
+          to_endpoint: 1
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Dining Room/Table Switch"
+          from_endpoint: 2
+          to: "Dining Room/Over Table"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+            - genScenes
+        - from: "Dining Room/Wall Switch"
+          from_endpoint: 2
+          to: "Dining Room/Over Table"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+            - genScenes
+        - from: "Hall/Foyer Switch"
+          from_endpoint: 2
+          to: "Hall/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Hall/Garage Laundry Switch"
+          from_endpoint: 2
+          to: "Hall/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Hall/Transition Switch"
+          from_endpoint: 3
+          to: "Hall/Transition"
+          to_endpoint: 11
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Hall/Upstairs/Switch"
+          from_endpoint: 2
+          to: "Hall/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Kitchen/Bay Switch"
+          from_endpoint: 2
+          to: "Kitchen/Bay Light"
+          to_endpoint: 11
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Kitchen/Sink Overhead Switch"
+          from_endpoint: 2
+          to: "Kitchen/Sink Overhead"
+          to_endpoint: 11
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Kitchen/Switch"
+          from_endpoint: 2
+          to: "Kitchen/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Outside/Front Lights"
+          from_endpoint: 2
+          to: "Outside/Front Hue"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Owner Suite/Bathroom/Shower Switch"
+          from_endpoint: 2
+          to: "Owner Suite/Bathroom/Lights"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Owner Suite/Bathroom/Tub Switch"
+          from_endpoint: 2
+          to: "Owner Suite/Bathroom/Lights"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
     sequence:
       - action: logbook.log
         data:
           entity_id: script.reset_inovelli_switches
           name: Exclude log
-          message: "Setting all appropriate light switches smart bulb mode on and dimmer mode"
+          message: "Replaying saved Inovelli Zigbee2MQTT config after switch resets"
           domain: script
       - action: number.set_value
         data:
@@ -2154,292 +2504,116 @@ script:
             {{all_inovelli_switches_singletapbehavior_mode}}
           option: "Old Behavior"
       - delay: "{{ ha_write_delay }}"
-        enabled: false
-      - action: select.select_option
-        enabled: false
-        data:
-          entity_id: >
-            {{all_inovelli_switches_sb_mode}}
-          option: "Disabled"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id: >
-            {{all_inovelli_switches_sb_mode}}
-          option: "Smart Bulb Mode"
-      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
         data:
           entity_id: >
             {{all_inovelli_switches_bindingofftoonsynclevel_mode}}
           option: "Enabled"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id: >
-            select.hall_stairway_smartbulbmode,
-            select.owner_suite_bathroom_exhaust_smartbulbmode,
-            select.owner_suite_bathroom_vanity_smartbulbmode,
-            select.owner_suite_closet_smartbulbmode,
-            select.hall_stairway_smartbulbmode,
-            select.garage_overhead_switch_smartbulbmode,
-            select.deck_flood_lights_smartbulbmode,
-            select.laundry_wall_switch_smartbulbmode,
-            select.kitchen_under_cabinet_smartbulbmode,
-            select.basement_overhead_outlet_smartbulbmode
-          option: "Disabled"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id: >
-            {{all_inovelli_switches_ouput_mode}}
-          option: "Dimmer"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id:
-            - select.laundry_wall_switch_outputmode
-            - select.garage_overhead_switch_outputmode
-            - select.deck_flood_lights_outputmode
-            - select.kitchen_under_cabinet_outputmode
-            - select.basement_overhead_outlet_outputmode # Todo maybe remove this when something is plugged in?
-            # - select.hall_stairway_outputmode
-          option: "On/Off"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id:
-            - select.basement_bathroom_exhaust_outputmode
-            - select.guest_bathroom_exhaust_outputmode
-            - select.owner_suite_bathroom_exhaust_outputmode
-          option: "Exhaust Fan (On/Off)"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id:
-            - select.owner_suite_bathroom_exhaust_switchtype
-            - select.basement_bathroom_exhaust_switchtype
-            - select.guest_bathroom_exhaust_switchtype
-            - select.basement_great_room_landing_switch_2_switchtype
-            - select.basement_great_room_west_switch_switchtype
-            - select.basement_landing_switch_switchtype
-            - select.basement_north_hallway_switch_switchtype
-            - select.basement_overhead_outlet_switchtype
-            - select.deck_flood_lights_switchtype
-            - select.den_flood_switch_switchtype
-            - select.dining_room_wall_switch_switchtype
-            - select.dining_room_table_switch_switchtype
-            - select.garage_overhead_switch_switchtype
-            - select.kitchen_bay_switch_switchtype
-            - select.kitchen_sink_overhead_switch_switchtype
-            - select.kitchen_switch_switchtype
-            - select.kitchen_under_cabinet_switchtype
-            - select.laundry_wall_switch_switchtype
-            - select.office_fan_switch_switchtype
-            - select.owner_suite_bathroom_shower_switch_switchtype
-            - select.owner_suite_bathroom_tub_switch_switchtype
-            - select.owner_suite_bathroom_vanity_switchtype
-            - select.owner_suite_closet_switchtype
-            - select.owner_suite_fan_switch_switchtype
-          option: "Single Pole"
-      - delay: "{{ ha_write_delay }}"
-      - action: select.select_option
-        data:
-          entity_id:
-            - select.hall_garage_laundry_switch_switchtype
-            - select.hall_stairway_switchtype
-            - select.hall_upstairs_switch_switchtype
-          option: "3-Way Aux Switch"
-      - action: select.select_option
-        data:
-          entity_id: select.hall_transition_switch_switchtype
-          option: "Aux Switch"
-      # Now redo the bindings of switches to bulbs/etc
       - delay: "{{ mqtt_bind_delay }}"
-      # TODO: Z2M 2.0 I need to update these bindings: https://github.com/Koenkk/zigbee2mqtt/pull/24432
-      - action: mqtt.publish
+      - repeat:
+          for_each: "{{ inovelli_smart_bulb_mode_replay }}"
+          sequence:
+            - variables:
+                replay_option: "{{ repeat.item.option }}"
+                replay_entities: "{{ repeat.item.entities }}"
+            - repeat:
+                for_each: "{{ replay_entities }}"
+                sequence:
+                  - action: select.select_option
+                    data:
+                      entity_id: "{{ repeat.item }}"
+                      option: "{{ replay_option }}"
+                  - delay: "{{ ha_write_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_output_mode_replay }}"
+          sequence:
+            - variables:
+                replay_option: "{{ repeat.item.option }}"
+                replay_entities: "{{ repeat.item.entities }}"
+            - repeat:
+                for_each: "{{ replay_entities }}"
+                sequence:
+                  - action: select.select_option
+                    data:
+                      entity_id: "{{ repeat.item }}"
+                      option: "{{ replay_option }}"
+                  - delay: "{{ ha_write_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_switch_type_replay }}"
+          sequence:
+            - variables:
+                replay_option: "{{ repeat.item.option }}"
+                replay_entities: "{{ repeat.item.entities }}"
+            - repeat:
+                for_each: "{{ replay_entities }}"
+                sequence:
+                  - action: select.select_option
+                    data:
+                      entity_id: "{{ repeat.item }}"
+                      option: "{{ replay_option }}"
+                  - delay: "{{ ha_write_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_group_membership_replay }}"
+          sequence:
+            - variables:
+                replay_group: "{{ repeat.item.group }}"
+                replay_members: "{{ repeat.item.members }}"
+            - repeat:
+                for_each: "{{ replay_members }}"
+                sequence:
+                  - action: mqtt.publish
+                    data:
+                      topic: zigbee2mqtt/bridge/request/group/members/add
+                      payload: >
+                        {{ {
+                          'group': replay_group,
+                          'device': repeat.item.device,
+                          'endpoint': repeat.item.endpoint
+                        } | tojson }}
+                  - delay: "{{ mqtt_bind_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_binding_replay }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/bind
+                payload: >
+                  {% set payload = {
+                    'from': repeat.item.from,
+                    'to': repeat.item.to,
+                    'clusters': repeat.item.clusters
+                  } %}
+                  {% if repeat.item.from_endpoint is defined and repeat.item.from_endpoint not in [none, '', 'default'] %}
+                    {% set payload = payload | combine({'from_endpoint': repeat.item.from_endpoint}) %}
+                  {% endif %}
+                  {% if repeat.item.to_endpoint is defined and repeat.item.to_endpoint not in [none, ''] %}
+                    {% set payload = payload | combine({'to_endpoint': repeat.item.to_endpoint}) %}
+                  {% endif %}
+                  {{ payload | tojson }}
+            - delay: "{{ mqtt_bind_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_led_notification_targets }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: "zigbee2mqtt/{{ repeat.item }}/set"
+                payload: >
+                  {{ {
+                    'led_effect': {
+                      'effect': aurora_effect,
+                      'color': aurora_color,
+                      'level': aurora_level,
+                      'duration': aurora_duration
+                    }
+                  } | tojson }}
+            - delay: "{{ mqtt_bind_delay }}"
+      - action: logbook.log
         data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Deck/Kitchen Door/2","to":"Deck/Hue"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Outside/Front Lights/2","to":"Outside/Front Hue"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Owner Suite/Bathroom/Tub Switch/2","to":"Owner Suite/Bathroom/Bathtub Lights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Kitchen/Sink Light Switch/2","to":"Kitchen/Sink"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Upstairs/Switch/2","to":"Hall/Upstairs Lights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Living Room/Wall Switch/2","to":"Living Room/Lamps"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Transition Switch/2","to":"Hall/Transition Lights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Transition Switch/2","to":"Hall/Main Foyer"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Garage Laundry Switch/2","to":"Hall/Transition Lights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Foyer Switch/2","to":"Hall/Main Foyer"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Foyer Switch/2","to":"Hall/Front Door"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/group/members/add
-          payload: >-
-            {"group":"Dining Room/Over Table",
-              "device":"Dining Room/Table Switch",
-              "endpoint":2}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Dining Room/Table Switch/2","to":"Dining Room/Over Table"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Dining Room/Overhead/2","to":"Dining Room/Over Table"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/group/members/add
-          payload: >-
-            {"group":"Den/Floods",
-              "device":"Den/Flood Switch",
-              "endpoint":2}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Den/Flood Switch/2","to":"Den/Floods"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Den/Flood Switch/2","to":"Den/All"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Deck/Flood Lights/2","to":"Deck/All"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/North Hallway Switch/2","to":"Basement/All Down Lights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/North Hallway Switch/2","to":"Basement/North Hallway"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Landing Switch/2","to":"Basement/Landing Group"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room West Switch/2","to":"Basement/All Down Lights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room West Switch/2","to":"Basement/West Downlights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/All Down Lights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/East Downlights"}
-      - delay: "{{ mqtt_bind_delay }}"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Bathroom/Shower Switch/2","to":"Basement/Bathroom Shower/1"}
+          name: Zigbee2MQTT Reset
+          message: >
+            Replayed the saved Inovelli smart bulb modes, output modes, switch types,
+            group memberships, and bindings for switches and bulbs/groups,
+            and set the Inovelli LED bar to aurora so the completed reset is easy to verify.
 
   turn_off_owner_suite_inovelli_switch_leds:
     icon: mdi:light-switch
