@@ -155,6 +155,7 @@ select:
       - dots
       - fire
       - f1 race
+      - lava field
       - glitter
       - juggle
       - lightning
@@ -165,7 +166,9 @@ select:
       - rainbow with glitter
       - ripple
       - sinelon
+      - thunderstorm
       - twinkle
+      - wall fire
     lambda: |-
       const auto effect = id(tiki_room_strip).get_effect_name();
       if (strcmp(effect.c_str(), "None") == 0) {
@@ -273,6 +276,11 @@ light:
           lambda: |-
             tikiroom::apply_f1_race(it, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
+          name: lava field
+          update_interval: ${tikiroom_effect_frame_interval}
+          lambda: |-
+            tikiroom::apply_lava_field(it, id(tikiroom_effect_speed), initial_run);
+      - addressable_lambda:
           name: glitter
           update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
@@ -323,7 +331,17 @@ light:
           lambda: |-
             tikiroom::apply_sinelon(it, current_color, id(tikiroom_effect_speed), initial_run);
       - addressable_lambda:
+          name: thunderstorm
+          update_interval: ${tikiroom_effect_frame_interval}
+          lambda: |-
+            tikiroom::apply_thunderstorm(it, id(tikiroom_effect_speed), initial_run);
+      - addressable_lambda:
           name: twinkle
           update_interval: ${tikiroom_effect_frame_interval}
           lambda: |-
             tikiroom::apply_twinkle(it, id(tikiroom_effect_speed), initial_run);
+      - addressable_lambda:
+          name: wall fire
+          update_interval: ${tikiroom_effect_frame_interval}
+          lambda: |-
+            tikiroom::apply_wall_fire(it, id(tikiroom_effect_speed), initial_run);
