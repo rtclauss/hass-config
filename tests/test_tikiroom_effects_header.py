@@ -18,6 +18,9 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
 
     assert "inline float smoothstep(float edge0, float edge1, float value)" in text
     assert "constexpr uint8_t GLITTER_FADE_AMOUNT = 20;" in text
+    assert "constexpr uint8_t F1_CRASH_MIN_FRAMES = 30;" in text
+    assert "constexpr uint8_t F1_CRASH_MAX_FRAMES = 50;" in text
+    assert "constexpr uint8_t F1_CRASH_DURATION_FRAMES = 18;" in text
     assert "constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 64;" in text
     assert "constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;" in text
     assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;" in text
@@ -65,13 +68,27 @@ def test_thunderstorm_uses_jungle_canopy_palette_and_bounded_flash_blending() ->
     assert "fade_to_black(GLITTER_FADE_AMOUNT);" not in block
 
 
-def test_f1_race_can_trigger_random_overtakes() -> None:
+def test_f1_race_can_trigger_random_overtakes_and_crashes() -> None:
     block = _function_block("apply_f1_race")
 
     assert "static uint32_t last_motion_ms = 0;" in block
     assert "static uint32_t next_overtake_ms = 0;" in block
+    assert "static uint8_t frames_until_crash = F1_CRASH_MIN_FRAMES;" in block
+    assert "static bool crash_active = false;" in block
+    assert "static uint8_t crash_frame = 0;" in block
+    assert "static uint8_t crash_car = 0;" in block
+    assert "static float crash_progress = 0.0f;" in block
+    assert "static uint8_t active_cars = static_cast<uint8_t>(cars.size());" in block
+    assert "static std::array<bool, cars.size()> car_active{};" in block
+    assert "const auto reset_race = [&](uint32_t base_now)" in block
     assert "static std::array<float, 5> car_progress{};" in block
     assert "static std::array<float, 5> pace_delta{};" in block
     assert "car_progress[i] += delta_s * laps_per_second * effective_pace[i];" in block
-    assert "const uint8_t attacker = random_u8(static_cast<uint8_t>(cars.size()));" in block
+    assert "std::array<uint8_t, cars.size()> active_indices{};" in block
+    assert "const uint8_t attacker = active_indices[random_u8(static_cast<uint8_t>(active_count))];" in block
     assert "pace_delta[attacker] += attack_boost;" in block
+    assert "frames_until_crash--;" in block
+    assert "crash_active = true;" in block
+    assert "const float blast = static_cast<float>(crash_frame) / static_cast<float>(F1_CRASH_DURATION_FRAMES - 1);" in block
+    assert "if (active_cars == 0) {" in block
+    assert "reset_race(now);" in block
