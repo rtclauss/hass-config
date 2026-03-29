@@ -163,16 +163,18 @@ automation:
     mode: restart
     trigger:
       - trigger: state
-        entity_id: group.egress_points
+        entity_id: binary_sensor.any_egress_open
+        from: "off"
+        to: "on"
       - trigger: state
         entity_id: binary_sensor.office_occupancy_2
         from: "off"
         to: "on"
     variables:
       open_egress_points: >-
-        {{ expand('group.egress_points') | selectattr('state', 'eq', 'on') | map(attribute='name') | join(', ') }}
+        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
       trigger_label: >-
-        {% if trigger.entity_id == 'group.egress_points' %}
+        {% if trigger.entity_id == 'binary_sensor.any_egress_open' %}
           {{ open_egress_points if open_egress_points else 'an egress point' }}
         {% else %}
           {{ trigger.to_state.attributes.friendly_name }}
