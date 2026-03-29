@@ -390,6 +390,28 @@ automation:
           entity_id:
             - switch.basement_sump_pump
 
+  - alias: Turn Laundry Plugs Back On
+    id: turn_laundry_plugs_back_on
+    trigger:
+      - trigger: state
+        entity_id:
+          - switch.laundry_room_washing_machine
+          - switch.laundry_room_dryer
+        to: "off"
+      - trigger: state
+        entity_id:
+          - switch.laundry_room_washing_machine
+          - switch.laundry_room_dryer
+        not_to: "on"
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id:
+            - switch.laundry_room_washing_machine
+            - switch.laundry_room_dryer
+
   - alias: Notify Sump Pit Getting Full
     id: notify_sump_pit_getting_full
     trigger:
