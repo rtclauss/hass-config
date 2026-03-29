@@ -96,6 +96,7 @@ homeassistant:
 automation:
   - id: leave_home_for_curling
     alias: leave_home_for_curling
+    description: Run one full-floor pass on the main and upstairs levels when leaving for curling.
     trigger:
       - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
@@ -119,18 +120,7 @@ automation:
             - binary_sensor.curling_season
           state: "on"
     action:
-      # Revert back when batteries are all reset/new
-      # including main level vacuum
-      # - alias: Start Vacuums
-      #   action: vacuum.start
-      #   target:
-      #     entity_id: all
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: script.vacuum_main_and_upstairs_levels
       - action: climate.set_preset_mode
         enabled: false
         target:
