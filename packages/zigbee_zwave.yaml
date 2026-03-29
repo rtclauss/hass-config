@@ -565,7 +565,7 @@ automation:
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id: light.dining_room_overhead
+                  entity_id: light.dining_room_all
                   brightness_pct: 100
           - conditions:
               - condition: trigger
@@ -573,7 +573,7 @@ automation:
             sequence:
               - action: light.turn_off
                 data:
-                  entity_id: light.dining_room_overhead
+                  entity_id: light.dining_room_all
                   transition: 5
           - conditions:
               - condition: trigger
@@ -581,22 +581,18 @@ automation:
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id:
-                    - light.dining_room_overhead
-                    - light.dining_room
+                  entity_id: light.dining_room_all
                   kelvin: >-
-                    {{state_attr("light.dining_room","color_temp_kelvin")+200}}
+                    {{ state_attr("light.dining_room_all", "color_temp_kelvin") | int(4000) + 200 }}
           - conditions:
               - condition: trigger
                 id: down-double
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id:
-                    - light.dining_room_overhead
-                    - light.dining_room
+                  entity_id: light.dining_room_all
                   kelvin: >-
-                    {{state_attr("light.dining_room","color_temp_kelvin")-200}}
+                    {{ state_attr("light.dining_room_all", "color_temp_kelvin") | int(4000) - 200 }}
 
   - alias: dining_room_table_switch_actions
     id: dining_room_table_switch_actions
@@ -1139,7 +1135,7 @@ automation:
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id: light.kitchen_overhead
+                  entity_id: light.kitchen_all
                   transition: 1
           - conditions:
               - condition: trigger
@@ -1147,7 +1143,7 @@ automation:
             sequence:
               - action: light.turn_off
                 data:
-                  entity_id: light.kitchen_overhead
+                  entity_id: light.kitchen_all
                   transition: 5
           - conditions:
               - condition: trigger
@@ -1157,9 +1153,9 @@ automation:
                 sequence:
                   - action: light.turn_on
                     data:
-                      entity_id: light.kitchen_overhead
+                      entity_id: light.kitchen_all
                       brightness: >-
-                        {{state_attr('light.kitchen_overhead', 'brightness') + 10 }}
+                        {{ state_attr('light.kitchen_all', 'brightness') | int(0) + 10 }}
                   - delay:
                       milliseconds: 50
                 until:
@@ -1170,7 +1166,7 @@ automation:
                         state: "up_release"
                       - alias: "condition alias (name)"
                         condition: numeric_state
-                        entity_id: light.kitchen_overhead
+                        entity_id: light.kitchen_all
                         attribute: brightness
                         above: 254
           - conditions:
@@ -1181,9 +1177,9 @@ automation:
                 sequence:
                   - action: light.turn_on
                     data:
-                      entity_id: light.kitchen_overhead
+                      entity_id: light.kitchen_all
                       brightness: >-
-                        {{state_attr('light.kitchen_overhead', 'brightness') - 10}}
+                        {{ state_attr('light.kitchen_all', 'brightness') | int(0) - 10 }}
                   - delay:
                       milliseconds: 50
                 until:
@@ -1194,7 +1190,7 @@ automation:
                         state: "down_release"
                       - alias: "condition alias (name)"
                         condition: numeric_state
-                        entity_id: light.kitchen_overhead
+                        entity_id: light.kitchen_all
                         attribute: brightness
                         below: 1
 
