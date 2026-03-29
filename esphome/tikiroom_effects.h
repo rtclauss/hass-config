@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -243,6 +244,25 @@ inline uint16_t wrap_led_index(int32_t index) {
   return static_cast<uint16_t>(index);
 }
 
+inline uint16_t wrapped_distance(uint16_t a, uint16_t b) {
+  int32_t delta = static_cast<int32_t>(a) - static_cast<int32_t>(b);
+  if (delta < 0) {
+    delta = -delta;
+  }
+  const int32_t reverse = static_cast<int32_t>(NUM_LEDS) - delta;
+  return static_cast<uint16_t>(delta < reverse ? delta : reverse);
+}
+
+inline float clamp_unit(float value) {
+  if (value < 0.0f) {
+    return 0.0f;
+  }
+  if (value > 1.0f) {
+    return 1.0f;
+  }
+  return value;
+}
+
 inline void fill_rainbow(uint8_t start_hue, uint8_t delta_hue) {
   auto &rt = state();
   uint8_t hue = start_hue;
@@ -402,6 +422,68 @@ inline void apply_fire(AddressableLight &it, float speed, bool initial_run) {
   copy_to_output(it);
 }
 
+inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run) {
+  static uint32_t last_update = 0;
+  static uint16_t flow_offset = 0;
+  auto &rt = state();
+
+  if (initial_run) {
+    flow_offset = 0;
+    clear_leds();
+  }
+
+  if (!due(last_update, clamp_interval(speed, 110, 22))) {
+    copy_to_output(it);
+    return;
+  }
+
+  flow_offset += 2 + static_cast<uint16_t>(speed / 24.0f);
+
+  const uint16_t vent_a = beatsin16(5, 0, NUM_LEDS - 1);
+  const uint16_t vent_b = beatsin16(4, 0, NUM_LEDS - 1, 2.1f);
+  const uint16_t vent_c = beatsin16(3, 0, NUM_LEDS - 1, 4.2f);
+
+  for (uint16_t i = 0; i < NUM_LEDS; i++) {
+    const float crust = pseudo_noise(i * 18, flow_offset + (i * 4));
+
+    float vent_heat = 0.0f;
+    const float dist_a = static_cast<float>(wrapped_distance(i, vent_a));
+    const float dist_b = static_cast<float>(wrapped_distance(i, vent_b));
+    const float dist_c = static_cast<float>(wrapped_distance(i, vent_c));
+    vent_heat = std::max(vent_heat, clamp_unit(1.0f - (dist_a / 135.0f)));
+    vent_heat = std::max(vent_heat, clamp_unit(1.0f - (dist_b / 105.0f)));
+    vent_heat = std::max(vent_heat, clamp_unit(1.0f - (dist_c / 82.0f)));
+
+    float heat = clamp_unit((crust * 0.55f) + (vent_heat * 0.70f));
+    heat *= heat;
+
+    Color pixel(
+        clamp_u8(static_cast<int>(10 + (crust * 18.0f))),
+        clamp_u8(static_cast<int>(2 + (crust * 8.0f))),
+        0);
+
+    if (heat > 0.18f) {
+      const float flare = clamp_unit((heat - 0.18f) / 0.82f);
+      const Color magma(
+          clamp_u8(static_cast<int>(70 + (flare * 185.0f))),
+          clamp_u8(static_cast<int>(
+              flare < 0.65f
+                  ? flare * 120.0f
+                  : 78.0f + (((flare - 0.65f) / 0.35f) * 155.0f))),
+          clamp_u8(static_cast<int>(flare > 0.88f ? ((flare - 0.88f) / 0.12f) * 80.0f : 0.0f)));
+      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(flare * 255.0f)));
+    }
+
+    if (vent_heat > 0.85f && crust > 0.68f) {
+      add_inplace(pixel, Color(28, 12, 0));
+    }
+
+    rt.leds[i] = pixel;
+  }
+
+  copy_to_output(it);
+}
+
 inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
   struct CarSpec {
     Color color;
@@ -474,6 +556,67 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     add_inplace(rt.leds[wrap_led_index(nose - 3)], scale_color(car.color, 128));
     add_inplace(rt.leds[wrap_led_index(nose - 4)], scale_color(car.color, 72));
     add_inplace(rt.leds[wrap_led_index(nose - 5)], scale_color(car.color, 32));
+  }
+
+  copy_to_output(it);
+}
+
+inline void apply_wall_fire(AddressableLight &it, float speed, bool initial_run) {
+  static uint32_t last_update = 0;
+  static uint16_t drift_offset = 0;
+  auto &rt = state();
+
+  if (initial_run) {
+    drift_offset = 0;
+    clear_leds();
+  }
+
+  if (!due(last_update, clamp_interval(speed, 95, 18))) {
+    copy_to_output(it);
+    return;
+  }
+
+  drift_offset += 2 + static_cast<uint16_t>(speed / 26.0f);
+
+  const float elapsed_s = now_ms() / 1000.0f;
+  const uint16_t flame_a = beatsin16(7, 0, NUM_LEDS - 1);
+  const uint16_t flame_b = beatsin16(6, 0, NUM_LEDS - 1, 1.7f);
+  const uint16_t flame_c = beatsin16(5, 0, NUM_LEDS - 1, 3.4f);
+  const uint16_t flame_d = beatsin16(8, 0, NUM_LEDS - 1, 4.8f);
+
+  for (uint16_t i = 0; i < NUM_LEDS; i++) {
+    const float ember_noise = pseudo_noise(i * 16, drift_offset + (i * 2));
+    const float ember = 0.18f + (ember_noise * 0.22f);
+
+    float tongue = 0.0f;
+    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_a)) / 88.0f)));
+    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_b)) / 74.0f)));
+    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_c)) / 96.0f)));
+    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_d)) / 70.0f)));
+
+    const float local_flicker = (std::sin((elapsed_s * 3.2f) + (i * 0.08f)) + 1.0f) * 0.5f;
+    float heat = clamp_unit(ember + (tongue * (0.35f + (local_flicker * 0.75f))));
+    heat *= heat;
+
+    Color pixel(
+        clamp_u8(static_cast<int>(18 + (ember * 52.0f))),
+        clamp_u8(static_cast<int>(2 + (ember * 18.0f))),
+        0);
+
+    if (heat > 0.24f) {
+      const float flame = clamp_unit((heat - 0.24f) / 0.76f);
+      const Color flame_color(
+          255,
+          clamp_u8(static_cast<int>(30 + (flame * 200.0f))),
+          clamp_u8(static_cast<int>(flame > 0.76f ? ((flame - 0.76f) / 0.24f) * 96.0f : 0.0f)));
+      pixel = blend(pixel, flame_color, clamp_u8(static_cast<int>(flame * 255.0f)));
+    }
+
+    rt.leds[i] = pixel;
+  }
+
+  if (random_u8() < 28) {
+    add_inplace(rt.leds[random_u16(NUM_LEDS)], Color(255, 96, 16));
   }
 
   copy_to_output(it);
@@ -564,6 +707,113 @@ inline void apply_lightning(AddressableLight &it, float speed, bool initial_run)
         next_step_ms = now + (flash_index == 1 ? 130U : (50U + random_u8(100)));
       }
     }
+  }
+
+  copy_to_output(it);
+}
+
+inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_run) {
+  static uint32_t last_update = 0;
+  static uint16_t cloud_offset = 0;
+  static uint16_t rain_offset_a = 0;
+  static uint16_t rain_offset_b = 47;
+  static bool burst_active = false;
+  static bool flash_on = false;
+  static uint8_t flashes_remaining = 0;
+  static uint32_t next_event_ms = 0;
+  static uint16_t flash_center = 0;
+  static uint16_t flash_width = 0;
+  static uint8_t flash_level = 0;
+  auto &rt = state();
+  const auto now = now_ms();
+
+  if (initial_run) {
+    cloud_offset = 0;
+    rain_offset_a = 0;
+    rain_offset_b = 47;
+    burst_active = false;
+    flash_on = false;
+    flashes_remaining = 0;
+    next_event_ms = now + 1500;
+    flash_center = 0;
+    flash_width = 0;
+    flash_level = 0;
+    clear_leds();
+  }
+
+  if (!due(last_update, clamp_interval(speed, 95, 18))) {
+    copy_to_output(it);
+    return;
+  }
+
+  if (!burst_active && now >= next_event_ms) {
+    burst_active = true;
+    flash_on = true;
+    flashes_remaining = random_u8(2, 5);
+    flash_center = random_u16(NUM_LEDS);
+    flash_width = static_cast<uint16_t>(80 + random_u16(160));
+    flash_level = random_u8(150, 255);
+    next_event_ms = now + random_u8(40, 90);
+  } else if (burst_active && now >= next_event_ms) {
+    if (flash_on) {
+      flash_on = false;
+      next_event_ms = now + random_u8(50, 120);
+    } else {
+      flashes_remaining--;
+      if (flashes_remaining == 0) {
+        burst_active = false;
+        flash_level = 0;
+        next_event_ms =
+            now + (1200U + (static_cast<uint32_t>(clamp_interval(speed, 240, 60)) * 8U));
+      } else {
+        flash_on = true;
+        flash_center = wrap_led_index(
+            static_cast<int32_t>(flash_center) + static_cast<int32_t>(random_u16(121)) - 60);
+        flash_width = static_cast<uint16_t>(60 + random_u16(140));
+        flash_level = random_u8(110, 245);
+        next_event_ms = now + random_u8(30, 80);
+      }
+    }
+  }
+
+  cloud_offset += 1 + static_cast<uint16_t>(speed / 40.0f);
+  rain_offset_a += 7 + static_cast<uint16_t>(speed / 20.0f);
+  rain_offset_b += 11 + static_cast<uint16_t>(speed / 16.0f);
+
+  const uint8_t ambient_roll = beatsin8(6, 6, 20);
+
+  for (uint16_t i = 0; i < NUM_LEDS; i++) {
+    const float cloud = pseudo_noise(i * 14, cloud_offset + (i * 3));
+
+    Color pixel(
+        clamp_u8(static_cast<int>(2 + (cloud * 10.0f))),
+        clamp_u8(static_cast<int>(4 + ambient_roll + (cloud * 18.0f))),
+        clamp_u8(static_cast<int>(12 + ambient_roll + (cloud * 36.0f))));
+
+    const uint8_t phase_a = static_cast<uint8_t>((i * 17 + rain_offset_a) % 101);
+    if (phase_a < 7) {
+      const uint8_t streak = static_cast<uint8_t>((7 - phase_a) * 16);
+      add_inplace(pixel, Color(0, streak / 2, streak));
+    }
+
+    const uint8_t phase_b = static_cast<uint8_t>((i * 29 + rain_offset_b) % 137);
+    if (phase_b < 10) {
+      const uint8_t streak = static_cast<uint8_t>((10 - phase_b) * 11);
+      add_inplace(pixel, Color(0, streak / 3, streak));
+    }
+
+    if (flash_on) {
+      const uint16_t distance = wrapped_distance(i, flash_center);
+      if (distance < flash_width) {
+        const float factor = 1.0f - (static_cast<float>(distance) / static_cast<float>(flash_width));
+        const uint8_t flash = clamp_u8(static_cast<int>(flash_level * factor));
+        add_inplace(pixel, Color(flash, flash, clamp_u8(static_cast<int>(flash * 0.9f))));
+      } else {
+        add_inplace(pixel, Color(flash_level / 18, flash_level / 18, flash_level / 10));
+      }
+    }
+
+    rt.leds[i] = pixel;
   }
 
   copy_to_output(it);
