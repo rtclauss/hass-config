@@ -44,10 +44,54 @@ jobs:
             packages \
             zigbee2mqtt
 
+  esphome-build:
+    name: ESPHome Build
+    runs-on: ubuntu-latest
+    needs: yaml-lint
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install ESPHome
+        run: python -m pip install --upgrade pip esphome
+
+      - name: Validate and compile ESPHome configs
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+          config_files=(esphome/*.yaml)
+
+          if [[ ${#config_files[@]} -eq 0 ]]; then
+            echo "No ESPHome configs found."
+            exit 1
+          fi
+
+          for config in "${config_files[@]}"; do
+            if [[ "$(basename "$config")" == "secrets.yaml" ]]; then
+              continue
+            fi
+
+            echo "::group::ESPHome config check: $config"
+            esphome config "$config"
+            echo "::endgroup::"
+
+            echo "::group::ESPHome compile: $config"
+            esphome compile "$config"
+            echo "::endgroup::"
+          done
+
   home-assistant-check-config:
     name: Home Assistant Check Config
     runs-on: ubuntu-latest
-    needs: yaml-lint
+    needs:
+      - yaml-lint
+      - esphome-build
     steps:
       - name: Checkout
         uses: actions/checkout@v4
