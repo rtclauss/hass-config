@@ -57,9 +57,25 @@ def test_tikiroom_esphome_exposes_f1_race_effect() -> None:
     assert "tikiroom::apply_f1_race(it, id(tikiroom_effect_speed), initial_run);" in text
 
 
+def test_tikiroom_esphome_exposes_atmospheric_effects() -> None:
+    text = TIKIROOM_ESPHOME_PATH.read_text(encoding="utf-8")
+
+    assert "- lava field" in text
+    assert "name: lava field" in text
+    assert "tikiroom::apply_lava_field(it, id(tikiroom_effect_speed), initial_run);" in text
+
+    assert "- thunderstorm" in text
+    assert "name: thunderstorm" in text
+    assert "tikiroom::apply_thunderstorm(it, id(tikiroom_effect_speed), initial_run);" in text
+
+    assert "- wall fire" in text
+    assert "name: wall fire" in text
+    assert "tikiroom::apply_wall_fire(it, id(tikiroom_effect_speed), initial_run);" in text
+
+
 def test_tikiroom_esphome_limits_frame_rate_for_gpio14_bit_bang() -> None:
     text = TIKIROOM_ESPHOME_PATH.read_text(encoding="utf-8")
 
     assert "tikiroom_effect_frame_interval: 50ms" in text
     assert "restore_mode: ALWAYS_OFF" in text
-    assert text.count("update_interval: ${tikiroom_effect_frame_interval}") == 20
+    assert text.count("update_interval: ${tikiroom_effect_frame_interval}") == 23
