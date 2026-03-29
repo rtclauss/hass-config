@@ -28,10 +28,12 @@ def test_lava_field_layers_heat_and_uses_fade_carryover() -> None:
     block = _function_block("apply_lava_field")
 
     assert "std::array<Color, LAVA_FIELD_CELLS> lava_cells{};" in block
-    assert "base_flow" in block
+    assert "cluster_phases" in block
+    assert "cluster_radii" in block
+    assert "clump_heat" in block
     assert "ember_wave" in block
     assert "fade_to_black(GLITTER_FADE_AMOUNT);" in block
-    assert "smoothstep(0.22f, 0.94f, molten_mix)" in block
+    assert "smoothstep(0.18f, 0.96f, molten_mix)" in block
     assert "lava_cells[cell] = pixel;" in block
     assert "add_scaled_inplace(rt.leds[i], sample_coarse_cells(lava_cells, i), GLITTER_FADE_AMOUNT);" in block
 
@@ -39,16 +41,14 @@ def test_lava_field_layers_heat_and_uses_fade_carryover() -> None:
 def test_thunderstorm_uses_jungle_canopy_palette_and_fade_carryover() -> None:
     block = _function_block("apply_thunderstorm")
 
-    assert "canopy_offset" in block
+    assert "foliage_phases" in block
+    assert "rain_phases" in block
     assert "std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};" in block
     assert "fade_to_black(GLITTER_FADE_AMOUNT);" in block
-    assert "const float canopy =" in block
-    assert "const float undergrowth =" in block
-    assert "const Color storm_haze(" in block
     assert "ambient_cells[cell] = pixel;" in block
-    assert "Color pixel = sample_coarse_cells(ambient_cells, i);" in block
-    assert "add_scaled_inplace(rt.leds[i], pixel, GLITTER_FADE_AMOUNT);" in block
-    assert "add_scaled_inplace(rt.leds[i], flash_overlay, 60);" in block
+    assert "rain_group" in block
+    assert "add_scaled_inplace(rt.leds[i], sample_coarse_cells(ambient_cells, i), GLITTER_FADE_AMOUNT);" in block
+    assert "add_scaled_inplace(rt.leds[i], flash_overlay, 88);" in block
 
 
 def test_f1_race_can_trigger_random_overtakes() -> None:

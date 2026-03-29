@@ -447,13 +447,16 @@ inline void apply_fire(AddressableLight &it, float speed, bool initial_run) {
 
 inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run) {
   static uint32_t last_update = 0;
-  static uint16_t flow_offset = 0;
+  static uint16_t drift_offset = 0;
   static uint16_t ember_offset = 173;
+  const std::array<float, 5> cluster_phases{{0.1f, 1.4f, 2.3f, 3.5f, 4.6f}};
+  const std::array<float, 5> cluster_rates{{0.11f, 0.08f, 0.13f, 0.09f, 0.12f}};
+  const std::array<float, 5> cluster_radii{{5.5f, 7.0f, 4.5f, 6.0f, 5.0f}};
   std::array<Color, LAVA_FIELD_CELLS> lava_cells{};
   auto &rt = state();
 
   if (initial_run) {
-    flow_offset = 0;
+    drift_offset = 0;
     ember_offset = 173;
     clear_leds();
   }
@@ -465,53 +468,46 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
 
   fade_to_black(GLITTER_FADE_AMOUNT);
 
-  flow_offset += 1 + static_cast<uint16_t>(speed / 88.0f);
+  drift_offset += 1 + static_cast<uint16_t>(speed / 92.0f);
   ember_offset += 1 + static_cast<uint16_t>(speed / 124.0f);
-
-  const uint16_t vent_a = beatsin16(5, 0, NUM_LEDS - 1);
-  const uint16_t vent_b = beatsin16(4, 0, NUM_LEDS - 1, 2.1f);
-  const uint16_t vent_c = beatsin16(3, 0, NUM_LEDS - 1, 4.2f);
+  const float elapsed_s = now_ms() / 1000.0f;
 
   for (size_t cell = 0; cell < LAVA_FIELD_CELLS; cell++) {
-    const uint16_t coarse_led = static_cast<uint16_t>((cell * NUM_LEDS) / LAVA_FIELD_CELLS);
-    const float base_flow = pseudo_noise(static_cast<uint16_t>(cell * 53), flow_offset + static_cast<uint16_t>(cell * 7));
-    const float ember_wave = pseudo_noise(static_cast<uint16_t>((cell * 71) + 97), ember_offset + static_cast<uint16_t>(cell * 11));
+    const float crust_noise =
+        pseudo_noise(static_cast<uint16_t>(cell * 37), drift_offset + static_cast<uint16_t>(cell * 7));
+    const float ember_wave =
+        pseudo_noise(static_cast<uint16_t>((cell * 61) + 97), ember_offset + static_cast<uint16_t>(cell * 11));
+    float clump_heat = 0.0f;
 
-    float vent_heat = 0.0f;
-    const float dist_a = static_cast<float>(wrapped_distance(coarse_led, vent_a));
-    const float dist_b = static_cast<float>(wrapped_distance(coarse_led, vent_b));
-    const float dist_c = static_cast<float>(wrapped_distance(coarse_led, vent_c));
-    vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_a / 168.0f));
-    vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_b / 138.0f));
-    vent_heat = std::max(vent_heat, smoothstep(1.0f, 0.0f, dist_c / 112.0f));
+    for (size_t cluster = 0; cluster < cluster_phases.size(); cluster++) {
+      const float center =
+          ((std::sin((elapsed_s * cluster_rates[cluster] * 2.0f * PI_F) + cluster_phases[cluster]) + 1.0f) * 0.5f) *
+          static_cast<float>(LAVA_FIELD_CELLS - 1);
+      const float activity =
+          smoothstep(
+              0.18f,
+              0.92f,
+              pseudo_noise(
+                  static_cast<uint16_t>(cluster * 73 + 19),
+                  drift_offset + static_cast<uint16_t>(cluster * 53)));
+      const float distance = std::fabs(static_cast<float>(cell) - center);
+      const float influence = smoothstep(1.0f, 0.0f, distance / cluster_radii[cluster]);
+      clump_heat = std::max(clump_heat, influence * (0.28f + (activity * 0.72f)));
+    }
 
-    const float molten_mix = clamp_unit((base_flow * 0.34f) + (ember_wave * 0.28f) + (vent_heat * 0.64f));
-    const float flare = smoothstep(0.22f, 0.94f, molten_mix);
+    const float molten_mix = clamp_unit((crust_noise * 0.24f) + (ember_wave * 0.30f) + (clump_heat * 0.96f));
+    const float flare = smoothstep(0.18f, 0.96f, molten_mix);
 
     Color pixel(
-        clamp_u8(static_cast<int>(8 + (base_flow * 16.0f) + (ember_wave * 6.0f))),
-        clamp_u8(static_cast<int>(3 + (base_flow * 6.0f) + (ember_wave * 10.0f))),
+        clamp_u8(static_cast<int>(6 + (crust_noise * 12.0f) + (ember_wave * 10.0f))),
+        clamp_u8(static_cast<int>(2 + (crust_noise * 4.0f) + (ember_wave * 6.0f))),
         0);
 
     if (flare > 0.0f) {
-      const Color magma(
-          clamp_u8(static_cast<int>(70 + (flare * 185.0f))),
-          clamp_u8(static_cast<int>(
-              flare < 0.65f
-                  ? flare * 120.0f
-                  : 78.0f + (((flare - 0.65f) / 0.35f) * 155.0f))),
-          clamp_u8(static_cast<int>(flare > 0.84f ? ((flare - 0.84f) / 0.16f) * 72.0f : 0.0f)));
-      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(64 + (flare * 191.0f))));
-    }
-
-    const float seam_glow = smoothstep(0.54f, 0.92f, ember_wave * vent_heat);
-    if (seam_glow > 0.0f) {
-      add_inplace(
-          pixel,
-          Color(
-              clamp_u8(static_cast<int>(10 + (seam_glow * 26.0f))),
-              clamp_u8(static_cast<int>(4 + (seam_glow * 18.0f))),
-              0));
+      Color magma = blend(Color(92, 12, 0), Color(255, 72, 0), clamp_u8(static_cast<int>(flare * 255.0f)));
+      magma = blend(magma, Color(255, 178, 28), clamp_u8(static_cast<int>(smoothstep(0.38f, 0.92f, flare) * 255.0f)));
+      magma = blend(magma, Color(255, 242, 180), clamp_u8(static_cast<int>(smoothstep(0.82f, 1.0f, flare) * 180.0f)));
+      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(54 + (flare * 201.0f))));
     }
 
     lava_cells[cell] = pixel;
@@ -821,32 +817,30 @@ inline void apply_lightning(AddressableLight &it, float speed, bool initial_run)
 
 inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_run) {
   static uint32_t last_update = 0;
-  static uint16_t cloud_offset = 0;
-  static uint16_t canopy_offset = 113;
-  static uint16_t rain_offset_a = 0;
-  static uint16_t rain_offset_b = 47;
+  static uint16_t foliage_offset = 0;
+  static uint16_t rain_offset = 47;
   static bool burst_active = false;
   static bool flash_on = false;
   static uint8_t flashes_remaining = 0;
   static uint32_t next_event_ms = 0;
-  static uint16_t flash_center = 0;
-  static uint16_t flash_width = 0;
   static uint8_t flash_level = 0;
+  const std::array<float, 4> foliage_phases{{0.3f, 1.8f, 3.2f, 4.7f}};
+  const std::array<float, 4> foliage_rates{{0.07f, 0.05f, 0.09f, 0.06f}};
+  const std::array<float, 4> foliage_radii{{5.0f, 7.5f, 4.0f, 6.0f}};
+  const std::array<float, 3> rain_phases{{0.9f, 2.6f, 4.1f}};
+  const std::array<float, 3> rain_rates{{0.14f, 0.10f, 0.12f}};
+  const std::array<float, 3> rain_radii{{2.5f, 3.5f, 2.8f}};
   std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};
   auto &rt = state();
   const auto now = now_ms();
 
   if (initial_run) {
-    cloud_offset = 0;
-    canopy_offset = 113;
-    rain_offset_a = 0;
-    rain_offset_b = 47;
+    foliage_offset = 0;
+    rain_offset = 47;
     burst_active = false;
     flash_on = false;
     flashes_remaining = 0;
     next_event_ms = now + 1500;
-    flash_center = 0;
-    flash_width = 0;
     flash_level = 0;
     clear_leds();
   }
@@ -862,9 +856,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     burst_active = true;
     flash_on = true;
     flashes_remaining = random_u8(2, 5);
-    flash_center = random_u16(NUM_LEDS);
-    flash_width = static_cast<uint16_t>(80 + random_u16(160));
-    flash_level = random_u8(150, 255);
+    flash_level = random_u8(170, 255);
     next_event_ms = now + random_u8(40, 90);
   } else if (burst_active && now >= next_event_ms) {
     if (flash_on) {
@@ -879,69 +871,85 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
             now + (1200U + (static_cast<uint32_t>(clamp_interval(speed, 240, 60)) * 8U));
       } else {
         flash_on = true;
-        flash_center = wrap_led_index(
-            static_cast<int32_t>(flash_center) + static_cast<int32_t>(random_u16(121)) - 60);
-        flash_width = static_cast<uint16_t>(60 + random_u16(140));
         flash_level = random_u8(110, 245);
         next_event_ms = now + random_u8(30, 80);
       }
     }
   }
 
-  cloud_offset += 1 + static_cast<uint16_t>(speed / 108.0f);
-  canopy_offset += 1 + static_cast<uint16_t>(speed / 144.0f);
-  rain_offset_a += 4 + static_cast<uint16_t>(speed / 78.0f);
-  rain_offset_b += 6 + static_cast<uint16_t>(speed / 62.0f);
+  foliage_offset += 1 + static_cast<uint16_t>(speed / 118.0f);
+  rain_offset += 2 + static_cast<uint16_t>(speed / 74.0f);
+  const float elapsed_s = now / 1000.0f;
 
-  const uint8_t ambient_roll = beatsin8(6, 6, 20);
+  const uint8_t ambient_roll = beatsin8(5, 4, 16);
 
   for (size_t cell = 0; cell < THUNDERSTORM_CELLS; cell++) {
-    const float cloud = pseudo_noise(static_cast<uint16_t>(cell * 41), cloud_offset + static_cast<uint16_t>(cell * 6));
-    const float canopy = pseudo_noise(static_cast<uint16_t>((cell * 23) + 71), canopy_offset + static_cast<uint16_t>(cell * 4));
-    const float undergrowth = smoothstep(0.08f, 0.92f, (canopy * 0.68f) + ((1.0f - cloud) * 0.32f));
+    const float fog_noise =
+        pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
 
     Color pixel(
-        clamp_u8(static_cast<int>(1 + (canopy * 5.0f))),
-        clamp_u8(static_cast<int>(10 + ambient_roll + (undergrowth * 34.0f))),
-        clamp_u8(static_cast<int>(4 + (cloud * 18.0f) + (canopy * 10.0f))));
+        clamp_u8(static_cast<int>(1 + (fog_noise * 3.0f))),
+        clamp_u8(static_cast<int>(7 + ambient_roll + (fog_noise * 10.0f))),
+        clamp_u8(static_cast<int>(2 + (fog_noise * 6.0f))));
 
-    const Color storm_haze(
-        clamp_u8(static_cast<int>(cloud * 5.0f)),
-        clamp_u8(static_cast<int>(8 + (cloud * 26.0f))),
-        clamp_u8(static_cast<int>(14 + ambient_roll + (cloud * 48.0f))));
-    pixel = blend(pixel, storm_haze, clamp_u8(static_cast<int>(48 + (smoothstep(0.16f, 0.96f, cloud) * 104.0f))));
+    for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
+      const float center =
+          ((std::sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
+          static_cast<float>(THUNDERSTORM_CELLS - 1);
+      const float activity =
+          smoothstep(
+              0.16f,
+              0.92f,
+              pseudo_noise(
+                  static_cast<uint16_t>(cluster * 59 + 11),
+                  foliage_offset + static_cast<uint16_t>(cluster * 47)));
+      const float distance = std::fabs(static_cast<float>(cell) - center);
+      const float canopy = smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (activity * 0.72f));
+      if (canopy > 0.0f) {
+        const Color foliage(
+            clamp_u8(static_cast<int>(2 + (cluster % 2 == 0 ? canopy * 10.0f : canopy * 6.0f))),
+            clamp_u8(static_cast<int>(16 + (cluster % 2 == 0 ? canopy * 78.0f : canopy * 58.0f))),
+            clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 18.0f : canopy * 10.0f))));
+        pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
+      }
+    }
+
+    for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
+      const float center =
+          ((std::sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
+          static_cast<float>(THUNDERSTORM_CELLS - 1);
+      const float pulse =
+          smoothstep(
+              0.24f,
+              0.94f,
+              pseudo_noise(
+                  static_cast<uint16_t>(cluster * 83 + 31),
+                  rain_offset + static_cast<uint16_t>(cluster * 41)));
+      const float distance = std::fabs(static_cast<float>(cell) - center);
+      const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * pulse;
+      if (rain_group > 0.0f) {
+        add_inplace(
+            pixel,
+            Color(
+                clamp_u8(static_cast<int>(rain_group * 12.0f)),
+                clamp_u8(static_cast<int>(6 + (rain_group * 34.0f))),
+                clamp_u8(static_cast<int>(18 + (rain_group * 86.0f)))));
+      }
+    }
 
     ambient_cells[cell] = pixel;
   }
 
   for (uint16_t i = 0; i < NUM_LEDS; i++) {
-    Color pixel = sample_coarse_cells(ambient_cells, i);
-
-    const uint8_t phase_a = static_cast<uint8_t>((i * 17 + rain_offset_a) % 101);
-    if (phase_a < 7) {
-      const uint8_t streak = static_cast<uint8_t>((7 - phase_a) * 16);
-      add_inplace(pixel, Color(0, clamp_u8(6 + (streak / 2)), clamp_u8(14 + streak)));
-    }
-
-    const uint8_t phase_b = static_cast<uint8_t>((i * 29 + rain_offset_b) % 137);
-    if (phase_b < 10) {
-      const uint8_t streak = static_cast<uint8_t>((10 - phase_b) * 11);
-      add_inplace(pixel, Color(0, clamp_u8(5 + (streak / 3)), clamp_u8(10 + streak)));
-    }
-
-    add_scaled_inplace(rt.leds[i], pixel, GLITTER_FADE_AMOUNT);
+    add_scaled_inplace(rt.leds[i], sample_coarse_cells(ambient_cells, i), GLITTER_FADE_AMOUNT);
 
     if (flash_on) {
-      Color flash_overlay(0, 0, 0);
-      const uint16_t distance = wrapped_distance(i, flash_center);
-      if (distance < flash_width) {
-        const float factor = 1.0f - (static_cast<float>(distance) / static_cast<float>(flash_width));
-        const uint8_t flash = clamp_u8(static_cast<int>(flash_level * factor));
-        flash_overlay = Color(flash, flash, clamp_u8(static_cast<int>(flash * 0.9f)));
-      } else {
-        flash_overlay = Color(flash_level / 18, flash_level / 18, flash_level / 10);
-      }
-      add_scaled_inplace(rt.leds[i], flash_overlay, 60);
+      const uint8_t texture = static_cast<uint8_t>(176 + ((i * 19 + (now >> 3)) % 64));
+      const Color flash_overlay(
+          clamp_u8(static_cast<int>((flash_level * texture) / 255)),
+          clamp_u8(static_cast<int>((flash_level * texture) / 255)),
+          clamp_u8(static_cast<int>((flash_level * (texture - 18)) / 255)));
+      add_scaled_inplace(rt.leds[i], flash_overlay, 88);
     }
   }
 
