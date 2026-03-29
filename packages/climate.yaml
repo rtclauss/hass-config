@@ -377,17 +377,14 @@ automation:
                 entity_id: binary_sensor.ecobee_home
                 state: "on"
             sequence:
-              - action: input_text.set_value
-                data:
-                  entity_id: input_text.window_climate_restore_preset_mode
-                  value: "{{ state_attr('climate.my_ecobee', 'preset_mode') | default('', true) }}"
               - action: input_boolean.turn_on
                 data:
                   entity_id: input_boolean.window_climate_paused_by_windows
-              - action: climate.set_preset_mode
+              - action: climate.turn_off
                 data:
-                  entity_id: climate.my_ecobee
-                  preset_mode: away_indefinitely
+                  entity_id:
+                    - climate.my_ecobee
+                    - climate.my_ecobee_2
           - conditions:
               - condition: trigger
                 id: resume
@@ -395,33 +392,18 @@ automation:
                 entity_id: input_boolean.window_climate_paused_by_windows
                 state: "on"
             sequence:
-              - choose:
-                  - conditions:
-                      - condition: template
-                        value_template: >-
-                          {% set preset = states('input_text.window_climate_restore_preset_mode') | lower %}
-                          {{ preset in ['unknown', 'unavailable', 'none', ''] }}
-                    sequence:
-                      - action: ecobee.resume_program
-                        data:
-                          entity_id: climate.my_ecobee
-                          resume_all: true
-                  - conditions:
-                      - condition: template
-                        value_template: >-
-                          {{ states('input_text.window_climate_restore_preset_mode') | length > 0 }}
-                    sequence:
-                      - action: climate.set_preset_mode
-                        data:
-                          entity_id: climate.my_ecobee
-                          preset_mode: "{{ states('input_text.window_climate_restore_preset_mode') }}"
+              - action: ecobee.resume_program
+                data:
+                  entity_id: climate.my_ecobee
+                  resume_all: true
+              - action: climate.turn_on
+                data:
+                  entity_id:
+                    - climate.my_ecobee
+                    - climate.my_ecobee_2
               - action: input_boolean.turn_off
                 data:
                   entity_id: input_boolean.window_climate_paused_by_windows
-              - action: input_text.set_value
-                data:
-                  entity_id: input_text.window_climate_restore_preset_mode
-                  value: ""
       - action: notify.mobile_app_wethop
         data:
           message: clear_notification
