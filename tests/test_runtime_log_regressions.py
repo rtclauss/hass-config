@@ -44,8 +44,10 @@ def test_bedroom_hour_of_day_remains_numeric() -> None:
 def test_bird_templates_guard_missing_json_fields() -> None:
     text = _read(BIRDS_PATH)
 
-    assert "value_json is defined and value_json is mapping and value_json.common_name is defined" in text
-    assert "{{ value }}" in text
+    assert "{% set raw_value = value | default('', true) | trim %}" in text
+    assert "{% set raw_json = raw_value | replace('&#34;', '\"') | replace('&quot;', '\"') %}" in text
+    assert "{% set payload = raw_json | from_json(default={}) %}" in text
+    assert "payload is mapping and payload.common_name is defined" in text
     assert "value_json is defined and value_json is mapping and value_json.species is defined and value_json.species | count > 0" in text
     assert "value_json is defined and value_json is mapping and value_json.detections is defined and value_json.detections | length > 0" in text
 
