@@ -69,7 +69,7 @@ This table combines the spare inventory above with the currently configured batt
 | --- | --- | --- | --- | --- | --- | --- |
 | `AAA` | Rechargeable cylindrical | 16 | 15 | 16 | 47 | Covers deployed window sensors and remotes plus a half-set rechargeable buffer for same-day swaps. |
 | `AA` | Rechargeable cylindrical | 0 | 6 | 4 | 10 | Covers the modified arrival sensor plus one full replacement set for the Schlage lock so a low-battery alert does not leave the front door waiting on a charger cycle or a store run. |
-| `FYRTUR battery pack` | Rechargeable pack | 0 | 2 | 1 | 3 | One charged spare pack keeps a blind online while the other pack recharges. |
+| `FYRTUR battery pack (BRAUNIT)` | Rechargeable pack | 0 | 2 | 1 | 3 | One charged spare pack keeps a blind online while the other pack recharges. |
 | `CR2450` | Primary coin cell | 16 | 8 | 6 | 30 | Shared across the legacy motion sensors, the cube, and the Matter P2 motion sensor. |
 | `CR2032` | Primary coin cell | 16 | 25 | 11 | 52 | This becomes the largest family once the installed climate sensors, plant sensors, TRADFRI remotes, and small Aqara/Xiaomi nodes are included. |
 | `CR1632` | Primary coin cell | 4 | 1 | 3 | 8 | Small but easy-to-forget door-sensor cell; keep a few ahead of failures. |
