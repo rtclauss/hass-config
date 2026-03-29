@@ -60,6 +60,44 @@ jobs:
       - name: Install ESPHome
         run: python -m pip install --upgrade pip esphome
 
+      - name: Prepare ESPHome secrets for CI
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          secret_pattern = re.compile(r"!secret\s+([A-Za-z0-9_]+)")
+          key_pattern = re.compile(r"^\s*([A-Za-z0-9_]+)\s*:")
+
+          config_dir = Path("esphome")
+          secrets_path = config_dir / "secrets.yaml"
+
+          referenced = set()
+          for file_path in config_dir.glob("*.yaml"):
+            if file_path.name == "secrets.yaml":
+              continue
+            content = file_path.read_text(encoding="utf-8", errors="ignore")
+            referenced.update(secret_pattern.findall(content))
+
+          existing = set()
+          if secrets_path.exists():
+            for line in secrets_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+              line = line.strip()
+              if not line or line.startswith("#"):
+                continue
+              match = key_pattern.match(line)
+              if match:
+                existing.add(match.group(1))
+
+          missing = sorted(referenced - existing)
+          if missing:
+            with secrets_path.open("a", encoding="utf-8") as file:
+              for key in missing:
+                file.write(f"{key}: ci_placeholder\n")
+          PY
+
       - name: Validate and compile ESPHome configs
         run: |
           set -euo pipefail
