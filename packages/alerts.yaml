@@ -219,6 +219,38 @@ automation:
           message: >
             Alarm triggered while you're away
 
+  - alias: mirror_shared_notifications_to_lg_tv_when_on
+    id: mirror_shared_notifications_to_lg_tv_when_on
+    mode: queued
+    trigger:
+      - trigger: event
+        event_type: call_service
+        event_data:
+          domain: notify
+          service: all
+      - trigger: event
+        event_type: call_service
+        event_data:
+          domain: notify
+          service: notify_all
+    variables:
+      notify_payload: "{{ trigger.event.data.service_data | default({}, true) }}"
+      notify_message: "{{ notify_payload.message | default('', true) }}"
+      notify_title: "{{ notify_payload.title | default(none, true) }}"
+      notify_data: "{{ notify_payload.data | default(none, true) }}"
+    condition:
+      - condition: state
+        entity_id: media_player.lg_webos_smart_tv
+        state: "on"
+      - condition: template
+        value_template: "{{ notify_message | trim != '' }}"
+    action:
+      - action: notify.lg_webos_tv_oled65c4aua_dusqljr
+        data:
+          message: "{{ notify_message }}"
+          title: "{{ notify_title }}"
+          data: "{{ notify_data }}"
+
   - alias: send_pic_from_camera
     id: send_pic_from_camera
     trigger:
