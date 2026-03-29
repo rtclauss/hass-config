@@ -22,9 +22,10 @@ constexpr uint8_t GLITTER_FADE_AMOUNT = 20;
 constexpr uint8_t F1_CRASH_MIN_FRAMES = 30;
 constexpr uint8_t F1_CRASH_MAX_FRAMES = 50;
 constexpr uint8_t F1_CRASH_DURATION_FRAMES = 18;
-constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 64;
+constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;
 constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;
-constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;
+constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 168;
+constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 60;
 constexpr size_t LAVA_FIELD_CELLS = 48;
 constexpr size_t THUNDERSTORM_CELLS = 40;
 constexpr float PI_F = 3.14159265f;
@@ -455,11 +456,11 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
   static uint32_t last_update = 0;
   static uint16_t drift_offset = 0;
   static uint16_t ember_offset = 173;
-  const std::array<float, 8> cluster_phases{{0.1f, 0.7f, 1.5f, 2.1f, 2.9f, 3.6f, 4.3f, 5.0f}};
-  const std::array<float, 8> cluster_rates{{0.11f, 0.08f, 0.13f, 0.09f, 0.12f, 0.07f, 0.10f, 0.06f}};
-  const std::array<float, 8> cluster_radii{{2.1f, 3.0f, 1.8f, 2.6f, 2.2f, 3.4f, 2.0f, 2.8f}};
-  std::array<float, 8> cluster_centers{};
-  std::array<float, 8> cluster_activity{};
+  const std::array<float, 5> cluster_phases{{0.1f, 1.4f, 2.3f, 3.5f, 4.6f}};
+  const std::array<float, 5> cluster_rates{{0.11f, 0.08f, 0.13f, 0.09f, 0.12f}};
+  const std::array<float, 5> cluster_radii{{5.5f, 7.0f, 4.5f, 6.0f, 5.0f}};
+  std::array<float, 5> cluster_centers{};
+  std::array<float, 5> cluster_activity{};
   std::array<Color, LAVA_FIELD_CELLS> lava_cells{};
   auto &rt = state();
 
@@ -496,43 +497,30 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
         pseudo_noise(static_cast<uint16_t>(cell * 37), drift_offset + static_cast<uint16_t>(cell * 7));
     const float ember_wave =
         pseudo_noise(static_cast<uint16_t>((cell * 61) + 97), ember_offset + static_cast<uint16_t>(cell * 11));
-    const float color_shift =
-        pseudo_noise(static_cast<uint16_t>((cell * 47) + 151), ember_offset + static_cast<uint16_t>(cell * 17));
     float clump_heat = 0.0f;
 
     for (size_t cluster = 0; cluster < cluster_phases.size(); cluster++) {
       const float distance = std::fabs(static_cast<float>(cell) - cluster_centers[cluster]);
       const float influence = smoothstep(1.0f, 0.0f, distance / cluster_radii[cluster]);
-      clump_heat = std::max(clump_heat, influence * (0.14f + (cluster_activity[cluster] * 0.86f)));
+      clump_heat = std::max(clump_heat, influence * (0.28f + (cluster_activity[cluster] * 0.72f)));
     }
 
-    const float cooled_crust = smoothstep(0.18f, 0.90f, 1.0f - ((clump_heat * 0.82f) + (ember_wave * 0.18f)));
-    const float molten_mix = clamp_unit((clump_heat * 1.08f) + (ember_wave * 0.34f) - (cooled_crust * 0.20f));
-    const float flare = smoothstep(0.26f, 0.97f, molten_mix);
-    const float hotspot = smoothstep(0.74f, 0.99f, molten_mix);
+    const float molten_mix = clamp_unit((crust_noise * 0.24f) + (ember_wave * 0.30f) + (clump_heat * 0.96f));
+    const float flare = smoothstep(0.18f, 0.96f, molten_mix);
 
     Color pixel(
-        clamp_u8(static_cast<int>(1 + (crust_noise * 4.0f))),
-        clamp_u8(static_cast<int>(crust_noise * 2.0f)),
+        clamp_u8(static_cast<int>(6 + (crust_noise * 12.0f) + (ember_wave * 10.0f))),
+        clamp_u8(static_cast<int>(2 + (crust_noise * 4.0f) + (ember_wave * 6.0f))),
         0);
-    const Color crust_tint(
-        clamp_u8(static_cast<int>(6 + (crust_noise * 14.0f))),
-        clamp_u8(static_cast<int>(1 + (ember_wave * 3.0f))),
-        0);
-    pixel = blend(pixel, crust_tint, clamp_u8(static_cast<int>((1.0f - clump_heat) * 132.0f)));
 
     if (flare > 0.0f) {
       Color magma = blend(
-          Color(84, 8, 0),
-          Color(210, 34, 0),
-          clamp_u8(static_cast<int>(((flare * 0.58f) + (color_shift * 0.42f)) * 255.0f)));
-      magma = blend(magma, Color(255, 94, 0), clamp_u8(static_cast<int>(smoothstep(0.24f, 0.76f, flare) * 255.0f)));
-      magma = blend(
-          magma,
-          Color(255, 170, 18),
-          clamp_u8(static_cast<int>(smoothstep(0.52f, 0.90f, flare) * (180.0f + (color_shift * 60.0f)))));
-      magma = blend(magma, Color(255, 235, 132), clamp_u8(static_cast<int>(hotspot * 144.0f)));
-      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(32 + (flare * 223.0f))));
+          Color(92, 12, 0),
+          Color(255, 72, 0),
+          clamp_u8(static_cast<int>(flare * 255.0f)));
+      magma = blend(magma, Color(255, 178, 28), clamp_u8(static_cast<int>(smoothstep(0.38f, 0.92f, flare) * 255.0f)));
+      magma = blend(magma, Color(255, 242, 180), clamp_u8(static_cast<int>(smoothstep(0.82f, 1.0f, flare) * 180.0f)));
+      pixel = blend(pixel, magma, clamp_u8(static_cast<int>(54 + (flare * 201.0f))));
     }
 
     lava_cells[cell] = pixel;
@@ -957,6 +945,10 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
   const std::array<float, 3> rain_phases{{0.9f, 2.6f, 4.1f}};
   const std::array<float, 3> rain_rates{{0.14f, 0.10f, 0.12f}};
   const std::array<float, 3> rain_radii{{2.5f, 3.5f, 2.8f}};
+  std::array<float, 4> foliage_centers{};
+  std::array<float, 4> foliage_activity{};
+  std::array<float, 3> rain_centers{};
+  std::array<float, 3> rain_pulses{};
   std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};
   auto &rt = state();
   const auto now = now_ms();
@@ -981,23 +973,23 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     burst_active = true;
     flash_on = true;
     flashes_remaining = random_u8(2, 5);
-    flash_level = random_u8(170, 255);
-    next_event_ms = now + random_u8(40, 90);
+    flash_level = random_u8(150, 235);
+    next_event_ms = now + random_u8(35, 70);
   } else if (burst_active && now >= next_event_ms) {
     if (flash_on) {
       flash_on = false;
-      next_event_ms = now + random_u8(50, 120);
+      next_event_ms = now + random_u8(95, 190);
     } else {
       flashes_remaining--;
       if (flashes_remaining == 0) {
         burst_active = false;
         flash_level = 0;
         next_event_ms =
-            now + (1200U + (static_cast<uint32_t>(clamp_interval(speed, 240, 60)) * 8U));
+            now + (1450U + (static_cast<uint32_t>(clamp_interval(speed, 240, 60)) * 9U));
       } else {
         flash_on = true;
-        flash_level = random_u8(110, 245);
-        next_event_ms = now + random_u8(30, 80);
+        flash_level = random_u8(120, 220);
+        next_event_ms = now + random_u8(30, 65);
       }
     }
   }
@@ -1005,60 +997,66 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
   foliage_offset += 1 + static_cast<uint16_t>(speed / 118.0f);
   rain_offset += 2 + static_cast<uint16_t>(speed / 74.0f);
   const float elapsed_s = now / 1000.0f;
+  const float coarse_limit = static_cast<float>(THUNDERSTORM_CELLS - 1);
 
   const uint8_t ambient_roll = beatsin8(5, 4, 16);
+
+  for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
+    foliage_centers[cluster] =
+        ((std::sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
+        coarse_limit;
+    foliage_activity[cluster] = smoothstep(
+        0.16f,
+        0.92f,
+        pseudo_noise(
+            static_cast<uint16_t>(cluster * 59 + 11),
+            foliage_offset + static_cast<uint16_t>(cluster * 47)));
+  }
+
+  for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
+    rain_centers[cluster] =
+        ((std::sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
+        coarse_limit;
+    rain_pulses[cluster] = smoothstep(
+        0.24f,
+        0.94f,
+        pseudo_noise(
+            static_cast<uint16_t>(cluster * 83 + 31),
+            rain_offset + static_cast<uint16_t>(cluster * 41)));
+  }
 
   for (size_t cell = 0; cell < THUNDERSTORM_CELLS; cell++) {
     const float fog_noise =
         pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
 
     Color pixel(
-        clamp_u8(static_cast<int>(1 + (fog_noise * 3.0f))),
-        clamp_u8(static_cast<int>(7 + ambient_roll + (fog_noise * 10.0f))),
-        clamp_u8(static_cast<int>(2 + (fog_noise * 6.0f))));
+        clamp_u8(static_cast<int>(1 + (fog_noise * 4.0f))),
+        clamp_u8(static_cast<int>(9 + ambient_roll + (fog_noise * 14.0f))),
+        clamp_u8(static_cast<int>(5 + (fog_noise * 11.0f))));
 
     for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
-      const float center =
-          ((std::sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
-          static_cast<float>(THUNDERSTORM_CELLS - 1);
-      const float activity =
-          smoothstep(
-              0.16f,
-              0.92f,
-              pseudo_noise(
-                  static_cast<uint16_t>(cluster * 59 + 11),
-                  foliage_offset + static_cast<uint16_t>(cluster * 47)));
-      const float distance = std::fabs(static_cast<float>(cell) - center);
-      const float canopy = smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (activity * 0.72f));
+      const float distance = std::fabs(static_cast<float>(cell) - foliage_centers[cluster]);
+      const float canopy =
+          smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (foliage_activity[cluster] * 0.72f));
       if (canopy > 0.0f) {
         const Color foliage(
             clamp_u8(static_cast<int>(2 + (cluster % 2 == 0 ? canopy * 10.0f : canopy * 6.0f))),
             clamp_u8(static_cast<int>(16 + (cluster % 2 == 0 ? canopy * 78.0f : canopy * 58.0f))),
-            clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 18.0f : canopy * 10.0f))));
+            clamp_u8(static_cast<int>(6 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
         pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
       }
     }
 
     for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
-      const float center =
-          ((std::sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
-          static_cast<float>(THUNDERSTORM_CELLS - 1);
-      const float pulse =
-          smoothstep(
-              0.24f,
-              0.94f,
-              pseudo_noise(
-                  static_cast<uint16_t>(cluster * 83 + 31),
-                  rain_offset + static_cast<uint16_t>(cluster * 41)));
-      const float distance = std::fabs(static_cast<float>(cell) - center);
-      const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * pulse;
+      const float distance = std::fabs(static_cast<float>(cell) - rain_centers[cluster]);
+      const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * rain_pulses[cluster];
       if (rain_group > 0.0f) {
         add_inplace(
             pixel,
             Color(
-                clamp_u8(static_cast<int>(rain_group * 12.0f)),
-                clamp_u8(static_cast<int>(6 + (rain_group * 34.0f))),
-                clamp_u8(static_cast<int>(18 + (rain_group * 86.0f)))));
+                clamp_u8(static_cast<int>(rain_group * 10.0f)),
+                clamp_u8(static_cast<int>(8 + (rain_group * 38.0f))),
+                clamp_u8(static_cast<int>(22 + (rain_group * 100.0f)))));
       }
     }
 
@@ -1074,7 +1072,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
           clamp_u8(static_cast<int>((flash_level * texture) / 255)),
           clamp_u8(static_cast<int>((flash_level * texture) / 255)),
           clamp_u8(static_cast<int>((flash_level * (texture - 18)) / 255)));
-      add_inplace(pixel, scale_color(flash_overlay, 88));
+      add_inplace(pixel, scale_color(flash_overlay, THUNDERSTORM_FLASH_SCALE));
     }
 
     const uint8_t blend_amount = flash_on ? THUNDERSTORM_FLASH_BLEND_AMOUNT : THUNDERSTORM_BLEND_AMOUNT;
