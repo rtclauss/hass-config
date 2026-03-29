@@ -20,7 +20,8 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
     assert "constexpr uint8_t GLITTER_FADE_AMOUNT = 20;" in text
     assert "constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;" in text
     assert "constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;" in text
-    assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;" in text
+    assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 148;" in text
+    assert "constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 52;" in text
     assert "constexpr size_t LAVA_FIELD_CELLS = 48;" in text
     assert "constexpr size_t THUNDERSTORM_CELLS = 40;" in text
     assert "inline void add_scaled_inplace(Color &base, const Color &added, uint8_t scale)" in text
@@ -50,8 +51,9 @@ def test_thunderstorm_uses_jungle_canopy_palette_and_bounded_flash_blending() ->
     assert "std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};" in block
     assert "ambient_cells[cell] = pixel;" in block
     assert "rain_group" in block
+    assert "rain_texture" in block
     assert "Color pixel = sample_coarse_cells(ambient_cells, i);" in block
-    assert "add_inplace(pixel, scale_color(flash_overlay, 88));" in block
+    assert "pixel = blend(pixel, flash_overlay, THUNDERSTORM_FLASH_SCALE);" in block
     assert "const uint8_t blend_amount = flash_on ? THUNDERSTORM_FLASH_BLEND_AMOUNT : THUNDERSTORM_BLEND_AMOUNT;" in block
     assert "rt.leds[i] = blend(rt.leds[i], pixel, blend_amount);" in block
     assert "fade_to_black(GLITTER_FADE_AMOUNT);" not in block

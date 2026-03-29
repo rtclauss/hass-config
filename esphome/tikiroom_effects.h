@@ -21,7 +21,8 @@ constexpr uint8_t SPARKING = 120;
 constexpr uint8_t GLITTER_FADE_AMOUNT = 20;
 constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;
 constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;
-constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;
+constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 148;
+constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 52;
 constexpr size_t LAVA_FIELD_CELLS = 48;
 constexpr size_t THUNDERSTORM_CELLS = 40;
 constexpr float PI_F = 3.14159265f;
@@ -856,23 +857,23 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     burst_active = true;
     flash_on = true;
     flashes_remaining = random_u8(2, 5);
-    flash_level = random_u8(170, 255);
-    next_event_ms = now + random_u8(40, 90);
+    flash_level = random_u8(150, 235);
+    next_event_ms = now + random_u8(35, 70);
   } else if (burst_active && now >= next_event_ms) {
     if (flash_on) {
       flash_on = false;
-      next_event_ms = now + random_u8(50, 120);
+      next_event_ms = now + random_u8(110, 220);
     } else {
       flashes_remaining--;
       if (flashes_remaining == 0) {
         burst_active = false;
         flash_level = 0;
         next_event_ms =
-            now + (1200U + (static_cast<uint32_t>(clamp_interval(speed, 240, 60)) * 8U));
+            now + (1600U + (static_cast<uint32_t>(clamp_interval(speed, 260, 70)) * 10U));
       } else {
         flash_on = true;
-        flash_level = random_u8(110, 245);
-        next_event_ms = now + random_u8(30, 80);
+        flash_level = random_u8(120, 220);
+        next_event_ms = now + random_u8(30, 60);
       }
     }
   }
@@ -888,9 +889,9 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
         pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
 
     Color pixel(
-        clamp_u8(static_cast<int>(1 + (fog_noise * 3.0f))),
-        clamp_u8(static_cast<int>(7 + ambient_roll + (fog_noise * 10.0f))),
-        clamp_u8(static_cast<int>(2 + (fog_noise * 6.0f))));
+        clamp_u8(static_cast<int>(fog_noise * 2.0f)),
+        clamp_u8(static_cast<int>(14 + ambient_roll + (fog_noise * 18.0f))),
+        clamp_u8(static_cast<int>(3 + (fog_noise * 8.0f))));
 
     for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
       const float center =
@@ -907,9 +908,9 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
       const float canopy = smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (activity * 0.72f));
       if (canopy > 0.0f) {
         const Color foliage(
-            clamp_u8(static_cast<int>(2 + (cluster % 2 == 0 ? canopy * 10.0f : canopy * 6.0f))),
-            clamp_u8(static_cast<int>(16 + (cluster % 2 == 0 ? canopy * 78.0f : canopy * 58.0f))),
-            clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 18.0f : canopy * 10.0f))));
+            clamp_u8(static_cast<int>(1 + (cluster % 2 == 0 ? canopy * 8.0f : canopy * 5.0f))),
+            clamp_u8(static_cast<int>(24 + (cluster % 2 == 0 ? canopy * 96.0f : canopy * 76.0f))),
+            clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
         pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
       }
     }
@@ -925,15 +926,23 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
               pseudo_noise(
                   static_cast<uint16_t>(cluster * 83 + 31),
                   rain_offset + static_cast<uint16_t>(cluster * 41)));
+      const float rain_texture =
+          smoothstep(
+              0.18f,
+              0.88f,
+              pseudo_noise(
+                  static_cast<uint16_t>((cell * 97) + (cluster * 17)),
+                  rain_offset + static_cast<uint16_t>(cluster * 63)));
       const float distance = std::fabs(static_cast<float>(cell) - center);
-      const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * pulse;
+      const float rain_group =
+          smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * pulse * (0.35f + (rain_texture * 0.65f));
       if (rain_group > 0.0f) {
         add_inplace(
             pixel,
             Color(
-                clamp_u8(static_cast<int>(rain_group * 12.0f)),
-                clamp_u8(static_cast<int>(6 + (rain_group * 34.0f))),
-                clamp_u8(static_cast<int>(18 + (rain_group * 86.0f)))));
+                clamp_u8(static_cast<int>(rain_group * 8.0f)),
+                clamp_u8(static_cast<int>(12 + (rain_group * 46.0f))),
+                clamp_u8(static_cast<int>(30 + (rain_group * 120.0f)))));
       }
     }
 
@@ -946,10 +955,10 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     if (flash_on) {
       const uint8_t texture = static_cast<uint8_t>(176 + ((i * 19 + (now >> 3)) % 64));
       const Color flash_overlay(
-          clamp_u8(static_cast<int>((flash_level * texture) / 255)),
-          clamp_u8(static_cast<int>((flash_level * texture) / 255)),
-          clamp_u8(static_cast<int>((flash_level * (texture - 18)) / 255)));
-      add_inplace(pixel, scale_color(flash_overlay, 88));
+          clamp_u8(static_cast<int>(48 + ((flash_level * texture) / 255))),
+          clamp_u8(static_cast<int>(56 + ((flash_level * texture) / 255))),
+          clamp_u8(static_cast<int>(72 + ((flash_level * (texture + 24)) / 255))));
+      pixel = blend(pixel, flash_overlay, THUNDERSTORM_FLASH_SCALE);
     }
 
     const uint8_t blend_amount = flash_on ? THUNDERSTORM_FLASH_BLEND_AMOUNT : THUNDERSTORM_BLEND_AMOUNT;
