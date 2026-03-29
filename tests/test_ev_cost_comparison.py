@@ -18,6 +18,7 @@ def test_utilities_package_defines_weekly_gas_price_and_ev_comparison_sensors() 
         "resource: https://www.way.com/gas/prices/minnesota/woodbury",
         "woodbury_weekly_regular_gas_price_live",
         "Week Ago Avg.",
+        "regex_findall(",
         "weekly_regular_gas_price_55125",
         "average_daily_ev_charging_cost",
         "average_daily_vehicle_miles",
