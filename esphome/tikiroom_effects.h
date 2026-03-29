@@ -447,8 +447,10 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
     return;
   }
 
-  flow_offset += 1 + static_cast<uint16_t>(speed / 34.0f);
-  ember_offset += 1 + static_cast<uint16_t>(speed / 52.0f);
+  fade_to_black(10);
+
+  flow_offset += 1 + static_cast<uint16_t>(speed / 88.0f);
+  ember_offset += 1 + static_cast<uint16_t>(speed / 124.0f);
 
   const uint16_t vent_a = beatsin16(5, 0, NUM_LEDS - 1);
   const uint16_t vent_b = beatsin16(4, 0, NUM_LEDS - 1, 2.1f);
@@ -495,7 +497,7 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
               0));
     }
 
-    rt.leds[i] = blend(rt.leds[i], pixel, 92);
+    rt.leds[i] = blend(rt.leds[i], pixel, 52);
   }
 
   copy_to_output(it);
@@ -520,10 +522,20 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
 
   static uint32_t last_update = 0;
   static uint32_t race_start_ms = 0;
+  static uint32_t last_motion_ms = 0;
+  static uint32_t next_overtake_ms = 0;
+  static std::array<float, 5> car_progress{};
+  static std::array<float, 5> pace_delta{};
   auto &rt = state();
 
   if (initial_run) {
     race_start_ms = now_ms();
+    last_motion_ms = race_start_ms;
+    next_overtake_ms = race_start_ms + 3500;
+    for (size_t i = 0; i < cars.size(); i++) {
+      car_progress[i] = cars[i].start_offset;
+    }
+    pace_delta.fill(0.0f);
     clear_leds();
   }
 
@@ -536,9 +548,64 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     race_start_ms = now_ms();
   }
 
-  const float elapsed_s = (now_ms() - race_start_ms) / 1000.0f;
+  const auto now = now_ms();
+  const float elapsed_s = (now - race_start_ms) / 1000.0f;
   const float laps_per_second = 0.025f + ((speed / 150.0f) * 0.110f);
+  float delta_s = (now - last_motion_ms) / 1000.0f;
+  if (delta_s < 0.0f) {
+    delta_s = 0.0f;
+  } else if (delta_s > 0.25f) {
+    delta_s = 0.25f;
+  }
+  last_motion_ms = now;
   const uint8_t tarmac_level = beatsin8(10, 6, 12);
+  std::array<float, cars.size()> position_ratio{};
+  std::array<float, cars.size()> effective_pace{};
+
+  for (size_t i = 0; i < cars.size(); i++) {
+    pace_delta[i] *= 0.988f;
+    if (std::fabs(pace_delta[i]) < 0.0003f) {
+      pace_delta[i] = 0.0f;
+    }
+
+    effective_pace[i] = cars[i].base_pace + pace_delta[i];
+    if (effective_pace[i] < 0.93f) {
+      effective_pace[i] = 0.93f;
+    } else if (effective_pace[i] > 1.09f) {
+      effective_pace[i] = 1.09f;
+    }
+
+    car_progress[i] += delta_s * laps_per_second * effective_pace[i];
+    car_progress[i] -= std::floor(car_progress[i]);
+    position_ratio[i] = car_progress[i];
+  }
+
+  if (now >= next_overtake_ms) {
+    const uint8_t attacker = random_u8(static_cast<uint8_t>(cars.size()));
+    float smallest_gap = 2.0f;
+    int defender = -1;
+    for (size_t i = 0; i < cars.size(); i++) {
+      if (i == attacker) {
+        continue;
+      }
+      float gap = position_ratio[i] - position_ratio[attacker];
+      if (gap <= 0.0f) {
+        gap += 1.0f;
+      }
+      if (gap < smallest_gap) {
+        smallest_gap = gap;
+        defender = static_cast<int>(i);
+      }
+    }
+
+    if (defender >= 0) {
+      const float attack_boost = 0.016f + (smallest_gap * 0.020f);
+      pace_delta[attacker] += attack_boost;
+      pace_delta[static_cast<size_t>(defender)] -= attack_boost * 0.55f;
+    }
+
+    next_overtake_ms = now + 3500U + random_u16(6500);
+  }
 
   fill_all(Color(tarmac_level, tarmac_level, tarmac_level));
 
@@ -562,9 +629,11 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     rt.leds[wrap_led_index(sector_two + i)] = Color(110, 0, 110);
   }
 
-  for (const auto &car : cars) {
+  for (size_t i = 0; i < cars.size(); i++) {
+    const auto &car = cars[i];
     const float variation = std::sin((elapsed_s * car.variation_rate * 2.0f * PI_F) + (car.start_offset * 2.0f * PI_F));
-    const float progress = (elapsed_s * laps_per_second * car.base_pace) + car.start_offset + (variation * car.variation_amount);
+    float progress = car_progress[i] + (variation * car.variation_amount);
+    progress -= std::floor(progress);
     const int32_t nose = static_cast<int32_t>(progress * NUM_LEDS);
 
     add_inplace(rt.leds[wrap_led_index(nose)], Color(255, 255, 255));
@@ -765,6 +834,8 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     return;
   }
 
+  fade_to_black(12);
+
   if (!burst_active && now >= next_event_ms) {
     burst_active = true;
     flash_on = true;
@@ -795,10 +866,10 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     }
   }
 
-  cloud_offset += 1 + static_cast<uint16_t>(speed / 44.0f);
-  canopy_offset += 1 + static_cast<uint16_t>(speed / 58.0f);
-  rain_offset_a += 6 + static_cast<uint16_t>(speed / 24.0f);
-  rain_offset_b += 9 + static_cast<uint16_t>(speed / 20.0f);
+  cloud_offset += 1 + static_cast<uint16_t>(speed / 108.0f);
+  canopy_offset += 1 + static_cast<uint16_t>(speed / 144.0f);
+  rain_offset_a += 4 + static_cast<uint16_t>(speed / 78.0f);
+  rain_offset_b += 6 + static_cast<uint16_t>(speed / 62.0f);
 
   const uint8_t ambient_roll = beatsin8(6, 6, 20);
 
@@ -841,7 +912,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
       }
     }
 
-    rt.leds[i] = blend(rt.leds[i], pixel, 108);
+    rt.leds[i] = blend(rt.leds[i], pixel, 60);
   }
 
   copy_to_output(it);
