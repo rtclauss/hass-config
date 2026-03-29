@@ -129,7 +129,7 @@ Behavior:
 - does not enable Tesla scheduled departure for alarm-only plans; those only influence charge-limit planning and planner messaging
 - disables Tesla scheduled departure when the planner no longer has a Home Assistant-managed preconditioning plan to keep
 - refuses to schedule preconditioning when the computed departure window is already in the past
-- stores the last Home Assistant-managed Tesla departure in `input_text.tesla_managed_departure_time`
+- stores the last Home Assistant-managed Tesla departure as a Unix timestamp in `input_number.tesla_managed_departure_ts` and tracks whether that schedule is active with `input_boolean.tesla_managed_departure_active`
 - clears that Home Assistant-managed Tesla schedule as soon as the stored departure time passes, even if the car is no longer at home
 - skips scheduled departure for all-day calendar events
 - preserves Tesla-app charging schedules at `home` unless the planner needs a non-default home charge target
@@ -196,5 +196,5 @@ Manual regression cases worth checking in Template Developer Tools or against li
 - Alarm-only plans adjust charge limit and planner messaging but do not create Tesla scheduled departure or cabin-preconditioning overrides.
 - At `home`, a real calendar departure can still create or update Tesla scheduled departure/preconditioning when the planner needs a non-default charge target, while default-`80%` home plans leave the Tesla app schedule in place.
 - At `parents`, `OCC`, and `SPCC`, Tesla dashboard text reflects that Home Assistant is preserving Tesla-app defaults and not actively planning departures there.
-- When there is no stored `input_text.tesla_managed_departure_time`, the planner does not send a redundant Tesla disable call.
+- When there is no active stored `input_number.tesla_managed_departure_ts`, the planner does not send a redundant Tesla disable call.
 - At protected locations, cleanup/no-plan disables only call the Tesla API when the live Tesla scheduled-departure state still matches the stored HA-managed departure and Tesla is not advertising scheduled charging or off-peak charging.
