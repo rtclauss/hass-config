@@ -13,8 +13,10 @@ def test_garden_birds_sensor_handles_missing_common_name_without_template_errors
     text = BIRDS_PATH.read_text(encoding="utf-8")
 
     assert 'name: "Garden Birds"' in text
-    assert "value_json is mapping" in text
-    assert "value_json.common_name is defined" in text
+    sensor_block = text.split('name: "Garden Birds"', 1)[1].split("########################", 1)[0]
+    assert "from_json(default={})" in sensor_block
+    assert "payload.common_name is defined" in sensor_block
+    assert "states('sensor.garden_birds')" in sensor_block
     assert "unknown" in text
 
 
