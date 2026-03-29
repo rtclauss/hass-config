@@ -17,6 +17,8 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
     text = TIKIROOM_EFFECTS_HEADER_PATH.read_text(encoding="utf-8")
 
     assert "inline float smoothstep(float edge0, float edge1, float value)" in text
+    assert "constexpr uint8_t GLITTER_FADE_AMOUNT = 20;" in text
+    assert "inline void add_scaled_inplace(Color &base, const Color &added, uint8_t scale)" in text
 
 
 def test_lava_field_layers_heat_and_uses_fade_carryover() -> None:
@@ -24,20 +26,21 @@ def test_lava_field_layers_heat_and_uses_fade_carryover() -> None:
 
     assert "base_flow" in block
     assert "ember_wave" in block
-    assert "fade_to_black(10);" in block
+    assert "fade_to_black(GLITTER_FADE_AMOUNT);" in block
     assert "smoothstep(0.22f, 0.94f, molten_mix)" in block
-    assert "rt.leds[i] = blend(rt.leds[i], pixel, 52);" in block
+    assert "add_scaled_inplace(rt.leds[i], pixel, GLITTER_FADE_AMOUNT);" in block
 
 
 def test_thunderstorm_uses_jungle_canopy_palette_and_fade_carryover() -> None:
     block = _function_block("apply_thunderstorm")
 
     assert "canopy_offset" in block
-    assert "fade_to_black(12);" in block
+    assert "fade_to_black(GLITTER_FADE_AMOUNT);" in block
     assert "const float canopy =" in block
     assert "const float undergrowth =" in block
     assert "const Color storm_haze(" in block
-    assert "rt.leds[i] = blend(rt.leds[i], pixel, 60);" in block
+    assert "add_scaled_inplace(rt.leds[i], pixel, GLITTER_FADE_AMOUNT);" in block
+    assert "add_scaled_inplace(rt.leds[i], flash_overlay, 60);" in block
 
 
 def test_f1_race_can_trigger_random_overtakes() -> None:
