@@ -18,7 +18,7 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
 
     assert "inline float smoothstep(float edge0, float edge1, float value)" in text
     assert "constexpr uint8_t GLITTER_FADE_AMOUNT = 20;" in text
-    assert "constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;" in text
+    assert "constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 64;" in text
     assert "constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;" in text
     assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;" in text
     assert "constexpr size_t LAVA_FIELD_CELLS = 48;" in text
@@ -35,7 +35,11 @@ def test_lava_field_layers_heat_and_blends_toward_a_bounded_target() -> None:
     assert "cluster_radii" in block
     assert "clump_heat" in block
     assert "ember_wave" in block
-    assert "smoothstep(0.18f, 0.96f, molten_mix)" in block
+    assert "color_shift" in block
+    assert "cooled_crust" in block
+    assert "hotspot" in block
+    assert "smoothstep(0.26f, 0.97f, molten_mix)" in block
+    assert "const Color crust_tint(" in block
     assert "lava_cells[cell] = pixel;" in block
     assert "const Color target = sample_coarse_cells(lava_cells, i);" in block
     assert "rt.leds[i] = blend(rt.leds[i], target, LAVA_FIELD_BLEND_AMOUNT);" in block
