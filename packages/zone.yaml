@@ -236,10 +236,10 @@ automation:
         to: "off"
     variables:
       open_egress_points: >-
-        {{ expand('group.egress_points') | selectattr('state', 'eq', 'on') | map(attribute='name') | join(', ') }}
+        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
     condition:
       - condition: state
-        entity_id: group.egress_points
+        entity_id: binary_sensor.any_egress_open
         state: "on"
     action:
       - action: notify.all
