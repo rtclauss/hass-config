@@ -712,11 +712,11 @@ rest:
         icon: mdi:gas-station
         unit_of_measurement: USD/gal
         value_template: >-
-          {% set match = value | regex_findall_index('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)', 0) %}
-          {% if match not in [none, ''] %}
-            {{ match | float(default=0) | round(2) }}
+          {% set matches = value | regex_findall('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)') %}
+          {% if matches | count > 0 %}
+            {{ matches[0] | float(default=0) | round(2) }}
           {% else %}
-            {{ 'unknown' }}
+            {{ none }}
           {% endif %}
 
 ########################
