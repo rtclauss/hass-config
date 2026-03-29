@@ -73,3 +73,26 @@ def test_dashboard_copy_explains_alarm_only_days_and_home_schedule_override_logi
     ):
         assert text in tile_text
         assert text in dashboard_text
+
+
+def test_preconditioning_plan_includes_low_tpms_air_reminder() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "tesla_tpms_air_threshold_psi:" in package_text
+    assert "name: Tesla TPMS Air Threshold" in package_text
+    assert "initial: 38" in package_text
+    assert "unit_of_measurement: psi" in package_text
+    assert "states('input_number.tesla_tpms_air_threshold_psi') | float(default=38)" in package_text
+    assert "sensor.nigori_tpms_front_left" in package_text
+    assert "sensor.nigori_tpms_front_right" in package_text
+    assert "sensor.nigori_tpms_rear_left" in package_text
+    assert "sensor.nigori_tpms_rear_right" in package_text
+    assert "{% if precondition and low_tpms %}" in package_text
+    assert "Tire pressure is low: " in package_text
+    assert "Get air before you leave." in package_text
+
+
+def test_early_morning_preconditioning_notification_repeats_low_tpms_warning() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "{{ trigger.id == 'early_morning' and tesla_plan.precondition and tesla_plan.low_tpms }}" in package_text
