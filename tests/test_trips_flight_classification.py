@@ -3,11 +3,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
 CENTRAL = ZoneInfo("America/Chicago")
 HOME_CODES = {"MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER"}
+TRIPS_PATH = Path(__file__).resolve().parents[1] / "packages" / "trips.yaml"
 
 
 @dataclass(frozen=True)
@@ -180,6 +182,14 @@ def test_named_flights_extract_clean_destination_codes() -> None:
     assert direct.destination_code == "CLT"
     assert verbose.destination_name == "CLT"
     assert verbose.destination_code == "CLT"
+
+
+def test_trips_package_avoids_case_sensitive_named_flight_splits() -> None:
+    text = TRIPS_PATH.read_text(encoding="utf-8")
+
+    assert "summary.split('Flight to ', 1)" not in text
+    assert "summary.split('Flight: ', 1)" not in text
+    assert "flight_tail_lower = summary_lower[8:]" in text
 
 
 def test_vacation_plan_ignores_barber_and_pairs_real_outbound_with_return() -> None:
