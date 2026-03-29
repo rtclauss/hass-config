@@ -490,13 +490,6 @@ automation:
             data:
               mode: away
               reason: leave_home
-          # Vacuum request payload is identical for both paths, so keep one action.
-          - action: mqtt.publish
-            data:
-              topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-              payload: >-
-                {% set segment_id = now().weekday() + 1 %}
-                {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
           # - action: notify.all
           #   data:
           #     title: "Auf wiedersehen"
@@ -602,7 +595,7 @@ automation:
 
   - id: vacuum_leave_home
     alias: vacuum_leave_home
-    description: Start the den, main level, and upstairs vacuums when Ryan leaves home.
+    description: Run the main and upstairs levels on departure, plus the den when its door is closed.
     trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
@@ -613,9 +606,7 @@ automation:
         entity_id: input_boolean.guest_mode
         state: "off"
     action:
-      - action: vacuum.start
-        target:
-          entity_id: vacuum.valetudo_mainlevel
+      - action: script.vacuum_main_and_upstairs_levels
         continue_on_error: true
       - if:
           - condition: state
@@ -626,10 +617,6 @@ automation:
             target:
               entity_id: vacuum.valetudo_den
             continue_on_error: true
-      - action: vacuum.start
-        target:
-          entity_id: vacuum.valetudo_upstairs_vacuum
-        continue_on_error: true
 
 ########################
 # Binary Sensors
