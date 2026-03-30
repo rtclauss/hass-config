@@ -6,7 +6,10 @@ from pathlib import Path
 
 HOLIDAYS_PATH = Path(__file__).resolve().parents[1] / "packages" / "holidays.yaml"
 
-EXPECTED_DYNAMIC_HOLIDAYS = {
+EXPECTED_HOLIDAYS = {
+    "christmas_season",
+    "st_andrews_day",
+    "halloween",
     "burns_night",
     "national_curling_month",
     "groundhog_day",
@@ -86,13 +89,13 @@ def _expand_scene(
     return entities
 
 
-def test_dynamic_holiday_definitions_cover_issue_244_observances() -> None:
+def test_holiday_definitions_cover_existing_and_issue_244_observances() -> None:
     definitions = _holiday_definitions()
 
-    assert set(definitions) == EXPECTED_DYNAMIC_HOLIDAYS
+    assert set(definitions) == EXPECTED_HOLIDAYS
 
 
-def test_dynamic_holiday_definitions_include_target_behaviors_and_palette_counts() -> None:
+def test_holiday_definitions_include_target_behaviors_and_palette_counts() -> None:
     definitions = _holiday_definitions()
 
     for holiday_key, definition in definitions.items():
@@ -107,7 +110,14 @@ def test_dynamic_holiday_definitions_include_target_behaviors_and_palette_counts
         assert len(definition["path_palette"]) >= definition["scene_count"], holiday_key
 
 
-def test_dynamic_holiday_rotation_reaches_every_declared_scene_index() -> None:
+def test_unified_registry_no_longer_uses_legacy_engine_markers() -> None:
+    text = HOLIDAYS_PATH.read_text(encoding="utf-8")
+
+    assert '"lighting_engine": "legacy_scene_loop"' not in text
+    assert '"legacy_scene_prefix":' not in text
+
+
+def test_holiday_rotation_reaches_every_declared_scene_index() -> None:
     definitions = _holiday_definitions()
 
     for holiday_key, definition in definitions.items():
