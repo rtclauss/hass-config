@@ -48,14 +48,6 @@ homeassistant:
       <<: *customize
       friendly_name: "Reset lights after holiday"
 
-    automation.st_andrews_day_light_loop:
-      <<: *customize
-      friendly_name: "St Andrews Day lights"
-
-    automation.halloween_light_loop:
-      <<: *customize
-      friendly_name: "Halloween lights"
-
     automation.outdoor_holiday_light_loop:
       <<: *customize
       friendly_name: "Outdoor holiday lights"
@@ -111,11 +103,6 @@ homeassistant:
     sensor.active_outdoor_holiday:
       <<: *customize
       friendly_name: "Active outdoor holiday"
-      icon: mdi:string-lights
-
-    sensor.active_holiday_lighting:
-      <<: *customize
-      friendly_name: "Active holiday lighting"
       icon: mdi:string-lights
 
     light.outdoor_holiday_facade_rgb_lights:
@@ -180,39 +167,6 @@ automation:
         target:
           entity_id: light.christmas_lights
 
-  - id: christmas_outside_light_loop_1
-    alias: christmas_outside_light_loop_1
-    trigger:
-      - trigger: sun
-        event: sunset
-        offset: -00:45:00
-      - trigger: time_pattern
-        minutes: "/1"
-    condition:
-      - alias: "Christmas-time"
-        condition: state
-        entity_id: binary_sensor.christmas_season
-        state: "on"
-      - alias: "Yield New Year's Eve to Hogmanay scenes"
-        condition: state
-        entity_id: binary_sensor.hogmanay
-        state: "off"
-      - condition: or
-        conditions:
-          - alias: "Sunset"
-            condition: sun
-            after: sunset
-            after_offset: -00:45:00
-          - alias: "Sunrise"
-            condition: sun
-            before: sunrise
-            before_offset: 00:45:00
-    action:
-      - action: scene.turn_on
-        data:
-          transition: 30
-          entity_id: scene.scene_christmas_outdoors_{{ now().minute % 4 + 1 | int }}
-
   - id: toggle_christmas_automations_on_season_change
     alias: toggle_christmas_automations_on_season_change
     trigger:
@@ -235,9 +189,6 @@ automation:
       - action: script.toggle_christmas_automation_during_christmas_season
         data:
           entity_id: automation.christmas_lights_off_bedroom_off
-      - action: script.toggle_christmas_automation_during_christmas_season
-        data:
-          entity_id: automation.christmas_outside_light_loop_1
 
   - id: reset_after_holiday
     alias: reset_after_holiday
@@ -254,64 +205,6 @@ automation:
       - action: light.turn_off
         data:
           entity_id: light.outside_front_hue
-
-  - id: st_andrews_day_light_loop
-    alias: st_andrews_day_light_loop
-    trigger:
-      - trigger: sun
-        event: sunset
-        offset: -00:45:00
-      - trigger: time_pattern
-        minutes: "/2"
-    condition:
-      - alias: "St Andrews Day"
-        condition: state
-        entity_id: binary_sensor.st_andrews_day
-        state: "on"
-      - condition: or
-        conditions:
-          - alias: "Sunset"
-            condition: sun
-            after: sunset
-            after_offset: -00:45:00
-          - alias: "Sunrise"
-            condition: sun
-            before: sunrise
-            before_offset: 00:45:00
-    action:
-      - action: scene.turn_on
-        data:
-          transition: 30
-          entity_id: scene.scene_st_andrews_day_outdoors_{{ (now().minute // 2) % 4 + 1 | int }}
-
-  - id: halloween_light_loop
-    alias: halloween_light_loop
-    trigger:
-      - trigger: sun
-        event: sunset
-        offset: -00:45:00
-      - trigger: time_pattern
-        minutes: "/2"
-    condition:
-      - alias: "Halloween"
-        condition: state
-        entity_id: binary_sensor.halloween
-        state: "on"
-      - condition: or
-        conditions:
-          - alias: "Sunset"
-            condition: sun
-            after: sunset
-            after_offset: -00:45:00
-          - alias: "Sunrise"
-            condition: sun
-            before: sunrise
-            before_offset: 00:45:00
-    action:
-      - action: scene.turn_on
-        data:
-          transition: 30
-          entity_id: scene.scene_halloween_outdoors_{{ (now().minute // 2) % 4 + 1 | int }}
 
   - id: outdoor_holiday_light_loop
     alias: outdoor_holiday_light_loop
@@ -351,16 +244,16 @@ automation:
       - alias: "Holiday lighting active today"
         condition: template
         value_template: >-
-          {{ states('sensor.active_holiday_lighting') | trim not in ['none', 'unknown', 'unavailable', ''] }}
+          {{ states('sensor.active_outdoor_holiday') | trim not in ['none', 'unknown', 'unavailable', ''] }}
       - alias: "Notification message available"
         condition: template
         value_template: >-
-          {{ state_attr('sensor.active_holiday_lighting', 'notification_message') | default('', true) | trim != '' }}
+          {{ state_attr('sensor.active_outdoor_holiday', 'notification_message') | default('', true) | trim != '' }}
     action:
       - action: notify.all
         data:
           title: Holiday lighting
-          message: "{{ state_attr('sensor.active_holiday_lighting', 'notification_message') }}"
+          message: "{{ state_attr('sensor.active_outdoor_holiday', 'notification_message') }}"
 
   - alias: Garbage Holiday Update
     id: garbage_holiday_update
@@ -685,6 +578,93 @@ script:
             }
           holiday_definitions_json: >-
             {
+              "christmas_season": {
+                "label": "Christmas Season",
+                "cadence_minutes": 1,
+                "transition_seconds": 30,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Classic red and green Christmas facade loop.",
+                  "front_ambient_light": "Warm white porch glow with subtle holiday red and green accents.",
+                  "accent_path_lights": "Warm white base with alternating red and green accents when path lights exist."
+                },
+                "facade_palette": [
+                  {"rgb_color": [0, 255, 0], "brightness": 255},
+                  {"rgb_color": [255, 0, 0], "brightness": 255},
+                  {"rgb_color": [0, 255, 0], "brightness": 255},
+                  {"rgb_color": [255, 0, 0], "brightness": 255}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2500, "brightness": 155},
+                  {"rgb_color": [255, 90, 90], "brightness": 135},
+                  {"rgb_color": [90, 220, 120], "brightness": 135},
+                  {"color_temp_kelvin": 2400, "brightness": 160}
+                ],
+                "path_palette": [
+                  {"color_temp_kelvin": 2600, "brightness": 112},
+                  {"rgb_color": [255, 0, 0], "brightness": 108},
+                  {"rgb_color": [0, 255, 0], "brightness": 108},
+                  {"color_temp_kelvin": 2600, "brightness": 112}
+                ]
+              },
+              "st_andrews_day": {
+                "label": "St Andrew's Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 30,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Saltire-inspired blue and white with warm amber accents.",
+                  "front_ambient_light": "Cool white and blue porch wash with a restrained amber variant.",
+                  "accent_path_lights": "Blue and white stepping pattern with amber accents when path lights exist."
+                },
+                "facade_palette": [
+                  {"rgb_color": [0, 0, 255], "brightness": 255},
+                  {"rgb_color": [255, 255, 255], "brightness": 255},
+                  {"rgb_color": [255, 69, 0], "brightness": 255},
+                  {"rgb_color": [30, 144, 255], "brightness": 255}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [0, 0, 255], "brightness": 145},
+                  {"rgb_color": [255, 255, 255], "brightness": 150},
+                  {"color_temp_kelvin": 2600, "brightness": 135},
+                  {"rgb_color": [30, 144, 255], "brightness": 145}
+                ],
+                "path_palette": [
+                  {"rgb_color": [0, 0, 255], "brightness": 112},
+                  {"rgb_color": [255, 255, 255], "brightness": 112},
+                  {"color_temp_kelvin": 2600, "brightness": 108},
+                  {"rgb_color": [30, 144, 255], "brightness": 110}
+                ]
+              },
+              "halloween": {
+                "label": "Halloween",
+                "cadence_minutes": 2,
+                "transition_seconds": 30,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Spooky Halloween facade loop with red, orange, purple, and eerie green.",
+                  "front_ambient_light": "Porch glow shifts between jack-o-lantern orange, ghostly purple, and toxic green.",
+                  "accent_path_lights": "Warm orange base with purple and green accents when path lights exist."
+                },
+                "facade_palette": [
+                  {"rgb_color": [255, 0, 0], "brightness": 255},
+                  {"rgb_color": [255, 120, 0], "brightness": 255},
+                  {"rgb_color": [60, 0, 120], "brightness": 255},
+                  {"rgb_color": [0, 255, 100], "brightness": 255}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [255, 64, 0], "brightness": 145},
+                  {"rgb_color": [255, 150, 0], "brightness": 150},
+                  {"rgb_color": [120, 0, 220], "brightness": 140},
+                  {"rgb_color": [0, 180, 70], "brightness": 140}
+                ],
+                "path_palette": [
+                  {"rgb_color": [255, 120, 0], "brightness": 112},
+                  {"rgb_color": [120, 0, 220], "brightness": 108},
+                  {"rgb_color": [0, 180, 70], "brightness": 108},
+                  {"rgb_color": [255, 64, 0], "brightness": 110}
+                ]
+              },
               "burns_night": {
                 "label": "Burns Night",
                 "cadence_minutes": 2,
@@ -1383,6 +1363,10 @@ template:
         state: >-
           {%- if is_state('binary_sensor.hogmanay', 'on') -%}
             hogmanay
+          {%- elif is_state('binary_sensor.halloween', 'on') -%}
+            halloween
+          {%- elif is_state('binary_sensor.st_andrews_day', 'on') -%}
+            st_andrews_day
           {%- elif is_state('binary_sensor.burns_night', 'on') -%}
             burns_night
           {%- elif is_state('binary_sensor.national_curling_month', 'on') -%}
@@ -1419,13 +1403,18 @@ template:
             veterans_day
           {%- elif is_state('binary_sensor.thanksgiving', 'on') -%}
             thanksgiving
+          {%- elif is_state('binary_sensor.christmas_season', 'on') -%}
+            christmas_season
           {%- else -%}
             none
           {%- endif -%}
         attributes:
           friendly_label: >-
             {% set labels = {
-              'none': 'No dynamic holiday',
+              'none': 'No holiday lighting',
+              'christmas_season': 'Christmas Season',
+              'st_andrews_day': "St Andrew's Day",
+              'halloween': 'Halloween',
               'hogmanay': "Hogmanay",
               'burns_night': "Burns Night",
               'national_curling_month': "National Curling Month",
@@ -1448,46 +1437,16 @@ template:
             } %}
             {% set active = states('sensor.active_outdoor_holiday') | trim %}
             {{ labels.get(active, active | replace('_', ' ') | title) }}
-
-      - name: active_holiday_lighting
-        unique_id: active_holiday_lighting
-        state: >-
-          {%- set dynamic = states('sensor.active_outdoor_holiday') | trim -%}
-          {%- if dynamic not in ['none', 'unknown', 'unavailable', ''] -%}
-            {{ dynamic }}
-          {%- elif is_state('binary_sensor.halloween', 'on') -%}
-            halloween
-          {%- elif is_state('binary_sensor.st_andrews_day', 'on') -%}
-            st_andrews_day
-          {%- elif is_state('binary_sensor.christmas_season', 'on') -%}
-            christmas_season
-          {%- else -%}
-            none
-          {%- endif -%}
-        attributes:
-          friendly_label: >-
-            {% set active = states('sensor.active_holiday_lighting') | trim %}
-            {% set labels = {
-              'none': 'No holiday lighting',
-              'christmas_season': 'Christmas Season',
-              'halloween': 'Halloween',
-              'st_andrews_day': "St Andrew's Day"
-            } %}
-            {% if active in labels %}
-              {{ labels[active] }}
-            {% else %}
-              {{ state_attr('sensor.active_outdoor_holiday', 'friendly_label') | default(active | replace('_', ' ') | title, true) }}
-            {% endif %}
           notification_message: >-
-            {% set active = states('sensor.active_holiday_lighting') | trim %}
+            {% set active = states('sensor.active_outdoor_holiday') | trim %}
             {% if active in ['none', 'unknown', 'unavailable', ''] %}
               {{ '' }}
             {% elif active == 'christmas_season' %}
-              Today's special lighting is Christmas Season. The tree and outdoor Christmas scenes will start before sunset.
+              Today's special lighting is Christmas Season. The tree and palette-driven outdoor Christmas scenes will start before sunset.
             {% elif active == 'halloween' %}
-              Today's special lighting is Halloween. The existing spooky outdoor loop will start before sunset.
+              Today's special lighting is Halloween. The palette-driven outdoor holiday scenes will start before sunset.
             {% elif active == 'st_andrews_day' %}
-              Today's special lighting is St Andrew's Day. The Saltire-inspired outdoor loop will start before sunset.
+              Today's special lighting is St Andrew's Day. The palette-driven outdoor holiday scenes will start before sunset.
             {% else %}
               Today's special lighting is {{ state_attr('sensor.active_outdoor_holiday', 'friendly_label') | default(active | replace('_', ' ') | title, true) }}. The palette-driven outdoor holiday scenes will start before sunset.
             {% endif %}
