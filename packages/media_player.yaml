@@ -646,6 +646,7 @@ script:
 
   music_assistant_prepare_bedroom_group:
     alias: "Prepare bedroom Music Assistant group"
+    mode: restart
     sequence:
       - if:
           - alias: "Check if guests are here."
@@ -683,6 +684,14 @@ script:
             data:
               group_members:
                 - media_player.bathroom_sonos_2
+
+  music_assistant_try_join_bedroom_group_after_play:
+    alias: "Try joining bedroom Music Assistant followers after playback"
+    mode: restart
+    sequence:
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_prepare_bedroom_group
 
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
@@ -1576,16 +1585,6 @@ script:
           {% set pindex =  (range(0, (plists | length))|random) -%}
           {{ plists[pindex] }}
     sequence:
-      # - action: media_player.join
-      #   target:
-      #     entity_id:
-      #       - media_player.bedroom
-      #   data:
-      #     group_members:
-      #       - media_player.bathroom
-      #       - media_player.office
-      #       - media_player.den
-      - action: script.music_assistant_prepare_bedroom_group
       - action: media_player.shuffle_set
         continue_on_error: true
         target:
@@ -1625,6 +1624,9 @@ script:
         data:
           entity_id: media_player.bedroom_sonos_2
           media_item: "{{ playlist }}"
+      - action: script.turn_on
+        target:
+          entity_id: script.music_assistant_try_join_bedroom_group_after_play
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
