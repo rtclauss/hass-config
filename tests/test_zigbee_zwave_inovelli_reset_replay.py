@@ -132,12 +132,27 @@ def test_reset_script_replays_current_live_switch_modes_readably() -> None:
     block = _script_block("reset_inovelli_switches")
 
     assert 'option: "Disabled"' in block
+    assert "select.deck_flood_lights_smartbulbmode" in block
     assert "select.owner_suite_bathroom_vanity_smartbulbmode" in block
     assert 'option: "On/Off"' in block
     assert "select.garage_overhead_switch_outputmode" in block
     assert 'option: "3-Way Aux Switch"' in block
     assert "select.garage_overhead_switch_switchtype" in block
     assert "select.hall_foyer_switch_switchtype" in block
+
+
+def test_reset_script_does_not_restore_deck_flood_lights_smart_bulb_mode() -> None:
+    block = _script_block("reset_inovelli_switches")
+    smart_bulb_section = _section(
+        block,
+        'inovelli_smart_bulb_mode_replay:',
+        'inovelli_output_mode_replay:',
+    )
+
+    smart_bulb_option, disabled_option = smart_bulb_section.split('        - option: "Disabled"', 1)
+
+    assert "select.deck_flood_lights_smartbulbmode" not in smart_bulb_option
+    assert "select.deck_flood_lights_smartbulbmode" in disabled_option
 
 
 def test_reset_script_replays_current_live_group_memberships_and_bindings() -> None:
