@@ -77,7 +77,24 @@ def test_garbage_pickup_template_keeps_dates_serializable() -> None:
     assert "garbage_pickup_window.range_start" not in text
     assert 'start_date_time: "{{ range_start }}"' in text
     assert 'end_date_time: "{{ range_end }}"' in text
-    assert 'week_mon: "{{ base_wed - timedelta(days=base_wed.weekday()) }}"' in text
+    assert 'today: "{{ now().date().isoformat() }}"' in text
+    assert 'today_weekday: "{{ now().weekday() }}"' in text
+    assert "today.weekday()" not in text
+    assert "week_mon.isoformat()" not in text
+    assert "base_wed.isoformat()" not in text
+    assert "strptime(base_wed, '%Y-%m-%d').date()" in text
     assert "ns = namespace(hit=false)" in text
     assert "holiday_mon_to_wed in [true, 'true', 'True', 'on']" in text
-    assert 'base_wednesday: "{{ base_wed.isoformat() }}"' in text
+    assert 'base_wednesday: "{{ base_wed }}"' in text
+
+
+def test_front_door_lock_template_has_backing_helper() -> None:
+    text = _read(ZIGBEE_ZWAVE_PATH)
+
+    input_boolean_block = text.split("input_boolean:\n", 1)[1].split(
+        "\n########################\n# Input Numbers", 1
+    )[0]
+
+    assert "front_door_lock:" in input_boolean_block
+    assert "unique_id: front_door_lock_template" in text
+    assert "entity_id:\n                - input_boolean.front_door_lock" in text
