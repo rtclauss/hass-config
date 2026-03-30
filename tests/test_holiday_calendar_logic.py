@@ -11,6 +11,19 @@ def _text() -> str:
     return HOLIDAYS_PATH.read_text(encoding="utf-8")
 
 
+def _template_sensor_block(sensor_name: str) -> str:
+    text = _text()
+    marker = f"      - name: {sensor_name}"
+    start = text.index(marker)
+    end_candidates = [
+        text.find("\n      - name:", start + 1),
+        text.find("\n  - trigger:", start + 1),
+    ]
+    end_positions = [index for index in end_candidates if index != -1]
+    end = min(end_positions) if end_positions else len(text)
+    return text[start:end]
+
+
 def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
     current = date(year, month, 1)
     while current.weekday() != weekday:
@@ -89,12 +102,32 @@ def test_reference_dates_for_computed_holidays_match_expected_observances() -> N
 
 
 def test_active_outdoor_holiday_prioritizes_specific_days_over_broader_seasons() -> None:
-    text = _text()
-    start = text.index("- name: active_outdoor_holiday")
-    end = text.index("  - trigger:", start)
-    block = text[start:end]
+    block = _template_sensor_block("active_outdoor_holiday")
 
     assert block.index("binary_sensor.hogmanay") < block.index("binary_sensor.burns_night")
     assert block.index("binary_sensor.burns_night") < block.index(
         "binary_sensor.national_curling_month"
     )
+
+
+def test_active_holiday_lighting_includes_existing_holidays_after_dynamic_selector() -> None:
+    block = _template_sensor_block("active_holiday_lighting")
+
+    assert "states('sensor.active_outdoor_holiday') | trim" in block
+    assert block.index("binary_sensor.halloween") < block.index("binary_sensor.st_andrews_day")
+    assert block.index("binary_sensor.st_andrews_day") < block.index(
+        "binary_sensor.christmas_season"
+    )
+    assert "Today's special lighting is Christmas Season." in block
+    assert "Today's special lighting is Halloween." in block
+    assert "Today's special lighting is St Andrew's Day." in block
+
+
+def test_holiday_lighting_notification_only_sends_on_holiday_days() -> None:
+    text = _text()
+
+    assert "- id: notify_holiday_lighting_day" in text
+    assert "entity_id: sensor.active_holiday_lighting" not in text
+    assert "states('sensor.active_holiday_lighting') | trim not in ['none', 'unknown', 'unavailable', '']" in text
+    assert "state_attr('sensor.active_holiday_lighting', 'notification_message')" in text
+    assert "action: notify.all" in text
