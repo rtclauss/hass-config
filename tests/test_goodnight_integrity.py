@@ -111,29 +111,43 @@ def test_goodnight_integrity_only_notifies_on_verification_exceptions() -> None:
         assert token in block
 
 
-def test_bed_lamps_off_delegates_to_goodnight_integrity() -> None:
+def test_cpap_bedtime_lights_off_still_treats_cpap_as_full_sleep() -> None:
+    block = _automation_block(LIGHT_PATH, "cpap_on_lights_off")
+    action_block = block.split("    action:", 1)[1]
+
+    assert "sensor.owner_suite_cpap_plug_power" in block
+    assert "input_boolean.wakeup_alarm_firing" in block
+    assert "light.owner_suite_lamps" in action_block
+    assert "light.bed_lightstrip" in action_block
+    assert "script.goodnight_integrity" in action_block
+    assert "reason: cpap_sleep" in action_block
+
+
+def test_bed_lamps_off_only_finishes_turning_off_lights() -> None:
     block = _automation_block(LIGHT_PATH, "turn_off_all_lights_when_bed_off")
 
-    assert "script.goodnight_integrity" in block
-    assert "reason: bed_lamps_off" in block
+    assert "sensor.owner_suite_cpap_plug_power" in block
+    assert "script.lights_off_except" in block
+    assert "light.outside_front_hue" in block
+    assert "light.outside_front_door" in block
 
     for token in (
-        "script.lights_off_except",
         "switch.office_red_lava_lamp",
         "media_player.lg_webos_smart_tv",
         "media_player.basement",
+        "script.goodnight_integrity",
     ):
         assert token not in block
 
 
-def test_tv_bed_prep_delegates_to_goodnight_integrity() -> None:
+def test_tv_bed_prep_stops_short_of_full_goodnight_shutdown() -> None:
     block = _automation_block(TV_PATH, "tv_off_at_night_bed_prep")
 
-    assert "script.goodnight_integrity" in block
-    assert "reason: tv_bed_prep" in block
+    assert "scene.bedroom_prep" in block
     assert "script.spotify_bedtime" in block
 
     for token in (
+        "script.goodnight_integrity",
         "cover.garage_door",
         "action: media_player.turn_off",
     ):
