@@ -139,19 +139,57 @@ alarm_control_panel: []
 automation:
   - id: close_owner_suite_blinds_at_night
     alias: close_owner_suite_blinds_at_night
+    description: Close the owner suite blinds near sunset and catch up after brief evening cover reconnects.
     trigger:
       - trigger: sun
         event: sunset
         offset: -00:30:00
+        id: sunset
+      - trigger: state
+        entity_id: cover.owner_suite_blinds_ha
+        from: "unavailable"
+        to: "open"
+        id: recovery
+      - trigger: state
+        entity_id: cover.owner_suite_blinds_ha
+        from: "unknown"
+        to: "open"
+        id: recovery
     action:
-      - delay: 00:{{ (range(5,45)|random|int) }}:00
-      - action: cover.close_cover
-        target:
-          entity_id: cover.owner_suite_blinds_ha
-          # entity_id: cover.owner_suite_blinds when z2m starts working again
-          # https://github.com/Koenkk/zigbee2mqtt/issues/19124
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: sunset
+              - condition: state
+                entity_id: cover.owner_suite_blinds_ha
+                state: "open"
+            sequence:
+              - variables:
+                  blind_close_delay_minutes: "{{ range(5, 45) | random | int }}"
+              - delay:
+                  minutes: "{{ blind_close_delay_minutes }}"
+              - action: cover.close_cover
+                target:
+                  entity_id: cover.owner_suite_blinds_ha
+                  # entity_id: cover.owner_suite_blinds when z2m starts working again
+                  # https://github.com/Koenkk/zigbee2mqtt/issues/19124
+          - conditions:
+              - condition: trigger
+                id: recovery
+              - condition: sun
+                after: sunset
+              - condition: time
+                before: "23:00:00"
+            sequence:
+              - delay:
+                  minutes: 1
+              - action: cover.close_cover
+                target:
+                  entity_id: cover.owner_suite_blinds_ha
+                  # entity_id: cover.owner_suite_blinds when z2m starts working again
+                  # https://github.com/Koenkk/zigbee2mqtt/issues/19124
 
-# opening is set up in alarms.yaml
+# opening is set up in workday.yaml via wake_up_script
 
 ########################
 # Binary Sensors

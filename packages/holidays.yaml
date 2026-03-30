@@ -588,22 +588,28 @@ template:
         entity_id: calendar.mn_holidays
     action:
       - variables:
-          today: "{{ now().date() }}"
-          is_wed: "{{ today.weekday() == 2 }}"
+          today: "{{ now().date().isoformat() }}"
+          today_weekday: "{{ now().weekday() }}"
+          is_wed: "{{ today_weekday | int == 2 }}"
           after_pickup_time: "{{ now().hour >= 12 }}"
           days_until_wed: >
-            {% set d = 2 - today.weekday() %}
+            {% set d = 2 - (today_weekday | int) %}
             {% if d < 0 %}{% set d = d + 7 %}{% endif %}
             {{ d }}
           base_wed: >
+            {% set today_date = strptime(today, '%Y-%m-%d').date() %}
             {% if is_wed and not after_pickup_time %}
               {{ today }}
             {% else %}
-              {{ today + timedelta(days=days_until_wed if (not is_wed) else 7) }}
+              {{ (today_date + timedelta(days=(days_until_wed | int) if (not is_wed) else 7)).isoformat() }}
             {% endif %}
-          week_mon: "{{ base_wed - timedelta(days=base_wed.weekday()) }}"
-          range_start: "{{ week_mon.isoformat() }}T00:00:00"
-          range_end: "{{ (base_wed + timedelta(days=1)).isoformat() }}T23:59:59"
+          week_mon: >
+            {% set base_wed_date = strptime(base_wed, '%Y-%m-%d').date() %}
+            {{ (base_wed_date - timedelta(days=base_wed_date.weekday())).isoformat() }}
+          range_start: "{{ week_mon }}T00:00:00"
+          range_end: >
+            {% set base_wed_date = strptime(base_wed, '%Y-%m-%d').date() %}
+            {{ (base_wed_date + timedelta(days=1)).isoformat() }}T23:59:59
       - action: calendar.get_events
         target:
           entity_id: calendar.mn_holidays
@@ -614,8 +620,8 @@ template:
       - variables:
           holiday_events: "{{ hols.events | default([]) }}"
           holiday_mon_to_wed: >
-            {% set ws = week_mon %}
-            {% set we = base_wed %}
+            {% set ws = strptime(week_mon, '%Y-%m-%d').date() %}
+            {% set we = strptime(base_wed, '%Y-%m-%d').date() %}
             {% set ns = namespace(hit=false) %}
             {% for e in holiday_events %}
               {% set d = as_datetime(e.start).date() %}
@@ -626,16 +632,16 @@ template:
             {{ ns.hit }}
           pickup_date: >
             {% if holiday_mon_to_wed in [true, 'true', 'True', 'on'] %}
-              {{ (base_wed + timedelta(days=1)).isoformat() }}
+              {{ (strptime(base_wed, '%Y-%m-%d').date() + timedelta(days=1)).isoformat() }}
             {% else %}
-              {{ base_wed.isoformat() }}
+              {{ base_wed }}
             {% endif %}
     sensor:
       - name: Garbage pickup date
         unique_id: garbage_pickup_date_apple_valley
         state: "{{ pickup_date }}"
         attributes:
-          base_wednesday: "{{ base_wed.isoformat() }}"
+          base_wednesday: "{{ base_wed }}"
           holiday_shift_applied: "{{ holiday_mon_to_wed in [true, 'true', 'True', 'on'] }}"
           holiday_events_in_range: "{{ holiday_events | map(attribute='summary') | list }}"
 
