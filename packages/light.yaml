@@ -437,6 +437,9 @@ automation:
           entity_id:
             - light.owner_suite_lamps
             - light.bed_lightstrip
+      - action: script.goodnight_integrity
+        data:
+          reason: cpap_sleep
 
   # - id: deck_light_auto_off
   #   alias: deck_light_auto_off
@@ -1683,14 +1686,23 @@ automation:
           entity_id:
             - input_boolean.guest_mode
           state: "off"
+        - alias: "CPAP not already driving full sleep shutdown"
+          condition: numeric_state
+          entity_id: sensor.owner_suite_cpap_plug_power
+          below: 1.3
     action:
       - action: switch.turn_on
         data:
           entity_id:
             - switch.sleep_mode
-      - action: script.goodnight_integrity
+      - action: script.lights_off_except
         data:
-          reason: bed_lamps_off
+          exclude_lights:
+            - light.outside_front_hue
+            - light.outside_north_west_garage
+            - light.outside_south_west_garage
+            - light.outside_front_door
+          transition: 30
         # Only turn on the humidifier when it's winter
         # Not used with whole-home humidifier
         # - condition: and
