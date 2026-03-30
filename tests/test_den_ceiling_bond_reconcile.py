@@ -56,4 +56,6 @@ def test_den_ceiling_bond_reconcile_has_overnight_force_off_failsafe() -> None:
     assert 'state: "off"' in block
     assert "hours: 1" in block
     assert "action: light.turn_off" in block
+    assert "action: notify.all" in block
+    assert "Den ceiling light failsafe" in block
     assert 'minutes: "/30"' in block
