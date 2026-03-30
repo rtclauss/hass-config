@@ -111,6 +111,25 @@ def test_house_party_helper_joins_every_sonos_zone() -> None:
         assert media_player in block
 
 
+def test_bedroom_group_helper_restarts_instead_of_blocking_new_runs() -> None:
+    block = _script_block("music_assistant_prepare_bedroom_group")
+
+    assert 'mode: restart' in block
+
+
+def test_bedtime_join_retry_runs_after_playback_starts() -> None:
+    helper_block = _script_block("music_assistant_try_join_bedroom_group_after_play")
+    bedtime_block = _script_block("spotify_bedtime")
+
+    assert 'mode: restart' in helper_block
+    assert 'seconds: 2' in helper_block
+    assert 'action: script.music_assistant_prepare_bedroom_group' in helper_block
+    assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in bedtime_block
+    assert bedtime_block.index('action: script.music_assistant_play_item') < bedtime_block.index(
+        'entity_id: script.music_assistant_try_join_bedroom_group_after_play'
+    )
+
+
 def test_bedtime_playlist_includes_somafm_station_names() -> None:
     block = _script_block("spotify_bedtime")
 
