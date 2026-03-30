@@ -60,6 +60,10 @@ homeassistant:
       <<: *customize
       friendly_name: "Outdoor holiday lights"
 
+    automation.notify_holiday_lighting_day:
+      <<: *customize
+      friendly_name: "Notify holiday lighting day"
+
     binary_sensor.christmas_season:
       <<: *customize
       friendly_name: "Christmas Season"
@@ -107,6 +111,11 @@ homeassistant:
     sensor.active_outdoor_holiday:
       <<: *customize
       friendly_name: "Active outdoor holiday"
+      icon: mdi:string-lights
+
+    sensor.active_holiday_lighting:
+      <<: *customize
+      friendly_name: "Active holiday lighting"
       icon: mdi:string-lights
 
     light.outdoor_holiday_facade_rgb_lights:
@@ -331,6 +340,27 @@ automation:
       - action: script.apply_outdoor_holiday_scene
         data:
           holiday_key: "{{ states('sensor.active_outdoor_holiday') | trim }}"
+
+  - id: notify_holiday_lighting_day
+    alias: notify_holiday_lighting_day
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+    condition:
+      - alias: "Holiday lighting active today"
+        condition: template
+        value_template: >-
+          {{ states('sensor.active_holiday_lighting') | trim not in ['none', 'unknown', 'unavailable', ''] }}
+      - alias: "Notification message available"
+        condition: template
+        value_template: >-
+          {{ state_attr('sensor.active_holiday_lighting', 'notification_message') | default('', true) | trim != '' }}
+    action:
+      - action: notify.all
+        data:
+          title: Holiday lighting
+          message: "{{ state_attr('sensor.active_holiday_lighting', 'notification_message') }}"
 
   - alias: Garbage Holiday Update
     id: garbage_holiday_update
@@ -1418,6 +1448,49 @@ template:
             } %}
             {% set active = states('sensor.active_outdoor_holiday') | trim %}
             {{ labels.get(active, active | replace('_', ' ') | title) }}
+
+      - name: active_holiday_lighting
+        unique_id: active_holiday_lighting
+        state: >-
+          {%- set dynamic = states('sensor.active_outdoor_holiday') | trim -%}
+          {%- if dynamic not in ['none', 'unknown', 'unavailable', ''] -%}
+            {{ dynamic }}
+          {%- elif is_state('binary_sensor.halloween', 'on') -%}
+            halloween
+          {%- elif is_state('binary_sensor.st_andrews_day', 'on') -%}
+            st_andrews_day
+          {%- elif is_state('binary_sensor.christmas_season', 'on') -%}
+            christmas_season
+          {%- else -%}
+            none
+          {%- endif -%}
+        attributes:
+          friendly_label: >-
+            {% set active = states('sensor.active_holiday_lighting') | trim %}
+            {% set labels = {
+              'none': 'No holiday lighting',
+              'christmas_season': 'Christmas Season',
+              'halloween': 'Halloween',
+              'st_andrews_day': "St Andrew's Day"
+            } %}
+            {% if active in labels %}
+              {{ labels[active] }}
+            {% else %}
+              {{ state_attr('sensor.active_outdoor_holiday', 'friendly_label') | default(active | replace('_', ' ') | title, true) }}
+            {% endif %}
+          notification_message: >-
+            {% set active = states('sensor.active_holiday_lighting') | trim %}
+            {% if active in ['none', 'unknown', 'unavailable', ''] %}
+              {{ '' }}
+            {% elif active == 'christmas_season' %}
+              Today's special lighting is Christmas Season. The tree and outdoor Christmas scenes will start before sunset.
+            {% elif active == 'halloween' %}
+              Today's special lighting is Halloween. The existing spooky outdoor loop will start before sunset.
+            {% elif active == 'st_andrews_day' %}
+              Today's special lighting is St Andrew's Day. The Saltire-inspired outdoor loop will start before sunset.
+            {% else %}
+              Today's special lighting is {{ state_attr('sensor.active_outdoor_holiday', 'friendly_label') | default(active | replace('_', ' ') | title, true) }}. The palette-driven outdoor holiday scenes will start before sunset.
+            {% endif %}
 
   - trigger:
       - trigger: homeassistant
