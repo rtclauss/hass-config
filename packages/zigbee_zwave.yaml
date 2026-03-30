@@ -2172,7 +2172,9 @@ script:
       aurora_effect: aurora
       aurora_color: 187
       aurora_level: 51
-      aurora_duration: 255
+      # Keep the aurora notification visible for 10 minutes, then let the
+      # devices fall back to whichever LED defaults are already active.
+      aurora_duration: 600
       all_inovelli_switches_energy_report_rate: >
         {%- for device in states.number | select('match', '.*periodicpowerandenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_active_energy_report_rate: >
@@ -2673,29 +2675,34 @@ script:
                   {% endif %}
                   {{ payload | tojson }}
             - delay: "{{ mqtt_bind_delay }}"
-      - repeat:
-          for_each: "{{ inovelli_led_notification_targets }}"
-          sequence:
-            - action: mqtt.publish
-              data:
-                topic: "zigbee2mqtt/{{ repeat.item }}/set"
-                payload: >
-                  {{ {
-                    'led_effect': {
-                      'effect': aurora_effect,
-                      'color': aurora_color,
-                      'level': aurora_level,
-                      'duration': aurora_duration
-                    }
-                  } | tojson }}
-            - delay: "{{ mqtt_bind_delay }}"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
+            sequence:
+              - repeat:
+                  for_each: "{{ inovelli_led_notification_targets }}"
+                  sequence:
+                    - action: mqtt.publish
+                      data:
+                        topic: "zigbee2mqtt/{{ repeat.item }}/set"
+                        payload: >
+                          {{ {
+                            'led_effect': {
+                              'effect': aurora_effect,
+                              'color': aurora_color,
+                              'level': aurora_level,
+                              'duration': aurora_duration
+                            }
+                          } | tojson }}
+                    - delay: "{{ mqtt_bind_delay }}"
       - action: logbook.log
         data:
           name: Zigbee2MQTT Reset
           message: >
             Replayed the saved Inovelli smart bulb modes, output modes, switch types,
-            group memberships, and bindings for switches and bulbs/groups,
-            and set the Inovelli LED bar to aurora so the completed reset is easy to verify.
+            group memberships, and bindings for switches and bulbs/groups.
 
   turn_off_owner_suite_inovelli_switch_leds:
     icon: mdi:light-switch
