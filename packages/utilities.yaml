@@ -371,6 +371,26 @@ automation:
         data:
           addon: a0d7b954_appdaemon
 
+  - alias: Restart Music Assistant every 12.17 hours
+    description: >
+      Restart the Music Assistant add-on on a self-rescheduling loop to work
+      around Sonos DNS issues.
+    id: restart_music_assistant_every_12_17_hours
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - repeat:
+          while:
+            - condition: template
+              value_template: "{{ true }}"
+          sequence:
+            # 12.17 hours interpreted as decimal hours: 12 hours, 10 minutes, 12 seconds.
+            - delay: "12:10:12"
+            - action: hassio.addon_restart
+              data:
+                addon: d5369777_music_assistant
+
   - alias: Turn Sump Back On
     id: turn_sump_back_on
     trigger:
