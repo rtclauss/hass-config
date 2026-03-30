@@ -108,14 +108,16 @@ def test_active_outdoor_holiday_prioritizes_specific_days_over_broader_seasons()
     assert block.index("binary_sensor.burns_night") < block.index(
         "binary_sensor.national_curling_month"
     )
+    assert block.index("binary_sensor.thanksgiving") < block.index(
+        "binary_sensor.christmas_season"
+    )
 
 
-def test_active_holiday_lighting_includes_existing_holidays_after_dynamic_selector() -> None:
-    block = _template_sensor_block("active_holiday_lighting")
+def test_active_outdoor_holiday_now_includes_existing_holidays() -> None:
+    block = _template_sensor_block("active_outdoor_holiday")
 
-    assert "states('sensor.active_outdoor_holiday') | trim" in block
     assert block.index("binary_sensor.halloween") < block.index("binary_sensor.st_andrews_day")
-    assert block.index("binary_sensor.st_andrews_day") < block.index(
+    assert block.index("binary_sensor.thanksgiving") < block.index(
         "binary_sensor.christmas_season"
     )
     assert "Today's special lighting is Christmas Season." in block
@@ -123,11 +125,21 @@ def test_active_holiday_lighting_includes_existing_holidays_after_dynamic_select
     assert "Today's special lighting is St Andrew's Day." in block
 
 
+def test_unified_holiday_registry_includes_legacy_holidays() -> None:
+    text = _text()
+
+    assert '"christmas_season": {' in text
+    assert '"st_andrews_day": {' in text
+    assert '"halloween": {' in text
+    assert '"lighting_engine": "legacy_scene_loop"' not in text
+    assert '"legacy_scene_prefix":' not in text
+
+
 def test_holiday_lighting_notification_only_sends_on_holiday_days() -> None:
     text = _text()
 
     assert "- id: notify_holiday_lighting_day" in text
     assert "entity_id: sensor.active_holiday_lighting" not in text
-    assert "states('sensor.active_holiday_lighting') | trim not in ['none', 'unknown', 'unavailable', '']" in text
-    assert "state_attr('sensor.active_holiday_lighting', 'notification_message')" in text
+    assert "states('sensor.active_outdoor_holiday') | trim not in ['none', 'unknown', 'unavailable', '']" in text
+    assert "state_attr('sensor.active_outdoor_holiday', 'notification_message')" in text
     assert "action: notify.all" in text
