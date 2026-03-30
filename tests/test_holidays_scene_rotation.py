@@ -67,3 +67,10 @@ def test_christmas_loop_keeps_per_minute_rotation() -> None:
 
     scene_indexes = {minute % 4 + 1 for minute in range(60)}
     assert scene_indexes == {1, 2, 3, 4}
+
+
+def test_christmas_loop_yields_new_years_eve_to_hogmanay() -> None:
+    christmas = _automation_block("christmas_outside_light_loop_1")
+
+    assert 'entity_id: binary_sensor.hogmanay' in christmas
+    assert 'state: "off"' in christmas
