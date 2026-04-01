@@ -24,6 +24,14 @@ def test_tesla_departure_planner_waits_for_helpers_on_startup() -> None:
     assert 'delay: "00:00:30"' in text
 
 
+def test_tesla_departure_planner_notification_uses_notify_all_with_error_tolerance() -> None:
+    text = _read(CAR_PATH)
+
+    assert "id: tesla_departure_planner_apply" in text
+    assert "continue_on_error: true" in text
+    assert "action: notify.notify_all" in text
+
+
 def test_time_to_home_template_handles_unavailable_source_state() -> None:
     text = _read(TRIPS_PATH)
 
