@@ -63,7 +63,7 @@ This table summarizes battery-powered devices that are already represented in th
 | 8 | Aqara | Temperature and Humidity Sensor (WSDCGQ11LM) | Zigbee | `sensor` | `CR2032` | 1 | Eight configured room climate sensors currently report battery values in Home Assistant. |
 | 1 | Aqara | Vibration Sensor (DJT11LM) | Zigbee | `binary_sensor` | `CR2032` | 1 | Laundry washer vibration node. |
 | 1 | Aqara | Water Leak Sensor (SJCGQ11LM) | Zigbee | `binary_sensor` | `CR2032` | 1 | Basement unfinished leak node. |
-| 2 | Aqara | Door and Window Sensor (MCCGQ11LM) | Zigbee | `binary_sensor` | `CR1632` | 1 | Hall garage entry and laundry washer door contact sensors. |
+| 6 | Aqara | Door and Window Sensor (MCCGQ11LM) | Zigbee | `binary_sensor` | `CR1632` | 1 | Hall garage entry, main foyer front door, kitchen deck, den doors, tiki room deck, and laundry washer door contact sensors. |
 | 1 | Xiaomi | Mi Wireless Switch (WXKG01LM) | Zigbee | `button` | `CR2032` | 1 | Hall button scene trigger. |
 | 20 | IKEA | PARASOLL door/window sensor | Zigbee | `binary_sensor` | `AAA` | 1 | Twenty contact sensors are now installed across kitchen, dining room, owner suite, guest, office, basement, powder room, and mailbox openings. |
 | 1 | IKEA | RODRET wireless dimmer | Zigbee | `button` | `AAA` | 1 | One live RODRET dimmer is paired today; the spare inventory section tracks four more. |
@@ -87,10 +87,10 @@ This table combines the spare inventory above with the currently configured batt
 | `FYRTUR battery pack (BRAUNIT)` | Rechargeable pack | 0 | 2 | 1 | 3 | One charged spare pack keeps a blind online while the other pack recharges. |
 | `CR2450` | Primary coin cell | 16 | 8 | 6 | 30 | Shared across the legacy motion sensors, the cube, and the Matter P2 motion sensor. |
 | `CR2032` | Primary coin cell | 16 | 25 | 11 | 52 | This becomes the largest family once the installed climate sensors, plant sensors, TRADFRI remotes, and small Aqara/Xiaomi nodes are included. |
-| `CR1632` | Primary coin cell | 4 | 2 | 3 | 9 | Small but easy-to-forget door-sensor cell; keep a few ahead of failures for the garage entry and washer-door contacts. |
+| `CR1632` | Primary coin cell | 4 | 6 | 3 | 13 | Small but easy-to-forget door-sensor cell; keep a few ahead of failures for the active Aqara door contacts plus any spare replacements. |
 | `CR2477` | Primary coin cell | 0 | 5 | 3 | 8 | Niche ecobee sensor cell that is worth stocking instead of special-ordering after a failure. |
 | `CR123A` | Primary cylindrical lithium | 4 | 0 | 4 | 8 | Keep a full spare round for the FireFighter stock because this cell is less interchangeable with the rest of the house. |
-| `TOTAL` | 8 battery families / 4 kinds | 56 | 75 | 48 | 179 | Kinds in use: rechargeable cylindrical cells, rechargeable packs, primary coin cells, and primary cylindrical lithium cells. |
+| `TOTAL` | 8 battery families / 4 kinds | 56 | 79 | 48 | 183 | Kinds in use: rechargeable cylindrical cells, rechargeable packs, primary coin cells, and primary cylindrical lithium cells. |
 
 ## Battery Assumptions
 
