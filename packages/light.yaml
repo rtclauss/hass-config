@@ -2158,7 +2158,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: solid
 
@@ -2169,7 +2169,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: bpm
 
@@ -2180,7 +2180,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: candy cane
 
@@ -2191,7 +2191,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: christmas
 
@@ -2202,7 +2202,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: confetti
 
@@ -2213,7 +2213,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: cyclon rainbow
 
@@ -2224,7 +2224,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: dots
 
@@ -2235,7 +2235,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: fire
 
@@ -2246,7 +2246,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: glitter
 
@@ -2257,7 +2257,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: juggle
 
@@ -2268,7 +2268,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: lightning
 
@@ -2279,7 +2279,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: noise
 
@@ -2290,7 +2290,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: police all
 
@@ -2301,7 +2301,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: police one
 
@@ -2312,7 +2312,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: rainbow
 
@@ -2323,7 +2323,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: rainbow with glitter
 
@@ -2334,7 +2334,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: ripple
 
@@ -2345,7 +2345,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: sinelon
 
@@ -2356,7 +2356,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: twinkle
 
@@ -2368,7 +2368,7 @@ script:
         description: "Excluded lights as list"
     variables:
       all_other_lights: >
-        {%- for device in states.light|rejectattr('entity_id','in', exclude_lights )|rejectattr('state','in','off') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.light | rejectattr('entity_id', 'in', exclude_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
       # - action: retry.call
       #   data:

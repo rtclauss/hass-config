@@ -82,10 +82,12 @@ def test_tiki_time_color_cycle_targets_individual_color_lights() -> None:
         "light.east_table_lamp",
         "light.west_table_lamp",
         "light.tiki_room_floor_lamp",
+        "light.tiki_room_lights_tiki_room_strip",
     ):
         assert entity_id in block
 
     assert "effect: rainbow" in block
+    assert "light.tiki_room_strip" not in block
     assert "entity_id: light.kitchen_all" not in block
     assert "entity_id: light.office_all" not in block
 
