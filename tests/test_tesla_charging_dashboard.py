@@ -44,19 +44,41 @@ def test_home_default_charge_plan_skips_extra_tesla_schedule_override() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "{% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}" in package_text
-    assert "tesla_plan.manage_tesla_schedule" in package_text
     assert "No extra home charging override is needed." in package_text
 
 
 def test_alarm_only_planner_skips_preconditioning_without_real_departure() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
-    assert "{% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}" in package_text
+    assert "{% set precondition = has_calendar_departure and departure_window_open %}" in package_text
     assert (
         "{% set precondition = (has_calendar_departure or alarm_enabled) and departure_window_open %}"
         not in package_text
     )
     assert "skip cabin preconditioning until a real next-day departure is scheduled" in package_text
+
+
+def test_home_default_charge_plan_still_runs_real_departure_preconditioning() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert 'value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != \'\' }}"' in package_text
+    assert 'value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != \'\' and tesla_plan.manage_tesla_schedule }}"' not in package_text
+
+
+def test_real_calendar_preconditioning_is_not_gated_by_temperature() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "{% set precondition = has_calendar_departure and departure_window_open %}" in package_text
+    assert "{% set precondition = has_calendar_departure and departure_window_open and cold_weather %}" not in package_text
+    assert "{% set precondition = has_calendar_departure and departure_window_open and outside_temp_f" not in package_text
+
+
+def test_calendar_destination_ignores_blank_location_events_before_falling_back_home() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "{% set ns = namespace(start=none, value=states('input_text.home_address')) %}" in package_text
+    assert "{% if candidate.start_raw not in [none, ''] and candidate.location != '' %}" in package_text
+    assert "{% if (personal_meeting_time < curling_upcoming) %}" not in package_text
 
 
 def test_dashboard_copy_explains_alarm_only_days_and_home_schedule_override_logic() -> None:
