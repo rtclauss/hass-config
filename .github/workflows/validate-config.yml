@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # Home Assistant 2026.4.0 regressed `check_config` for trigger-based automation,
+  # script, and template validation. Keep this pinned until upstream fixes
+  # home-assistant/core#167066 in a stable release.
+  HOME_ASSISTANT_CHECK_CONFIG_IMAGE: ghcr.io/home-assistant/home-assistant:2026.3.4
+
 concurrency:
   group: validate-home-assistant-config-${{ github.ref }}
   cancel-in-progress: true
@@ -42,6 +48,7 @@ jobs:
             configuration.yaml \
             automations.yaml \
             blueprints \
+            esphome \
             packages \
             zigbee2mqtt
 
@@ -83,15 +90,36 @@ jobs:
             exit 0
           fi
 
+          changed_esphome_files=$(printf '%s\n' "$diff_output" | grep -E '^esphome/.*\.ya?ml$' | sort -u || true)
+
           config_files=()
+          package_change=false
+
           while IFS= read -r config; do
             [[ -z "$config" ]] && continue
-            if [[ -f "$config" ]]; then
-              config_files+=("$config")
-            else
-              echo "Skipping removed ESPHome config: $config"
+
+            if [[ "$config" =~ ^esphome/[^/]+\.ya?ml$ ]]; then
+              if [[ -f "$config" ]]; then
+                config_files+=("$config")
+              else
+                echo "Skipping removed ESPHome config: $config"
+              fi
+              continue
             fi
-          done < <(printf '%s\n' "$diff_output" | grep -E '^esphome/.*\.ya?ml$' | sort -u || true)
+
+            package_change=true
+          done <<< "$changed_esphome_files"
+
+          if [[ "$package_change" == "true" ]]; then
+            while IFS= read -r config; do
+              [[ -z "$config" ]] && continue
+              config_files+=("$config")
+            done < <(grep -l "^packages:" esphome/*.yaml || true)
+          fi
+
+          if [[ ${#config_files[@]} -gt 0 ]]; then
+            mapfile -t config_files < <(printf '%s\n' "${config_files[@]}" | sort -u)
+          fi
 
           if [[ ${#config_files[@]} -eq 0 ]]; then
             echo "esphome_changed=false" >> "$GITHUB_OUTPUT"
@@ -253,7 +281,7 @@ jobs:
 
           docker run --rm \
             -v "${{ github.workspace }}:/config" \
-            ghcr.io/home-assistant/home-assistant:stable \
+            "$HOME_ASSISTANT_CHECK_CONFIG_IMAGE" \
             python -m homeassistant --config /config --script check_config 2>&1 | tee check-config.log
 
           if grep -Eq "(Failed config|ERROR:homeassistant\\.config:Invalid config|ERROR:homeassistant\\.config:Error loading)" check-config.log; then
