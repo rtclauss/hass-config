@@ -24,6 +24,14 @@ def test_tesla_departure_planner_waits_for_helpers_on_startup() -> None:
     assert 'delay: "00:00:30"' in text
 
 
+def test_tesla_departure_planner_notification_uses_notify_all_with_error_tolerance() -> None:
+    text = _read(CAR_PATH)
+
+    assert "id: tesla_departure_planner_apply" in text
+    assert "continue_on_error: true" in text
+    assert "action: notify.notify_all" in text
+
+
 def test_time_to_home_template_handles_unavailable_source_state() -> None:
     text = _read(TRIPS_PATH)
 
@@ -98,3 +106,28 @@ def test_front_door_lock_template_has_backing_helper() -> None:
     assert "front_door_lock:" in input_boolean_block
     assert "unique_id: front_door_lock_template" in text
     assert "entity_id:\n                - input_boolean.front_door_lock" in text
+
+
+def test_owner_suite_led_shutdown_waits_for_inovelli_state_settle() -> None:
+    text = _read(ZIGBEE_ZWAVE_PATH)
+
+    block = text.split("turn_off_owner_suite_inovelli_switch_leds:\n", 1)[1].split(
+        "\n########################\n# REST Command",
+        1,
+    )[0]
+
+    assert "initial_grace_period: 30" in block
+    assert "expected_state: 0" in block
+    assert block.count("action: number.set_value") == 3
+
+
+def test_lights_off_except_only_targets_currently_on_lights() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    block = text.split("lights_off_except:\n", 1)[1].split(
+        "\n########################\n# Sensor",
+        1,
+    )[0]
+
+    assert "selectattr('state', 'eq', 'on')" in block
+    assert "rejectattr('state','in','off')" not in block
