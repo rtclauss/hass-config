@@ -279,7 +279,7 @@ automation:
             {% endif %}
             {% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}
             {% set departure_window_open = departure_dt is not none and departure_dt > now() %}
-            {% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}
+            {% set precondition = has_calendar_departure and departure_window_open %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
@@ -366,7 +366,7 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' and tesla_plan.manage_tesla_schedule }}"
+                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' }}"
             sequence:
               - action: script.tesla_set_precondition_schedule_time
                 data:
@@ -1110,49 +1110,33 @@ template:
         unique_id: calendar_destination
         name: Next Calendar Destination
         state: >-
-          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
-            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-          {% else %}
-            {% set personal_meeting_time = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if state_attr("binary_sensor.work_trip_today", "start_time") not in [none, ''] %}
-            {% set work_meeting_upcoming = state_attr("binary_sensor.work_trip_today", "start_time")| as_datetime|as_local %}
-          {% else %}
-            {% set work_meeting_upcoming = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if state_attr("calendar.curling", "start_time")  != None %}
-            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
-          {% else %}
-            {% set curling_upcoming = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if (personal_meeting_time < curling_upcoming) %}
-            {% if (personal_meeting_time < work_meeting_upcoming) %}
-              {% if (personal_meeting_time - now())< timedelta(hours=24) and state_attr('calendar.ryan_claussen', 'location') != "" %}
-                {{ state_attr('calendar.ryan_claussen', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% else %}
-                {{ state_attr('binary_sensor.work_trip_today', 'location') }}
-            {% endif %}
-          {% else %}
-            {% if (curling_upcoming < work_meeting_upcoming) %}
-              {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.curling', 'location') != "" %}
-                {{ state_attr('calendar.curling', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% else %}
-            {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('binary_sensor.work_trip_today', 'location') not in [none, ''] %}
-                {{ state_attr('binary_sensor.work_trip_today', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
+          {% set now_local = now() %}
+          {% set horizon = now_local + timedelta(hours=24) %}
+          {% set ns = namespace(start=none, value=states('input_text.home_address')) %}
+          {% set candidates = [
+            {
+              'start_raw': state_attr('calendar.ryan_claussen', 'start_time'),
+              'location': state_attr('calendar.ryan_claussen', 'location') | default('', true) | trim
+            },
+            {
+              'start_raw': state_attr('binary_sensor.work_trip_today', 'start_time'),
+              'location': state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | trim
+            },
+            {
+              'start_raw': state_attr('calendar.curling', 'start_time'),
+              'location': state_attr('calendar.curling', 'location') | default('', true) | trim
+            }
+          ] %}
+          {% for candidate in candidates %}
+            {% if candidate.start_raw not in [none, ''] and candidate.location != '' %}
+              {% set candidate_start = candidate.start_raw | as_datetime | as_local %}
+              {% if candidate_start is not none and candidate_start > now_local and candidate_start < horizon and (ns.start is none or candidate_start < ns.start) %}
+                {% set ns.start = candidate_start %}
+                {% set ns.value = candidate.location %}
               {% endif %}
             {% endif %}
-          {% endif %}
+          {% endfor %}
+          {{ ns.value }}
 ########################
 # Zone
 ########################
