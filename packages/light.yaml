@@ -400,23 +400,7 @@ automation:
           - input_boolean.bayesian_zeke_home
         state: "on"
     action:
-      - action: adaptive_lighting.apply
-        data:
-          lights:
-            - light.basement_great_room
-          entity_id: switch.adaptive_lighting_basement
-          adapt_brightness: true
-          adapt_color: true
-          turn_on_lights: true
-      # - action: light.turn_on
-      #   data:
-      #     entity_id:
-      #       - light.basement_great_room_east_and_middle_switch
-      #       - light.basement_north_hallway_switch
-      #       - light.basement_landing_switch
-      #       - light.basement_great_room_west_switch
-      #       - light.basement_great_room_landing_switch_2
-      #       - light.basement_great_room
+      - action: script.turn_on_basement_lights_sequentially
 
   - id: cpap_on_lights_off
     alias: cpap_on_lights_off
@@ -2199,6 +2183,35 @@ script:
           entity_id: scene.scene_reset_basement
         data:
           transition: 15
+
+  turn_on_basement_lights_sequentially:
+    alias: "Turn On Basement Lights Sequentially"
+    description: >-
+      Turn on the basement path in stages from the landing toward the TV, then
+      bring up the TV bias light last.
+    mode: restart
+    sequence:
+      - repeat:
+          for_each:
+            - light.basement_landing_switch
+            - light.basement_great_room_landing_switch_2
+            - light.basement_north_hallway_switch
+            - light.basement_great_room_east_and_middle_switch
+            - light.basement_great_room_west_switch
+          sequence:
+            - action: adaptive_lighting.apply
+              data:
+                entity_id: switch.adaptive_lighting_basement
+                lights:
+                  - "{{ repeat.item }}"
+                adapt_brightness: true
+                adapt_color: true
+                turn_on_lights: true
+            - delay:
+                seconds: 1
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_tv_bias
 
   tiki_room_solid:
     alias: "Tiki Room Solid"

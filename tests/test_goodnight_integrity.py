@@ -147,7 +147,29 @@ def test_basement_lights_auto_on_respects_plex_basement_playback() -> None:
     assert "media_player.plex_basement_apple_tv" in block
     assert "condition: not" in block
     assert "condition: or" in block
-    assert "light.basement_great_room" in block
+    assert "script.turn_on_basement_lights_sequentially" in block
+
+
+def test_turn_on_basement_lights_sequentially_stages_path_lights_before_tv_bias() -> None:
+    block = _script_block(LIGHT_PATH, "turn_on_basement_lights_sequentially")
+
+    assert "Turn on the basement path in stages" in block
+    assert "switch.adaptive_lighting_basement" in block
+    assert "for_each:" in block
+    assert "{{ repeat.item }}" in block
+
+    ordered_entities = (
+        "light.basement_landing_switch",
+        "light.basement_great_room_landing_switch_2",
+        "light.basement_north_hallway_switch",
+        "light.basement_great_room_east_and_middle_switch",
+        "light.basement_great_room_west_switch",
+        "light.basement_tv_bias",
+    )
+
+    positions = [block.index(entity_id) for entity_id in ordered_entities]
+    assert positions == sorted(positions)
+    assert block.count("seconds: 1") == 1
 
 
 def test_tv_bed_prep_stops_short_of_full_goodnight_shutdown() -> None:
