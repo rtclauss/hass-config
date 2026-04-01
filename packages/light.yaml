@@ -383,11 +383,18 @@ automation:
           - binary_sensor.bayesian_bed_occupancy
           # - input_boolean.chatgpt_bed_occupied
         state: "off"
-      - not:
-          - alias: "watching something"
-            condition: state
-            entity_id: media_player.basement
-            state: "playing"
+      - condition: not
+        conditions:
+          - condition: or
+            conditions:
+              - alias: "watching something"
+                condition: state
+                entity_id: media_player.basement
+                state: "playing"
+              - alias: "watching Apple TV"
+                condition: state
+                entity_id: media_player.plex_basement_apple_tv
+                state: "playing"
       - condition: state
         entity_id:
           - input_boolean.bayesian_zeke_home
