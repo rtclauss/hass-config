@@ -149,6 +149,7 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
 
 - [House Transition Framework](docs/house_transition_framework.md)
 - [Room Intent Policy](docs/room_intent.yaml)
+- [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
 - [Tesla Departure Planner](docs/tesla_departure_planner.md)
 
