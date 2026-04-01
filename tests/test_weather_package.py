@@ -13,6 +13,7 @@ def test_car_window_alert_closes_windows_even_when_notification_is_throttled() -
     assert "choose:" in text
     assert "action: cover.close_cover" in text
     assert "resource_template: >-" in text
+    assert "timeout: 20" in text
     assert "state_attr('zone.home', 'latitude')" in text
     assert "state_attr('zone.home', 'longitude')" in text
     assert "latitude=0&longitude=0" not in text
