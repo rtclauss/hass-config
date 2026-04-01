@@ -99,7 +99,7 @@ def test_configured_battery_rows_cover_live_battery_devices() -> None:
         ("Aqara", "Temperature and Humidity Sensor (WSDCGQ11LM)"): ("8", "CR2032", "1"),
         ("Aqara", "Vibration Sensor (DJT11LM)"): ("1", "CR2032", "1"),
         ("Aqara", "Water Leak Sensor (SJCGQ11LM)"): ("1", "CR2032", "1"),
-        ("Aqara", "Door and Window Sensor (MCCGQ11LM)"): ("1", "CR1632", "1"),
+        ("Aqara", "Door and Window Sensor (MCCGQ11LM)"): ("2", "CR1632", "1"),
         ("Xiaomi", "Mi Wireless Switch (WXKG01LM)"): ("1", "CR2032", "1"),
         ("IKEA", "PARASOLL door/window sensor"): ("20", "AAA", "1"),
         ("IKEA", "RODRET wireless dimmer"): ("1", "AAA", "1"),
@@ -131,6 +131,23 @@ def test_loose_battery_stock_tracks_spare_aaa_cells() -> None:
     assert "Loose spare cells on hand" in aaa["notes"]
 
 
+def test_configured_z2m_rows_cover_new_non_battery_devices() -> None:
+    rows = _table_rows("Configured Zigbee2MQTT Devices")
+    configured = {(row["brand"], row["model"]): row for row in rows}
+
+    expected = {
+        ("IKEA", "INSPELNING smart plug"): ("2", "n/a", "0"),
+        ("Innr", "E26/24 bulb 1100lm, dimmable, white spectrum"): ("1", "n/a", "0"),
+    }
+
+    for key, (quantity, battery, cells_per_device) in expected.items():
+        row = configured.get(key)
+        assert row is not None, f"Missing configured Zigbee2MQTT row for {key!r}"
+        assert row["quantity"] == quantity
+        assert _clean_cell(row["battery"]) == battery
+        assert row["cells_device"] == cells_per_device
+
+
 def test_battery_planning_totals_match_inventory_rows() -> None:
     inventory_rows = _table_rows("Inventory")
     configured_rows = _table_rows("Configured Battery Devices")
@@ -158,7 +175,7 @@ def test_battery_planning_totals_match_inventory_rows() -> None:
         "FYRTUR battery pack (BRAUNIT)": ("Rechargeable pack", 0, 2, 1, 3),
         "CR2450": ("Primary coin cell", 16, 8, 6, 30),
         "CR2032": ("Primary coin cell", 16, 25, 11, 52),
-        "CR1632": ("Primary coin cell", 4, 1, 3, 8),
+        "CR1632": ("Primary coin cell", 4, 2, 3, 9),
         "CR2477": ("Primary coin cell", 0, 5, 3, 8),
         "CR123A": ("Primary cylindrical lithium", 4, 0, 4, 8),
     }
