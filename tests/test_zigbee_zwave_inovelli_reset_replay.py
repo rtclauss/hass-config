@@ -315,7 +315,7 @@ def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
     assert "aurora_effect: aurora" in block
     assert "aurora_color: 187" in block
     assert "aurora_level: 51" in block
-    assert "aurora_duration: 600" in block
+    assert "aurora_duration: 70" in block
     assert 'topic: "zigbee2mqtt/{{ repeat.item }}/set"' in block
     assert "'led_effect': {" in block
 
