@@ -960,28 +960,68 @@ template:
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, entry='None') %}
+            {% set home_street = states('input_text.home_address') | default('', true) | lower | trim | regex_replace(',.*$', '') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
+            {% set personal_summary = state_attr('calendar.ryan_claussen', 'message') | default('', true) | string %}
+            {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | string %}
+            {% set personal_location = state_attr('calendar.ryan_claussen', 'location') | default('', true) | string %}
+            {% set personal_text = [personal_summary, personal_description, personal_location] | join(' ') | lower %}
+            {% set personal_summary_lower = personal_summary | lower %}
+            {% set personal_location_lower = personal_location | lower | trim %}
+            {% set personal_all_day = state_attr('calendar.ryan_claussen', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set personal_route_summary = '→' in personal_summary %}
+            {% set personal_named_flight = personal_summary_lower.startswith('flight to ') or (personal_summary_lower.startswith('flight: ') and ' to ' in personal_summary_lower) %}
+            {% set personal_itinerary_marker = 'synced by flighty' in personal_text or 'created from an email you received in gmail' in personal_text or 'booking code:' in personal_text or 'flight time ' in personal_text %}
+            {% set personal_looks_like_flight = personal_route_summary or personal_named_flight or personal_itinerary_marker or ' airport' in personal_text or personal_location_lower.endswith(' intl.') or personal_location_lower.endswith(' international airport') %}
+            {% set personal_virtual = personal_location_lower.startswith('http://') or personal_location_lower.startswith('https://') %}
+            {% set personal_home_like = home_street != '' and home_street in personal_location_lower %}
             {% if personal_start_raw not in [none, ''] %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
-              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
+              {% if personal_start is not none and personal_start > now_local and personal_start < horizon and personal_location_lower != '' and not personal_all_day and not personal_virtual and not personal_home_like and not personal_looks_like_flight and 'nocharge' not in personal_text %}
                 {% set ns.start = personal_start %}
-                {% set ns.entry = 'Personal: ' ~ (state_attr('calendar.ryan_claussen', 'message') | default('', true)) %}
+                {% set ns.entry = 'Personal: ' ~ personal_summary %}
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+            {% set work_summary = state_attr('binary_sensor.work_trip_today', 'message') | default('', true) | string %}
+            {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | string %}
+            {% set work_location = state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | string %}
+            {% set work_text = [work_summary, work_description, work_location] | join(' ') | lower %}
+            {% set work_summary_lower = work_summary | lower %}
+            {% set work_location_lower = work_location | lower | trim %}
+            {% set work_all_day = state_attr('binary_sensor.work_trip_today', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set work_route_summary = '→' in work_summary %}
+            {% set work_named_flight = work_summary_lower.startswith('flight to ') or (work_summary_lower.startswith('flight: ') and ' to ' in work_summary_lower) %}
+            {% set work_itinerary_marker = 'synced by flighty' in work_text or 'created from an email you received in gmail' in work_text or 'booking code:' in work_text or 'flight time ' in work_text %}
+            {% set work_looks_like_flight = work_route_summary or work_named_flight or work_itinerary_marker or ' airport' in work_text or work_location_lower.endswith(' intl.') or work_location_lower.endswith(' international airport') %}
+            {% set work_virtual = work_location_lower.startswith('http://') or work_location_lower.startswith('https://') %}
+            {% set work_home_like = home_street != '' and home_street in work_location_lower %}
             {% if work_start_raw not in [none, ''] %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
-              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
+              {% if work_start is not none and work_start > now_local and work_start < horizon and work_location_lower != '' and not work_all_day and not work_virtual and not work_home_like and not work_looks_like_flight and 'nocharge' not in work_text and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
-                {% set ns.entry = 'Work: ' ~ (state_attr('binary_sensor.work_trip_today', 'message') | default('', true)) %}
+                {% set ns.entry = 'Work: ' ~ work_summary %}
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
+            {% set curling_summary = state_attr('calendar.curling', 'message') | default('', true) | string %}
+            {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | string %}
+            {% set curling_location = state_attr('calendar.curling', 'location') | default('', true) | string %}
+            {% set curling_text = [curling_summary, curling_description, curling_location] | join(' ') | lower %}
+            {% set curling_summary_lower = curling_summary | lower %}
+            {% set curling_location_lower = curling_location | lower | trim %}
+            {% set curling_all_day = state_attr('calendar.curling', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set curling_route_summary = '→' in curling_summary %}
+            {% set curling_named_flight = curling_summary_lower.startswith('flight to ') or (curling_summary_lower.startswith('flight: ') and ' to ' in curling_summary_lower) %}
+            {% set curling_itinerary_marker = 'synced by flighty' in curling_text or 'created from an email you received in gmail' in curling_text or 'booking code:' in curling_text or 'flight time ' in curling_text %}
+            {% set curling_looks_like_flight = curling_route_summary or curling_named_flight or curling_itinerary_marker or ' airport' in curling_text or curling_location_lower.endswith(' intl.') or curling_location_lower.endswith(' international airport') %}
+            {% set curling_virtual = curling_location_lower.startswith('http://') or curling_location_lower.startswith('https://') %}
+            {% set curling_home_like = home_street != '' and home_street in curling_location_lower %}
             {% if curling_start_raw not in [none, ''] %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
-              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
+              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and curling_location_lower != '' and not curling_all_day and not curling_virtual and not curling_home_like and not curling_looks_like_flight and 'nocharge' not in curling_text and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
-                {% set ns.entry = 'Curling: ' ~ (state_attr('calendar.curling', 'message') | default('', true)) %}
+                {% set ns.entry = 'Curling: ' ~ curling_summary %}
               {% endif %}
             {% endif %}
             {{ ns.entry }}
@@ -989,26 +1029,66 @@ template:
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, value='None') %}
+            {% set home_street = states('input_text.home_address') | default('', true) | lower | trim | regex_replace(',.*$', '') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
+            {% set personal_summary = state_attr('calendar.ryan_claussen', 'message') | default('', true) | string %}
+            {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | string %}
+            {% set personal_location = state_attr('calendar.ryan_claussen', 'location') | default('', true) | string %}
+            {% set personal_text = [personal_summary, personal_description, personal_location] | join(' ') | lower %}
+            {% set personal_summary_lower = personal_summary | lower %}
+            {% set personal_location_lower = personal_location | lower | trim %}
+            {% set personal_all_day = state_attr('calendar.ryan_claussen', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set personal_route_summary = '→' in personal_summary %}
+            {% set personal_named_flight = personal_summary_lower.startswith('flight to ') or (personal_summary_lower.startswith('flight: ') and ' to ' in personal_summary_lower) %}
+            {% set personal_itinerary_marker = 'synced by flighty' in personal_text or 'created from an email you received in gmail' in personal_text or 'booking code:' in personal_text or 'flight time ' in personal_text %}
+            {% set personal_looks_like_flight = personal_route_summary or personal_named_flight or personal_itinerary_marker or ' airport' in personal_text or personal_location_lower.endswith(' intl.') or personal_location_lower.endswith(' international airport') %}
+            {% set personal_virtual = personal_location_lower.startswith('http://') or personal_location_lower.startswith('https://') %}
+            {% set personal_home_like = home_street != '' and home_street in personal_location_lower %}
             {% if personal_start_raw not in [none, ''] %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
-              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
+              {% if personal_start is not none and personal_start > now_local and personal_start < horizon and personal_location_lower != '' and not personal_all_day and not personal_virtual and not personal_home_like and not personal_looks_like_flight and 'nocharge' not in personal_text %}
                 {% set ns.start = personal_start %}
                 {% set ns.value = personal_start_raw %}
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+            {% set work_summary = state_attr('binary_sensor.work_trip_today', 'message') | default('', true) | string %}
+            {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | string %}
+            {% set work_location = state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | string %}
+            {% set work_text = [work_summary, work_description, work_location] | join(' ') | lower %}
+            {% set work_summary_lower = work_summary | lower %}
+            {% set work_location_lower = work_location | lower | trim %}
+            {% set work_all_day = state_attr('binary_sensor.work_trip_today', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set work_route_summary = '→' in work_summary %}
+            {% set work_named_flight = work_summary_lower.startswith('flight to ') or (work_summary_lower.startswith('flight: ') and ' to ' in work_summary_lower) %}
+            {% set work_itinerary_marker = 'synced by flighty' in work_text or 'created from an email you received in gmail' in work_text or 'booking code:' in work_text or 'flight time ' in work_text %}
+            {% set work_looks_like_flight = work_route_summary or work_named_flight or work_itinerary_marker or ' airport' in work_text or work_location_lower.endswith(' intl.') or work_location_lower.endswith(' international airport') %}
+            {% set work_virtual = work_location_lower.startswith('http://') or work_location_lower.startswith('https://') %}
+            {% set work_home_like = home_street != '' and home_street in work_location_lower %}
             {% if work_start_raw not in [none, ''] %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
-              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
+              {% if work_start is not none and work_start > now_local and work_start < horizon and work_location_lower != '' and not work_all_day and not work_virtual and not work_home_like and not work_looks_like_flight and 'nocharge' not in work_text and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
                 {% set ns.value = work_start_raw %}
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
+            {% set curling_summary = state_attr('calendar.curling', 'message') | default('', true) | string %}
+            {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | string %}
+            {% set curling_location = state_attr('calendar.curling', 'location') | default('', true) | string %}
+            {% set curling_text = [curling_summary, curling_description, curling_location] | join(' ') | lower %}
+            {% set curling_summary_lower = curling_summary | lower %}
+            {% set curling_location_lower = curling_location | lower | trim %}
+            {% set curling_all_day = state_attr('calendar.curling', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set curling_route_summary = '→' in curling_summary %}
+            {% set curling_named_flight = curling_summary_lower.startswith('flight to ') or (curling_summary_lower.startswith('flight: ') and ' to ' in curling_summary_lower) %}
+            {% set curling_itinerary_marker = 'synced by flighty' in curling_text or 'created from an email you received in gmail' in curling_text or 'booking code:' in curling_text or 'flight time ' in curling_text %}
+            {% set curling_looks_like_flight = curling_route_summary or curling_named_flight or curling_itinerary_marker or ' airport' in curling_text or curling_location_lower.endswith(' intl.') or curling_location_lower.endswith(' international airport') %}
+            {% set curling_virtual = curling_location_lower.startswith('http://') or curling_location_lower.startswith('https://') %}
+            {% set curling_home_like = home_street != '' and home_street in curling_location_lower %}
             {% if curling_start_raw not in [none, ''] %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
-              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
+              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and curling_location_lower != '' and not curling_all_day and not curling_virtual and not curling_home_like and not curling_looks_like_flight and 'nocharge' not in curling_text and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
                 {% set ns.value = curling_start_raw %}
               {% endif %}
@@ -1018,26 +1098,66 @@ template:
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, value='None') %}
+            {% set home_street = states('input_text.home_address') | default('', true) | lower | trim | regex_replace(',.*$', '') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
+            {% set personal_summary = state_attr('calendar.ryan_claussen', 'message') | default('', true) | string %}
+            {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | string %}
+            {% set personal_location = state_attr('calendar.ryan_claussen', 'location') | default('', true) | string %}
+            {% set personal_text = [personal_summary, personal_description, personal_location] | join(' ') | lower %}
+            {% set personal_summary_lower = personal_summary | lower %}
+            {% set personal_location_lower = personal_location | lower | trim %}
+            {% set personal_all_day = state_attr('calendar.ryan_claussen', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set personal_route_summary = '→' in personal_summary %}
+            {% set personal_named_flight = personal_summary_lower.startswith('flight to ') or (personal_summary_lower.startswith('flight: ') and ' to ' in personal_summary_lower) %}
+            {% set personal_itinerary_marker = 'synced by flighty' in personal_text or 'created from an email you received in gmail' in personal_text or 'booking code:' in personal_text or 'flight time ' in personal_text %}
+            {% set personal_looks_like_flight = personal_route_summary or personal_named_flight or personal_itinerary_marker or ' airport' in personal_text or personal_location_lower.endswith(' intl.') or personal_location_lower.endswith(' international airport') %}
+            {% set personal_virtual = personal_location_lower.startswith('http://') or personal_location_lower.startswith('https://') %}
+            {% set personal_home_like = home_street != '' and home_street in personal_location_lower %}
             {% if personal_start_raw not in [none, ''] %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
-              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
+              {% if personal_start is not none and personal_start > now_local and personal_start < horizon and personal_location_lower != '' and not personal_all_day and not personal_virtual and not personal_home_like and not personal_looks_like_flight and 'nocharge' not in personal_text %}
                 {% set ns.start = personal_start %}
                 {% set ns.value = state_attr('calendar.ryan_claussen', 'all_day') %}
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+            {% set work_summary = state_attr('binary_sensor.work_trip_today', 'message') | default('', true) | string %}
+            {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | string %}
+            {% set work_location = state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | string %}
+            {% set work_text = [work_summary, work_description, work_location] | join(' ') | lower %}
+            {% set work_summary_lower = work_summary | lower %}
+            {% set work_location_lower = work_location | lower | trim %}
+            {% set work_all_day = state_attr('binary_sensor.work_trip_today', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set work_route_summary = '→' in work_summary %}
+            {% set work_named_flight = work_summary_lower.startswith('flight to ') or (work_summary_lower.startswith('flight: ') and ' to ' in work_summary_lower) %}
+            {% set work_itinerary_marker = 'synced by flighty' in work_text or 'created from an email you received in gmail' in work_text or 'booking code:' in work_text or 'flight time ' in work_text %}
+            {% set work_looks_like_flight = work_route_summary or work_named_flight or work_itinerary_marker or ' airport' in work_text or work_location_lower.endswith(' intl.') or work_location_lower.endswith(' international airport') %}
+            {% set work_virtual = work_location_lower.startswith('http://') or work_location_lower.startswith('https://') %}
+            {% set work_home_like = home_street != '' and home_street in work_location_lower %}
             {% if work_start_raw not in [none, ''] %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
-              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
+              {% if work_start is not none and work_start > now_local and work_start < horizon and work_location_lower != '' and not work_all_day and not work_virtual and not work_home_like and not work_looks_like_flight and 'nocharge' not in work_text and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
                 {% set ns.value = state_attr('binary_sensor.work_trip_today', 'all_day') %}
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
+            {% set curling_summary = state_attr('calendar.curling', 'message') | default('', true) | string %}
+            {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | string %}
+            {% set curling_location = state_attr('calendar.curling', 'location') | default('', true) | string %}
+            {% set curling_text = [curling_summary, curling_description, curling_location] | join(' ') | lower %}
+            {% set curling_summary_lower = curling_summary | lower %}
+            {% set curling_location_lower = curling_location | lower | trim %}
+            {% set curling_all_day = state_attr('calendar.curling', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% set curling_route_summary = '→' in curling_summary %}
+            {% set curling_named_flight = curling_summary_lower.startswith('flight to ') or (curling_summary_lower.startswith('flight: ') and ' to ' in curling_summary_lower) %}
+            {% set curling_itinerary_marker = 'synced by flighty' in curling_text or 'created from an email you received in gmail' in curling_text or 'booking code:' in curling_text or 'flight time ' in curling_text %}
+            {% set curling_looks_like_flight = curling_route_summary or curling_named_flight or curling_itinerary_marker or ' airport' in curling_text or curling_location_lower.endswith(' intl.') or curling_location_lower.endswith(' international airport') %}
+            {% set curling_virtual = curling_location_lower.startswith('http://') or curling_location_lower.startswith('https://') %}
+            {% set curling_home_like = home_street != '' and home_street in curling_location_lower %}
             {% if curling_start_raw not in [none, ''] %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
-              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
+              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and curling_location_lower != '' and not curling_all_day and not curling_virtual and not curling_home_like and not curling_looks_like_flight and 'nocharge' not in curling_text and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
                 {% set ns.value = state_attr('calendar.curling', 'all_day') %}
               {% endif %}
@@ -1046,10 +1166,23 @@ template:
         state: >-
           {% set now_local = now() %}
           {% set horizon = now_local + timedelta(hours=24) %}
+          {% set home_street = states('input_text.home_address') | default('', true) | lower | trim | regex_replace(',.*$', '') %}
           {% set ns = namespace(start=none, eligible=false) %}
           {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-          {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | lower %}
-          {% if personal_start_raw not in [none, ''] and 'nocharge' not in personal_description %}
+          {% set personal_summary = state_attr('calendar.ryan_claussen', 'message') | default('', true) | string %}
+          {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | string %}
+          {% set personal_location = state_attr('calendar.ryan_claussen', 'location') | default('', true) | string %}
+          {% set personal_text = [personal_summary, personal_description, personal_location] | join(' ') | lower %}
+          {% set personal_summary_lower = personal_summary | lower %}
+          {% set personal_location_lower = personal_location | lower | trim %}
+          {% set personal_all_day = state_attr('calendar.ryan_claussen', 'all_day') in [true, 'true', 'True', 'on'] %}
+          {% set personal_route_summary = '→' in personal_summary %}
+          {% set personal_named_flight = personal_summary_lower.startswith('flight to ') or (personal_summary_lower.startswith('flight: ') and ' to ' in personal_summary_lower) %}
+          {% set personal_itinerary_marker = 'synced by flighty' in personal_text or 'created from an email you received in gmail' in personal_text or 'booking code:' in personal_text or 'flight time ' in personal_text %}
+          {% set personal_looks_like_flight = personal_route_summary or personal_named_flight or personal_itinerary_marker or ' airport' in personal_text or personal_location_lower.endswith(' intl.') or personal_location_lower.endswith(' international airport') %}
+          {% set personal_virtual = personal_location_lower.startswith('http://') or personal_location_lower.startswith('https://') %}
+          {% set personal_home_like = home_street != '' and home_street in personal_location_lower %}
+          {% if personal_start_raw not in [none, ''] and personal_location_lower != '' and not personal_all_day and not personal_virtual and not personal_home_like and not personal_looks_like_flight and 'nocharge' not in personal_text %}
             {% set personal_start = personal_start_raw | as_datetime | as_local %}
             {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
               {% set ns.start = personal_start %}
@@ -1057,8 +1190,20 @@ template:
             {% endif %}
           {% endif %}
           {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-          {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | lower %}
-          {% if work_start_raw not in [none, ''] and 'nocharge' not in work_description %}
+          {% set work_summary = state_attr('binary_sensor.work_trip_today', 'message') | default('', true) | string %}
+          {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | string %}
+          {% set work_location = state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | string %}
+          {% set work_text = [work_summary, work_description, work_location] | join(' ') | lower %}
+          {% set work_summary_lower = work_summary | lower %}
+          {% set work_location_lower = work_location | lower | trim %}
+          {% set work_all_day = state_attr('binary_sensor.work_trip_today', 'all_day') in [true, 'true', 'True', 'on'] %}
+          {% set work_route_summary = '→' in work_summary %}
+          {% set work_named_flight = work_summary_lower.startswith('flight to ') or (work_summary_lower.startswith('flight: ') and ' to ' in work_summary_lower) %}
+          {% set work_itinerary_marker = 'synced by flighty' in work_text or 'created from an email you received in gmail' in work_text or 'booking code:' in work_text or 'flight time ' in work_text %}
+          {% set work_looks_like_flight = work_route_summary or work_named_flight or work_itinerary_marker or ' airport' in work_text or work_location_lower.endswith(' intl.') or work_location_lower.endswith(' international airport') %}
+          {% set work_virtual = work_location_lower.startswith('http://') or work_location_lower.startswith('https://') %}
+          {% set work_home_like = home_street != '' and home_street in work_location_lower %}
+          {% if work_start_raw not in [none, ''] and work_location_lower != '' and not work_all_day and not work_virtual and not work_home_like and not work_looks_like_flight and 'nocharge' not in work_text %}
             {% set work_start = work_start_raw | as_datetime | as_local %}
             {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
               {% set ns.start = work_start %}
@@ -1066,8 +1211,20 @@ template:
             {% endif %}
           {% endif %}
           {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-          {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | lower %}
-          {% if curling_start_raw not in [none, ''] and 'nocharge' not in curling_description %}
+          {% set curling_summary = state_attr('calendar.curling', 'message') | default('', true) | string %}
+          {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | string %}
+          {% set curling_location = state_attr('calendar.curling', 'location') | default('', true) | string %}
+          {% set curling_text = [curling_summary, curling_description, curling_location] | join(' ') | lower %}
+          {% set curling_summary_lower = curling_summary | lower %}
+          {% set curling_location_lower = curling_location | lower | trim %}
+          {% set curling_all_day = state_attr('calendar.curling', 'all_day') in [true, 'true', 'True', 'on'] %}
+          {% set curling_route_summary = '→' in curling_summary %}
+          {% set curling_named_flight = curling_summary_lower.startswith('flight to ') or (curling_summary_lower.startswith('flight: ') and ' to ' in curling_summary_lower) %}
+          {% set curling_itinerary_marker = 'synced by flighty' in curling_text or 'created from an email you received in gmail' in curling_text or 'booking code:' in curling_text or 'flight time ' in curling_text %}
+          {% set curling_looks_like_flight = curling_route_summary or curling_named_flight or curling_itinerary_marker or ' airport' in curling_text or curling_location_lower.endswith(' intl.') or curling_location_lower.endswith(' international airport') %}
+          {% set curling_virtual = curling_location_lower.startswith('http://') or curling_location_lower.startswith('https://') %}
+          {% set curling_home_like = home_street != '' and home_street in curling_location_lower %}
+          {% if curling_start_raw not in [none, ''] and curling_location_lower != '' and not curling_all_day and not curling_virtual and not curling_home_like and not curling_looks_like_flight and 'nocharge' not in curling_text %}
             {% set curling_start = curling_start_raw | as_datetime | as_local %}
             {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
               {% set ns.start = curling_start %}
@@ -1113,26 +1270,45 @@ template:
           {% set now_local = now() %}
           {% set horizon = now_local + timedelta(hours=24) %}
           {% set ns = namespace(start=none, value=states('input_text.home_address')) %}
+          {% set home_street = states('input_text.home_address') | default('', true) | lower | trim | regex_replace(',.*$', '') %}
           {% set candidates = [
             {
               'start_raw': state_attr('calendar.ryan_claussen', 'start_time'),
-              'location': state_attr('calendar.ryan_claussen', 'location') | default('', true) | trim
+              'location': state_attr('calendar.ryan_claussen', 'location') | default('', true) | string,
+              'summary': state_attr('calendar.ryan_claussen', 'message') | default('', true) | string,
+              'description': state_attr('calendar.ryan_claussen', 'description') | default('', true) | string,
+              'all_day': state_attr('calendar.ryan_claussen', 'all_day') in [true, 'true', 'True', 'on']
             },
             {
               'start_raw': state_attr('binary_sensor.work_trip_today', 'start_time'),
-              'location': state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | trim
+              'location': state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | string,
+              'summary': state_attr('binary_sensor.work_trip_today', 'message') | default('', true) | string,
+              'description': state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | string,
+              'all_day': state_attr('binary_sensor.work_trip_today', 'all_day') in [true, 'true', 'True', 'on']
             },
             {
               'start_raw': state_attr('calendar.curling', 'start_time'),
-              'location': state_attr('calendar.curling', 'location') | default('', true) | trim
+              'location': state_attr('calendar.curling', 'location') | default('', true) | string,
+              'summary': state_attr('calendar.curling', 'message') | default('', true) | string,
+              'description': state_attr('calendar.curling', 'description') | default('', true) | string,
+              'all_day': state_attr('calendar.curling', 'all_day') in [true, 'true', 'True', 'on']
             }
           ] %}
           {% for candidate in candidates %}
-            {% if candidate.start_raw not in [none, ''] and candidate.location != '' %}
+            {% set candidate_location_lower = candidate.location | lower | trim %}
+            {% set candidate_summary_lower = candidate.summary | lower %}
+            {% set candidate_text = [candidate.summary, candidate.description, candidate.location] | join(' ') | lower %}
+            {% set candidate_route_summary = '→' in candidate.summary %}
+            {% set candidate_named_flight = candidate_summary_lower.startswith('flight to ') or (candidate_summary_lower.startswith('flight: ') and ' to ' in candidate_summary_lower) %}
+            {% set candidate_itinerary_marker = 'synced by flighty' in candidate_text or 'created from an email you received in gmail' in candidate_text or 'booking code:' in candidate_text or 'flight time ' in candidate_text %}
+            {% set candidate_looks_like_flight = candidate_route_summary or candidate_named_flight or candidate_itinerary_marker or ' airport' in candidate_text or candidate_location_lower.endswith(' intl.') or candidate_location_lower.endswith(' international airport') %}
+            {% set candidate_virtual = candidate_location_lower.startswith('http://') or candidate_location_lower.startswith('https://') %}
+            {% set candidate_home_like = home_street != '' and home_street in candidate_location_lower %}
+            {% if candidate.start_raw not in [none, ''] and candidate_location_lower != '' and not candidate.all_day and not candidate_virtual and not candidate_home_like and not candidate_looks_like_flight and 'nocharge' not in candidate_text %}
               {% set candidate_start = candidate.start_raw | as_datetime | as_local %}
               {% if candidate_start is not none and candidate_start > now_local and candidate_start < horizon and (ns.start is none or candidate_start < ns.start) %}
                 {% set ns.start = candidate_start %}
-                {% set ns.value = candidate.location %}
+                {% set ns.value = candidate.location | trim %}
               {% endif %}
             {% endif %}
           {% endfor %}
