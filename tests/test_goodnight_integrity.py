@@ -140,6 +140,16 @@ def test_bed_lamps_off_only_finishes_turning_off_lights() -> None:
         assert token not in block
 
 
+def test_basement_lights_auto_on_respects_plex_basement_playback() -> None:
+    block = _automation_block(LIGHT_PATH, "basement_lights_auto_on")
+
+    assert "media_player.basement" in block
+    assert "media_player.plex_basement_apple_tv" in block
+    assert "condition: not" in block
+    assert "condition: or" in block
+    assert "light.basement_great_room" in block
+
+
 def test_tv_bed_prep_stops_short_of_full_goodnight_shutdown() -> None:
     block = _automation_block(TV_PATH, "tv_off_at_night_bed_prep")
 
