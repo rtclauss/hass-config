@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 
@@ -34,36 +33,28 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_two_minute_holiday_loops_use_half_minute_indexing() -> None:
-    st_andrews = _automation_block("st_andrews_day_light_loop")
-    halloween = _automation_block("halloween_light_loop")
+def test_single_outdoor_holiday_loop_replaces_legacy_holiday_loop_automations() -> None:
+    text = HOLIDAYS_PATH.read_text(encoding="utf-8")
 
-    assert 'minutes: "/2"' in st_andrews
-    assert 'minutes: "/2"' in halloween
-
-    assert (
-        "scene.scene_st_andrews_day_outdoors_{{ (now().minute // 2) % 4 + 1 | int }}"
-        in st_andrews
-    )
-    assert "scene.scene_st_andrews_day_outdoors_{{ now().minute % 4 + 1 | int }}" not in st_andrews
-
-    assert (
-        "scene.scene_halloween_outdoors_{{ (now().minute // 2) % 4 + 1 | int }}" in halloween
-    )
-    assert "scene.scene_halloween_outdoors_{{ now().minute % 4 + 1 | int }}" not in halloween
+    assert "- id: outdoor_holiday_light_loop" in text
+    assert "- id: christmas_outside_light_loop_1" not in text
+    assert "- id: st_andrews_day_light_loop" not in text
+    assert "- id: halloween_light_loop" not in text
 
 
-def test_two_minute_holiday_loops_can_reach_all_four_scenes() -> None:
-    scene_indexes = {(minute // 2) % 4 + 1 for minute in range(0, 60, 2)}
+def test_outdoor_holiday_loop_uses_active_outdoor_holiday_selector_and_script() -> None:
+    block = _automation_block("outdoor_holiday_light_loop")
 
-    assert scene_indexes == {1, 2, 3, 4}
+    assert 'minutes: "/1"' in block
+    assert "states('sensor.active_outdoor_holiday') | trim" in block
+    assert "action: script.apply_outdoor_holiday_scene" in block
+    assert 'holiday_key: "{{ states(\'sensor.active_outdoor_holiday\') | trim }}"' in block
 
 
-def test_christmas_loop_keeps_per_minute_rotation() -> None:
-    christmas = _automation_block("christmas_outside_light_loop_1")
+def test_christmas_toggle_only_manages_tree_automations() -> None:
+    block = _automation_block("toggle_christmas_automations_on_season_change")
 
-    assert 'minutes: "/1"' in christmas
-    assert "scene.scene_christmas_outdoors_{{ now().minute % 4 + 1 | int }}" in christmas
-
-    scene_indexes = {minute % 4 + 1 for minute in range(60)}
-    assert scene_indexes == {1, 2, 3, 4}
+    assert "automation.christmas_tree_on" in block
+    assert "automation.christmas_tree_off_midnight" in block
+    assert "automation.christmas_lights_off_bedroom_off" in block
+    assert "automation.christmas_outside_light_loop_1" not in block
