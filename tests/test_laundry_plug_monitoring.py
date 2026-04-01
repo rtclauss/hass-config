@@ -111,7 +111,7 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert "input_boolean.washer_wet_load_pending" in washer_reminder
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_reminder
     assert "input_datetime.washer_finished_at" in washer_reminder
-    assert "18 * 60 * 60" in washer_reminder
+    assert "24 * 60 * 60" in washer_reminder
     assert "option: MUSTY" in washer_reminder
     assert "binary_sensor.front_load_washer_wash_completed" not in washer_reminder
 

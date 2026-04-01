@@ -213,7 +213,7 @@ automation:
 
   - id: washer_reminder
     alias: washer_reminder
-    description: Escalate a finished load to MUSTY when wet clothes stay in the closed washer past the rewash threshold.
+    description: Escalate a finished load to MUSTY when wet clothes stay in the closed washer for 24 hours after the cycle completes.
     trigger:
       - trigger: time_pattern
         minutes: "/10"
@@ -236,7 +236,7 @@ automation:
         value_template: >-
           {% set finished = states('input_datetime.washer_finished_at') %}
           {{ finished not in ['unknown', 'unavailable', 'none', '']
-             and as_timestamp(now()) - as_timestamp(finished) >= 18 * 60 * 60 }}
+             and as_timestamp(now()) - as_timestamp(finished) >= 24 * 60 * 60 }}
     action:
       - action: input_select.select_option
         target:
