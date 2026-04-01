@@ -42,6 +42,7 @@ jobs:
             configuration.yaml \
             automations.yaml \
             blueprints \
+            esphome \
             packages \
             zigbee2mqtt
 
@@ -83,15 +84,36 @@ jobs:
             exit 0
           fi
 
+          changed_esphome_files=$(printf '%s\n' "$diff_output" | grep -E '^esphome/.*\.ya?ml$' | sort -u || true)
+
           config_files=()
+          package_change=false
+
           while IFS= read -r config; do
             [[ -z "$config" ]] && continue
-            if [[ -f "$config" ]]; then
-              config_files+=("$config")
-            else
-              echo "Skipping removed ESPHome config: $config"
+
+            if [[ "$config" =~ ^esphome/[^/]+\.ya?ml$ ]]; then
+              if [[ -f "$config" ]]; then
+                config_files+=("$config")
+              else
+                echo "Skipping removed ESPHome config: $config"
+              fi
+              continue
             fi
-          done < <(printf '%s\n' "$diff_output" | grep -E '^esphome/.*\.ya?ml$' | sort -u || true)
+
+            package_change=true
+          done <<< "$changed_esphome_files"
+
+          if [[ "$package_change" == "true" ]]; then
+            while IFS= read -r config; do
+              [[ -z "$config" ]] && continue
+              config_files+=("$config")
+            done < <(grep -l "^packages:" esphome/*.yaml || true)
+          fi
+
+          if [[ ${#config_files[@]} -gt 0 ]]; then
+            mapfile -t config_files < <(printf '%s\n' "${config_files[@]}" | sort -u)
+          fi
 
           if [[ ${#config_files[@]} -eq 0 ]]; then
             echo "esphome_changed=false" >> "$GITHUB_OUTPUT"
