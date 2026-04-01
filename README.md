@@ -234,6 +234,7 @@ Software on the NUC:
 * [Adaptive Lighting](https://github.com/basnijholt/adaptive-lighting)
 
 **AppDaemon Apps:**
+* Sync workflow: [`docs/appdaemon_sync.md`](docs/appdaemon_sync.md) keeps the tracked `appdaemon/` tree aligned with the live Supervisor add-on under `addon_configs`.
 * [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location tracking.  Uses bayesian data to eliminate red-herrings when arriving at home.  Could be extended to other zones if you have multiple `device_tracker`s
 * [Lighting Fade-In](appdaemon/apps/brighten_lights.py) - Fades in lights from `off` over a pre-defined interval on a work (non-weekend, non-holiday) day.
 * [Music Fade-in](appdaemon/apps/fade_in_music.py) - Fades in music when I wake up in the morning
