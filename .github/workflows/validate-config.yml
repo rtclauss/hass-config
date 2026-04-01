@@ -13,6 +13,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # Home Assistant 2026.4.0 regressed `check_config` for trigger-based automation,
+  # script, and template validation. Keep this pinned until upstream fixes
+  # home-assistant/core#167066 in a stable release.
+  HOME_ASSISTANT_CHECK_CONFIG_IMAGE: ghcr.io/home-assistant/home-assistant:2026.3.4
+
 concurrency:
   group: validate-home-assistant-config-${{ github.ref }}
   cancel-in-progress: true
@@ -275,7 +281,7 @@ jobs:
 
           docker run --rm \
             -v "${{ github.workspace }}:/config" \
-            ghcr.io/home-assistant/home-assistant:stable \
+            "$HOME_ASSISTANT_CHECK_CONFIG_IMAGE" \
             python -m homeassistant --config /config --script check_config 2>&1 | tee check-config.log
 
           if grep -Eq "(Failed config|ERROR:homeassistant\\.config:Invalid config|ERROR:homeassistant\\.config:Error loading)" check-config.log; then
