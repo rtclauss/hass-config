@@ -36,9 +36,11 @@ def _automation_block(automation_id: str) -> str:
 def test_battery_template_sensors_scan_all_battery_device_class_entities() -> None:
     block_20 = _sensor_block("battery_low_20")
     block_10 = _sensor_block("battery_low_10")
+    block_dead = _sensor_block("battery_dead")
 
     assert "battery_exclude_entities: []" in block_20
     assert "variables: *battery_monitor_exclusions" in block_10
+    assert "variables: *battery_monitor_exclusions" in block_dead
 
     for block, threshold in ((block_20, "20"), (block_10, "10")):
         assert f"default_entity_id: sensor.battery_low_{threshold}" in block
@@ -48,6 +50,16 @@ def test_battery_template_sensors_scan_all_battery_device_class_entities() -> No
         assert "tracked_count:" in block
         assert "summary: >-" in block
         assert "battery.state ~ '%'" in block
+
+    assert "default_entity_id: sensor.battery_dead" in block_dead
+    assert "selectattr('attributes.device_class', 'eq', 'battery')" in block_dead
+    assert "rejectattr('entity_id', 'in', battery_exclude_entities)" in block_dead
+    assert "selectattr('entity_id', 'search', '_battery$')" in block_dead
+    assert "if battery.state == 'unavailable'" in block_dead
+    assert "tracked_count:" in block_dead
+    assert "summary: >-" in block_dead
+    assert "battery.state ~ '%'" not in block_dead
+    assert "laptop/vacuum battery_level" in block_dead
 
 
 def test_battery_automations_update_notifications_from_dynamic_sensor_summaries() -> None:
@@ -81,6 +93,31 @@ def test_battery_automations_update_notifications_from_dynamic_sensor_summaries(
         assert f"Battery Sensors Below {threshold}% (" not in block
 
 
+def test_battery_dead_automation_updates_notifications_for_unavailable_battery_sensors() -> None:
+    block = _automation_block("notify_battery_dead")
+
+    assert "mode: queued" in block
+    assert "id: summary_change" in block
+    assert "attribute: summary" in block
+    assert "trigger: homeassistant" in block
+    assert "id: startup_sync" in block
+    assert "persistent_notification.create" in block
+    assert "persistent_notification.dismiss" in block
+    assert "notify.all" in block
+    assert "states('sensor.battery_dead')" in block
+    assert "state_attr('sensor.battery_dead', 'summary')" in block
+    assert "battery_label" in block
+    assert "battery_title" in block
+    assert "battery_message" in block
+    assert "battery sensor' if battery_count == 1 else 'battery sensors" in block
+    assert "Affected sensor' if battery_count == 1 else 'Affected sensors" in block
+    assert "trigger.id == 'summary_change'" in block
+    assert "count_increased" in block
+    assert "notification_id: battery-dead" in block
+    assert "offline" in block
+    assert "Do not infer dead batteries from last_seen here" not in block
+
+
 def test_logbook_excludes_current_battery_monitor_entities_instead_of_stale_ones() -> None:
     text = CONFIG_PATH.read_text(encoding="utf-8")
 
@@ -91,6 +128,13 @@ def test_logbook_excludes_current_battery_monitor_entities_instead_of_stale_ones
         "sensor.battery_low_10",
     ):
         assert entity_id in text
+
+    package_text = BATTERIES_PATH.read_text(encoding="utf-8")
+    for entity_id in (
+        "notify_battery_dead",
+        "sensor.battery_dead",
+    ):
+        assert entity_id in package_text
 
     for stale_entity_id in (
         "automation.battery_sensor_from_attributes",
