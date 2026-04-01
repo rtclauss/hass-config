@@ -1,0 +1,113 @@
+# # TODO replace when move finished
+# schedy_heating: # This is our app instance name.
+#   module: hass_apps_loader
+#   class: SchedyApp
+
+#   #debug: true
+
+#   actor_type: thermostat
+
+#   expression_environment: |
+#     def hvac_mode():
+#       return state("climate.tiki_room")
+
+#     def zeke_location():
+#       return state("person.ryan")
+
+#     def guest_mode_on():
+#       return is_on("input_boolean.guest_mode")
+
+#     def egress_open():
+#       return is_on("group.egress_points")
+
+#   schedule_snippets:
+#     # only heat for tiki
+#     cooling_season:
+#       - weekdays: 1-5
+#         v: 75
+#         rules:
+#           - x: "85 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
+#           - { start: "20:30", end: "07:00", weekdays: 1-5, v: 74 }
+#           - { start: "20:30", end: "08:30", weekdays: 6-7, v: 74 }
+#           - x: "74 if zeke_location() == 'home' else Next()"
+#       - weekdays: 6-7
+#         v: 74
+#         rules:
+#           - { v: 74, start: "00:00", end: "06:00" }
+#           - x: "74 if zeke_location() == 'home' else Next()"
+#           - x: "85 if zeke_location() != 'home' else Next()"
+
+#     heating_season:
+#       - weekdays: 1-5
+#         v: 68
+#         rules:
+#           - x: "55 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
+#           - { start: "06:00", end: "10:00", v: 68 }
+#           - { start: "10:30", end: "14:30", v: 68 }
+#           - { start: "17:00", end: "22:30", v: 68 }
+#           - { start: "22:30-1d", end: "06:00+1d", v: 60 }
+#           - x: "68 if zeke_location() == 'home' else Next()"
+#           - x: "Next() if guest_mode_on() else Break()"
+#           - { v: 60, start: "00:00", end: "06:00" }
+#           - { v: 68, start: "06:00", end: "00:00" }
+
+#       - weekdays: 6-7
+#         v: 68
+#         rules:
+#           - x: "OFF"
+#           - x: "55 if zeke_location() != 'home' and guest_mode_on() != True else Next()"
+#           - { start: "10:30", end: "13:30", v: 68 }
+#           - { start: "13:30", end: "15:00", v: 60 }
+#           - { start: "17:00", end: "22:30", v: 68 }
+#           - { start: "22:30-1d", end: "10:30+1d", v: 60 }
+#           - x: "Next() if guest_mode_on() else Break()"
+#           - { v: 60, start: "00:00", end: "06:00" }
+#           - { start: "07:00", end: "22:30", v: 68 }
+#           - { start: "22:30-1d", end: "06:00+1d", v: 60 }
+
+#   # schedule_append:
+#   #   - v: 'OFF'
+
+#   schedule_prepend:
+#     - x: "Mark(OFF, Mark.OVERLAY) if is_on('group.egress_points') else Next()"
+
+#   rooms:
+#     tiki_room:
+#       actors:
+#         climate.tiki_room:
+#           supports_hvac_modes: false
+#           max_temp: 90
+#           min_temp: 60
+#       rescheduling_delay: 240
+#       schedule:
+#         - x: "IncludeSchedule(schedule_snippets['cooling_season']) if hvac_mode() == 'cool' else Next()"
+#         - x: "IncludeSchedule(schedule_snippets['heating_season']) if hvac_mode() == 'heat' else Break()"
+#     # basement:
+#     #   actors:
+#     #     climate.basement:
+#     #       max_temp: 90
+#     #       min_temp: 60
+#     #   rescheduling_delay: 240
+#     #   schedule:
+#     #     - v: "OFF"
+#     #       rules:
+#     #         - x: "Next() if guest_mode_on() else Break()"
+#     #         - { v: 60, start: "00:00", end: "06:00" }
+#     #         - { v: 70, start: "06:00" }
+#     #     - v: "OFF"
+
+#   statistics:
+#     tiki_room_temp_delta:
+#       type: temp_delta
+#     # basement_temp_delta:
+#     #   type: temp_delta
+
+#   watched_entities:
+#     - climate.tiki_room
+#     - input_datetime.next_work_meeting
+#     - input_boolean.trip
+#     - person.ryan
+#     - binary_sensor.workday_sensor
+#     - group.egress_points
+#     - sensor.time
+#     - input_boolean.guest_mode
