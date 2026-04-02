@@ -648,6 +648,15 @@ script:
     alias: "Prepare bedroom Music Assistant group"
     mode: restart
     sequence:
+      - alias: "Split bedroom wake-up players before regrouping"
+        continue_on_error: true
+        action: media_player.unjoin
+        target:
+          entity_id:
+            - media_player.bedroom_sonos_2
+            - media_player.bathroom_sonos_2
+            - media_player.den_sonos_2
+            - media_player.office_sonos_2
       - if:
           - alias: "Check if guests are here."
             condition: state
@@ -666,15 +675,6 @@ script:
                 - media_player.den_sonos_2
                 - media_player.office_sonos_2
         else:
-          - alias: "Split guest-area players before regrouping"
-            continue_on_error: true
-            action: media_player.unjoin
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
-                - media_player.den_sonos_2
-                - media_player.office_sonos_2
           - alias: "Limit wake-up audio to bedroom and bathroom"
             continue_on_error: true
             action: media_player.join
@@ -696,6 +696,16 @@ script:
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
     sequence:
+      - alias: "Split arrival players before regrouping"
+        continue_on_error: true
+        action: media_player.unjoin
+        target:
+          entity_id:
+            - media_player.bedroom_sonos_2
+            - media_player.bathroom_sonos_2
+            - media_player.den_sonos_2
+            - media_player.office_sonos_2
+            - media_player.tiki_room_2
       - if:
           - alias: "Check if guests are here."
             condition: state
@@ -715,16 +725,6 @@ script:
                 - media_player.office_sonos_2
                 - media_player.tiki_room_2
         else:
-          - alias: "Split guest-area players before regrouping"
-            continue_on_error: true
-            action: media_player.unjoin
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
-                - media_player.den_sonos_2
-                - media_player.office_sonos_2
-                - media_player.tiki_room_2
           - alias: "Keep arrival audio in bedroom suite only"
             continue_on_error: true
             action: media_player.join
@@ -734,6 +734,14 @@ script:
             data:
               group_members:
                 - media_player.bathroom_sonos_2
+
+  music_assistant_try_join_arrival_group_after_play:
+    alias: "Try joining arrival Music Assistant followers after playback"
+    mode: restart
+    sequence:
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_prepare_arrival_group
 
   music_assistant_prepare_house_party_group:
     alias: "Prepare house party Music Assistant group"
@@ -1052,6 +1060,9 @@ script:
           media_id: "{{ radio_uri }}"
           media_type: radio
           enqueue: replace
+      - action: script.turn_on
+        target:
+          entity_id: script.music_assistant_try_join_bedroom_group_after_play
       - repeat:
           sequence:
             - alias: "Increase Volume by 0.01"
@@ -1447,6 +1458,9 @@ script:
         data:
           entity_id: "{{ playback_entity }}"
           spotify_uri: "{{ playlist }}"
+      - action: script.turn_on
+        target:
+          entity_id: script.music_assistant_try_join_arrival_group_after_play
       - action: logbook.log
         data:
           entity_id: "{{ playback_entity }}"
@@ -1847,6 +1861,9 @@ script:
         data:
           entity_id: media_player.bedroom_sonos_2
           spotify_uri: "{{ playlist }}"
+      - action: script.turn_on
+        target:
+          entity_id: script.music_assistant_try_join_bedroom_group_after_play
 
 ########################
 # Sensor
