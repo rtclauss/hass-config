@@ -115,6 +115,42 @@ def test_bedroom_group_helper_restarts_instead_of_blocking_new_runs() -> None:
     block = _script_block("music_assistant_prepare_bedroom_group")
 
     assert 'mode: restart' in block
+    assert 'action: media_player.unjoin' in block
+    for media_player in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.den_sonos_2",
+        "media_player.office_sonos_2",
+    ):
+        assert media_player in block
+
+
+def test_arrival_group_helper_resets_players_before_regrouping() -> None:
+    block = _script_block("music_assistant_prepare_arrival_group")
+
+    assert 'action: media_player.unjoin' in block
+    assert '"Join whole-house arrival group"' in block
+    for media_player in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.den_sonos_2",
+        "media_player.office_sonos_2",
+        "media_player.tiki_room_2",
+    ):
+        assert media_player in block
+
+
+def test_arrival_join_retry_runs_after_playback_starts() -> None:
+    helper_block = _script_block("music_assistant_try_join_arrival_group_after_play")
+    arrival_block = _script_block("spotify_arrival")
+
+    assert 'mode: restart' in helper_block
+    assert 'seconds: 2' in helper_block
+    assert 'action: script.music_assistant_prepare_arrival_group' in helper_block
+    assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' in arrival_block
+    assert arrival_block.index('action: script.music_assistant_play_spotify_uri') < arrival_block.index(
+        'entity_id: script.music_assistant_try_join_arrival_group_after_play'
+    )
 
 
 def test_bedtime_join_retry_runs_after_playback_starts() -> None:
@@ -126,6 +162,24 @@ def test_bedtime_join_retry_runs_after_playback_starts() -> None:
     assert 'action: script.music_assistant_prepare_bedroom_group' in helper_block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in bedtime_block
     assert bedtime_block.index('action: script.music_assistant_play_item') < bedtime_block.index(
+        'entity_id: script.music_assistant_try_join_bedroom_group_after_play'
+    )
+
+
+def test_radio_wakeup_join_retry_runs_after_playback_starts() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
+    assert block.index('action: music_assistant.play_media') < block.index(
+        'entity_id: script.music_assistant_try_join_bedroom_group_after_play'
+    )
+
+
+def test_spotify_wakeup_join_retry_runs_after_playback_starts() -> None:
+    block = _script_block("spotify_wake_up")
+
+    assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
+    assert block.index('action: script.music_assistant_play_spotify_uri') < block.index(
         'entity_id: script.music_assistant_try_join_bedroom_group_after_play'
     )
 
