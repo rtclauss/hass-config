@@ -3278,6 +3278,99 @@
               "cards": [
                 {
                   "type": "heading",
+                  "heading": "Vacuum Stalls"
+                },
+                {
+                  "type": "custom:mushroom-template-card",
+                  "entity": "sensor.valetudo_mainlevel_stall_status",
+                  "primary": "Ground Floor",
+                  "secondary": "{% set room = state_attr('sensor.valetudo_mainlevel_stall_status', 'room') %}\n{% set samples = state_attr('sensor.valetudo_mainlevel_stall_status', 'samples_without_progress') | default(0) %}\n{% if is_state('binary_sensor.valetudo_mainlevel_stalled', 'on') %}\nStalled in {{ room or 'unknown room' }}\n{{ samples }} unchanged samples\n{% elif is_state('sensor.valetudo_mainlevel_stall_status', 'monitoring') %}\nMonitoring\n{{ samples }} unchanged samples\n{% elif is_state('sensor.valetudo_mainlevel_stall_status', 'unavailable') %}\nTelemetry unavailable\n{% else %}\nIdle\n{% endif %}",
+                  "multiline_secondary": true,
+                  "icon": "mdi:robot-vacuum-alert",
+                  "icon_color": "{{ 'red' if is_state('binary_sensor.valetudo_mainlevel_stalled', 'on') else 'blue' if is_state('sensor.valetudo_mainlevel_stall_status', 'monitoring') else '' }}",
+                  "tap_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "custom:mushroom-template-card",
+                  "entity": "sensor.valetudo_den_stall_status",
+                  "primary": "Den",
+                  "secondary": "{% set room = state_attr('sensor.valetudo_den_stall_status', 'room') %}\n{% set samples = state_attr('sensor.valetudo_den_stall_status', 'samples_without_progress') | default(0) %}\n{% if is_state('binary_sensor.valetudo_den_stalled', 'on') %}\nStalled in {{ room or 'unknown room' }}\n{{ samples }} unchanged samples\n{% elif is_state('sensor.valetudo_den_stall_status', 'monitoring') %}\nMonitoring\n{{ samples }} unchanged samples\n{% elif is_state('sensor.valetudo_den_stall_status', 'unavailable') %}\nTelemetry unavailable\n{% else %}\nIdle\n{% endif %}",
+                  "multiline_secondary": true,
+                  "icon": "mdi:robot-vacuum-alert",
+                  "icon_color": "{{ 'red' if is_state('binary_sensor.valetudo_den_stalled', 'on') else 'blue' if is_state('sensor.valetudo_den_stall_status', 'monitoring') else '' }}",
+                  "tap_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "custom:mushroom-template-card",
+                  "entity": "sensor.valetudo_upstairs_vacuum_stall_status",
+                  "primary": "Upstairs",
+                  "secondary": "{% set room = state_attr('sensor.valetudo_upstairs_vacuum_stall_status', 'room') %}\n{% set samples = state_attr('sensor.valetudo_upstairs_vacuum_stall_status', 'samples_without_progress') | default(0) %}\n{% if is_state('binary_sensor.valetudo_upstairs_vacuum_stalled', 'on') %}\nStalled in {{ room or 'unknown room' }}\n{{ samples }} unchanged samples\n{% elif is_state('sensor.valetudo_upstairs_vacuum_stall_status', 'monitoring') %}\nMonitoring\n{{ samples }} unchanged samples\n{% elif is_state('sensor.valetudo_upstairs_vacuum_stall_status', 'unavailable') %}\nTelemetry unavailable\n{% else %}\nIdle\n{% endif %}",
+                  "multiline_secondary": true,
+                  "icon": "mdi:robot-vacuum-alert",
+                  "icon_color": "{{ 'red' if is_state('binary_sensor.valetudo_upstairs_vacuum_stalled', 'on') else 'blue' if is_state('sensor.valetudo_upstairs_vacuum_stall_status', 'monitoring') else '' }}",
+                  "tap_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "conditional",
+                  "conditions": [
+                    {
+                      "entity": "binary_sensor.valetudo_mainlevel_stalled",
+                      "state": "on"
+                    }
+                  ],
+                  "card": {
+                    "type": "picture-entity",
+                    "entity": "sensor.valetudo_mainlevel_stall_status",
+                    "name": "Ground Floor Stall Evidence",
+                    "show_state": false,
+                    "show_name": true
+                  }
+                },
+                {
+                  "type": "conditional",
+                  "conditions": [
+                    {
+                      "entity": "binary_sensor.valetudo_den_stalled",
+                      "state": "on"
+                    }
+                  ],
+                  "card": {
+                    "type": "picture-entity",
+                    "entity": "sensor.valetudo_den_stall_status",
+                    "name": "Den Stall Evidence",
+                    "show_state": false,
+                    "show_name": true
+                  }
+                },
+                {
+                  "type": "conditional",
+                  "conditions": [
+                    {
+                      "entity": "binary_sensor.valetudo_upstairs_vacuum_stalled",
+                      "state": "on"
+                    }
+                  ],
+                  "card": {
+                    "type": "picture-entity",
+                    "entity": "sensor.valetudo_upstairs_vacuum_stall_status",
+                    "name": "Upstairs Stall Evidence",
+                    "show_state": false,
+                    "show_name": true
+                  }
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
                   "heading": "Water Softener"
                 },
                 {
