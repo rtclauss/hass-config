@@ -29,6 +29,15 @@ The planner now normalizes Waze/Tesla duration inputs with Home Assistant's `as_
 
 The trip-selection template now only considers future departures inside the next 24 hours. Once a calendar departure is in the past, its `start_time` drops out of the planner inputs and the next planner recompute clears Tesla scheduled departure instead of leaving stale preconditioning or off-peak charging events behind.
 
+The planner only treats calendar entries as drive departures when they are timed away-from-home events with a concrete destination. It ignores:
+
+- all-day entries
+- entries with blank locations
+- virtual/URL locations
+- home-address events
+- flight and airport itinerary entries
+- events explicitly marked with `nocharge` in the description
+
 ### Alarm inputs
 
 - `input_boolean.weekday_alarm_on`
@@ -137,6 +146,22 @@ Behavior:
 - at `home`, a default-`80%` calendar departure can still set Tesla scheduled departure for cabin preconditioning without enabling Home Assistant-managed off-peak charging
 - preserves Tesla-app charging schedules at protected locations during cleanup by only clearing Tesla when the live scheduled-departure state still matches the stored HA-managed departure and Tesla is not advertising scheduled charging or off-peak charging
 
+### Calendar trip classification
+
+The planner now centralizes calendar filtering in:
+
+- `sensor.tesla_next_drive_departure`
+
+Behavior:
+
+- scans personal, work, and curling sources for the next timed routable drive departure inside the next 24 hours
+- treats `binary_sensor.upcoming_trip_charging` as a derived "this drive is long enough to justify extra charging" signal rather than as the source of truth for trip selection
+- ignores all-day events, blank locations, home-address events, URL/virtual events, and flight-style itineraries by default
+- supports explicit description overrides:
+  - `tesla:drive` forces a timed event with a real location to count as a drive departure
+  - `tesla:home`, `tesla:virtual`, `tesla:flight`, `tesla:ride`, and `tesla:ignore` force the planner to skip that event
+- uses `sensor.calendar_destination` as a simple projection of the canonical drive-departure sensor so routing and trip selection stay in sync
+
 ### Notifications
 
 The planner sends Tesla status notifications with a deep link to the storage dashboard Tesla view:
@@ -193,6 +218,7 @@ Manual regression cases worth checking in Template Developer Tools or against li
 - Tesla `sensor.nigori_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
 - A just-finished calendar departure disappears from `binary_sensor.upcoming_trip_charging` and clears Tesla scheduled departure on the next planner recompute.
 - A calendar event that is still upcoming but already inside the departure buffer skips scheduled preconditioning instead of creating a stale past-due Tesla schedule.
+- Home-address appointments, virtual appointments, blank-location reminders, flight itineraries, and all-day entries do not become Tesla drive departures.
 - At `home`, default-`80%` alarm plans do not create Tesla scheduled departure entries, while real calendar departures can still set Tesla scheduled departure for cabin preconditioning without taking over off-peak charging.
 - Alarm-only plans adjust charge limit and planner messaging but do not create Tesla scheduled departure or cabin-preconditioning overrides.
 - At `home`, a real calendar departure can still create or update Tesla scheduled departure/preconditioning whether the charge target stays at `80%` or rises above it, while only the non-default charge-target cases enable a temporary Home Assistant-managed off-peak charging override.
