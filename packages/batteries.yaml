@@ -92,8 +92,12 @@ template:
         icon: mdi:battery-20
         variables: &battery_monitor_exclusions
           # Exact entity_ids that should never appear in the low-battery monitor.
-          # Keep this empty unless a specific sensor should be suppressed.
-          battery_exclude_entities: []
+          # Exclude the monitor sensors themselves so they never recurse into
+          # their own summaries if Home Assistant marks them as battery class.
+          battery_exclude_entities:
+            - sensor.battery_low_20
+            - sensor.battery_low_10
+            - sensor.battery_dead
         state: >-
           {% set monitored_batteries = states.sensor
             | selectattr('attributes.device_class', 'eq', 'battery')
