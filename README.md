@@ -25,6 +25,7 @@
 # Use the pinned interpreter from .python-version (for example via pyenv)
 python -m pip install --upgrade pip yamllint
 python scripts/check_ha_python_support.py --python-version-file .python-version
+uv run --with pytest pytest
 ```
 
 ## Music Assistant Media Flow
@@ -149,6 +150,7 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
 
 - [House Transition Framework](docs/house_transition_framework.md)
 - [Room Intent Policy](docs/room_intent.yaml)
+- [Room Naming Model](docs/room_names.md)
 - [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
 - [Tesla Departure Planner](docs/tesla_departure_planner.md)
