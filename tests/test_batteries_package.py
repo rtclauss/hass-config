@@ -38,7 +38,13 @@ def test_battery_template_sensors_scan_all_battery_device_class_entities() -> No
     block_10 = _sensor_block("battery_low_10")
     block_dead = _sensor_block("battery_dead")
 
-    assert "battery_exclude_entities: []" in block_20
+    assert "battery_exclude_entities:" in block_20
+    for excluded_sensor in (
+        "sensor.battery_low_20",
+        "sensor.battery_low_10",
+        "sensor.battery_dead",
+    ):
+        assert excluded_sensor in block_20
     assert "variables: *battery_monitor_exclusions" in block_10
     assert "variables: *battery_monitor_exclusions" in block_dead
 
