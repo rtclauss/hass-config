@@ -598,21 +598,24 @@ script:
           - switch.adaptive_lighting_adapt_brightness_owner_suite
           - switch.adaptive_lighting_adapt_color_owner_suite
       - alias: "Turn on light at dimmest setting. Adaptive Lighting will apply"
+        continue_on_error: true
         action: light.turn_on
         data:
           entity_id:
             - light.owner_suite_lamps
             - light.bed_lightstrip
-          kelvin: 370
+          color_temp_kelvin: 2700
           brightness_pct: 1
       - delay:
           seconds: 5
-      - action: light.turn_on
+      - alias: "Ramp bedroom lights up to full wake-up brightness"
+        continue_on_error: true
+        action: light.turn_on
         data:
           entity_id:
             - light.owner_suite_lamps
             - light.bed_lightstrip
-          kelvin: 153
+          color_temp_kelvin: 6500
           brightness_pct: 100
           transition: 300
       - delay:
