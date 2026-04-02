@@ -146,6 +146,22 @@ Behavior:
 - at `home`, a default-`80%` calendar departure can still set Tesla scheduled departure for cabin preconditioning without enabling Home Assistant-managed off-peak charging
 - preserves Tesla-app charging schedules at protected locations during cleanup by only clearing Tesla when the live scheduled-departure state still matches the stored HA-managed departure and Tesla is not advertising scheduled charging or off-peak charging
 
+### Calendar trip classification
+
+The planner now centralizes calendar filtering in:
+
+- `sensor.tesla_next_drive_departure`
+
+Behavior:
+
+- scans personal, work, and curling sources for the next timed routable drive departure inside the next 24 hours
+- treats `binary_sensor.upcoming_trip_charging` as a derived "this drive is long enough to justify extra charging" signal rather than as the source of truth for trip selection
+- ignores all-day events, blank locations, home-address events, URL/virtual events, and flight-style itineraries by default
+- supports explicit description overrides:
+  - `tesla:drive` forces a timed event with a real location to count as a drive departure
+  - `tesla:home`, `tesla:virtual`, `tesla:flight`, `tesla:ride`, and `tesla:ignore` force the planner to skip that event
+- uses `sensor.calendar_destination` as a simple projection of the canonical drive-departure sensor so routing and trip selection stay in sync
+
 ### Notifications
 
 The planner sends Tesla status notifications with a deep link to the storage dashboard Tesla view:

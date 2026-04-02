@@ -76,26 +76,42 @@ def test_real_calendar_preconditioning_is_not_gated_by_temperature() -> None:
 def test_calendar_destination_ignores_blank_location_events_before_falling_back_home() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
-    assert "{% set ns = namespace(start=none, value=states('input_text.home_address')) %}" in package_text
-    assert "candidate_location_lower != ''" in package_text
-    assert "not candidate_virtual" in package_text
-    assert "not candidate_home_like" in package_text
-    assert "not candidate_looks_like_flight" in package_text
+    assert "default_entity_id: sensor.tesla_next_drive_departure" in package_text
+    assert "default_entity_id: sensor.calendar_destination" in package_text
+    assert "{% set plan_text = states('sensor.tesla_next_drive_departure') %}" in package_text
+    assert "{% set plan = {'l': states('input_text.home_address')} %}" in package_text
+    assert "{{ plan.l | default(states('input_text.home_address')) }}" in package_text
     assert "{% if (personal_meeting_time < curling_upcoming) %}" not in package_text
 
 
 def test_upcoming_trip_selector_ignores_home_virtual_blank_and_flight_events() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
-    assert "{% set home_street = states('input_text.home_address') | default('', true) | lower | trim | regex_replace(',.*$', '') %}" in package_text
-    assert "personal_location_lower != ''" in package_text
-    assert "not personal_all_day" in package_text
-    assert "not personal_virtual" in package_text
-    assert "not personal_home_like" in package_text
-    assert "not personal_looks_like_flight" in package_text
-    assert "'booking code:' in personal_text" in package_text
-    assert "'flight time ' in personal_text" in package_text
-    assert "personal_location_lower.startswith('https://')" in package_text
+    assert "{% set home_street = home_address | lower | trim | regex_replace(',.*$', '') %}" in package_text
+    assert "location_lower != '' and not virtual and not home_like and not looks_like_flight" in package_text
+    assert "{% elif candidate.all_day %}" in package_text
+    assert "{% elif explicit_home %}" in package_text
+    assert "{% elif explicit_virtual %}" in package_text
+    assert "{% elif explicit_flight %}" in package_text
+    assert "{% elif explicit_ride %}" in package_text
+    assert "{% elif explicit_drive %}" in package_text
+    assert "'booking code:' in text" in package_text
+    assert "'flight time ' in text" in package_text
+    assert "location_lower.startswith('https://')" in package_text
+
+
+def test_drive_selector_supports_explicit_description_overrides() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    for marker in (
+        "tesla:drive",
+        "tesla:home",
+        "tesla:virtual",
+        "tesla:flight",
+        "tesla:ride",
+        "tesla:ignore",
+    ):
+        assert marker in package_text
 
 
 def test_dashboard_copy_explains_alarm_only_days_and_home_schedule_override_logic() -> None:
