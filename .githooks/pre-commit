@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+if [ "${APPDAEMON_SYNC_SKIP:-0}" = "1" ]; then
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+
+# Only auto-sync when the repo copy is clean. If the user is already editing
+# appdaemon/ locally, leave their work alone and let them sync deliberately.
+if [ -n "$(git diff --name-only -- appdaemon)" ]; then
+  exit 0
+fi
+
+if [ -n "$(git diff --cached --name-only -- appdaemon)" ]; then
+  exit 0
+fi
+
+if [ -n "$(git ls-files --others --exclude-standard -- appdaemon)" ]; then
+  exit 0
+fi
+
+python3 "$repo_root/scripts/appdaemon_sync.py" pull --stage --quiet
