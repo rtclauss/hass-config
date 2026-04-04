@@ -105,6 +105,7 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
         key="hallway",
         preferred_label="Hallway",
         home_assistant_area="Hallway",
+        intent_key="hallway",
         zigbee2mqtt_namespaces=("Hall",),
         legacy_labels=("Hall",),
     ),
@@ -112,6 +113,7 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
         key="main_foyer",
         preferred_label="Main Foyer",
         home_assistant_area="Main Foyer",
+        intent_key="main_foyer",
         zigbee2mqtt_namespaces=("Main Foyer",),
     ),
     RoomNameSpec(
