@@ -457,6 +457,37 @@ automation:
         data:
           value: 0
 
+  - id: tesla_precondition_direct
+    alias: tesla_precondition_direct
+    mode: single
+    trigger:
+      - trigger: template
+        id: precondition_window
+        value_template: >-
+          {% set departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
+          {{ is_state('input_boolean.tesla_managed_departure_active', 'on')
+             and departure_ts > 0
+             and (departure_ts - 1800) | timestamp_local | as_datetime <= now()
+             and departure_ts | timestamp_local | as_datetime > now() }}
+    action:
+      - condition: template
+        value_template: >-
+          {% set departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
+          {{ is_state('input_boolean.tesla_managed_departure_active', 'on')
+             and departure_ts > 0
+             and departure_ts | timestamp_local | as_datetime > now() }}
+      - action: logbook.log
+        data:
+          entity_id: automation.tesla_precondition_direct
+          domain: automation
+          name: Tesla scheduled departure planner
+          message: >-
+            {% set departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
+            Direct preconditioning started 30 min before departure at {{ departure_ts | timestamp_custom('%a %I:%M %p', true) }}.
+      - action: climate.turn_on
+        target:
+          entity_id: climate.nigori_hvac_climate_system
+
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
     trigger:
