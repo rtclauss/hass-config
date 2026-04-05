@@ -41,6 +41,8 @@ This file tracks available or unused smart-home devices that can be repurposed f
 | Battery | Quantity | Notes |
 | --- | --- | --- |
 | `AAA` | 8 | Loose spare cells on hand for PARASOLL sensors, RODRET dimmers, BADRING leak sensors, BILRESA remotes, and other AAA-powered accessories. |
+| `AA` | 8 | Loose spare cells on hand for AA-powered accessories. |
+| `CR2032` | 4 | Loose spare cells on hand for CR2032-powered accessories. |
 
 ## Configured Zigbee2MQTT Devices
 
