@@ -57,13 +57,14 @@ def _automation_block(path: Path, automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_wake_up_script_uses_supported_color_temperature_fields() -> None:
+def test_wake_up_script_uses_supported_color_temperature_fields_and_keeps_running() -> None:
     block = _script_block(WORKDAY_PATH, "wake_up_script")
 
     assert "cover.owner_suite_blinds_ha" in block
     assert "color_temp_kelvin: 2700" in block
     assert "color_temp_kelvin: 6500" in block
     assert "\n          kelvin:" not in block
+    assert block.count("continue_on_error: true") >= 3
 
 
 def test_close_owner_suite_blinds_catches_evening_recovery_after_missed_sunset() -> None:
