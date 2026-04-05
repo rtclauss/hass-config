@@ -86,16 +86,21 @@ def test_battery_automations_update_notifications_from_dynamic_sensor_summaries(
         assert "notify.all" in block
         assert f"states('sensor.battery_low_{threshold}')" in block
         assert f"state_attr('sensor.battery_low_{threshold}', 'summary')" in block
+        assert f"notification_tag: low-battery-{threshold}" in block
         assert "battery_label" in block
         assert "battery_title" in block
         assert "battery_message" in block
         assert "battery sensor' if battery_count == 1 else 'battery sensors" in block
         assert "Affected sensor' if battery_count == 1 else 'Affected sensors" in block
-        assert "trigger.id == 'summary_change'" in block
-        assert "count_increased" in block
+        assert "condition: trigger" in block
+        assert "id: summary_change" in block
+        assert "battery_summary | trim != ''" in block
+        assert "message: clear_notification" in block
+        assert 'tag: "{{ notification_tag }}"' in block
+        assert "persistent: true" in block
+        assert "continue_on_error: true" in block
         assert f"notification_id: low-battery-{threshold}" in block
         assert f"below {threshold}%" in block
-        assert "trigger.from_state is not none" in block
         assert f"Battery Sensors Below {threshold}% (" not in block
 
 
@@ -112,13 +117,19 @@ def test_battery_dead_automation_updates_notifications_for_unavailable_battery_s
     assert "notify.all" in block
     assert "states('sensor.battery_dead')" in block
     assert "state_attr('sensor.battery_dead', 'summary')" in block
+    assert "notification_tag: battery-dead" in block
     assert "battery_label" in block
     assert "battery_title" in block
     assert "battery_message" in block
     assert "battery sensor' if battery_count == 1 else 'battery sensors" in block
     assert "Affected sensor' if battery_count == 1 else 'Affected sensors" in block
-    assert "trigger.id == 'summary_change'" in block
-    assert "count_increased" in block
+    assert "condition: trigger" in block
+    assert "id: summary_change" in block
+    assert "battery_summary | trim != ''" in block
+    assert "message: clear_notification" in block
+    assert 'tag: "{{ notification_tag }}"' in block
+    assert "persistent: true" in block
+    assert "continue_on_error: true" in block
     assert "notification_id: battery-dead" in block
     assert "offline" in block
     assert "Do not infer dead batteries from last_seen here" not in block
