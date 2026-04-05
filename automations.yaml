@@ -110,3 +110,50 @@
           power_state: false
         action: bond.set_light_power_tracked_state
   mode: restart
+- id: '1775314501816'
+  alias: Fan Off When Timer Ends
+  description: Turns off a fan when its corresponding timer expires
+  triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.owner_suite_fan_timer
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.owner_suite_bathroom_exhaust_timer
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.office_ceiling_fan_timer
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.basement_bathroom_exhaust_timer
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.den_ceiling_fan_timer
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.guest_room_fan_timer
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.guest_bathroom_exhaust_timer
+  actions:
+  - variables:
+      fan_map:
+        timer.owner_suite_fan_timer: fan.owner_suite
+        timer.owner_suite_bathroom_exhaust_timer: fan.owner_suite_bathroom_exhaust
+        timer.office_ceiling_fan_timer: fan.office_ceiling_fan
+        timer.basement_bathroom_exhaust_timer: fan.basement_bathroom_exhaust
+        timer.den_ceiling_fan_timer: fan.den_ceiling
+        timer.guest_room_fan_timer: fan.guest_room
+        timer.guest_bathroom_exhaust_timer: fan.guest_bathroom_exhaust
+  - action: fan.turn_off
+    target:
+      entity_id: '{{ fan_map[trigger.event.data.entity_id] }}'
+  mode: parallel
+  max: 7
