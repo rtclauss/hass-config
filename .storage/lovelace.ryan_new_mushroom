@@ -371,7 +371,7 @@
                   "type": "custom:mushroom-template-card",
                   "entity": "person.ryan",
                   "primary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Room confidence pending{% elif ns.best_score == 0 %}No likely room{% else %}{{ ns.best_name }}{% endif %}",
-                  "secondary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Deploy or reload the room confidence template sensors to populate this view.{% elif ns.best_score == 0 %}No room has positive confidence right now.{% else %}Score {{ ns.best_score }}{% if ns.best_binary %} • confident occupancy on{% else %} • below confident threshold{% endif %}{% endif %}",
+                  "secondary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Deploy or reload the room confidence template sensors to populate this view.{% elif ns.best_score == 0 %}No room has positive confidence right now.{% else %}Score {{ ns.best_score }}{% if ns.best_binary %} \u2022 confident occupancy on{% else %} \u2022 below confident threshold{% endif %}{% endif %}",
                   "icon": "mdi:crosshairs-gps",
                   "icon_color": "{% set rooms = ['sensor.bedroom_room_confidence', 'sensor.office_room_confidence', 'sensor.den_room_confidence', 'sensor.basement_room_confidence'] %} {% set ns = namespace(best_score=-1) %} {% for entity_id in rooms %}{% set score = states(entity_id) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_score = score %}{% endif %}{% endfor %} {% if ns.best_score >= 70 %}green{% elif ns.best_score >= 50 %}teal{% elif ns.best_score > 0 %}amber{% else %}grey{% endif %}",
                   "multiline_secondary": true,
@@ -610,6 +610,13 @@
                   "primary_info": "none"
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.owner_suite_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
                   "entity": "media_player.bedroom_sonos_2",
                   "group": false,
@@ -803,6 +810,13 @@
                   "icon": ""
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.owner_suite_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
                   "entity": "media_player.bathroom_sonos_2",
                   "artwork": "material",
@@ -929,6 +943,13 @@
                   "icon_animation": true,
                   "show_percentage_control": true,
                   "collapsible_controls": true
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.office_ceiling_fan_timer"
+                  ],
+                  "mushroom": true
                 },
                 {
                   "type": "custom:mushroom-light-card",
@@ -2114,6 +2135,13 @@
                   "name": "Exhaust",
                   "icon_animation": true,
                   "collapsible_controls": true
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.basement_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
                 }
               ]
             },
@@ -2268,6 +2296,13 @@
                   "show_percentage_control": true,
                   "collapsible_controls": true,
                   "show_oscillate_control": true
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.den_ceiling_fan_timer"
+                  ],
+                  "mushroom": true
                 },
                 {
                   "type": "custom:mini-media-player",
@@ -2486,6 +2521,13 @@
                   "show_oscillate_control": false
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.guest_room_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mushroom-light-card",
                   "entity": "light.guest_room_fan_switch"
                 },
@@ -2496,6 +2538,13 @@
                 {
                   "type": "custom:mushroom-fan-card",
                   "entity": "fan.guest_bathroom_exhaust"
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.guest_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
                 }
               ]
             }
@@ -2622,8 +2671,8 @@
           "cards": [
             {
               "type": "markdown",
-              "title": "Aircraft Overhead (≤5 mi, unlimited altitude)",
-              "content": "{% set st = states('sensor.closest_aircraft_overhead') %}\n{% if st in ['none','unknown','unavailable'] %}\nNo aircraft currently within 5 mi at any altitude.\n{% else %}\n{% set img = state_attr('sensor.closest_aircraft_photo','url') %}\n{% set mil = state_attr('sensor.closest_aircraft_overhead','is_military') %}\n{% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}\n{% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}\n{% set desc = state_attr('sensor.closest_aircraft_overhead','desc') %}\n{% set type_code = state_attr('sensor.closest_aircraft_overhead','type_code') %}\n{% set alt = state_attr('sensor.closest_aircraft_overhead','altitude_ft') %}\n{% set dist = state_attr('sensor.closest_aircraft_overhead','distance_mi') %}\n{% set route = states('sensor.closest_aircraft_routeset') %}\n{% set names = states('sensor.closest_aircraft_routeset_names') %}\n\n\n{% if img %}\n![aircraft]({{ img }})\n{% endif %}\n\n**Closest:** {{ cs if cs else st }}{% if mil %} 🇺🇸{% endif %}\n\n**Route:** {% if route not in ['unknown','none','unavailable'] %}{{ route }}{% else %}—{% endif %}\n{% if names%}\n  {{names}}\n{% endif %}\n\n**Plane:** {{ desc if desc else 'Unknown' }}{% if type_code %} ({{ type_code }}){% endif %}  \n**Altitude:** {{ alt if alt is not none else '—' }} ft  \n**Distance:** {{ dist if dist is not none else '—' }} mi  \n**HEX:** `{{ hx if hx else '—' }}`\n{% endif %}\n"
+              "title": "Aircraft Overhead (\u22645 mi, unlimited altitude)",
+              "content": "{% set st = states('sensor.closest_aircraft_overhead') %}\n{% if st in ['none','unknown','unavailable'] %}\nNo aircraft currently within 5 mi at any altitude.\n{% else %}\n{% set img = state_attr('sensor.closest_aircraft_photo','url') %}\n{% set mil = state_attr('sensor.closest_aircraft_overhead','is_military') %}\n{% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}\n{% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}\n{% set desc = state_attr('sensor.closest_aircraft_overhead','desc') %}\n{% set type_code = state_attr('sensor.closest_aircraft_overhead','type_code') %}\n{% set alt = state_attr('sensor.closest_aircraft_overhead','altitude_ft') %}\n{% set dist = state_attr('sensor.closest_aircraft_overhead','distance_mi') %}\n{% set route = states('sensor.closest_aircraft_routeset') %}\n{% set names = states('sensor.closest_aircraft_routeset_names') %}\n\n\n{% if img %}\n![aircraft]({{ img }})\n{% endif %}\n\n**Closest:** {{ cs if cs else st }}{% if mil %} \ud83c\uddfa\ud83c\uddf8{% endif %}\n\n**Route:** {% if route not in ['unknown','none','unavailable'] %}{{ route }}{% else %}\u2014{% endif %}\n{% if names%}\n  {{names}}\n{% endif %}\n\n**Plane:** {{ desc if desc else 'Unknown' }}{% if type_code %} ({{ type_code }}){% endif %}  \n**Altitude:** {{ alt if alt is not none else '\u2014' }} ft  \n**Distance:** {{ dist if dist is not none else '\u2014' }} mi  \n**HEX:** `{{ hx if hx else '\u2014' }}`\n{% endif %}\n"
             },
             {
               "type": "vertical-stack",
@@ -3222,7 +3271,7 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Washer",
-                  "secondary": "{% set power = states(\"sensor.laundry_room_washing_machine_power\") %}\n{% set current = states(\"sensor.laundry_room_washing_machine_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.washing_machine_running\", \"on\") %}\nRunning\n{{ power }} W · {{ current }} A\n{% else %}\nIdle\n{{ power }} W · {{ current }} A\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_washing_machine_power\") %}\n{% set current = states(\"sensor.laundry_room_washing_machine_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.washing_machine_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:washing-machine",
                   "entity": "binary_sensor.washing_machine_running",
                   "multiline_secondary": true,
@@ -3234,7 +3283,7 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Dryer",
-                  "secondary": "{% set power = states(\"sensor.laundry_room_dryer_power\") %}\n{% set current = states(\"sensor.laundry_room_dryer_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.dryer_running\", \"on\") %}\nRunning\n{{ power }} W · {{ current }} A\n{% else %}\nIdle\n{{ power }} W · {{ current }} A\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_dryer_power\") %}\n{% set current = states(\"sensor.laundry_room_dryer_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.dryer_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:tumble-dryer",
                   "entity": "binary_sensor.dryer_running",
                   "multiline_secondary": true,
