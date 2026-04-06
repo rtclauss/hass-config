@@ -2416,9 +2416,19 @@ script:
       exclude_lights:
         description: "Excluded lights as list"
     variables:
+      # Builds a comma-separated string of all currently-on lights, excluding
+      # the lights listed in exclude_lights (e.g. outdoor/porch lights that
+      # should stay on overnight).
       all_other_lights: >
         {%- for device in states.light | rejectattr('entity_id', 'in', exclude_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
+      # Fixed: guard the entire sequence so that when all non-excluded lights
+      # are already off (all_other_lights resolves to an empty string), the
+      # light.turn_off service call is skipped entirely. Without this guard,
+      # passing entity_id="" raises "not a valid value for dictionary value
+      # @ data['entity_id']" and the script errors out.
+      - condition: template
+        value_template: "{{ all_other_lights | trim != '' }}"
       # - action: retry.call
       #   data:
       #     action: light.turn_off

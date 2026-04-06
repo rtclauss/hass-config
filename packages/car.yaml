@@ -490,12 +490,19 @@ automation:
 
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
+    # Restarts the garage door ESPHome device daily at 04:00 to keep its
+    # MQTT connection fresh.
+    # Fixed: added continue_on_error: true so that a timeout (e.g. when the
+    # ESP is briefly offline or has already been restarted) does not mark the
+    # automation as errored. The restart is best-effort — if the device is
+    # unreachable the automation should simply complete cleanly.
     trigger:
       - trigger: time
         at: "04:00:00"
     condition: []
     action:
       - action: rest_command.restart_garage_opener
+        continue_on_error: true
 
   - id: set_charging_rate
     alias: set_charging_rate
