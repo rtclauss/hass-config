@@ -256,6 +256,10 @@ automation:
 
   - alias: send_pic_from_camera
     id: send_pic_from_camera
+    # Sends a mobile notification with a camera snapshot when motion is detected.
+    # Triggers on basement or living room motion sensors held for 5 seconds.
+    # Fixed: entity_id must live inside data.data (not at the top level of data)
+    # so the HA companion app can attach the camera snapshot correctly.
     trigger:
       - trigger: state
         entity_id:
@@ -271,12 +275,15 @@ automation:
         data:
           message: >-
             Stream from {{ trigger.to_state.attributes.friendly_name }}
-          entity_id: >-
-            {% if trigger.entity_id == "binary_sensor.basement_motion" %}
-              camera.tikiroomcamera
-            {% else %}
-              camera.livingroomcamera
-            {% endif %}
+          data:
+            # camera_entity_id attaches a snapshot from the associated camera
+            # to the iOS/Android companion app notification.
+            entity_id: >-
+              {% if trigger.entity_id == "binary_sensor.basement_motion" %}
+                camera.tikiroomcamera
+              {% else %}
+                camera.livingroomcamera
+              {% endif %}
 
   - alias: arm_alarm
     id: arm_alarm
