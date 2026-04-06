@@ -151,3 +151,41 @@ def test_early_morning_preconditioning_notification_repeats_low_tpms_warning() -
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "{{ trigger.id == 'early_morning' and tesla_plan.precondition and tesla_plan.low_tpms }}" in package_text
+
+
+def test_direct_preconditioning_automation_exists_and_uses_climate_entity() -> None:
+    """tesla_precondition_direct must call climate.turn_on directly so preconditioning
+    works even when the car is unplugged (Tesla's SCHEDULED_DEPARTURE only preconditioning
+    fires if the car is plugged in at departure time)."""
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "id: tesla_precondition_direct" in package_text
+    assert "alias: tesla_precondition_direct" in package_text
+    assert "climate.turn_on" in package_text
+    assert "climate.nigori_hvac_climate_system" in package_text
+
+
+def test_direct_preconditioning_triggers_30_minutes_before_managed_departure() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    # Trigger fires when now() is within 30 minutes (1800 seconds) of departure
+    assert "departure_ts - 1800" in package_text
+
+
+def test_direct_preconditioning_does_not_gate_on_charger_state() -> None:
+    """The direct preconditioning automation must NOT check binary_sensor.nigori_charger
+    — the whole point is to precondition regardless of plug state."""
+    import re
+
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    # Find the tesla_precondition_direct automation block
+    match = re.search(
+        r"id: tesla_precondition_direct.*?(?=\n  - id:|\Z)",
+        package_text,
+        re.DOTALL,
+    )
+    assert match is not None, "tesla_precondition_direct automation not found"
+    automation_block = match.group(0)
+
+    assert "nigori_charger" not in automation_block
