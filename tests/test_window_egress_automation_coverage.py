@@ -86,12 +86,16 @@ def test_dynamic_egress_sensors_replace_legacy_group() -> None:
     block = _template_sensor_block(ZIGBEE_ZWAVE_PATH, "open_egress_points")
 
     assert "default_entity_id: sensor.open_egress_points" in block
-    assert "entity_id.endswith('_contact')" in block
+    assert "entity_id.endswith('_contact')" not in block
     assert "device_class in ['door', 'window', 'opening']" in block
     for entity_id in (
         "binary_sensor.mailbox_contact",
         "binary_sensor.den_doors_contact",
         "binary_sensor.laundry_room_washing_machine_door_contact",
+        "binary_sensor.nigori_windows",
+        "binary_sensor.nigori_doors",
+        "binary_sensor.nigori_trunk",
+        "binary_sensor.nigori_frunk",
     ):
         assert entity_id in block
     assert "group.egress_points" not in block
