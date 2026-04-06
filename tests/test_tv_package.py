@@ -72,13 +72,17 @@ def test_all_watch_scripts_are_exposed_to_siri_and_voice_integrations() -> None:
 
 
 def test_watch_f1_script_uses_basement_apple_tv_path() -> None:
-    block = _script_block("watch_f1")
+    f1_block = _script_block("watch_f1")
 
-    for token in (
-        "entity_id: media_player.basement",
-        'source: "HDMI 3"',
-        'source: "F1 TV"',
-        "action: script.wait_for_basement_media_player_ready",
-        "action: script.music_assistant_pause_house_audio",
-    ):
-        assert token in block
+    assert "entity_id: media_player.basement" in f1_block
+    assert 'source: "F1 TV"' in f1_block
+    assert "action: script.music_assistant_pause_house_audio" in f1_block
+
+    # Startup steps may be inlined or delegated to watch_basement_tv_startup
+    if "action: script.watch_basement_tv_startup" in f1_block:
+        startup_block = _script_block("watch_basement_tv_startup")
+        assert 'source: "HDMI 3"' in startup_block
+        assert "action: script.wait_for_basement_media_player_ready" in startup_block
+    else:
+        assert 'source: "HDMI 3"' in f1_block
+        assert "action: script.wait_for_basement_media_player_ready" in f1_block
