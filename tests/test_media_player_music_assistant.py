@@ -259,19 +259,16 @@ def test_bedtime_playlist_includes_somafm_station_names() -> None:
     assert 'media_item: "{{ playlist }}"' in block
 
 
-def test_music_assistant_dashboard_exposes_search_controls() -> None:
+def test_music_assistant_dashboard_exposes_player_card() -> None:
+    # The dashboard now uses mass-player-card for browsing/search instead of
+    # the old manual input_text / input_select search panel (replaced in
+    # commit 1d1827d when mass_queue integration was added).
     dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
 
     for token in (
         "Music Assistant",
-        "input_text.music_assistant_search_query",
-        "input_select.music_assistant_provider_filter",
-        "input_select.music_assistant_playlist_target",
-        "input_select.music_assistant_search_media_type",
-        "input_select.music_assistant_search_results",
-        "script.music_assistant_search_music",
-        "script.music_assistant_play_selected_search_result",
-        "script.music_assistant_add_selected_search_result_to_playlist",
+        "custom:mass-player-card",
+        "media_player.bedroom_sonos_2",
     ):
         assert token in dashboard
 
