@@ -94,7 +94,7 @@ def test_camera_scenes_toggle_current_camera_controls() -> None:
 
 def test_camera_status_groups_track_current_living_room_and_tiki_room_entities() -> None:
     livingroom_group = _group_block(CAMERA_PATH, "livingroom_camera_status")
-    basement_group = _group_block(CAMERA_PATH, "basement_camera_status")
+    basement_group = _group_block(CAMERA_PATH, "tikiroom_camera_status")
 
     for stale_entity_id in (
         "switch.livingroom_night_mode_auto",
