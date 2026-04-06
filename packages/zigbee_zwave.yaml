@@ -1478,14 +1478,21 @@ automation:
 
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
+    # Reconfigures Zigbee2MQTT and all Valetudo vacuums after HA startup.
+    # Fixed: added continue_on_error: true to each rest_command so that a single
+    # unreachable vacuum (e.g. den vacuum offline at boot) does not abort the
+    # sequence and leave the remaining vacuums un-reconfigured.
     trigger:
       - trigger: homeassistant
         event: start
     action:
       - delay: "00:01:00"
       - action: rest_command.reload_den_vacuum
+        continue_on_error: true
       - action: rest_command.reload_upstairs_vacuum
+        continue_on_error: true
       - action: rest_command.reload_main_level_vacuum
+        continue_on_error: true
 
   - id: refresh_z2m_router_inventory
     alias: refresh_z2m_router_inventory
