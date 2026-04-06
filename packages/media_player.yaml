@@ -124,15 +124,21 @@ automation:
       #     command: "rotate_right"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action_angle
-        not_to: None
+        not_to:
+          - None
+          - "unknown"
+          - "unavailable"
     action:
       - action: media_player.volume_set
         data:
           entity_id: media_player.bedroom_sonos_2
           # volume_level: >-
           # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
+          # Fixed: the inner float() call now carries its own default of 0 so that
+          # transient "unknown"/"unavailable" sensor states (e.g. cube waking up)
+          # do not raise a ValueError and abort the automation.
           volume_level: >-
-            {{ (state_attr('media_player.bedroom_sonos_2', 'volume_level') + (float(trigger.to_state.state)/1000)) | round(2) | float(default=0) }}
+            {{ (state_attr('media_player.bedroom_sonos_2', 'volume_level') + (float(trigger.to_state.state, 0)/1000)) | round(2) | float(default=0) }}
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
