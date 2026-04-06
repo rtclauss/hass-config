@@ -156,16 +156,12 @@ alarm_control_panel: []
 automation:
   - id: washer_started
     alias: washer_started
-    description: Mark the washer as actively running and clear any stale wet-load reminder from a prior load.
+    description: Mark the washer as actively running.
     trigger:
       - trigger: state
         entity_id: binary_sensor.washing_machine_running
-        from: "off"
         to: "on"
     action:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.washer_wet_load_pending
       - action: input_select.select_option
         target:
           entity_id: input_select.washer_state
@@ -186,9 +182,6 @@ automation:
           entity_id: input_datetime.washer_finished_at
         data:
           datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.washer_wet_load_pending
       - action: input_select.select_option
         target:
           entity_id: input_select.washer_state
@@ -221,17 +214,14 @@ automation:
         event: start
     condition:
       - condition: state
-        entity_id: input_boolean.washer_wet_load_pending
-        state: "on"
+        entity_id: input_select.washer_state
+        state: "CLEAN"
       - condition: state
         entity_id: binary_sensor.washing_machine_running
         state: "off"
       - condition: state
         entity_id: binary_sensor.laundry_room_washing_machine_door_contact
         state: "off"
-      - condition: state
-        entity_id: input_select.washer_state
-        state: "CLEAN"
       - condition: template
         value_template: >-
           {% set finished = states('input_datetime.washer_finished_at') %}
@@ -258,13 +248,15 @@ automation:
       - condition: state
         entity_id: binary_sensor.washing_machine_running
         state: "off"
-      - condition: state
-        entity_id: input_boolean.washer_wet_load_pending
-        state: "on"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: input_select.washer_state
+            state: "CLEAN"
+          - condition: state
+            entity_id: input_select.washer_state
+            state: "MUSTY"
     action:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.washer_wet_load_pending
       - action: input_select.select_option
         target:
           entity_id: input_select.washer_state
@@ -299,10 +291,7 @@ group: {}
 ########################
 # Input Booleans
 ########################
-input_boolean:
-  washer_wet_load_pending:
-    name: Washer Wet Load Pending
-    icon: mdi:tshirt-crew
+input_boolean: {}
 
 ########################
 # Input Datetime

@@ -87,16 +87,16 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     washer_cleared = _automation_block(CLEANING_PATH, "washer_cleared")
 
     assert "entity_id: binary_sensor.washing_machine_running" in washer_started
-    assert 'from: "off"' in washer_started
     assert 'to: "on"' in washer_started
-    assert "input_boolean.washer_wet_load_pending" in washer_started
+    assert 'from: "off"' not in washer_started  # must fire even after unavailable→on
+    assert "input_boolean.washer_wet_load_pending" not in washer_started
     assert "option: CLEANING" in washer_started
 
     assert "entity_id: binary_sensor.washing_machine_running" in wash_finished
     assert 'from: "on"' in wash_finished
     assert 'to: "off"' in wash_finished
     assert "input_datetime.washer_finished_at" in wash_finished
-    assert "input_boolean.washer_wet_load_pending" in wash_finished
+    assert "input_boolean.washer_wet_load_pending" not in wash_finished
     assert "option: CLEAN" in wash_finished
     assert "binary_sensor.front_load_washer_wash_completed" not in wash_finished
 
@@ -108,7 +108,8 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert 'trigger: time_pattern' in washer_reminder
     assert 'minutes: "/10"' in washer_reminder
     assert 'trigger: homeassistant' in washer_reminder
-    assert "input_boolean.washer_wet_load_pending" in washer_reminder
+    assert "input_boolean.washer_wet_load_pending" not in washer_reminder
+    assert 'state: "CLEAN"' in washer_reminder  # input_select gates the reminder
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_reminder
     assert "input_datetime.washer_finished_at" in washer_reminder
     assert "24 * 60 * 60" in washer_reminder
@@ -117,14 +118,16 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
 
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_cleared
     assert 'to: "on"' in washer_cleared
-    assert "input_boolean.washer_wet_load_pending" in washer_cleared
+    assert "input_boolean.washer_wet_load_pending" not in washer_cleared
+    assert 'state: "CLEAN"' in washer_cleared
+    assert 'state: "MUSTY"' in washer_cleared
     assert "option: IDLE" in washer_cleared
 
 
 def test_cleaning_package_tracks_wet_load_helpers() -> None:
     config = CLEANING_PATH.read_text(encoding="utf-8")
 
-    assert "washer_wet_load_pending:" in config
+    assert "washer_wet_load_pending" not in config  # removed; state machine uses input_select
     assert "input_datetime:" in config
     assert "washer_finished_at:" in config
     assert "binary_sensor.laundry_room_washing_machine_door_contact:" in config
