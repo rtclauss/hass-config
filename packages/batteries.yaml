@@ -130,7 +130,7 @@ template:
             {% for battery in monitored_batteries %}
               {% set value = battery.state | float(9999) %}
               {% if value < 20 %}
-                {% set ns.lines = ns.lines + ['- ' ~ (battery.name | default(battery.entity_id, true)) ~ ': ' ~ battery.state ~ '%'] %}
+                {% set ns.lines = ns.lines + ['- ' ~ entity_name(battery.entity_id) ~ ': ' ~ battery.state ~ '%'] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -172,7 +172,7 @@ template:
             {% for battery in monitored_batteries %}
               {% set value = battery.state | float(9999) %}
               {% if value < 10 %}
-                {% set ns.lines = ns.lines + ['- ' ~ (battery.name | default(battery.entity_id, true)) ~ ': ' ~ battery.state ~ '%'] %}
+                {% set ns.lines = ns.lines + ['- ' ~ entity_name(battery.entity_id) ~ ': ' ~ battery.state ~ '%'] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -218,7 +218,7 @@ template:
             {% set ns = namespace(lines=[]) %}
             {% for battery in monitored_batteries %}
               {% if battery.state == 'unavailable' %}
-                {% set ns.lines = ns.lines + ['- ' ~ (battery.name | default(battery.entity_id, true)) ~ ': ' ~ battery.state] %}
+                {% set ns.lines = ns.lines + ['- ' ~ entity_name(battery.entity_id) ~ ': ' ~ battery.state] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -245,19 +245,13 @@ automation:
         {{ states('sensor.battery_low_20') | int(0) }}
       battery_summary: >-
         {{ state_attr('sensor.battery_low_20', 'summary') | default('', true) }}
+      notification_tag: low-battery-20
       battery_label: >-
         {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
       battery_title: >-
         {{ battery_count }} {{ battery_label }} below 20%
       battery_message: >-
         {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
-      count_increased: >-
-        {{ trigger.id == 'summary_change'
-           and trigger.from_state is not none
-           and trigger.to_state is not none
-           and trigger.from_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
       - choose:
           - conditions:
@@ -268,6 +262,12 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: low-battery-20
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ notification_tag }}"
         default:
           - action: persistent_notification.dismiss
             data:
@@ -279,14 +279,20 @@ automation:
               notification_id: low-battery-20
           - choose:
               - conditions:
+                  - condition: trigger
+                    id: summary_change
                   - condition: template
                     value_template: >-
-                      {{ count_increased }}
+                      {{ battery_summary | trim != '' }}
                 sequence:
-                  - action: notify.all
+                  - continue_on_error: true
+                    action: notify.all
                     data:
                       title: "{{ battery_title }}"
                       message: "{{ battery_message }}"
+                      data:
+                        tag: "{{ notification_tag }}"
+                        persistent: true
 
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
@@ -306,19 +312,13 @@ automation:
         {{ states('sensor.battery_low_10') | int(0) }}
       battery_summary: >-
         {{ state_attr('sensor.battery_low_10', 'summary') | default('', true) }}
+      notification_tag: low-battery-10
       battery_label: >-
         {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
       battery_title: >-
         {{ battery_count }} {{ battery_label }} below 10%
       battery_message: >-
         {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
-      count_increased: >-
-        {{ trigger.id == 'summary_change'
-           and trigger.from_state is not none
-           and trigger.to_state is not none
-           and trigger.from_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
       - choose:
           - conditions:
@@ -329,6 +329,12 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: low-battery-10
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ notification_tag }}"
         default:
           - action: persistent_notification.dismiss
             data:
@@ -340,14 +346,20 @@ automation:
               notification_id: low-battery-10
           - choose:
               - conditions:
+                  - condition: trigger
+                    id: summary_change
                   - condition: template
                     value_template: >-
-                      {{ count_increased }}
+                      {{ battery_summary | trim != '' }}
                 sequence:
-                  - action: notify.all
+                  - continue_on_error: true
+                    action: notify.all
                     data:
                       title: "{{ battery_title }}"
                       message: "{{ battery_message }}"
+                      data:
+                        tag: "{{ notification_tag }}"
+                        persistent: true
 
   - id: notify_battery_dead
     alias: notify_battery_dead
@@ -367,19 +379,13 @@ automation:
         {{ states('sensor.battery_dead') | int(0) }}
       battery_summary: >-
         {{ state_attr('sensor.battery_dead', 'summary') | default('', true) }}
+      notification_tag: battery-dead
       battery_label: >-
         {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
       battery_title: >-
         {{ battery_count }} {{ battery_label }} offline
       battery_message: >-
         {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
-      count_increased: >-
-        {{ trigger.id == 'summary_change'
-           and trigger.from_state is not none
-           and trigger.to_state is not none
-           and trigger.from_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
       - choose:
           - conditions:
@@ -390,6 +396,12 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: battery-dead
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ notification_tag }}"
         default:
           - action: persistent_notification.dismiss
             data:
@@ -401,14 +413,20 @@ automation:
               notification_id: battery-dead
           - choose:
               - conditions:
+                  - condition: trigger
+                    id: summary_change
                   - condition: template
                     value_template: >-
-                      {{ count_increased }}
+                      {{ battery_summary | trim != '' }}
                 sequence:
-                  - action: notify.all
+                  - continue_on_error: true
+                    action: notify.all
                     data:
                       title: "{{ battery_title }}"
                       message: "{{ battery_message }}"
+                      data:
+                        tag: "{{ notification_tag }}"
+                        persistent: true
 
 ########################
 # Binary Sensors
