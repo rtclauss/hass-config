@@ -201,6 +201,7 @@ automation:
             {% endif %}
             {% set alarm_enabled = alarm_time_raw not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
             {% set outside_temp_f = states('sensor.outside_temperature') | float(default=999) %}
+            {% set outside_temp_known = states('sensor.outside_temperature') not in ['unknown', 'unavailable'] %}
             {% set cold_weather = outside_temp_f <= 20 %}
             {% set trip_entry = state_attr('binary_sensor.upcoming_trip_charging', 'entry') | default('', true) %}
             {% set trip_distance_mi = state_attr('sensor.waze_next_trip_distance', 'distance') | float(default=0) %}
@@ -319,7 +320,7 @@ automation:
               {% else %}
                 {% set precondition_phrase = 'skip cabin preconditioning until a real next-day departure is scheduled' %}
               {% endif %}
-              {% set summary = 'Plan Tesla for ' ~ source ~ '. ' ~ charge_limit_phrase ~ ' and ' ~ precondition_phrase ~ '. Outside ' ~ (outside_temp_f | round(0)) ~ 'F. EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
+              {% set summary = 'Plan Tesla for ' ~ source ~ '. ' ~ charge_limit_phrase ~ ' and ' ~ precondition_phrase ~ '.' ~ (' Outside ' ~ (outside_temp_f | round(0) | int) ~ 'F.' if outside_temp_known else '') ~ ' EV tariff ' ~ tariff_display ~ ' at $' ~ ('%.4f' | format(electrical_rate)) ~ '/kWh.' %}
             {% else %}
               {% set summary = 'No next-day departure plan detected. Restore the Tesla default charge limit to 80%.' %}
             {% endif %}
