@@ -199,7 +199,7 @@ automation:
             The following entities have not updated in 24 hours:
             {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
               not is_state_attr(item.entity_id, 'hidden', true)
-              and (now()-as_local(item.last_updated) > timedelta(hours=12))
+              and (now()-as_local(item.last_reported) > timedelta(hours=12))
               and not (item.entity_id | lower).find('update') != -1
               and not (item.entity_id | lower).find('heading') != -1
               and not (item.entity_id | lower).find('alert') != -1
