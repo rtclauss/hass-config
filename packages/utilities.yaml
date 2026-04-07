@@ -199,7 +199,7 @@ automation:
             The following entities have not updated in 24 hours:
             {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
               not is_state_attr(item.entity_id, 'hidden', true)
-              and (now()-as_local(item.last_updated) > timedelta(hours=12))
+              and (now()-as_local(item.last_reported) > timedelta(hours=12))
               and not (item.entity_id | lower).find('update') != -1
               and not (item.entity_id | lower).find('heading') != -1
               and not (item.entity_id | lower).find('alert') != -1
@@ -235,21 +235,25 @@ automation:
       #   id: nonsummer
     action:
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.hourly_electricity
         data:
           option: "{{ tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.daily_electricity
         data:
           option: "{{ tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.monthly_electricity
         data:
           option: "{{ tariff }}"
       - action: input_number.set_value
+        continue_on_error: true
         target:
           entity_id: input_number.electrical_rate
         data:
@@ -310,21 +314,25 @@ automation:
         {% endif %}
     action:
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.hourly_ev_charging
         data:
           option: "{{ ev_tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.daily_ev_charging
         data:
           option: "{{ ev_tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.monthly_ev_charging
         data:
           option: "{{ ev_tariff }}"
       - action: input_number.set_value
+        continue_on_error: true
         target:
           entity_id: input_number.ev_electrical_rate
         data:
@@ -371,6 +379,26 @@ automation:
         data:
           addon: a0d7b954_appdaemon
 
+  - alias: Restart Music Assistant every 12.17 hours
+    description: >
+      Restart the Music Assistant add-on on a self-rescheduling loop to work
+      around Sonos DNS issues.
+    id: restart_music_assistant_every_12_17_hours
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - repeat:
+          while:
+            - condition: template
+              value_template: "{{ true }}"
+          sequence:
+            # 12.17 hours interpreted as decimal hours: 12 hours, 10 minutes, 12 seconds.
+            - delay: "12:10:12"
+            - action: hassio.addon_restart
+              data:
+                addon: d5369777_music_assistant
+
   - alias: Turn Sump Back On
     id: turn_sump_back_on
     trigger:
@@ -389,6 +417,28 @@ automation:
         target:
           entity_id:
             - switch.basement_sump_pump
+
+  - alias: Turn Laundry Plugs Back On
+    id: turn_laundry_plugs_back_on
+    trigger:
+      - trigger: state
+        entity_id:
+          - switch.laundry_room_washing_machine
+          - switch.laundry_room_dryer
+        to: "off"
+      - trigger: state
+        entity_id:
+          - switch.laundry_room_washing_machine
+          - switch.laundry_room_dryer
+        not_to: "on"
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id:
+            - switch.laundry_room_washing_machine
+            - switch.laundry_room_dryer
 
   - alias: Notify Sump Pit Getting Full
     id: notify_sump_pit_getting_full
@@ -454,42 +504,33 @@ automation:
     id: notify_garbage_day
     description: Notify garbage day
     trigger:
-      - trigger: calendar
-        id: day_changed
-        entity_id: calendar.garbage_collection
-        event: start
-        offset: "-33:30:00"
-      - trigger: calendar
-        id: pickup_tomorrow
-        entity_id: calendar.garbage_collection
-        event: start
-        offset: "-09:30:00"
-    variables:
-      garbage_summary: "{{ state_attr('sensor.waste_management', 'friendly_name') | default('Waste Management', true) }}"
+      - trigger: time
+        at: "14:30:00"
+    condition:
+      - condition: template
+        value_template: "{{ states('sensor.garbage_pickup_date') not in ['unknown', 'unavailable', 'none', 'None', ''] }}"
     action:
       - choose:
           - conditions:
-              - condition: trigger
-                id: day_changed
               - alias: Only on Tuesdays (Day before Garbage Day/Wednesday)
                 condition: time
                 weekday:
                   - tue
-              - alias: Waste Management event
+              - alias: Pickup shifted to Thursday this week
                 condition: template
                 value_template: >-
-                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
+                  {% set pickup_date = as_datetime(states('sensor.garbage_pickup_date')).date() %}
+                  {{ pickup_date == (now().date() + timedelta(days=2)) }}
             sequence:
               - action: notify.all
                 data:
                   message: DO NOT put out bins tonight. Garbage day has changed!
           - conditions:
-              - condition: trigger
-                id: pickup_tomorrow
-              - alias: Waste Management event
+              - alias: Pickup is tomorrow
                 condition: template
                 value_template: >-
-                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
+                  {% set pickup_date = as_datetime(states('sensor.garbage_pickup_date')).date() %}
+                  {{ pickup_date == (now().date() + timedelta(days=1)) }}
             sequence:
               - action: notify.all
                 data:
@@ -699,11 +740,11 @@ rest:
         icon: mdi:gas-station
         unit_of_measurement: USD/gal
         value_template: >-
-          {% set match = value | regex_findall_index('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)', 0) %}
-          {% if match not in [none, ''] %}
-            {{ match | float(default=0) | round(2) }}
+          {% set matches = value | regex_findall('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)') %}
+          {% if matches | count > 0 %}
+            {{ matches[0] | float(default=0) | round(2) }}
           {% else %}
-            {{ 'unknown' }}
+            {{ none }}
           {% endif %}
 
 ########################
@@ -762,16 +803,12 @@ template:
         state_class: total_increasing
         unit_of_measurement: kWh
         availability: >
-          {% if is_state("sensor.filtered_raw_electrical_sensor", "unavailable") %}
-            false
-          {% else %}
-            true
-          {%- endif %}
+          {{ states('sensor.filtered_raw_electrical_sensor') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
         state: >-
-          {% if not states('sensor.filtered_raw_electrical_sensor') in ['unavailable','unknown','Unavailable','Unknown'] %}
-            {{(states("sensor.filtered_raw_electrical_sensor")| int)/100.0}}
+          {% if states('sensor.filtered_raw_electrical_sensor') in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ none }}
           {% else %}
-            unavailable
+            {{ (states('sensor.filtered_raw_electrical_sensor') | float(default=0)) / 100.0 }}
           {% endif %}
       - name: house_electrical_meter_non_ev
         unique_id: house_electrical_meter_non_ev
@@ -781,12 +818,17 @@ template:
         availability: >
           {{
             states('sensor.house_electrical_meter') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
-            and states('sensor.nigori_energy_added') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+            and (
+              states('device_tracker.nigori_location_tracker') | default('', true) | lower != 'home'
+              or states('sensor.nigori_energy_added') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+            )
           }}
         state: >-
           {% set house_kwh = states('sensor.house_electrical_meter') | float(default=0) %}
           {% set ev_kwh = states('sensor.nigori_energy_added') | float(default=0) %}
-          {% set calculated = [house_kwh - ev_kwh, 0] | max %}
+          {% set home_charging = (states('device_tracker.nigori_location_tracker') | default('', true) | lower) == 'home' %}
+          {% set calculated = house_kwh - ev_kwh if home_charging else house_kwh %}
+          {% set calculated = [calculated, 0] | max %}
           {% set previous = this.state | float(default=calculated) %}
           {{ [calculated, previous] | max | round(3) }}
       - name: house_electrical_rate

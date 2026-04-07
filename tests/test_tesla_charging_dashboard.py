@@ -44,19 +44,74 @@ def test_home_default_charge_plan_skips_extra_tesla_schedule_override() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "{% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}" in package_text
-    assert "tesla_plan.manage_tesla_schedule" in package_text
     assert "No extra home charging override is needed." in package_text
 
 
 def test_alarm_only_planner_skips_preconditioning_without_real_departure() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
-    assert "{% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}" in package_text
+    assert "{% set precondition = has_calendar_departure and departure_window_open %}" in package_text
     assert (
         "{% set precondition = (has_calendar_departure or alarm_enabled) and departure_window_open %}"
         not in package_text
     )
     assert "skip cabin preconditioning until a real next-day departure is scheduled" in package_text
+
+
+def test_home_default_charge_plan_still_runs_real_departure_preconditioning() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert 'value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != \'\' }}"' in package_text
+    assert 'value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != \'\' and tesla_plan.manage_tesla_schedule }}"' not in package_text
+
+
+def test_real_calendar_preconditioning_is_not_gated_by_temperature() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "{% set precondition = has_calendar_departure and departure_window_open %}" in package_text
+    assert "{% set precondition = has_calendar_departure and departure_window_open and cold_weather %}" not in package_text
+    assert "{% set precondition = has_calendar_departure and departure_window_open and outside_temp_f" not in package_text
+
+
+def test_calendar_destination_ignores_blank_location_events_before_falling_back_home() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "default_entity_id: sensor.tesla_next_drive_departure" in package_text
+    assert "default_entity_id: sensor.calendar_destination" in package_text
+    assert "{% set plan_text = states('sensor.tesla_next_drive_departure') %}" in package_text
+    assert "{% set plan = {'l': states('input_text.home_address')} %}" in package_text
+    assert "{{ plan.l | default(states('input_text.home_address')) }}" in package_text
+    assert "{% if (personal_meeting_time < curling_upcoming) %}" not in package_text
+
+
+def test_upcoming_trip_selector_ignores_home_virtual_blank_and_flight_events() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "{% set home_street = home_address | lower | trim | regex_replace(',.*$', '') %}" in package_text
+    assert "location_lower != '' and not virtual and not home_like and not looks_like_flight" in package_text
+    assert "{% elif candidate.all_day %}" in package_text
+    assert "{% elif explicit_home %}" in package_text
+    assert "{% elif explicit_virtual %}" in package_text
+    assert "{% elif explicit_flight %}" in package_text
+    assert "{% elif explicit_ride %}" in package_text
+    assert "{% elif explicit_drive %}" in package_text
+    assert "'booking code:' in text" in package_text
+    assert "'flight time ' in text" in package_text
+    assert "location_lower.startswith('https://')" in package_text
+
+
+def test_drive_selector_supports_explicit_description_overrides() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    for marker in (
+        "tesla:drive",
+        "tesla:home",
+        "tesla:virtual",
+        "tesla:flight",
+        "tesla:ride",
+        "tesla:ignore",
+    ):
+        assert marker in package_text
 
 
 def test_dashboard_copy_explains_alarm_only_days_and_home_schedule_override_logic() -> None:
@@ -73,3 +128,64 @@ def test_dashboard_copy_explains_alarm_only_days_and_home_schedule_override_logi
     ):
         assert text in tile_text
         assert text in dashboard_text
+
+
+def test_preconditioning_plan_includes_low_tpms_air_reminder() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "tesla_tpms_air_threshold_psi:" in package_text
+    assert "name: Tesla TPMS Air Threshold" in package_text
+    assert "initial: 38" in package_text
+    assert "unit_of_measurement: psi" in package_text
+    assert "states('input_number.tesla_tpms_air_threshold_psi') | float(default=38)" in package_text
+    assert "sensor.nigori_tpms_front_left" in package_text
+    assert "sensor.nigori_tpms_front_right" in package_text
+    assert "sensor.nigori_tpms_rear_left" in package_text
+    assert "sensor.nigori_tpms_rear_right" in package_text
+    assert "{% if precondition and low_tpms %}" in package_text
+    assert "Tire pressure is low: " in package_text
+    assert "Get air before you leave." in package_text
+
+
+def test_early_morning_preconditioning_notification_repeats_low_tpms_warning() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "{{ trigger.id == 'early_morning' and tesla_plan.precondition and tesla_plan.low_tpms }}" in package_text
+
+
+def test_direct_preconditioning_automation_exists_and_uses_climate_entity() -> None:
+    """tesla_precondition_direct must call climate.turn_on directly so preconditioning
+    works even when the car is unplugged (Tesla's SCHEDULED_DEPARTURE only preconditioning
+    fires if the car is plugged in at departure time)."""
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "id: tesla_precondition_direct" in package_text
+    assert "alias: tesla_precondition_direct" in package_text
+    assert "climate.turn_on" in package_text
+    assert "climate.nigori_hvac_climate_system" in package_text
+
+
+def test_direct_preconditioning_triggers_30_minutes_before_managed_departure() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    # Trigger fires when now() is within 30 minutes (1800 seconds) of departure
+    assert "departure_ts - 1800" in package_text
+
+
+def test_direct_preconditioning_does_not_gate_on_charger_state() -> None:
+    """The direct preconditioning automation must NOT check binary_sensor.nigori_charger
+    — the whole point is to precondition regardless of plug state."""
+    import re
+
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    # Find the tesla_precondition_direct automation block
+    match = re.search(
+        r"id: tesla_precondition_direct.*?(?=\n  - id:|\Z)",
+        package_text,
+        re.DOTALL,
+    )
+    assert match is not None, "tesla_precondition_direct automation not found"
+    automation_block = match.group(0)
+
+    assert "nigori_charger" not in automation_block

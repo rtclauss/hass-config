@@ -35,6 +35,80 @@ homeassistant:
     ################################################
     ## Scripts
     ################################################
+    script.watch_tv:
+      <<: *expose
+      friendly_name: "Watch TV"
+      icon: mdi:television
+
+    script.watch_youtube:
+      <<: *expose
+      friendly_name: "Watch YouTube"
+      icon: mdi:youtube-tv
+
+    script.watch_netflix:
+      <<: *expose
+      friendly_name: "Watch Netflix"
+      icon: mdi:netflix
+
+    script.watch_plex:
+      <<: *expose
+      friendly_name: "Watch Plex"
+      icon: mdi:plex
+
+    script.watch_f1:
+      <<: *expose
+      friendly_name: "Watch F1"
+      icon: mdi:flag-checkered
+
+    script.watch_letterkenny:
+      <<: *expose
+      friendly_name: "Watch Letterkenny"
+      icon: mdi:television-play
+
+    script.watch_the_simpsons:
+      <<: *expose
+      friendly_name: "Watch The Simpsons"
+      icon: mdi:television-play
+
+    script.watch_american_dad:
+      <<: *expose
+      friendly_name: "Watch American Dad"
+      icon: mdi:television-play
+
+    script.watch_aqua_teen:
+      <<: *expose
+      friendly_name: "Watch Aqua Teen"
+      icon: mdi:television-play
+
+    script.watch_bobs_burgers:
+      <<: *expose
+      friendly_name: "Watch Bob's Burgers"
+      icon: mdi:television-play
+
+    script.watch_ds9:
+      <<: *expose
+      friendly_name: "Watch DS9"
+      icon: mdi:television-play
+
+    script.watch_rick_and_morty:
+      <<: *expose
+      friendly_name: "Watch Rick and Morty"
+      icon: mdi:television-play
+
+    script.watch_tng:
+      <<: *expose
+      friendly_name: "Watch TNG"
+      icon: mdi:television-play
+
+    script.watch_basement_tv_startup:
+      <<: *expose
+      friendly_name: "Basement TV Startup"
+      icon: mdi:television
+
+    script.watch_plex_show:
+      <<: *expose
+      friendly_name: "Watch Plex Show"
+      icon: mdi:plex
 
 ################################################
 ## Automation
@@ -128,22 +202,22 @@ automation:
           state: "off"
     action:
       - action: media_player.volume_set
+        continue_on_error: true
         data:
           entity_id:
             - media_player.bedroom_sonos_2
             - media_player.bathroom_sonos_2
           volume_level: 0.02
       - action: scene.turn_on
+        continue_on_error: true
         target:
           entity_id: scene.bedroom_prep
         data:
           transition: 60
       - action: script.turn_on
+        continue_on_error: true
         target:
           entity_id: script.spotify_bedtime
-      - action: script.goodnight_integrity
-        data:
-          reason: tv_bed_prep
       - delay: "00:20:00"
       - action: switch.turn_off
         target:
@@ -254,11 +328,13 @@ automation:
           state: "off"
     action:
       - action: media_player.media_pause
+        continue_on_error: true
         data:
           entity_id:
             - media_player.office_sonos_2
             - media_player.den_sonos_2
       - action: script.lights_off_except
+        continue_on_error: true
         data:
           exclude_lights:
             - light.outside_front_hue
@@ -268,13 +344,16 @@ automation:
             - light.basement_tv_bias
           transition: 15
       - action: script.turn_on
+        continue_on_error: true
         target:
           entity_id: script.night_tv_mode_switches
       - action: media_player.media_pause
+        continue_on_error: true
         data:
           entity_id:
             - media_player.den_sonos_2
       - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
 
 ################################################
 ## Scenes
@@ -379,8 +458,11 @@ script:
             entity_id: media_player.plex_basement_apple_tv
             state: "unavailable"
 
-  watch_tv:
-    alias: "Watch TV"
+  # Shared preamble: power on basement media player, wait for ready,
+  # then switch the LG TV to HDMI 3. Called by all watch_* scripts.
+  watch_basement_tv_startup:
+    alias: "Basement TV Startup"
+    mode: parallel
     sequence:
       - action: media_player.turn_on
         data:
@@ -392,231 +474,20 @@ script:
         data:
           entity_id: media_player.lg_webos_smart_tv
           source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "YouTube TV"
 
-  watch_youtube:
-    alias: "Watch YouTube"
+  # Shared Plex-show launcher. Runs startup, selects Plex source, scans
+  # for the Apple TV Plex client, then plays the requested show shuffled.
+  watch_plex_show:
+    alias: "Watch Plex Show"
+    mode: parallel
+    fields:
+      show_name:
+        description: "Plex library show name (must match library exactly)"
+        required: true
+        selector:
+          text:
     sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "YouTube"
-
-  watch_netflix:
-    alias: "Watch Netflix"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Netflix"
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-
-  watch_plex:
-    alias: "Watch Plex"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-
-  watch_f1:
-    alias: "Watch F1"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "F1 TV"
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-
-  watch_letterkenny:
-    alias: "Watch Letterkenny"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: button.press
-        target:
-          entity_id: button.fermentor_scan_clients
-      - action: script.wait_for_basement_plex_client_ready
-      - action: media_player.play_media
-        data:
-          entity_id: media_player.plex_basement_apple_tv
-          media_content_type: EPISODE
-          media_content_id: '{ "library_name": "TV", "show_name": "Letterkenny", "shuffle": "1" }'
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-
-  watch_the_simpsons:
-    alias: "Watch The Simpsons"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: button.press
-        target:
-          entity_id: button.fermentor_scan_clients
-      - action: script.wait_for_basement_plex_client_ready
-      - action: media_player.play_media
-        data:
-          entity_id: media_player.plex_basement_apple_tv
-          media_content_type: EPISODE
-          media_content_id: '{ "library_name": "TV", "show_name": "The Simpsons", "shuffle": "1" }'
-      - action: script.music_assistant_pause_house_audio
-
-  watch_american_dad:
-    alias: "Watch American Dad"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: button.press
-        target:
-          entity_id: button.fermentor_scan_clients
-      - action: script.wait_for_basement_plex_client_ready
-      - action: media_player.play_media
-        data:
-          entity_id: media_player.plex_basement_apple_tv
-          media_content_type: EPISODE
-          media_content_id: '{ "library_name": "TV", "show_name": "American Dad", "shuffle": "1" }'
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-
-  watch_aqua_teen:
-    alias: "Watch Aqua Teen"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: button.press
-        target:
-          entity_id: button.fermentor_scan_clients
-      - action: script.wait_for_basement_plex_client_ready
-      - action: media_player.play_media
-        data:
-          entity_id: media_player.plex_basement_apple_tv
-          media_content_type: EPISODE
-          media_content_id: '{ "library_name": "TV", "show_name": "Aqua Teen Hunger Force", "shuffle": "1" }'
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
-
-  watch_bobs_burgers:
-    alias: "Watch Bobs Burgers"
-    sequence:
-      - action: media_player.turn_on
-        data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
+      - action: script.watch_basement_tv_startup
       - action: media_player.select_source
         data:
           entity_id: media_player.basement
@@ -632,103 +503,121 @@ script:
           entity_id: media_player.plex_basement_apple_tv
           media_content_type: EPISODE
           media_content_id: >-
-            { "library_name": "TV", "show_name": "Bob's Burgers", "shuffle": "1" }
+            { "library_name": "TV", "show_name": "{{ show_name }}", "shuffle": "1" }
       - delay:
           seconds: 2
       - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_tv:
+    alias: "Watch TV"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "YouTube TV"
+
+  watch_youtube:
+    alias: "Watch YouTube"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "YouTube"
+
+  watch_netflix:
+    alias: "Watch Netflix"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Netflix"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_plex:
+    alias: "Watch Plex"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_f1:
+    alias: "Watch F1"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "F1 TV"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_letterkenny:
+    alias: "Watch Letterkenny"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Letterkenny"
+
+  watch_the_simpsons:
+    alias: "Watch The Simpsons"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "The Simpsons"
+
+  watch_american_dad:
+    alias: "Watch American Dad"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "American Dad"
+
+  watch_aqua_teen:
+    alias: "Watch Aqua Teen"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Aqua Teen Hunger Force"
+
+  watch_bobs_burgers:
+    alias: "Watch Bobs Burgers"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Bob's Burgers"
 
   watch_ds9:
     alias: "Watch DS9"
     sequence:
-      - action: media_player.turn_on
+      - action: script.watch_plex_show
         data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: button.press
-        target:
-          entity_id: button.fermentor_scan_clients
-      - action: script.wait_for_basement_plex_client_ready
-      - action: media_player.play_media
-        data:
-          entity_id: media_player.plex_basement_apple_tv
-          media_content_type: EPISODE
-          media_content_id: '{ "library_name": "TV", "show_name": "Star Trek: Deep Space Nine", "shuffle": "1" }'
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
+          show_name: "Star Trek: Deep Space Nine"
 
   watch_rick_and_morty:
     alias: "Watch Rick and Morty"
     sequence:
-      - action: media_player.turn_on
+      - action: script.watch_plex_show
         data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: button.press
-        target:
-          entity_id: button.fermentor_scan_clients
-      - action: script.wait_for_basement_plex_client_ready
-      - action: media_player.play_media
-        data:
-          entity_id: media_player.plex_basement_apple_tv
-          media_content_type: EPISODE
-          media_content_id: '{ "library_name": "TV", "show_name": "Rick and Morty", "shuffle": "1" }'
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
+          show_name: "Rick and Morty"
 
   watch_tng:
     alias: "Watch TNG"
     sequence:
-      - action: media_player.turn_on
+      - action: script.watch_plex_show
         data:
-          entity_id: media_player.basement
-      - action: script.wait_for_basement_media_player_ready
-      - delay:
-          seconds: 10
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.lg_webos_smart_tv
-          source: "HDMI 3"
-      - action: media_player.select_source
-        data:
-          entity_id: media_player.basement
-          source: "Plex"
-      - delay:
-          seconds: 2
-      - action: button.press
-        target:
-          entity_id: button.fermentor_scan_clients
-      - action: script.wait_for_basement_plex_client_ready
-      - action: media_player.play_media
-        data:
-          entity_id: media_player.plex_basement_apple_tv
-          media_content_type: EPISODE
-          media_content_id: '{ "library_name": "TV", "show_name": "Star Trek: The Next Generation", "shuffle": "1" }'
-      - delay:
-          seconds: 2
-      - action: script.music_assistant_pause_house_audio
+          show_name: "Star Trek: The Next Generation"

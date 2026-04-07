@@ -163,26 +163,22 @@ automation:
     mode: restart
     trigger:
       - trigger: state
-        entity_id:
-          - binary_sensor.se_basement_window_contact
-          - binary_sensor.sw_basement_window_contact
-          - binary_sensor.deck_door_contact
-          #        - binary_sensor.downstairs_motion
-          - binary_sensor.ene_window_contact
-          - binary_sensor.ese_window_contact
-          - binary_sensor.main_foyer_front_door_contact
-          #        - binary_sensor.hallway_motion
-          #        - binary_sensor.master_bedroom_motion
-          - binary_sensor.nne_window_contact
-          - binary_sensor.north_kitchen_sink_window_contact
-          - binary_sensor.north_master_bedroom_window_contact
-          - binary_sensor.nw_basement_window_contact
-          - binary_sensor.office_occupancy_2
-          - binary_sensor.office_north_window_contact
-          #        - binary_sensor.motion_sensor_motion
-          - binary_sensor.sse_window_contact
+        entity_id: binary_sensor.any_egress_open
         from: "off"
         to: "on"
+      - trigger: state
+        entity_id: binary_sensor.office_occupancy_2
+        from: "off"
+        to: "on"
+    variables:
+      open_egress_points: >-
+        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
+      trigger_label: >-
+        {% if trigger.entity_id == 'binary_sensor.any_egress_open' %}
+          {{ open_egress_points if open_egress_points else 'an egress point' }}
+        {% else %}
+          {{ trigger.to_state.attributes.friendly_name }}
+        {% endif %}
     condition:
       - condition: state
         entity_id: alarm_control_panel.home_alarm
@@ -192,26 +188,22 @@ automation:
         target:
           entity_id: alarm_control_panel.home_alarm
       - action: notify.all
+        continue_on_error: true
         data:
           message: >
-            Motion detected at {{ trigger.to_state.attributes.friendly_name }} while you're away!
+            Activity detected at {{ trigger_label }} while you're away!
       #    - action: tts.google_say
       #      data:
       #        message: "Intruder Alert! Intruder Alert! You are detected and recorded."
-      - action: light.turn_on
-        data:
-          entity_id: light.dining_room_lamps
-          flash: long
-      - delay: 00:00:02
-      - action: light.turn_on
-        data:
-          entity_id: light.dining_room_lamps
-          flash: long
-      - delay: 00:00:02
-      - action: light.turn_on
-        data:
-          entity_id: light.dining_room_lamps
-          flash: long
+      - repeat:
+          count: 3
+          sequence:
+            - action: light.turn_on
+              continue_on_error: true
+              data:
+                entity_id: light.dining_room_lamps
+                flash: long
+            - delay: 00:00:02
 
   - alias: send_notification_when_alarm_triggered
     id: send_notification_when_alarm_triggered
@@ -221,12 +213,53 @@ automation:
         to: "triggered"
     action:
       - action: notify.all
+        continue_on_error: true
         data:
           message: >
             Alarm triggered while you're away
+      - action: notify.mobile_app_wethop
+        continue_on_error: true
+        data:
+          message: "Something triggered alarm panel at home!"
+
+  - alias: mirror_shared_notifications_to_lg_tv_when_on
+    id: mirror_shared_notifications_to_lg_tv_when_on
+    mode: queued
+    trigger:
+      - trigger: event
+        event_type: call_service
+        event_data:
+          domain: notify
+          service: all
+      - trigger: event
+        event_type: call_service
+        event_data:
+          domain: notify
+          service: notify_all
+    variables:
+      notify_payload: "{{ trigger.event.data.service_data | default({}, true) }}"
+      notify_message: "{{ notify_payload.message | default('', true) }}"
+      notify_title: "{{ notify_payload.title | default(none, true) }}"
+      notify_data: "{{ notify_payload.data | default(none, true) }}"
+    condition:
+      - condition: state
+        entity_id: media_player.lg_webos_smart_tv
+        state: "on"
+      - condition: template
+        value_template: "{{ notify_message | trim != '' }}"
+    action:
+      - action: notify.lg_webos_tv_oled65c4aua_dusqljr
+        data:
+          message: "{{ notify_message }}"
+          title: "{{ notify_title }}"
+          data: "{{ notify_data }}"
 
   - alias: send_pic_from_camera
     id: send_pic_from_camera
+    # Sends a mobile notification with a camera snapshot when motion is detected.
+    # Triggers on basement or living room motion sensors held for 5 seconds.
+    # Fixed: entity_id must live inside data.data (not at the top level of data)
+    # so the HA companion app can attach the camera snapshot correctly.
     trigger:
       - trigger: state
         entity_id:
@@ -242,12 +275,15 @@ automation:
         data:
           message: >-
             Stream from {{ trigger.to_state.attributes.friendly_name }}
-          entity_id: >-
-            {% if trigger.entity_id == "binary_sensor.basement_motion" %}
-              camera.tikiroomcamera
-            {% else %}
-              camera.livingroomcamera
-            {% endif %}
+          data:
+            # camera_entity_id attaches a snapshot from the associated camera
+            # to the iOS/Android companion app notification.
+            entity_id: >-
+              {% if trigger.entity_id == "binary_sensor.basement_motion" %}
+                camera.tikiroomcamera
+              {% else %}
+                camera.livingroomcamera
+              {% endif %}
 
   - alias: arm_alarm
     id: arm_alarm
@@ -271,11 +307,13 @@ automation:
         data:
           code: !secret alarm_code
       - action: switch.turn_on
+        continue_on_error: true
         target:
           entity_id:
             - switch.livingroom_motion_detection
             - switch.tikiroomcam_tikiroom_motion_detection
       - action: input_boolean.turn_on
+        continue_on_error: true
         target:
           entity_id:
             - input_boolean.house_unoccupied
@@ -294,6 +332,7 @@ automation:
         data:
           code: !secret alarm_code
       - action: switch.turn_off
+        continue_on_error: true
         target:
           entity_id:
             - switch.livingroom_motion_detection
@@ -303,20 +342,10 @@ automation:
       #        message: >
       #          Disabled alarm and turned off motion detection
       - action: input_boolean.turn_off
+        continue_on_error: true
         target:
           entity_id:
             - input_boolean.house_unoccupied
-
-  - alias: notify_ios_app
-    id: notify_ios_app
-    trigger:
-      - trigger: state
-        entity_id: alarm_control_panel.home_alarm
-        to: "triggered"
-    action:
-      - action: notify.mobile_app_wethop
-        data:
-          message: "Something triggered alarm panel at home!"
 
 ########################
 # Binary Sensors
@@ -370,7 +399,6 @@ notify:
       - action: mobile_app_wethop
       - action: mobile_app_f7m69c_5d3d6e76
       - action: mobile_app_personal_macbook
-      - action: lg_webos_tv_oled65c4aua_dusqljr
   - name: notify_all
     platform: group
     services:
@@ -378,7 +406,6 @@ notify:
       - action: mobile_app_wethop
       - action: mobile_app_f7m69c_5d3d6e76
       - action: mobile_app_personal_macbook
-      - action: lg_webos_tv_oled65c4aua_dusqljr
 
 ########################
 # Scenes

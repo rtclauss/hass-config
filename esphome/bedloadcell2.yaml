@@ -3,12 +3,14 @@
 
 esphome:
   name: bedloadcell2 # this is the west side of the bed sensor
-  platform: ESP8266
+
+esp8266:
   board: esp01_1m
 
 wifi:
   ssid: !secret wifi_ap
   password: !secret wifi_password
+  min_auth_mode: WPA2
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -24,6 +26,7 @@ logger:
   esp8266_store_log_strings_in_flash: False
 
 ota:
+  - platform: esphome
 
 sensor:
   - platform: homeassistant
@@ -32,16 +35,19 @@ sensor:
     entity_id: sensor.raw_bed_load_cell_2_average
     internal: True
 
-
   - platform: hx711
-    name: "Bed Load Cell 2"
-    device_class: weight
-    state_class: measurement
-    unit_of_measurement: kg
+    id: raw_bed_load_cell_2_source
+    internal: true
     dout_pin: GPIO0
     clk_pin: GPIO14
     gain: 128
     update_interval: 0.5s
+  - platform: copy
+    source_id: raw_bed_load_cell_2_source
+    name: "Bed Load Cell 2"
+    device_class: weight
+    state_class: measurement
+    unit_of_measurement: kg
     filters:
       # -134510.0 is a magic number that represents the HX711 reading for 86kg
       # that is the negative value in both the float m and float c calculations
@@ -57,7 +63,6 @@ sensor:
           window_size: 15
           send_every: 1
     accuracy_decimals: 2
-
 
   # 7/19/23 old working, not dynamic update daily for zero range.
   # - platform: hx711
@@ -80,7 +85,7 @@ sensor:
   #         # - 401689 -> 0 # was 19kg on 5/6/2023
   #         # - 382171 -> 0 # was 60kg on 7/5/2023
   #         - 163555 -> 0 # was 0 on 7/19/23
-  #         - 
+  #         -
   #         # - 169400 -> 86 was 145kg on same date
   #         # - 15400 -> 86 was 154kg on 7/13/2023
   #         - -134510 -> 86
@@ -88,13 +93,10 @@ sensor:
   #         window_size: 15
   #         send_every: 1
   #   accuracy_decimals: 2
-  - platform: hx711
+  - platform: copy
+    source_id: raw_bed_load_cell_2_source
     name: "Raw Bed Load Cell 2"
     state_class: measurement
-    dout_pin: GPIO0
-    clk_pin: GPIO14
-    gain: 128
-    update_interval: 0.5s
     filters:
       - sliding_window_moving_average:
           window_size: 15

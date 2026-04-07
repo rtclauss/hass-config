@@ -151,8 +151,6 @@ automation:
         target:
           entity_id:
             - sensor.closest_aircraft_routeset
-            - sensor.closest_aircraft_routeset_names
-
             - sensor.closest_aircraft_route_raw
 
             - sensor.closest_aircraft_photo_raw
@@ -310,29 +308,6 @@ sensor:
     json_attributes:
       - response
 
-  # - platform: rest
-  #   name: Closest Aircraft Routeset Raw
-  #   resource: "https://adsb.im/api/0/routeset"
-  #   method: POST
-  #   scan_interval: 60
-  #   headers:
-  #     Accept: "application/json"
-  #     Content-Type: "application/json; charset=utf-8"
-  #     User-Agent: "HomeAssistant routeset"
-  #   payload: >-
-  #     {% set cs = (state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim) %}
-  #     {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
-  #     {% set lat = (p.lat if p is mapping and p.lat is defined else none) %}
-  #     {% set lon = (p.lon if p is mapping and p.lon is defined else none) %}
-
-  #     {% if cs == '' or lat is none or lon is none %}
-  #       {{ {"planes": []} | tojson }}
-  #     {% else %}
-  #       {{ {"planes": [{"callsign": cs, "lat": lat|float, "lng": lon|float}]} | tojson }}
-  #     {% endif %}
-  #   value_template: >-
-  #     {{ value | default('') }}
-
 ########################
 # Switch
 ########################
@@ -353,16 +328,16 @@ template:
           {% set home_lat = state_attr('zone.home', 'latitude') %}
           {% set home_lon = state_attr('zone.home', 'longitude') %}
           {% set max_km = 5 * 1.609344 %}
-          {% set max_alt = 10000 %}
 
           {% set ns = namespace(best=None, best_d=999999) %}
+          {% if home_lat is not none and home_lon is not none %}
           {% for p in planes %}
             {% set lat = p.lat | default(none) %}
             {% set lon = p.lon | default(none) %}
             {% set alt = p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) %}
             {% if lat is not none and lon is not none and alt is not none and alt != 'ground' %}
               {% set alt_ft = alt | float(-1) %}
-              {% if 0 <= alt_ft < max_alt %}
+              {% if 0 <= alt_ft %}
                 {% set d_km = distance(home_lat, home_lon, lat, lon) %}
                 {% if d_km is not none and d_km < max_km and d_km < ns.best_d %}
                   {% set ns.best_d = d_km %}
@@ -371,6 +346,7 @@ template:
               {% endif %}
             {% endif %}
           {% endfor %}
+          {% endif %}
 
           {% if ns.best %}
             {% set cs = (ns.best.flight | default('')) | trim %}
@@ -390,16 +366,16 @@ template:
             {% set home_lat = state_attr('zone.home', 'latitude') %}
             {% set home_lon = state_attr('zone.home', 'longitude') %}
             {% set max_km = 5 * 1.609344 %}
-            {% set max_alt = 10000 %}
 
             {% set ns = namespace(best=None, best_d=999999) %}
+            {% if home_lat is not none and home_lon is not none %}
             {% for p in planes %}
               {% set lat = p.lat | default(none) %}
               {% set lon = p.lon | default(none) %}
               {% set alt = p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) %}
               {% if lat is not none and lon is not none and alt is not none and alt != 'ground' %}
                 {% set alt_ft = alt | float(-1) %}
-                {% if 0 <= alt_ft < max_alt %}
+                {% if 0 <= alt_ft %}
                   {% set d_km = distance(home_lat, home_lon, lat, lon) %}
                   {% if d_km is not none and d_km < max_km and d_km < ns.best_d %}
                     {% set ns.best_d = d_km %}
@@ -408,19 +384,20 @@ template:
                 {% endif %}
               {% endif %}
             {% endfor %}
+            {% endif %}
             {{ ns.best if ns.best else dict() }}
 
           hex: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.hex if p and p.hex is defined else none }}
 
           callsign: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {% set cs = (p.flight | default('')) | trim if p else '' %}
             {{ cs if cs != '' else none }}
 
           altitude_ft: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {% if p %}
               {{ p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) }}
             {% else %}
@@ -429,39 +406,41 @@ template:
 
           distance_km: >-
             {# Use computed distance from selection pass, if present in feed; else recompute #}
-            {% set p = this.attributes.raw %}
-            {% if p and p.lat is defined and p.lon is defined %}
-              {% set home_lat = state_attr('zone.home', 'latitude') %}
-              {% set home_lon = state_attr('zone.home', 'longitude') %}
-              {{ distance(home_lat, home_lon, p.lat, p.lon) | round(3) }}
+            {% set p = this.attributes.get('raw') %}
+            {% set home_lat = state_attr('zone.home', 'latitude') %}
+            {% set home_lon = state_attr('zone.home', 'longitude') %}
+            {% if p and p.lat is defined and p.lon is defined and home_lat is not none and home_lon is not none %}
+              {% set d_km = distance(home_lat, home_lon, p.lat, p.lon) %}
+              {{ d_km | round(3) if d_km is not none else none }}
             {% else %}
               {{ none }}
             {% endif %}
 
           distance_mi: >-
-            {% if this.attributes.distance_km is not none %}
-              {{ (this.attributes.distance_km | float * 0.621371) | round(2) }}
+            {% set distance_km = this.attributes.get('distance_km') %}
+            {% if distance_km is not none %}
+              {{ (distance_km | float(default=0)) * 0.621371 | round(2) }}
             {% else %}
               {{ none }}
             {% endif %}
 
           # Plane description + ICAO type code
           desc: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.desc if p and p.desc is defined else none }}
 
           type_code: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.t if p and p.t is defined else none }}
 
           # Military flag comes directly from your feed (best)
           is_military: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {{ p.is_military | default(false) if p else false }}
 
           # Route: best-effort from whatever your feed has
           route: >-
-            {% set p = this.attributes.raw %}
+            {% set p = this.attributes.get('raw') %}
             {% if not p %}
               {{ none }}
             {% elif p.route is defined and (p.route | string | trim) != '' %}
@@ -582,54 +561,6 @@ template:
             {{ r.flightroute.airline.name
               if r and r.flightroute is defined and r.flightroute.airline is defined
               else none }}
-
-  - sensor:
-      - name: airport_codes_icao
-        unique_id: airport_codes_icao
-        state: >-
-          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-          {% if raw in ['unknown','unavailable','none',''] %}
-            {{ none }}
-          {% else %}
-            {% set j = raw | from_json %}
-            {% if j is sequence and j is not mapping and (j | length) > 0 %}
-              {{ j[0].airport_codes if j[0].airport_codes is defined else none }}
-            {% else %}
-              {{ none }}
-            {% endif %}
-          {% endif %}
-
-      - name: airports_names
-        unique_id: airports_names
-        state: >-
-          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-          {% if raw in ['unknown','unavailable','none',''] %}
-            {{ none }}
-          {% else %}
-            {% set j = raw | from_json %}
-            {% if j is sequence and j is not mapping and (j | length) > 0 and j[0]._airports is defined %}
-              {{ (j[0]._airports | map(attribute='name') | list) | join(' → ') }}
-            {% else %}
-              {{ none }}
-            {% endif %}
-          {% endif %}
-
-      # Helpful when debugging: if ADSB.im returns {"detail":[...]} you'll see it here
-      - name: error_detail
-        unique_id: closest_aircraft_error_detail
-        state: >-
-          {% set raw = states('sensor.closest_aircraft_routeset_raw') %}
-          {% if raw in ['unknown','unavailable','none',''] %}
-            {{ none }}
-          {% else %}
-            {% set j = raw | from_json %}
-            {% if j is mapping and j.detail is defined %}
-              {{ j.detail | tojson }}
-            {% else %}
-              {{ none }}
-            {% endif %}
-          {% endif %}
-
 rest:
   - resource: https://adsb.im/api/0/routeset
     method: POST
@@ -658,45 +589,32 @@ rest:
         unique_id: closest_aircraft_routeset
         value_template: >-
           {% set j = value | from_json %}
-          {% if j is sequence and j|length > 0 and j[0]._airport_codes_iata is defined %}
+          {% if j is sequence and j | length > 0 and j[0]._airport_codes_iata is defined %}
             {{ j[0]._airport_codes_iata }}
           {% else %}
-            unknown
+            {{ none }}
           {% endif %}
 
-  - resource: https://adsb.im/api/0/routeset
-    method: POST
-    scan_interval: 60
-    headers:
-      Accept: application/json
-      Content-Type: application/json; charset=utf-8
-      Origin: http://10.24.1.188:8080
-      Referer: http://10.24.1.188:8080/
-      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0
-      Sec-Fetch-Dest: empty
-      Sec-Fetch-Mode: cors
-      Sec-Fetch-Site: cross-site
-    payload_template: >-
-      {% set cs = (state_attr('sensor.closest_aircraft_overhead','callsign') | default('', true) | trim) %}
-      {% set p = state_attr('sensor.closest_aircraft_overhead','raw') %}
-      {% set lat = (p.lat if p is mapping and p.lat is defined else none) %}
-      {% set lon = (p.lon if p is mapping and p.lon is defined else none) %}
-      {% if cs == '' or lat is none or lon is none %}
-        {{ {"planes": []} | tojson }}
-      {% else %}
-        {{ {"planes": [{"callsign": cs, "lat": lat|float, "lng": lon|float}]} | tojson }}
-      {% endif %}
-    sensor:
       - name: Closest Aircraft Routeset Names
         unique_id: closest_aircraft_routeset_names
         value_template: >-
           {% set j = value | from_json %}
-          {% if j is sequence and j|length > 0 and j[0]._airports is defined %}
-            {% set names = j[0]._airports | map(attribute='name') | list %}
-            {% set s = names | join(' → ') %}
+          {% if j is sequence and j | length > 0 and j[0]._airports is defined %}
+            {% set s = (j[0]._airports | map(attribute='name') | list) | join(' → ') %}
             {{ s[:250] }}
           {% else %}
-            unknown
+            {{ none }}
+          {% endif %}
+
+      - name: error_detail
+        unique_id: closest_aircraft_error_detail
+        value_template: >-
+          {% set j = value | from_json %}
+          {% if j is mapping and j.detail is defined %}
+            {% set detail = j.detail | tojson %}
+            {{ detail[:250] }}
+          {% else %}
+            {{ none }}
           {% endif %}
 
 ########################

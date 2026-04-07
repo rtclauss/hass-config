@@ -28,11 +28,6 @@ homeassistant:
     ## Automations
     ################################################
 
-    automation.initialize_vacation_items:
-      <<: *customize
-      friendly_name: "Initialize Vacation Items"
-      icon: mdi:beach
-
     automation.trip_mode_manager:
       <<: *customize
       friendly_name: "Trip Mode Manager"
@@ -47,6 +42,11 @@ homeassistant:
       <<: *customize
       friendly_name: "Sync Ecobee Calendar Vacation"
       icon: mdi:calendar-sync
+
+    automation.log_calendar_vacation_plan_diagnostics:
+      <<: *customize
+      friendly_name: "Log Calendar Vacation Diagnostics"
+      icon: mdi:clipboard-text-clock
 
     automation.trip_mode_watchdog_home_1h:
       <<: *customize
@@ -73,10 +73,6 @@ homeassistant:
     automation.vacuum_flying_home:
       <<: *customize
       friendly_name: "Vacuum house when flying home"
-
-    automation.toggle_vacation_tab:
-      <<: *customize
-      friendly_name: "Show/Hide Vacation tab"
 
     ################################################
     ## Binary Sensors
@@ -459,9 +455,10 @@ automation:
                     {% set origin_code = summary.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                     {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                   {% elif summary_lower.startswith('flight to ') %}
-                    {% set destination_code = summary.split('Flight to ', 1)[1].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set destination_code = summary_lower[10:].split(' (', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                   {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
-                    {% set destination_code = summary.split('Flight: ', 1)[1].split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set flight_tail_lower = summary_lower[8:] %}
+                    {% set destination_code = flight_tail_lower.split(' to ', 1)[1].split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                   {% endif %}
                   {% set is_msp_departure = (
                     origin_code == "MSP"
@@ -604,6 +601,32 @@ automation:
               end_date: "{{ (schedule_end | as_datetime | as_local).date().isoformat() }}"
               end_time: "{{ (schedule_end | as_datetime | as_local).strftime('%H:%M:%S') }}"
 
+  - id: log_calendar_vacation_plan_diagnostics
+    alias: log_calendar_vacation_plan_diagnostics
+    mode: restart
+    trigger:
+      - trigger: state
+        entity_id: sensor.ecobee_calendar_vacation_schedule
+      - trigger: state
+        entity_id: sensor.ecobee_calendar_vacation_schedule
+        attribute: decision_code
+    variables:
+      decision_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'decision_summary') | default('No travel decision recorded.', true) | string | trim }}"
+      outbound_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'outbound_summary') | default('', true) | string | trim }}"
+      return_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'return_summary') | default('', true) | string | trim }}"
+      fallback_summary: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'fallback_summary') | default('', true) | string | trim }}"
+      fallback_source: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'fallback_source') | default('', true) | string | trim }}"
+      destination_name: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'destination_name') | default('', true) | string | trim }}"
+      ignored_reason: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'ignored_reason') | default('', true) | string | trim }}"
+    action:
+      - action: logbook.log
+        data:
+          entity_id: sensor.ecobee_calendar_vacation_schedule
+          domain: sensor
+          name: Travel detection
+          message: >-
+            {{ decision_summary }}{% if outbound_summary %} Outbound: {{ outbound_summary }}.{% endif %}{% if return_summary %} Return: {{ return_summary }}.{% endif %}{% if fallback_summary %} Fallback{% if fallback_source %} ({{ fallback_source }}){% endif %}: {{ fallback_summary }}.{% endif %}{% if destination_name %} Destination: {{ destination_name }}.{% endif %}{% if ignored_reason and ignored_reason != decision_summary %} Ignored: {{ ignored_reason }}.{% endif %}
+
   - id: trip_mode_watchdog_home_1h
     alias: trip_mode_watchdog_home_1h
     trigger:
@@ -665,7 +688,10 @@ automation:
               - action: notify.mobile_app_wethop
                 data:
                   title: "Garage opened while on a trip"
-                  # message: "Close the door?"
+                  # Fixed: `message` is a required field for all HA notify services.
+                  # Removing the comment restores the field that was accidentally
+                  # commented out, preventing the "required key not provided" error.
+                  message: "Close the door?"
                   data:
                     tag: "garage-opened-on-trip"
                     persistent: true
@@ -860,6 +886,7 @@ automation:
 
   - id: vacuum_on_trip
     alias: vacuum_on_trip
+    description: Run one full-floor pass on the main and upstairs levels during trips.
     trigger:
       - trigger: time
         at: "13:00:00"
@@ -874,27 +901,21 @@ automation:
           condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
+        - alias: "guest mode off"
+          condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
     action:
-      # Revert back when batteries are all reset/new
-      # including main level vacuum
-      # - alias: Start Vacuums
-      #   action: vacuum.start
-      #   target:
-      #     entity_id: all
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: script.vacuum_main_and_upstairs_levels
       - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/cleaning"
-          message: "Vacuuming part of the house while you're away \U0001F4BA"
+          message: "Vacuuming the main and upstairs levels while you're away \U0001F4BA"
 
   - id: vacuum_flying_home
     alias: vacuum_flying_home
+    description: Run one full-floor pass on the main and upstairs levels before Ryan flies home.
     trigger:
       - entity_id: binary_sensor.flying_home_today
         from: "off"
@@ -909,24 +930,16 @@ automation:
         - condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
     action:
-      # Revert back when batteries are all reset/new
-      # including main level vacuum
-      # - alias: Start Vacuums
-      #   action: vacuum.start
-      #   target:
-      #     entity_id: all
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: script.vacuum_main_and_upstairs_levels
       - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/cleaning"
-          message: "Vacuuming the house while you fly home \U0001F4BA"
+          message: "Vacuuming the main and upstairs levels while you fly home \U0001F4BA"
 
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab
@@ -1373,6 +1386,7 @@ template:
               {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
               {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
               {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+              {% set is_friend_itinerary = 'friend' in text %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
@@ -1394,7 +1408,7 @@ template:
               {% if named_destination != '' %}
                 {% set destination_code = named_destination.split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
               {% endif %}
-              {% if looks_like_flight and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL'] and start_dt is not none and end_dt is not none %}
+              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL'] and start_dt is not none and end_dt is not none %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
@@ -1441,6 +1455,7 @@ template:
               {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
               {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
               {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+              {% set is_friend_itinerary = 'friend' in text %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
@@ -1462,7 +1477,7 @@ template:
               {% if named_destination != '' %}
                 {% set destination_code = named_destination.split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
               {% endif %}
-              {% if looks_like_flight and destination_code in ['RST', 'ROCHESTER'] and start_dt is not none and end_dt is not none %}
+              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['RST', 'ROCHESTER'] and start_dt is not none and end_dt is not none %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
@@ -1543,58 +1558,147 @@ template:
               }}
             {% endif %}
           vacation_plan_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set future_cutoff_ts = now_ts + (180 * 86400) %}
+            {% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] %}
             {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
             {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
             {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
-            {% set ns = namespace(curling_event=None, outbound=None, return_home=None) %}
+            {% set travel_events = personal_events_list + work_trip_events_list %}
+            {% set ns = namespace(
+              outbound=None,
+              final_destination=None,
+              return_home=None,
+              standalone_fallback=None,
+              paired_fallback=None,
+              ignored_reason='No qualifying travel itinerary or calendar trip block was found.'
+            ) %}
             {% for event in curling_events_list %}
+              {% set summary = event.summary | default('Curling', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
               {% set start_dt = as_datetime(start_raw) %}
               {% set end_dt = as_datetime(end_raw) %}
-              {% set is_all_day = 'T' not in (start_raw | string) %}
-              {% set duration_days = 0 %}
               {% if start_dt is not none and end_dt is not none %}
-                {% set duration_days = ((as_timestamp(end_dt) - as_timestamp(start_dt)) / 86400) | int(0) %}
-              {% endif %}
-              {% if ns.curling_event is none and start_dt is not none and end_dt is not none and is_all_day and duration_days > 2 %}
-                {% set ns.curling_event = {
-                  'reason': 'calendar',
-                  'summary': event.summary | default('Curling', true),
-                  'start': (start_dt | as_local).isoformat(),
-                  'end': (end_dt | as_local).isoformat(),
-                  'return_summary': '',
-                  'vacation_name': event.summary | default('Curling', true)
-                } %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set is_all_day = 'T' not in (start_raw | string) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                {% if end_ts > now_ts and end_ts <= future_cutoff_ts and is_all_day and duration_days > 2 %}
+                  {% set candidate = {
+                    'summary': summary,
+                    'start': (start_dt | as_local).isoformat(),
+                    'end': (end_dt | as_local).isoformat(),
+                    'start_ts': start_ts,
+                    'end_ts': end_ts,
+                    'vacation_name': summary | default('Curling', true),
+                    'source_code': 'curling_block',
+                    'source_label': 'curling block',
+                    'priority': 4
+                  } %}
+                  {% if ns.standalone_fallback is none or candidate.priority < ns.standalone_fallback.priority or (candidate.priority == ns.standalone_fallback.priority and candidate.start_ts < ns.standalone_fallback.start_ts) %}
+                    {% set ns.standalone_fallback = candidate %}
+                  {% endif %}
+                {% endif %}
               {% endif %}
             {% endfor %}
-            {% set travel_events = personal_events_list + work_trip_events_list %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('Vacation', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set is_all_day = 'T' not in (start_raw | string) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                {% set is_explicit_vacation = '#vacation' in text %}
+                {% set is_trip_block = is_all_day and duration_days > 1 and ('vacation' in text or ' trip' in text or text.startswith('trip ') or 'travel' in text or 'out of town' in text or 'pto' in text or 'ooo' in text) %}
+                {% if end_ts > now_ts and end_ts <= future_cutoff_ts and (is_explicit_vacation or is_trip_block) %}
+                  {% set candidate = {
+                    'summary': summary,
+                    'start': (start_dt | as_local).isoformat(),
+                    'end': (end_dt | as_local).isoformat(),
+                    'start_ts': start_ts,
+                    'end_ts': end_ts,
+                    'vacation_name': summary,
+                    'source_code': 'explicit_vacation' if is_explicit_vacation else 'all_day_trip_block',
+                    'source_label': 'explicit vacation event' if is_explicit_vacation else 'all-day trip block',
+                    'priority': 1 if is_explicit_vacation else 3
+                  } %}
+                  {% if ns.standalone_fallback is none or candidate.priority < ns.standalone_fallback.priority or (candidate.priority == ns.standalone_fallback.priority and candidate.start_ts < ns.standalone_fallback.start_ts) %}
+                    {% set ns.standalone_fallback = candidate %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% for event in work_trip_events_list %}
+              {% set summary = event.summary | default('Work Trip', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set text = [summary, description, location] | join(' ') | lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% if start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% set is_all_day = 'T' not in (start_raw | string) %}
+                {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                {% set is_lodging = 'stay at' in text or 'hotel' in text or 'airbnb' in text or 'lodging' in text or 'resort' in text or ' inn' in text or text.startswith('inn ') or 'check-in' in text or 'check out' in text %}
+                {% set is_trip_block = is_all_day and duration_days > 1 %}
+                {% if end_ts > now_ts and end_ts <= future_cutoff_ts and (is_lodging or is_trip_block) %}
+                  {% set candidate = {
+                    'summary': summary,
+                    'start': (start_dt | as_local).isoformat(),
+                    'end': (end_dt | as_local).isoformat(),
+                    'start_ts': start_ts,
+                    'end_ts': end_ts,
+                    'vacation_name': summary,
+                    'source_code': 'lodging' if is_lodging else 'all_day_trip_block',
+                    'source_label': 'lodging span' if is_lodging else 'all-day trip block',
+                    'priority': 0 if is_lodging else 3
+                  } %}
+                  {% if ns.standalone_fallback is none or candidate.priority < ns.standalone_fallback.priority or (candidate.priority == ns.standalone_fallback.priority and candidate.start_ts < ns.standalone_fallback.start_ts) %}
+                    {% set ns.standalone_fallback = candidate %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
             {% for event in travel_events %}
               {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
               {% set start_dt = as_datetime(start_raw) %}
               {% if start_dt is not none %}
-                {% set summary = event.summary | default('Flight', true) %}
-                {% set description = event.description | default('', true) %}
-                {% set location = event.location | default('', true) %}
+                {% set summary = event.summary | default('Flight', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
                 {% set summary_lower = summary | lower %}
-                {% set summary_text = summary | string %}
-                {% set flight_text = ([summary, description, location] | join(' ') | lower) %}
-                {% set route_summary = '→' in summary_text %}
+                {% set flight_text = [summary, description, location] | join(' ') | lower %}
+                {% set route_summary = '→' in summary %}
                 {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
                 {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
                 {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                {% set is_friend_itinerary = 'friend' in flight_text %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set origin_code = '' %}
                 {% set destination_name = '' %}
                 {% set destination_code = '' %}
                 {% set named_destination = '' %}
                 {% if route_summary %}
-                  {% set origin_code = summary_text.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
-                  {% set destination_code = summary_text.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% set origin_code = summary.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                  {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                 {% elif summary_lower.startswith('flight to ') %}
-                  {% set named_destination = summary_text[10:] %}
+                  {% set named_destination = summary[10:] %}
                 {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
-                  {% set flight_tail = summary_text[8:] %}
+                  {% set flight_tail = summary[8:] %}
                   {% set flight_tail_lower = summary_lower[8:] %}
                   {% set to_index = flight_tail_lower.find(' to ') %}
                   {% if to_index != -1 %}
@@ -1609,9 +1713,12 @@ template:
                   {% set destination_name = destination_code %}
                 {% endif %}
                 {% set is_home_origin = origin_code in ['MSP', 'RST'] %}
-                {% set is_home_destination = destination_code in ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] %}
+                {% set is_home_destination = destination_code in home_codes %}
                 {% set outbound_priority = 0 if is_home_origin else 1 if named_flight else 9 %}
-                {% if looks_like_flight and start_ts >= (as_timestamp(now()) - 3600) and destination_name != '' and not is_home_destination and outbound_priority < 9 %}
+                {% if looks_like_flight and is_friend_itinerary and is_home_destination and ns.ignored_reason == 'No qualifying travel itinerary or calendar trip block was found.' %}
+                  {% set ns.ignored_reason = 'Ignored a friend itinerary arriving home.' %}
+                {% endif %}
+                {% if looks_like_flight and not is_friend_itinerary and start_ts >= (now_ts - 3600) and destination_name != '' and not is_home_destination and outbound_priority < 9 %}
                   {% if ns.outbound is none or outbound_priority < ns.outbound.priority or (outbound_priority == ns.outbound.priority and start_ts < ns.outbound.start_ts) %}
                     {% set ns.outbound = {
                       'summary': summary,
@@ -1625,28 +1732,35 @@ template:
               {% endif %}
             {% endfor %}
             {% if ns.outbound is not none %}
+              {% set ns.final_destination = {
+                'destination_name': ns.outbound.destination_name,
+                'summary': ns.outbound.summary,
+                'start_ts': ns.outbound.start_ts
+              } %}
               {% for event in travel_events %}
                 {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
                 {% set start_dt = as_datetime(start_raw) %}
                 {% if start_dt is not none %}
-                  {% set summary = event.summary | default('Flight', true) %}
-                  {% set description = event.description | default('', true) %}
-                  {% set location = event.location | default('', true) %}
+                  {% set summary = event.summary | default('Flight', true) | string %}
+                  {% set description = event.description | default('', true) | string %}
+                  {% set location = event.location | default('', true) | string %}
                   {% set summary_lower = summary | lower %}
-                  {% set summary_text = summary | string %}
-                  {% set flight_text = ([summary, description, location] | join(' ') | lower) %}
-                  {% set route_summary = '→' in summary_text %}
+                  {% set flight_text = [summary, description, location] | join(' ') | lower %}
+                  {% set route_summary = '→' in summary %}
                   {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
                   {% set itinerary_marker = 'synced by flighty' in flight_text or 'created from an email you received in gmail' in flight_text or 'booking code:' in flight_text or 'flight time ' in flight_text %}
                   {% set looks_like_flight = route_summary or named_flight or itinerary_marker %}
+                  {% set is_friend_itinerary = 'friend' in flight_text %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set destination_name = '' %}
                   {% set destination_code = '' %}
                   {% set named_destination = '' %}
                   {% if route_summary %}
-                    {% set destination_code = summary_text.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set destination_code = summary.split('→', 1)[1].split('•', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
                   {% elif summary_lower.startswith('flight to ') %}
-                    {% set named_destination = summary_text[10:] %}
+                    {% set named_destination = summary[10:] %}
                   {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
-                    {% set flight_tail = summary_text[8:] %}
+                    {% set flight_tail = summary[8:] %}
                     {% set flight_tail_lower = summary_lower[8:] %}
                     {% set to_index = flight_tail_lower.find(' to ') %}
                     {% if to_index != -1 %}
@@ -1654,10 +1768,23 @@ template:
                     {% endif %}
                   {% endif %}
                   {% if named_destination != '' %}
-                    {% set destination_code = named_destination.split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                    {% set destination_name = named_destination.split(' (', 1)[0].split(' •', 1)[0].strip() %}
+                    {% set destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
                   {% endif %}
-                  {% set start_ts = as_timestamp(start_dt) %}
-                  {% if looks_like_flight and destination_code in ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] and start_ts > ns.outbound.start_ts %}
+                  {% if destination_name == '' and destination_code not in home_codes %}
+                    {% set destination_name = destination_code %}
+                  {% endif %}
+                  {% set is_home_destination = destination_code in home_codes %}
+                  {% if looks_like_flight and not is_friend_itinerary and destination_name != '' and not is_home_destination and start_ts >= ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 172800) %}
+                    {% if ns.final_destination is none or start_ts >= ns.final_destination.start_ts %}
+                      {% set ns.final_destination = {
+                        'destination_name': destination_name,
+                        'summary': summary,
+                        'start_ts': start_ts
+                      } %}
+                    {% endif %}
+                  {% endif %}
+                  {% if looks_like_flight and not is_friend_itinerary and is_home_destination and start_ts > ns.outbound.start_ts %}
                     {% if ns.return_home is none or start_ts < ns.return_home.start_ts %}
                       {% set ns.return_home = {
                         'summary': summary,
@@ -1668,22 +1795,208 @@ template:
                   {% endif %}
                 {% endif %}
               {% endfor %}
+              {% for event in curling_events_list %}
+                {% set summary = event.summary | default('Curling', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% set end_dt = as_datetime(end_raw) %}
+                {% if start_dt is not none and end_dt is not none %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set end_ts = as_timestamp(end_dt) %}
+                  {% set is_all_day = 'T' not in (start_raw | string) %}
+                  {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                  {% if end_ts > ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 259200) and is_all_day and duration_days > 2 %}
+                    {% set contains_outbound = start_ts <= ns.outbound.start_ts and end_ts >= ns.outbound.start_ts %}
+                    {% set proximity = ((start_ts - ns.outbound.start_ts) | abs) %}
+                    {% set candidate = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'end_ts': end_ts,
+                      'vacation_name': summary | default('Curling', true),
+                      'source_code': 'curling_block',
+                      'source_label': 'curling block',
+                      'priority': 4,
+                      'contains_outbound': contains_outbound,
+                      'proximity': proximity
+                    } %}
+                    {% if ns.paired_fallback is none or candidate.priority < ns.paired_fallback.priority or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound and not ns.paired_fallback.contains_outbound) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity < ns.paired_fallback.proximity) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity == ns.paired_fallback.proximity and candidate.start_ts < ns.paired_fallback.start_ts) %}
+                      {% set ns.paired_fallback = candidate %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% for event in personal_events_list %}
+                {% set summary = event.summary | default('Vacation', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
+                {% set text = [summary, description, location] | join(' ') | lower %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% set end_dt = as_datetime(end_raw) %}
+                {% if start_dt is not none and end_dt is not none %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set end_ts = as_timestamp(end_dt) %}
+                  {% set is_all_day = 'T' not in (start_raw | string) %}
+                  {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                  {% set is_explicit_vacation = '#vacation' in text %}
+                  {% set is_trip_block = is_all_day and duration_days > 1 and ('vacation' in text or ' trip' in text or text.startswith('trip ') or 'travel' in text or 'out of town' in text or 'pto' in text or 'ooo' in text) %}
+                  {% if end_ts > ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 259200) and (is_explicit_vacation or is_trip_block) %}
+                    {% set contains_outbound = start_ts <= ns.outbound.start_ts and end_ts >= ns.outbound.start_ts %}
+                    {% set proximity = ((start_ts - ns.outbound.start_ts) | abs) %}
+                    {% set candidate = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'end_ts': end_ts,
+                      'vacation_name': summary,
+                      'source_code': 'explicit_vacation' if is_explicit_vacation else 'all_day_trip_block',
+                      'source_label': 'explicit vacation event' if is_explicit_vacation else 'all-day trip block',
+                      'priority': 1 if is_explicit_vacation else 3,
+                      'contains_outbound': contains_outbound,
+                      'proximity': proximity
+                    } %}
+                    {% if ns.paired_fallback is none or candidate.priority < ns.paired_fallback.priority or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound and not ns.paired_fallback.contains_outbound) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity < ns.paired_fallback.proximity) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity == ns.paired_fallback.proximity and candidate.start_ts < ns.paired_fallback.start_ts) %}
+                      {% set ns.paired_fallback = candidate %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% for event in work_trip_events_list %}
+                {% set summary = event.summary | default('Work Trip', true) | string %}
+                {% set description = event.description | default('', true) | string %}
+                {% set location = event.location | default('', true) | string %}
+                {% set text = [summary, description, location] | join(' ') | lower %}
+                {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+                {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+                {% set start_dt = as_datetime(start_raw) %}
+                {% set end_dt = as_datetime(end_raw) %}
+                {% if start_dt is not none and end_dt is not none %}
+                  {% set start_ts = as_timestamp(start_dt) %}
+                  {% set end_ts = as_timestamp(end_dt) %}
+                  {% set is_all_day = 'T' not in (start_raw | string) %}
+                  {% set duration_days = ((end_ts - start_ts) / 86400) | int(0) %}
+                  {% set is_lodging = 'stay at' in text or 'hotel' in text or 'airbnb' in text or 'lodging' in text or 'resort' in text or ' inn' in text or text.startswith('inn ') or 'check-in' in text or 'check out' in text %}
+                  {% set is_trip_block = is_all_day and duration_days > 1 %}
+                  {% if end_ts > ns.outbound.start_ts and start_ts <= (ns.outbound.start_ts + 259200) and (is_lodging or is_trip_block) %}
+                    {% set contains_outbound = start_ts <= ns.outbound.start_ts and end_ts >= ns.outbound.start_ts %}
+                    {% set proximity = ((start_ts - ns.outbound.start_ts) | abs) %}
+                    {% set candidate = {
+                      'summary': summary,
+                      'start': (start_dt | as_local).isoformat(),
+                      'end': (end_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'end_ts': end_ts,
+                      'vacation_name': summary,
+                      'source_code': 'lodging' if is_lodging else 'all_day_trip_block',
+                      'source_label': 'lodging span' if is_lodging else 'all-day trip block',
+                      'priority': 0 if is_lodging else 3,
+                      'contains_outbound': contains_outbound,
+                      'proximity': proximity
+                    } %}
+                    {% if ns.paired_fallback is none or candidate.priority < ns.paired_fallback.priority or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound and not ns.paired_fallback.contains_outbound) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity < ns.paired_fallback.proximity) or (candidate.priority == ns.paired_fallback.priority and candidate.contains_outbound == ns.paired_fallback.contains_outbound and candidate.proximity == ns.paired_fallback.proximity and candidate.start_ts < ns.paired_fallback.start_ts) %}
+                      {% set ns.paired_fallback = candidate %}
+                    {% endif %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
             {% endif %}
             {% if ns.outbound is not none and ns.return_home is not none and (ns.return_home.start_ts - 7200) > ns.outbound.start_ts %}
               {{
                 {
                   'reason': 'flight',
+                  'decision_code': 'flight_return',
+                  'decision_summary': 'Using outbound flight and booked return flight.',
                   'summary': ns.outbound.summary,
                   'start': ns.outbound.start,
                   'end': ((ns.return_home.start | as_datetime | as_local) - timedelta(hours=2)).isoformat(),
                   'return_summary': ns.return_home.summary,
-                  'vacation_name': ns.outbound.destination_name | default(ns.outbound.summary, true)
+                  'vacation_name': ns.final_destination.destination_name | default(ns.outbound.destination_name, true),
+                  'outbound_summary': ns.outbound.summary,
+                  'destination_name': ns.final_destination.destination_name | default(ns.outbound.destination_name, true),
+                  'fallback_summary': '',
+                  'fallback_source': '',
+                  'ignored_reason': ''
                 } | to_json
               }}
-            {% elif ns.curling_event is not none %}
-              {{ ns.curling_event | to_json }}
+            {% elif ns.outbound is not none and ns.paired_fallback is not none and ns.paired_fallback.end_ts > ns.outbound.start_ts %}
+              {{
+                {
+                  'reason': 'flight',
+                  'decision_code': 'flight_' ~ ns.paired_fallback.source_code,
+                  'decision_summary': 'Using outbound flight and ' ~ ns.paired_fallback.source_label ~ ' because no return flight is booked.',
+                  'summary': ns.outbound.summary,
+                  'start': ns.outbound.start,
+                  'end': ns.paired_fallback.end,
+                  'return_summary': '',
+                  'vacation_name': ns.final_destination.destination_name | default(ns.paired_fallback.vacation_name, true),
+                  'outbound_summary': ns.outbound.summary,
+                  'destination_name': ns.final_destination.destination_name | default(ns.paired_fallback.vacation_name, true),
+                  'fallback_summary': ns.paired_fallback.summary,
+                  'fallback_source': ns.paired_fallback.source_label,
+                  'ignored_reason': ''
+                } | to_json
+              }}
+            {% elif ns.outbound is not none %}
+              {{
+                {
+                  'reason': 'off',
+                  'decision_code': 'off_outbound_missing_end',
+                  'decision_summary': 'Found an outbound flight, but no booked return or related fallback trip window.',
+                  'summary': '',
+                  'start': '',
+                  'end': '',
+                  'return_summary': '',
+                  'vacation_name': '',
+                  'outbound_summary': ns.outbound.summary,
+                  'destination_name': ns.final_destination.destination_name | default(ns.outbound.destination_name, true),
+                  'fallback_summary': '',
+                  'fallback_source': '',
+                  'ignored_reason': 'No return flight or linked lodging, vacation event, or all-day trip block was found.'
+                } | to_json
+              }}
+            {% elif ns.standalone_fallback is not none %}
+              {{
+                {
+                  'reason': 'calendar',
+                  'decision_code': 'calendar_' ~ ns.standalone_fallback.source_code,
+                  'decision_summary': 'Using standalone ' ~ ns.standalone_fallback.source_label ~ '.',
+                  'summary': ns.standalone_fallback.summary,
+                  'start': ns.standalone_fallback.start,
+                  'end': ns.standalone_fallback.end,
+                  'return_summary': '',
+                  'vacation_name': ns.standalone_fallback.vacation_name,
+                  'outbound_summary': '',
+                  'destination_name': ns.standalone_fallback.vacation_name,
+                  'fallback_summary': ns.standalone_fallback.summary,
+                  'fallback_source': ns.standalone_fallback.source_label,
+                  'ignored_reason': ''
+                } | to_json
+              }}
             {% else %}
-              {{ {'reason': 'off', 'summary': '', 'start': '', 'end': '', 'return_summary': '', 'vacation_name': ''} | to_json }}
+              {{
+                {
+                  'reason': 'off',
+                  'decision_code': 'off_no_candidate',
+                  'decision_summary': ns.ignored_reason,
+                  'summary': '',
+                  'start': '',
+                  'end': '',
+                  'return_summary': '',
+                  'vacation_name': '',
+                  'outbound_summary': '',
+                  'destination_name': '',
+                  'fallback_summary': '',
+                  'fallback_source': '',
+                  'ignored_reason': ns.ignored_reason
+                } | to_json
+              }}
             {% endif %}
     binary_sensor:
       - name: Curling Vacation Today
@@ -1806,12 +2119,70 @@ template:
             {% else %}
               {{ (raw_plan | from_json).vacation_name | default('') }}
             {% endif %}
+          decision_code: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              off_no_candidate
+            {% else %}
+              {{ (raw_plan | from_json).decision_code | default('off_no_candidate') }}
+            {% endif %}
+          decision_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ 'No qualifying travel itinerary or calendar trip block was found.' }}
+            {% else %}
+              {{ (raw_plan | from_json).decision_summary | default('No qualifying travel itinerary or calendar trip block was found.') }}
+            {% endif %}
+          outbound_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).outbound_summary | default('') }}
+            {% endif %}
+          destination_name: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).destination_name | default('') }}
+            {% endif %}
+          fallback_summary: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).fallback_summary | default('') }}
+            {% endif %}
+          fallback_source: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ '' }}
+            {% else %}
+              {{ (raw_plan | from_json).fallback_source | default('') }}
+            {% endif %}
+          ignored_reason: >-
+            {% set raw_plan = (vacation_plan_json | default('', true) | string | trim) %}
+            {% set raw_plan_state = raw_plan | lower %}
+            {% if raw_plan == '' or raw_plan_state in ['unknown', 'unavailable', 'none', 'null'] %}
+              {{ 'No qualifying travel itinerary or calendar trip block was found.' }}
+            {% else %}
+              {{ (raw_plan | from_json).ignored_reason | default('') }}
+            {% endif %}
   - sensor:
       - name: time_to_home
         default_entity_id: sensor.me_to_home
         unique_id: me_to_home
+        availability: >-
+          {{ states('sensor.me_to_home') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
         state: >-
-          {% set to_home = states.sensor.me_to_home.state | int %}
-          {% set minutes = ((to_home % 60) / 1) | int %}
-          {% set hours = ((to_home % 1440) / 60) | int %}
-          {{hours}}:{{minutes}}:00
+          {% set to_home = states('sensor.me_to_home') | int(default=0) %}
+          {% set minutes = to_home % 60 %}
+          {% set hours = (to_home % 1440) // 60 %}
+          {{ '%02d:%02d:00' | format(hours, minutes) }}

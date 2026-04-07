@@ -1,5 +1,5 @@
 # The Brewery Home Assistant Configuration 🍺
-[![Build Status](https://api.travis-ci.com/rtclauss/hass-config.svg?branch=master)](https://app.travis-ci.com/github/rtclauss/hass-config)
+[![Build Status](https://api.travis-ci.com/rtclauss/hass-config.svg?branch=main)](https://app.travis-ci.com/github/rtclauss/hass-config)
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
@@ -10,12 +10,22 @@
 - Config checks run against `ghcr.io/home-assistant/home-assistant:stable` so validation tracks current Home Assistant stable releases.
 - As of 2026-03-15, latest `homeassistant` requires Python `>=3.14.2`, so `.python-version` is set to `3.14.3`.
 
+## Branch Flow
+
+- `main` is stable/live.
+- `develop` is the integration branch used for Home Assistant soak testing.
+- Start feature work in a worktree from `origin/develop`.
+- Open feature/fix PRs to `develop`, explicitly setting the base branch.
+- `main` only accepts promotion PRs from `develop`.
+- After HA validation, open a promotion PR from `develop` to `main`.
+
 ### Local Setup
 
 ```bash
 # Use the pinned interpreter from .python-version (for example via pyenv)
 python -m pip install --upgrade pip yamllint
 python scripts/check_ha_python_support.py --python-version-file .python-version
+uv run --with pytest pytest
 ```
 
 ## Music Assistant Media Flow
@@ -139,24 +149,26 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
 ## Feature Docs
 
 - [House Transition Framework](docs/house_transition_framework.md)
+- [Room Intent Policy](docs/room_intent.yaml)
+- [Room Naming Model](docs/room_names.md)
+- [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
 - [Tesla Departure Planner](docs/tesla_departure_planner.md)
 
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
-I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/master/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
+I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/main/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
 
 Software on the NUC:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
 * Running in Hass.io
-  * ~~[ADB](https://github.com/hassio-addons/addon-adb)~~ Removed FireTVs
   * [AppDaemon](https://github.com/hassio-addons/addon-appdaemon)
   * [VSCode](https://github.com/hassio-addons/addon-vscode)
   * [Mosquitto Broker](https://home-assistant.io/addons/mosquitto/)
   * [Music Assistant](https://music-assistant.io/) - Main playback engine for Sonos/Spotify/radio automations
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
-  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/master/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/master/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/master/esphome/bluetoothproxy1.yaml)
+  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/main/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
   * ~~[Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)~~ Moving to Zigbee/Thread/Matter
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
@@ -236,6 +248,7 @@ Coordinator and protocol note:
   itself has been retired.
 
 **AppDaemon Apps:**
+* Sync workflow: [`docs/appdaemon_sync.md`](docs/appdaemon_sync.md) keeps the tracked `appdaemon/` tree aligned with the live Supervisor add-on under `addon_configs`.
 * [Bayesian Device Tracker](appdaemon/apps/tracker.py) - Merges GPS location info with bayesian binary sensor to give ground-truth location tracking.  Uses bayesian data to eliminate red-herrings when arriving at home.  Could be extended to other zones if you have multiple `device_tracker`s
 * [Lighting Fade-In](appdaemon/apps/brighten_lights.py) - Fades in lights from `off` over a pre-defined interval on a work (non-weekend, non-holiday) day.
 * [Music Fade-in](appdaemon/apps/fade_in_music.py) - Fades in music when I wake up in the morning
@@ -244,10 +257,10 @@ Coordinator and protocol note:
 * [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates matic events into a generic sensor.
 * ~~[Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.~~
 * ~~[Schedy](appdaemon/apps/schedy_heating.yaml) - Replacement for Nest. Work in Progress.~~
-* [Thermostat Stats](https://github.com/rtclauss/hass-config/blob/master/appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
+* [Thermostat Stats](https://github.com/rtclauss/hass-config/blob/main/appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
 
 **Apple Shortcuts**
-* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/master/packages/workday.yaml#L107)
+* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/main/packages/workday.yaml#L107)
 * iOS personal automation: run every day at `9:00 PM`, find the wake-up alarm you want to mirror on the phone, format its time as `HH:mm`, and `POST` JSON to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync` with `{"alarm_time":"07:30"}`. If there is no enabled alarm for the next day, send `{"alarm_enabled": false}` instead. If JSON is awkward, the webhook also accepts query parameters.
 
 Shortcut recipe:

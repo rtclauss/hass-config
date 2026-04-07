@@ -42,6 +42,13 @@ def test_tiki_time_uses_shared_music_assistant_helpers() -> None:
     assert "source: Photos" in block
     assert "flash: short" in block
     assert "script.tiki_time_tropical_color_cycle" in block
+    assert "Basement player failed to turn on" in block
+    assert "wait_for_trigger:" in block
+    turn_on_section = block.split("      - action: media_player.turn_on", 1)[1].split(
+        "      - action: script.wait_for_basement_media_player_ready",
+        1,
+    )[0]
+    assert "continue_on_error: true" not in turn_on_section
 
 
 def test_tiki_time_color_cycle_loops_while_party_music_is_active() -> None:
@@ -75,10 +82,12 @@ def test_tiki_time_color_cycle_targets_individual_color_lights() -> None:
         "light.east_table_lamp",
         "light.west_table_lamp",
         "light.tiki_room_floor_lamp",
+        "light.tiki_room_lights_tiki_room_strip",
     ):
         assert entity_id in block
 
     assert "effect: rainbow" in block
+    assert "light.tiki_room_strip" not in block
     assert "entity_id: light.kitchen_all" not in block
     assert "entity_id: light.office_all" not in block
 

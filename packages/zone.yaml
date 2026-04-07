@@ -42,7 +42,7 @@ homeassistant:
       icon: mdi:weather-cloudy
     automation.doors_open_when_leaving_home:
       <<: *customize
-      friendly_name: Doors Left Open When Leaving
+      friendly_name: Egress Left Open When Leaving
       icon: mdi:door-open
     automation.garage_door_open_when_leaving_home:
       <<: *customize
@@ -57,9 +57,6 @@ homeassistant:
     automation.turn_off_lights_when_i_leave:
       <<: *customize
       friendly_name: Lights Off on Departure
-    automation.update_nest_eta:
-      <<: *customize
-      friendly_name: Update Nest ETA as Approach Home
     automation.vacuum_return_home:
       <<: *customize
       friendly_name: Stop Vacuuming on Arrival
@@ -234,22 +231,18 @@ automation:
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         to: "off"
+    variables:
+      open_egress_points: >-
+        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
     condition:
-      condition: or
-      conditions:
-        - condition: state
-          entity_id: binary_sensor.main_foyer_front_door_contact
-          state: open
-        - condition: state
-          entity_id: binary_sensor.deck_door_contact
-          state: open
-        - condition: state
-          entity_id: binary_sensor.hall_garage_entry_contact
-          state: open
+      - condition: state
+        entity_id: binary_sensor.any_egress_open
+        state: "on"
     action:
       - action: notify.all
         data:
-          message: Door left open!
+          message: >-
+            Door or window left open: {{ open_egress_points }}.
 
   - id: garage_door_open_when_leaving_home
     alias: garage_door_open_when_leaving_home
@@ -489,17 +482,11 @@ automation:
         state: "Automotive"
         # Todo add biking here?
     action:
-      - action: script.house_transition
-        data:
-          mode: away
-          reason: leave_home
-      # Vacuum request payload is identical for both paths, so keep one action.
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - parallel:
+          - action: script.house_transition
+            data:
+              mode: away
+              reason: leave_home
           # - action: notify.all
           #   data:
           #     title: "Auf wiedersehen"
@@ -598,23 +585,25 @@ automation:
             - vacuum.valetudo_upstairs_vacuum
       - action: switch.turn_off
         target:
-          entity_id: switch.living_room_camera
+          entity_id: switch.livingroom_motion_detection
       - action: switch.turn_off
         target:
-          entity_id: switch.basement_camera_power
+          entity_id: switch.tiki_room_camera
 
   - id: vacuum_leave_home
     alias: vacuum_leave_home
-    description: Start the den, main level, and upstairs vacuums when Ryan leaves home.
+    description: Run the main and upstairs levels on departure, plus the den when its door is closed.
     trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
         from: "on"
         to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
-      - action: vacuum.start
-        target:
-          entity_id: vacuum.valetudo_mainlevel
+      - action: script.vacuum_main_and_upstairs_levels
         continue_on_error: true
       - if:
           - condition: state
@@ -625,10 +614,6 @@ automation:
             target:
               entity_id: vacuum.valetudo_den
             continue_on_error: true
-      - action: vacuum.start
-        target:
-          entity_id: vacuum.valetudo_upstairs_vacuum
-        continue_on_error: true
 
 ########################
 # Binary Sensors
@@ -770,44 +755,42 @@ scene:
         state: "on"
       light.den_all:
         state: "on"
-      switch.living_room_camera:
+      switch.livingroom_motion_detection:
         state: "off"
-      switch.basement_camera_power:
+      switch.tiki_room_camera:
         state: "off"
 
   - name: turn_on_cameras
     entities:
-      switch.living_room_camera:
+      switch.livingroom_motion_detection:
         state: "on"
-      switch.basement_camera_power:
+      switch.tiki_room_camera:
         state: "on"
 
   - name: goodnight
     entities:
-      switch.christmas_tree:
-        state: "off"
-      switch.deck_all:
-        state: "off"
       light.deck_string:
         state: "off"
-      light.hall_main_foyer:
+      light.hall_foyer_switch:
         state: "off"
       light.hall_stairway:
         state: "off"
       media_player.lg_webos_smart_tv:
         state: "off"
-      # switch.humidifier:
-      #   state: "off"
+      light.deck_kitchen_door:
+        state: "off"
+      switch.christmas_tree:
+        state: "off"
 
   - name: leave_home
     entities:
       media_player.lg_webos_smart_tv:
         state: "off"
-      switch.bathroom_light_fan_switch:
+      light.owner_suite_bathroom_lights:
         state: "off"
       switch.christmas_tree:
         state: "off"
-      switch.deck:
+      light.deck_kitchen_door:
         state: "off"
       light.deck_string:
         state: "off"
@@ -819,7 +802,8 @@ scene:
 ########################
 # Scripts
 ########################
-script: {}
+script:
+  {}
   # update_nest_eta:
   #   sequence:
   #     - action: nest.set_eta
@@ -830,7 +814,8 @@ script: {}
 ########################
 # Sensor
 ########################
-sensor: []
+sensor:
+  []
 
   # - platform: places
   #   name: android

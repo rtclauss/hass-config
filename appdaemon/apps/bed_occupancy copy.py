@@ -1,0 +1,621 @@
+import appdaemon.plugins.hass.hassapi as hass
+import statistics
+from datetime import datetime, timedelta, time
+import numpy as np
+import asyncio
+import psycopg2
+from scipy.signal import butter, filtfilt
+from dateutil import parser
+
+class BedOccupancy(hass.Hass):
+    """
+    Bed occupancy detection and calibration app (kg).
+
+    - Automatically calibrates zero_offset and scale_factor from prior-day history
+    - Converts raw ADC to kg via zero_offset & scale_factor
+    - Smoothed medians, absolute-delta with hysteresis
+    - Day/night baselines updated from history twice daily
+    - Threshold recalculated twice daily when unoccupied
+    - Baseline drift tolerance, clamping, and skip when occupied
+    """
+    def initialize(self):
+        self.hysteresis_score = 0
+        self.log("[init] Initializing BedOccupancy app", ascii_encode=False)
+
+        self.load_cell = self.args["load_cell_sensor"]
+        self.presence = self.args.get("presence_entity")
+        self.occupancy_bool = self.args["occupancy_boolean"]
+        self.override_entity = self.args.get("override_boolean")
+        self.delta_sensor = self.args["delta_sensor"]
+        self.threshold_sensor = self.args["threshold_sensor"]
+        self.baseline_day_sensor = self.args["baseline_day_sensor"]
+        self.baseline_night_sensor = self.args["baseline_night_sensor"]
+        self.input_threshold = self.args.get("input_threshold_entity")
+        self.buffer_size = int(self.args.get("buffer_size", 5))
+
+        self.zero_offset = float(self.args.get("zero_offset", 0.0))
+        self.scale = float(self.args.get("scale_factor", 1.0))
+        self.decay = float(self.args.get("decay", 0.85))
+        self.zero_drift = float(self.args.get("zero_drift_tolerance", 0.1))
+        self.min_empty = float(self.args.get("min_empty_kg", 0.0))
+        self.max_empty = float(self.args.get("max_empty_kg", 5.0))
+
+        self.override_active = False
+        if self.override_entity:
+            self.override_active = (self.get_state(self.override_entity) == 'on')
+            self.listen_state(self._on_override_toggle, self.override_entity)
+        
+        self.create_task(self._init_hysteresis())
+
+
+        self.night_start = int(self.args.get("night_start_hour", 22))
+        self.night_end = int(self.args.get("night_end_hour", 8))
+
+        self.buffer = []
+        self.fast_buffer = []
+        self.fast_size = max(3, self.buffer_size // 2)
+        self.occupied = (self.get_state(self.occupancy_bool) == 'on')
+
+        self.listen_state(self._raw_update, self.load_cell)
+
+        if self.input_threshold:
+            self.listen_event(self._on_manual_threshold, "call_service", domain="input_button", service="press", entity_id=self.input_threshold)
+
+        self.run_daily(self._auto_calibrate, time(14, 0))
+        self.run_daily(self._auto_calibrate, time(20, 0))
+        self.run_daily(self._update_threshold_from_history, time(10, 0))
+        self.run_daily(self._update_threshold_from_history, time(18, 0))
+        self.run_daily(self._update_baseline_from_history, time(11, 0))
+        self.run_daily(self._update_baseline_from_history, time(20, 0))
+        self.run_every(self._update_hysteresis, time(0, 0), timedelta(hours=6))
+        self.run_in(self._auto_calibrate, 5, kwargs={})
+        self.run_in(self._update_baseline_from_history, 15, kwargs={})
+        self.run_in(self._update_threshold_from_history, 30, kwargs={})
+
+        self.log("[init] BedOccupancy initialized", ascii_encode=False)
+
+    def _set_paired_state(self, base_entity_id: str, raw_value: float, kg_value: float = None, unit: str = "kg"):
+        """Updates both raw and kg sensors."""
+        # raw sensor
+        self.set_state(f"{base_entity_id}_raw", state=round(raw_value, 2), attributes={
+            "unit_of_measurement": "raw",
+            "device_class": "none",
+            "state_class": "measurement",
+        })
+        # kg sensor
+        if kg_value is not None:
+            self.set_state(base_entity_id, state=round(kg_value, 2), attributes={
+                "unit_of_measurement": unit,
+                "device_class": "weight",
+                "state_class": "measurement",
+            })
+
+    def _on_override_toggle(self, entity, attribute, old, new, kwargs):
+        now = datetime.now().isoformat()
+        self.log(f"[override] Transition {old} → {new} at {now}", ascii_encode=False)
+        self.set_state("sensor.chatgpt_bed_override_event", state=new, attributes={"timestamp": now, "from": old, "to": new})
+        self.override_active = (new == 'on')
+        if self.override_active:
+            self.log("[override] Manual override ENABLED. Auto detection suspended.", ascii_encode=False)
+        else:
+            self.log("[override] Manual override DISABLED. Resuming auto detection.", ascii_encode=False)
+            self.buffer.clear()
+            self.fast_buffer.clear()
+            raw = self.get_state(self.load_cell)
+            try:
+                self._raw_update(self.load_cell, None, None, raw)
+            except:
+                pass
+
+    def _on_manual_threshold(self, event_name, data, kwargs):
+        self.log("[manual] Manual threshold trigger", ascii_encode=False)
+        self.run_in(self._update_threshold_from_history, 5, kwargs={})
+
+    async def _auto_calibrate(self, kwargs):
+        self.log("[calib] Auto-calibrating zero_offset & scale_factor", ascii_encode=False)
+        entries = await self._get_history_chunked(self.load_cell, days=14)
+        raw_vals = []
+        for e in entries:
+            s = e.get('state')
+            try:
+                raw_vals.append(float(s))
+            except (TypeError, ValueError):
+                continue
+        if not raw_vals:
+            self.log("[calib] No valid raw entries, skipping", ascii_encode=False)
+            return
+
+        occ_entries = await self._get_history_chunked(self.occupancy_bool, days=14)
+        occ_states = {self.convert_utc(e['last_changed']): (e['state']=='on')
+                        for e in occ_entries if 'state' in e}
+
+        def is_occupied(ts):
+            nearest = max((t for t in occ_states if t <= ts), default=None)
+            return occ_states.get(nearest, False)
+
+        empty_vals = []
+        for e in entries:
+            ts = self.convert_utc(e.get('last_changed'))
+            if not is_occupied(ts) and 12 <= ts.hour < 20:
+                try:
+                    empty_vals.append(float(e.get('state')))
+                except:
+                    continue
+        if not empty_vals:
+            self.log("[calib] No unoccupied samples, skipping", ascii_encode=False)
+            return
+        empty_vals = self._safe_highpass(empty_vals, "calib_empty")
+        empty_vals, mad_empty, *_ = self._mad_filter(empty_vals, "calib_empty")
+        if not empty_vals:
+            self.log("[calib] All unoccupied samples rejected by MAD filter", ascii_encode=False)
+            return
+        med_empty = statistics.median(empty_vals)
+
+        occ_vals = []
+        for e in entries:
+            ts = self.convert_utc(e.get('last_changed'))
+            if is_occupied(ts):
+                try:
+                    occ_vals.append(float(e.get('state')))
+                except:
+                    continue
+        if occ_vals and med_empty is not None:
+            occ_vals = self._safe_highpass(occ_vals, "calib_occ")
+            occ_vals, mad_occ, *_ = self._mad_filter(occ_vals, "calib_occ")
+            if not occ_vals:
+                self.log("[calib] All occupied samples rejected by MAD filter", ascii_encode=False)
+                return
+            med_occ = statistics.median(occ_vals)
+            if med_occ != med_empty:
+                target_kg = float(self.args.get('target_occupied_weight', 80.0))
+                new_scale = target_kg / (med_occ - med_empty)
+                self.zero_offset = med_empty
+                self.scale = new_scale
+                self.log(f"[calib] zero_offset raw={med_empty:.2f} raw_units, scale_factor={new_scale:.4f} unitless", ascii_encode=False)
+                                # paired calibration sensors for zero_offset
+                zero_kg = self._convert(med_empty)
+                self._set_paired_state("sensor.chatgpt_bed_zero_offset", med_empty, zero_kg)
+                # add calibration metadata
+                self.set_state("sensor.chatgpt_bed_zero_offset", attributes={
+                    "calibrated": datetime.now().isoformat(),
+                    "accuracy": round(mad_empty, 2)
+                })
+                                # paired calibration sensors for scale_factor
+                self._set_paired_state("sensor.chatgpt_bed_scale_factor", new_scale, None, unit="unitless")
+                # add calibration metadata
+                self.set_state("sensor.chatgpt_bed_scale_factor", attributes={
+                    "calibrated": datetime.now().isoformat(),
+                    "accuracy": round(mad_occ, 2)
+                })
+        else:
+            self.log("[calib] Insufficient occupied samples, skipping scale calc", ascii_encode=False)
+
+
+    def _get_history_via_sql(self, entity_id, start_time, end_time):
+        self.log(f"[sql] SQL querying for {entity_id}", level="INFO")
+        import psycopg2
+        from dateutil import parser
+
+        if not self.args.get("use_sql_history", False):
+            return []
+
+        db_url = self.args.get("db_url")
+        if not db_url:
+            self.log("[sql] Missing 'db_url' in apps.yaml", level="ERROR")
+            return []
+
+        try:
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            query = """
+                SELECT s.last_updated_ts, s.state
+                FROM states s
+                JOIN states_meta m ON s.metadata_id = m.metadata_id
+                WHERE m.entity_id = %s
+                    AND s.last_updated_ts >= %s
+                    AND s.last_updated_ts < %s
+                    AND s.state NOT IN ('unknown', 'unavailable')
+                ORDER BY s.last_updated_ts ASC
+            """
+            cur.execute(query, (entity_id, start_time.timestamp(), end_time.timestamp()))
+            results = cur.fetchall()
+            cur.close()
+            conn.close()
+            return [{"last_changed": datetime.fromtimestamp(float(r[0])), "state": r[1]} for r in results]
+        except Exception as e:
+            import traceback
+            self.log(f"[sql] Error fetching history for {entity_id}: {e}", level="ERROR")
+            self.log(traceback.format_exc(), level="ERROR")
+
+
+    async def _get_history_chunked(self, entity_id, days=14):
+        now = await self.run_in_executor(self.datetime)
+        if self.args.get("use_sql_history", False):
+            start = now - timedelta(days=days)
+            results = self._get_history_via_sql(entity_id, start, now)
+            if results:
+                return results
+            else:
+                self.log(f"[sql] SQL query failed or returned no results, falling back to HA API", level="WARNING")
+        
+        self.log(f"[get_history_chunked] HA Chunk History querying for {entity_id}", level="INFO")
+        history = []
+        start_batch = await self.run_in_executor(self.datetime)
+
+        async def fetch_chunk(start, end):
+            t0 = await self.run_in_executor(self.datetime)
+            try:
+                result = await self.get_history(entity_id=entity_id, start_time=start, end_time=end)
+                duration = (await self.run_in_executor(self.datetime) - t0).total_seconds()
+                # self.log(f"[chunk] {entity_id} {start.strftime('%Y-%m-%d %H:%M')}–{end.strftime('%H:%M')} fetched in {duration:.2f}s", ascii_encode=False)
+                return sum(result or [], [])
+            except Exception as e:
+                duration = (await self.run_in_executor(self.datetime) - t0).total_seconds()
+                self.log(f"[chunk] FAILED {entity_id} {start.strftime('%Y-%m-%d %H:%M')}–{end.strftime('%H:%M')} after {duration:.2f}s: {e}", level="WARNING")
+                return []
+
+        tasks = []
+        for i in range(days):
+            base = now - timedelta(days=i+1)
+            for j in range(0, 24, 6):  # four 6-hour chunks per day
+                start = base.replace(hour=j, minute=0, second=0, microsecond=0)
+                end = start + timedelta(hours=6)
+                tasks.append(fetch_chunk(start, end))
+
+        results = await asyncio.gather(*tasks)
+        for r in results:
+            history.extend(r)
+
+        total_duration = (await self.run_in_executor(self.datetime) - start_batch).total_seconds()
+        self.log(f"[chunk] {entity_id} total fetch time: {total_duration:.2f}s", ascii_encode=False)
+
+        return history
+
+    def _convert(self, raw):
+        """Safely convert raw ADC to kg with scale sanity check"""
+        try:
+            kg = (raw - self.zero_offset) * self.scale
+            if abs(kg) > 1000:
+                self.log(f"[convert] ⚠️ Computed weight out of range: {kg:.2f}kg", level="WARNING", ascii_encode=False)
+                return None
+            return kg
+        except Exception as e:
+            self.log(f"[convert] ⚠️ Conversion error: {e}", level="WARNING", ascii_encode=False)
+            return None
+
+
+    async def _update_baseline_from_history(self, kwargs):
+        self.log("[baseline] Calculating baselines via MAD-filtered history (exp-weighted)", ascii_encode=False)
+        raw_entries = await self._get_history_chunked(self.load_cell, days=14)
+        occ_entries = await self._get_history_chunked(self.occupancy_bool, days=14)
+
+        occ_states = {self.convert_utc(e["last_changed"]): e["state"] == "on" for e in occ_entries if "state" in e}
+        def is_occupied(ts):
+            nearest = max((t for t in occ_states if t <= ts), default=None)
+            return occ_states.get(nearest, False)
+
+        day_buckets = {}
+        night_buckets = {}
+        for e in raw_entries:
+            try:
+                raw_val = float(e["state"])
+                ts = self.convert_utc(e["last_changed"])
+                if is_occupied(ts):
+                    continue
+                bucket = night_buckets if self.night_start <= ts.hour or ts.hour < self.night_end else day_buckets
+                key = ts.date()
+                bucket.setdefault(key, []).append(raw_val)
+            except:
+                continue
+
+        def weighted_baseline_raw(buckets, label):
+            daily = []
+            for day, vals in sorted(buckets.items()):
+                vals = self._safe_highpass(vals, f"{label}_{day.isoformat()}")
+                vals, *_ = self._mad_filter(vals, f"{label}_{day.isoformat()}")
+                if vals:
+                    med = statistics.median(vals)
+                    daily.append(med)
+            if not daily:
+                return None
+            weights = [self.decay ** i for i in reversed(range(len(daily)))]
+            return np.average(daily, weights=weights)
+
+        day_raw = weighted_baseline_raw(day_buckets, "day")
+        night_raw = weighted_baseline_raw(night_buckets, "night")
+
+        if day_raw is not None:
+            day_kg = self._convert(day_raw)
+            self._set_paired_state(self.baseline_day_sensor, day_raw, day_kg)
+        if night_raw is not None:
+            night_kg = self._convert(night_raw)
+            self._set_paired_state(self.baseline_night_sensor, night_raw, night_kg)
+
+    def _iqr_estimate(self):
+        try:
+            self.log("[iqr] Using chunked history for IQR estimate", ascii_encode=False)
+            entries = asyncio.run(self._get_history_chunked(self.delta_sensor, days=14)) or []
+            entries = sum(entries, [])
+            deltas = []
+            for e in entries:
+                try:
+                    deltas.append(abs(float(e.get("state"))))
+                except (TypeError, ValueError):
+                    continue
+            q1, q3 = np.percentile(deltas, [25, 75])
+            iqr = q3 - q1
+            self.log(f"[iqr] IQR estimation: Q1={q1:.2f}kg, Q3={q3:.2f}kg, IQR={iqr:.2f}kg", ascii_encode=False)
+            return iqr
+        except Exception as e:
+            self.log(f"[iqr] Fallback IQR=100.0 due to error: {e}", ascii_encode=False)
+            return 100.0
+
+    def _is_night(self):
+        h = datetime.now().hour
+        return h >= self.night_start or h < self.night_end
+
+    def _get_baseline(self):
+        sensor = self.baseline_night_sensor if self._is_night() else self.baseline_day_sensor
+        try:
+            return float(self.get_state(sensor))
+        except:
+            return None
+
+    def _set_baseline(self, sensor, new_base):
+        self.occupied = (self.get_state(self.occupancy_bool) == 'on')
+        old = self._get_baseline()
+        if self.occupied or old is None:
+            value = new_base
+        else:
+            new_base = max(min(new_base, self.max_empty), self.min_empty)
+            if abs(new_base - old) <= self.zero_drift:
+                self.log(f"[baseline] Δ{new_base-old:.3f}kg within ±{self.zero_drift}kg → IGNORE", ascii_encode=False)
+                return
+            alpha = 0.1
+            value = old*(1-alpha) + new_base*alpha
+        self.set_state(sensor, state=round(value,2), attributes={
+            "unit_of_measurement":"kg",
+            "device_class":"weight",
+            "state_class":"measurement"
+        })
+        self.log(f"[baseline] {sensor} set to {value:.2f}kg", ascii_encode=False)
+
+
+    # _raw_update and all relevant detection functions should now check self.override_active before continuing logic
+    def _set_occupied(self, state):
+        if self.override_active:
+            self.log("[override] Active - ignoring _set_occupied() call", ascii_encode=False)
+            return
+        self.occupied = state
+        s = 'on' if state else 'off'
+        self.set_state(self.occupancy_bool, state=s)
+        self.log(f"[occupancy] {'OCC' if state else 'UNOCC'}", ascii_encode=False)
+
+    def _raw_update(self, entity, attribute, old, new, kwargs=None):
+        # parse raw input from sensor
+        try:
+            raw = float(new)
+        except Exception:
+            self.log(f"[raw] Invalid input: {new}", level="WARNING", ascii_encode=False)
+            return
+        
+        # convert raw to kg and update kg sensor only
+        kg = self._convert(raw)
+        if kg is not None:
+            self.set_state(f"{self.load_cell}_kg", state=round(kg, 2), attributes={
+                "unit_of_measurement": "kg",
+                "device_class": "weight",
+                "state_class": "measurement",
+            })
+
+        # EMA baseline and buffering (kg) unchanged
+        if not hasattr(self, 'ema_baseline'):
+            self.ema_baseline = None
+        if not hasattr(self, 'ema_alpha'):
+            self.ema_alpha = float(self.args.get("ema_alpha", 0.05))
+        if self.ema_baseline is None:
+            self.ema_baseline = raw
+        else:
+            self.ema_baseline = self.ema_alpha * raw + (1 - self.ema_alpha) * self.ema_baseline
+        self.log(f"[raw] EMA baseline (raw ADC units)={self.ema_baseline:.2f}, raw sample={raw:.2f}", ascii_encode=False)
+
+        if kg is None or abs(kg) > 1000:
+            return
+        self.buffer.append(kg)
+        if len(self.buffer) > self.buffer_size:
+            self.buffer.pop(0)
+        self.fast_buffer.append(kg)
+        if len(self.fast_buffer) > self.fast_size:
+            self.fast_buffer.pop(0)
+
+        if len(self.buffer) < self.buffer_size:
+            self.log(f"[eval] Buffering: {len(self.buffer)}/{self.buffer_size}", ascii_encode=False)
+            return
+
+        slow_kg = statistics.median(self.buffer)
+        fast_kg = statistics.median(self.fast_buffer)
+        baseline_kg = self._get_baseline()
+        if baseline_kg is None:
+            target = self.baseline_night_sensor if self._is_night() else self.baseline_day_sensor
+            self._set_baseline(target, slow_kg)
+            return
+
+        # presence check
+        if self.presence and self.get_state(self.presence) != 'home':
+            self.log("[eval] Skipping—away", ascii_encode=False)
+            return
+
+        # compute delta in raw and kg
+        baseline_raw = self.zero_offset + (baseline_kg / self.scale) if self.scale else self.zero_offset
+        slow_raw = slow_kg / self.scale + self.zero_offset if self.scale else 0
+        delta_raw = abs(slow_raw - baseline_raw)
+        delta_kg = abs(slow_kg - baseline_kg)
+        self._set_paired_state(self.delta_sensor, delta_raw, delta_kg)
+
+        # compute thresholds for logging & comparison
+        thr_kg = self._get_threshold()
+        thr_raw = (thr_kg / self.scale + self.zero_offset) if self.scale else 0
+        fast_raw = fast_kg / self.scale + self.zero_offset if self.scale else 0
+
+        # rich debug log for evaluation metrics (raw & kg)
+        self.log(
+            f"[eval] raw slow={slow_raw:.2f} raw fast={fast_raw:.2f} raw base={baseline_raw:.2f} raw Δ={delta_raw:.2f} | "
+            f"kg slow={slow_kg:.2f}kg fast={fast_kg:.2f}kg base={baseline_kg:.2f}kg Δ={delta_kg:.2f}kg | "
+            f"thr raw={thr_raw:.2f} thr kg={thr_kg:.2f}kg ±{self.hysteresis:.2f}",
+            ascii_encode=False
+        )
+
+        # occupancy logic unchanged
+        thr_kg = self._get_threshold()
+        thr_raw = (thr_kg / self.scale + self.zero_offset) if self.scale else 0
+        if self.override_active:
+            self.log("[override] Active - skipping detection", ascii_encode=False)
+            return
+        if self.occupied:
+            if delta_kg < (thr_kg - self.hysteresis) and abs(fast_kg - baseline_kg) < (thr_kg - self.hysteresis):
+                self._set_occupied(False)
+                # hysteresis score for premature exit
+                if abs(fast_kg - baseline_kg) > (thr_kg - self.hysteresis * 0.5):
+                    self.hysteresis_score += 1
+        else:
+            if abs(fast_kg - baseline_kg) > (thr_kg + self.hysteresis):
+                self._set_occupied(True)
+                # hysteresis score for early entry
+                if abs(fast_kg - baseline_kg) < (thr_kg + self.hysteresis * 0.5):
+                    self.hysteresis_score += 1
+
+    
+    def _safe_highpass(self, values, label, min_len=30):
+        """Apply a Butterworth high-pass filter if enough samples exist."""
+        if len(values) < min_len:
+            self.log(f"[{label}] Skipping Butterworth high-pass filter (raw units) — only {len(values)} raw samples", level="WARNING", ascii_encode=False)
+            return values
+        try:
+            b, a = butter(2, 0.01, btype='high')
+            filtered = filtfilt(b, a, values)
+
+            # Clamp to plausible range (e.g., +/- 1000 kg)
+            clamped = np.clip(filtered, -1000, 1000)
+
+            if np.any(clamped != filtered):
+                self.log(f"[{label}] Clamped filter output to ±1000kg (range was {filtered.min():.2f}-{filtered.max():.2f})", level="WARNING", ascii_encode=False)
+
+            return clamped.tolist()
+        except Exception as e:
+            self.log(f"[{label}] Filter error: {e}", level="ERROR")
+            return values
+
+    def _mad_filter(self, values, label):
+        if not values:
+            return values, 0.0, 0, 0
+        arr = np.array(values)
+        med = np.median(arr)
+        mad = np.median(np.abs(arr - med))
+        z = 0.6745 * (arr - med) / (mad + 1e-9)
+        filtered = arr[np.abs(z) <= 3.5].tolist()
+
+        safe_label = label.replace('-', '_')
+        self.log(f"[mad_filter] Setting mad state and filtered state for sensor.chatgpt_bed_{safe_label}_mad and sensor.chatgpt_bed_{safe_label}_filtered", ascii_encode=False)
+        self.set_state(f"sensor.chatgpt_bed_{safe_label}_mad", state=round(mad, 2))
+        self.set_state(f"sensor.chatgpt_bed_{safe_label}_filtered", state=len(filtered), attributes={
+            "original": len(arr),
+            "removed": len(arr) - len(filtered)
+        })
+        self.log(f"[{label}] MAD={mad:.2f}, kept {len(filtered)}/{len(arr)}", ascii_encode=False)
+        return filtered, mad, len(arr), len(filtered)
+
+    async def _update_threshold_from_history(self, kwargs):
+        """Compute threshold using raw delta history and convert to kg."""
+        self.occupied = (self.get_state(self.occupancy_bool) == 'on')
+        if self.occupied or self.override_active:
+            self.log("⚠️ [thresh] Skipping threshold update—bed is occupied or override is active", ascii_encode=False)
+            return
+        self.log("🔍 [thresh] Calculating threshold via raw delta history (exp-weighted)", ascii_encode=False)
+        # Use raw delta history
+        raw_entries = await self._get_history_chunked(f"{self.delta_sensor}_raw", days=14)
+
+        day_buckets = {}
+        for e in raw_entries:
+            try:
+                ts = self.convert_utc(e["last_changed"])
+                raw_val = abs(float(e["state"]))  # raw ADC delta
+                key = ts.date()
+                day_buckets.setdefault(key, []).append(raw_val)
+            except:
+                continue
+
+        raw_daily_medians = []
+        for day, vals in sorted(day_buckets.items()):
+            # apply MAD filter on raw values
+            vals, *_ = self._mad_filter(vals, f"thresh_raw_{day.isoformat()}")
+            if vals:
+                raw_daily_medians.append(statistics.median(vals))
+
+        if not raw_daily_medians:
+            self.log("⚠️ [thresh] No valid raw daily medians, skipping update", ascii_encode=False)
+            return
+
+        weights = [self.decay ** i for i in reversed(range(len(raw_daily_medians)))]
+        thr_raw = np.average(raw_daily_medians, weights=weights)
+        # convert to kg
+        thr_kg = self._convert(thr_raw)
+        # respect manual input threshold in kg
+        state = await self.run_in_executor(lambda: self.get_state(self.input_threshold))
+        try:
+            manual = float(state)
+        except (TypeError, ValueError):
+            manual = thr_kg if thr_kg is not None else 0
+        if thr_kg is None:
+            self.log(f"⚠️ [thresh] Conversion from raw {thr_raw:.2f} to kg failed, skipping update", ascii_encode=False)
+            return
+        thr_kg = min(thr_kg, manual)
+
+        # update paired threshold sensors
+        self._set_paired_state(self.threshold_sensor, thr_raw, thr_kg)
+        # log threshold with raw and kg
+        self.log(
+            f"✅ [thresh] Updated threshold raw={thr_raw:.2f} threshold kg={thr_kg:.2f}kg", ascii_encode=False
+        )
+
+    def _get_threshold(self):
+        try:
+            return float(self.get_state(self.threshold_sensor))
+        except:
+            return float(self.get_state(self.input_threshold) or 500)
+
+    def convert_utc(self, ts):
+        if isinstance(ts, str):
+            try:
+                return datetime.fromisoformat(ts.replace('Z','+00:00'))
+            except:
+                return datetime.now()
+        return ts
+
+    def _update_hysteresis(self, kwargs):
+        if not hasattr(self, "hysteresis_history"):
+            self.hysteresis_history = []
+        self.hysteresis_history.append(self.hysteresis_score)
+        if len(self.hysteresis_history) > 10:
+            self.hysteresis_history.pop(0)
+
+        weights = [self.decay ** i for i in reversed(range(len(self.hysteresis_history)))]
+        weighted_score = sum(s * w for s, w in zip(self.hysteresis_history, weights)) / sum(weights)
+
+        adjust = 0.05 * weighted_score
+        old = self.hysteresis
+        self.hysteresis = min(max(old + adjust, 5.0), 150.0)
+        self.hysteresis_score = 0
+        self.log(f"[hyst] Adjusted hysteresis to {self.hysteresis:.2f}kg (Δ={adjust:.2f}, score={weighted_score:.2f})", ascii_encode=False)
+
+    async def _init_hysteresis(self):
+        try:
+            entries = await self._get_history_chunked(self.delta_sensor, days=14)
+            deltas = [abs(float(e.get("state"))) for e in entries if e.get("state") not in (None, 'unknown', 'unavailable')]
+            _, mad, *_ = self._mad_filter(deltas, "init_hyst")
+            self.hysteresis = min(mad * 1.5, float(self.args.get("hysteresis", 50.0)))
+            self.log(f"[init] MAD-based hysteresis set to {self.hysteresis:.2f}kg", ascii_encode=False)
+        except Exception as e:
+            self.log(f"[init] Fallback hysteresis=50.0 due to error: {e}", ascii_encode=False)
+            self.hysteresis = float(self.args.get("hysteresis", 50.0))
+
+# EOF

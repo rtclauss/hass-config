@@ -32,16 +32,6 @@ homeassistant:
       friendly_name: "Turn on deck lights automatically"
       icon: mdi:nature-people
 
-    automation.front_door_light_auto_off:
-      <<: *customize
-      friendly_name: "Turn off front door light automatically"
-      icon: mdi:home
-
-    automation.front_door_light_auto_on:
-      <<: *customize
-      friendly_name: "Turn on front door light automatically"
-      icon: mdi:home
-
     automation.hallway_light_toggle_at_night:
       <<: *customize
       friendly_name: "Toggle hallway light automatically at night"
@@ -56,20 +46,6 @@ homeassistant:
       <<: *customize
       friendly_name: "Turn off master bedroom lights automatically"
       icon: mdi:ceiling-light
-
-    automation.office_light_on_at_night:
-      <<: *customize
-      friendly_name: "Turn on office light automatically at night"
-      icon: mdi:ceiling-light
-
-    automation.office_light_off_at_night:
-      <<: *customize
-      friendly_name: "Turn off office light automatically"
-      icon: mdi:ceiling-light
-
-    automation.toggle_living_room:
-      <<: *customize
-      friendly_name: "Toggle Living Room"
 
     automation.button_reset_basement:
       <<: *customize
@@ -407,11 +383,18 @@ automation:
           - binary_sensor.bayesian_bed_occupancy
           # - input_boolean.chatgpt_bed_occupied
         state: "off"
-      - not:
-          - alias: "watching something"
-            condition: state
-            entity_id: media_player.basement
-            state: "playing"
+      - condition: not
+        conditions:
+          - condition: or
+            conditions:
+              - alias: "watching something"
+                condition: state
+                entity_id: media_player.basement
+                state: "playing"
+              - alias: "watching Apple TV"
+                condition: state
+                entity_id: media_player.plex_basement_apple_tv
+                state: "playing"
       - condition: state
         entity_id:
           - input_boolean.bayesian_zeke_home
@@ -461,6 +444,9 @@ automation:
           entity_id:
             - light.owner_suite_lamps
             - light.bed_lightstrip
+      - action: script.goodnight_integrity
+        data:
+          reason: cpap_sleep
 
   # - id: deck_light_auto_off
   #   alias: deck_light_auto_off
@@ -524,7 +510,9 @@ automation:
     alias: deck_light_auto_on
     trigger:
       - trigger: state
-        entity_id: binary_sensor.deck_door_contact
+        entity_id:
+          - binary_sensor.kitchen_deck_contact
+          - binary_sensor.tiki_room_deck_contact
         to: "on"
     condition:
       condition: and
@@ -532,10 +520,6 @@ automation:
         - condition: sun
           after: sunset
           after_offset: -02:00:00
-        - condition: state
-          entity_id: light.deck
-          state: "off"
-          enabled: false
         - condition: state
           entity_id: light.deck_string
           state: "off"
@@ -607,9 +591,16 @@ automation:
         offset: "00:00:00"
         id: sunrise
       - trigger: sun
+        event: sunrise
+        offset: "-00:45:00"
+        id: pre_sunrise
+      - trigger: sun
         event: sunset
         offset: "-01:45:00"
         id: sunset
+      - trigger: time
+        at: "02:00:00"
+        id: late_night_dim
     action:
       - choose:
           - conditions:
@@ -625,7 +616,34 @@ automation:
                     - light.outside_north_west_garage
                     - light.outside_south_west_garage
                     - light.outside_front_door
-      - choose:
+          - conditions:
+              - condition: trigger
+                id: pre_sunrise
+            sequence:
+              - action: light.turn_on
+                data:
+                  transition: 300
+                  brightness_pct: 100
+                target:
+                  entity_id:
+                    - light.outside_front_hue
+                    - light.outside_north_west_garage
+                    - light.outside_south_west_garage
+                    - light.outside_front_door
+          - conditions:
+              - condition: trigger
+                id: late_night_dim
+            sequence:
+              - action: light.turn_on
+                data:
+                  transition: 300
+                  brightness_pct: 25
+                target:
+                  entity_id:
+                    - light.outside_front_hue
+                    - light.outside_north_west_garage
+                    - light.outside_south_west_garage
+                    - light.outside_front_door
           - conditions:
               - condition: trigger
                 id: sunset
@@ -786,8 +804,15 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                state: "off"
+                for:
+                  minutes: 3
+              - condition: state
+                entity_id:
                   - binary_sensor.hall_upstairs_motion_occupancy
                 state: "off"
+                for:
+                  minutes: 3
               - action: light.turn_off
                 data:
                   entity_id:
@@ -808,8 +833,15 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                state: "off"
+                for:
+                  minutes: 15
+              - condition: state
+                entity_id:
                   - binary_sensor.hall_upstairs_motion_occupancy
                 state: "off"
+                for:
+                  minutes: 15
               - action: light.turn_off
                 data:
                   entity_id:
@@ -862,8 +894,15 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                state: "off"
+                for:
+                  minutes: 15
+              - condition: state
+                entity_id:
                   - binary_sensor.hall_upstairs_motion_occupancy
                 state: "off"
+                for:
+                  minutes: 15
               - action: light.turn_off
                 data:
                   entity_id:
@@ -883,8 +922,15 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                state: "off"
+                for:
+                  minutes: 3
+              - condition: state
+                entity_id:
                   - binary_sensor.hall_upstairs_motion_occupancy
                 state: "off"
+                for:
+                  minutes: 3
               - action: light.turn_off
                 data:
                   entity_id:
@@ -932,6 +978,8 @@ automation:
 
   - id: kitchen_lights_toggle
     alias: kitchen_lights_toggle
+    description: Disabled pending a new kitchen policy; broad guest mode should not rely on this automation.
+    initial_state: false
     mode: restart
     trigger:
       - trigger: state
@@ -1232,9 +1280,9 @@ automation:
     condition:
       condition: and
       conditions:
-        - condition: zone
-          entity_id: device_tracker.bayesian_zeke_home
-          zone: zone.home
+        - condition: state
+          entity_id: binary_sensor.bayesian_zeke_home
+          state: "on"
         - condition: state
           entity_id: light.owner_suite_lamps
           state: "off"
@@ -1501,8 +1549,15 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                state: "off"
+                for:
+                  minutes: 15
+              - condition: state
+                entity_id:
                   - binary_sensor.hall_upstairs_motion_occupancy
                 state: "off"
+                for:
+                  minutes: 15
               - action: light.turn_off
                 data:
                   entity_id:
@@ -1539,8 +1594,15 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                state: "off"
+                for:
+                  minutes: 15
+              - condition: state
+                entity_id:
                   - binary_sensor.hall_upstairs_motion_occupancy
                 state: "off"
+                for:
+                  minutes: 15
               - action: light.turn_off
                 data:
                   entity_id:
@@ -1618,7 +1680,7 @@ automation:
         entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
         to: "on"
       - trigger: state
-        entity_id: binary_sensor.hallway_motion
+        entity_id: binary_sensor.hall_upstairs_motion_occupancy
         to: "on"
     condition:
       - condition: time
@@ -1630,8 +1692,8 @@ automation:
         {{ is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
            or states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed >= today_at('08:00') }}
       - >-
-        {{ is_state('binary_sensor.hallway_motion', 'on')
-           or states.binary_sensor.hallway_motion.last_changed >= today_at('08:00') }}
+        {{ is_state('binary_sensor.hall_upstairs_motion_occupancy', 'on')
+           or states.binary_sensor.hall_upstairs_motion_occupancy.last_changed >= today_at('08:00') }}
     action:
       - action: script.turn_on
         target:
@@ -1673,14 +1735,23 @@ automation:
           entity_id:
             - input_boolean.guest_mode
           state: "off"
+        - alias: "CPAP not already driving full sleep shutdown"
+          condition: numeric_state
+          entity_id: sensor.owner_suite_cpap_plug_power
+          below: 1.3
     action:
       - action: switch.turn_on
         data:
           entity_id:
             - switch.sleep_mode
-      - action: script.goodnight_integrity
+      - action: script.lights_off_except
         data:
-          reason: bed_lamps_off
+          exclude_lights:
+            - light.outside_front_hue
+            - light.outside_north_west_garage
+            - light.outside_south_west_garage
+            - light.outside_front_door
+          transition: 30
         # Only turn on the humidifier when it's winter
         # Not used with whole-home humidifier
         # - condition: and
@@ -2069,6 +2140,18 @@ scene:
       light.hall_upstairs_switch:
         state: "on"
         brightness: 255
+      light.outside_front_hue:
+        state: "on"
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        brightness: 255
+      light.outside_front_door:
+        state: "on"
+        brightness: 255
       light.den_all:
         state: "on"
       light.kitchen_sink_overhead:
@@ -2124,7 +2207,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: solid
 
@@ -2135,7 +2218,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: bpm
 
@@ -2146,7 +2229,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: candy cane
 
@@ -2157,7 +2240,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: christmas
 
@@ -2168,7 +2251,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: confetti
 
@@ -2179,7 +2262,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: cyclon rainbow
 
@@ -2190,7 +2273,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: dots
 
@@ -2201,7 +2284,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: fire
 
@@ -2212,7 +2295,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: glitter
 
@@ -2223,7 +2306,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: juggle
 
@@ -2234,7 +2317,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: lightning
 
@@ -2245,7 +2328,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: noise
 
@@ -2256,7 +2339,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: police all
 
@@ -2267,7 +2350,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: police one
 
@@ -2278,7 +2361,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: rainbow
 
@@ -2289,7 +2372,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: rainbow with glitter
 
@@ -2300,7 +2383,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: ripple
 
@@ -2311,7 +2394,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: sinelon
 
@@ -2322,7 +2405,7 @@ script:
     sequence:
       - action: light.turn_on
         target:
-          entity_id: light.tiki_room_strip
+          entity_id: light.tiki_room_lights_tiki_room_strip
         data:
           effect: twinkle
 
@@ -2333,9 +2416,19 @@ script:
       exclude_lights:
         description: "Excluded lights as list"
     variables:
+      # Builds a comma-separated string of all currently-on lights, excluding
+      # the lights listed in exclude_lights (e.g. outdoor/porch lights that
+      # should stay on overnight).
       all_other_lights: >
-        {%- for device in states.light|rejectattr('entity_id','in', exclude_lights )|rejectattr('state','in','off') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.light | rejectattr('entity_id', 'in', exclude_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
+      # Fixed: guard the entire sequence so that when all non-excluded lights
+      # are already off (all_other_lights resolves to an empty string), the
+      # light.turn_off service call is skipped entirely. Without this guard,
+      # passing entity_id="" raises "not a valid value for dictionary value
+      # @ data['entity_id']" and the script errors out.
+      - condition: template
+        value_template: "{{ all_other_lights | trim != '' }}"
       # - action: retry.call
       #   data:
       #     action: light.turn_off

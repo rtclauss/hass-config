@@ -178,18 +178,21 @@ automation:
           - condition: state
             entity_id: sensor.season
             state: "winter"
-      - alias: "Check if we already notified within the last hour"
-        condition: template
-        value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
     action:
-      - action: notify.mobile_app_wethop
-        data:
-          title: "Tesla Windows"
-          message: >-
-            Rain is expected near the parked Tesla within the next two hours. Home
-            Assistant is closing the open windows using the vehicle's current location
-            forecast.
+      - choose:
+          - conditions:
+              - alias: "Check if we already notified within the last hour"
+                condition: template
+                value_template: >-
+                  {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "Tesla Windows"
+                  message: >-
+                    Rain is expected near the parked Tesla within the next two hours. Home
+                    Assistant is closing the open windows using the vehicle's current location
+                    forecast.
       - action: cover.close_cover
         target:
           entity_id: cover.nigori_windows
@@ -246,7 +249,7 @@ automation:
                   entity_id:
                     - light.dining_room_all
                     - light.basement_great_room
-                    - light.owner_suite_all
+                    - light.owner_suite_lamps
                   flash: long
               - action: light.turn_on
                 data:
@@ -288,17 +291,28 @@ automation:
       - trigger: numeric_state
         entity_id: sensor.nws_alerts
         above: 0
-    condition:
-      - condition: template
-        value_template: >-
-          {% set alert_type = state_attr('sensor.nws_alerts', 'TYPE') | default('', true) %}
-          {% set description = state_attr('sensor.nws_alerts', 'Description') | default('', true) %}
-          {{ not (alert_type == "TOR" or description == "Tornado Warning") }}
     action:
-      - action: notify.all
-        data:
-          message: >-
-            {{ state_attr('sensor.nws_alerts', 'Description') }}
+      - variables:
+          nws_alerts: "{{ state_attr('sensor.nws_alerts', 'Alerts') | default([], true) }}"
+          primary_alert: "{{ nws_alerts[0] if nws_alerts is sequence and nws_alerts | count > 0 else dict() }}"
+          alert_type: >-
+            {{ primary_alert.Event | default(state_attr('sensor.nws_alerts', 'TYPE') | default('', true), true) }}
+          alert_message: >-
+            {% set description = primary_alert.Description | default(state_attr('sensor.nws_alerts', 'Description') | default('', true), true) %}
+            {% if description | trim != '' %}
+              {{ description }}
+            {% else %}
+              {{ primary_alert.Headline | default('', true) }}
+            {% endif %}
+      - if:
+          - condition: template
+            value_template: >-
+              {{ alert_type not in ['TOR', 'Tornado Warning'] and alert_message | trim != '' }}
+        then:
+          - action: notify.notify_all
+            data:
+              title: "{{ alert_type if alert_type | trim != '' else 'Weather alert' }}"
+              message: "{{ alert_message }}"
 
   - id: window_open_departure_rain_warning
     alias: window_open_departure_rain_warning
@@ -608,13 +622,13 @@ input_text:
     name: Triggered Weather Alert IDs - UI
     icon: mdi:information-variant
     max: 255
-    initial: None
+    initial: ""
 
   nws_dakota_county_alerts_triggered_pushbullet_alert_ids:
     name: Triggered Weather Alert IDs - Pushbullet
     icon: mdi:information-variant
     max: 255
-    initial: None
+    initial: ""
 
 ########################
 # Groups
@@ -640,15 +654,19 @@ script:
       - action: persistent_notification.dismiss
         data:
           notification_id: "nws_dakota_county_alerts_alert"
-        ## Create a new persistant notification in the UI for a new alert
-      - action: >
-          {% if states.sensor.nws_dakota_county_alerts.state != '0' %}
-            persistent_notification.create
-          {% endif %}
-        data_template:
-          notification_id: "nws_dakota_county_alerts_alert"
-          message: "{{ message }}"
-          title: "{{ title }}"
+      ## Create a new persistent notification only while at least one alert is active.
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: sensor.nws_dakota_county_alerts
+                state: "0"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: "nws_dakota_county_alerts_alert"
+              message: "{{ message }}"
+              title: "{{ title }}"
 
 ################################################
 ## Sensors
@@ -691,11 +709,6 @@ sensor:
   #  - visibility
   #  - ozone
 
-  - platform: weatheralerts
-    state: !secret home_state
-    zone: !secret nws_zone
-    county: !secret nws_county
-
   # Follow the Tesla's coordinates so rain detection works away from home.
   - platform: rest
     name: nigori_precip_next_2hr
@@ -706,9 +719,14 @@ sensor:
       {% if latitude is number and longitude is number %}
         https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(latitude) }}&longitude={{ '%.4f' | format(longitude) }}&hourly=precipitation_probability&forecast_hours=2&timezone=auto
       {% else %}
-        https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&hourly=precipitation_probability&forecast_hours=2&timezone=UTC
+        {% set home_lat = state_attr('zone.home', 'latitude') | float(default=none) %}
+        {% set home_lon = state_attr('zone.home', 'longitude') | float(default=none) %}
+        {% if home_lat is number and home_lon is number %}
+          https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(home_lat) }}&longitude={{ '%.4f' | format(home_lon) }}&hourly=precipitation_probability&forecast_hours=2&timezone=auto
+        {% endif %}
       {% endif %}
     scan_interval: 900
+    timeout: 20
     unit_of_measurement: "%"
     value_template: >-
       {% set probabilities = value_json.hourly.precipitation_probability if value_json.hourly is defined and value_json.hourly.precipitation_probability is defined else [] %}
@@ -3386,6 +3404,7 @@ template:
     - name: outside_humidity
       unique_id: outside_humidity
       device_class: humidity
+      unit_of_measurement: "%"
       state: "{{ state_attr('sensor.active_weather_entity_id', 'humidity') | int(default=0) }}"
 
     - name: outside_temperature
