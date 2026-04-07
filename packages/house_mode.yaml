@@ -1,6 +1,7 @@
 # Home Assistant package for shared house mode transitions.
 # It centralizes arrival, departure, night, guest, and trip side effects so
 # existing automations can delegate to one script entrypoint.
+# Canonical room-purpose and privacy context lives in docs/room_intent.yaml.
 
 ################################################################
 ## Packages / House Mode
@@ -72,7 +73,7 @@ script:
       Shared entrypoint for house mode transitions. Base arrival/departure
       automations can reapply lights, security, and climate, while guest/trip
       callers can selectively reapply only media, climate, or travel policy.
-    mode: queued
+    mode: restart
     max: 10
     fields:
       mode:
@@ -243,8 +244,8 @@ script:
                     action: switch.turn_off
                     target:
                       entity_id:
-                        - switch.living_room_camera
-                        - switch.basement_camera_power
+                        - switch.livingroom_motion_detection
+                        - switch.tiki_room_camera
           - choose:
               - conditions:
                   - "{{ should_apply_climate and guest_mode_enabled }}"

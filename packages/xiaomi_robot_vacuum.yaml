@@ -1,5 +1,7 @@
 # Home Assistant package for the Xiaomi/Valetudo vacuum.
-# It wraps room-cleaning scripts, schedule helpers, and error recovery so the vacuum can be controlled by name instead of raw segment commands.
+# It wraps whole-floor and room-cleaning scripts, schedule helpers, and error
+# recovery so the vacuum can be controlled by name instead of raw segment
+# commands.
 
 ################################################################
 ## Packages / Xiaomi Vacuum
@@ -120,6 +122,9 @@ automation:
       - condition: state
         entity_id: binary_sensor.den_doors_contact
         state: "off"
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
       - delay: "00:00:05"
       - action: vacuum.start
@@ -207,6 +212,30 @@ scene: []
 # Scripts
 ########################
 script:
+  vacuum_main_level_full_floor:
+    alias: "Vacuum Main Level Full Floor"
+    sequence:
+      - action: vacuum.start
+        target:
+          entity_id: vacuum.valetudo_mainlevel
+
+  vacuum_upstairs_full_floor:
+    alias: "Vacuum Upstairs Full Floor"
+    sequence:
+      - action: vacuum.start
+        target:
+          entity_id: vacuum.valetudo_upstairs_vacuum
+
+  vacuum_main_and_upstairs_levels:
+    alias: "Vacuum Main And Upstairs Levels"
+    description: Run one full-floor cleaning pass on both resident levels.
+    mode: queued
+    sequence:
+      - action: script.vacuum_main_level_full_floor
+        continue_on_error: true
+      - action: script.vacuum_upstairs_full_floor
+        continue_on_error: true
+
   vacuum_master_bedroom:
     alias: "Vacuum Master Bedroom"
     sequence:
@@ -223,7 +252,7 @@ script:
         data:
           topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
           payload: >-
-            {"action": "start_segment_action","segment_ids": ["5],"iterations": 4,"customOrder": true}
+            {"action": "start_segment_action","segment_ids": ["5"],"iterations": 4,"customOrder": true}
   vacuum_bathroom:
     alias: "Vacuum Bathroom"
     sequence:

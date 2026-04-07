@@ -34,9 +34,13 @@ def _script_block(script_id: str) -> str:
 def test_reset_script_keeps_den_flood_switch_group_membership() -> None:
     block = _script_block("reset_inovelli_switches")
 
-    assert 'group: "Den/Floods"' in block
-    assert 'device: "Den/Flood Switch"' in block
-    assert "endpoint: 2" in block
+    assert re.search(
+        r'- group: "Den/Floods"\n'
+        r'\s+members:\n'
+        r'\s+- device: "Den/Flood Switch"\n'
+        r'\s+endpoint: 1',
+        block,
+    )
 
 
 def test_reset_script_keeps_den_flood_switch_bindings_to_group_and_lamp() -> None:

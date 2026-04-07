@@ -29,15 +29,6 @@ homeassistant:
       friendly_name: "Sync Phone Wake-up Alarm"
       icon: mdi:cellphone-message
 
-    ################################################
-    ## Input Text
-    ################################################
-
-    input_text.phone_wakeup_alarm_time:
-      <<: *customize
-      friendly_name: "Phone Wake-up Alarm Time"
-      icon: mdi:alarm
-
 ################################################
 ## Automation
 ################################################
@@ -89,20 +80,7 @@ automation:
           {{ alarm_time_raw != '' }}
         {% endif %}
     action:
-      - action: input_text.set_value
-        target:
-          entity_id: input_text.phone_wakeup_alarm_time
-        data:
-          value: "{{ alarm_time_raw if alarm_enabled else '' }}"
       - action: script.set_wakeup_from_phone_alarm
         data:
           alarm_time: "{{ alarm_time }}"
           alarm_enabled: "{{ alarm_enabled }}"
-
-################################################
-## Input Text
-################################################
-
-input_text:
-  phone_wakeup_alarm_time:
-    max: 16

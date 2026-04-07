@@ -1,5 +1,6 @@
 # Home Assistant package for guest mode.
 # It turns guest Wi-Fi presence into a house-wide guest state and then adjusts climate and UI behavior while visitors are around.
+# Canonical room-purpose and privacy context lives in docs/room_intent.yaml.
 
 ################################################################
 ## Packages / Guest
@@ -345,17 +346,14 @@ template:
       - default_entity_id: binary_sensor.guest_on_wifi
         unique_id: guest_on_wifi
         state: >-
-          {% set state = states('sensor.barley_guest') %} {% if is_number(state) and state | float >= 1 %}
-            True
-          {% else %}
-            False
-          {% endif %}"
+          {% set state = states('sensor.barley_guest') %}
+          {{ is_number(state) and state | float >= 1 }}
         name: guest_on_wifi
   - sensor:
       - name: guests_on_wifi
         unique_id: guests_on_wifi
         state: >-
-          {{ (states.device_tracker | selectattr('state','eq','home') | selectattr('attributes.is_guest', 'eq', true) | list) }}
+          {{ states.device_tracker | selectattr('state', 'eq', 'home') | selectattr('attributes.is_guest', 'eq', true) | list | count }}
 
 ########################
 # Zone

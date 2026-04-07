@@ -1,0 +1,22 @@
+name: Enforce Main Promotion
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  enforce-main-promotion:
+    name: Enforce Main Promotion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the canonical develop branch as the PR head
+        run: |
+          if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" || "${{ github.head_ref }}" != "develop" ]]; then
+            echo "PRs into main must come from this repo's develop branch."
+            echo "Current source: ${{ github.event.pull_request.head.repo.full_name }}:${{ github.head_ref }}"
+            exit 1
+          fi

@@ -48,8 +48,7 @@ def test_den_vacuum_error_retry_requires_the_den_door_to_be_closed() -> None:
 def test_leave_home_only_starts_the_den_vacuum_when_the_den_door_is_closed() -> None:
     block = _automation_block(ZONE_PATH, "vacuum_leave_home")
 
-    assert "entity_id: vacuum.valetudo_mainlevel" in block
-    assert "entity_id: vacuum.valetudo_upstairs_vacuum" in block
+    assert "action: script.vacuum_main_and_upstairs_levels" in block
     assert "- if:" in block
     assert "entity_id: binary_sensor.den_doors_contact" in block
     assert 'state: "off"' in block
