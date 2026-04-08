@@ -260,13 +260,13 @@ def test_bedtime_playlist_includes_somafm_station_names() -> None:
 
 
 def test_music_assistant_dashboard_exposes_player_card() -> None:
-    # The dashboard now uses mass-player-card for browsing/search instead of
-    # the old manual input_text / input_select search panel (replaced in
-    # commit 1d1827d when mass_queue integration was added).
+    # The dashboard uses a dedicated Music Assistant tab with mass-player-card
+    # instead of the old inline search panel.
     dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
 
     for token in (
         "Music Assistant",
+        '"path": "music-assistant"',
         "custom:mass-player-card",
         "media_player.bedroom_sonos_2",
     ):
