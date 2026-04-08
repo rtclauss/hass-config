@@ -11,6 +11,7 @@ HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
 HOUSE_MODE_PATH = ROOT / "packages" / "house_mode.yaml"
 LIGHT_PATH = ROOT / "packages" / "light.yaml"
 WEATHER_PATH = ROOT / "packages" / "weather.yaml"
+WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
 ZONE_PATH = ROOT / "packages" / "zone.yaml"
 ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
 
@@ -128,3 +129,24 @@ def test_stale_hallway_motion_entity_is_fully_replaced() -> None:
     assert "binary_sensor.hallway_motion" not in light_text + zigbee_zwave_text
     assert "binary_sensor.hall_upstairs_motion_occupancy" in light_text
     assert "binary_sensor.hall_upstairs_motion_occupancy" in zigbee_zwave_text
+
+
+def test_ios_alarm_sync_preserves_manual_workday_alarm_overrides() -> None:
+    block = _script_block(WORKDAY_PATH, "set_wakeup_from_phone_alarm")
+
+    assert re.search(
+        r'action: input_boolean\.turn_on\s+target:\s+entity_id: input_boolean\.weekday_alarm_on',
+        block,
+    )
+    assert re.search(
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id: input_boolean\.weekend_alarm_on',
+        block,
+    )
+    assert not re.search(
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id: input_boolean\.weekday_alarm_on',
+        block,
+    )
+    assert not re.search(
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id: input_boolean\.special_meeting',
+        block,
+    )

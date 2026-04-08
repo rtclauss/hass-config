@@ -515,18 +515,8 @@ script:
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.weekend_alarm_on
-              - action: input_boolean.turn_off
-                target:
-                  entity_id: input_boolean.special_meeting
         default:
           - choose:
-              - conditions:
-                  - condition: template
-                    value_template: "{{ tomorrow_is_workday }}"
-                sequence:
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: input_boolean.weekday_alarm_on
               - conditions:
                   - condition: template
                     value_template: "{{ not tomorrow_is_workday }}"
@@ -534,9 +524,6 @@ script:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.weekend_alarm_on
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.special_meeting
 
   snooze_script:
     alias: Snooze Tasks
