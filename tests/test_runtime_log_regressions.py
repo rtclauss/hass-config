@@ -16,6 +16,33 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _automation_block(path: Path, automation_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line not in (f"    id: {automation_id}", f"  - id: {automation_id}"):
+            continue
+
+        for candidate in range(index, -1, -1):
+            if lines[candidate].startswith("  - "):
+                start = candidate
+                break
+        if start is not None:
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find automation block {automation_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("  - "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def test_tesla_departure_planner_waits_for_helpers_on_startup() -> None:
     text = _read(CAR_PATH)
 
@@ -68,6 +95,20 @@ def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
     assert "states('sensor.garbage_pickup_date')" in text
     assert 'message: DO NOT put out bins tonight. Garbage day has changed!' in text
     assert "Put out bins tonight. Garbage tomorrow." in text
+
+
+def test_stale_entity_notification_only_exists_when_entities_are_present() -> None:
+    block = _automation_block(UTILITIES_PATH, "check_non_responding_entities")
+
+    assert "stale_threshold_hours: 12" in block
+    assert "stale_entities:" in block
+    assert "last_reported" in block
+    assert "persistent_notification.create" in block
+    assert "persistent_notification.dismiss" in block
+    assert "notification_id: stale-entities" in block
+    assert "stale_entities | trim != ''" in block
+    assert "have not reported in {{ stale_threshold_hours }} hours" in block
+    assert "have not updated in 24 hours" not in block
 
 
 def test_house_electrical_meter_never_emits_literal_unavailable() -> None:
