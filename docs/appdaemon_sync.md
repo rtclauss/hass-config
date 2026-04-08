@@ -14,6 +14,17 @@ Pull the live add-on tree into the repo and stage it:
 python3 scripts/appdaemon_sync.py pull --stage
 ```
 
+Routine pulls are additive/update-only: files missing from the live add-on are
+left intact in the repo copy so custom apps do not disappear from feature
+branches after an HA-side reset or reinstall.
+
+Use `--delete` only when you intentionally want the repo copy pruned to match
+the live add-on exactly:
+
+```sh
+python3 scripts/appdaemon_sync.py pull --stage --delete
+```
+
 Check whether the repo copy differs from the live add-on tree:
 
 ```sh
@@ -58,7 +69,7 @@ scripts/install_appdaemon_hooks.sh
 ```
 
 The pre-commit hook auto-pulls live AppDaemon changes only when `appdaemon/` is
-clean locally. That keeps accidental hook-driven overwrites away from intentional
-local edits.
+clean locally, and only from the primary checkout. Worktrees skip the hook so
+older feature branches do not absorb unrelated AppDaemon drift.
 
 Set `APPDAEMON_SYNC_SKIP=1` to bypass the hook for a single commit.
