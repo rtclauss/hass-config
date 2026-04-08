@@ -54,15 +54,15 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "detect_non_ha_changes: false" in block
 
 
-def test_dining_room_adaptive_lighting_reconciles_legacy_switch_to_scene_safe_settings() -> None:
+def test_dining_room_adaptive_lighting_reconciles_current_switch_to_scene_safe_settings() -> None:
     block = _automation_block("reconcile_owner_suite_adaptive_lighting")
 
     assert "trigger: homeassistant" in block
     assert "event: start" in block
     assert 'delay: "00:00:30"' in block
-    assert "legacy living-room suffix" in block
+    assert "current dining-room entity id" in block
     assert "action: adaptive_lighting.change_switch_settings" in block
-    assert "entity_id: switch.dining_room_adaptive_lighting_living_room" in block
+    assert "entity_id: switch.dining_room_adaptive_lighting_dining_room" in block
     assert "use_defaults: current" in block
     assert "include_config_in_attributes: true" in block
     assert "take_over_control: true" in block
