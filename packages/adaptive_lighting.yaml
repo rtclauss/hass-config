@@ -4,8 +4,8 @@ automation:
     description: >
       Reapply the scene-friendly Adaptive Lighting baselines after Home
       Assistant starts so owner suite and dining-room tuning survive restarts.
-      The runtime dining-room switch still uses the legacy living-room
-      entity_id.
+      The runtime dining-room switch now uses the dining-room entity_id, but
+      Adaptive Lighting still keeps the legacy living-room suffix in its name.
     mode: single
     trigger:
       - trigger: homeassistant
@@ -14,7 +14,7 @@ automation:
       - delay: "00:00:30"
       - action: adaptive_lighting.change_switch_settings
         data:
-          entity_id: switch.adaptive_lighting_living_room
+          entity_id: switch.dining_room_adaptive_lighting_living_room
           use_defaults: current
           include_config_in_attributes: true
           take_over_control: true

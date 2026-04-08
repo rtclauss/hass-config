@@ -60,9 +60,9 @@ def test_dining_room_adaptive_lighting_reconciles_legacy_switch_to_scene_safe_se
     assert "trigger: homeassistant" in block
     assert "event: start" in block
     assert 'delay: "00:00:30"' in block
-    assert "legacy living-room" in block
+    assert "legacy living-room suffix" in block
     assert "action: adaptive_lighting.change_switch_settings" in block
-    assert "entity_id: switch.adaptive_lighting_living_room" in block
+    assert "entity_id: switch.dining_room_adaptive_lighting_living_room" in block
     assert "use_defaults: current" in block
     assert "include_config_in_attributes: true" in block
     assert "take_over_control: true" in block
