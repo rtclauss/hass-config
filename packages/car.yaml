@@ -280,7 +280,7 @@ automation:
             {% endif %}
             {% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}
             {% set departure_window_open = departure_dt is not none and departure_dt > now() %}
-            {% set precondition = has_calendar_departure and departure_window_open %}
+            {% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
@@ -367,7 +367,7 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' }}"
+                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' and tesla_plan.manage_tesla_schedule }}"
             sequence:
               - action: script.tesla_set_precondition_schedule_time
                 data:
@@ -457,37 +457,6 @@ automation:
           entity_id: input_number.tesla_managed_departure_ts
         data:
           value: 0
-
-  - id: tesla_precondition_direct
-    alias: tesla_precondition_direct
-    mode: single
-    trigger:
-      - trigger: template
-        id: precondition_window
-        value_template: >-
-          {% set departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
-          {{ is_state('input_boolean.tesla_managed_departure_active', 'on')
-             and departure_ts > 0
-             and (departure_ts - 1800) | timestamp_local | as_datetime <= now()
-             and departure_ts | timestamp_local | as_datetime > now() }}
-    action:
-      - condition: template
-        value_template: >-
-          {% set departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
-          {{ is_state('input_boolean.tesla_managed_departure_active', 'on')
-             and departure_ts > 0
-             and departure_ts | timestamp_local | as_datetime > now() }}
-      - action: logbook.log
-        data:
-          entity_id: automation.tesla_precondition_direct
-          domain: automation
-          name: Tesla scheduled departure planner
-          message: >-
-            {% set departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
-            Direct preconditioning started 30 min before departure at {{ departure_ts | timestamp_custom('%a %I:%M %p', true) }}.
-      - action: climate.turn_on
-        target:
-          entity_id: climate.nigori_hvac_climate_system
 
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
@@ -989,101 +958,137 @@ sensor: []
 # Template
 ########################
 template:
-  - sensor:
-      - default_entity_id: sensor.tesla_next_drive_departure
-        unique_id: tesla_next_drive_departure
-        name: Tesla Next Drive Departure
-        icon: mdi:car-clock
+  - binary_sensor:
+      - name: upcoming_trip_charging
+        unique_id: upcoming_trip_charging
+        availability: >-
+          {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
+        attributes:
+          entry: >-
+            {% set now_local = now() %}
+            {% set horizon = now_local + timedelta(hours=24) %}
+            {% set ns = namespace(start=none, entry='None') %}
+            {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
+            {% if personal_start_raw not in [none, ''] %}
+              {% set personal_start = personal_start_raw | as_datetime | as_local %}
+              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
+                {% set ns.start = personal_start %}
+                {% set ns.entry = 'Personal: ' ~ (state_attr('calendar.ryan_claussen', 'message') | default('', true)) %}
+              {% endif %}
+            {% endif %}
+            {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+            {% if work_start_raw not in [none, ''] %}
+              {% set work_start = work_start_raw | as_datetime | as_local %}
+              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
+                {% set ns.start = work_start %}
+                {% set ns.entry = 'Work: ' ~ (state_attr('binary_sensor.work_trip_today', 'message') | default('', true)) %}
+              {% endif %}
+            {% endif %}
+            {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
+            {% if curling_start_raw not in [none, ''] %}
+              {% set curling_start = curling_start_raw | as_datetime | as_local %}
+              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
+                {% set ns.start = curling_start %}
+                {% set ns.entry = 'Curling: ' ~ (state_attr('calendar.curling', 'message') | default('', true)) %}
+              {% endif %}
+            {% endif %}
+            {{ ns.entry }}
+          start_time: >-
+            {% set now_local = now() %}
+            {% set horizon = now_local + timedelta(hours=24) %}
+            {% set ns = namespace(start=none, value='None') %}
+            {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
+            {% if personal_start_raw not in [none, ''] %}
+              {% set personal_start = personal_start_raw | as_datetime | as_local %}
+              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
+                {% set ns.start = personal_start %}
+                {% set ns.value = personal_start_raw %}
+              {% endif %}
+            {% endif %}
+            {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+            {% if work_start_raw not in [none, ''] %}
+              {% set work_start = work_start_raw | as_datetime | as_local %}
+              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
+                {% set ns.start = work_start %}
+                {% set ns.value = work_start_raw %}
+              {% endif %}
+            {% endif %}
+            {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
+            {% if curling_start_raw not in [none, ''] %}
+              {% set curling_start = curling_start_raw | as_datetime | as_local %}
+              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
+                {% set ns.start = curling_start %}
+                {% set ns.value = curling_start_raw %}
+              {% endif %}
+            {% endif %}
+            {{ ns.value }}
+          all_day: >-
+            {% set now_local = now() %}
+            {% set horizon = now_local + timedelta(hours=24) %}
+            {% set ns = namespace(start=none, value='None') %}
+            {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
+            {% if personal_start_raw not in [none, ''] %}
+              {% set personal_start = personal_start_raw | as_datetime | as_local %}
+              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
+                {% set ns.start = personal_start %}
+                {% set ns.value = state_attr('calendar.ryan_claussen', 'all_day') %}
+              {% endif %}
+            {% endif %}
+            {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+            {% if work_start_raw not in [none, ''] %}
+              {% set work_start = work_start_raw | as_datetime | as_local %}
+              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
+                {% set ns.start = work_start %}
+                {% set ns.value = state_attr('binary_sensor.work_trip_today', 'all_day') %}
+              {% endif %}
+            {% endif %}
+            {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
+            {% if curling_start_raw not in [none, ''] %}
+              {% set curling_start = curling_start_raw | as_datetime | as_local %}
+              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
+                {% set ns.start = curling_start %}
+                {% set ns.value = state_attr('calendar.curling', 'all_day') %}
+              {% endif %}
+            {% endif %}
+            {{ ns.value }}
         state: >-
           {% set now_local = now() %}
           {% set horizon = now_local + timedelta(hours=24) %}
-          {% set home_address = states('input_text.home_address') | default('', true) | trim %}
-          {% set home_street = home_address | lower | trim | regex_replace(',.*$', '') %}
-          {% set ns = namespace(best=none) %}
-          {% set candidates = [
-            {
-              'source': 'Personal',
-              'summary': state_attr('calendar.ryan_claussen', 'message') | default('', true) | string,
-              'description': state_attr('calendar.ryan_claussen', 'description') | default('', true) | string,
-              'location': state_attr('calendar.ryan_claussen', 'location') | default('', true) | string,
-              'start_raw': state_attr('calendar.ryan_claussen', 'start_time'),
-              'all_day': state_attr('calendar.ryan_claussen', 'all_day') in [true, 'true', 'True', 'on']
-            },
-            {
-              'source': 'Work',
-              'summary': state_attr('binary_sensor.work_trip_today', 'message') | default('', true) | string,
-              'description': state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | string,
-              'location': state_attr('binary_sensor.work_trip_today', 'location') | default('', true) | string,
-              'start_raw': state_attr('binary_sensor.work_trip_today', 'start_time'),
-              'all_day': state_attr('binary_sensor.work_trip_today', 'all_day') in [true, 'true', 'True', 'on']
-            },
-            {
-              'source': 'Curling',
-              'summary': state_attr('calendar.curling', 'message') | default('', true) | string,
-              'description': state_attr('calendar.curling', 'description') | default('', true) | string,
-              'location': state_attr('calendar.curling', 'location') | default('', true) | string,
-              'start_raw': state_attr('calendar.curling', 'start_time'),
-              'all_day': state_attr('calendar.curling', 'all_day') in [true, 'true', 'True', 'on']
-            }
-          ] %}
-          {% for candidate in candidates %}
-            {% if candidate.start_raw not in [none, '', 'None'] %}
-              {% set start_dt = candidate.start_raw | as_datetime | as_local %}
-              {% set location = candidate.location | trim %}
-              {% set location_lower = location | lower %}
-              {% set summary_lower = candidate.summary | lower %}
-              {% set description_lower = candidate.description | lower %}
-              {% set text = [candidate.summary, candidate.description, location] | join(' ') | lower %}
-              {% set route_summary = '→' in candidate.summary %}
-              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
-              {% set itinerary_marker = 'synced by flighty' in text or 'created from an email you received in gmail' in text or 'booking code:' in text or 'flight time ' in text %}
-              {% set looks_like_flight = route_summary or named_flight or itinerary_marker or ' airport' in text or location_lower.endswith(' intl.') or location_lower.endswith(' international airport') %}
-              {% set virtual = location_lower.startswith('http://') or location_lower.startswith('https://') %}
-              {% set home_like = home_street != '' and home_street in location_lower %}
-              {% set explicit_ignore = 'tesla:ignore' in description_lower %}
-              {% set explicit_drive = 'tesla:drive' in description_lower %}
-              {% set explicit_home = 'tesla:home' in description_lower %}
-              {% set explicit_virtual = 'tesla:virtual' in description_lower %}
-              {% set explicit_flight = 'tesla:flight' in description_lower %}
-              {% set explicit_ride = 'tesla:ride' in description_lower %}
-              {% set eligible = false %}
-              {% if start_dt is not none and start_dt > now_local and start_dt < horizon %}
-                {% if explicit_ignore %}
-                  {% set eligible = false %}
-                {% elif candidate.all_day %}
-                  {% set eligible = false %}
-                {% elif explicit_home %}
-                  {% set eligible = false %}
-                {% elif explicit_virtual %}
-                  {% set eligible = false %}
-                {% elif explicit_flight %}
-                  {% set eligible = false %}
-                {% elif explicit_ride %}
-                  {% set eligible = false %}
-                {% elif explicit_drive %}
-                  {% set eligible = location_lower != '' and not virtual %}
-                {% elif 'nocharge' in text %}
-                  {% set eligible = false %}
-                {% else %}
-                  {% set eligible = location_lower != '' and not virtual and not home_like and not looks_like_flight %}
-                {% endif %}
-              {% endif %}
-              {% if eligible and (ns.best is none or start_dt < ns.best.start_dt) %}
-                {% set ns.best = {
-                  'entry': candidate.source ~ ': ' ~ candidate.summary,
-                  'start_time': candidate.start_raw | string,
-                  'all_day': candidate.all_day,
-                  'location': location,
-                  'start_dt': start_dt
-                } %}
-              {% endif %}
+          {% set ns = namespace(start=none, eligible=false) %}
+          {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
+          {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | lower %}
+          {% if personal_start_raw not in [none, ''] and 'nocharge' not in personal_description %}
+            {% set personal_start = personal_start_raw | as_datetime | as_local %}
+            {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
+              {% set ns.start = personal_start %}
+              {% set ns.eligible = true %}
             {% endif %}
-          {% endfor %}
-          {% if ns.best is not none %}
-            {{ {'e': ns.best.entry, 's': ns.best.start_time, 'a': ns.best.all_day, 'l': ns.best.location} | to_json }}
-          {% else %}
-            {{ {'e': 'None', 's': 'None', 'a': false, 'l': home_address} | to_json }}
           {% endif %}
+          {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+          {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | lower %}
+          {% if work_start_raw not in [none, ''] and 'nocharge' not in work_description %}
+            {% set work_start = work_start_raw | as_datetime | as_local %}
+            {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
+              {% set ns.start = work_start %}
+              {% set ns.eligible = true %}
+            {% endif %}
+          {% endif %}
+          {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
+          {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | lower %}
+          {% if curling_start_raw not in [none, ''] and 'nocharge' not in curling_description %}
+            {% set curling_start = curling_start_raw | as_datetime | as_local %}
+            {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
+              {% set ns.start = curling_start %}
+              {% set ns.eligible = true %}
+            {% endif %}
+          {% endif %}
+          {{ ns.eligible and (state_attr("sensor.waze_next_trip_distance", "distance") | int(0) > 45) }}
+      - default_entity_id: binary_sensor.tesla_daily_plan_active
+        unique_id: tesla_daily_plan_active
+        name: Tesla Daily Plan Active
+        state: >-
+          {{ is_state('input_boolean.long_range_travel', 'off') }}
+  - sensor:
       - name: charge_complete
         unique_id: charge_complete
         device_class: timestamp
@@ -1113,56 +1118,49 @@ template:
         unique_id: calendar_destination
         name: Next Calendar Destination
         state: >-
-          {% set plan_text = states('sensor.tesla_next_drive_departure') %}
-          {% if plan_text not in ['unknown', 'unavailable', '', 'None', 'none'] %}
-            {% set plan = plan_text | from_json %}
+          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
+            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
           {% else %}
-            {% set plan = {'l': states('input_text.home_address')} %}
+            {% set personal_meeting_time = as_datetime(13596565062) %}
           {% endif %}
-          {{ plan.l | default(states('input_text.home_address')) }}
-  - binary_sensor:
-      - name: upcoming_trip_charging
-        unique_id: upcoming_trip_charging
-        availability: >-
-          {{ states('sensor.tesla_next_drive_departure') not in ['unknown', 'unavailable', ''] }}
-        attributes:
-          entry: >-
-            {% set plan_text = states('sensor.tesla_next_drive_departure') %}
-            {% if plan_text not in ['unknown', 'unavailable', '', 'None', 'none'] %}
-              {% set plan = plan_text | from_json %}
-            {% else %}
-              {% set plan = {'e': 'None'} %}
-            {% endif %}
-            {{ plan.e | default('None') }}
-          start_time: >-
-            {% set plan_text = states('sensor.tesla_next_drive_departure') %}
-            {% if plan_text not in ['unknown', 'unavailable', '', 'None', 'none'] %}
-              {% set plan = plan_text | from_json %}
-            {% else %}
-              {% set plan = {'s': 'None'} %}
-            {% endif %}
-            {{ plan.s | default('None') }}
-          all_day: >-
-            {% set plan_text = states('sensor.tesla_next_drive_departure') %}
-            {% if plan_text not in ['unknown', 'unavailable', '', 'None', 'none'] %}
-              {% set plan = plan_text | from_json %}
-            {% else %}
-              {% set plan = {'a': false} %}
-            {% endif %}
-            {{ plan.a | default(false) }}
-        state: >-
-          {% set plan_text = states('sensor.tesla_next_drive_departure') %}
-          {% if plan_text not in ['unknown', 'unavailable', '', 'None', 'none'] %}
-            {% set plan = plan_text | from_json %}
+
+          {% if state_attr("binary_sensor.work_trip_today", "start_time") not in [none, ''] %}
+            {% set work_meeting_upcoming = state_attr("binary_sensor.work_trip_today", "start_time")| as_datetime|as_local %}
           {% else %}
-            {% set plan = {'s': 'None'} %}
+            {% set work_meeting_upcoming = as_datetime(13596565062) %}
           {% endif %}
-          {{ plan.s not in [none, '', 'None'] and (state_attr("sensor.waze_next_trip_distance", "distance") | int(0) > 45) }}
-      - default_entity_id: binary_sensor.tesla_daily_plan_active
-        unique_id: tesla_daily_plan_active
-        name: Tesla Daily Plan Active
-        state: >-
-          {{ is_state('input_boolean.long_range_travel', 'off') }}
+
+          {% if state_attr("calendar.curling", "start_time")  != None %}
+            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
+          {% else %}
+            {% set curling_upcoming = as_datetime(13596565062) %}
+          {% endif %}
+
+          {% if (personal_meeting_time < curling_upcoming) %}
+            {% if (personal_meeting_time < work_meeting_upcoming) %}
+              {% if (personal_meeting_time - now())< timedelta(hours=24) and state_attr('calendar.ryan_claussen', 'location') != "" %}
+                {{ state_attr('calendar.ryan_claussen', 'location') }}
+              {% else %}
+                {{states("input_text.home_address")}}
+              {% endif %}
+            {% else %}
+                {{ state_attr('binary_sensor.work_trip_today', 'location') }}
+            {% endif %}
+          {% else %}
+            {% if (curling_upcoming < work_meeting_upcoming) %}
+              {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.curling', 'location') != "" %}
+                {{ state_attr('calendar.curling', 'location') }}
+              {% else %}
+                {{states("input_text.home_address")}}
+              {% endif %}
+            {% else %}
+            {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('binary_sensor.work_trip_today', 'location') not in [none, ''] %}
+                {{ state_attr('binary_sensor.work_trip_today', 'location') }}
+              {% else %}
+                {{states("input_text.home_address")}}
+              {% endif %}
+            {% endif %}
+          {% endif %}
 ########################
 # Zone
 ########################
