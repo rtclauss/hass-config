@@ -64,3 +64,27 @@ def test_build_rsync_command_includes_delete_and_excludes() -> None:
     assert "__pycache__/" in command
     assert "compiled/" in command
     assert command[-2:] == ["/source/", "/dest/"]
+
+
+def test_build_rsync_command_omits_delete_by_default() -> None:
+    command = MODULE.build_rsync_command(
+        Path("/source"),
+        Path("/dest"),
+        delete=False,
+        dry_run=False,
+        itemize=False,
+    )
+
+    assert command[:2] == ["rsync", "-a"]
+    assert "--delete" not in command
+    assert command[-2:] == ["/source/", "/dest/"]
+
+
+def test_pull_parser_requires_explicit_delete_flag() -> None:
+    parser = MODULE.build_parser()
+
+    default_args = parser.parse_args(["pull"])
+    delete_args = parser.parse_args(["pull", "--delete"])
+
+    assert default_args.delete is False
+    assert delete_args.delete is True
