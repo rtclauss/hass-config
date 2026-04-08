@@ -2,14 +2,26 @@ automation:
   - id: reconcile_owner_suite_adaptive_lighting
     alias: reconcile_owner_suite_adaptive_lighting
     description: >
-      Reapply the owner suite Adaptive Lighting baseline after Home Assistant
-      starts so scene-friendly bedroom tuning survives restarts.
+      Reapply the scene-friendly Adaptive Lighting baselines after Home
+      Assistant starts so owner suite and dining-room tuning survive restarts.
+      The runtime dining-room Adaptive Lighting switch now uses the current dining-room entity id.
     mode: single
     trigger:
       - trigger: homeassistant
         event: start
     action:
       - delay: "00:00:30"
+      - action: adaptive_lighting.change_switch_settings
+        data:
+          entity_id: switch.dining_room_adaptive_lighting_dining_room
+          use_defaults: current
+          include_config_in_attributes: true
+          take_over_control: true
+          adapt_only_on_bare_turn_on: true
+          only_once: true
+          initial_transition: 1
+          transition: 5
+          detect_non_ha_changes: false
       - action: adaptive_lighting.change_switch_settings
         data:
           entity_id: switch.adaptive_lighting_owner_suite
