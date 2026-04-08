@@ -169,10 +169,14 @@ rule BeginWakeupSequence {
     when: WakeupSequenceRequested(kind)
     requires: not wakeup.wakeup_alarm_firing
     ensures: wakeup.wakeup_alarm_firing = true
-    ensures: owner_suite.adaptive_lighting_enabled = false
     ensures: owner_suite.lighting_state = dim_warm
     ensures: owner_suite.blinds_state = opening
     ensures: WakeupRampRequested(kind)
+    @guidance
+        -- The current wake-up flow no longer suspends adaptive lighting at the
+        -- start of the sequence. It applies the light ramp while adaptive
+        -- lighting remains in effect and explicitly re-enables the bedroom
+        -- adaptive-lighting switches at the end.
 }
 
 rule FinishWakeupSequence {
