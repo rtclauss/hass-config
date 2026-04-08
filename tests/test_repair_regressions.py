@@ -134,19 +134,27 @@ def test_stale_hallway_motion_entity_is_fully_replaced() -> None:
 def test_ios_alarm_sync_preserves_manual_workday_alarm_overrides() -> None:
     block = _script_block(WORKDAY_PATH, "set_wakeup_from_phone_alarm")
 
+    for helper in (
+        "input_boolean.ios_synced_weekday_alarm",
+        "input_boolean.ios_synced_special_meeting",
+    ):
+        assert helper in block
+
+    assert "weekday_alarm_already_on" in block
+    assert "special_meeting_already_on" in block
+    assert "not weekday_alarm_already_on" in block
+    assert "not special_meeting_already_on" in block
+    assert "tomorrow_is_workday and is_state('input_boolean.ios_synced_weekday_alarm', 'on')" in block
+    assert "tomorrow_is_workday and is_state('input_boolean.ios_synced_special_meeting', 'on')" in block
     assert re.search(
-        r'action: input_boolean\.turn_on\s+target:\s+entity_id: input_boolean\.weekday_alarm_on',
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id:\s+- input_boolean\.weekday_alarm_on\s+- input_boolean\.ios_synced_weekday_alarm',
+        block,
+    )
+    assert re.search(
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id:\s+- input_boolean\.special_meeting\s+- input_boolean\.ios_synced_special_meeting',
         block,
     )
     assert re.search(
         r'action: input_boolean\.turn_off\s+target:\s+entity_id: input_boolean\.weekend_alarm_on',
-        block,
-    )
-    assert not re.search(
-        r'action: input_boolean\.turn_off\s+target:\s+entity_id: input_boolean\.weekday_alarm_on',
-        block,
-    )
-    assert not re.search(
-        r'action: input_boolean\.turn_off\s+target:\s+entity_id: input_boolean\.special_meeting',
         block,
     )

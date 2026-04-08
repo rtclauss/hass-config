@@ -90,6 +90,14 @@ homeassistant:
       <<: *customize
       friendly_name: "Weekend alarm on"
 
+    input_boolean.ios_synced_weekday_alarm:
+      <<: *customize
+      friendly_name: "iOS synced weekday alarm"
+
+    input_boolean.ios_synced_special_meeting:
+      <<: *customize
+      friendly_name: "iOS synced special meeting"
+
     input_boolean.wakeup_alarm_firing:
       <<: *customize
       friendly_name: "Wakeup alarm firing"
@@ -482,6 +490,8 @@ script:
             {{ (tomorrow_holidays.events | default([]) | length) > 0 }}
           tomorrow_is_workday: >-
             {{ tomorrow_is_weekday and not tomorrow_is_holiday }}
+          weekday_alarm_already_on: "{{ is_state('input_boolean.weekday_alarm_on', 'on') }}"
+          special_meeting_already_on: "{{ is_state('input_boolean.special_meeting', 'on') }}"
       - choose:
           - conditions:
               - condition: template
@@ -500,9 +510,25 @@ script:
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.weekday_alarm_on
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ not weekday_alarm_already_on }}"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        target:
+                          entity_id: input_boolean.ios_synced_weekday_alarm
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.special_meeting
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ not special_meeting_already_on }}"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        target:
+                          entity_id: input_boolean.ios_synced_special_meeting
           - conditions:
               - condition: template
                 value_template: "{{ sync_alarm_enabled and not tomorrow_is_workday }}"
@@ -515,8 +541,31 @@ script:
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.weekend_alarm_on
+              - action: input_boolean.turn_off
+                target:
+                  entity_id:
+                    - input_boolean.ios_synced_weekday_alarm
+                    - input_boolean.ios_synced_special_meeting
         default:
           - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tomorrow_is_workday and is_state('input_boolean.ios_synced_weekday_alarm', 'on') }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id:
+                        - input_boolean.weekday_alarm_on
+                        - input_boolean.ios_synced_weekday_alarm
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tomorrow_is_workday and is_state('input_boolean.ios_synced_special_meeting', 'on') }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id:
+                        - input_boolean.special_meeting
+                        - input_boolean.ios_synced_special_meeting
               - conditions:
                   - condition: template
                     value_template: "{{ not tomorrow_is_workday }}"
@@ -524,6 +573,11 @@ script:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.weekend_alarm_on
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id:
+                        - input_boolean.ios_synced_weekday_alarm
+                        - input_boolean.ios_synced_special_meeting
 
   snooze_script:
     alias: Snooze Tasks
@@ -640,6 +694,8 @@ input_boolean:
   morning_routine:
   weekday_alarm_on:
   weekend_alarm_on:
+  ios_synced_weekday_alarm:
+  ios_synced_special_meeting:
   wakeup_alarm_firing:
   snooze_status:
     initial: false
