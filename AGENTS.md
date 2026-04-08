@@ -22,6 +22,11 @@
 - Read it before changing guest mode, occupancy, lighting, media, vacuum, climate, dashboards, or other room-targeted logic.
 - If convenience behavior conflicts with room intent, preserve privacy-first behavior.
 
+## Behavioral Specs
+- Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
+- Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
+- Before changing related Home Assistant automations, scripts, helpers, dashboards, or tests, read the relevant Allium spec first and keep implementation changes aligned with it.
+
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.
 - Do not commit `AGENTS.local.md` unless explicitly asked.
