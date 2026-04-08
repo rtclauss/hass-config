@@ -105,6 +105,14 @@ def test_monitor_only_counts_cleaning_and_returning_states() -> None:
     assert module.is_active_vacuum_state("unavailable") is False
 
 
+def test_slug_from_vacuum_entity_drops_duplicate_valetudo_prefix() -> None:
+    module = _load_module()
+
+    assert module.slug_from_vacuum_entity("vacuum.valetudo_mainlevel") == "mainlevel"
+    assert module.slug_from_vacuum_entity("vacuum.valetudo_den") == "den"
+    assert module.slug_from_vacuum_entity("vacuum.valetudo_upstairs_vacuum") == "upstairs_vacuum"
+
+
 def test_extract_valetudo_map_and_render_png(tmp_path: Path) -> None:
     module = _load_module()
     map_data = {

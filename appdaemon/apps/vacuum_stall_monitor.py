@@ -138,7 +138,7 @@ def normalize_service(service_name: str) -> str:
 
 
 def slug_from_vacuum_entity(entity_id: str) -> str:
-    return entity_id.split(".", 1)[-1]
+    return entity_id.split(".", 1)[-1].removeprefix("valetudo_")
 
 
 def is_active_vacuum_state(state: str | None, active_states: tuple[str, ...] = ("cleaning", "returning")) -> bool:
