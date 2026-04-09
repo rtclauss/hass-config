@@ -57,14 +57,52 @@ def _automation_block(path: Path, automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_wake_up_script_uses_supported_color_temperature_fields_and_keeps_running() -> None:
+def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_while_blinds_start_raising() -> None:
+    block = _script_block(WORKDAY_PATH, "owner_suite_morning_transition")
+
+    for token in (
+        "switch.sleep_mode",
+        "switch.adaptive_lighting_owner_suite",
+        "action: adaptive_lighting.apply",
+        "entity_id: switch.adaptive_lighting_owner_suite",
+        "manual_control: false",
+        "transition: 2",
+        "transition: 180",
+        "cover.owner_suite_blinds_ha",
+        "position: \"{{ repeat.index * 2 }}\"",
+        "switch.adaptive_lighting_adapt_brightness_owner_suite",
+        "switch.adaptive_lighting_adapt_color_owner_suite",
+    ):
+        assert token in block
+
+
+def test_wake_up_script_uses_shared_owner_suite_morning_transition() -> None:
     block = _script_block(WORKDAY_PATH, "wake_up_script")
 
-    assert "cover.owner_suite_blinds_ha" in block
-    assert "color_temp_kelvin: 2700" in block
-    assert "color_temp_kelvin: 6500" in block
-    assert "\n          kelvin:" not in block
-    assert block.count("continue_on_error: true") >= 3
+    assert "script.owner_suite_morning_transition" in block
+    assert "cover.owner_suite_blinds_ha" not in block
+    assert "transition: 180" not in block
+
+
+def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> None:
+    block = _automation_block(WORKDAY_PATH, "workday_owner_suite_wake_transition_from_morning_activity")
+
+    for token in (
+        'after: "04:30:00"',
+        'before: "12:00:00"',
+        "binary_sensor.workday_sensor",
+        "binary_sensor.bayesian_zeke_home",
+        "binary_sensor.planned_vacation_calendar",
+        "binary_sensor.bayesian_bed_occupancy",
+        "binary_sensor.owner_suite_bathroom_room_occupancy",
+        "binary_sensor.hall_upstairs_motion_occupancy",
+        "input_boolean.wakeup_alarm_firing",
+        "light.owner_suite_lamps",
+        "script.owner_suite_morning_transition",
+        "as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900",
+        "as_timestamp(now()) - as_timestamp(states.binary_sensor.hall_upstairs_motion_occupancy.last_changed) <= 900",
+    ):
+        assert token in block
 
 
 def test_close_owner_suite_blinds_catches_evening_recovery_after_missed_sunset() -> None:
