@@ -1707,11 +1707,16 @@ script:
             to: "on"
         timeout:
           minutes: 10 # TODO this as a variable that is passed by the caller. Different timeouts for tv off and for laying in bed automation
-        continue_on_timeout: false
-      - delay:
-          minutes: 3
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.completed }}"
+        then:
+          - delay:
+              minutes: 3
       - action: script.turn_on
-        entity_id: script.spotify_bedtime_volume
+        target:
+          entity_id: script.spotify_bedtime_volume
 
   spotify_bedtime_volume:
     alias: "Spotify Bedtime Rampdown"
