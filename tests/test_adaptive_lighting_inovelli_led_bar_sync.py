@@ -102,6 +102,10 @@ def test_led_bar_sync_script_uses_privacy_and_sleep_guards_with_office_fallback(
     assert "entity_id: switch.sleep_mode" in block
     assert "guest_mode_blocks_sync: true" in block
     assert "fallback_adaptive_switch: switch.adaptive_lighting_owner_suite" in block
+    assert "light.owner_suite_lamps" in block
+    assert "repeat.item == 'owner_suite'" in block
+    assert "now().hour >= 22 or now().hour < 6" in block
+    assert "room_specific_sync_blocked" in block
     assert "min_color_temp" in block
     assert "max_color_temp" in block
     assert "* 170" in block
