@@ -71,7 +71,10 @@ def test_default_led_bar_sync_automation_updates_owner_suite_and_office() -> Non
     assert "switch.adaptive_lighting_owner_suite" in block
     assert "switch.adaptive_lighting_sleep_mode_owner_suite" in block
     assert 'delay: "00:00:30"' in block
-    assert "action: script.sync_inovelli_led_bars_to_adaptive_lighting" in block
+    assert "action: script.turn_on" in block
+    assert "entity_id: script.sync_inovelli_led_bars_to_adaptive_lighting" in block
+    assert "variables:" in block
+    assert "action: script.sync_inovelli_led_bars_to_adaptive_lighting" not in block
     assert "- owner suite" in block
     assert "- office" in block
 
