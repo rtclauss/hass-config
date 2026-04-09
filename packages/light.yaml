@@ -1685,6 +1685,7 @@ automation:
     condition:
       - condition: time
         after: "07:59:59"
+        before: "12:00:00"
       - condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
@@ -1698,6 +1699,22 @@ automation:
       - action: script.turn_on
         target:
           entity_id: script.day_mode_switches_owner_suite_bedroom
+
+  - alias: owner_suite_switch_leds_red_when_lamps_on_at_night
+    id: owner_suite_switch_leds_red_when_lamps_on_at_night
+    description: Restore the owner suite Inovelli LED bars to the nighttime red state whenever the owner suite lamps come back on overnight.
+    trigger:
+      - trigger: state
+        entity_id: light.owner_suite_lamps
+        to: "on"
+    condition:
+      - condition: time
+        after: "22:00:00"
+        before: "06:00:00"
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.night_mode_switches_owner_suite
 
   - alias: button_reset_basement
     id: button_reset_basement
@@ -1773,6 +1790,12 @@ automation:
       - action: light.turn_off
         target:
           entity_id: light.bed_lightstrip
+      - if:
+          - condition: time
+            after: "22:00:00"
+            before: "06:00:00"
+        then:
+          - action: script.turn_off_owner_suite_inovelli_switch_leds
 
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom
