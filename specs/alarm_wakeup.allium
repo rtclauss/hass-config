@@ -40,8 +40,12 @@ external entity WakeupContext {
     resident_in_bed: Boolean
     bathroom_occupied: Boolean
     guest_mode_enabled: Boolean
+    within_workday_owner_suite_wake_window: Boolean
     within_weekday_bathroom_window: Boolean
     within_weekend_bathroom_window: Boolean
+    owner_suite_lamps_on: Boolean
+    owner_suite_recent_bathroom_activity: Boolean
+    owner_suite_recent_hall_activity: Boolean
 }
 
 ------------------------------------------------------------
@@ -75,6 +79,7 @@ entity OwnerSuiteWakeEnvironment {
 config {
     special_meeting_lead: Duration = 5.minutes
     snooze_duration: Duration = 8.minutes
+    morning_blinds_delay: Duration = 175.seconds
 }
 
 ------------------------------------------------------------
@@ -165,26 +170,52 @@ rule TriggerSpecialMeetingWakeup {
     ensures: MorningAudioRequested(meeting_track, bedroom_suite)
 }
 
+rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
+    when: context.resident_in_bed becomes false
+    or context.bathroom_occupied becomes true
+    or context.owner_suite_recent_hall_activity becomes true
+    requires: calendar.today_is_workday
+    requires: context.within_workday_owner_suite_wake_window
+    requires: context.resident_home
+    requires: not context.planned_vacation_active
+    requires: not wakeup.wakeup_alarm_firing
+    requires: not context.owner_suite_lamps_on
+    requires: not context.resident_in_bed
+    requires: context.owner_suite_recent_bathroom_activity
+    requires: context.owner_suite_recent_hall_activity
+    ensures: WakeupSequenceRequested(workday_morning_activity)
+}
+
 rule BeginWakeupSequence {
     when: WakeupSequenceRequested(kind)
     requires: not wakeup.wakeup_alarm_firing
     ensures: wakeup.wakeup_alarm_firing = true
-    ensures: owner_suite.lighting_state = dim_warm
-    ensures: owner_suite.blinds_state = opening
+    ensures: owner_suite.adaptive_lighting_enabled = true
+    ensures: owner_suite.lighting_state = daylight_ramp
     ensures: WakeupRampRequested(kind)
+    ensures: WakeupBlindTransitionRequested(kind)
     @guidance
-        -- The current wake-up flow no longer suspends adaptive lighting at the
-        -- start of the sequence. It applies the light ramp while adaptive
-        -- lighting remains in effect and explicitly re-enables the bedroom
-        -- adaptive-lighting switches at the end.
+        -- The live owner-suite morning transition immediately hands brightness
+        -- and color back to adaptive lighting. It starts with a short apply
+        -- from the current owner-suite sleep target and then settles into a
+        -- longer adaptive daytime ramp instead of forcing an explicit 2700K to
+        -- 6500K sequence in the wake-up script itself.
 }
 
 rule FinishWakeupSequence {
     when: WakeupRampRequested(kind)
     ensures: owner_suite.lighting_state = daytime
     ensures: owner_suite.sleep_mode_enabled = false
-    ensures: owner_suite.blinds_state = mostly_open
     ensures: owner_suite.adaptive_lighting_enabled = true
+}
+
+rule OpenBlindsDuringWakeupTransition {
+    when: WakeupBlindTransitionRequested(kind)
+    ensures: owner_suite.blinds_state = mostly_open
+    @guidance
+        -- The owner-suite morning transition delays blind movement by
+        -- config.morning_blinds_delay and then opens the blinds gradually in
+        -- small steps while the adaptive lighting ramp continues.
 }
 
 rule PrepareMorningAudioGroup {
