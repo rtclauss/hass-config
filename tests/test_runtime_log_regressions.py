@@ -172,3 +172,17 @@ def test_lights_off_except_only_targets_currently_on_lights() -> None:
 
     assert "selectattr('state', 'eq', 'on')" in block
     assert "rejectattr('state','in','off')" not in block
+
+
+def test_lights_off_except_skips_light_groups_that_contain_protected_members() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    block = text.split("lights_off_except:\n", 1)[1].split(
+        "\n########################\n# Sensor",
+        1,
+    )[0]
+
+    assert "protected_lights:" in block
+    assert "state_attr(light.entity_id, 'entity_id')" in block
+    assert "members | select('in', excluded)" in block
+    assert "rejectattr('entity_id', 'in', protected_lights)" in block

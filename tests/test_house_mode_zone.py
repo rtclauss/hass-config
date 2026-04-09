@@ -75,3 +75,11 @@ def test_departure_house_transition_runs_in_parallel_without_embedding_vacuum_lo
     assert "action: mqtt.publish" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" in vacuum_block
+
+
+def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
+    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+
+    assert "Primary tracker confirms departure" in block
+    assert "device_tracker.bayesian_zeke_home" in block
+    assert "not is_state('device_tracker.bayesian_zeke_home', 'home')" in block
