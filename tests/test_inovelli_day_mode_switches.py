@@ -124,6 +124,14 @@ def test_owner_suite_bedroom_day_mode_waits_for_bed_bathroom_and_hallway_activit
     assert 'before: "12:00:00"' in block
     assert "today_at('08:00')" in block
     assert "script.day_mode_switches_owner_suite_bedroom" in block
+    assert "script.owner_suite_morning_transition" not in block
+
+
+def test_wake_up_script_no_longer_forces_day_mode_before_eight_am() -> None:
+    block = _script_block(WORKDAY_PATH, "wake_up_script")
+
+    assert "script.owner_suite_morning_transition" in block
+    assert "script.day_mode_switches" not in block
 
 
 def test_owner_suite_night_mode_script_sets_suite_led_bars_to_red() -> None:
@@ -175,5 +183,5 @@ def test_owner_suite_night_lamp_shutdown_turns_off_switch_leds_with_bed_strip() 
 def test_wake_up_script_no_longer_forces_day_mode_before_eight_am() -> None:
     block = _script_block(WORKDAY_PATH, "wake_up_script")
 
-    assert "switch.sleep_mode" in block
+    assert "script.owner_suite_morning_transition" in block
     assert "script.day_mode_switches" not in block
