@@ -336,6 +336,12 @@ automation:
         entity_id: binary_sensor.planned_vacation_calendar
         state: "off"
       - condition: state
+        entity_id: input_select.house_mode
+        state:
+          - night
+          - in_bed
+          - asleep
+      - condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
       - condition: state
@@ -707,6 +713,17 @@ script:
           adapt_color: true
           turn_on_lights: true
           transition: 2
+      - alias: "Return the shared house mode to home once the wake transition begins"
+        continue_on_error: true
+        action: script.house_transition
+        data:
+          mode: home
+          reason: owner_suite_morning_transition
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
       - delay:
           seconds: 1
       - parallel:

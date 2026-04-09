@@ -125,6 +125,8 @@ def test_goodnight_integrity_preserves_bedroom_audio_and_pauses_unrelated_rooms(
     block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
 
     for token in (
+        "script.house_transition",
+        "mode: asleep",
         'value_template: "{{ not guest_context_enabled }}"',
         "bedroom_audio_pause_targets",
         "'media_player.bedroom_sonos_2'",

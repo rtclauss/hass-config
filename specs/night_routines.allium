@@ -19,6 +19,7 @@ given {
     night: NightContext
     bedtime: BedtimeEnvironment
     house: HouseSleepSafety
+    house_mode: HouseModeStateMachine
 }
 
 ------------------------------------------------------------
@@ -59,6 +60,22 @@ entity HouseSleepSafety {
     climate_mode: resumed_program | guest_sleep | unavailable | away_like
 }
 
+entity HouseModeStateMachine {
+    mode: home | away | night | in_bed | asleep
+
+    transitions mode {
+        home -> away
+        away -> home
+        home -> night
+        night -> home
+        night -> in_bed
+        night -> asleep
+        in_bed -> asleep
+        in_bed -> home
+        asleep -> home
+    }
+}
+
 ------------------------------------------------------------
 -- Config
 ------------------------------------------------------------
@@ -78,10 +95,21 @@ rule StartBedtimePreparation {
     requires: night.within_bedtime_prep_window
     requires: not night.guest_mode_enabled
     requires: not night.resident_in_bed
+    requires: house_mode.mode = night
     ensures: bedtime.bedroom_prep_active = true
     ensures: bedtime.bedtime_audio_active = true
     ensures: bedtime.sleep_mode_enabled = false
     ensures: BedtimeAudioRequested(bedroom_suite)
+}
+
+rule EnterInBedHouseMode {
+    when: ResidentSettledInBed()
+    requires: house_mode.mode = night
+    ensures: house_mode.mode = in_bed
+    @guidance
+        -- The live implementation derives this from sustained owner-suite bed
+        -- occupancy, then turns off unrelated house lights while preserving
+        -- the bedside lights and overnight exterior lighting.
 }
 
 rule ScheduleBedtimeAudioRampdown {
@@ -107,9 +135,17 @@ rule TriggerGoodnightFromCPAPSleep {
     ensures: GoodnightIntegrityRequested(cpap_sleep)
 }
 
+rule EnterAsleepHouseModeFromBedsideShutdown {
+    when: BedsideLampsTurnedOffForSleep()
+    requires: house_mode.mode in {night, in_bed}
+    ensures: house_mode.mode = asleep
+    ensures: bedtime.sleep_mode_enabled = true
+}
+
 rule ApplyGoodnightIntegrity {
     when: GoodnightIntegrityRequested(reason)
     let guest_context_enabled = night.guest_mode_enabled or night.guest_room_occupied
+    ensures: house_mode.mode = asleep
     ensures: house.common_area_lights_off = true
     ensures:
         if night.guest_mode_enabled:
