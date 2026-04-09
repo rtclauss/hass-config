@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HOUSE_MODE_PATH = ROOT / "packages" / "house_mode.yaml"
 IOS_WAKEUP_PATH = ROOT / "packages" / "ios_wakeup.yaml"
 MEDIA_PLAYER_PATH = ROOT / "packages" / "media_player.yaml"
+ALARM_WAKEUP_SPEC_PATH = ROOT / "specs" / "alarm_wakeup.allium"
 TV_PATH = ROOT / "packages" / "tv.yaml"
 WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
 
@@ -109,6 +110,20 @@ def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> No
         'spotify_uri: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ"',
     ):
         assert token in block
+
+
+def test_alarm_wakeup_spec_supports_workday_activity_trigger_and_three_minute_ramp() -> None:
+    spec = ALARM_WAKEUP_SPEC_PATH.read_text(encoding="utf-8")
+
+    for token in (
+        "workday_wake_activity_detected: Boolean",
+        "wakeup_ramp_duration: Duration = 3.minutes",
+        "rule TriggerWorkdayWakeupFromMorningActivity",
+        "when: context.workday_wake_activity_detected becomes true",
+        "WakeupSequenceRequested(workday_morning_activity)",
+        "config.wakeup_ramp_duration",
+    ):
+        assert token in spec
 
 
 def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
