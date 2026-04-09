@@ -143,10 +143,20 @@ script:
                   {% else %}
                     {{ '' }}
                   {% endif %}
+                room_specific_sync_blocked: >-
+                  {{
+                    repeat.item == 'owner_suite'
+                    and is_state('light.owner_suite_lamps', 'on')
+                    and (now().hour >= 22 or now().hour < 6)
+                  }}
             - if:
                 - condition: template
                   value_template: >-
-                    {{ not guest_mode_blocks_room and adaptive_lighting_entity != '' }}
+                    {{
+                      not guest_mode_blocks_room
+                      and not room_specific_sync_blocked
+                      and adaptive_lighting_entity != ''
+                    }}
               then:
                 - variables:
                     adaptive_brightness_pct: >-
