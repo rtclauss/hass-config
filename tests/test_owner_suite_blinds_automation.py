@@ -61,6 +61,8 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
     block = _script_block(WORKDAY_PATH, "owner_suite_morning_transition")
 
     for token in (
+        "script.house_transition",
+        "mode: home",
         "switch.sleep_mode",
         "switch.adaptive_lighting_owner_suite",
         "action: adaptive_lighting.apply",
@@ -91,6 +93,10 @@ def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> Non
     for token in (
         'after: "04:30:00"',
         'before: "12:00:00"',
+        "input_select.house_mode",
+        "- night",
+        "- in_bed",
+        "- asleep",
         "binary_sensor.workday_sensor",
         "binary_sensor.bayesian_zeke_home",
         "binary_sensor.planned_vacation_calendar",

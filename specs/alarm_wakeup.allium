@@ -22,6 +22,7 @@ given {
     calendar: CalendarContext
     context: WakeupContext
     owner_suite: OwnerSuiteWakeEnvironment
+    house_mode: HouseModeStateMachine
 }
 
 ------------------------------------------------------------
@@ -70,6 +71,10 @@ entity OwnerSuiteWakeEnvironment {
     adaptive_lighting_enabled: Boolean
     sleep_mode_enabled: Boolean
     blinds_state: closed | opening | mostly_open
+}
+
+entity HouseModeStateMachine {
+    mode: home | away | night | in_bed | asleep
 }
 
 ------------------------------------------------------------
@@ -178,6 +183,7 @@ rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
     requires: context.within_workday_owner_suite_wake_window
     requires: context.resident_home
     requires: not context.planned_vacation_active
+    requires: house_mode.mode in {night, in_bed, asleep}
     requires: not wakeup.wakeup_alarm_firing
     requires: not context.owner_suite_lamps_on
     requires: not context.resident_in_bed
@@ -189,6 +195,7 @@ rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
 rule BeginWakeupSequence {
     when: WakeupSequenceRequested(kind)
     requires: not wakeup.wakeup_alarm_firing
+    ensures: house_mode.mode = home
     ensures: wakeup.wakeup_alarm_firing = true
     ensures: owner_suite.adaptive_lighting_enabled = true
     ensures: owner_suite.lighting_state = daylight_ramp

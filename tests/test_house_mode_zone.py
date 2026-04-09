@@ -66,6 +66,23 @@ def test_house_transition_no_longer_queues_later_mode_changes() -> None:
     assert "script.lights_off_except" in text
 
 
+def test_house_transition_supports_in_bed_and_asleep_without_forcing_night_scene_defaults() -> None:
+    text = HOUSE_MODE_PATH.read_text(encoding="utf-8")
+    block = _script_block("house_transition")
+
+    for token in (
+        "- in_bed",
+        "- asleep",
+        "House mode to apply: home, away, night, in_bed, or asleep.",
+        "normalized in ['away', 'night', 'in_bed', 'asleep']",
+        "requested_mode in ['home', 'night', 'in_bed', 'asleep']",
+    ):
+        assert token in text or token in block
+
+    assert "elif requested_mode == 'night'" in block
+    assert "resolved_light_scene" in block
+
+
 def test_departure_house_transition_runs_in_parallel_without_embedding_vacuum_logic() -> None:
     transition_block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
     vacuum_block = _automation_block(ZONE_PATH, "vacuum_leave_home")
