@@ -82,6 +82,7 @@ def test_led_bar_sync_script_accepts_room_inputs_and_maps_owner_suite_and_office
     assert "fields:" in block
     assert "room:" in block
     assert "rooms:" in block
+    assert 'example: "owner suite, office"' in block
     assert "owner_suite:" in block
     assert "office:" in block
     assert "switch.adaptive_lighting_owner_suite" in block
