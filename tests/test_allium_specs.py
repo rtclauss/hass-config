@@ -14,6 +14,8 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
             "rule NormalizePhoneWakeupPayload",
             "rule SyncPhoneWakeupAlarm",
             "rule TriggerWeekdayWakeup",
+            "rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity",
+            "rule OpenBlindsDuringWakeupTransition",
             "rule StartBathroomMorningRoutine",
         ],
         "night_routines.allium": [
