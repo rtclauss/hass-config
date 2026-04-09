@@ -2416,11 +2416,21 @@ script:
       exclude_lights:
         description: "Excluded lights as list"
     variables:
+      protected_lights: >-
+        {% set excluded = exclude_lights | default([], true) | list %}
+        {% set ns = namespace(entities=excluded) %}
+        {% for light in states.light %}
+          {% set members = state_attr(light.entity_id, 'entity_id') %}
+          {% if members is iterable and members is not string and (members | select('in', excluded) | list | count > 0) %}
+            {% set ns.entities = ns.entities + [light.entity_id] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.entities | unique | list }}
       # Builds a comma-separated string of all currently-on lights, excluding
-      # the lights listed in exclude_lights (e.g. outdoor/porch lights that
-      # should stay on overnight).
+      # the protected lights and any light groups that would turn those
+      # protected members off indirectly.
       all_other_lights: >
-        {%- for device in states.light | rejectattr('entity_id', 'in', exclude_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.light | rejectattr('entity_id', 'in', protected_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
       # Fixed: guard the entire sequence so that when all non-excluded lights
       # are already off (all_other_lights resolves to an empty string), the
