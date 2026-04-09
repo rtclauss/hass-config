@@ -57,7 +57,7 @@ def _automation_block(path: Path, automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_while_blinds_start_raising() -> None:
+def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_delays_blind_ramp() -> None:
     block = _script_block(WORKDAY_PATH, "owner_suite_morning_transition")
 
     for token in (
@@ -68,6 +68,7 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_while
         "manual_control: false",
         "transition: 2",
         "transition: 180",
+        "seconds: 175",
         "cover.owner_suite_blinds_ha",
         "position: \"{{ repeat.index * 2 }}\"",
         "switch.adaptive_lighting_adapt_brightness_owner_suite",
