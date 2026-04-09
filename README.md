@@ -71,6 +71,7 @@ Accepted playlist values:
 - `https://open.spotify.com/album/...`
 - `https://open.spotify.com/artist/...`
 - `https://open.spotify.com/track/...`
+- Permanent internet radio playlist URLs, such as `https://somafm.com/groovesalad.pls`
 - Music Assistant URIs or plain item names, for mixed lists that call `script.music_assistant_play_item`
 
 If you are creating a brand new script, prefer calling the helper instead of using `media_player.play_media` directly:
@@ -85,6 +86,7 @@ If you are creating a brand new script, prefer calling the helper instead of usi
 Notes:
 
 - The generic helper now passes Music Assistant URIs and plain item names through directly. Use `media_type` when a name is ambiguous.
+- Prefer explicit URLs or Music Assistant URIs for radio entries so automations do not depend on name search resolution.
 - `script.music_assistant_play_spotify_uri` remains as a compatibility wrapper for Spotify URLs and URIs.
 
 ### Searching and Queuing Music Assistant Items
