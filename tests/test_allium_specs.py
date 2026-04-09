@@ -21,9 +21,11 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
         "night_routines.allium": [
             "-- allium: 3",
             "rule StartBedtimePreparation",
+            "rule ScheduleBedtimeAudioRampdown",
             "rule ChooseBedtimeAudioFromConfiguredPool",
             "rule TriggerGoodnightFromCPAPSleep",
             "rule ApplyGoodnightIntegrity",
+            "wait_for_bathroom_visit_or_timeout",
         ],
     }
 

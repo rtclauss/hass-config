@@ -87,7 +87,11 @@ rule StartBedtimePreparation {
 rule ScheduleBedtimeAudioRampdown {
     when: BedtimeAudioRequested(zone)
     ensures: bedtime.bedtime_audio_rampdown_active = true
-    ensures: BedtimeAudioRampdownScheduled(wait_for_bathroom_visit, config.bedtime_audio_timeout, config.bedtime_audio_rampdown_delay)
+    ensures: BedtimeAudioRampdownScheduled(wait_for_bathroom_visit_or_timeout, config.bedtime_audio_timeout, config.bedtime_audio_rampdown_delay)
+    @guidance
+        -- A bathroom occupancy event starts the additional rampdown delay.
+        -- If no bathroom visit is detected within config.bedtime_audio_timeout,
+        -- the rampdown still begins at the timeout instead of aborting.
 }
 
 rule ChooseBedtimeAudioFromConfiguredPool {

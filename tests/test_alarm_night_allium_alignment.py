@@ -194,7 +194,7 @@ def test_tv_bed_prep_is_guest_suppressed_and_defers_sleep_mode_shutdown() -> Non
         assert token in block
 
 
-def test_bedtime_audio_waits_for_bathroom_then_ramps_down() -> None:
+def test_bedtime_audio_uses_bathroom_visit_or_timeout_before_rampdown() -> None:
     block = _script_block(MEDIA_PLAYER_PATH, "spotify_bedtime")
 
     for token in (
@@ -202,8 +202,10 @@ def test_bedtime_audio_waits_for_bathroom_then_ramps_down() -> None:
         "entity_id: binary_sensor.owner_suite_bathroom_room_occupancy",
         'to: "on"',
         "minutes: 10",
-        "continue_on_timeout: false",
+        "continue_on_timeout: true",
+        'value_template: "{{ wait.completed }}"',
         "minutes: 3",
+        "target:\n          entity_id: script.spotify_bedtime_volume",
         "entity_id: script.spotify_bedtime_volume",
     ):
         assert token in block
