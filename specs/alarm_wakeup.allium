@@ -40,6 +40,7 @@ external entity WakeupContext {
     resident_in_bed: Boolean
     bathroom_occupied: Boolean
     guest_mode_enabled: Boolean
+    workday_wake_activity_detected: Boolean
     within_weekday_bathroom_window: Boolean
     within_weekend_bathroom_window: Boolean
 }
@@ -75,6 +76,7 @@ entity OwnerSuiteWakeEnvironment {
 config {
     special_meeting_lead: Duration = 5.minutes
     snooze_duration: Duration = 8.minutes
+    wakeup_ramp_duration: Duration = 3.minutes
 }
 
 ------------------------------------------------------------
@@ -165,6 +167,15 @@ rule TriggerSpecialMeetingWakeup {
     ensures: MorningAudioRequested(meeting_track, bedroom_suite)
 }
 
+rule TriggerWorkdayWakeupFromMorningActivity {
+    when: context.workday_wake_activity_detected becomes true
+    requires: calendar.today_is_workday
+    requires: context.resident_home
+    requires: not context.planned_vacation_active
+    requires: not wakeup.wakeup_alarm_firing
+    ensures: WakeupSequenceRequested(workday_morning_activity)
+}
+
 rule BeginWakeupSequence {
     when: WakeupSequenceRequested(kind)
     requires: not wakeup.wakeup_alarm_firing
@@ -173,10 +184,11 @@ rule BeginWakeupSequence {
     ensures: owner_suite.blinds_state = opening
     ensures: WakeupRampRequested(kind)
     @guidance
-        -- The current wake-up flow no longer suspends adaptive lighting at the
-        -- start of the sequence. It applies the light ramp while adaptive
-        -- lighting remains in effect and explicitly re-enables the bedroom
-        -- adaptive-lighting switches at the end.
+        -- The current wake-up flow keeps Adaptive Lighting in control the
+        -- entire time. It explicitly starts from the Adaptive Lighting sleep
+        -- target, then exits sleep mode and ramps to the current adaptive
+        -- target over config.wakeup_ramp_duration while the blinds begin
+        -- opening as part of the same transition.
 }
 
 rule FinishWakeupSequence {
