@@ -960,6 +960,15 @@ automation:
             before: sunrise
             before_offset: "+0:10:00"
     action:
+      - action: script.house_transition
+        data:
+          mode: in_bed
+          reason: bed_occupancy_sustained
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
       - action: script.lights_off_except
         data:
           exclude_lights:
@@ -1653,6 +1662,26 @@ automation:
         data:
           entity_id:
             - switch.sleep_mode
+      - if:
+          - condition: state
+            entity_id: device_tracker.bayesian_zeke_home
+            state: "home"
+          - condition: state
+            entity_id: input_select.house_mode
+            state:
+              - night
+              - in_bed
+              - asleep
+        then:
+          - action: script.house_transition
+            data:
+              mode: home
+              reason: morning_sleep_mode_timeout
+              apply_lights: false
+              apply_security: false
+              apply_climate: false
+              apply_media: false
+              apply_trip_policy: false
       - action: script.turn_on
         target:
           entity_id: script.day_mode_switches_general
@@ -1774,6 +1803,15 @@ automation:
         data:
           entity_id:
             - switch.sleep_mode
+      - action: script.house_transition
+        data:
+          mode: asleep
+          reason: bedside_lamps_off
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
       - action: script.lights_off_except
         data:
           exclude_lights:

@@ -94,6 +94,10 @@ def test_turn_off_sleep_mode_uses_general_day_mode_and_early_office_guest_when_n
     block = _automation_block(LIGHT_PATH, "turn_off_sleep_mode")
 
     assert 'at: "08:00:00"' in block
+    assert "script.house_transition" in block
+    assert "reason: morning_sleep_mode_timeout" in block
+    assert "device_tracker.bayesian_zeke_home" in block
+    assert "input_select.house_mode" in block
     assert "script.day_mode_switches_general" in block
     assert "entity_id: input_boolean.guest_mode" in block
     assert 'state: "off"' in block

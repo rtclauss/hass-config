@@ -61,6 +61,8 @@ input_select:
       - home
       - away
       - night
+      - in_bed
+      - asleep
     initial: home
 
 ########################
@@ -77,7 +79,7 @@ script:
     max: 10
     fields:
       mode:
-        description: "Base house mode to apply: home, away, or night."
+        description: "House mode to apply: home, away, night, in_bed, or asleep."
         example: away
       reason:
         description: Optional logbook reason for the transition request.
@@ -118,7 +120,7 @@ script:
     variables:
       requested_mode: >-
         {% set normalized = (mode | default(states('input_select.house_mode'), true) | string | lower | trim) %}
-        {% if normalized in ['away', 'night'] %}
+        {% if normalized in ['away', 'night', 'in_bed', 'asleep'] %}
           {{ normalized }}
         {% else %}
           home
@@ -238,7 +240,7 @@ script:
                     target:
                       entity_id: scene.turn_on_cameras
               - conditions:
-                  - "{{ should_apply_security and requested_mode in ['home', 'night'] }}"
+                  - "{{ should_apply_security and requested_mode in ['home', 'night', 'in_bed', 'asleep'] }}"
                 sequence:
                   - continue_on_error: true
                     action: switch.turn_off
@@ -257,7 +259,7 @@ script:
                     data:
                       preset_mode: "{{ guest_climate_preset }}"
               - conditions:
-                  - "{{ should_apply_climate and requested_mode in ['home', 'night'] }}"
+                  - "{{ should_apply_climate and requested_mode in ['home', 'night', 'in_bed', 'asleep'] }}"
                 sequence:
                   - continue_on_error: true
                     action: ecobee.resume_program
@@ -343,6 +345,15 @@ script:
       guest_room_occupied: "{{ is_state('binary_sensor.guest_room_occupancy_2', 'on') }}"
       guest_context_enabled: "{{ guest_mode_enabled or guest_room_occupied }}"
     sequence:
+      - action: script.house_transition
+        data:
+          mode: asleep
+          reason: "{{ reason | default('goodnight_integrity', true) }}"
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
       - parallel:
           - choose:
               - conditions:
