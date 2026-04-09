@@ -36,3 +36,161 @@ automation:
           sleep_brightness: 1
           sleep_color_temp: 1000
           detect_non_ha_changes: false
+
+  - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
+    alias: sync_selected_inovelli_led_bars_to_adaptive_lighting
+    description: >
+      Keep the owner suite and office Inovelli LED bars aligned with Adaptive
+      Lighting while still yielding to trip mode, sleep mode, and office guest
+      privacy overrides. The shared script accepts room or rooms so additional
+      rooms can opt in without duplicating the LED-bar mapping logic.
+    mode: restart
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id:
+          - switch.sleep_mode
+          - input_boolean.guest_mode
+          - switch.adaptive_lighting_owner_suite
+          - switch.adaptive_lighting_sleep_mode_owner_suite
+      - trigger: time_pattern
+        minutes: "/2"
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: "00:00:30"
+      - action: script.sync_inovelli_led_bars_to_adaptive_lighting
+        data:
+          rooms:
+            - owner suite
+            - office
+
+script:
+  sync_inovelli_led_bars_to_adaptive_lighting:
+    alias: sync_inovelli_led_bars_to_adaptive_lighting
+    description: >
+      Mirror Adaptive Lighting color temperature and brightness onto selected
+      Inovelli LED bars. Rooms may provide a preferred Adaptive Lighting
+      switch plus a fallback so guest-sensitive rooms can opt in gradually
+      without breaking when a dedicated switch has not been created yet.
+    icon: mdi:led-strip-variant
+    mode: queued
+    fields:
+      room:
+        description: Single room to sync.
+        example: owner suite
+      rooms:
+        description: List of rooms to sync.
+        example:
+          - owner suite
+          - office
+    variables:
+      room_configs:
+        owner_suite:
+          preferred_adaptive_switch: switch.adaptive_lighting_owner_suite
+          fallback_adaptive_switch: switch.adaptive_lighting_owner_suite
+          led_color_on: number.owner_suite_fan_switch_ledcolorwhenon
+          led_color_off: number.owner_suite_fan_switch_ledcolorwhenoff
+          led_intensity_on: number.owner_suite_fan_switch_ledintensitywhenon
+          led_intensity_off: number.owner_suite_fan_switch_ledintensitywhenoff
+          guest_mode_blocks_sync: false
+        office:
+          preferred_adaptive_switch: switch.adaptive_lighting_office
+          fallback_adaptive_switch: switch.adaptive_lighting_owner_suite
+          led_color_on: number.office_fan_switch_ledcolorwhenon
+          led_color_off: number.office_fan_switch_ledcolorwhenoff
+          led_intensity_on: number.office_fan_switch_ledintensitywhenon
+          led_intensity_off: number.office_fan_switch_ledintensitywhenoff
+          guest_mode_blocks_sync: true
+      requested_rooms: >-
+        {% set raw_rooms = rooms if rooms is defined else room if room is defined else [] %}
+        {% set items = raw_rooms.split(',') if raw_rooms is string else raw_rooms %}
+        {% set ns = namespace(values=[]) %}
+        {% for item in items %}
+          {% set normalized = item | string | lower | replace('-', '_') | replace(' ', '_') %}
+          {% if normalized == 'owner_suite_bedroom' %}
+            {% set normalized = 'owner_suite' %}
+          {% endif %}
+          {% if normalized in room_configs and normalized not in ns.values %}
+            {% set ns.values = ns.values + [normalized] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.values }}
+    sequence:
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+      - condition: state
+        entity_id: switch.sleep_mode
+        state: "off"
+      - repeat:
+          for_each: "{{ requested_rooms }}"
+          sequence:
+            - variables:
+                guest_mode_blocks_room: >-
+                  {{
+                    room_configs[repeat.item]['guest_mode_blocks_sync']
+                    and is_state('input_boolean.guest_mode', 'on')
+                  }}
+                adaptive_lighting_entity: >-
+                  {% set preferred = room_configs[repeat.item]['preferred_adaptive_switch'] %}
+                  {% set fallback = room_configs[repeat.item]['fallback_adaptive_switch'] %}
+                  {% if has_value(preferred) %}
+                    {{ preferred }}
+                  {% elif has_value(fallback) %}
+                    {{ fallback }}
+                  {% else %}
+                    {{ '' }}
+                  {% endif %}
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ not guest_mode_blocks_room and adaptive_lighting_entity != '' }}
+              then:
+                - variables:
+                    adaptive_brightness_pct: >-
+                      {{ state_attr(adaptive_lighting_entity, 'brightness_pct') | int(75) }}
+                    adaptive_current_kelvin: >-
+                      {{ state_attr(adaptive_lighting_entity, 'color_temp_kelvin') | int(3000) }}
+                    adaptive_min_kelvin: >-
+                      {{
+                        (state_attr(adaptive_lighting_entity, 'configuration') or {})
+                        .get('min_color_temp', 2000)
+                        | int(2000)
+                      }}
+                    adaptive_max_kelvin: >-
+                      {{
+                        (state_attr(adaptive_lighting_entity, 'configuration') or {})
+                        .get('max_color_temp', 5500)
+                        | int(5500)
+                      }}
+                    adaptive_led_color: >-
+                      {% set current_kelvin = adaptive_current_kelvin | int(3000) %}
+                      {% set min_kelvin = adaptive_min_kelvin | int(2000) %}
+                      {% set max_kelvin = adaptive_max_kelvin | int(5500) %}
+                      {% set clamped_kelvin = [[current_kelvin, min_kelvin] | max, max_kelvin] | min %}
+                      {% if max_kelvin <= min_kelvin %}
+                        170
+                      {% else %}
+                        {{ (((clamped_kelvin - min_kelvin) / (max_kelvin - min_kelvin)) * 170) | round(0) | int }}
+                      {% endif %}
+                    adaptive_led_intensity_on: >-
+                      {% set brightness_pct = adaptive_brightness_pct | int(75) %}
+                      {{ [[brightness_pct, 1] | max, 100] | min }}
+                - action: number.set_value
+                  data:
+                    entity_id: >-
+                      {{ room_configs[repeat.item]['led_color_on'] }},
+                      {{ room_configs[repeat.item]['led_color_off'] }}
+                    value: "{{ adaptive_led_color }}"
+                - action: number.set_value
+                  data:
+                    entity_id: "{{ room_configs[repeat.item]['led_intensity_on'] }}"
+                    value: "{{ adaptive_led_intensity_on }}"
+                - action: number.set_value
+                  data:
+                    entity_id: "{{ room_configs[repeat.item]['led_intensity_off'] }}"
+                    value: 1
