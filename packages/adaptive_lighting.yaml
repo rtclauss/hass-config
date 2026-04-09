@@ -62,11 +62,14 @@ automation:
             value_template: "{{ trigger.platform == 'homeassistant' }}"
         then:
           - delay: "00:00:30"
-      - action: script.sync_inovelli_led_bars_to_adaptive_lighting
+      - action: script.turn_on
+        target:
+          entity_id: script.sync_inovelli_led_bars_to_adaptive_lighting
         data:
-          rooms:
-            - owner suite
-            - office
+          variables:
+            rooms:
+              - owner suite
+              - office
 
 script:
   sync_inovelli_led_bars_to_adaptive_lighting:
