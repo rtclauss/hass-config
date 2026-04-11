@@ -75,6 +75,15 @@ def test_trip_templates_treat_minnesota_as_home_destination() -> None:
     assert 'destination_code not in ["", "MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER", "MINNESOTA"]' in text
     assert "{% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER', 'MINNESOTA'] %}" in text
 
+def test_trip_mode_manager_can_enable_trip_mode_when_departing_for_scheduled_travel() -> None:
+    block = _automation_block(TRIPS_PATH, "trip_mode_manager")
+
+    assert "id: depart_for_scheduled_trip" in block
+    assert "trigger.id != 'depart_for_scheduled_trip'" in block
+    assert "entity_id: binary_sensor.planned_work_trip_calendar" in block
+    assert "sensor.ecobee_calendar_vacation_schedule" in block
+    assert "start_ts - 21600" in block
+
 
 def test_bedroom_hour_of_day_remains_numeric() -> None:
     text = _read(ZIGBEE_ZWAVE_PATH)
