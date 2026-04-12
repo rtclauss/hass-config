@@ -10,7 +10,7 @@ import pytest
 
 
 CENTRAL = ZoneInfo("America/Chicago")
-HOME_CODES = {"MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER"}
+HOME_CODES = {"MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER", "MINNESOTA"}
 TRIPS_PATH = Path(__file__).resolve().parents[1] / "packages" / "trips.yaml"
 MATRIX_PATH = Path(__file__).resolve().parents[1] / "docs" / "travel_detection_regression_matrix.md"
 
@@ -568,6 +568,34 @@ def test_friend_itineraries_to_home_are_ignored() -> None:
     assert plan["reason"] == "off"
     assert plan["decision_code"] == "off_no_candidate"
     assert "friend itinerary" in plan["ignored_reason"].lower()
+
+
+def test_home_region_named_flight_does_not_override_curling_trip_block() -> None:
+    now = iso("2026-04-11T08:00:00-05:00")
+    personal_events = [
+        {
+            "summary": "Flight to Minnesota (DL 2819)",
+            "description": "Created from an email you received in Gmail",
+            "start": "2026-04-12T17:47:00-05:00",
+            "end": "2026-04-12T20:00:00-05:00",
+        }
+    ]
+    curling_events = [
+        {
+            "summary": "Arena play down",
+            "start": "2026-04-10",
+            "end": "2026-04-13",
+            "location": "Brookings\nUnited States",
+        }
+    ]
+
+    plan = build_vacation_plan(personal_events, now, curling_events=curling_events)
+
+    assert plan["reason"] == "calendar"
+    assert plan["decision_code"] == "calendar_curling_block"
+    assert plan["summary"] == "Arena play down"
+    assert plan["outbound_summary"] == ""
+    assert plan["fallback_source"] == "curling block"
 
 
 def test_local_rochester_appointments_do_not_create_trip_window() -> None:

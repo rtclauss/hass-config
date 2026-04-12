@@ -68,6 +68,14 @@ def test_time_to_home_template_handles_unavailable_source_state() -> None:
     assert "'%02d:%02d:00' | format(hours, minutes)" in text
 
 
+def test_trip_templates_treat_minnesota_as_home_destination() -> None:
+    text = _read(TRIPS_PATH)
+
+    assert '"MINNESOTA"' in text
+    assert 'destination_code not in ["", "MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER", "MINNESOTA"]' in text
+    assert "{% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER', 'MINNESOTA'] %}" in text
+
+
 def test_bedroom_hour_of_day_remains_numeric() -> None:
     text = _read(ZIGBEE_ZWAVE_PATH)
 
