@@ -1,0 +1,106 @@
+# IKEA PARASOLL (E2013) — battery drain & drop-off fix
+#
+# Root cause (github.com/Koenkk/zigbee2mqtt/issues/22579):
+#   1. Battery drain: Z2M writes an aggressive genPollCtrl check-in interval.
+#   2. Drop off: a regression removed the ssIasZone cluster binding, so the
+#      device stops sending contact-state changes after a few hours.
+#
+# This package pairs with zigbee2mqtt/ext_converter.js.
+# Deployment order:
+#   1. Put ext_converter.js in the zigbee2mqtt config directory.
+#   2. Add `external_converters: [ext_converter.js]` to zigbee2mqtt/configuration.yaml
+#      (already done — see the top of that file).
+#   3. Restart Zigbee2MQTT.  Devices should show "PARASOLL door/window sensor (patched)".
+#   4. Run script.parasoll_reconfigure_all from Developer Tools or the UI.
+#   5. For sensors that are fully unresponsive: pull the battery, reinsert, then
+#      the automation below handles them automatically as they re-join.
+
+################################################################
+## Scripts
+################################################################
+
+script:
+  parasoll_reconfigure_all:
+    alias: "PARASOLL - Reconfigure All"
+    description: >
+      Sends a Z2M reconfigure command to every joined PARASOLL sensor so the
+      patched converter settings (ssIasZone binding, no genPollCtrl) are applied
+      without requiring a factory reset.  Sensors that are completely dead need
+      a battery pull first so Z2M can actually reach them.
+    mode: single
+    sequence:
+      - variables:
+          parasoll_ieee_list: >
+            {% set ns = namespace(devices=[]) %}
+            {% for entity in states.binary_sensor %}
+              {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor' %}
+                {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
+                {% for id_tuple in ids %}
+                  {% if id_tuple[0] == 'mqtt' %}
+                    {% set ieee = id_tuple[1] | replace('zigbee2mqtt_', '') %}
+                    {% if ieee not in ns.devices %}
+                      {% set ns.devices = ns.devices + [ieee] %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.devices }}
+      - repeat:
+          for_each: "{{ parasoll_ieee_list }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/configure
+                payload: '{"id": "{{ repeat.item }}"}'
+            - delay:
+                milliseconds: 1500
+
+################################################################
+## Automations
+################################################################
+
+automation:
+  - alias: "PARASOLL - Auto-Reconfigure on Join or Announce"
+    id: parasoll_auto_reconfigure_on_join
+    description: >
+      Watches Z2M bridge events and sends a reconfigure request when:
+        • A brand-new PARASOLL joins (device_interview event, model E2013).
+        • A known PARASOLL re-announces after a battery pull or reconnect
+          (device_announce event, cross-checked against HA device registry).
+      The 5-second delay gives Z2M time to finish its own setup first.
+    mode: queued
+    max: 10
+    trigger:
+      - platform: mqtt
+        topic: zigbee2mqtt/bridge/event
+    condition:
+      - condition: template
+        value_template: >
+          {% set type = trigger.payload_json.type %}
+          {% set ieee = trigger.payload_json.data.ieee_address %}
+          {% if type == 'device_interview' %}
+            {{ trigger.payload_json.data.get('definition', {}).get('model', '') == 'E2013' }}
+          {% elif type == 'device_announce' %}
+            {% set ns = namespace(found=false) %}
+            {% for entity in states.binary_sensor %}
+              {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor' %}
+                {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
+                {% for id_tuple in ids %}
+                  {% if id_tuple[0] == 'mqtt' and id_tuple[1] == 'zigbee2mqtt_' ~ ieee %}
+                    {% set ns.found = true %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.found }}
+          {% else %}
+            {{ false }}
+          {% endif %}
+    action:
+      - delay:
+          seconds: 5
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/device/configure
+          payload: '{"id": "{{ trigger.payload_json.data.ieee_address }}"}'
