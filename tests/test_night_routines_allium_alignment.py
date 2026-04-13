@@ -104,7 +104,7 @@ def test_tv_bed_prep_starts_low_volume_bedroom_prep_and_delayed_sleep_mode_relea
         assert token in block
 
 
-def test_spotify_bedtime_waits_for_bathroom_and_then_ramps_down() -> None:
+def test_spotify_bedtime_uses_bathroom_visit_or_timeout_before_rampdown() -> None:
     block = _script_block(MEDIA_PLAYER_PATH, "spotify_bedtime")
 
     for token in (
@@ -112,8 +112,10 @@ def test_spotify_bedtime_waits_for_bathroom_and_then_ramps_down() -> None:
         "entity_id: binary_sensor.owner_suite_bathroom_room_occupancy",
         'to: "on"',
         "minutes: 10",
-        "continue_on_timeout: false",
+        "continue_on_timeout: true",
+        'value_template: "{{ wait.completed }}"',
         "minutes: 3",
+        "target:\n          entity_id: script.spotify_bedtime_volume",
         "entity_id: script.spotify_bedtime_volume",
     ):
         assert token in block
@@ -123,6 +125,8 @@ def test_goodnight_integrity_preserves_bedroom_audio_and_pauses_unrelated_rooms(
     block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
 
     for token in (
+        "script.house_transition",
+        "mode: asleep",
         'value_template: "{{ not guest_context_enabled }}"',
         "bedroom_audio_pause_targets",
         "'media_player.bedroom_sonos_2'",

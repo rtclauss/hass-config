@@ -42,3 +42,12 @@ def test_owner_suite_light_auto_on_uses_home_presence_sensor() -> None:
     assert "zone: zone.home" not in block
     assert "light.owner_suite_lamps" in block
     assert "binary_sensor.bayesian_bed_occupancy" in block
+    assert "action: switch.turn_on" in block
+    assert "switch.adaptive_lighting_owner_suite" in block
+    assert "action: adaptive_lighting.apply" in block
+    assert "entity_id: switch.adaptive_lighting_owner_suite" in block
+    assert "turn_on_lights: true" in block
+    assert "transition: 45" in block
+    assert "manual_control: false" in block
+    assert "\n          brightness_pct:" not in block
+    assert "\n          color_temp_kelvin:" not in block

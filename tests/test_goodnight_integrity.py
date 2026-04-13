@@ -65,6 +65,8 @@ def test_goodnight_integrity_script_coordinates_house_shutdown_and_verification(
 
     for token in (
         "sleep-safe state",
+        "script.house_transition",
+        "mode: asleep",
         "script.lights_off_except",
         "switch.office_red_lava_lamp",
         "switch.northern_light_lava_lamp",
@@ -127,6 +129,8 @@ def test_bed_lamps_off_only_finishes_turning_off_lights() -> None:
     block = _automation_block(LIGHT_PATH, "turn_off_all_lights_when_bed_off")
 
     assert "sensor.owner_suite_cpap_plug_power" in block
+    assert "script.house_transition" in block
+    assert "mode: asleep" in block
     assert "script.lights_off_except" in block
     assert "light.outside_front_hue" in block
     assert "light.outside_front_door" in block
@@ -138,6 +142,17 @@ def test_bed_lamps_off_only_finishes_turning_off_lights() -> None:
         "script.goodnight_integrity",
     ):
         assert token not in block
+
+
+def test_in_bed_turn_off_other_lights_marks_house_mode_before_dimming_the_rest_of_the_house() -> None:
+    block = _automation_block(LIGHT_PATH, "in_bed_turn_off_other_lights")
+
+    assert "binary_sensor.bayesian_bed_occupancy" in block
+    assert "minutes: 10" in block
+    assert "script.house_transition" in block
+    assert "mode: in_bed" in block
+    assert "reason: bed_occupancy_sustained" in block
+    assert "script.lights_off_except" in block
 
 
 def test_basement_lights_auto_on_respects_plex_basement_playback() -> None:

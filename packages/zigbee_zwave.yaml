@@ -2160,6 +2160,49 @@ script:
             {{owner_suite_bedroom_on_led_switches}}
           value: "170"
 
+  night_mode_switches_owner_suite:
+    icon: mdi:light-switch
+    sequence:
+      - *trip_led_updates_allowed
+      - action: logbook.log
+        data:
+          entity_id: script.night_mode_switches_owner_suite
+          name: Exclude log
+          message: "Setting owner suite switch LED colors to nighttime red"
+          domain: script
+      - action: number.set_value
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledcolorwhenoff
+            - number.owner_suite_fan_switch_ledcolorwhenoff
+            - number.owner_suite_bathroom_vanity_ledcolorwhenoff
+        data:
+          value: "0"
+      - action: number.set_value
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledintensitywhenoff
+            - number.owner_suite_fan_switch_ledintensitywhenoff
+            - number.owner_suite_bathroom_vanity_ledintensitywhenoff
+        data:
+          value: "1"
+      - action: number.set_value
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledintensitywhenon
+            - number.owner_suite_fan_switch_ledintensitywhenon
+            - number.owner_suite_bathroom_vanity_ledintensitywhenon
+        data:
+          value: "50"
+      - action: number.set_value
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledcolorwhenon
+            - number.owner_suite_fan_switch_ledcolorwhenon
+            - number.owner_suite_bathroom_vanity_ledcolorwhenon
+        data:
+          value: "0"
+
   day_mode_switches_office_guest_room:
     icon: mdi:light-switch
     variables:

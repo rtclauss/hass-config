@@ -242,21 +242,31 @@ def test_stuck_morning_audio_scripts_are_recovered() -> None:
     assert 'entity_id: input_boolean.morning_routine' in block
 
 
-def test_bedtime_playlist_includes_somafm_station_names() -> None:
+def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     block = _script_block("spotify_bedtime")
 
-    for station in (
+    for station_url in (
+        "https://somafm.com/groovesalad.pls",
+        "https://somafm.com/deepspaceone.pls",
+        "https://somafm.com/missioncontrol.pls",
+        "https://somafm.com/spacestation.pls",
+        "https://somafm.com/vaporwaves.pls",
+    ):
+        assert f'"{station_url}"' in block
+
+    for station_name in (
         "Groove Salad",
         "Deep Space One",
         "Mission Control",
         "Space Station Soma",
         "Vaporwaves",
     ):
-        assert f'"{station}"' in block
+        assert f'"{station_name}"' not in block
 
     assert "range(0, (plists | length))" in block
     assert "action: script.music_assistant_play_item" in block
     assert 'media_item: "{{ playlist }}"' in block
+    assert "playlist.startswith('https://somafm.com/')" in block
 
 
 def test_music_assistant_dashboard_exposes_player_card() -> None:
