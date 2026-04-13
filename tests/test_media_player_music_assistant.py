@@ -195,8 +195,11 @@ def test_radio_wakeup_join_retry_runs_after_playback_starts() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
     assert 'playback_entity_id:' in block
+    assert 'regroup_after_play:' in block
     assert 'playback_player' in block
+    assert 'should_regroup_after_play' in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
+    assert 'action: media_player.unjoin' in block
     assert 'action: script.turn_on' in block
     assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
     assert 'entity_id: "{{ playback_player }}"' in block
@@ -210,8 +213,11 @@ def test_spotify_wakeup_join_retry_runs_after_playback_starts() -> None:
     block = _script_block("spotify_wake_up")
 
     assert 'playback_entity_id:' in block
+    assert 'regroup_after_play:' in block
     assert 'playback_player' in block
+    assert 'should_regroup_after_play' in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
+    assert 'action: media_player.unjoin' in block
     assert 'action: script.turn_on' in block
     assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
     assert 'entity_id: "{{ playback_player }}"' in block
@@ -224,8 +230,10 @@ def test_spotify_wakeup_join_retry_runs_after_playback_starts() -> None:
 def test_bathroom_wakeup_automation_targets_bathroom_player() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
-    assert 'entity_id: script.spotify_wake_up' in block
+    assert 'action: script.spotify_wake_up' in block
     assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 2
+    assert block.count('regroup_after_play: false') == 2
+    assert 'media_player.media_stop' not in block
 
 
 def test_stuck_morning_audio_scripts_are_recovered() -> None:
