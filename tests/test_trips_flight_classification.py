@@ -427,6 +427,7 @@ def test_trips_package_exposes_vacation_plan_diagnostics_and_logging() -> None:
     assert "alias: log_calendar_vacation_plan_diagnostics" in text
     assert "name: Travel detection" in text
     assert "attribute: decision_code" in text
+    assert "continue_on_error: true\n        action: logbook.log" in text
     assert "not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL']" in text
     assert "not is_friend_itinerary and destination_code in ['RST', 'ROCHESTER']" in text
 
