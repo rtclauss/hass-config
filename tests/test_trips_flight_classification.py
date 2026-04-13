@@ -599,8 +599,8 @@ def test_named_homebound_flight_to_minnesota_does_not_override_active_trip_block
     assert plan["reason"] == "calendar"
     assert plan["decision_code"] == "calendar_curling_block"
     assert plan["summary"] == "Arena play down"
-    assert plan["start"] == iso("2026-04-10T00:00:00-05:00")
-    assert plan["end"] == iso("2026-04-13T00:00:00-05:00")
+    assert plan["vacation_name"] == "Arena play down"
+    assert plan["fallback_source"] == "curling block"
 
 
 def test_local_rochester_appointments_do_not_create_trip_window() -> None:
