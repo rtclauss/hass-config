@@ -42,7 +42,7 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "event: start" in block
     assert 'delay: "00:00:30"' in block
     assert "action: adaptive_lighting.change_switch_settings" in block
-    assert "owner suite wake transitions and dining-room tuning survive restarts" in block
+    assert "kitchen, dining-room, and owner-suite tuning survive restarts" in block
     assert "entity_id: switch.adaptive_lighting_owner_suite" in block
     assert "use_defaults: current" in block
     assert "include_config_in_attributes: true" in block
@@ -55,6 +55,7 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "sleep_brightness: 1" in block
     assert "sleep_color_temp: 1000" in block
     assert "detect_non_ha_changes: false" in block
+    assert "event: adaptive_lighting_startup_reconciled" in block
 
 
 def test_dining_room_adaptive_lighting_reconciles_current_switch_to_scene_safe_settings() -> None:
@@ -73,4 +74,20 @@ def test_dining_room_adaptive_lighting_reconciles_current_switch_to_scene_safe_s
     assert "only_once: true" in block
     assert "initial_transition: 1" in block
     assert "transition: 5" in block
+    assert "detect_non_ha_changes: false" in block
+
+
+def test_kitchen_adaptive_lighting_reconciles_bright_scene_safe_settings() -> None:
+    block = _automation_block("reconcile_owner_suite_adaptive_lighting")
+
+    assert "preserving each room's intended scene and task-lighting behavior" in block
+    assert "action: adaptive_lighting.change_switch_settings" in block
+    assert "entity_id: switch.adaptive_lighting_kitchen" in block
+    assert "use_defaults: current" in block
+    assert "include_config_in_attributes: true" in block
+    assert "take_over_control: true" in block
+    assert "adapt_only_on_bare_turn_on: true" in block
+    assert "only_once: true" in block
+    assert "initial_transition: 1" in block
+    assert "transition: 3" in block
     assert "detect_non_ha_changes: false" in block

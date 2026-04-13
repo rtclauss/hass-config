@@ -3,7 +3,8 @@ automation:
     alias: reconcile_owner_suite_adaptive_lighting
     description: >
       Reapply the Adaptive Lighting baselines after Home Assistant starts so
-      owner suite wake transitions and dining-room tuning survive restarts.
+      kitchen, dining-room, and owner-suite tuning survive restarts while
+      preserving each room's intended scene and task-lighting behavior.
       The runtime dining-room Adaptive Lighting switch now uses the current dining-room entity id.
     mode: single
     trigger:
@@ -24,6 +25,17 @@ automation:
           detect_non_ha_changes: false
       - action: adaptive_lighting.change_switch_settings
         data:
+          entity_id: switch.adaptive_lighting_kitchen
+          use_defaults: current
+          include_config_in_attributes: true
+          take_over_control: true
+          adapt_only_on_bare_turn_on: true
+          only_once: true
+          initial_transition: 1
+          transition: 3
+          detect_non_ha_changes: false
+      - action: adaptive_lighting.change_switch_settings
+        data:
           entity_id: switch.adaptive_lighting_owner_suite
           use_defaults: current
           include_config_in_attributes: true
@@ -36,18 +48,21 @@ automation:
           sleep_brightness: 1
           sleep_color_temp: 1000
           detect_non_ha_changes: false
+      - event: adaptive_lighting_startup_reconciled
 
   - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
     alias: sync_selected_inovelli_led_bars_to_adaptive_lighting
     description: >
       Keep the owner suite and office Inovelli LED bars aligned with Adaptive
       Lighting while still yielding to trip mode, sleep mode, and office guest
-      privacy overrides. The shared script accepts room or rooms so additional
-      rooms can opt in without duplicating the LED-bar mapping logic.
+      privacy overrides. Startup sync waits for Adaptive Lighting baseline
+      reconciliation so the shared script runs after room settings are
+      restored. The shared script accepts room or rooms so additional rooms
+      can opt in without duplicating the LED-bar mapping logic.
     mode: restart
     trigger:
-      - trigger: homeassistant
-        event: start
+      - trigger: event
+        event_type: adaptive_lighting_startup_reconciled
       - trigger: state
         entity_id:
           - switch.sleep_mode
@@ -57,11 +72,6 @@ automation:
       - trigger: time_pattern
         minutes: "/2"
     action:
-      - if:
-          - condition: template
-            value_template: "{{ trigger.platform == 'homeassistant' }}"
-        then:
-          - delay: "00:00:30"
       - action: script.turn_on
         target:
           entity_id: script.sync_inovelli_led_bars_to_adaptive_lighting
