@@ -28,7 +28,7 @@ def test_z2m_lifecycle_package_tracks_join_drop_leave_and_mesh_health() -> None:
         "topic: zigbee2mqtt/bridge/event",
         "topic: zigbee2mqtt/bridge/health",
         "topic: zigbee2mqtt/bridge/response/coordinator_check",
-        "topic: zigbee2mqtt/+/availability",
+        "topic: zigbee2mqtt/#",
         "'present_in_roster': false",
         "'last_interview_status': event_data.status",
         "joined and immediately left the network",
