@@ -34,6 +34,18 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
             "rule ApplyGoodnightIntegrity",
             "wait_for_bathroom_visit_or_timeout",
         ],
+        "z2m_lifecycle.allium": [
+            "-- allium: 3",
+            "entity ZigbeeDeviceLifecycle",
+            "rule RecordDeviceInterviewFailure",
+            "rule DetectJoinThenDropFromLeave",
+            "rule DetectJoinThenDropFromRosterLoss",
+            "rule DetectLeftNetwork",
+            "rule EscalateOnlyForSystemicBridgeFailures",
+            "single_device_churn_never_triggers_host_restart",
+            "rule ConfirmForceDeviceDecommission",
+            "InventoryMarkdownUpdateRequired",
+        ],
     }
 
     for filename, expected_tokens in specs.items():
