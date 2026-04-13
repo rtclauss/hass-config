@@ -82,7 +82,8 @@ def test_trip_mode_manager_can_enable_trip_mode_when_departing_for_scheduled_tra
     assert "trigger.id != 'depart_for_scheduled_trip'" in block
     assert "entity_id: binary_sensor.planned_work_trip_calendar" in block
     assert "sensor.ecobee_calendar_vacation_schedule" in block
-    assert "start_ts - 21600" in block
+    assert "scheduled_departure_lead_seconds = 6 * 3600" in block
+    assert "start_ts - scheduled_departure_lead_seconds" in block
 
 
 def test_bedroom_hour_of_day_remains_numeric() -> None:
