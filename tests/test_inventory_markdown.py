@@ -225,3 +225,13 @@ def test_inventory_documents_battery_assumptions_for_ambiguous_models() -> None:
         "`FireFighter` row reflects the Ecolink FireFighter battery family",
     ):
         assert snippet in text
+
+
+def test_inventory_documents_z2m_decommission_reconciliation_rule() -> None:
+    text = INVENTORY_PATH.read_text(encoding="utf-8")
+
+    assert "When a Zigbee2MQTT device is intentionally decommissioned" in text
+    assert "Configured Battery Devices" in text
+    assert "Configured Zigbee2MQTT Devices" in text
+    assert "increment the matching spare row in `Inventory`" in text
+    assert "re-check `Battery Planning` totals" in text

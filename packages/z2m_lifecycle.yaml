@@ -1,0 +1,1133 @@
+# Zigbee2MQTT lifecycle package
+#
+# This package separates per-device lifecycle tracking from the broader
+# zigbee_zwave room and device behavior package. It keeps bridge watchdog logic,
+# mesh health, per-device drop/offline classification, and decommission helpers
+# in one place so issue #435 can evolve without further expanding zigbee_zwave.
+
+################################################################
+## Automations
+################################################################
+
+automation:
+  - id: refresh_z2m_lifecycle_inventory
+    alias: refresh_z2m_lifecycle_inventory
+    mode: single
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/30"
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/state
+        payload: online
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/response/device/remove
+    action:
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/devices
+          payload: >-
+            {"id":"z2m_lifecycle_devices"}
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/coordinator_check
+          payload: ""
+
+  - id: sync_z2m_decommission_options
+    alias: sync_z2m_decommission_options
+    mode: restart
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: sensor.z2m_lifecycle_issues
+        attribute: selection_options_csv
+    variables:
+      selection_options: >-
+        {% set values = state_attr('sensor.z2m_lifecycle_issues', 'selection_options') | default([], true) %}
+        {{ ['Select a device'] + values if values | count > 0 else ['Select a device'] }}
+    action:
+      - action: input_select.set_options
+        target:
+          entity_id: input_select.z2m_decommission_device
+        data:
+          options: "{{ selection_options }}"
+      - if:
+          - condition: template
+            value_template: >-
+              {{ states('input_select.z2m_decommission_device') not in selection_options }}
+        then:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.z2m_decommission_device
+            data:
+              option: Select a device
+
+  - id: notify_z2m_lifecycle_issues
+    alias: notify_z2m_lifecycle_issues
+    mode: queued
+    max: 10
+    trigger:
+      - trigger: state
+        id: summary_change
+        entity_id: sensor.z2m_lifecycle_issues
+        attribute: issue_summary
+      - trigger: homeassistant
+        id: startup_sync
+        event: start
+    variables:
+      issue_count: "{{ states('sensor.z2m_lifecycle_issues') | int(0) }}"
+      issue_summary: "{{ state_attr('sensor.z2m_lifecycle_issues', 'issue_summary') | default('', true) }}"
+      notification_tag: z2m-lifecycle
+      issue_label: "{{ 'device' if issue_count == 1 else 'devices' }}"
+      issue_title: "{{ issue_count }} Zigbee lifecycle {{ issue_label }}"
+      issue_message: >-
+        {{ ('Affected device' if issue_count == 1 else 'Affected devices') ~ ':\n' ~ issue_summary }}
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ issue_count == 0 }}"
+            sequence:
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: z2m-lifecycle
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ notification_tag }}"
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: z2m-lifecycle
+          - action: persistent_notification.create
+            data:
+              title: "{{ issue_title }}"
+              message: "{{ issue_message }}"
+              notification_id: z2m-lifecycle
+          - choose:
+              - conditions:
+                  - condition: trigger
+                    id: summary_change
+                  - condition: template
+                    value_template: "{{ issue_summary | trim != '' }}"
+                sequence:
+                  - continue_on_error: true
+                    action: notify.all
+                    data:
+                      title: "{{ issue_title }}"
+                      message: "{{ issue_message }}"
+                      data:
+                        tag: "{{ notification_tag }}"
+                        persistent: true
+
+  - id: handle_z2m_device_remove_response
+    alias: handle_z2m_device_remove_response
+    mode: queued
+    max: 10
+    trigger:
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/response/device/remove
+    variables:
+      response: "{{ trigger.payload_json if trigger.payload_json is mapping else dict() }}"
+      response_data: "{{ response.data if response.data is defined and response.data is mapping else dict() }}"
+      response_status: "{{ response.status | default('error', true) }}"
+      response_error: "{{ response.error | default('Unknown error', true) }}"
+      device_id: "{{ response_data.id | default('unknown-device', true) }}"
+      force_remove: "{{ response_data.force | default(false, true) }}"
+      block_device: "{{ response_data.block | default(false, true) }}"
+      matched_device: >-
+        {% set selection_map = state_attr('sensor.z2m_lifecycle_issues', 'selection_map') | default({}, true) %}
+        {% set match = namespace(value=dict()) %}
+        {% if selection_map is mapping %}
+          {% for _, candidate in selection_map.items() %}
+            {% if candidate.get('id', '') == device_id %}
+              {% set match.value = candidate %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {{ match.value }}
+      device_name: "{{ matched_device.get('friendly_name', device_id) }}"
+      device_model: "{{ matched_device.get('model', 'Unknown model') }}"
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ response_status == 'ok' }}"
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  title: Z2M device removed
+                  message: >-
+                    {{ device_name }} ({{ device_model }}, {{ device_id }}) was removed from Zigbee2MQTT{% if force_remove in [true, 'true', 'True'] %} with force removal{% endif %}{% if block_device in [true, 'true', 'True'] %} and block enabled{% endif %}. Update inventory.md in the repo by decrementing the configured row for this model and incrementing the spare Inventory row before the next merge.
+                  notification_id: z2m-device-remove
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  title: Z2M device removed
+                  message: >-
+                    {{ device_name }} ({{ device_model }}, {{ device_id }}) was removed from Zigbee2MQTT. Move it back into inventory.md spare stock in the repo.
+                  data:
+                    tag: z2m-device-remove
+                    persistent: true
+              - delay:
+                  seconds: 10
+              - action: mqtt.publish
+                data:
+                  topic: zigbee2mqtt/bridge/request/devices
+                  payload: >-
+                    {"id":"z2m_lifecycle_devices"}
+              - action: mqtt.publish
+                data:
+                  topic: zigbee2mqtt/bridge/request/coordinator_check
+                  payload: ""
+        default:
+          - action: persistent_notification.create
+            data:
+              title: Z2M device removal failed
+              message: >-
+                Failed to remove {{ device_name }} ({{ device_model }}, {{ device_id }}): {{ response_error }}. Wake the device and retry `script.z2m_force_decommission_selected_device` only if it should be removed from monitoring and returned to inventory.md.
+              notification_id: z2m-device-remove
+          - continue_on_error: true
+            action: notify.all
+            data:
+              title: Z2M device removal failed
+              message: >-
+                Failed to remove {{ device_name }} ({{ device_model }}, {{ device_id }}): {{ response_error }}
+              data:
+                tag: z2m-device-remove
+                persistent: true
+
+  - id: reset_z2m_reboot_counter
+    alias: reset_z2m_reboot_counter
+    trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: REBOOT_Z2M_COUNTER
+    action:
+      - action: counter.reset
+        target:
+          entity_id: counter.reboot_counter
+
+  - id: reset_z2m_reboot_counter_on_recovery
+    alias: reset_z2m_reboot_counter_on_recovery
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.zigbee2mqtt_running
+        to: "on"
+        for:
+          minutes: 10
+      - trigger: state
+        entity_id: binary_sensor.z2m_failing
+        to: "off"
+        for:
+          minutes: 10
+      - trigger: numeric_state
+        entity_id: sensor.z2m_recovery_candidates
+        below: 21
+        for:
+          minutes: 10
+    condition:
+      - condition: state
+        entity_id: binary_sensor.zigbee2mqtt_running
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.z2m_failing
+        state: "off"
+      - condition: numeric_state
+        entity_id: sensor.z2m_recovery_candidates
+        below: 21
+      - condition: numeric_state
+        entity_id: counter.reboot_counter
+        above: 0
+    action:
+      - action: counter.reset
+        target:
+          entity_id: counter.reboot_counter
+
+  # This automation depends on a HA host restart path configured elsewhere.
+  # It should only react to bridge-wide problems, not a single end device that
+  # leaves the network or drops right after joining.
+  - id: shutdown_proxmox_z2m_unavailable
+    alias: shutdown_proxmox_z2m_unavailable
+    mode: single
+    max_exceeded: silent
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.z2m_failing
+        to: "on"
+        for:
+          minutes: 5
+        id: routers_offline
+      - trigger: state
+        entity_id: binary_sensor.zigbee2mqtt_running
+        to: "off"
+        for:
+          minutes: 15
+        id: z2m_not_running
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/state
+        payload: "offline"
+        id: bridge_offline
+      - trigger: time_pattern
+        minutes: "/10"
+        id: watchdog_tick
+      - trigger: numeric_state
+        entity_id: sensor.z2m_recovery_candidates
+        above: 20
+        for:
+          minutes: 5
+        id: recovery_candidates_high
+    variables:
+      max_restart_attempts: 3
+      recovery_candidates_high: >-
+        {{
+          states('sensor.z2m_recovery_candidates') | int(0) > 20
+          and (as_timestamp(now()) - as_timestamp(states.sensor.z2m_recovery_candidates.last_changed, 0)) >= 300
+        }}
+      issue_active: >-
+        {{
+          is_state('binary_sensor.zigbee2mqtt_running', 'off')
+          or is_state('binary_sensor.z2m_failing', 'on')
+          or recovery_candidates_high
+        }}
+      issue_reason: >-
+        {% if is_state('binary_sensor.zigbee2mqtt_running', 'off') %}
+          Zigbee2MQTT add-on is not running
+        {% elif is_state('binary_sensor.z2m_failing', 'on') %}
+          Router offline threshold exceeded
+        {% elif recovery_candidates_high %}
+          Z2M recovery candidates exceeded threshold (20) for at least 5 minutes
+        {% else %}
+          Unknown
+        {% endif %}
+    condition:
+      - condition: template
+        value_template: "{{ issue_active }}"
+    action:
+      - if:
+          - condition: numeric_state
+            entity_id: sensor.z2m_ota_updates_in_progress
+            above: 0
+        then:
+          - repeat:
+              while:
+                - condition: numeric_state
+                  entity_id: sensor.z2m_ota_updates_in_progress
+                  above: 0
+                - condition: template
+                  value_template: "{{ repeat.index <= 36 }}"
+              sequence:
+                - action: notify.mobile_app_wethop
+                  data:
+                    message: >-
+                      Zigbee2MQTT OTA update(s) in progress ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
+                - delay: "00:10:00"
+          - if:
+              - condition: numeric_state
+                entity_id: sensor.z2m_ota_updates_in_progress
+                above: 0
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: >-
+                    Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping restart/shutdown to avoid interruption.
+              - stop: OTA update still in progress
+      - if:
+          - condition: numeric_state
+            entity_id: counter.reboot_counter
+            below: 3
+        then:
+          - action: counter.increment
+            target:
+              entity_id: counter.reboot_counter
+          - action: notify.mobile_app_wethop
+            data:
+              message: >-
+                Z2M recovery attempt {{ states('counter.reboot_counter') }} of {{ max_restart_attempts }}. Reason: {{ issue_reason }}. Restarting Zigbee2MQTT.
+          - action: hassio.addon_restart
+            data:
+              addon: 45df7312_zigbee2mqtt
+          - delay:
+              minutes: 5
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/options
+              payload: >-
+                {"options": {"homeassistant": true}}
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/devices
+              payload: >-
+                {"id":"z2m_lifecycle_devices"}
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/coordinator_check
+              payload: ""
+          - delay:
+              minutes: 2
+          - if:
+              - condition: template
+                value_template: >-
+                  {{
+                    not is_state('binary_sensor.zigbee2mqtt_running', 'off')
+                    and not is_state('binary_sensor.z2m_failing', 'on')
+                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
+                  }}
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: >-
+                    Zigbee2MQTT recovered after restart attempt {{ states('counter.reboot_counter') }}. Resetting recovery counter.
+              - action: counter.reset
+                target:
+                  entity_id: counter.reboot_counter
+              - stop: Z2M recovered after restart attempt
+      - if:
+          - condition: template
+            value_template: >-
+              {{
+                is_state('binary_sensor.zigbee2mqtt_running', 'off')
+                or is_state('binary_sensor.z2m_failing', 'on')
+                or (states('sensor.z2m_recovery_candidates') | int(0) > 20)
+              }}
+          - condition: numeric_state
+            entity_id: counter.reboot_counter
+            above: 2
+        then:
+          - action: notify.mobile_app_wethop
+            data:
+              title: Z2M Recovery Escalation
+              message: >-
+                Z2M is still unhealthy after {{ states('counter.reboot_counter') }} restart attempts. Restarting EMQX, then Zigbee2MQTT, before host shutdown.
+          - action: hassio.addon_restart
+            data:
+              addon: a0d7b954_emqx
+          - delay:
+              minutes: 2
+          - action: hassio.addon_restart
+            data:
+              addon: 45df7312_zigbee2mqtt
+          - delay:
+              minutes: 5
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/options
+              payload: >-
+                {"options": {"homeassistant": true}}
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/devices
+              payload: >-
+                {"id":"z2m_lifecycle_devices"}
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/coordinator_check
+              payload: ""
+          - delay:
+              minutes: 2
+          - if:
+              - condition: template
+                value_template: >-
+                  {{
+                    not is_state('binary_sensor.zigbee2mqtt_running', 'off')
+                    and not is_state('binary_sensor.z2m_failing', 'on')
+                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
+                  }}
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: >-
+                    Z2M recovered after EMQX + Z2M restart escalation. Resetting recovery counter.
+              - action: counter.reset
+                target:
+                  entity_id: counter.reboot_counter
+              - stop: Z2M recovered before host shutdown
+          - action: notify.mobile_app_wethop
+            data:
+              title: Z2M Failed
+              message: >-
+                {{ states('sensor.z2m_failing') }} of {{ states('sensor.z2m_router_total') }} Zigbee routers are offline ({{ states('sensor.z2m_router_offline_pct') }}%, threshold {{ states('input_number.z2m_router_offline_threshold_pct') }}%). Zigbee2MQTT running: {{ states('binary_sensor.zigbee2mqtt_running') }}. We've rebooted Z2M {{ states('counter.reboot_counter') }} times. Restarting host.
+              data:
+                actions:
+                  - action: "REBOOT_Z2M_COUNTER"
+                    title: Z2M failed
+                    activationMode: background
+                    authenticationRequired: false
+                    destructive: false
+                    behavior: default
+          - if:
+              - condition: numeric_state
+                entity_id: sensor.z2m_ota_updates_in_progress
+                above: 0
+            then:
+              - repeat:
+                  while:
+                    - condition: numeric_state
+                      entity_id: sensor.z2m_ota_updates_in_progress
+                      above: 0
+                    - condition: template
+                      value_template: "{{ repeat.index <= 36 }}"
+                  sequence:
+                    - action: notify.mobile_app_wethop
+                      data:
+                        message: >-
+                          Zigbee2MQTT OTA update(s) started while recovery was running ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
+                    - delay: "00:10:00"
+              - if:
+                  - condition: numeric_state
+                    entity_id: sensor.z2m_ota_updates_in_progress
+                    above: 0
+                then:
+                  - action: notify.mobile_app_wethop
+                    data:
+                      message: >-
+                        Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping host shutdown.
+                  - stop: OTA update still in progress
+          - delay:
+              minutes: 2
+          - action: rest_command.proxmox_shutdown
+
+################################################################
+## Input Helpers
+################################################################
+
+input_number:
+  z2m_router_offline_threshold_pct:
+    name: Z2M router offline threshold
+    min: 1
+    max: 100
+    step: 1
+    mode: box
+    unit_of_measurement: "%"
+    initial: 15
+
+counter:
+  reboot_counter:
+    name: Reboot Counter
+    initial: 0
+    step: 1
+    restore: true
+    icon: mdi:restart-alert
+
+input_select:
+  z2m_decommission_device:
+    name: Z2M decommission device
+    icon: mdi:trash-can-outline
+    options:
+      - Select a device
+
+################################################################
+## Scripts
+################################################################
+
+script:
+  z2m_decommission_selected_device:
+    alias: Z2M - Decommission Selected Device
+    mode: single
+    sequence:
+      - variables:
+          selected_option: "{{ states('input_select.z2m_decommission_device') }}"
+          selection_map: "{{ state_attr('sensor.z2m_lifecycle_issues', 'selection_map') | default({}, true) }}"
+          selected_device: >-
+            {% if selection_map is mapping %}
+              {{ selection_map.get(selected_option, {}) }}
+            {% else %}
+              {{ dict() }}
+            {% endif %}
+          device_id: "{{ selected_device.get('id', '') }}"
+          device_name: "{{ selected_device.get('friendly_name', selected_option) }}"
+          device_model: "{{ selected_device.get('model', 'Unknown model') }}"
+      - if:
+          - condition: template
+            value_template: "{{ selected_option == 'Select a device' or device_id == '' }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              title: Z2M decommission
+              message: Select a device in input_select.z2m_decommission_device before running this script.
+              notification_id: z2m-decommission
+          - stop: No selected device
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/device/remove
+          payload: >-
+            {"id":"{{ device_id }}","force":false,"block":false}
+      - action: persistent_notification.create
+        data:
+          title: Z2M decommission requested
+          message: >-
+            Requested normal removal for {{ device_name }} ({{ device_model }}, {{ device_id }}). Wait for the remove response and `device_leave` confirmation before updating inventory.md. Once removal is confirmed, decrement the configured row for this model and increment the spare Inventory row in inventory.md.
+          notification_id: z2m-decommission
+
+  z2m_force_decommission_selected_device:
+    alias: Z2M - Force Decommission Selected Device
+    mode: single
+    sequence:
+      - variables:
+          selected_option: "{{ states('input_select.z2m_decommission_device') }}"
+          selection_map: "{{ state_attr('sensor.z2m_lifecycle_issues', 'selection_map') | default({}, true) }}"
+          selected_device: >-
+            {% if selection_map is mapping %}
+              {{ selection_map.get(selected_option, {}) }}
+            {% else %}
+              {{ dict() }}
+            {% endif %}
+          device_id: "{{ selected_device.get('id', '') }}"
+          device_name: "{{ selected_device.get('friendly_name', selected_option) }}"
+          device_model: "{{ selected_device.get('model', 'Unknown model') }}"
+      - if:
+          - condition: template
+            value_template: "{{ selected_option == 'Select a device' or device_id == '' }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              title: Z2M force decommission
+              message: Select a device in input_select.z2m_decommission_device before running this script.
+              notification_id: z2m-decommission
+          - stop: No selected device
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/device/remove
+          payload: >-
+            {"id":"{{ device_id }}","force":true,"block":false}
+      - action: persistent_notification.create
+        data:
+          title: Z2M force decommission requested
+          message: >-
+            Requested force removal for {{ device_name }} ({{ device_model }}, {{ device_id }}). This only removes the device from the Zigbee2MQTT database; update inventory.md only if the device is intentionally retired from the configured fleet and should return to spare stock.
+          notification_id: z2m-decommission
+
+################################################################
+## Templates
+################################################################
+
+template:
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/1"
+    variables:
+      z2m_ota_stats: >-
+        {% set now_ts = as_timestamp(now()) | float(0) %}
+        {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
+        {% set previous_starts = current_attrs.get('started_at_map', {}) %}
+        {% set ns = namespace(count=0, entities=[], progress={}, starts={}, eta_ts=[]) %}
+        {% for entity_id in integration_entities('mqtt') | default([], true) %}
+          {% if entity_id.startswith('update.') %}
+            {% set entity_picture = state_attr(entity_id, 'entity_picture') | default('', true) %}
+            {% set in_progress = state_attr(entity_id, 'in_progress') | default(false, true) %}
+            {% if 'koenkk/zigbee2mqtt' in (entity_picture | lower) and in_progress %}
+              {% set ns.count = ns.count + 1 %}
+              {% set ns.entities = ns.entities + [entity_id] %}
+              {% set pct = state_attr(entity_id, 'update_percentage') %}
+              {% set start_ts = previous_starts.get(entity_id, now_ts) %}
+              {% set ns.starts = ns.starts | combine({entity_id: start_ts}, recursive=True) %}
+              {% if pct is number %}
+                {% set ns.progress = ns.progress | combine({entity_id: pct}, recursive=True) %}
+                {% if pct > 0 and pct < 100 and now_ts > start_ts %}
+                  {% set elapsed = now_ts - start_ts %}
+                  {% if elapsed >= 120 %}
+                    {% set eta_ts = now_ts + (elapsed * (100 - pct) / pct) %}
+                    {% set ns.eta_ts = ns.eta_ts + [eta_ts] %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {% set eta_ts = (ns.eta_ts | max) if (ns.eta_ts | count > 0) else none %}
+        {% set eta_minutes = ((eta_ts - now_ts) / 60) | round(0) if eta_ts is not none else none %}
+        {{ {
+            'count': ns.count,
+            'entities': ns.entities | sort,
+            'progress': ns.progress,
+            'started_at_map': ns.starts,
+            'eta_ts': eta_ts,
+            'eta_minutes': eta_minutes
+          } }}
+    sensor:
+      - name: z2m_ota_updates_in_progress
+        unique_id: z2m_ota_updates_in_progress
+        state: "{{ z2m_ota_stats.get('count', 0) }}"
+        attributes:
+          entities: "{{ z2m_ota_stats.get('entities', []) }}"
+          progress_pct: "{{ z2m_ota_stats.get('progress', {}) }}"
+          started_at_map: "{{ z2m_ota_stats.get('started_at_map', {}) }}"
+          eta_minutes: "{{ z2m_ota_stats.get('eta_minutes') }}"
+          estimated_completion_ts: "{{ z2m_ota_stats.get('eta_ts') }}"
+
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/devices
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/response/devices
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/event
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/health
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/response/coordinator_check
+      - trigger: mqtt
+        topic: zigbee2mqtt/+/availability
+    variables:
+      z2m_lifecycle_stats: >-
+        {% set now_ts = as_timestamp(now()) | float(0) %}
+        {% set stabilization_window = 300 %}
+        {% set churn_window = 86400 %}
+        {% set retention_window = 604800 %}
+        {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
+        {% set devices = current_attrs.get('devices', {}) %}
+        {% set coordinator_missing_routers = current_attrs.get('coordinator_missing_routers', []) %}
+        {% set topic = trigger.topic if trigger is defined and trigger.topic is defined else '' %}
+        {% set payload = trigger.payload_json if trigger is defined and trigger.payload_json is defined else none %}
+        {% set is_devices_topic = topic in ['zigbee2mqtt/bridge/devices', 'zigbee2mqtt/bridge/response/devices'] %}
+        {% set is_availability_topic = topic.endswith('/availability') and not topic.startswith('zigbee2mqtt/bridge/') %}
+        {% set is_event_topic = topic == 'zigbee2mqtt/bridge/event' %}
+        {% set is_health_topic = topic == 'zigbee2mqtt/bridge/health' %}
+        {% set is_coordinator_topic = topic == 'zigbee2mqtt/bridge/response/coordinator_check' %}
+
+        {% if is_devices_topic %}
+          {% if payload.data is defined and payload.data is sequence and payload.data is not string %}
+            {% set device_rows = payload.data %}
+          {% elif payload is sequence and payload is not string %}
+            {% set device_rows = payload %}
+          {% else %}
+            {% set device_rows = [] %}
+          {% endif %}
+          {% set ns = namespace(updated=devices, roster_names=[]) %}
+          {% for row in device_rows %}
+            {% set friendly_name = row.friendly_name | default(row.ieee_address, true) %}
+            {% set device_type = row.type | default('', true) %}
+            {% if friendly_name not in ['', 'Coordinator'] and device_type != 'Coordinator' %}
+              {% set previous = devices.get(friendly_name, {}) %}
+              {% set definition_model = row.definition.model if row.definition is defined and row.definition is mapping and row.definition.model is defined else row.model | default(previous.get('model', 'Unknown model'), true) %}
+              {% set ns.roster_names = ns.roster_names + [friendly_name] %}
+              {% set ns.updated = ns.updated | combine({
+                friendly_name: previous | combine({
+                  'friendly_name': friendly_name,
+                  'ieee_address': row.ieee_address | default(previous.get('ieee_address', friendly_name), true),
+                  'type': device_type,
+                  'model': definition_model,
+                  'power_source': row.power_source | default(previous.get('power_source')),
+                  'disabled': row.disabled | default(false, true),
+                  'present_in_roster': true,
+                  'last_roster_seen_ts': now_ts,
+                  'last_roster_missing_ts': none
+                }, recursive=True)
+              }, recursive=True) %}
+            {% endif %}
+          {% endfor %}
+          {% for friendly_name, previous in devices.items() %}
+            {% if friendly_name not in ns.roster_names %}
+              {% set missing_since = previous.get('last_roster_missing_ts') %}
+              {% if previous.get('present_in_roster', true) %}
+                {% set missing_since = now_ts %}
+              {% endif %}
+              {% set ns.updated = ns.updated | combine({
+                friendly_name: previous | combine({
+                  'present_in_roster': false,
+                  'last_roster_missing_ts': missing_since
+                }, recursive=True)
+              }, recursive=True) %}
+            {% endif %}
+          {% endfor %}
+          {% set devices = ns.updated %}
+        {% endif %}
+
+        {% if is_availability_topic %}
+          {% set friendly_name = topic[12:-13] %}
+          {% set previous = devices.get(friendly_name, {}) %}
+          {% if payload.state is defined %}
+            {% set availability_state = payload.state %}
+          {% else %}
+            {% set availability_state = trigger.payload %}
+          {% endif %}
+          {% set last_change_ts = previous.get('last_availability_change_ts', now_ts) %}
+          {% if previous.get('availability', 'unknown') != (availability_state | string | lower) %}
+            {% set last_change_ts = now_ts %}
+          {% endif %}
+          {% set devices = devices | combine({
+            friendly_name: previous | combine({
+              'friendly_name': friendly_name,
+              'ieee_address': previous.get('ieee_address', friendly_name),
+              'availability': availability_state | string | lower,
+              'last_availability_change_ts': last_change_ts
+            }, recursive=True)
+          }, recursive=True) %}
+        {% endif %}
+
+        {% if is_event_topic %}
+          {% set event_type = payload.type | default('', true) %}
+          {% set event_data = payload.data if payload.data is defined and payload.data is mapping else dict() %}
+          {% set event_ieee = event_data.ieee_address | default('', true) %}
+          {% set event_name = event_data.friendly_name | default('', true) %}
+          {% if event_name == '' and event_ieee != '' %}
+            {% set lookup = namespace(name='') %}
+            {% for candidate_name, candidate in devices.items() %}
+              {% if candidate.get('ieee_address', '') == event_ieee %}
+                {% set lookup.name = candidate_name %}
+              {% endif %}
+            {% endfor %}
+            {% set event_name = lookup.name %}
+          {% endif %}
+          {% if event_name == '' and event_ieee != '' %}
+            {% set event_name = event_ieee %}
+          {% endif %}
+          {% if event_name != '' %}
+            {% set previous = devices.get(event_name, {}) %}
+            {% set event_update = {
+              'friendly_name': event_name,
+              'ieee_address': event_ieee | default(previous.get('ieee_address', event_name), true),
+              'last_event_type': event_type,
+              'last_event_ts': now_ts
+            } %}
+            {% if event_type == 'device_joined' %}
+              {% set event_update = event_update | combine({'last_join_ts': now_ts}, recursive=True) %}
+            {% elif event_type == 'device_interview' %}
+              {% set event_update = event_update | combine({
+                'last_interview_ts': now_ts,
+                'last_interview_status': event_data.status | default('', true)
+              }, recursive=True) %}
+            {% elif event_type == 'device_announce' %}
+              {% set event_update = event_update | combine({'last_announce_ts': now_ts}, recursive=True) %}
+            {% elif event_type == 'device_leave' %}
+              {% set event_update = event_update | combine({'last_leave_ts': now_ts}, recursive=True) %}
+            {% endif %}
+            {% if event_data.definition is defined and event_data.definition is mapping and event_data.definition.model is defined %}
+              {% set event_update = event_update | combine({'model': event_data.definition.model}, recursive=True) %}
+            {% endif %}
+            {% set devices = devices | combine({
+              event_name: previous | combine(event_update, recursive=True)
+            }, recursive=True) %}
+          {% endif %}
+        {% endif %}
+
+        {% if is_health_topic %}
+          {% set device_health = payload.devices if payload.devices is defined and payload.devices is mapping else dict() %}
+          {% set ns = namespace(updated=devices) %}
+          {% for friendly_name, previous in devices.items() %}
+            {% set ieee = previous.get('ieee_address', '') %}
+            {% if ieee != '' and device_health.get(ieee) is mapping %}
+              {% set stats = device_health.get(ieee) %}
+              {% set leave_count = stats.leave_count | default(previous.get('health_leave_count', 0), true) | int(0) %}
+              {% set previous_leave_count = previous.get('health_leave_count', 0) | int(0) %}
+              {% set network_address_changes = stats.network_address_changes | default(previous.get('health_network_address_changes', 0), true) | int(0) %}
+              {% set previous_network_address_changes = previous.get('health_network_address_changes', 0) | int(0) %}
+              {% set last_health_leave_delta_ts = previous.get('last_health_leave_delta_ts') %}
+              {% if leave_count > previous_leave_count %}
+                {% set last_health_leave_delta_ts = now_ts %}
+              {% endif %}
+              {% set last_network_address_change_ts = previous.get('last_network_address_change_ts') %}
+              {% if network_address_changes > previous_network_address_changes %}
+                {% set last_network_address_change_ts = now_ts %}
+              {% endif %}
+              {% set ns.updated = ns.updated | combine({
+                friendly_name: previous | combine({
+                  'health_leave_count': leave_count,
+                  'health_network_address_changes': network_address_changes,
+                  'health_messages': stats.messages | default(previous.get('health_messages')),
+                  'health_messages_per_sec': stats.messages_per_sec | default(previous.get('health_messages_per_sec')),
+                  'last_health_leave_delta_ts': last_health_leave_delta_ts,
+                  'last_network_address_change_ts': last_network_address_change_ts
+                }, recursive=True)
+              }, recursive=True) %}
+            {% endif %}
+          {% endfor %}
+          {% set devices = ns.updated %}
+        {% endif %}
+
+        {% if is_coordinator_topic %}
+          {% set missing_rows = payload.data.missing_routers if payload.data is defined and payload.data is mapping and payload.data.missing_routers is defined else [] %}
+          {% set ns = namespace(items=[]) %}
+          {% for row in missing_rows %}
+            {% set ns.items = ns.items + [row.friendly_name | default(row.ieee_address, true)] %}
+          {% endfor %}
+          {% set coordinator_missing_routers = ns.items | sort %}
+        {% endif %}
+
+        {% set ns = namespace(retained=dict()) %}
+        {% for friendly_name, device in devices.items() %}
+          {% set recent_signal_ts = [
+            device.get('last_join_ts', 0) | float(0),
+            device.get('last_interview_ts', 0) | float(0),
+            device.get('last_announce_ts', 0) | float(0),
+            device.get('last_leave_ts', 0) | float(0),
+            device.get('last_roster_seen_ts', 0) | float(0),
+            device.get('last_roster_missing_ts', 0) | float(0)
+          ] | max %}
+          {% if device.get('present_in_roster', true) or recent_signal_ts >= (now_ts - retention_window) %}
+            {% set ns.retained = ns.retained | combine({friendly_name: device}, recursive=True) %}
+          {% endif %}
+        {% endfor %}
+        {% set devices = ns.retained %}
+
+        {% set ns = namespace(
+          issue_map=dict(),
+          issue_summary=[],
+          selection_map=dict(),
+          selection_options=[],
+          join_then_drop=[],
+          left_network=[],
+          offline=[],
+          flapping=[],
+          online=[],
+          issue_count=0
+        ) %}
+        {% for friendly_name, device in devices | dictsort %}
+          {% if device.get('disabled') != true %}
+            {% set model = device.get('model', 'Unknown model') %}
+            {% set device_id = device.get('ieee_address', friendly_name) %}
+            {% set present_in_roster = device.get('present_in_roster', true) %}
+            {% if present_in_roster %}
+              {% set selection_label = friendly_name ~ ' (' ~ model ~ '; ' ~ device_id ~ ')' %}
+              {% set ns.selection_options = ns.selection_options + [selection_label] %}
+              {% set ns.selection_map = ns.selection_map | combine({
+                selection_label: {
+                  'id': device_id,
+                  'friendly_name': friendly_name,
+                  'model': model
+                }
+              }, recursive=True) %}
+            {% endif %}
+            {% set availability = device.get('availability', 'unknown') %}
+            {% set last_join_ts = device.get('last_join_ts', 0) | float(0) %}
+            {% set last_interview_ts = device.get('last_interview_ts', 0) | float(0) %}
+            {% set last_interview_status = device.get('last_interview_status', '') %}
+            {% set last_announce_ts = device.get('last_announce_ts', 0) | float(0) %}
+            {% set last_leave_ts = device.get('last_leave_ts', 0) | float(0) %}
+            {% set last_availability_change_ts = device.get('last_availability_change_ts', 0) | float(0) %}
+            {% set last_joinish_ts = [last_join_ts, last_interview_ts, last_announce_ts] | max %}
+            {% set last_online_ts = last_availability_change_ts if availability == 'online' else 0 %}
+            {% set last_recovery_ts = [last_joinish_ts, last_online_ts] | max %}
+            {% set issue_reason = '' %}
+            {% if last_leave_ts > 0 and last_joinish_ts > 0 and last_leave_ts >= last_joinish_ts and (last_leave_ts - last_joinish_ts) <= stabilization_window and last_leave_ts >= last_recovery_ts %}
+              {% set issue_reason = 'joined and immediately left the network' %}
+              {% set ns.join_then_drop = ns.join_then_drop + [friendly_name] %}
+            {% elif last_interview_status == 'failed' and last_interview_ts > 0 and (now_ts - last_interview_ts) <= stabilization_window %}
+              {% set issue_reason = 'device interview failed' %}
+              {% set ns.flapping = ns.flapping + [friendly_name] %}
+            {% elif not present_in_roster and last_joinish_ts > 0 and (now_ts - last_joinish_ts) <= stabilization_window %}
+              {% set issue_reason = 'joined or announced but never stabilized' %}
+              {% set ns.join_then_drop = ns.join_then_drop + [friendly_name] %}
+            {% elif availability == 'offline' and last_joinish_ts > 0 and (now_ts - last_joinish_ts) <= stabilization_window %}
+              {% set issue_reason = 'joined or announced but never stabilized' %}
+              {% set ns.join_then_drop = ns.join_then_drop + [friendly_name] %}
+            {% elif last_leave_ts > 0 and last_leave_ts >= last_recovery_ts %}
+              {% set issue_reason = 'left the network' %}
+              {% set ns.left_network = ns.left_network + [friendly_name] %}
+            {% elif availability == 'offline' %}
+              {% set issue_reason = 'availability reported offline' %}
+              {% set ns.offline = ns.offline + [friendly_name] %}
+            {% elif device.get('last_network_address_change_ts', 0) | float(0) > 0 and (now_ts - (device.get('last_network_address_change_ts', 0) | float(0))) <= churn_window %}
+              {% set issue_reason = 'changed network address recently' %}
+              {% set ns.flapping = ns.flapping + [friendly_name] %}
+            {% elif device.get('last_health_leave_delta_ts', 0) | float(0) > 0 and (now_ts - (device.get('last_health_leave_delta_ts', 0) | float(0))) <= churn_window %}
+              {% set issue_reason = 'leave count increased recently' %}
+              {% set ns.flapping = ns.flapping + [friendly_name] %}
+            {% else %}
+              {% set ns.online = ns.online + [friendly_name] %}
+            {% endif %}
+            {% if issue_reason != '' %}
+              {% set ns.issue_map = ns.issue_map | combine({
+                friendly_name: {
+                  'id': device_id,
+                  'friendly_name': friendly_name,
+                  'model': model,
+                  'reason': issue_reason,
+                  'availability': availability,
+                  'last_event_type': device.get('last_event_type', '')
+                }
+              }, recursive=True) %}
+              {% set ns.issue_summary = ns.issue_summary + ['- ' ~ friendly_name ~ ' (' ~ model ~ '): ' ~ issue_reason] %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {% if coordinator_missing_routers | count > 0 %}
+          {% set ns.issue_summary = ns.issue_summary + ['- Coordinator is missing router(s): ' ~ (coordinator_missing_routers | join(', '))] %}
+        {% endif %}
+        {% set ns.issue_count = (ns.issue_map | count) + (1 if coordinator_missing_routers | count > 0 else 0) %}
+        {{ {
+          'devices': devices,
+          'issue_map': ns.issue_map,
+          'issue_summary': ns.issue_summary | join('\n'),
+          'issue_count': ns.issue_count,
+          'selection_map': ns.selection_map,
+          'selection_options': ns.selection_options | sort,
+          'selection_options_csv': ns.selection_options | sort | join(' | '),
+          'join_then_drop': ns.join_then_drop | sort,
+          'left_network': ns.left_network | sort,
+          'offline': ns.offline | sort,
+          'flapping': ns.flapping | sort,
+          'online': ns.online | sort,
+          'coordinator_missing_routers': coordinator_missing_routers,
+          'updated_at': now_ts
+        } }}
+    sensor:
+      - name: z2m_lifecycle_issues
+        unique_id: z2m_lifecycle_issues
+        icon: mdi:lan-disconnect
+        state: "{{ z2m_lifecycle_stats.get('issue_count', 0) }}"
+        attributes:
+          issue_summary: "{{ z2m_lifecycle_stats.get('issue_summary', '') }}"
+          issue_map: "{{ z2m_lifecycle_stats.get('issue_map', {}) }}"
+          selection_map: "{{ z2m_lifecycle_stats.get('selection_map', {}) }}"
+          selection_options: "{{ z2m_lifecycle_stats.get('selection_options', []) }}"
+          selection_options_csv: "{{ z2m_lifecycle_stats.get('selection_options_csv', '') }}"
+          join_then_drop: "{{ z2m_lifecycle_stats.get('join_then_drop', []) }}"
+          left_network: "{{ z2m_lifecycle_stats.get('left_network', []) }}"
+          offline: "{{ z2m_lifecycle_stats.get('offline', []) }}"
+          flapping: "{{ z2m_lifecycle_stats.get('flapping', []) }}"
+          online: "{{ z2m_lifecycle_stats.get('online', []) }}"
+          coordinator_missing_routers: "{{ z2m_lifecycle_stats.get('coordinator_missing_routers', []) }}"
+          devices: "{{ z2m_lifecycle_stats.get('devices', {}) }}"
+
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/devices
+      - trigger: mqtt
+        topic: zigbee2mqtt/bridge/response/devices
+      - trigger: mqtt
+        topic: zigbee2mqtt/+/availability
+    variables:
+      z2m_router_stats: >-
+        {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
+        {% set previous = {
+            'routers': current_attrs.get('routers', []),
+            'availability_map': current_attrs.get('availability_map', {}),
+            'offline_names': current_attrs.get('offline_routers', []),
+            'offline': current_attrs.get('offline_router_count', 0),
+            'total': current_attrs.get('total_router_count', 0),
+            'pct': (this.state | float(0)) if this is defined else 0
+          } %}
+        {% set topic = trigger.topic if trigger is defined and trigger.topic is defined else '' %}
+        {% set is_devices_topic = topic in ['zigbee2mqtt/bridge/devices', 'zigbee2mqtt/bridge/response/devices'] %}
+        {% set is_availability_topic = topic.endswith('/availability') and not topic.startswith('zigbee2mqtt/bridge/') %}
+
+        {% if not is_devices_topic and not is_availability_topic %}
+          {{ previous }}
+        {% else %}
+          {% set routers = previous.routers %}
+          {% set availability_map = previous.availability_map %}
+
+          {% if is_devices_topic %}
+            {% set payload = trigger.payload_json %}
+            {% if payload is mapping and payload.data is defined %}
+              {% set devices = payload.data %}
+            {% elif payload is sequence and payload is not string %}
+              {% set devices = payload %}
+            {% else %}
+              {% set devices = [] %}
+            {% endif %}
+            {% set routers = devices
+              | selectattr('type', 'eq', 'Router')
+              | rejectattr('friendly_name', 'equalto', 'Coordinator')
+              | rejectattr('disabled', 'eq', true)
+              | map(attribute='friendly_name')
+              | list %}
+          {% endif %}
+
+          {% if is_availability_topic %}
+            {% set friendly_name = topic[12:-13] %}
+            {% if trigger.payload_json is mapping and trigger.payload_json.state is defined %}
+              {% set availability_state = trigger.payload_json.state %}
+            {% else %}
+              {% set availability_state = trigger.payload %}
+            {% endif %}
+            {% set availability_map = availability_map | combine({ friendly_name: (availability_state | string | lower) }) %}
+          {% endif %}
+
+          {% set ns = namespace(offline=[]) %}
+          {% for router in routers %}
+            {% if availability_map.get(router, 'unknown') == 'offline' %}
+              {% set ns.offline = ns.offline + [router] %}
+            {% endif %}
+          {% endfor %}
+
+          {% set total = routers | count %}
+          {% set offline = ns.offline | count %}
+          {% set percent = ((offline / total) * 100) if total > 0 else 0 %}
+          {{ {
+              'routers': routers | sort,
+              'availability_map': availability_map,
+              'offline_names': ns.offline | sort,
+              'offline': offline,
+              'total': total,
+              'pct': percent | round(1)
+            } }}
+        {% endif %}
+    sensor:
+      - name: z2m_router_offline_pct
+        unique_id: z2m_router_offline_pct
+        unit_of_measurement: "%"
+        state: "{{ z2m_router_stats.get('pct', 0) }}"
+        attributes:
+          offline_router_count: "{{ z2m_router_stats.get('offline', 0) }}"
+          total_router_count: "{{ z2m_router_stats.get('total', 0) }}"
+          offline_routers: "{{ z2m_router_stats.get('offline_names', []) }}"
+          routers: "{{ z2m_router_stats.get('routers', []) }}"
+          availability_map: "{{ z2m_router_stats.get('availability_map', {}) }}"
+
+  - binary_sensor:
+      - name: z2m_failing
+        unique_id: z2m_failing_binary
+        device_class: problem
+        state: >-
+          {% set total = states('sensor.z2m_router_total') | int(0) %}
+          {% set offline_pct = states('sensor.z2m_router_offline_pct') | float(0) %}
+          {% set threshold_pct = states('input_number.z2m_router_offline_threshold_pct') | float(15) %}
+          {{ total > 0 and offline_pct >= threshold_pct }}
+
+  - sensor:
+      - name: z2m_router_total
+        unique_id: z2m_router_total
+        state: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"
+
+      - name: z2m_failing
+        unique_id: z2m_failing_count
+        state: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_router_count') | int(0) }}"
+        attributes:
+          total_router_count: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"
+          offline_router_pct: "{{ states('sensor.z2m_router_offline_pct') | float(0) }}"
+          offline_routers: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_routers') | default([], true) }}"
+
+      - name: z2m_recovery_candidates
+        unique_id: z2m_recovery_candidates
+        icon: mdi:lan-disconnect
+        state: >-
+          {% set ns = namespace(count=0) %}
+          {% for s in states if s.state == 'unavailable' %}
+            {% set eid = s.entity_id %}
+            {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
+              {% set did = device_id(eid) %}
+              {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
+              {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
+                {% set ns.count = ns.count + 1 %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.count }}
+        attributes:
+          entities: >-
+            {% set ns = namespace(items=[]) %}
+            {% for s in states if s.state == 'unavailable' %}
+              {% set eid = s.entity_id %}
+              {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
+                {% set did = device_id(eid) %}
+                {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
+                {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
+                  {% set ns.items = ns.items + [eid] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items | join(', ') }}
+          recovery_hint: "Restart Zigbee2MQTT first when this count stays above threshold."

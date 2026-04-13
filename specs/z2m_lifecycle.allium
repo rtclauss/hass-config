@@ -1,0 +1,160 @@
+-- allium: 3
+-- z2m_lifecycle.allium
+--
+-- Scope: Zigbee2MQTT device lifecycle tracking, notification, and decommission.
+-- Includes:
+--   - device_joined, device_interview, device_announce, device_leave,
+--     availability, and bridge-roster-loss handling
+--   - join_then_drop and left_network classification for unstable devices such
+--     as PARASOLL contact sensors
+--   - bridge/coordinator health boundaries that separate single-device churn
+--     from systemic recovery
+--   - decommission request, force remove fallback, and inventory.md
+--     reconciliation requirements
+-- Excludes:
+--   - exact MQTT topic strings, payload JSON, and Home Assistant entity ids
+--   - restart transport details for add-ons, hosts, or mobile notification apps
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    bridge: ZigbeeBridgeHealth
+    notifications: LifecycleNotificationState
+    inventory: InventoryReconciliationState
+}
+
+------------------------------------------------------------
+-- Entities
+------------------------------------------------------------
+
+entity ZigbeeBridgeHealth {
+    bridge_status: online | offline | degraded
+    coordinator_status: healthy | missing_routers
+    systemic_recovery_needed: Boolean
+}
+
+entity ZigbeeDeviceLifecycle {
+    friendly_name: String
+    model: String
+    availability: online | offline | unknown
+    present_in_bridge_roster: Boolean
+    interview_status: none | started | successful | failed
+    lifecycle: healthy | joining | interviewing | online | transiently_unavailable | join_then_drop | left_network | decommission_requested | decommissioned
+    issue_reason: none | availability_offline | device_interview_failed | joined_then_left | left_network | network_address_flapping
+    removal_mode: none | normal | force
+}
+
+entity LifecycleNotificationState {
+    lifecycle_issue_count: Integer
+    persistent_notification_active: Boolean
+    push_notification_active: Boolean
+}
+
+entity InventoryReconciliationState {
+    inventory_markdown_update_required: Boolean
+    configured_row_adjusted: Boolean
+    spare_row_adjusted: Boolean
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    stabilization_window: Duration = 5.minutes
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule RecordDeviceJoined {
+    when: DeviceJoined(device)
+    ensures: device.lifecycle = joining
+    ensures: device.issue_reason = none
+}
+
+rule RecordDeviceInterviewFailure {
+    when: DeviceInterviewReported(device, failed)
+    requires: device.lifecycle in {joining, interviewing}
+    ensures: device.interview_status = failed
+    ensures: device.issue_reason = device_interview_failed
+    ensures: LifecycleIssueRaised(device, device_interview_failed)
+}
+
+rule DetectJoinThenDropFromLeave {
+    when: DeviceLeftNetwork(device)
+    requires: device.lifecycle in {joining, interviewing}
+    ensures: device.lifecycle = join_then_drop
+    ensures: device.issue_reason = joined_then_left
+    ensures: LifecycleIssueRaised(device, joined_then_left)
+}
+
+rule DetectJoinThenDropFromRosterLoss {
+    when: DeviceMissingFromBridgeRoster(device)
+    requires: device.lifecycle in {joining, interviewing}
+    requires: device.present_in_bridge_roster = false
+    ensures: device.lifecycle = join_then_drop
+    ensures: device.issue_reason = joined_then_left
+    ensures: LifecycleIssueRaised(device, joined_then_left)
+}
+
+rule DetectLeftNetwork {
+    when: DeviceLeftNetwork(device)
+    requires: device.lifecycle not in {decommission_requested, decommissioned}
+    requires: device.lifecycle not in {joining, interviewing}
+    ensures: device.lifecycle = left_network
+    ensures: device.issue_reason = left_network
+    ensures: LifecycleIssueRaised(device, left_network)
+}
+
+rule NotifyLifecycleIssue {
+    when: LifecycleIssueRaised(device, reason)
+    ensures: notifications.lifecycle_issue_count = notifications.lifecycle_issue_count + 1
+    ensures: notifications.persistent_notification_active = true
+    ensures: notifications.push_notification_active = true
+}
+
+rule ClearLifecycleNotificationOnRecovery {
+    when: DeviceRecovered(device)
+    requires: device.lifecycle in {join_then_drop, left_network, transiently_unavailable}
+    ensures: device.lifecycle = healthy
+    ensures: device.issue_reason = none
+}
+
+rule EscalateOnlyForSystemicBridgeFailures {
+    when: BridgeHealthCheckFailed()
+    requires: bridge.systemic_recovery_needed
+    requires: bridge.bridge_status in {offline, degraded} or bridge.coordinator_status = missing_routers
+    ensures: SystemicRecoveryRequested()
+    @guidance
+        -- single_device_churn_never_triggers_host_restart
+}
+
+rule RequestDeviceDecommission {
+    when: DecommissionRequested(device, mode)
+    requires: mode in {normal, force}
+    ensures: device.lifecycle = decommission_requested
+    ensures: device.removal_mode = mode
+}
+
+rule ConfirmNormalDeviceDecommission {
+    when: DeviceRemovalConfirmed(device)
+    requires: device.removal_mode = normal
+    ensures: device.lifecycle = decommissioned
+    ensures: inventory.inventory_markdown_update_required = true
+    ensures: InventoryMarkdownUpdateRequired(device, configured_to_spare_stock)
+}
+
+rule ConfirmForceDeviceDecommission {
+    when: DeviceForceRemoved(device)
+    requires: device.removal_mode = force
+    ensures: device.lifecycle = decommissioned
+    ensures: inventory.inventory_markdown_update_required = true
+    ensures: InventoryMarkdownUpdateRequired(device, configured_to_spare_stock)
+    @guidance
+        -- Force removal only removes the Zigbee2MQTT database entry; the
+        -- device still needs a factory reset before it can be safely re-used.
+}
