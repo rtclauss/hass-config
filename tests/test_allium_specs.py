@@ -23,9 +23,11 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
         "night_routines.allium": [
             "-- allium: 3",
             "entity HouseModeStateMachine",
+            "overnight_exterior_lighting_preserved: Boolean",
             "rule StartBedtimePreparation",
             "rule ScheduleBedtimeAudioRampdown",
             "rule EnterInBedHouseMode",
+            "ensures: house.overnight_exterior_lighting_preserved = true",
             "rule ChooseBedtimeAudioFromConfiguredPool",
             "rule TriggerGoodnightFromCPAPSleep",
             "rule EnterAsleepHouseModeFromBedsideShutdown",
