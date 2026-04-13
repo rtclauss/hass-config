@@ -429,10 +429,11 @@ automation:
                       {% set start_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'start'), default=none) %}
                       {% set end_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'end'), default=none) %}
                       {% set now_ts = as_timestamp(now()) %}
+                      {% set scheduled_departure_lead_seconds = 6 * 3600 %}
                       {{
                         start_ts is not none
                         and end_ts is not none
-                        and now_ts >= (start_ts - 21600)
+                        and now_ts >= (start_ts - scheduled_departure_lead_seconds)
                         and now_ts < end_ts
                       }}
             sequence:
