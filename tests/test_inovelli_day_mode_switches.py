@@ -114,13 +114,13 @@ def test_guest_mode_keeps_office_and_guest_room_switches_delayed_until_noon() ->
     assert "script.day_mode_switches_office_guest_room" in block
 
 
-def test_owner_suite_bedroom_day_mode_waits_for_bed_bathroom_and_hallway_activity() -> None:
+def test_owner_suite_bedroom_day_mode_waits_for_bed_bedroom_and_bathroom_activity() -> None:
     block = _automation_block(LIGHT_PATH, "enable_owner_suite_bedroom_switch_day_mode_after_morning_activity")
 
     for entity_id in (
         "binary_sensor.bayesian_bed_occupancy",
+        "binary_sensor.bedroom_occupancy",
         "binary_sensor.owner_suite_bathroom_room_occupancy",
-        "binary_sensor.hall_upstairs_motion_occupancy",
     ):
         assert entity_id in block
 

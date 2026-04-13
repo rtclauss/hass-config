@@ -1711,7 +1711,7 @@ automation:
 
   - alias: enable_owner_suite_bedroom_switch_day_mode_after_morning_activity
     id: enable_owner_suite_bedroom_switch_day_mode_after_morning_activity
-    description: Apply owner suite bedroom switch day mode after 8 AM once bed occupancy clears and both the bathroom and hallway have seen motion.
+    description: Apply owner suite bedroom switch day mode after 8 AM once bed occupancy clears and both the bedroom and bathroom have seen activity.
     trigger:
       - trigger: time
         at: "08:00:00"
@@ -1722,7 +1722,7 @@ automation:
         entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
         to: "on"
       - trigger: state
-        entity_id: binary_sensor.hall_upstairs_motion_occupancy
+        entity_id: binary_sensor.bedroom_occupancy
         to: "on"
     condition:
       - condition: time
@@ -1735,8 +1735,8 @@ automation:
         {{ is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
            or states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed >= today_at('08:00') }}
       - >-
-        {{ is_state('binary_sensor.hall_upstairs_motion_occupancy', 'on')
-           or states.binary_sensor.hall_upstairs_motion_occupancy.last_changed >= today_at('08:00') }}
+        {{ is_state('binary_sensor.bedroom_occupancy', 'on')
+           or states.binary_sensor.bedroom_occupancy.last_changed >= today_at('08:00') }}
     action:
       - action: script.turn_on
         target:
