@@ -163,18 +163,12 @@ def test_arrival_group_helper_resets_players_before_regrouping() -> None:
         assert media_player in block
 
 
-def test_arrival_join_retry_runs_after_playback_starts() -> None:
-    helper_block = _script_block("music_assistant_try_join_arrival_group_after_play")
+def test_arrival_music_does_not_retry_regroup_after_playback_starts() -> None:
     arrival_block = _script_block("spotify_arrival")
 
-    assert 'mode: restart' in helper_block
-    assert 'seconds: 2' in helper_block
-    assert 'action: script.turn_on' in helper_block
-    assert 'entity_id: script.music_assistant_prepare_arrival_group' in helper_block
-    assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' in arrival_block
-    assert arrival_block.index('action: script.music_assistant_play_spotify_uri') < arrival_block.index(
-        'entity_id: script.music_assistant_try_join_arrival_group_after_play'
-    )
+    assert 'action: script.music_assistant_prepare_arrival_group' in arrival_block
+    assert 'action: script.music_assistant_play_spotify_uri' in arrival_block
+    assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' not in arrival_block
 
 
 def test_bedtime_join_retry_runs_after_playback_starts() -> None:
