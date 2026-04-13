@@ -10,7 +10,7 @@ import pytest
 
 
 CENTRAL = ZoneInfo("America/Chicago")
-HOME_CODES = {"MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER"}
+HOME_CODES = {"MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER", "MINNESOTA"}
 TRIPS_PATH = Path(__file__).resolve().parents[1] / "packages" / "trips.yaml"
 MATRIX_PATH = Path(__file__).resolve().parents[1] / "docs" / "travel_detection_regression_matrix.md"
 
@@ -402,11 +402,15 @@ def test_route_summaries_keep_departure_and_return_directions_distinct() -> None
 def test_named_flights_extract_clean_destination_codes() -> None:
     direct = parse_flight_signals("flight to CLT (DL 2819)")
     verbose = parse_flight_signals("Flight: MSP TO CLT (DL 2819)")
+    homebound = parse_flight_signals("Flight to Minnesota (DL 2819)")
 
     assert direct.destination_name == "CLT"
     assert direct.destination_code == "CLT"
     assert verbose.destination_name == "CLT"
     assert verbose.destination_code == "CLT"
+    assert homebound.destination_name == "Minnesota"
+    assert homebound.destination_code == "MINNESOTA"
+    assert homebound.destination_code in HOME_CODES
 
 
 def test_trips_package_avoids_case_sensitive_named_flight_splits() -> None:
@@ -428,7 +432,7 @@ def test_trips_package_exposes_vacation_plan_diagnostics_and_logging() -> None:
     assert "name: Travel detection" in text
     assert "attribute: decision_code" in text
     assert "continue_on_error: true\n        action: logbook.log" in text
-    assert "not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL']" in text
+    assert "not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'MINNESOTA']" in text
     assert "not is_friend_itinerary and destination_code in ['RST', 'ROCHESTER']" in text
 
 
@@ -569,6 +573,34 @@ def test_friend_itineraries_to_home_are_ignored() -> None:
     assert plan["reason"] == "off"
     assert plan["decision_code"] == "off_no_candidate"
     assert "friend itinerary" in plan["ignored_reason"].lower()
+
+
+def test_home_region_named_flight_does_not_override_curling_trip_block() -> None:
+    now = iso("2026-04-11T08:00:00-05:00")
+    personal_events = [
+        {
+            "summary": "Flight to Minnesota (DL 2819)",
+            "description": "Created from an email you received in Gmail",
+            "start": "2026-04-12T17:47:00-05:00",
+            "end": "2026-04-12T20:00:00-05:00",
+        }
+    ]
+    curling_events = [
+        {
+            "summary": "Arena play down",
+            "start": "2026-04-10",
+            "end": "2026-04-13",
+            "location": "Brookings\nUnited States",
+        }
+    ]
+
+    plan = build_vacation_plan(personal_events, now, curling_events=curling_events)
+
+    assert plan["reason"] == "calendar"
+    assert plan["decision_code"] == "calendar_curling_block"
+    assert plan["summary"] == "Arena play down"
+    assert plan["outbound_summary"] == ""
+    assert plan["fallback_source"] == "curling block"
 
 
 def test_local_rochester_appointments_do_not_create_trip_window() -> None:
