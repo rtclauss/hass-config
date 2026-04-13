@@ -2492,11 +2492,37 @@ script:
     variables:
       protected_lights: >-
         {% set excluded = exclude_lights | default([], true) | list %}
+        {% set opaque_group_members = {
+          'light.outside_front_lights': [
+            'light.outside_front_hue',
+            'light.outside_north_west_garage',
+            'light.outside_south_west_garage',
+            'light.outside_front_door'
+          ],
+          'light.deck_all': [
+            'light.deck_kitchen_door_light',
+            'light.deck_tiki_room_door',
+            'light.deck_flood_lights',
+            'light.deck_string',
+            'light.deck_kitchen_door',
+            'light.deck_hue'
+          ]
+        } %}
         {% set ns = namespace(entities=excluded) %}
         {% for light in states.light %}
-          {% set members = state_attr(light.entity_id, 'entity_id') %}
-          {% if members is iterable and members is not string and (members | select('in', excluded) | list | count > 0) %}
-            {% set ns.entities = ns.entities + [light.entity_id] %}
+          {# Zigbee2MQTT aggregate lights such as light.outside_front_lights do
+             not expose member lists via state attributes, so keep a small
+             explicit fallback map for the opaque groups we preserve overnight. #}
+          {% set runtime_members = state_attr(light.entity_id, 'entity_id') %}
+          {% if runtime_members is iterable and runtime_members is not string %}
+            {% set members = runtime_members | list %}
+          {% elif light.entity_id in opaque_group_members %}
+            {% set members = opaque_group_members[light.entity_id] %}
+          {% else %}
+            {% set members = [] %}
+          {% endif %}
+          {% if light.entity_id in excluded or (members | select('in', excluded) | list | count > 0) %}
+            {% set ns.entities = ns.entities + [light.entity_id] + members %}
           {% endif %}
         {% endfor %}
         {{ ns.entities | unique | list }}
