@@ -1408,7 +1408,7 @@ template:
               {% if named_destination != '' %}
                 {% set destination_code = named_destination.split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
               {% endif %}
-              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL'] and start_dt is not none and end_dt is not none %}
+              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'MINNESOTA'] and start_dt is not none and end_dt is not none %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
@@ -1709,7 +1709,7 @@ template:
                   {% set destination_name = named_destination.split(' (', 1)[0].split(' •', 1)[0].strip() %}
                   {% set destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
                 {% endif %}
-                {% if destination_name == '' and destination_code not in ['', 'MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER', 'MINNESOTA'] %}
+                {% if destination_name == '' and destination_code not in ([''] + home_codes) %}
                   {% set destination_name = destination_code %}
                 {% endif %}
                 {% set is_home_origin = origin_code in ['MSP', 'RST'] %}

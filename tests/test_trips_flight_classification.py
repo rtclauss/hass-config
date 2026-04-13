@@ -402,11 +402,15 @@ def test_route_summaries_keep_departure_and_return_directions_distinct() -> None
 def test_named_flights_extract_clean_destination_codes() -> None:
     direct = parse_flight_signals("flight to CLT (DL 2819)")
     verbose = parse_flight_signals("Flight: MSP TO CLT (DL 2819)")
+    homebound = parse_flight_signals("Flight to Minnesota (DL 2819)")
 
     assert direct.destination_name == "CLT"
     assert direct.destination_code == "CLT"
     assert verbose.destination_name == "CLT"
     assert verbose.destination_code == "CLT"
+    assert homebound.destination_name == "Minnesota"
+    assert homebound.destination_code == "MINNESOTA"
+    assert homebound.destination_code in HOME_CODES
 
 
 def test_trips_package_avoids_case_sensitive_named_flight_splits() -> None:
@@ -427,7 +431,7 @@ def test_trips_package_exposes_vacation_plan_diagnostics_and_logging() -> None:
     assert "alias: log_calendar_vacation_plan_diagnostics" in text
     assert "name: Travel detection" in text
     assert "attribute: decision_code" in text
-    assert "not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL']" in text
+    assert "not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'MINNESOTA']" in text
     assert "not is_friend_itinerary and destination_code in ['RST', 'ROCHESTER']" in text
 
 
