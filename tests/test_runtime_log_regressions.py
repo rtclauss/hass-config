@@ -68,6 +68,24 @@ def test_time_to_home_template_handles_unavailable_source_state() -> None:
     assert "'%02d:%02d:00' | format(hours, minutes)" in text
 
 
+def test_trip_templates_treat_minnesota_as_home_destination() -> None:
+    text = _read(TRIPS_PATH)
+
+    assert '"MINNESOTA"' in text
+    assert 'destination_code not in ["", "MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER", "MINNESOTA"]' in text
+    assert "{% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER', 'MINNESOTA'] %}" in text
+
+def test_trip_mode_manager_can_enable_trip_mode_when_departing_for_scheduled_travel() -> None:
+    block = _automation_block(TRIPS_PATH, "trip_mode_manager")
+
+    assert "id: depart_for_scheduled_trip" in block
+    assert "trigger.id != 'depart_for_scheduled_trip'" in block
+    assert "entity_id: binary_sensor.planned_work_trip_calendar" in block
+    assert "sensor.ecobee_calendar_vacation_schedule" in block
+    assert "scheduled_departure_lead_seconds = 6 * 3600" in block
+    assert "start_ts - scheduled_departure_lead_seconds" in block
+
+
 def test_bedroom_hour_of_day_remains_numeric() -> None:
     text = _read(ZIGBEE_ZWAVE_PATH)
 
@@ -172,3 +190,17 @@ def test_lights_off_except_only_targets_currently_on_lights() -> None:
 
     assert "selectattr('state', 'eq', 'on')" in block
     assert "rejectattr('state','in','off')" not in block
+
+
+def test_lights_off_except_skips_light_groups_that_contain_protected_members() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    block = text.split("lights_off_except:\n", 1)[1].split(
+        "\n########################\n# Sensor",
+        1,
+    )[0]
+
+    assert "protected_lights:" in block
+    assert "state_attr(light.entity_id, 'entity_id')" in block
+    assert "members | select('in', excluded)" in block
+    assert "rejectattr('entity_id', 'in', protected_lights)" in block

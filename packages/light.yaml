@@ -960,6 +960,15 @@ automation:
             before: sunrise
             before_offset: "+0:10:00"
     action:
+      - action: script.house_transition
+        data:
+          mode: in_bed
+          reason: bed_occupancy_sustained
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
       - action: script.lights_off_except
         data:
           exclude_lights:
@@ -1292,16 +1301,29 @@ automation:
           state: "off"
           # enabled: false
     action:
-      - action: light.turn_on
-        data:
+      - action: switch.turn_on
+        target:
           entity_id:
+            - switch.adaptive_lighting_owner_suite
+            - switch.adaptive_lighting_adapt_brightness_owner_suite
+            - switch.adaptive_lighting_adapt_color_owner_suite
+      - action: adaptive_lighting.apply
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite
+          lights:
             - light.owner_suite_lamps
             - light.bed_lightstrip
-          brightness_pct: >-
-            {{ state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct') | int(100) }}
-          color_temp_kelvin: >-
-            {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin') | int(4000) }}
+          adapt_brightness: true
+          adapt_color: true
+          turn_on_lights: true
           transition: 45
+      - action: adaptive_lighting.set_manual_control
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite
+          lights:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
+          manual_control: false
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.owner_suite_bedroom_auto_on
@@ -1640,6 +1662,26 @@ automation:
         data:
           entity_id:
             - switch.sleep_mode
+      - if:
+          - condition: state
+            entity_id: device_tracker.bayesian_zeke_home
+            state: "home"
+          - condition: state
+            entity_id: input_select.house_mode
+            state:
+              - night
+              - in_bed
+              - asleep
+        then:
+          - action: script.house_transition
+            data:
+              mode: home
+              reason: morning_sleep_mode_timeout
+              apply_lights: false
+              apply_security: false
+              apply_climate: false
+              apply_media: false
+              apply_trip_policy: false
       - action: script.turn_on
         target:
           entity_id: script.day_mode_switches_general
@@ -1685,6 +1727,7 @@ automation:
     condition:
       - condition: time
         after: "07:59:59"
+        before: "12:00:00"
       - condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
@@ -1698,6 +1741,22 @@ automation:
       - action: script.turn_on
         target:
           entity_id: script.day_mode_switches_owner_suite_bedroom
+
+  - alias: owner_suite_switch_leds_red_when_lamps_on_at_night
+    id: owner_suite_switch_leds_red_when_lamps_on_at_night
+    description: Restore the owner suite Inovelli LED bars to the nighttime red state whenever the owner suite lamps come back on overnight.
+    trigger:
+      - trigger: state
+        entity_id: light.owner_suite_lamps
+        to: "on"
+    condition:
+      - condition: time
+        after: "22:00:00"
+        before: "06:00:00"
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.night_mode_switches_owner_suite
 
   - alias: button_reset_basement
     id: button_reset_basement
@@ -1744,6 +1803,15 @@ automation:
         data:
           entity_id:
             - switch.sleep_mode
+      - action: script.house_transition
+        data:
+          mode: asleep
+          reason: bedside_lamps_off
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
       - action: script.lights_off_except
         data:
           exclude_lights:
@@ -1773,6 +1841,12 @@ automation:
       - action: light.turn_off
         target:
           entity_id: light.bed_lightstrip
+      - if:
+          - condition: time
+            after: "22:00:00"
+            before: "06:00:00"
+        then:
+          - action: script.turn_off_owner_suite_inovelli_switch_leds
 
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom
@@ -2416,11 +2490,21 @@ script:
       exclude_lights:
         description: "Excluded lights as list"
     variables:
+      protected_lights: >-
+        {% set excluded = exclude_lights | default([], true) | list %}
+        {% set ns = namespace(entities=excluded) %}
+        {% for light in states.light %}
+          {% set members = state_attr(light.entity_id, 'entity_id') %}
+          {% if members is iterable and members is not string and (members | select('in', excluded) | list | count > 0) %}
+            {% set ns.entities = ns.entities + [light.entity_id] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.entities | unique | list }}
       # Builds a comma-separated string of all currently-on lights, excluding
-      # the lights listed in exclude_lights (e.g. outdoor/porch lights that
-      # should stay on overnight).
+      # the protected lights and any light groups that would turn those
+      # protected members off indirectly.
       all_other_lights: >
-        {%- for device in states.light | rejectattr('entity_id', 'in', exclude_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.light | rejectattr('entity_id', 'in', protected_lights) | selectattr('state', 'eq', 'on') %}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
       # Fixed: guard the entire sequence so that when all non-excluded lights
       # are already off (all_other_lights resolves to an empty string), the

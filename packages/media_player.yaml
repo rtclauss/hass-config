@@ -1589,11 +1589,11 @@ script:
         ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
         ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
         ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
-        ## SomaFM Groove Salad
-        ## SomaFM Deep Space One
-        ## SomaFM Mission Control
-        ## SomaFM Space Station Soma
-        ## SomaFM Vaporwaves
+        ## SomaFM Groove Salad: https://somafm.com/groovesalad.pls
+        ## SomaFM Deep Space One: https://somafm.com/deepspaceone.pls
+        ## SomaFM Mission Control: https://somafm.com/missioncontrol.pls
+        ## SomaFM Space Station Soma: https://somafm.com/spacestation.pls
+        ## SomaFM Vaporwaves: https://somafm.com/vaporwaves.pls
         #}
         {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu",
           "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
@@ -1649,11 +1649,11 @@ script:
           "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV",
           "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
           "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2",
-          "Groove Salad",
-          "Deep Space One",
-          "Mission Control",
-          "Space Station Soma",
-          "Vaporwaves",
+          "https://somafm.com/groovesalad.pls",
+          "https://somafm.com/deepspaceone.pls",
+          "https://somafm.com/missioncontrol.pls",
+          "https://somafm.com/spacestation.pls",
+          "https://somafm.com/vaporwaves.pls",
           "spotify--Tviw9k66://playlist/2I2cwYxeuLbIXaNRccMViZ"
           ] -%}
           {% set pindex =  (range(0, (plists | length))|random) -%}
@@ -1698,6 +1698,7 @@ script:
         data:
           entity_id: media_player.bedroom_sonos_2
           media_item: "{{ playlist }}"
+          media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
       - action: script.turn_on
         target:
           entity_id: script.music_assistant_try_join_bedroom_group_after_play
@@ -1707,11 +1708,16 @@ script:
             to: "on"
         timeout:
           minutes: 10 # TODO this as a variable that is passed by the caller. Different timeouts for tv off and for laying in bed automation
-        continue_on_timeout: false
-      - delay:
-          minutes: 3
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.completed }}"
+        then:
+          - delay:
+              minutes: 3
       - action: script.turn_on
-        entity_id: script.spotify_bedtime_volume
+        target:
+          entity_id: script.spotify_bedtime_volume
 
   spotify_bedtime_volume:
     alias: "Spotify Bedtime Rampdown"

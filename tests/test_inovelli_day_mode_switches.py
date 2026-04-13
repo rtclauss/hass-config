@@ -35,11 +35,10 @@ def _script_block(path: Path, script_id: str) -> str:
 
 def _automation_block(path: Path, automation_id: str) -> str:
     lines = path.read_text(encoding="utf-8").splitlines()
-    id_line = f"    id: {automation_id}"
     start = None
 
     for index, line in enumerate(lines):
-        if line != id_line:
+        if line not in (f"    id: {automation_id}", f"  - id: {automation_id}"):
             continue
 
         for candidate in range(index, -1, -1):
@@ -95,6 +94,10 @@ def test_turn_off_sleep_mode_uses_general_day_mode_and_early_office_guest_when_n
     block = _automation_block(LIGHT_PATH, "turn_off_sleep_mode")
 
     assert 'at: "08:00:00"' in block
+    assert "script.house_transition" in block
+    assert "reason: morning_sleep_mode_timeout" in block
+    assert "device_tracker.bayesian_zeke_home" in block
+    assert "input_select.house_mode" in block
     assert "script.day_mode_switches_general" in block
     assert "entity_id: input_boolean.guest_mode" in block
     assert 'state: "off"' in block
@@ -122,12 +125,67 @@ def test_owner_suite_bedroom_day_mode_waits_for_bed_bathroom_and_hallway_activit
         assert entity_id in block
 
     assert 'after: "07:59:59"' in block
+    assert 'before: "12:00:00"' in block
     assert "today_at('08:00')" in block
     assert "script.day_mode_switches_owner_suite_bedroom" in block
+    assert "script.owner_suite_morning_transition" not in block
 
 
 def test_wake_up_script_no_longer_forces_day_mode_before_eight_am() -> None:
     block = _script_block(WORKDAY_PATH, "wake_up_script")
 
-    assert "switch.sleep_mode" in block
+    assert "script.owner_suite_morning_transition" in block
+    assert "script.day_mode_switches" not in block
+
+
+def test_owner_suite_night_mode_script_sets_suite_led_bars_to_red() -> None:
+    block = _script_block(ZIGBEE_ZWAVE_PATH, "night_mode_switches_owner_suite")
+
+    for entity_id in (
+        "number.owner_suite_closet_ledcolorwhenoff",
+        "number.owner_suite_fan_switch_ledcolorwhenoff",
+        "number.owner_suite_bathroom_vanity_ledcolorwhenoff",
+        "number.owner_suite_closet_ledintensitywhenoff",
+        "number.owner_suite_fan_switch_ledintensitywhenoff",
+        "number.owner_suite_bathroom_vanity_ledintensitywhenoff",
+        "number.owner_suite_closet_ledintensitywhenon",
+        "number.owner_suite_fan_switch_ledintensitywhenon",
+        "number.owner_suite_bathroom_vanity_ledintensitywhenon",
+        "number.owner_suite_closet_ledcolorwhenon",
+        "number.owner_suite_fan_switch_ledcolorwhenon",
+        "number.owner_suite_bathroom_vanity_ledcolorwhenon",
+    ):
+        assert entity_id in block
+
+    assert 'value: "0"' in block
+    assert 'value: "1"' in block
+    assert 'value: "50"' in block
+    assert "Setting owner suite switch LED colors to nighttime red" in block
+
+
+def test_owner_suite_switch_leds_return_to_night_red_when_lamps_turn_on_overnight() -> None:
+    block = _automation_block(LIGHT_PATH, "owner_suite_switch_leds_red_when_lamps_on_at_night")
+
+    assert "entity_id: light.owner_suite_lamps" in block
+    assert 'to: "on"' in block
+    assert 'after: "22:00:00"' in block
+    assert 'before: "06:00:00"' in block
+    assert "script.night_mode_switches_owner_suite" in block
+
+
+def test_owner_suite_night_lamp_shutdown_turns_off_switch_leds_with_bed_strip() -> None:
+    block = _automation_block(LIGHT_PATH, "owner_suite_bed_strip_off_when_lamps_off")
+
+    assert "entity_id: light.owner_suite_lamps" in block
+    assert 'to: "off"' in block
+    assert "entity_id: light.bed_lightstrip" in block
+    assert 'after: "22:00:00"' in block
+    assert 'before: "06:00:00"' in block
+    assert "script.turn_off_owner_suite_inovelli_switch_leds" in block
+
+
+def test_wake_up_script_no_longer_forces_day_mode_before_eight_am() -> None:
+    block = _script_block(WORKDAY_PATH, "wake_up_script")
+
+    assert "script.owner_suite_morning_transition" in block
     assert "script.day_mode_switches" not in block

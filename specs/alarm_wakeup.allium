@@ -189,13 +189,13 @@ rule BeginWakeupSequence {
         -- target, then exits sleep mode and ramps to the current adaptive
         -- target over config.wakeup_ramp_duration while the blinds begin
         -- opening as part of the same transition.
+    ensures: owner_suite.adaptive_lighting_enabled = true
 }
 
 rule FinishWakeupSequence {
     when: WakeupRampRequested(kind)
     ensures: owner_suite.lighting_state = daytime
     ensures: owner_suite.sleep_mode_enabled = false
-    ensures: owner_suite.blinds_state = mostly_open
     ensures: owner_suite.adaptive_lighting_enabled = true
 }
 

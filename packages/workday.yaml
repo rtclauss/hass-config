@@ -306,6 +306,63 @@ automation:
                   entity_id: media_player.bedroom_sonos_2
                   spotify_uri: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ"
 
+  - id: workday_owner_suite_wake_transition_from_morning_activity
+    alias: workday_owner_suite_wake_transition_from_morning_activity
+    description: >
+      Start the owner suite workday wake transition when bed occupancy clears
+      and both the bathroom and upstairs hall show fresh wake-up activity.
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        to: "off"
+      - trigger: state
+        entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.hall_upstairs_motion_occupancy
+        to: "on"
+    condition:
+      - condition: time
+        after: "04:30:00"
+        before: "12:00:00"
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.planned_vacation_calendar
+        state: "off"
+      - condition: state
+        entity_id: input_select.house_mode
+        state:
+          - night
+          - in_bed
+          - asleep
+      - condition: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.wakeup_alarm_firing
+        state: "off"
+      - condition: state
+        entity_id: light.owner_suite_lamps
+        state: "off"
+      - condition: template
+        value_template: >-
+          {{ is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
+             or as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900 }}
+      - condition: template
+        value_template: >-
+          {{ is_state('binary_sensor.hall_upstairs_motion_occupancy', 'on')
+             or as_timestamp(now()) - as_timestamp(states.binary_sensor.hall_upstairs_motion_occupancy.last_changed) <= 900 }}
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.owner_suite_morning_transition
+
   - id: toggle_lava_lamp_workday
     alias: toggle_lava_lamp_workday
     trigger:
@@ -622,6 +679,107 @@ script:
         data:
           radio_uri: "tunein--S3NwgspV://radio/s20620"
 
+  owner_suite_morning_transition:
+    alias: Owner Suite Morning Transition
+    mode: single
+    sequence:
+      - alias: "Start from the owner suite adaptive sleep target"
+        continue_on_error: true
+        action: switch.turn_on
+        target:
+          entity_id:
+            - switch.adaptive_lighting_owner_suite
+            - switch.adaptive_lighting_adapt_brightness_owner_suite
+            - switch.adaptive_lighting_adapt_color_owner_suite
+            - switch.sleep_mode
+      - alias: "Clear any stale owner suite manual control before the wake ramp"
+        continue_on_error: true
+        action: adaptive_lighting.set_manual_control
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite
+          lights:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
+          manual_control: false
+      - alias: "Apply the owner suite adaptive sleep target"
+        continue_on_error: true
+        action: adaptive_lighting.apply
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite
+          lights:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
+          adapt_brightness: true
+          adapt_color: true
+          turn_on_lights: true
+          transition: 2
+      - alias: "Return the shared house mode to home once the wake transition begins"
+        continue_on_error: true
+        action: script.house_transition
+        data:
+          mode: home
+          reason: owner_suite_morning_transition
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
+      - delay:
+          seconds: 1
+      - parallel:
+          - sequence:
+              - alias: "Ramp the owner suite lights to the current adaptive daytime target"
+                continue_on_error: true
+                action: switch.turn_off
+                data:
+                  entity_id:
+                    - switch.sleep_mode
+              - alias: "Apply the daytime adaptive target over three minutes"
+                continue_on_error: true
+                action: adaptive_lighting.apply
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamps
+                    - light.bed_lightstrip
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
+                  transition: 180
+              - alias: "Keep owner suite adaptive lighting in control after the wake ramp"
+                continue_on_error: true
+                action: switch.turn_on
+                target:
+                  entity_id:
+                    - switch.adaptive_lighting_owner_suite
+                    - switch.adaptive_lighting_adapt_brightness_owner_suite
+                    - switch.adaptive_lighting_adapt_color_owner_suite
+              - alias: "Clear owner suite adaptive-lighting manual control after the wake ramp"
+                continue_on_error: true
+                action: adaptive_lighting.set_manual_control
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamps
+                    - light.bed_lightstrip
+                  manual_control: false
+          - sequence:
+              - alias: "Let the adaptive wake ramp settle before opening blinds"
+                continue_on_error: true
+                delay:
+                  seconds: 175
+              - alias: "Start raising the owner suite blinds during the wake ramp"
+                continue_on_error: true
+                repeat:
+                  until: "{{ (repeat.index * 2) == 80 }}"
+                  sequence:
+                    - action: cover.set_cover_position
+                      data:
+                        entity_id: cover.owner_suite_blinds_ha
+                        position: "{{ repeat.index * 2 }}"
+                    - delay:
+                        seconds: "{{ (75/(log(repeat.index + 1, 5))) | round(0, 'ceil', 5) }}"
+
   wake_up_script:
     alias: Common Wake Up Tasks
     sequence:
@@ -633,50 +791,7 @@ script:
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.wakeup_alarm_firing
-      - alias: "Turn on light at dimmest setting. Adaptive Lighting will apply"
-        continue_on_error: true
-        action: light.turn_on
-        data:
-          entity_id:
-            - light.owner_suite_lamps
-            - light.bed_lightstrip
-          color_temp_kelvin: 2700
-          brightness_pct: 1
-      - delay:
-          seconds: 5
-      - alias: "Ramp bedroom lights up to full wake-up brightness"
-        continue_on_error: true
-        action: light.turn_on
-        data:
-          entity_id:
-            - light.owner_suite_lamps
-            - light.bed_lightstrip
-          color_temp_kelvin: 6500
-          brightness_pct: 100
-          transition: 300
-      - delay:
-          minutes: 1
-      - action: switch.turn_off
-        data:
-          entity_id:
-            - switch.sleep_mode
-      - alias: "Slowly Open Blinds"
-        continue_on_error: true
-        repeat:
-          until: "{{ (repeat.index * 2) == 80 }}"
-          sequence:
-            - action: cover.set_cover_position
-              data:
-                entity_id: cover.owner_suite_blinds_ha
-                position: "{{ repeat.index * 2 }}"
-            - delay:
-                seconds: "{{ (75/(log(repeat.index + 1, 5))) | round(0, 'ceil', 5) }}"
-      - alias: "Turn on Adaptive Brightness for bedroom"
-        continue_on_error: true
-        action: switch.turn_on
-        entity_id:
-          - switch.adaptive_lighting_adapt_brightness_owner_suite
-          - switch.adaptive_lighting_adapt_color_owner_suite
+      - action: script.owner_suite_morning_transition
 
 ########################
 # Binary Sensors
