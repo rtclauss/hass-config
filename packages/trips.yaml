@@ -321,6 +321,10 @@ automation:
         to: "off"
         for:
           hours: 20
+      - trigger: state
+        id: depart_for_scheduled_trip
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "off"
       - trigger: template
         id: away_over_radius_mi
         value_template: >-
@@ -406,12 +410,32 @@ automation:
                   - away_over_radius_mi
                   - planned_work_trip
                   - planned_vacation
+                  - depart_for_scheduled_trip
               - condition: state
                 entity_id: binary_sensor.bayesian_zeke_home
                 state: "off"
               - condition: state
                 entity_id: input_boolean.trip
                 state: "off"
+              - condition: or
+                conditions:
+                  - condition: template
+                    value_template: "{{ trigger.id != 'depart_for_scheduled_trip' }}"
+                  - condition: state
+                    entity_id: binary_sensor.planned_work_trip_calendar
+                    state: "on"
+                  - condition: template
+                    value_template: >-
+                      {% set start_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'start'), default=none) %}
+                      {% set end_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'end'), default=none) %}
+                      {% set now_ts = as_timestamp(now()) %}
+                      {% set scheduled_departure_lead_seconds = 6 * 3600 %}
+                      {{
+                        start_ts is not none
+                        and end_ts is not none
+                        and now_ts >= (start_ts - scheduled_departure_lead_seconds)
+                        and now_ts < end_ts
+                      }}
             sequence:
               - action: input_boolean.turn_on
                 target:
