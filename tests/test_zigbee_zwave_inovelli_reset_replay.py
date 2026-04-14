@@ -309,6 +309,30 @@ def test_reset_script_replays_endpoint_1_membership_for_group_bound_switch_sync(
         assert (group, device, 2) not in memberships
 
 
+def test_hall_transition_recovery_replays_led_policy_after_unavailable() -> None:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+
+    block = text.split(
+        "replay_hall_transition_inovelli_led_policy_on_recovery:\n",
+        1,
+    )[1].split(
+        "\n  turn_off_owner_suite_inovelli_switch_leds:\n",
+        1,
+    )[0]
+
+    for token in (
+        'from: "unavailable"',
+        "number.hall_transition_switch_ledcolorwhenoff",
+        "number.hall_transition_switch_ledcolorwhenon",
+        "number.hall_transition_switch_ledintensitywhenoff",
+        "number.hall_transition_switch_ledintensitywhenon",
+        "switch.sleep_mode",
+        "sun.sun",
+        "script.restore_inovelli_switch_leds_from_trip",
+    ):
+        assert token in block
+
+
 def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
     block = _script_block("reset_inovelli_switches")
 
