@@ -75,6 +75,29 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _scene_block(scene_name: str) -> str:
+    lines = TV_PATH.read_text(encoding="utf-8").splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line != f"  - name: {scene_name}":
+            continue
+        start = index
+        break
+
+    if start is None:
+        raise AssertionError(f"Could not find scene {scene_name!r} in {TV_PATH.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("  - name: "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+
 def test_all_watch_scripts_are_exposed_to_siri_and_voice_integrations() -> None:
     package = TV_PATH.read_text(encoding="utf-8")
     watch_scripts = set(re.findall(r"^  (watch_[a-z0-9_]+):$", package, flags=re.MULTILINE))
@@ -110,19 +133,28 @@ def test_watch_f1_script_uses_basement_apple_tv_path() -> None:
         assert "action: script.wait_for_basement_media_player_ready" in f1_block
 
 
-def test_tv_resumed_preserves_outside_groups_when_playback_starts() -> None:
+def test_tv_paused_scene_only_restores_basement_great_room_lighting() -> None:
+    block = _scene_block("tv_paused")
+
+    assert 'light.basement_great_room:\n        state: "on"\n        brightness: 128' in block
+    assert "light.kitchen_sink_overhead" not in block
+    assert "light.den_floods" not in block
+
+
+def test_tv_resumed_automation_uses_basement_scene_instead_of_whole_house_light_sweep() -> None:
     block = _automation_block("tv_resumed")
 
-    for token in (
-        "action: script.lights_off_except",
-        "light.outside_front_hue",
-        "light.outside_north_west_garage",
-        "light.outside_south_west_garage",
-        "light.outside_front_door",
-        "light.basement_tv_bias",
-        'after: "19:30:00"',
-        'before: "23:59:00"',
-    ):
-        assert token in block
+    assert "action: scene.turn_on" in block
+    assert "entity_id: scene.tv_resumed" in block
+    assert "action: script.lights_off_except" not in block
 
-    assert "light.deck_all" not in block
+
+def test_tv_resumed_scene_only_targets_basement_great_room() -> None:
+    block = _scene_block("tv_resumed")
+
+    assert 'light.basement_great_room:\n        state: "off"' in block
+    assert "light.kitchen_all" not in block
+    assert "light.hall_all" not in block
+    assert "light.den_all" not in block
+    assert "light.office_all" not in block
+    assert "light.deck_string" not in block
