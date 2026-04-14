@@ -168,21 +168,23 @@ automation:
     alias: tv_off_at_night_bed_prep
     trigger:
       - trigger: state
+        id: lg-tv-off
         entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "off"
         for:
           seconds: 15
       - trigger: state
+        id: lg-tv-unavailable
         entity_id: media_player.lg_webos_smart_tv
         from: "on"
         to: "unavailable"
         for:
           seconds: 15
       - trigger: state
-        entity_id: media_player.lg_webos_smart_tv
-        from: "off"
-        to: "unavailable"
+        id: basement-player-off
+        entity_id: media_player.basement
+        to: "off"
         for:
           seconds: 5
       - trigger: event
@@ -206,6 +208,21 @@ automation:
         - condition: state
           entity_id: binary_sensor.bayesian_bed_occupancy
           state: "off"
+        - condition: or
+          conditions:
+            - condition: template
+              value_template: "{{ trigger.id != 'basement-player-off' }}"
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: media_player.lg_webos_smart_tv
+                  state: "off"
+                - condition: state
+                  entity_id: media_player.lg_webos_smart_tv
+                  state: "unavailable"
+                - condition: state
+                  entity_id: media_player.plex_basement_apple_tv
+                  state: "unavailable"
     action:
       - action: media_player.volume_set
         continue_on_error: true
