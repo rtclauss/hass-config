@@ -115,10 +115,14 @@ def test_tv_resumed_preserves_outside_groups_when_playback_starts() -> None:
 
     for token in (
         "action: script.lights_off_except",
-        "light.outside_front_lights",
-        "light.deck_all",
+        "light.outside_front_hue",
+        "light.outside_north_west_garage",
+        "light.outside_south_west_garage",
+        "light.outside_front_door",
         "light.basement_tv_bias",
         'after: "19:30:00"',
         'before: "23:59:00"',
     ):
         assert token in block
+
+    assert "light.deck_all" not in block
