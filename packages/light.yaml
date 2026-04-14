@@ -1903,7 +1903,28 @@ automation:
   - id: toggle_on_under_bed_on_motion
     alias: toggle_on_under_bed_on_motion
     mode: restart
+    variables:
+      under_bed_brightness_pct: >-
+        {{ state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct') | int(25) }}
+      under_bed_kelvin: >-
+        {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin') | int(2700) }}
     trigger:
+      - trigger: state
+        id: zone_1_on
+        entity_id: binary_sensor.under_bed_presense_zone_1_occupancy
+        to: "on"
+      - trigger: state
+        id: zone_2_on
+        entity_id: binary_sensor.everything_presence_lite_2fbc58_zone_2_occupancy
+        to: "on"
+      - trigger: state
+        id: zone_3_on
+        entity_id: binary_sensor.everything_presence_lite_2fbc58_zone_3_occupancy
+        to: "on"
+      - trigger: state
+        id: zone_4_on
+        entity_id: binary_sensor.everything_presence_lite_2fbc58_zone_4_occupancy
+        to: "on"
       - trigger: state
         id: motion_on
         entity_id: binary_sensor.presense
@@ -1931,15 +1952,91 @@ automation:
       - choose:
           - conditions:
               - condition: trigger
+                id: zone_1_on
+            sequence:
+              - condition: state
+                entity_id: light.owner_suite_lamps
+                state: "on"
+              - action: light.turn_off
+                target:
+                  entity_id: light.bed_lightstrip
+              # Split the first 8 guaranteed LIFX Z zones into 4 logical bed quadrants.
+              - action: lifx.set_state
+                target:
+                  entity_id: light.bed_lightstrip
+                data:
+                  power: true
+                  brightness_pct: "{{ under_bed_brightness_pct }}"
+                  kelvin: "{{ under_bed_kelvin }}"
+                  zones: [0, 1]
+          - conditions:
+              - condition: trigger
+                id: zone_2_on
+            sequence:
+              - condition: state
+                entity_id: light.owner_suite_lamps
+                state: "on"
+              - action: light.turn_off
+                target:
+                  entity_id: light.bed_lightstrip
+              - action: lifx.set_state
+                target:
+                  entity_id: light.bed_lightstrip
+                data:
+                  power: true
+                  brightness_pct: "{{ under_bed_brightness_pct }}"
+                  kelvin: "{{ under_bed_kelvin }}"
+                  zones: [2, 3]
+          - conditions:
+              - condition: trigger
+                id: zone_3_on
+            sequence:
+              - condition: state
+                entity_id: light.owner_suite_lamps
+                state: "on"
+              - action: light.turn_off
+                target:
+                  entity_id: light.bed_lightstrip
+              - action: lifx.set_state
+                target:
+                  entity_id: light.bed_lightstrip
+                data:
+                  power: true
+                  brightness_pct: "{{ under_bed_brightness_pct }}"
+                  kelvin: "{{ under_bed_kelvin }}"
+                  zones: [4, 5]
+          - conditions:
+              - condition: trigger
+                id: zone_4_on
+            sequence:
+              - condition: state
+                entity_id: light.owner_suite_lamps
+                state: "on"
+              - action: light.turn_off
+                target:
+                  entity_id: light.bed_lightstrip
+              - action: lifx.set_state
+                target:
+                  entity_id: light.bed_lightstrip
+                data:
+                  power: true
+                  brightness_pct: "{{ under_bed_brightness_pct }}"
+                  kelvin: "{{ under_bed_kelvin }}"
+                  zones: [6, 7]
+          - conditions:
+              - condition: trigger
                 id: motion_on
             sequence:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              # TODO maybe don't turn off the lights.
-              # - action: light.turn_off
-              #   data:
-              #     entity_id: light.outside_front_hue
+              - condition: state
+                entity_id:
+                  - binary_sensor.under_bed_presense_zone_1_occupancy
+                  - binary_sensor.everything_presence_lite_2fbc58_zone_2_occupancy
+                  - binary_sensor.everything_presence_lite_2fbc58_zone_3_occupancy
+                  - binary_sensor.everything_presence_lite_2fbc58_zone_4_occupancy
+                state: "off"
               - action: adaptive_lighting.apply
                 data:
                   lights:
@@ -1952,14 +2049,9 @@ automation:
               - condition: trigger
                 id: motion_off
             sequence:
-              # TODO maybe don't turn off the lights.
-              # - action: light.turn_off
-              #   data:
-              #     entity_id: light.outside_front_hue
               - action: light.turn_off
-                data:
-                  entity_id:
-                    - light.bed_lightstrip
+                target:
+                  entity_id: light.bed_lightstrip
 
   - id: turn_off_basement_light_when_dark_in_room
     alias: turn_off_basement_light_when_dark_in_room
