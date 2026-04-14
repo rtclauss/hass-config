@@ -3,7 +3,7 @@ automation:
     alias: reconcile_owner_suite_adaptive_lighting
     description: >
       Reapply the Adaptive Lighting baselines after Home Assistant starts so
-      kitchen, dining-room, and owner-suite tuning survive restarts while
+      kitchen, den, dining-room, and owner-suite tuning survive restarts while
       preserving each room's intended scene and task-lighting behavior.
       The runtime dining-room Adaptive Lighting switch now uses the current dining-room entity id.
     mode: single
@@ -33,6 +33,18 @@ automation:
           only_once: true
           initial_transition: 1
           transition: 3
+          detect_non_ha_changes: false
+      - action: adaptive_lighting.change_switch_settings
+        data:
+          entity_id: switch.adaptive_lighting_den
+          use_defaults: current
+          include_config_in_attributes: true
+          take_over_control: true
+          adapt_only_on_bare_turn_on: true
+          only_once: true
+          initial_transition: 2
+          transition: 2
+          separate_turn_on_commands: true
           detect_non_ha_changes: false
       - action: adaptive_lighting.change_switch_settings
         data:
