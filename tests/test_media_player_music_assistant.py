@@ -185,17 +185,19 @@ def test_bedtime_join_retry_runs_after_playback_starts() -> None:
     )
 
 
-def test_radio_wakeup_join_retry_runs_after_playback_starts() -> None:
+def test_radio_wakeup_prepares_group_before_play_and_only_retries_regroup_when_requested() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
     assert 'playback_entity_id:' in block
+    assert 'prepare_group_before_play:' in block
     assert 'regroup_after_play:' in block
     assert 'playback_player' in block
+    assert 'should_prepare_group_before_play' in block
     assert 'should_regroup_after_play' in block
-    assert 'action: script.music_assistant_prepare_bedroom_group' not in block
     assert 'action: media_player.unjoin' in block
-    assert 'action: script.turn_on' in block
-    assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
+    assert 'action: script.music_assistant_prepare_bedroom_group' in block
+    assert "{{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}" in block
+    assert "{{ regroup_after_play | default(false) | bool }}" in block
     assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
     assert block.index('action: music_assistant.play_media') < block.index(
@@ -203,17 +205,19 @@ def test_radio_wakeup_join_retry_runs_after_playback_starts() -> None:
     )
 
 
-def test_spotify_wakeup_join_retry_runs_after_playback_starts() -> None:
+def test_spotify_wakeup_prepares_group_before_play_and_only_retries_regroup_when_requested() -> None:
     block = _script_block("spotify_wake_up")
 
     assert 'playback_entity_id:' in block
+    assert 'prepare_group_before_play:' in block
     assert 'regroup_after_play:' in block
     assert 'playback_player' in block
+    assert 'should_prepare_group_before_play' in block
     assert 'should_regroup_after_play' in block
-    assert 'action: script.music_assistant_prepare_bedroom_group' not in block
     assert 'action: media_player.unjoin' in block
-    assert 'action: script.turn_on' in block
-    assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
+    assert 'action: script.music_assistant_prepare_bedroom_group' in block
+    assert "{{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}" in block
+    assert "{{ regroup_after_play | default(false) | bool }}" in block
     assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
     assert block.index('action: script.music_assistant_play_spotify_uri') < block.index(
