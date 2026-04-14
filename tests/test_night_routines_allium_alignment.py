@@ -82,7 +82,7 @@ def test_tv_bed_prep_handles_off_to_unavailable_shutdown_handoff() -> None:
     block = _automation_block(TV_PATH, "tv_off_at_night_bed_prep")
 
     assert 'from: "off"\n        to: "unavailable"' in block
-    assert "seconds: 2" in block
+    assert "seconds: 10" in block
 
 
 def test_tv_bed_prep_requires_night_window_no_guest_mode_and_not_in_bed() -> None:
