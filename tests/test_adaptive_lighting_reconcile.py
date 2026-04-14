@@ -42,7 +42,7 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "event: start" in block
     assert 'delay: "00:00:30"' in block
     assert "action: adaptive_lighting.change_switch_settings" in block
-    assert "kitchen, basement, dining-room, and owner-suite tuning survive restarts" in block
+    assert "kitchen, den, basement, dining-room, and owner-suite tuning survive restarts" in block
     assert "entity_id: switch.adaptive_lighting_owner_suite" in block
     assert "use_defaults: current" in block
     assert "include_config_in_attributes: true" in block
@@ -90,6 +90,22 @@ def test_kitchen_adaptive_lighting_reconciles_bright_scene_safe_settings() -> No
     assert "only_once: true" in block
     assert "initial_transition: 1" in block
     assert "transition: 3" in block
+    assert "detect_non_ha_changes: false" in block
+
+
+def test_den_adaptive_lighting_reconciles_scene_safe_settings_for_media_use() -> None:
+    block = _automation_block("reconcile_owner_suite_adaptive_lighting")
+
+    assert "action: adaptive_lighting.change_switch_settings" in block
+    assert "entity_id: switch.adaptive_lighting_den" in block
+    assert "use_defaults: current" in block
+    assert "include_config_in_attributes: true" in block
+    assert "take_over_control: true" in block
+    assert "adapt_only_on_bare_turn_on: true" in block
+    assert "only_once: true" in block
+    assert "initial_transition: 2" in block
+    assert "transition: 2" in block
+    assert "separate_turn_on_commands: true" in block
     assert "detect_non_ha_changes: false" in block
 
 
