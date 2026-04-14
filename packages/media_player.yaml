@@ -1064,16 +1064,20 @@ script:
         description: "Optional delay before playback starts"
       playback_entity_id:
         description: "Preferred Music Assistant player for wake-up playback"
+      prepare_group_before_play:
+        description: "Whether to prepare the bedroom wake-up zone before playback starts"
       regroup_after_play:
         description: "Whether to regroup the bedroom wake-up zone after playback starts"
     variables:
       playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
+      should_prepare_group_before_play: >-
+        {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
       should_regroup_after_play: >-
-        {{ regroup_after_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
+        {{ regroup_after_play | default(false) | bool }}
     sequence:
       - if:
           - condition: template
-            value_template: "{{ should_regroup_after_play }}"
+            value_template: "{{ should_prepare_group_before_play }}"
         then:
           - action: script.turn_on
             target:
@@ -1085,7 +1089,7 @@ script:
               entity_id: "{{ playback_player }}"
       - if:
           - condition: template
-            value_template: "{{ should_regroup_after_play }}"
+            value_template: "{{ should_prepare_group_before_play }}"
         then:
           - action: media_player.volume_set
             continue_on_error: true
@@ -1126,7 +1130,7 @@ script:
             - choose:
                 - conditions:
                     - condition: template
-                      value_template: "{{ should_regroup_after_play }}"
+                      value_template: "{{ should_prepare_group_before_play }}"
                   sequence:
                     - alias: "Increase grouped wake-up volume by 0.01"
                       continue_on_error: true
@@ -1778,12 +1782,16 @@ script:
     fields:
       playback_entity_id:
         description: "Preferred Music Assistant player for wake-up playback"
+      prepare_group_before_play:
+        description: "Whether to prepare the bedroom wake-up zone before playback starts"
       regroup_after_play:
         description: "Whether to regroup the bedroom wake-up zone after playback starts"
     variables:
       playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
+      should_prepare_group_before_play: >-
+        {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
       should_regroup_after_play: >-
-        {{ regroup_after_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
+        {{ regroup_after_play | default(false) | bool }}
       playlist: >-
         {#
         ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
@@ -1897,7 +1905,7 @@ script:
     sequence:
       - if:
           - condition: template
-            value_template: "{{ should_regroup_after_play }}"
+            value_template: "{{ should_prepare_group_before_play }}"
         then:
           - action: script.turn_on
             target:
@@ -1937,7 +1945,7 @@ script:
       - alias: "Set volume low"
         if:
           - condition: template
-            value_template: "{{ should_regroup_after_play }}"
+            value_template: "{{ should_prepare_group_before_play }}"
         then:
           - continue_on_error: true
             action: media_player.volume_set
