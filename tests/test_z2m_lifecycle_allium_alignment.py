@@ -15,6 +15,8 @@ def test_z2m_lifecycle_spec_covers_repo_contract() -> None:
         "rule DetectJoinThenDropFromLeave",
         "rule DetectJoinThenDropFromRosterLoss",
         "rule DetectLeftNetwork",
+        "rule DelayTransientCoordinatorMissingRouters",
+        "rule NotifyPersistentCoordinatorMissingRouters",
         "rule RecordDeviceInterviewFailure",
         "rule RequestDeviceDecommission",
         "rule ConfirmNormalDeviceDecommission",
@@ -36,5 +38,7 @@ def test_z2m_lifecycle_package_matches_allium_edge_cases() -> None:
         "topic: zigbee2mqtt/bridge/request/device/remove",
         "topic: zigbee2mqtt/bridge/response/device/remove",
         "topic: zigbee2mqtt/bridge/response/coordinator_check",
+        "coordinator_issue_hold_seconds = 120",
+        "coordinator_missing_routers_pending_since",
     ):
         assert token in text

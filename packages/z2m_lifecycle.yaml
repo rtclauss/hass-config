@@ -683,9 +683,12 @@ template:
         {% set stabilization_window = 300 %}
         {% set churn_window = 86400 %}
         {% set retention_window = 604800 %}
+        {% set coordinator_issue_hold_seconds = 120 %}
         {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
         {% set devices = current_attrs.get('devices', {}) %}
         {% set coordinator_missing_routers = current_attrs.get('coordinator_missing_routers', []) %}
+        {% set coordinator_missing_routers_pending = current_attrs.get('coordinator_missing_routers_pending', []) %}
+        {% set coordinator_missing_routers_pending_since = current_attrs.get('coordinator_missing_routers_pending_since') %}
         {% set topic = trigger.topic if trigger is defined and trigger.topic is defined else '' %}
         {% set payload = trigger.payload_json if trigger is defined and trigger.payload_json is defined else none %}
         {% set is_devices_topic = topic in ['zigbee2mqtt/bridge/devices', 'zigbee2mqtt/bridge/response/devices'] %}
@@ -850,7 +853,16 @@ template:
           {% for row in missing_rows %}
             {% set ns.items = ns.items + [row.friendly_name | default(row.ieee_address, true)] %}
           {% endfor %}
-          {% set coordinator_missing_routers = ns.items | sort %}
+          {% set incoming_missing_routers = ns.items | sort %}
+          {% if incoming_missing_routers | count > 0 %}
+            {% if coordinator_missing_routers_pending | count == 0 or coordinator_missing_routers_pending_since in [none, '', 'unknown', 'unavailable'] %}
+              {% set coordinator_missing_routers_pending_since = now_ts %}
+            {% endif %}
+            {% set coordinator_missing_routers_pending = incoming_missing_routers %}
+          {% else %}
+            {% set coordinator_missing_routers_pending = [] %}
+            {% set coordinator_missing_routers_pending_since = none %}
+          {% endif %}
         {% endif %}
 
         {% set ns = namespace(retained=dict()) %}
@@ -868,6 +880,12 @@ template:
           {% endif %}
         {% endfor %}
         {% set devices = ns.retained %}
+
+        {% if coordinator_missing_routers_pending | count > 0 and (coordinator_missing_routers_pending_since | default(0, true) | float(0)) > 0 and (now_ts - (coordinator_missing_routers_pending_since | default(0, true) | float(0))) >= coordinator_issue_hold_seconds %}
+          {% set coordinator_missing_routers = coordinator_missing_routers_pending | sort %}
+        {% else %}
+          {% set coordinator_missing_routers = [] %}
+        {% endif %}
 
         {% set ns = namespace(
           issue_map=dict(),
@@ -968,6 +986,8 @@ template:
           'flapping': ns.flapping | sort,
           'online': ns.online | sort,
           'coordinator_missing_routers': coordinator_missing_routers,
+          'coordinator_missing_routers_pending': coordinator_missing_routers_pending | sort,
+          'coordinator_missing_routers_pending_since': coordinator_missing_routers_pending_since,
           'updated_at': now_ts
         } }}
     sensor:
@@ -987,6 +1007,8 @@ template:
           flapping: "{{ z2m_lifecycle_stats.get('flapping', []) }}"
           online: "{{ z2m_lifecycle_stats.get('online', []) }}"
           coordinator_missing_routers: "{{ z2m_lifecycle_stats.get('coordinator_missing_routers', []) }}"
+          coordinator_missing_routers_pending: "{{ z2m_lifecycle_stats.get('coordinator_missing_routers_pending', []) }}"
+          coordinator_missing_routers_pending_since: "{{ z2m_lifecycle_stats.get('coordinator_missing_routers_pending_since') }}"
           devices: "{{ z2m_lifecycle_stats.get('devices', {}) }}"
 
   - trigger:
