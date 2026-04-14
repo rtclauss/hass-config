@@ -687,8 +687,8 @@ template:
         {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
         {% set devices = current_attrs.get('devices', {}) %}
         {% set coordinator_missing_routers = current_attrs.get('coordinator_missing_routers', []) %}
-        {% set coordinator_missing_routers_pending = current_attrs.get('coordinator_missing_routers_pending', []) %}
-        {% set coordinator_missing_routers_pending_since = current_attrs.get('coordinator_missing_routers_pending_since') %}
+        {% set coordinator_missing_routers_pending = current_attrs.get('coordinator_missing_routers_pending', coordinator_missing_routers) %}
+        {% set coordinator_missing_routers_pending_since = current_attrs.get('coordinator_missing_routers_pending_since', (now_ts - coordinator_issue_hold_seconds) if coordinator_missing_routers | count > 0 else none) %}
         {% set topic = trigger.topic if trigger is defined and trigger.topic is defined else '' %}
         {% set payload = trigger.payload_json if trigger is defined and trigger.payload_json is defined else none %}
         {% set is_devices_topic = topic in ['zigbee2mqtt/bridge/devices', 'zigbee2mqtt/bridge/response/devices'] %}
