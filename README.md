@@ -262,6 +262,7 @@ Coordinator and protocol note:
 **Apple Shortcuts**
 * [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/main/packages/workday.yaml#L107)
 * iOS personal automation: run every day at `9:00 PM`, find the wake-up alarm you want to mirror on the phone, format its time as `HH:mm`, and `POST` JSON to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync` with `{"alarm_time":"07:30"}`. If there is no enabled alarm for the next day, send `{"alarm_enabled": false}` instead. If JSON is awkward, the webhook also accepts query parameters.
+* Optional Outlook integration: on iPhone, a separate Shortcut can call the same webhook with `meeting_time` from the Outlook `Next Meeting` shortcut. Home Assistant will convert that meeting start into the existing `next_work_meeting` reminder time by subtracting 5 minutes. If Outlook reports no next meeting, send `{"meeting_enabled": false}` instead. Alarm sync and meeting sync can be sent together or as separate webhook calls.
 
 Shortcut recipe:
 
@@ -300,6 +301,31 @@ Expected payload when there is no alarm:
 }
 ```
 
+Expected payload when Outlook has a next meeting:
+
+```json
+{
+  "meeting_time": "09:00"
+}
+```
+
+Expected payload when Outlook has no next meeting:
+
+```json
+{
+  "meeting_enabled": false
+}
+```
+
+Combined payload example:
+
+```json
+{
+  "alarm_time": "07:30",
+  "meeting_time": "09:00"
+}
+```
+
 Suggested Shortcut action flow:
 
 ```text
@@ -313,6 +339,21 @@ If Find Alarms has any value
 Otherwise
   Dictionary
     alarm_enabled: false
+End If
+Get Contents of URL
+```
+
+Suggested Outlook follow-up Shortcut flow on iPhone:
+
+```text
+Run Shortcut (Next Meeting)
+If Next Meeting has a value
+  Format Date (HH:mm)
+  Dictionary
+    meeting_time: Formatted Date
+Otherwise
+  Dictionary
+    meeting_enabled: false
 End If
 Get Contents of URL
 ```
