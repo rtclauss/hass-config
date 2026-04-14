@@ -202,10 +202,20 @@ rule FinishWakeupSequence {
 rule PrepareMorningAudioGroup {
     when: MorningAudioRequested(program, target_room)
     ensures:
-        if context.guest_mode_enabled:
-            WakeupAudioGroupPrepared(bedroom_and_bathroom)
+        if target_room == bathroom:
+            WakeupAudioGroupPrepared(bathroom_only)
         else:
-            WakeupAudioGroupPrepared(bedroom_bathroom_office_den)
+            if context.guest_mode_enabled:
+                WakeupAudioGroupPrepared(bedroom_and_bathroom)
+            else:
+                WakeupAudioGroupPrepared(bedroom_bathroom_office_den)
+    @guidance
+        -- Bedroom-suite wake-up audio should prepare its intended speaker group
+        -- before playback begins and should not trigger a second regroup once
+        -- playback is already underway unless an explicit recovery path needs it.
+        -- Bathroom-triggered follow-up audio should stay independent from the
+        -- owner-suite light ramp and should not depend on regrouping the wider
+        -- bedroom wake-up audio zone.
 }
 
 rule ChooseWakeupPlaylistFromConfiguredPool {

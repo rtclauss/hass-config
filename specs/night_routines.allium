@@ -48,6 +48,7 @@ entity BedtimeEnvironment {
 
 entity HouseSleepSafety {
     common_area_lights_off: Boolean
+    overnight_exterior_lighting_preserved: Boolean
     preserved_guest_lighting: none | dedicated_guest_room | all_guest_capable_rooms
     preserved_guest_fans: none | dedicated_guest_room | office_and_guest_room
     decorative_lamps_off: Boolean
@@ -106,10 +107,12 @@ rule EnterInBedHouseMode {
     when: ResidentSettledInBed()
     requires: house_mode.mode = night
     ensures: house_mode.mode = in_bed
+    ensures: house.overnight_exterior_lighting_preserved = true
     @guidance
         -- The live implementation derives this from sustained owner-suite bed
         -- occupancy, then turns off unrelated house lights while preserving
-        -- the bedside lights and overnight exterior lighting.
+        -- the bedside lights and overnight exterior lighting until the
+        -- dedicated sunrise schedule takes over.
 }
 
 rule ScheduleBedtimeAudioRampdown {
@@ -147,6 +150,7 @@ rule ApplyGoodnightIntegrity {
     let guest_context_enabled = night.guest_mode_enabled or night.guest_room_occupied
     ensures: house_mode.mode = asleep
     ensures: house.common_area_lights_off = true
+    ensures: house.overnight_exterior_lighting_preserved = true
     ensures:
         if night.guest_mode_enabled:
             house.preserved_guest_lighting = all_guest_capable_rooms

@@ -68,6 +68,7 @@ def test_tv_bed_prep_supports_television_shutdown_and_button_entrypoints() -> No
         'from: "on"',
         'to: "off"',
         'to: "unavailable"',
+        'from: "off"',
         "event_type: zha_event",
         'device_ieee: "00:15:8d:00:02:12:fc:ff"',
         'command: "attribute_updated"',
@@ -75,6 +76,13 @@ def test_tv_bed_prep_supports_television_shutdown_and_button_entrypoints() -> No
         'to: "single"',
     ):
         assert token in block
+
+
+def test_tv_bed_prep_handles_off_to_unavailable_shutdown_handoff() -> None:
+    block = _automation_block(TV_PATH, "tv_off_at_night_bed_prep")
+
+    assert 'from: "off"\n        to: "unavailable"' in block
+    assert "seconds: 10" in block
 
 
 def test_tv_bed_prep_requires_night_window_no_guest_mode_and_not_in_bed() -> None:

@@ -101,13 +101,13 @@ def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> Non
         "binary_sensor.bayesian_zeke_home",
         "binary_sensor.planned_vacation_calendar",
         "binary_sensor.bayesian_bed_occupancy",
+        "binary_sensor.bedroom_occupancy",
         "binary_sensor.owner_suite_bathroom_room_occupancy",
-        "binary_sensor.hall_upstairs_motion_occupancy",
         "input_boolean.wakeup_alarm_firing",
         "light.owner_suite_lamps",
         "script.owner_suite_morning_transition",
+        "as_timestamp(now()) - as_timestamp(states.binary_sensor.bedroom_occupancy.last_changed) <= 900",
         "as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900",
-        "as_timestamp(now()) - as_timestamp(states.binary_sensor.hall_upstairs_motion_occupancy.last_changed) <= 900",
     ):
         assert token in block
 
