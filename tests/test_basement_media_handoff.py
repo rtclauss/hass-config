@@ -44,6 +44,6 @@ def test_basement_lights_auto_on_requires_occupancy_and_non_playback_states() ->
         'entity_id: media_player.basement\n                state: "paused"',
         'entity_id: media_player.plex_basement_apple_tv\n                state: "playing"',
         'entity_id: media_player.plex_basement_apple_tv\n                state: "paused"',
-        "light.basement_great_room",
+        "script.turn_on_basement_lights_sequentially",
     ):
         assert token in block

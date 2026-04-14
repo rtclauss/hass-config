@@ -217,7 +217,7 @@ def test_bedtime_audio_waits_for_bathroom_then_ramps_down() -> None:
         "entity_id: binary_sensor.owner_suite_bathroom_room_occupancy",
         'to: "on"',
         "minutes: 10",
-        "continue_on_timeout: false",
+        "continue_on_timeout: true",
         "minutes: 3",
         "entity_id: script.spotify_bedtime_volume",
     ):
