@@ -97,6 +97,7 @@ def _scene_block(scene_name: str) -> str:
     return "\n".join(lines[start:end])
 
 
+
 def test_all_watch_scripts_are_exposed_to_siri_and_voice_integrations() -> None:
     package = TV_PATH.read_text(encoding="utf-8")
     watch_scripts = set(re.findall(r"^  (watch_[a-z0-9_]+):$", package, flags=re.MULTILINE))

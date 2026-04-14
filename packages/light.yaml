@@ -376,6 +376,22 @@ automation:
       - trigger: state
         entity_id: binary_sensor.basement_landing_occupancy
         to: "on"
+      - trigger: state
+        entity_id: media_player.basement
+        to: "idle"
+        for:
+          seconds: 3
+      - trigger: state
+        entity_id: media_player.basement
+        to: "off"
+        for:
+          seconds: 3
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "off"
+        for:
+          seconds: 10
     condition:
       - alias: "Not in bed"
         condition: state
@@ -383,6 +399,10 @@ automation:
           - binary_sensor.bayesian_bed_occupancy
           # - input_boolean.chatgpt_bed_occupied
         state: "off"
+      - alias: "Basement landing still occupied"
+        condition: state
+        entity_id: binary_sensor.basement_landing_occupancy
+        state: "on"
       - condition: not
         conditions:
           - condition: or
@@ -391,10 +411,18 @@ automation:
                 condition: state
                 entity_id: media_player.basement
                 state: "playing"
+              - alias: "paused something"
+                condition: state
+                entity_id: media_player.basement
+                state: "paused"
               - alias: "watching Apple TV"
                 condition: state
                 entity_id: media_player.plex_basement_apple_tv
                 state: "playing"
+              - alias: "paused Apple TV"
+                condition: state
+                entity_id: media_player.plex_basement_apple_tv
+                state: "paused"
       - condition: state
         entity_id:
           - input_boolean.bayesian_zeke_home
@@ -987,8 +1015,7 @@ automation:
 
   - id: kitchen_lights_toggle
     alias: kitchen_lights_toggle
-    description: Disabled pending a new kitchen policy; broad guest mode should not rely on this automation.
-    initial_state: false
+    description: Kitchen motion lighting; enabled when guest mode is off.
     mode: restart
     trigger:
       - trigger: state
@@ -1711,7 +1738,7 @@ automation:
 
   - alias: enable_owner_suite_bedroom_switch_day_mode_after_morning_activity
     id: enable_owner_suite_bedroom_switch_day_mode_after_morning_activity
-    description: Apply owner suite bedroom switch day mode after 8 AM once bed occupancy clears and both the bathroom and hallway have seen motion.
+    description: Apply owner suite bedroom switch day mode after 8 AM once bed occupancy clears and both the bedroom and bathroom have seen activity.
     trigger:
       - trigger: time
         at: "08:00:00"
@@ -1722,7 +1749,7 @@ automation:
         entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
         to: "on"
       - trigger: state
-        entity_id: binary_sensor.hall_upstairs_motion_occupancy
+        entity_id: binary_sensor.bedroom_occupancy
         to: "on"
     condition:
       - condition: time
@@ -1735,8 +1762,8 @@ automation:
         {{ is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
            or states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed >= today_at('08:00') }}
       - >-
-        {{ is_state('binary_sensor.hall_upstairs_motion_occupancy', 'on')
-           or states.binary_sensor.hall_upstairs_motion_occupancy.last_changed >= today_at('08:00') }}
+        {{ is_state('binary_sensor.bedroom_occupancy', 'on')
+           or states.binary_sensor.bedroom_occupancy.last_changed >= today_at('08:00') }}
     action:
       - action: script.turn_on
         target:
@@ -2492,11 +2519,37 @@ script:
     variables:
       protected_lights: >-
         {% set excluded = exclude_lights | default([], true) | list %}
+        {% set opaque_group_members = {
+          'light.outside_front_lights': [
+            'light.outside_front_hue',
+            'light.outside_north_west_garage',
+            'light.outside_south_west_garage',
+            'light.outside_front_door'
+          ],
+          'light.deck_all': [
+            'light.deck_kitchen_door_light',
+            'light.deck_tiki_room_door',
+            'light.deck_flood_lights',
+            'light.deck_string',
+            'light.deck_kitchen_door',
+            'light.deck_hue'
+          ]
+        } %}
         {% set ns = namespace(entities=excluded) %}
         {% for light in states.light %}
-          {% set members = state_attr(light.entity_id, 'entity_id') %}
-          {% if members is iterable and members is not string and (members | select('in', excluded) | list | count > 0) %}
-            {% set ns.entities = ns.entities + [light.entity_id] %}
+          {# Zigbee2MQTT aggregate lights such as light.outside_front_lights do
+             not expose member lists via state attributes, so keep a small
+             explicit fallback map for the opaque groups we preserve overnight. #}
+          {% set runtime_members = state_attr(light.entity_id, 'entity_id') %}
+          {% if runtime_members is iterable and runtime_members is not string %}
+            {% set members = runtime_members | list %}
+          {% elif light.entity_id in opaque_group_members %}
+            {% set members = opaque_group_members[light.entity_id] %}
+          {% else %}
+            {% set members = [] %}
+          {% endif %}
+          {% if light.entity_id in excluded or (members | select('in', excluded) | list | count > 0) %}
+            {% set ns.entities = ns.entities + [light.entity_id] + members %}
           {% endif %}
         {% endfor %}
         {{ ns.entities | unique | list }}

@@ -125,3 +125,5 @@ This table combines the spare inventory above with the currently configured batt
 ## Update Rule
 
 When more examples are provided, append rows here and keep the model names canonical. If a device can reasonably fit more than one Home Assistant domain, prefer the control surface that matches how it is actually used.
+
+When a Zigbee2MQTT device is intentionally decommissioned, update this file in the same repo change: decrement the matching row in `Configured Battery Devices` or `Configured Zigbee2MQTT Devices`, increment the matching spare row in `Inventory`, and then re-check `Battery Planning` totals if the model uses replaceable cells.

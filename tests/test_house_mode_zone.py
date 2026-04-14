@@ -64,6 +64,7 @@ def test_house_transition_no_longer_queues_later_mode_changes() -> None:
     assert "house_transition:" in text
     assert "mode: restart" in text
     assert "script.lights_off_except" in text
+    assert "continue_on_error: true\n        action: logbook.log" in text
 
 
 def test_house_transition_supports_in_bed_and_asleep_without_forcing_night_scene_defaults() -> None:
