@@ -309,11 +309,30 @@ def test_reset_script_replays_endpoint_1_membership_for_group_bound_switch_sync(
         assert (group, device, 2) not in memberships
 
 
-def test_hall_transition_recovery_replays_led_policy_after_unavailable() -> None:
+def test_inovelli_led_recovery_automation_watches_all_led_number_entities() -> None:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+
+    block = text.split("automation:\n", 1)[1].split(
+        "\n  - alias: basement_bathroom_switch_actions\n",
+        1,
+    )[0]
+
+    for token in (
+        "replay_inovelli_led_policy_on_recovery",
+        "event_type: state_changed",
+        "entity_id is match('^number\\\\..*_led(?:color|intensity)when(?:on|off)$')",
+        "from_state.state == 'unavailable'",
+        "to_state.state not in ['unavailable', 'unknown']",
+        "entity_id: script.replay_inovelli_led_policy_after_recovery",
+    ):
+        assert token in block
+
+
+def test_inovelli_led_recovery_replays_trip_day_night_and_owner_suite_darkening() -> None:
     text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
 
     block = text.split(
-        "replay_hall_transition_inovelli_led_policy_on_recovery:\n",
+        "replay_inovelli_led_policy_after_recovery:\n",
         1,
     )[1].split(
         "\n  turn_off_owner_suite_inovelli_switch_leds:\n",
@@ -321,14 +340,13 @@ def test_hall_transition_recovery_replays_led_policy_after_unavailable() -> None
     )[0]
 
     for token in (
-        'from: "unavailable"',
-        "number.hall_transition_switch_ledcolorwhenoff",
-        "number.hall_transition_switch_ledcolorwhenon",
-        "number.hall_transition_switch_ledintensitywhenoff",
-        "number.hall_transition_switch_ledintensitywhenon",
-        "switch.sleep_mode",
-        "sun.sun",
-        "script.restore_inovelli_switch_leds_from_trip",
+        "entity_id: input_boolean.trip",
+        "entity_id: script.turn_off_all_inovelli_switch_leds",
+        "entity_id: script.restore_inovelli_switch_leds_from_trip",
+        "owner_suite_leds_should_be_dark",
+        "binary_sensor.bayesian_bed_occupancy",
+        "light.owner_suite_lamps",
+        "script.turn_off_owner_suite_inovelli_switch_leds",
     ):
         assert token in block
 
