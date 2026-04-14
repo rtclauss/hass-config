@@ -64,6 +64,7 @@ entity InventoryReconciliationState {
 
 config {
     stabilization_window: Duration = 5.minutes
+    coordinator_issue_hold_window: Duration = 2.minutes
 }
 
 ------------------------------------------------------------
@@ -112,6 +113,22 @@ rule DetectLeftNetwork {
 
 rule NotifyLifecycleIssue {
     when: LifecycleIssueRaised(device, reason)
+    ensures: notifications.lifecycle_issue_count = notifications.lifecycle_issue_count + 1
+    ensures: notifications.persistent_notification_active = true
+    ensures: notifications.push_notification_active = true
+}
+
+rule DelayTransientCoordinatorMissingRouters {
+    when: CoordinatorMissingRoutersObserved()
+    requires: bridge.coordinator_status = missing_routers
+    requires: DurationSinceCoordinatorMissingRoutersObserved() < coordinator_issue_hold_window
+    ensures: notifications.push_notification_active = false
+}
+
+rule NotifyPersistentCoordinatorMissingRouters {
+    when: CoordinatorMissingRoutersObserved()
+    requires: bridge.coordinator_status = missing_routers
+    requires: DurationSinceCoordinatorMissingRoutersObserved() >= coordinator_issue_hold_window
     ensures: notifications.lifecycle_issue_count = notifications.lifecycle_issue_count + 1
     ensures: notifications.persistent_notification_active = true
     ensures: notifications.push_notification_active = true

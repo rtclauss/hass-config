@@ -40,6 +40,21 @@ def test_z2m_lifecycle_package_tracks_join_drop_leave_and_mesh_health() -> None:
         assert token in text
 
 
+def test_z2m_lifecycle_package_debounces_transient_coordinator_router_alerts() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "coordinator_issue_hold_seconds = 120" in text
+    assert "current_attrs.get('coordinator_missing_routers_pending', coordinator_missing_routers)" in text
+    assert (
+        "current_attrs.get('coordinator_missing_routers_pending_since', (now_ts - coordinator_issue_hold_seconds) if coordinator_missing_routers | count > 0 else none)"
+        in text
+    )
+    assert (
+        "(now_ts - (coordinator_missing_routers_pending_since | default(0, true) | float(0))) >= coordinator_issue_hold_seconds"
+        in text
+    )
+
+
 def test_z2m_lifecycle_package_exposes_decommission_controls_and_inventory_guidance() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
 
