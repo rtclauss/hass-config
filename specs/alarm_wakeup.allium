@@ -1,0 +1,299 @@
+-- allium: 3
+-- alarm_wakeup.allium
+--
+-- Scope: Owner-suite wake-up scheduling and execution.
+-- Includes:
+--   - iPhone wake-up alarm sync into Home Assistant helper state
+--   - weekday, weekend, and special-meeting alarm branches
+--   - gentle wake-up lighting/blinds sequence
+--   - bathroom-triggered follow-up morning routine audio
+--   - snooze, cancel, midnight reset, and stuck-audio recovery
+-- Excludes:
+--   - exact media URIs, playlist composition, and player-specific API details
+--   - Tesla departure planning that consumes alarm helpers downstream
+--   - Lovelace card layout and presentation
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    wakeup: WakeupState
+    calendar: CalendarContext
+    context: WakeupContext
+    owner_suite: OwnerSuiteWakeEnvironment
+    house_mode: HouseModeStateMachine
+}
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity CalendarContext {
+    today_is_workday: Boolean
+    tomorrow_is_weekday: Boolean
+    tomorrow_has_holiday: Boolean
+}
+
+external entity WakeupContext {
+    resident_home: Boolean
+    planned_vacation_active: Boolean
+    resident_in_bed: Boolean
+    bathroom_occupied: Boolean
+    guest_mode_enabled: Boolean
+    within_workday_owner_suite_wake_window: Boolean
+    within_weekday_bathroom_window: Boolean
+    within_weekend_bathroom_window: Boolean
+    owner_suite_lamps_on: Boolean
+    owner_suite_recent_bathroom_activity: Boolean
+    owner_suite_recent_bedroom_activity: Boolean
+}
+
+------------------------------------------------------------
+-- Entities and Variants
+------------------------------------------------------------
+
+entity WakeupState {
+    weekday_alarm_time: Timestamp?
+    weekend_alarm_time: Timestamp?
+    next_work_meeting_alarm_time: Timestamp?
+    weekday_alarm_enabled: Boolean
+    weekend_alarm_enabled: Boolean
+    special_meeting_enabled: Boolean
+    ios_synced_weekday_alarm: Boolean
+    ios_synced_special_meeting: Boolean
+    morning_routine_started: Boolean
+    wakeup_alarm_firing: Boolean
+}
+
+entity OwnerSuiteWakeEnvironment {
+    lighting_state: sleeping | dim_warm | daylight_ramp | daytime
+    adaptive_lighting_enabled: Boolean
+    sleep_mode_enabled: Boolean
+    blinds_state: closed | opening | mostly_open
+}
+
+entity HouseModeStateMachine {
+    mode: home | away | night | in_bed | asleep
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    special_meeting_lead: Duration = 5.minutes
+    snooze_duration: Duration = 8.minutes
+    morning_blinds_delay: Duration = 175.seconds
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule NormalizePhoneWakeupPayload {
+    when: PhoneWakeupAlarmReceived(raw_alarm_time, raw_alarm_enabled, payload_source)
+    let has_alarm_time = raw_alarm_time != ""
+    let normalized_alarm_time = MinutePrecision(raw_alarm_time)
+    let normalized_alarm_enabled = AlarmFlagEnabled(raw_alarm_enabled, has_alarm_time)
+    ensures: PhoneWakeupAlarmSynced(normalized_alarm_time, normalized_alarm_enabled)
+    @guidance
+        -- Payload may arrive via JSON body, form body, or query string.
+        -- When the explicit enabled flag is missing, the presence of an alarm
+        -- time means the next-day wake-up alarm is treated as enabled.
+}
+
+rule SyncPhoneWakeupAlarm {
+    when: PhoneWakeupAlarmSynced(alarm_time, alarm_enabled)
+    let weekday_alarm_was_enabled = wakeup.weekday_alarm_enabled
+    let special_meeting_was_enabled = wakeup.special_meeting_enabled
+    let meeting_alarm_time = alarm_time - config.special_meeting_lead
+    let tomorrow_is_workday =
+        calendar.tomorrow_is_weekday
+        and not calendar.tomorrow_has_holiday
+    ensures:
+        if alarm_enabled and tomorrow_is_workday:
+            wakeup.weekday_alarm_time = alarm_time
+            wakeup.next_work_meeting_alarm_time = meeting_alarm_time
+            wakeup.weekday_alarm_enabled = true
+            if not weekday_alarm_was_enabled:
+                wakeup.ios_synced_weekday_alarm = true
+            wakeup.special_meeting_enabled = true
+            if not special_meeting_was_enabled:
+                wakeup.ios_synced_special_meeting = true
+        else:
+            if alarm_enabled and not tomorrow_is_workday:
+                wakeup.weekend_alarm_time = alarm_time
+                wakeup.weekend_alarm_enabled = true
+                wakeup.ios_synced_weekday_alarm = false
+                wakeup.ios_synced_special_meeting = false
+            else:
+                if tomorrow_is_workday and wakeup.ios_synced_weekday_alarm:
+                    wakeup.weekday_alarm_enabled = false
+                    wakeup.ios_synced_weekday_alarm = false
+                if tomorrow_is_workday and wakeup.ios_synced_special_meeting:
+                    wakeup.special_meeting_enabled = false
+                    wakeup.ios_synced_special_meeting = false
+                if not tomorrow_is_workday:
+                    wakeup.weekend_alarm_enabled = false
+                    wakeup.ios_synced_weekday_alarm = false
+                    wakeup.ios_synced_special_meeting = false
+}
+
+rule TriggerWeekdayWakeup {
+    when: wakeup.weekday_alarm_time <= now
+    requires: calendar.today_is_workday
+    requires: wakeup.weekday_alarm_enabled
+    requires: not wakeup.special_meeting_enabled
+    requires: context.resident_home
+    requires: not context.planned_vacation_active
+    requires: context.resident_in_bed
+    ensures: WakeupSequenceRequested(weekday)
+    ensures: MorningAudioRequested(news_briefing, bedroom_suite)
+}
+
+rule TriggerWeekendWakeup {
+    when: wakeup.weekend_alarm_time <= now
+    requires: not calendar.today_is_workday
+    requires: wakeup.weekend_alarm_enabled
+    requires: context.resident_home
+    requires: not context.planned_vacation_active
+    requires: context.resident_in_bed
+    ensures: WakeupSequenceRequested(weekend)
+    ensures: MorningAudioRequested(random_weekend_station, bedroom_suite)
+}
+
+rule TriggerSpecialMeetingWakeup {
+    when: wakeup.next_work_meeting_alarm_time <= now
+    requires: calendar.today_is_workday
+    requires: wakeup.special_meeting_enabled
+    requires: context.resident_home
+    requires: not context.planned_vacation_active
+    requires: context.resident_in_bed
+    ensures: wakeup.special_meeting_enabled = false
+    ensures: WakeupSequenceRequested(special_meeting)
+    ensures: MorningAudioRequested(meeting_track, bedroom_suite)
+}
+
+rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
+    when: context.resident_in_bed becomes false
+    or context.bathroom_occupied becomes true
+    or context.owner_suite_recent_bedroom_activity becomes true
+    requires: calendar.today_is_workday
+    requires: context.within_workday_owner_suite_wake_window
+    requires: context.resident_home
+    requires: not context.planned_vacation_active
+    requires: house_mode.mode in {night, in_bed, asleep}
+    requires: not wakeup.wakeup_alarm_firing
+    requires: not context.owner_suite_lamps_on
+    requires: not context.resident_in_bed
+    requires: context.owner_suite_recent_bathroom_activity
+    requires: context.owner_suite_recent_bedroom_activity
+    ensures: WakeupSequenceRequested(workday_morning_activity)
+}
+
+rule BeginWakeupSequence {
+    when: WakeupSequenceRequested(kind)
+    requires: not wakeup.wakeup_alarm_firing
+    ensures: house_mode.mode = home
+    ensures: wakeup.wakeup_alarm_firing = true
+    ensures: owner_suite.adaptive_lighting_enabled = true
+    ensures: owner_suite.lighting_state = daylight_ramp
+    ensures: WakeupRampRequested(kind)
+    ensures: WakeupBlindTransitionRequested(kind)
+    @guidance
+        -- The live owner-suite morning transition immediately hands brightness
+        -- and color back to adaptive lighting. It starts with a short apply
+        -- from the current owner-suite sleep target and then settles into a
+        -- longer adaptive daytime ramp instead of forcing an explicit 2700K to
+        -- 6500K sequence in the wake-up script itself.
+}
+
+rule FinishWakeupSequence {
+    when: WakeupRampRequested(kind)
+    ensures: owner_suite.lighting_state = daytime
+    ensures: owner_suite.sleep_mode_enabled = false
+    ensures: owner_suite.adaptive_lighting_enabled = true
+}
+
+rule OpenBlindsDuringWakeupTransition {
+    when: WakeupBlindTransitionRequested(kind)
+    ensures: owner_suite.blinds_state = mostly_open
+    @guidance
+        -- The owner-suite morning transition delays blind movement by
+        -- config.morning_blinds_delay and then opens the blinds gradually in
+        -- small steps while the adaptive lighting ramp continues.
+}
+
+rule PrepareMorningAudioGroup {
+    when: MorningAudioRequested(program, target_room)
+    ensures:
+        if target_room == bathroom:
+            WakeupAudioGroupPrepared(bathroom_only)
+        else:
+            if context.guest_mode_enabled:
+                WakeupAudioGroupPrepared(bedroom_and_bathroom)
+            else:
+                WakeupAudioGroupPrepared(bedroom_bathroom_office_den)
+    @guidance
+        -- Bedroom-suite wake-up audio should prepare its intended speaker group
+        -- before playback begins and should not trigger a second regroup once
+        -- playback is already underway unless an explicit recovery path needs it.
+        -- Bathroom-triggered follow-up audio should stay independent from the
+        -- owner-suite light ramp and should not depend on regrouping the wider
+        -- bedroom wake-up audio zone.
+}
+
+rule ChooseWakeupPlaylistFromConfiguredPool {
+    when: MorningAudioRequested(morning_playlist, target_room)
+    ensures: MorningAudioSelectionChosen(configured_wakeup_playlist_pool, shuffle_optional, repeat_all)
+}
+
+rule ChooseWeekendStationFromConfiguredPool {
+    when: MorningAudioRequested(random_weekend_station, target_room)
+    ensures: MorningAudioSelectionChosen(configured_weekend_station_pool, station_rotation)
+}
+
+rule StartBathroomMorningRoutine {
+    when: context.bathroom_occupied becomes true
+    requires: not context.resident_in_bed
+    requires: not wakeup.morning_routine_started
+    requires: context.within_weekday_bathroom_window or context.within_weekend_bathroom_window
+    ensures: wakeup.morning_routine_started = true
+    ensures: MorningAudioRequested(morning_playlist, bathroom)
+    ensures: BathroomWakeupVolumeStrategyChosen(gentle_fade_in_or_existing_boost)
+}
+
+rule SnoozeWakeup {
+    when: BedsideSnoozeButtonPressed()
+    requires: wakeup.wakeup_alarm_firing
+    requires: context.resident_home
+    requires: context.resident_in_bed
+    ensures: owner_suite.lighting_state = sleeping
+    ensures: MorningAudioStopped(bedroom_suite)
+    ensures: WakeupSequenceRequested(snooze_resume)
+    ensures: MorningAudioResumedAfterSnooze(config.snooze_duration)
+}
+
+rule CancelWakeupAudio {
+    when: BedsideCancelButtonPressed()
+    ensures: MorningAudioStopped(bedroom_suite)
+}
+
+rule ResetMorningRoutineAtDayRollover {
+    when: DayRolledOver()
+    ensures: wakeup.morning_routine_started = false
+}
+
+rule RecoverStuckMorningAudio {
+    when: MorningAudioScriptStalled(script_kind)
+    ensures: wakeup.morning_routine_started = false
+    ensures: MorningAudioRecoveryApplied(script_kind)
+}
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "Wake-up alarm firing is force-cleared by a fixed-time automation at 14:34:56. Is that exact timestamp intentional, or should the latch clear when the morning routine completes?"
+open question "The special-meeting branch clears special_meeting_enabled when it fires, but it leaves the iOS-synced marker behind until a later sync. Should the sync marker be consumed at the same time?"

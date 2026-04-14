@@ -1,3 +1,6 @@
+# Home Assistant package for bird-detection integrations and dashboards.
+# It exposes latest sightings, top-species summaries, and photo helpers so garden bird activity can be shown in cards and notifications.
+
 ################################################################
 ## Packages / TEMPLATE
 ################################################################
@@ -216,9 +219,31 @@ media_player: []
 mqtt:
   - sensor:
       - name: "Garden Birds"
+        unique_id: garden_birds
         state_topic: "birdpi/apprise"
         json_attributes_topic: "birdpi/apprise"
-        value_template: "{{ value_json.common_name }}"
+        value_template: >-
+          {% set raw_value = value | default('', true) | trim %}
+          {% set raw_json = raw_value | replace('&#34;', '"') | replace('&quot;', '"') %}
+          {% set payload = raw_json | from_json(default={}) %}
+          {% if payload is mapping and payload.common_name is defined and payload.common_name | string | trim != '' %}
+            {{ payload.common_name }}
+          {% elif raw_value in ['unknown', 'unavailable'] %}
+            {{ raw_value }}
+          {% elif raw_value != '' and raw_value[:1] not in ['{', '['] %}
+            {{ raw_value }}
+          {% else %}
+            {{ states('sensor.garden_birds') | default('unknown', true) }}
+          {% endif %}
+        json_attributes_template: >-
+          {% set raw_value = value | default('', true) | trim %}
+          {% set raw_json = raw_value | replace('&#34;', '"') | replace('&quot;', '"') %}
+          {% set payload = raw_json | from_json(default={}) %}
+          {% if payload is mapping %}
+            {{ payload | tojson }}
+          {% else %}
+            {}
+          {% endif %}
 
 ########################
 # Notify
@@ -252,17 +277,24 @@ script: {}
 sensor:
   - platform: rest
     name: Top 50 Bird Species
+    unique_id: top_50_bird_species
     resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/species/?period=day&limit=50
 
-    value_template: "{{ value_json.species[0].commonName }}"
+    value_template: >-
+      {% if value_json is defined and value_json is mapping and value_json.species is defined and value_json.species | count > 0 %}
+        {{ value_json.species[0].commonName }}
+      {% else %}
+        No detections
+      {% endif %}
     json_attributes:
       - species
 
   - platform: rest
     name: Latest Bird Detection
+    unique_id: latest_bird_detection
     resource: https://app.birdweather.com/api/v1/stations/v13SVjSLeUURwbirfciJoN71/detections/?limit=1
     value_template: >
-      {% if value_json.detections and value_json.detections | length > 0 %}
+      {% if value_json is defined and value_json is mapping and value_json.detections is defined and value_json.detections | length > 0 %}
         {{ value_json.detections[0].species.commonName }}
       {% else %}
         No detections
@@ -281,6 +313,7 @@ switch: []
 template:
   - image:
       - name: Bird-Pi Photo
+        unique_id: bird_pi_photo
         verify_ssl: false
         url: "{{ state_attr('sensor.garden_birds','image') }}"
 ########################

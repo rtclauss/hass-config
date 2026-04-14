@@ -1,3 +1,6 @@
+# Home Assistant package for core presence and arrival/departure behavior.
+# Complex areas: it builds the canonical home-state sensors and then uses them to drive ETA updates, arrival lighting, open-door reminders, and vacuum-return logic.
+
 ################################################################
 ## Packages / Zone
 ################################################################
@@ -39,7 +42,7 @@ homeassistant:
       icon: mdi:weather-cloudy
     automation.doors_open_when_leaving_home:
       <<: *customize
-      friendly_name: Doors Left Open When Leaving
+      friendly_name: Egress Left Open When Leaving
       icon: mdi:door-open
     automation.garage_door_open_when_leaving_home:
       <<: *customize
@@ -54,9 +57,6 @@ homeassistant:
     automation.turn_off_lights_when_i_leave:
       <<: *customize
       friendly_name: Lights Off on Departure
-    automation.update_nest_eta:
-      <<: *customize
-      friendly_name: Update Nest ETA as Approach Home
     automation.vacuum_return_home:
       <<: *customize
       friendly_name: Stop Vacuuming on Arrival
@@ -169,6 +169,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       condition: and
@@ -182,14 +183,13 @@ automation:
           state: "off"
           # enabled: false
     action:
-      - service: scene.turn_on
-        target:
-          entity_id: scene.cloudy_arrive_home
+      - action: script.house_transition
         data:
-          transition: 30
-      - service: notify.all
-        data:
-          message: Cloudy day arrival.
+          mode: home
+          reason: cloudy_home_arrival
+          light_scene: scene.cloudy_arrive_home
+          light_transition: 30
+          notify_message: Cloudy day arrival.
 
   - id: default_arrive_home
     alias: default_arrive_home
@@ -200,6 +200,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       and:
@@ -212,9 +213,10 @@ automation:
           entity_id: sensor.wethop_activity
           state: "Automotive"
     action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.arrive_home
+      - action: script.house_transition
+        data:
+          mode: home
+          reason: default_arrive_home
       # - alias: "Notify action"
       #   action: notify.mobile_app_wethop
       #   data:
@@ -230,26 +232,20 @@ automation:
         event: leave
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
         to: "off"
+    variables:
+      open_egress_points: >-
+        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
     condition:
-      condition: or
-      conditions:
-        - condition: state
-          entity_id: binary_sensor.main_foyer_front_door_contact
-          state: open
-        - condition: state
-          entity_id: binary_sensor.tiki_room_deck_contact
-          state: open
-        - condition: state
-          entity_id: binary_sensor.kitchen_deck_contact
-          state: open
-        - condition: state
-          entity_id: binary_sensor.hall_garage_entry_contact
-          state: open
+      - condition: state
+        entity_id: binary_sensor.any_egress_open
+        state: "on"
     action:
       - action: notify.all
         data:
-          message: Door left open!
+          message: >-
+            Door or window left open: {{ open_egress_points }}.
 
   - id: garage_door_open_when_leaving_home
     alias: garage_door_open_when_leaving_home
@@ -260,6 +256,7 @@ automation:
         event: leave
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
         to: "off"
     condition:
       - condition: state
@@ -304,6 +301,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       - condition: state
@@ -337,6 +335,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       condition: and
@@ -354,11 +353,11 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.night_arrive_home
+      - action: script.house_transition
         data:
-          transition: 30
+          mode: night
+          reason: night_arrival
+          light_transition: 30
       - action: vacuum.return_to_base
         data:
           entity_id: all
@@ -375,6 +374,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       condition: and
@@ -391,16 +391,18 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.bedroom_prep
+      - action: script.house_transition
+        data:
+          mode: night
+          reason: bedroom_prep_arrival
+          extra_scene: scene.bedroom_prep
       - action: notify.all
         data:
           data:
             url: "/ryan-new-mushroom/owner-suite"
           message: "Bedroom Prep Activated"
 
-          # Use Ecobee Vacation mode now.
+  # Use Ecobee Vacation mode now.
   # - id: return_from_road_trip
   #   alias: return_from_road_trip
   #   trigger:
@@ -475,11 +477,16 @@ automation:
         event: leave
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
         to: "off"
     condition:
       - condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      - alias: "Primary tracker confirms departure"
+        condition: template
+        value_template: >-
+          {{ not is_state('device_tracker.bayesian_zeke_home', 'home') }}
       - alias: "I'm driving away"
         enabled: false
         condition: state
@@ -487,56 +494,23 @@ automation:
         state: "Automotive"
         # Todo add biking here?
     action:
-      parallel:
-        - action: lock.lock
-          target:
-            entity_id: lock.front_door_lock
-        - action: cover.close_cover
-          target:
-            entity_id: cover.garage_door
-        - action: scene.turn_on
-          target:
-            entity_id: scene.leave_home
-        - action: script.lights_off_except
-          data:
-            exclude_lights:
-              - light.outside_front_hue
-              - light.outside_north_west_garage
-              - light.outside_south_west_garage
-              - light.outside_front_door
-            transition: 240
-        # - action: light.turn_off
-        #   entity_id: "all"
-        - action: fan.turn_off
-          target:
-            entity_id: "all"
-        # - alias: "Notify action"
-        #   action: notify.mobile_app_wethop
-        #   data:
-        #     message: >-
-        #       Leaving home with wethop activity {{ states('sensor.wethop_activity') }}
-        - action: scene.turn_on
-          target:
-            entity_id: scene.turn_on_cameras
-        # Vacuum request payload is identical for both paths, so keep one action.
-        - action: mqtt.publish
-          data:
-            topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-            payload: >-
-              {% set segment_id = now().weekday() + 1 %}
-              {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
-            # - action: notify.all
-            #   data:
-            #     title: "Auf wiedersehen"
-            #     message: "Vacuum the house?"
-            #     data:
-            #       actions:
-            #         - action: "VACUUM_HOUSE"
-            #           title: "Vacuum House"
-            #           activationMode: background
-            #           authenticationRequired: false
-            #           destructive: false
-            #           behavior: default
+      - parallel:
+          - action: script.house_transition
+            data:
+              mode: away
+              reason: leave_home
+          # - action: notify.all
+          #   data:
+          #     title: "Auf wiedersehen"
+          #     message: "Vacuum the house?"
+          #     data:
+          #       actions:
+          #         - action: "VACUUM_HOUSE"
+          #           title: "Vacuum House"
+          #           activationMode: background
+          #           authenticationRequired: false
+          #           destructive: false
+          #           behavior: default
 
   - alias: Update Bayesian Device tracker on start
     description: When HA starts up, update bayesian device tracker GPS items
@@ -613,17 +587,46 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     action:
       - action: vacuum.return_to_base
-        data:
-          entity_id: all
+        target:
+          entity_id:
+            - vacuum.valetudo_den
+            - vacuum.valetudo_mainlevel
+            - vacuum.valetudo_upstairs_vacuum
       - action: switch.turn_off
         target:
-          entity_id: switch.living_room_camera
+          entity_id: switch.livingroom_motion_detection
       - action: switch.turn_off
         target:
-          entity_id: switch.basement_camera_power
+          entity_id: switch.tiki_room_camera
+
+  - id: vacuum_leave_home
+    alias: vacuum_leave_home
+    description: Run the main and upstairs levels on departure, plus the den when its door is closed.
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+    action:
+      - action: script.vacuum_main_and_upstairs_levels
+        continue_on_error: true
+      - if:
+          - condition: state
+            entity_id: binary_sensor.den_doors_contact
+            state: "off"
+        then:
+          - action: vacuum.start
+            target:
+              entity_id: vacuum.valetudo_den
+            continue_on_error: true
 
 ########################
 # Binary Sensors
@@ -765,44 +768,42 @@ scene:
         state: "on"
       light.den_all:
         state: "on"
-      switch.living_room_camera:
+      switch.livingroom_motion_detection:
         state: "off"
-      switch.basement_camera_power:
+      switch.tiki_room_camera:
         state: "off"
 
   - name: turn_on_cameras
     entities:
-      switch.living_room_camera:
+      switch.livingroom_motion_detection:
         state: "on"
-      switch.basement_camera_power:
+      switch.tiki_room_camera:
         state: "on"
 
   - name: goodnight
     entities:
-      switch.christmas_tree:
-        state: "off"
-      switch.deck_all:
-        state: "off"
       light.deck_string:
         state: "off"
-      light.hall_main_foyer:
+      light.hall_foyer_switch:
         state: "off"
       light.hall_stairway:
         state: "off"
       media_player.lg_webos_smart_tv:
         state: "off"
-      # switch.humidifier:
-      #   state: "off"
+      light.deck_kitchen_door:
+        state: "off"
+      switch.christmas_tree:
+        state: "off"
 
   - name: leave_home
     entities:
       media_player.lg_webos_smart_tv:
         state: "off"
-      switch.bathroom_light_fan_switch:
+      light.owner_suite_bathroom_lights:
         state: "off"
       switch.christmas_tree:
         state: "off"
-      switch.deck:
+      light.deck_kitchen_door:
         state: "off"
       light.deck_string:
         state: "off"
@@ -814,7 +815,8 @@ scene:
 ########################
 # Scripts
 ########################
-script: {}
+script:
+  {}
   # update_nest_eta:
   #   sequence:
   #     - action: nest.set_eta
@@ -825,7 +827,8 @@ script: {}
 ########################
 # Sensor
 ########################
-sensor: []
+sensor:
+  []
 
   # - platform: places
   #   name: android
@@ -860,6 +863,7 @@ sensor: []
 template:
   - binary_sensor:
       - name: test_homeward
+        unique_id: test_homeward
         availability: >-
           {{ states.sensor.the_brewery_nearest_direction_of_travel.last_changed is defined }}
         state: >-
@@ -871,14 +875,17 @@ template:
           {% endif %}
   - sensor:
       - name: home_time
+        unique_id: home_time
         state: >-
           {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.the_brewery_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
         unit_of_measurement: "minutes"
       - name: zeke_speed
+        unique_id: zeke_speed
         unit_of_measurement: "mph"
         state: >-
           {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int(-1) }}
       - name: zeke_direction
+        unique_id: zeke_direction
         state: >-
           {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int(-1)) >=0 -%}
             {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int(-1) }}

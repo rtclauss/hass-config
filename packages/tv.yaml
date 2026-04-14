@@ -1,0 +1,629 @@
+# Home Assistant package for TV activity scenes and playback state handling.
+# It wraps on, off, pause, and resume behaviors so other automations can react to TV usage without embedding low-level media-player logic everywhere.
+
+################################################################
+## Packages / TV
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "tv"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+
+    ################################################
+    ## Scenes
+    ################################################
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.watch_tv:
+      <<: *expose
+      friendly_name: "Watch TV"
+      icon: mdi:television
+
+    script.watch_youtube:
+      <<: *expose
+      friendly_name: "Watch YouTube"
+      icon: mdi:youtube-tv
+
+    script.watch_netflix:
+      <<: *expose
+      friendly_name: "Watch Netflix"
+      icon: mdi:netflix
+
+    script.watch_plex:
+      <<: *expose
+      friendly_name: "Watch Plex"
+      icon: mdi:plex
+
+    script.watch_f1:
+      <<: *expose
+      friendly_name: "Watch F1"
+      icon: mdi:flag-checkered
+
+    script.watch_letterkenny:
+      <<: *expose
+      friendly_name: "Watch Letterkenny"
+      icon: mdi:television-play
+
+    script.watch_the_simpsons:
+      <<: *expose
+      friendly_name: "Watch The Simpsons"
+      icon: mdi:television-play
+
+    script.watch_american_dad:
+      <<: *expose
+      friendly_name: "Watch American Dad"
+      icon: mdi:television-play
+
+    script.watch_aqua_teen:
+      <<: *expose
+      friendly_name: "Watch Aqua Teen"
+      icon: mdi:television-play
+
+    script.watch_bobs_burgers:
+      <<: *expose
+      friendly_name: "Watch Bob's Burgers"
+      icon: mdi:television-play
+
+    script.watch_ds9:
+      <<: *expose
+      friendly_name: "Watch DS9"
+      icon: mdi:television-play
+
+    script.watch_rick_and_morty:
+      <<: *expose
+      friendly_name: "Watch Rick and Morty"
+      icon: mdi:television-play
+
+    script.watch_tng:
+      <<: *expose
+      friendly_name: "Watch TNG"
+      icon: mdi:television-play
+
+    script.watch_basement_tv_startup:
+      <<: *expose
+      friendly_name: "Basement TV Startup"
+      icon: mdi:television
+
+    script.watch_plex_show:
+      <<: *expose
+      friendly_name: "Watch Plex Show"
+      icon: mdi:plex
+
+################################################
+## Automation
+################################################
+
+automation:
+  - id: tv_off
+    alias: tv_off
+    trigger:
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "off"
+        for:
+          seconds: 15
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "unavailable"
+        for:
+          seconds: 15
+    action:
+      - action: scene.turn_on
+        target:
+          entity_id: scene.scene_reset_basement
+        data:
+          transition: 4
+      - action: light.turn_off
+        target:
+          entity_id: light.basement_tv_bias
+        data:
+          transition: 4
+
+  - id: tv_on
+    alias: tv_on
+    trigger:
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        to: "on"
+        for:
+          seconds: 10
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          state: "off"
+    action:
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_tv_bias
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+
+  - id: tv_off_at_night_bed_prep
+    alias: tv_off_at_night_bed_prep
+    trigger:
+      - trigger: state
+        id: lg-tv-off
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "off"
+        for:
+          seconds: 15
+      - trigger: state
+        id: lg-tv-unavailable
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "unavailable"
+        for:
+          seconds: 15
+      - trigger: state
+        id: lg-tv-off-to-unavailable
+        entity_id: media_player.lg_webos_smart_tv
+        from: "off"
+        to: "unavailable"
+        for:
+          seconds: 10
+      - trigger: state
+        id: basement-player-off
+        entity_id: media_player.basement
+        to: "off"
+        for:
+          seconds: 5
+      - trigger: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:02:12:fc:ff"
+          command: "attribute_updated"
+      - trigger: state
+        entity_id:
+          - sensor.hall_button_action
+        to: "single"
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "20:00:00"
+          before: "04:00:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+        - condition: state
+          entity_id: binary_sensor.bayesian_bed_occupancy
+          state: "off"
+        - condition: or
+          conditions:
+            - condition: template
+              value_template: "{{ trigger.id != 'basement-player-off' }}"
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: media_player.lg_webos_smart_tv
+                  state: "off"
+                - condition: state
+                  entity_id: media_player.lg_webos_smart_tv
+                  state: "unavailable"
+                - condition: state
+                  entity_id: media_player.plex_basement_apple_tv
+                  state: "unavailable"
+    action:
+      - action: media_player.volume_set
+        continue_on_error: true
+        data:
+          entity_id:
+            - media_player.bedroom_sonos_2
+            - media_player.bathroom_sonos_2
+          volume_level: 0.02
+      - action: scene.turn_on
+        continue_on_error: true
+        target:
+          entity_id: scene.bedroom_prep
+        data:
+          transition: 60
+      - action: script.turn_on
+        continue_on_error: true
+        target:
+          entity_id: script.spotify_bedtime
+      - delay: "00:20:00"
+      - action: switch.turn_off
+        target:
+          entity_id: switch.sleep_mode
+
+  - id: tv_paused
+    alias: tv_paused
+    initial_state: true
+    trigger:
+      - trigger: state
+        entity_id: media_player.basement
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 2
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "19:30:00"
+          before: "23:59:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+    action:
+      - action: scene.turn_on
+        target:
+          entity_id: scene.tv_paused
+        data:
+          transition: 4
+
+  - id: tv_watching_scotland
+    alias: tv_watching_scotland
+    initial_state: true
+    trigger:
+      - trigger: state
+        entity_id: media_player.basement
+        to: "playing"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        to: "playing"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "playing"
+        to: "paused"
+        for:
+          seconds: 2
+    condition:
+      condition: and
+      conditions:
+        - >-
+          {{ 'Scotland' in (state_attr('media_player.basement', 'media_title') or '')
+          or 'Scotland' in
+          (state_attr('media_player.plex_basement_apple_tv', 'media_title') or '') }}
+    action:
+      - action: light.turn_on
+        target:
+          entity_id: light.basement_tv_bias
+        data:
+          rgb_color:
+            - 254
+            - 11
+            - 255
+
+  - id: tv_resumed
+    alias: tv_resumed
+    initial_state: true
+    trigger:
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        to: "playing"
+        for:
+          seconds: 10
+      - trigger: state
+        entity_id: media_player.basement
+        to: "playing"
+        for:
+          seconds: 5
+      - trigger: state
+        entity_id: media_player.plex_basement_apple_tv
+        to: "playing"
+        for:
+          seconds: 5
+    condition:
+      condition: and
+      conditions:
+        - condition: time
+          after: "19:30:00"
+          before: "23:59:00"
+        - condition: state
+          entity_id: input_boolean.guest_mode
+          state: "off"
+    action:
+      - action: media_player.media_pause
+        continue_on_error: true
+        data:
+          entity_id:
+            - media_player.office_sonos_2
+            - media_player.den_sonos_2
+      - action: scene.turn_on
+        continue_on_error: true
+        target:
+          entity_id: scene.tv_resumed
+        data:
+          transition: 15
+      - action: script.turn_on
+        continue_on_error: true
+        target:
+          entity_id: script.night_tv_mode_switches
+      - action: media_player.media_pause
+        continue_on_error: true
+        data:
+          entity_id:
+            - media_player.den_sonos_2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+################################################
+## Scenes
+################################################
+
+scene:
+  - name: tv_paused
+    entities:
+      light.basement_great_room:
+        state: "on"
+        brightness: 128
+
+  - name: tv_resumed
+    entities:
+      light.basement_great_room:
+        state: "off"
+
+################################################
+## Scripts
+################################################
+
+script:
+  wait_for_basement_media_player_ready:
+    alias: "Wait for Basement Media Player"
+    mode: parallel
+    sequence:
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: media_player.basement
+                state: "off"
+        then:
+          - stop: Basement player already ready
+      - repeat:
+          sequence:
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id: media_player.basement
+                  from: "off"
+              timeout: "00:00:01"
+              continue_on_timeout: true
+          until:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: media_player.basement
+                  state: "off"
+
+  wait_for_basement_plex_client_ready:
+    alias: "Wait for Basement Plex Client"
+    mode: parallel
+    sequence:
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: media_player.plex_basement_apple_tv
+                state: "unavailable"
+        then:
+          - stop: Plex client already ready
+      - repeat:
+          count: 10
+          sequence:
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id: media_player.plex_basement_apple_tv
+                  from: "unavailable"
+              timeout: "00:00:01"
+              continue_on_timeout: true
+            - if:
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: media_player.plex_basement_apple_tv
+                      state: "unavailable"
+              then:
+                - stop: Plex client ready
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: media_player.plex_basement_apple_tv
+            state: "unavailable"
+
+  # Shared preamble: power on basement media player, wait for ready,
+  # then switch the LG TV to HDMI 3. Called by all watch_* scripts.
+  watch_basement_tv_startup:
+    alias: "Basement TV Startup"
+    mode: parallel
+    sequence:
+      - action: media_player.turn_on
+        data:
+          entity_id: media_player.basement
+      - action: script.wait_for_basement_media_player_ready
+      - delay:
+          seconds: 10
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.lg_webos_smart_tv
+          source: "HDMI 3"
+
+  # Shared Plex-show launcher. Runs startup, selects Plex source, scans
+  # for the Apple TV Plex client, then plays the requested show shuffled.
+  watch_plex_show:
+    alias: "Watch Plex Show"
+    mode: parallel
+    fields:
+      show_name:
+        description: "Plex library show name (must match library exactly)"
+        required: true
+        selector:
+          text:
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: button.press
+        target:
+          entity_id: button.fermentor_scan_clients
+      - action: script.wait_for_basement_plex_client_ready
+      - action: media_player.play_media
+        data:
+          entity_id: media_player.plex_basement_apple_tv
+          media_content_type: EPISODE
+          media_content_id: >-
+            { "library_name": "TV", "show_name": "{{ show_name }}", "shuffle": "1" }
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_tv:
+    alias: "Watch TV"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "YouTube TV"
+
+  watch_youtube:
+    alias: "Watch YouTube"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "YouTube"
+
+  watch_netflix:
+    alias: "Watch Netflix"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Netflix"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_plex:
+    alias: "Watch Plex"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "Plex"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_f1:
+    alias: "Watch F1"
+    sequence:
+      - action: script.watch_basement_tv_startup
+      - action: media_player.select_source
+        data:
+          entity_id: media_player.basement
+          source: "F1 TV"
+      - delay:
+          seconds: 2
+      - action: script.music_assistant_pause_house_audio
+        continue_on_error: true
+
+  watch_letterkenny:
+    alias: "Watch Letterkenny"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Letterkenny"
+
+  watch_the_simpsons:
+    alias: "Watch The Simpsons"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "The Simpsons"
+
+  watch_american_dad:
+    alias: "Watch American Dad"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "American Dad"
+
+  watch_aqua_teen:
+    alias: "Watch Aqua Teen"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Aqua Teen Hunger Force"
+
+  watch_bobs_burgers:
+    alias: "Watch Bobs Burgers"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Bob's Burgers"
+
+  watch_ds9:
+    alias: "Watch DS9"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Star Trek: Deep Space Nine"
+
+  watch_rick_and_morty:
+    alias: "Watch Rick and Morty"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Rick and Morty"
+
+  watch_tng:
+    alias: "Watch TNG"
+    sequence:
+      - action: script.watch_plex_show
+        data:
+          show_name: "Star Trek: The Next Generation"

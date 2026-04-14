@@ -1,3 +1,6 @@
+# Home Assistant package for the water softener.
+# It turns ESPHome salt-level readings into low-salt alerts, bag inventory tracking, and refill workflows tied to household supply reminders.
+
 ################################################################
 ## Packages / TEMPLATE
 ################################################################
@@ -176,12 +179,23 @@ automation:
           action: BOUGHT_SALT
     condition: []
     action:
-      - alias: Increase Number of salt bags in inventory
-        action: input_number.set_value
-        entity_id: input_number.bags_of_salt_at_home
-        data:
-          value: >-
-            {{(states("input_number.bags_of_salt_at_home")|int) + (trigger.event.data.reply_text | int)}}
+      - variables:
+          current_bags: >-
+            {{ states("input_number.bags_of_salt_at_home") | int(default=0) }}
+          purchased_text: >-
+            {{ trigger.event.data.reply_text | default("", true) | trim }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ purchased_text | regex_match('^\d+$') }}
+            sequence:
+              - alias: Increase Number of salt bags in inventory
+                action: input_number.set_value
+                entity_id: input_number.bags_of_salt_at_home
+                data:
+                  value: >-
+                    {{ current_bags + (purchased_text | int(default=0)) }}
 
   - id: temp_notify_place_name
     alias: temp_notify_place_name

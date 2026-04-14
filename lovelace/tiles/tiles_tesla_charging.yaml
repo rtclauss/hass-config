@@ -1,3 +1,6 @@
+# Tesla charging status tile include.
+# It summarizes live charging state, estimates, and helper information that support the vehicle dashboard and departure-planning automations.
+
 #####
 ## Tile Template
 ##
@@ -87,22 +90,120 @@ cards:
         cards:
           - type: button
             entity: input_boolean.long_range_travel
-            name: "Charge to Max Range?"
+            name: "Max Range Override"
             icon: mdi:backup-restore
             show_state: false
+            state_color: true
             tap_action:
               action: call-service
-              service: input_boolean.toggle
+              service: input_boolean.turn_on
+              service_data:
+                entity_id: input_boolean.long_range_travel
+          - type: button
+            entity: binary_sensor.tesla_daily_plan_active
+            name: "Use Daily Plan"
+            icon: mdi:ev-station
+            show_state: false
+            state_color: true
+            tap_action:
+              action: call-service
+              service: input_boolean.turn_off
               service_data:
                 entity_id: input_boolean.long_range_travel
           - type: markdown
             entity_id: binary_sensor.upcoming_trip_charging
             title: "Reason"
             content: >-
-              {% if states('binary_sensor.upcoming_trip_charging') is on %}
+              {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
+              {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
+              {% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}
+              {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
+              {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
+              {% set location_label = location_name | replace('_', ' ') | title %}
+              {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+              {% set home_planner = location_name == 'home' %}
+              {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
+              {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
+              {% if is_state('input_boolean.long_range_travel', 'on') %}
+                ### Max-range override is active
+                #### Charge limit pinned to 100% until you return to the daily plan
+              {% elif has_calendar_departure and home_planner %}
                 ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}
-                #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}
-                #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int }} mi
+                #### Departure plan: {{ trip_start_raw }}
+                #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int(0) }} mi
+              {% elif protected_location and not home_planner %}
+                ### Protected location
+                #### Tesla-app charging schedule stays authoritative at {{ location_label }}
+                #### Home Assistant departure planning currently runs only at Home
               {% else %}
-                
+                ### Daily planner is active
+                #### Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs
+                #### Cabin preconditioning only runs when a real next-day departure is scheduled
               {% endif %}
+              {% if protected_location and home_planner %}
+                #### {% if home_schedule_override_needed %}Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed{% else %}Tesla-app charging schedule stays authoritative at {{ location_label }}{% endif %}
+              {% endif %}
+
+      - type: horizontal-stack
+        title:
+        show_header_toggle: false
+        cards:
+          - type: markdown
+            title: "Planner Decision"
+            content: >-
+              {% set tariff = states('sensor.ev_charging_tariff') %}
+              {% set rate = states('sensor.ev_charging_tariff_rate') | float(default=0) %}
+              {% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}
+              {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
+              {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
+              {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
+              {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
+              {% set location_label = location_name | replace('_', ' ') | title %}
+              {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+              {% set home_planner = location_name == 'home' %}
+              {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
+              {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
+              ### {{ charge_limit }}% target
+              {% if is_state('input_boolean.long_range_travel', 'on') %}
+                #### Manual override is forcing max range
+              {% elif home_planner and is_state('binary_sensor.upcoming_trip_charging', 'on') %}
+                #### Planner is following the next trip
+              {% elif home_planner and planned_departure and charge_limit == 80 %}
+                #### Planner is keeping the Tesla app home schedule because no extra home charging is needed
+              {% elif home_planner and has_calendar_departure %}
+                #### Planner is following the next calendar departure
+              {% elif home_planner and alarm_enabled %}
+                #### Planner is following tomorrow's alarm for charge-limit planning only
+              {% elif protected_location and not home_planner %}
+                #### Tesla-app charging defaults are preserved here
+              {% else %}
+                #### No next-day departure plan is active
+              {% endif %}
+              #### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh
+              #### Charging schedule: {% if protected_location and not home_planner %}Preserve Tesla app default at {{ location_label }}{% elif home_schedule_override_needed %}Allow a temporary Home Assistant schedule override at {{ location_label }} because extra home charging is needed{% elif home_planner %}Preserve Tesla app default at {{ location_label }} because no extra home charging is needed{% else %}Allow Home Assistant off-peak charging management{% endif %}
+          - type: entities
+            title: "EV TOU"
+            show_header_toggle: false
+            entities:
+              - entity: sensor.ev_charging_tariff
+                name: Current Tariff
+              - entity: sensor.ev_charging_tariff_rate
+                name: Current Rate
+              - entity: sensor.daily_ev_charging_energy
+                name: Today's EV Energy
+              - entity: sensor.daily_ev_charging_cost
+                name: Today's EV Cost
+              - entity: sensor.average_daily_ev_charging_cost
+                name: Avg EV Cost / Day
+              - entity: sensor.average_daily_vehicle_miles
+                name: Avg Miles / Day
+              - entity: sensor.weekly_regular_gas_price_55125
+                name: 55125 Gas Price / Gal
+              - entity: sensor.average_daily_gas_car_cost_30mpg
+                name: Avg Gas Cost / Day @ 30 MPG
+              - entity: sensor.average_daily_ev_savings_vs_30mpg
+                name: EV Savings / Day vs 30 MPG
+              - entity: sensor.monthly_ev_charging_energy
+                name: This Month EV Energy
+              - entity: sensor.monthly_ev_charging_cost
+                name: This Month EV Cost

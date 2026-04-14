@@ -1,0 +1,387 @@
+# Home Assistant package for room-confidence occupancy.
+# It blends BLE/Bermuda room hints, motion/occupancy sensors, bed presence, and whole-home presence into more reliable room-level confidence scores.
+
+################################################################
+## Packages / Room Confidence
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "room_confidence"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Binary Sensors
+    ################################################
+    binary_sensor.basement_confident_occupancy:
+      <<: *customize
+      friendly_name: Basement confidently occupied
+      icon: mdi:home-floor-b
+    binary_sensor.bedroom_confident_occupancy:
+      <<: *customize
+      friendly_name: Bedroom confidently occupied
+      icon: mdi:bed
+    binary_sensor.den_confident_occupancy:
+      <<: *customize
+      friendly_name: Den confidently occupied
+      icon: mdi:sofa
+    binary_sensor.office_confident_occupancy:
+      <<: *customize
+      friendly_name: Office confidently occupied
+      icon: mdi:desk
+
+    ################################################
+    ## Sensors
+    ################################################
+    sensor.basement_room_confidence:
+      <<: *customize
+      friendly_name: Basement room confidence
+      icon: mdi:signal-distance-variant
+    sensor.bedroom_room_confidence:
+      <<: *customize
+      friendly_name: Bedroom room confidence
+      icon: mdi:signal-distance-variant
+    sensor.den_room_confidence:
+      <<: *customize
+      friendly_name: Den room confidence
+      icon: mdi:signal-distance-variant
+    sensor.office_room_confidence:
+      <<: *customize
+      friendly_name: Office room confidence
+      icon: mdi:signal-distance-variant
+    sensor.last_motion_area:
+      <<: *customize
+      friendly_name: Last motion area
+      icon: mdi:home-map-marker
+    sensor.last_motion_floor:
+      <<: *customize
+      friendly_name: Last motion floor
+      icon: mdi:home-floor-b
+
+################################################
+## Templates
+################################################
+
+template:
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id:
+          - person.ryan
+          - binary_sensor.bayesian_zeke_home
+          - sensor.iphone_17_pro_area
+          - sensor.iphone_17_pro_floor
+          - sensor.apple_watch_ultra_2_area
+          - sensor.apple_watch_ultra_2_floor
+          - binary_sensor.bayesian_bed_occupancy
+          - binary_sensor.bedroom_occupancy
+          - binary_sensor.den_occupancy_2
+          - binary_sensor.office_occupancy_2
+          - binary_sensor.office_motion_occupancy
+          - binary_sensor.ryan_office_presence
+          - binary_sensor.basement_occupancy_2
+    sensor:
+      - name: bedroom_room_confidence
+        unique_id: bedroom_room_confidence
+        unit_of_measurement: "%"
+        state: >-
+          {% set home_present = is_state('person.ryan', 'home') or is_state('binary_sensor.bayesian_zeke_home', 'on') %}
+          {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
+          {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
+          {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
+          {% set score = namespace(value=0) %}
+          {% if not home_present %}
+            0
+          {% else %}
+            {% if is_state('binary_sensor.bedroom_occupancy', 'on') %}
+              {% set score.value = score.value + 55 %}
+            {% endif %}
+            {% if is_state('binary_sensor.bayesian_bed_occupancy', 'on') %}
+              {% set score.value = score.value + 70 %}
+            {% endif %}
+            {% if phone_area == 'bedroom' %}
+              {% set score.value = score.value + 45 %}
+            {% elif phone_area not in unknown_states %}
+              {% set score.value = score.value - 25 %}
+            {% endif %}
+            {% if watch_area == 'bedroom' %}
+              {% set score.value = score.value + 10 %}
+            {% elif watch_area not in unknown_states %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'bedroom' and watch_area == 'bedroom' %}
+              {% set score.value = score.value + 5 %}
+            {% endif %}
+            {{ [[score.value, 0] | max, 100] | min }}
+          {% endif %}
+        attributes:
+          band: >-
+            {% set score = states('sensor.bedroom_room_confidence') | int(0) %}
+            {% if score >= 80 %}certain
+            {% elif score >= 50 %}likely
+            {% elif score >= 25 %}possible
+            {% else %}clear
+            {% endif %}
+          phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
+          watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
+
+      - name: office_room_confidence
+        unique_id: office_room_confidence
+        unit_of_measurement: "%"
+        state: >-
+          {% set home_present = is_state('person.ryan', 'home') or is_state('binary_sensor.bayesian_zeke_home', 'on') %}
+          {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
+          {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
+          {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
+          {% set local_signal_count = namespace(value=0) %}
+          {% set score = namespace(value=0) %}
+          {% if not home_present %}
+            0
+          {% else %}
+            {% if is_state('binary_sensor.office_occupancy_2', 'on') %}
+              {% set local_signal_count.value = local_signal_count.value + 1 %}
+              {% set score.value = score.value + 55 %}
+            {% endif %}
+            {% if is_state('binary_sensor.office_motion_occupancy', 'on') %}
+              {% set local_signal_count.value = local_signal_count.value + 1 %}
+              {% set score.value = score.value + 20 %}
+            {% endif %}
+            {% if is_state('binary_sensor.ryan_office_presence', 'on') %}
+              {% set local_signal_count.value = local_signal_count.value + 1 %}
+              {% set score.value = score.value + 30 %}
+            {% endif %}
+            {% if phone_area == 'office' %}
+              {% set score.value = score.value + 45 %}
+            {% elif phone_area not in unknown_states and local_signal_count.value < 2 %}
+              {% set score.value = score.value - 25 %}
+            {% endif %}
+            {% if watch_area == 'office' %}
+              {% set score.value = score.value + 10 %}
+            {% elif watch_area not in unknown_states and local_signal_count.value < 2 %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'office' and watch_area == 'office' %}
+              {% set score.value = score.value + 5 %}
+            {% endif %}
+            {{ [[score.value, 0] | max, 100] | min }}
+          {% endif %}
+        attributes:
+          band: >-
+            {% set score = states('sensor.office_room_confidence') | int(0) %}
+            {% if score >= 80 %}certain
+            {% elif score >= 50 %}likely
+            {% elif score >= 25 %}possible
+            {% else %}clear
+            {% endif %}
+          phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
+          watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
+          office_proxy_presence: "{{ states('binary_sensor.ryan_office_presence') }}"
+          local_signal_count: >-
+            {% set count = 0 %}
+            {% if is_state('binary_sensor.office_occupancy_2', 'on') %}
+              {% set count = count + 1 %}
+            {% endif %}
+            {% if is_state('binary_sensor.office_motion_occupancy', 'on') %}
+              {% set count = count + 1 %}
+            {% endif %}
+            {% if is_state('binary_sensor.ryan_office_presence', 'on') %}
+              {% set count = count + 1 %}
+            {% endif %}
+            {{ count }}
+
+      - name: den_room_confidence
+        unique_id: den_room_confidence
+        unit_of_measurement: "%"
+        state: >-
+          {% set home_present = is_state('person.ryan', 'home') or is_state('binary_sensor.bayesian_zeke_home', 'on') %}
+          {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
+          {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
+          {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
+          {% set score = namespace(value=0) %}
+          {% if not home_present %}
+            0
+          {% else %}
+            {% if is_state('binary_sensor.den_occupancy_2', 'on') %}
+              {% set score.value = score.value + 55 %}
+            {% endif %}
+            {% if phone_area == 'den' %}
+              {% set score.value = score.value + 45 %}
+            {% elif phone_area not in unknown_states %}
+              {% set score.value = score.value - 25 %}
+            {% endif %}
+            {% if watch_area == 'den' %}
+              {% set score.value = score.value + 10 %}
+            {% elif watch_area not in unknown_states %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'den' and watch_area == 'den' %}
+              {% set score.value = score.value + 5 %}
+            {% endif %}
+            {{ [[score.value, 0] | max, 100] | min }}
+          {% endif %}
+        attributes:
+          band: >-
+            {% set score = states('sensor.den_room_confidence') | int(0) %}
+            {% if score >= 80 %}certain
+            {% elif score >= 50 %}likely
+            {% elif score >= 25 %}possible
+            {% else %}clear
+            {% endif %}
+          phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
+          watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
+
+      - name: basement_room_confidence
+        unique_id: basement_room_confidence
+        unit_of_measurement: "%"
+        state: >-
+          {% set home_present = is_state('person.ryan', 'home') or is_state('binary_sensor.bayesian_zeke_home', 'on') %}
+          {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
+          {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
+          {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
+          {% set phone_floor = states('sensor.iphone_17_pro_floor') | lower %}
+          {% set watch_floor = states('sensor.apple_watch_ultra_2_floor') | lower %}
+          {% set score = namespace(value=0) %}
+          {% if not home_present %}
+            0
+          {% else %}
+            {% if is_state('binary_sensor.basement_occupancy_2', 'on') %}
+              {% set score.value = score.value + 55 %}
+            {% endif %}
+            {% if phone_area == 'unfinished basement' %}
+              {% set score.value = score.value + 35 %}
+            {% elif phone_area not in unknown_states %}
+              {% set score.value = score.value - 25 %}
+            {% endif %}
+            {% if watch_area == 'unfinished basement' %}
+              {% set score.value = score.value + 10 %}
+            {% elif watch_area not in unknown_states %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_floor == 'basement' %}
+              {% set score.value = score.value + 10 %}
+            {% elif phone_floor not in unknown_states %}
+              {% set score.value = score.value - 10 %}
+            {% endif %}
+            {% if watch_floor == 'basement' %}
+              {% set score.value = score.value + 5 %}
+            {% elif watch_floor not in unknown_states %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area == 'unfinished basement' and watch_area == 'unfinished basement' %}
+              {% set score.value = score.value + 5 %}
+            {% endif %}
+            {{ [[score.value, 0] | max, 100] | min }}
+          {% endif %}
+        attributes:
+          band: >-
+            {% set score = states('sensor.basement_room_confidence') | int(0) %}
+            {% if score >= 80 %}certain
+            {% elif score >= 50 %}likely
+            {% elif score >= 25 %}possible
+            {% else %}clear
+            {% endif %}
+          phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
+          watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
+          phone_floor: "{{ states('sensor.iphone_17_pro_floor') }}"
+          watch_floor: "{{ states('sensor.apple_watch_ultra_2_floor') }}"
+
+  - trigger:
+      - trigger: event
+        event_type: state_changed
+      - trigger: homeassistant
+        event: start
+    sensor:
+      - name: last_motion_area
+        unique_id: last_motion_area
+        state: >-
+          {% set previous = this.state if this is defined and this.state not in ['unknown', 'unavailable', 'none', ''] else 'unknown' %}
+          {% if trigger.platform == 'event' %}
+            {% set entity_id = trigger.event.data.entity_id | default('') %}
+            {% set old_state = trigger.event.data.old_state %}
+            {% set new_state = trigger.event.data.new_state %}
+            {% set device_class = new_state.attributes.device_class | default('', true) | lower if new_state is not none else '' %}
+            {% if entity_id.startswith('binary_sensor.') and new_state is not none and new_state.state == 'on' and (old_state is none or old_state.state != 'on') and device_class in ['motion', 'occupancy'] %}
+              {{ area_name(entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% else %}
+            {% set active = namespace(entities=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on' and device_class in ['motion', 'occupancy'] %}
+                {% set active.entities = active.entities + [sensor] %}
+              {% endif %}
+            {% endfor %}
+            {% if active.entities | count > 0 %}
+              {% set newest = active.entities | sort(attribute='last_changed') | last %}
+              {{ area_name(newest.entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% endif %}
+      - name: last_motion_floor
+        unique_id: last_motion_floor
+        state: >-
+          {% set previous = this.state if this is defined and this.state not in ['unknown', 'unavailable', 'none', ''] else 'unknown' %}
+          {% if trigger.platform == 'event' %}
+            {% set entity_id = trigger.event.data.entity_id | default('') %}
+            {% set old_state = trigger.event.data.old_state %}
+            {% set new_state = trigger.event.data.new_state %}
+            {% set device_class = new_state.attributes.device_class | default('', true) | lower if new_state is not none else '' %}
+            {% if entity_id.startswith('binary_sensor.') and new_state is not none and new_state.state == 'on' and (old_state is none or old_state.state != 'on') and device_class in ['motion', 'occupancy'] %}
+              {{ floor_name(entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% else %}
+            {% set active = namespace(entities=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on' and device_class in ['motion', 'occupancy'] %}
+                {% set active.entities = active.entities + [sensor] %}
+              {% endif %}
+            {% endfor %}
+            {% if active.entities | count > 0 %}
+              {% set newest = active.entities | sort(attribute='last_changed') | last %}
+              {{ floor_name(newest.entity_id) or previous }}
+            {% else %}
+              {{ previous }}
+            {% endif %}
+          {% endif %}
+
+  - binary_sensor:
+      - name: bedroom_confident_occupancy
+        unique_id: bedroom_confident_occupancy
+        device_class: occupancy
+        state: "{{ states('sensor.bedroom_room_confidence') | int(0) >= 50 }}"
+
+      - name: office_confident_occupancy
+        unique_id: office_confident_occupancy
+        device_class: occupancy
+        state: "{{ states('sensor.office_room_confidence') | int(0) >= 50 }}"
+
+      - name: den_confident_occupancy
+        unique_id: den_confident_occupancy
+        device_class: occupancy
+        state: "{{ states('sensor.den_room_confidence') | int(0) >= 50 }}"
+
+      - name: basement_confident_occupancy
+        unique_id: basement_confident_occupancy
+        device_class: occupancy
+        state: "{{ states('sensor.basement_room_confidence') | int(0) >= 50 }}"

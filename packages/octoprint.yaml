@@ -1,3 +1,6 @@
+# Home Assistant package for OctoPrint integration.
+# It keeps printer status sensors and print-finished notifications together so 3D-printer behavior stays isolated from unrelated automation domains.
+
 ################################################################
 ## Packages / OctoPrint
 ################################################################
@@ -273,6 +276,7 @@ switch: []
 template:
   - sensor:
       - name: "OctoPrint Time Elapsed"
+        unique_id: octoprint_time_elapsed
         unit_of_measurement: "s"
         availability: >
           {{ not is_state('sensor.octoprint_start_time', 'unavailable') }}
@@ -286,6 +290,7 @@ template:
         attributes:
           start_time: "states('sensor.octoprint_start_time')"
       - name: "OctoPrint Time Remaining"
+        unique_id: octoprint_time_remaining
         unit_of_measurement: "s"
         availability: >
           {{ not is_state('sensor.octoprint_estimated_finish_time', 'unavailable') }}

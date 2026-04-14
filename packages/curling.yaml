@@ -1,3 +1,6 @@
+# Home Assistant package for curling-season travel and UI behavior.
+# It turns seasonal schedules and venue-specific travel into helper states, notifications, and dashboard visibility rules.
+
 ################################################################
 ## Packages / Curling
 ################################################################
@@ -22,7 +25,7 @@ homeassistant:
         homebridge_hidden: false
 
     ################################################
-    ## Automation
+    ## Automations
     ################################################
 
     # automation.leave_home_for_curling:
@@ -30,19 +33,9 @@ homeassistant:
     #   friendly_name: "Leave home for curling"
     #   icon: mdi:curling
 
-    automation.return_home_from_OCC:
-      <<: *customize
-      friendly_name: "Return home from OCC"
-      icon: mdi:curling
-
     automation.return_home_from_spcc:
       <<: *customize
       friendly_name: "Return home from SPCC"
-      icon: mdi:curling
-
-    automation.display_curling_tab:
-      <<: *customize
-      friendly_name: "Display Curling tab"
       icon: mdi:curling
 
     automation.toggle_curling_automations_on_season_change:
@@ -50,13 +43,8 @@ homeassistant:
       friendly_name: "Toggle Curling season automations"
       icon: mdi:curling
 
-    automation.toggle_curling_tab:
-      <<: *customize
-      friendly_name: "Toggle Curling tab"
-      icon: mdi:curling
-
     ################################################
-    ## Binary Sensor
+    ## Binary Sensors
     ################################################
 
     binary_sensor.curling_season:
@@ -65,7 +53,7 @@ homeassistant:
       icon: mdi:calendar
 
     ################################################
-    ## Group
+    ## Groups
     ################################################
 
     group.curling_sensors:
@@ -93,6 +81,7 @@ homeassistant:
 automation:
   - id: leave_home_for_curling
     alias: leave_home_for_curling
+    description: Run one full-floor pass on the main and upstairs levels when leaving for curling.
     trigger:
       - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
@@ -116,18 +105,7 @@ automation:
             - binary_sensor.curling_season
           state: "on"
     action:
-      # Revert back when batteries are all reset/new
-      # including main level vacuum
-      # - alias: Start Vacuums
-      #   action: vacuum.start
-      #   target:
-      #     entity_id: all
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: script.vacuum_main_and_upstairs_levels
       - action: climate.set_preset_mode
         enabled: false
         target:
@@ -260,14 +238,18 @@ group:
 script:
   toggle_curling_automation_on_curling_season:
     sequence:
-      - action: >-
-          {% if is_state("binary_sensor.curling_season", 'on') %}
-            automation.turn_on
-          {% else %}
-            automation.turn_off
-          {% endif %}
-        data_template:
-          entity_id: "{{ entity_id }}"
+      - if:
+          - condition: state
+            entity_id: binary_sensor.curling_season
+            state: "on"
+        then:
+          - action: automation.turn_on
+            target:
+              entity_id: "{{ entity_id }}"
+        else:
+          - action: automation.turn_off
+            target:
+              entity_id: "{{ entity_id }}"
 
 ########################
 # Sensors
@@ -280,24 +262,27 @@ sensor: []
 template:
   - binary_sensor:
       - default_entity_id: binary_sensor.curling_season
+        unique_id: curling_season
         state: '{{ now().strftime("%m") |int in [1,2,3,10,11,12] }}'
         name: curling_season
   - sensor:
       - name: OCC Time
+        unique_id: occ_time
         state: >-
           {% if states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed is defined %}
              {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
           {% else %}
-            {{now()}}
+            0
           {% endif %}
-        unit_of_measurement: "minutes"
+        unit_of_measurement: "min"
         device_class: duration
       - name: SPCC Time
+        unique_id: spcc_time
         state: >-
           {% if states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed is defined %}
              {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
           {% else %}
-            {{now()}}
+            0
           {% endif %}
-        unit_of_measurement: "minutes"
+        unit_of_measurement: "min"
         device_class: duration

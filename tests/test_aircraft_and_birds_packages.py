@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+AIRPLANES_PATH = ROOT / "packages" / "airplanes.yaml"
+BIRDS_PATH = ROOT / "packages" / "birds.yaml"
+LOVELACE_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+
+
+def test_garden_birds_sensor_handles_missing_common_name_without_template_errors() -> None:
+    text = BIRDS_PATH.read_text(encoding="utf-8")
+
+    assert 'name: "Garden Birds"' in text
+    sensor_block = text.split('name: "Garden Birds"', 1)[1].split("########################", 1)[0]
+    assert "from_json(default={})" in sensor_block
+    assert "payload.common_name is defined" in sensor_block
+    assert "states('sensor.garden_birds')" in sensor_block
+    assert "unknown" in text
+
+
+def test_airplanes_package_uses_single_routeset_fetch_for_all_display_sensors() -> None:
+    text = AIRPLANES_PATH.read_text(encoding="utf-8")
+
+    assert text.count("resource: https://adsb.im/api/0/routeset") == 1
+    assert "state_attr('sensor.closest_aircraft_overhead','callsign')" in text
+    assert "name: Closest Aircraft Routeset" in text
+    assert "unique_id: closest_aircraft_routeset" in text
+    assert "name: Closest Aircraft Routeset Names" in text
+    assert "unique_id: closest_aircraft_routeset_names" in text
+    assert "name: error_detail" in text
+    assert "unique_id: closest_aircraft_error_detail" in text
+    assert "name: Closest Aircraft Routeset Raw" not in text
+    assert "unique_id: closest_aircraft_routeset_raw" not in text
+    assert "states('sensor.closest_aircraft_routeset_raw')" not in text
+    assert "{{ s[:250] }}" in text
+
+
+def test_aircraft_refresh_automation_updates_a_single_routeset_sensor() -> None:
+    text = AIRPLANES_PATH.read_text(encoding="utf-8")
+
+    assert "id: adsb_refresh_rest_on_hex_change" in text
+    assert "- sensor.closest_aircraft_routeset" in text
+    assert "- sensor.closest_aircraft_route_raw" in text
+    assert "- sensor.closest_aircraft_photo_raw" in text
+    assert "- sensor.closest_aircraft_photo" in text
+
+
+def test_aircraft_overhead_selection_has_no_altitude_ceiling() -> None:
+    text = AIRPLANES_PATH.read_text(encoding="utf-8")
+
+    assert "{% set max_alt = 10000 %}" not in text
+    assert "{% if 0 <= alt_ft < max_alt %}" not in text
+    assert text.count("{% if 0 <= alt_ft %}") == 2
+
+
+def test_aircraft_overhead_ui_copy_mentions_unlimited_altitude() -> None:
+    text = LOVELACE_PATH.read_text(encoding="utf-8")
+
+    assert "Aircraft Overhead (≤5 mi, unlimited altitude)" in text
+    assert "No aircraft currently within 5 mi at any altitude." in text
+    assert "Aircraft Overhead (≤5 mi, <10k ft)" not in text

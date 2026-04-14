@@ -1,3 +1,6 @@
+# Home Assistant package for workday-specific routines.
+# Complex areas: it ties together wake-up timing, office-lighting behavior, work-presence helpers, and automation branches that should only run on workdays.
+
 ################################################################
 ## Packages / Workday
 ################################################################
@@ -21,10 +24,6 @@ homeassistant:
         haaska_hidden: false
         homebridge_hidden: false
 
-    ################################################
-    ## Automation
-    ################################################
-
     automation.arrive_at_work:
       <<: *customize
       friendly_name: "Arrive at work"
@@ -41,6 +40,26 @@ homeassistant:
     automation.turn_on_office_lamp_when_work_tp_camera_inactive:
       <<: *customize
       friendly_name: "Turn on Rear Office Lamp when Camera Off"
+
+    automation.alarm_snooze:
+      <<: *customize
+      friendly_name: "Snooze"
+      icon: mdi:alarm-snooze
+
+    automation.cancel_alarms:
+      <<: *customize
+      friendly_name: "Cancel alarms"
+      icon: mdi:alarm-off
+
+    automation.alarm_wake_up:
+      <<: *customize
+      friendly_name: "Wake up"
+      icon: mdi:alarm
+
+    automation.toggle_lava_lamp_workday:
+      <<: *customize
+      friendly_name: "Toggle lava lamps for work wake-up"
+      icon: mdi:lava-lamp
 
     ################################################
     ## Scripts
@@ -63,6 +82,49 @@ homeassistant:
     ################################################
     ## Input Datetime
     ################################################
+
+    input_boolean.morning_routine:
+      <<: *customize
+      friendly_name: "Morning routine"
+
+    input_boolean.weekday_alarm_on:
+      <<: *customize
+      friendly_name: "Weekday alarm on"
+
+    input_boolean.weekend_alarm_on:
+      <<: *customize
+      friendly_name: "Weekend alarm on"
+
+    input_boolean.ios_synced_weekday_alarm:
+      <<: *customize
+      friendly_name: "iOS synced weekday alarm"
+
+    input_boolean.ios_synced_special_meeting:
+      <<: *customize
+      friendly_name: "iOS synced special meeting"
+
+    input_boolean.wakeup_alarm_firing:
+      <<: *customize
+      friendly_name: "Wakeup alarm firing"
+
+    input_boolean.snooze_status:
+      <<: *customize
+      friendly_name: "Snooze status"
+
+    input_boolean.special_meeting:
+      <<: *customize
+      friendly_name: "Special meeting"
+
+    input_datetime.weekday_alarm:
+      <<: *customize
+
+    input_datetime.weekend_alarm:
+      <<: *customize
+
+    input_datetime.next_work_meeting:
+      <<: *customize
+      friendly_name: "Next work meeting"
+      icon: mdi:briefcase
 
 ################################################
 ## Automation
@@ -102,6 +164,263 @@ automation:
       - action: input_boolean.turn_off
         data:
           entity_id: input_boolean.morning_routine
+
+  - id: alarm_snooze
+    alias: alarm_snooze
+    trigger:
+      - trigger: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:01:f2:a7:0a"
+          command: "click"
+          args:
+            click_type: "single"
+    condition:
+      - condition: state
+        entity_id: input_boolean.wakeup_alarm_firing
+        state: "true"
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: "home"
+      - condition: state
+        entity_id: input_boolean.master_bed_occupancy
+        state: "on"
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.snooze_script
+
+  - id: cancel_alarms
+    alias: cancel_alarms
+    trigger:
+      - trigger: event
+        event_type: zha_event
+        event_data:
+          device_ieee: "00:15:8d:00:01:f2:a7:0a"
+          command: "click"
+          args:
+            click_type: "double"
+    action:
+      - action: media_player.media_stop
+        data:
+          entity_id: media_player.bedroom_sonos_2
+
+  - id: alarm_wake_up
+    alias: alarm_wake_up
+    trigger:
+      - trigger: time
+        at: input_datetime.weekday_alarm
+        id: weekday-alarm
+      - trigger: time
+        at: input_datetime.weekend_alarm
+        id: weekend-alarm
+      - trigger: time
+        at: input_datetime.next_work_meeting
+        id: meeting-alarm
+    condition:
+      condition: and
+      conditions:
+        - condition: state
+          entity_id: device_tracker.bayesian_zeke_home
+          state: "home"
+        - condition: state
+          entity_id: binary_sensor.planned_vacation_calendar
+          state: "off"
+        - condition: state
+          entity_id: input_boolean.master_bed_occupancy
+          state: "on"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: weekday-alarm
+              - condition: state
+                entity_id: binary_sensor.workday_sensor
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.weekday_alarm_on
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.special_meeting
+                state: "off"
+            sequence:
+              - parallel:
+                  - action: script.turn_on
+                    target:
+                      entity_id: script.wake_up_script
+                  - action: script.turn_on
+                    target:
+                      entity_id: script.sonos_mpr_news_wake_up
+          - conditions:
+              - condition: trigger
+                id: weekend-alarm
+              - condition: state
+                entity_id: binary_sensor.workday_sensor
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.weekend_alarm_on
+                state: "on"
+            sequence:
+              - parallel:
+                  - action: script.turn_on
+                    target:
+                      entity_id: script.wake_up_script
+                  - action: script.turn_on
+                    data:
+                      entity_id: >-
+                        {%- set script = ["script.sonos_the_current_wake_up",
+                          "script.sonos_ksdj_wake_up"
+                          ] -%}
+                        {% set pindex = (range(0, (script | length - 1)) | random) -%}
+                        {{ script[pindex] }}
+          - conditions:
+              - condition: trigger
+                id: meeting-alarm
+              - condition: state
+                entity_id: binary_sensor.workday_sensor
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.special_meeting
+                state: "on"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.special_meeting
+              - action: script.turn_on
+                target:
+                  entity_id: script.wake_up_script
+              - action: media_player.media_pause
+                data:
+                  entity_id: media_player.bedroom_sonos_2
+              - delay:
+                  seconds: 2
+              - action: media_player.shuffle_set
+                data:
+                  entity_id: media_player.bedroom_sonos_2
+                  shuffle: false
+              - delay:
+                  seconds: 2
+              - action: media_player.volume_set
+                data:
+                  entity_id: media_player.bedroom_sonos_2
+                  volume_level: 0.2
+              - delay:
+                  seconds: 2
+              - action: script.music_assistant_play_spotify_uri
+                data:
+                  entity_id: media_player.bedroom_sonos_2
+                  spotify_uri: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ"
+
+  - id: workday_owner_suite_wake_transition_from_morning_activity
+    alias: workday_owner_suite_wake_transition_from_morning_activity
+    description: >
+      Start the owner suite workday wake transition when bed occupancy clears
+      and both the bedroom and bathroom show fresh wake-up activity.
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        to: "off"
+      - trigger: state
+        entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+        to: "on"
+      - trigger: state
+        entity_id: binary_sensor.bedroom_occupancy
+        to: "on"
+    condition:
+      - condition: time
+        after: "04:30:00"
+        before: "12:00:00"
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.planned_vacation_calendar
+        state: "off"
+      - condition: state
+        entity_id: input_select.house_mode
+        state:
+          - night
+          - in_bed
+          - asleep
+      - condition: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.wakeup_alarm_firing
+        state: "off"
+      - condition: state
+        entity_id: light.owner_suite_lamps
+        state: "off"
+      - condition: template
+        value_template: >-
+          {{ is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
+             or as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900 }}
+      - condition: template
+        value_template: >-
+          {{ is_state('binary_sensor.bedroom_occupancy', 'on')
+             or as_timestamp(now()) - as_timestamp(states.binary_sensor.bedroom_occupancy.last_changed) <= 900 }}
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.owner_suite_morning_transition
+
+  - id: toggle_lava_lamp_workday
+    alias: toggle_lava_lamp_workday
+    trigger:
+      - trigger: template
+        id: lava-lamp-off
+        value_template: >-
+          {% set forward_time = states.input_datetime.next_work_meeting.state[0:2] | int + 9 %}
+          {% set nine_hoursforward = strptime(forward_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
+          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
+          {{ formatted_time == nine_hoursforward }}
+      - trigger: template
+        id: lava-lamp-on
+        value_template: >-
+          {% set back_time = states.input_datetime.next_work_meeting.state[0:2] | int - 1 %}
+          {% set one_hourback = strptime(back_time ~ ":" ~ states.input_datetime.next_work_meeting.state[3:5], '%H:%M') %}
+          {% set formatted_time = strptime(states('sensor.time'), '%H:%M') %}
+          {{ formatted_time == one_hourback }}
+    condition:
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.special_meeting
+        state: "on"
+      - condition: state
+        entity_id: device_tracker.bayesian_zeke_home
+        state: "home"
+      - condition: state
+        entity_id:
+          - input_boolean.guest_mode
+        state: "off"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: lava-lamp-on
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.office_red_lava_lamp
+              - action: light.turn_on
+                data:
+                  entity_id: light.northern_light_lava_lamp
+          - conditions:
+              - condition: trigger
+                id: lava-lamp-off
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.office_red_lava_lamp
+              - action: light.turn_off
+                data:
+                  entity_id: light.northern_light_lava_lamp
 
   - id: turn_off_office_lamp_when_work_tp_camera_active
     alias: turn_off_office_lamp_when_work_tp_camera_active
@@ -151,6 +470,7 @@ automation:
 
   - id: vacuum_while_working
     alias: vacuum_while_working
+    description: Run one full-floor pass on the main and upstairs levels while Ryan is away.
     trigger:
       # - platform: state
       #   entity_id: device_tracker.bayesian_zeke_home
@@ -168,20 +488,12 @@ automation:
         event_type: mobile_app_notification_action
         event_data:
           action: VACUUM_HOUSE
-    condition: []
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
-      # Revert back when batteries are all reset/new
-      # including main level vacuum
-      # - alias: Start Vacuums
-      #   action: vacuum.start
-      #   target:
-      #     entity_id: all
-      - action: mqtt.publish
-        data:
-          topic: valetudo/upstairs-vacuum/MapSegmentationCapability/clean/set
-          payload: >-
-            {% set segment_id = now().weekday() + 1 %}
-            {"segment_ids": ["{{segment_id}}"],"iterations": 4,"customOrder": true}
+      - action: script.vacuum_main_and_upstairs_levels
 
 ########################
 # Scripts
@@ -240,6 +552,8 @@ script:
             {{ (tomorrow_holidays.events | default([]) | length) > 0 }}
           tomorrow_is_workday: >-
             {{ tomorrow_is_weekday and not tomorrow_is_holiday }}
+          weekday_alarm_already_on: "{{ is_state('input_boolean.weekday_alarm_on', 'on') }}"
+          special_meeting_already_on: "{{ is_state('input_boolean.special_meeting', 'on') }}"
       - choose:
           - conditions:
               - condition: template
@@ -258,9 +572,25 @@ script:
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.weekday_alarm_on
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ not weekday_alarm_already_on }}"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        target:
+                          entity_id: input_boolean.ios_synced_weekday_alarm
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.special_meeting
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ not special_meeting_already_on }}"
+                    sequence:
+                      - action: input_boolean.turn_on
+                        target:
+                          entity_id: input_boolean.ios_synced_special_meeting
           - conditions:
               - condition: template
                 value_template: "{{ sync_alarm_enabled and not tomorrow_is_workday }}"
@@ -275,16 +605,29 @@ script:
                   entity_id: input_boolean.weekend_alarm_on
               - action: input_boolean.turn_off
                 target:
-                  entity_id: input_boolean.special_meeting
+                  entity_id:
+                    - input_boolean.ios_synced_weekday_alarm
+                    - input_boolean.ios_synced_special_meeting
         default:
           - choose:
               - conditions:
                   - condition: template
-                    value_template: "{{ tomorrow_is_workday }}"
+                    value_template: "{{ tomorrow_is_workday and is_state('input_boolean.ios_synced_weekday_alarm', 'on') }}"
                 sequence:
                   - action: input_boolean.turn_off
                     target:
-                      entity_id: input_boolean.weekday_alarm_on
+                      entity_id:
+                        - input_boolean.weekday_alarm_on
+                        - input_boolean.ios_synced_weekday_alarm
+              - conditions:
+                  - condition: template
+                    value_template: "{{ tomorrow_is_workday and is_state('input_boolean.ios_synced_special_meeting', 'on') }}"
+                sequence:
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id:
+                        - input_boolean.special_meeting
+                        - input_boolean.ios_synced_special_meeting
               - conditions:
                   - condition: template
                     value_template: "{{ not tomorrow_is_workday }}"
@@ -292,9 +635,168 @@ script:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.weekend_alarm_on
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.special_meeting
+                  - action: input_boolean.turn_off
+                    target:
+                      entity_id:
+                        - input_boolean.ios_synced_weekday_alarm
+                        - input_boolean.ios_synced_special_meeting
+
+  snooze_script:
+    alias: Snooze Tasks
+    sequence:
+      - action: light.turn_off
+        data:
+          entity_id:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
+      - action: media_player.media_stop
+        continue_on_error: true
+        data:
+          entity_id: media_player.bedroom_sonos_2
+      - delay:
+          minutes: 8
+      - action: script.turn_on
+        entity_id: script.wake_up_script
+      - action: media_player.media_play
+        continue_on_error: true
+        data:
+          entity_id: media_player.bedroom_sonos_2
+
+  sonos_ksdj_wake_up:
+    alias: Sonos KSDJ Wake Up
+    sequence:
+      - action: script.music_assistant_radio_wake_up
+        data:
+          radio_uri: "library://radio/12"
+
+  sonos_mpr_news_wake_up:
+    alias: Sonos MPR News Wake Up
+    sequence:
+      - action: script.music_assistant_radio_wake_up
+        data:
+          radio_uri: "tunein--S3NwgspV://radio/s34350"
+          initial_delay: 5
+
+  sonos_the_current_wake_up:
+    alias: Sonos The Current Wake Up
+    sequence:
+      - action: script.music_assistant_radio_wake_up
+        data:
+          radio_uri: "tunein--S3NwgspV://radio/s20620"
+
+  owner_suite_morning_transition:
+    alias: Owner Suite Morning Transition
+    mode: single
+    sequence:
+      - alias: "Start from the owner suite adaptive sleep target"
+        continue_on_error: true
+        action: switch.turn_on
+        target:
+          entity_id:
+            - switch.adaptive_lighting_owner_suite
+            - switch.adaptive_lighting_adapt_brightness_owner_suite
+            - switch.adaptive_lighting_adapt_color_owner_suite
+            - switch.sleep_mode
+      - alias: "Clear any stale owner suite manual control before the wake ramp"
+        continue_on_error: true
+        action: adaptive_lighting.set_manual_control
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite
+          lights:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
+          manual_control: false
+      - alias: "Apply the owner suite adaptive sleep target"
+        continue_on_error: true
+        action: adaptive_lighting.apply
+        data:
+          entity_id: switch.adaptive_lighting_owner_suite
+          lights:
+            - light.owner_suite_lamps
+            - light.bed_lightstrip
+          adapt_brightness: true
+          adapt_color: true
+          turn_on_lights: true
+          transition: 2
+      - alias: "Return the shared house mode to home once the wake transition begins"
+        continue_on_error: true
+        action: script.house_transition
+        data:
+          mode: home
+          reason: owner_suite_morning_transition
+          apply_lights: false
+          apply_security: false
+          apply_climate: false
+          apply_media: false
+          apply_trip_policy: false
+      - delay:
+          seconds: 1
+      - parallel:
+          - sequence:
+              - alias: "Ramp the owner suite lights to the current adaptive daytime target"
+                continue_on_error: true
+                action: switch.turn_off
+                data:
+                  entity_id:
+                    - switch.sleep_mode
+              - alias: "Apply the daytime adaptive target over three minutes"
+                continue_on_error: true
+                action: adaptive_lighting.apply
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamps
+                    - light.bed_lightstrip
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
+                  transition: 180
+              - alias: "Keep owner suite adaptive lighting in control after the wake ramp"
+                continue_on_error: true
+                action: switch.turn_on
+                target:
+                  entity_id:
+                    - switch.adaptive_lighting_owner_suite
+                    - switch.adaptive_lighting_adapt_brightness_owner_suite
+                    - switch.adaptive_lighting_adapt_color_owner_suite
+              - alias: "Clear owner suite adaptive-lighting manual control after the wake ramp"
+                continue_on_error: true
+                action: adaptive_lighting.set_manual_control
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamps
+                    - light.bed_lightstrip
+                  manual_control: false
+          - sequence:
+              - alias: "Let the adaptive wake ramp settle before opening blinds"
+                continue_on_error: true
+                delay:
+                  seconds: 175
+              - alias: "Start raising the owner suite blinds during the wake ramp"
+                continue_on_error: true
+                repeat:
+                  until: "{{ (repeat.index * 2) == 80 }}"
+                  sequence:
+                    - action: cover.set_cover_position
+                      data:
+                        entity_id: cover.owner_suite_blinds_ha
+                        position: "{{ repeat.index * 2 }}"
+                    - delay:
+                        seconds: "{{ (75/(log(repeat.index + 1, 5))) | round(0, 'ceil', 5) }}"
+
+  wake_up_script:
+    alias: Common Wake Up Tasks
+    sequence:
+      - alias: Have we already done this?
+        condition: state
+        entity_id:
+          - input_boolean.wakeup_alarm_firing
+        state: "off"
+      - action: input_boolean.turn_on
+        data:
+          entity_id: input_boolean.wakeup_alarm_firing
+      - action: script.owner_suite_morning_transition
 
   set_next_work_meeting_from_phone:
     alias: Set Next Work Meeting From Phone
@@ -370,8 +872,7 @@ script:
 ########################
 # Binary Sensors
 ########################
-binary_sensor:
-  []
+binary_sensor: []
   # Moved to UI configuration
   # - platform: workday
   #   country: US
@@ -382,11 +883,28 @@ binary_sensor:
 ########################
 input_boolean:
   morning_routine:
+  weekday_alarm_on:
+  weekend_alarm_on:
+  ios_synced_weekday_alarm:
+  ios_synced_special_meeting:
+  wakeup_alarm_firing:
+  snooze_status:
+    initial: false
+  special_meeting:
 
 ################################################
 ## Input Datetime
 ################################################
-input_datetime: {}
+input_datetime:
+  weekday_alarm:
+    has_date: false
+    has_time: true
+  weekend_alarm:
+    has_date: false
+    has_time: true
+  next_work_meeting:
+    has_date: false
+    has_time: true
 
 ################################################
 ## Sensor

@@ -1,0 +1,396 @@
+# Home Assistant package for the Tiki Time party mode.
+# It exposes a Siri/Homebridge-friendly entrypoint that flashes the house,
+# starts SomaFM Tiki Time across the Sonos group, and moves the basement display
+# into a photo-friendly mode.
+
+################################################################
+## Packages / Tiki Time
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "tiki_time"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Scripts
+    ################################################
+    script.tiki_time:
+      <<: *customize
+      friendly_name: "Tiki Time"
+      icon: mdi:palm-tree
+      haaska_hidden: false
+      homebridge_hidden: false
+
+########################
+# Scripts
+########################
+
+script:
+  tiki_time_tropical_color_cycle:
+    alias: "Tiki Time Tropical Color Cycle"
+    description: >-
+      Continuously rotate Tiki Time-capable lights through a tropical palette
+      while the Tiki Time station is still playing.
+    icon: mdi:palette
+    mode: restart
+    sequence:
+      - if:
+          - condition: not
+            conditions:
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: media_player.den_sonos_2
+                    state: "playing"
+                  - condition: state
+                    entity_id: media_player.den_sonos_2
+                    state: "buffering"
+        then:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: media_player.den_sonos_2
+                to: "playing"
+              - trigger: state
+                entity_id: media_player.den_sonos_2
+                to: "buffering"
+            timeout: "00:00:10"
+            continue_on_timeout: true
+      - repeat:
+          while:
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: media_player.den_sonos_2
+                  state: "playing"
+                - condition: state
+                  entity_id: media_player.den_sonos_2
+                  state: "buffering"
+          sequence:
+            - variables:
+                cycle_index: "{{ repeat.index0 }}"
+                tropical_palette:
+                  - [18, 86]
+                  - [34, 90]
+                  - [52, 82]
+                  - [108, 70]
+                  - [166, 74]
+                  - [196, 76]
+                  - [286, 62]
+                  - [338, 68]
+            - parallel:
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_east_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_east_room_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_middle_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_middle_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_west_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_west_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_great_room_west_3
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.basement_tv_bias
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 35
+                        transition: 18
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_1
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 1) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_2
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_3
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_4
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 4) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_5
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 5) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_6
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_overhead_7
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 7) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 45
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.kitchen_sink_overhead
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 0) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 55
+                        transition: 18
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.east_table_lamp
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 2) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 65
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.west_table_lamp
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 6) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 65
+                        transition: 18
+                - sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.tiki_room_floor_lamp
+                      data:
+                        hs_color:
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][0] }}"
+                          - "{{ tropical_palette[(cycle_index + 3) % (tropical_palette | count)][1] }}"
+                        brightness_pct: 70
+                        transition: 18
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: light.tiki_room_lights_tiki_room_strip
+                      data:
+                        effect: rainbow
+                        brightness_pct: 80
+            - delay:
+                seconds: 20
+  tiki_time:
+    alias: "Tiki Time"
+    description: >-
+      Start the Tiki Time party mode: flash the lights, start SomaFM Tiki Time
+      on the Sonos group, move the basement display into Photos, and start the
+      tropical light rotation.
+    icon: mdi:palm-tree
+    mode: restart
+    sequence:
+      - action: logbook.log
+        data:
+          name: Tiki Time
+          entity_id: script.tiki_time
+          domain: script
+          message: "Starting the Tiki Time party mode."
+      - action: script.turn_off
+        target:
+          entity_id: script.tiki_time_tropical_color_cycle
+      - parallel:
+          - sequence:
+              - repeat:
+                  count: 3
+                  sequence:
+                    - action: light.turn_on
+                      continue_on_error: true
+                      data:
+                        entity_id: all
+                        flash: short
+                    - delay:
+                        seconds: 1
+          - sequence:
+              - delay:
+                  milliseconds: 300
+              - action: script.music_assistant_pause_house_audio
+              - action: script.music_assistant_prepare_house_party_group
+              - action: media_player.volume_set
+                continue_on_error: true
+                target:
+                  entity_id:
+                    - media_player.bedroom_sonos_2
+                    - media_player.bathroom_sonos_2
+                    - media_player.office_sonos_2
+                    - media_player.den_sonos_2
+                    - media_player.tiki_room_2
+                data:
+                  volume_level: 0.30
+              - action: script.music_assistant_play_item
+                continue_on_error: true
+                data:
+                  entity_id: media_player.den_sonos_2
+                  media_item: "somafm://radio/tikitime"
+                  enqueue: replace
+              - action: media_player.turn_on
+                target:
+                  entity_id: media_player.basement
+              - if:
+                  - condition: state
+                    entity_id: media_player.basement
+                    state: "off"
+                then:
+                  - wait_for_trigger:
+                      - trigger: state
+                        entity_id: media_player.basement
+                        from: "off"
+                    timeout: "00:00:05"
+                    continue_on_timeout: true
+                  - if:
+                      - condition: state
+                        entity_id: media_player.basement
+                        state: "off"
+                    then:
+                      - stop: Basement player failed to turn on
+              - action: script.wait_for_basement_media_player_ready
+              - action: media_player.volume_set
+                continue_on_error: true
+                target:
+                  entity_id:
+                    - media_player.basement
+                    - media_player.lg_webos_smart_tv
+                    - media_player.plex_basement_apple_tv
+                data:
+                  volume_level: 0
+              - action: media_player.select_source
+                continue_on_error: true
+                target:
+                  entity_id: media_player.basement
+                data:
+                  source: Photos
+      - action: light.turn_on
+        continue_on_error: true
+        data:
+          entity_id: all
+          brightness_pct: 25
+          color_temp_kelvin: 2000
+          transition: 45
+      - action: script.turn_on
+        target:
+          entity_id: script.tiki_time_tropical_color_cycle

@@ -1,3 +1,6 @@
+# Home Assistant package for ceiling and room fan automation.
+# It combines occupancy and manual-control helpers to run bedroom, den, and office fans without duplicating room-specific logic.
+
 ################################################################
 ## Packages / TEMPLATE
 ################################################################
@@ -119,6 +122,128 @@ automation:
                 data:
                   entity_id: fan.den_ceiling
 
+
+  - alias: den_ceiling_bond_state_reconcile
+    id: den_ceiling_bond_state_reconcile
+    description: >
+      Keep Bond's tracked state for the Den ceiling light aligned with the
+      room's overnight lighting reality. When the den is occupied at night and
+      illuminance is bright while the nearby spill-light sources stay off, mark
+      the ceiling light as on in Bond. When the room goes dark, mark it off.
+      After midnight, if the room has been vacant for an hour and still reads
+      bright with those spill-light sources off, force the ceiling light off so
+      it cannot stay on all night.
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.den_motion_occupancy
+        to: "on"
+      - trigger: numeric_state
+        entity_id: sensor.den_motion_illuminance
+        above: 100
+        for:
+          minutes: 1
+      - trigger: numeric_state
+        entity_id: sensor.den_motion_illuminance
+        below: 10
+        for:
+          minutes: 5
+      - trigger: time_pattern
+        minutes: "/30"
+    action:
+      - choose:
+          - conditions:
+              - condition: time
+                after: "00:30:00"
+              - condition: sun
+                before: sunrise
+              - condition: state
+                entity_id: binary_sensor.den_motion_occupancy
+                state: "off"
+                for:
+                  hours: 1
+              - &den_ceiling_spill_lights_off
+                condition: state
+                entity_id: light.den_flood_switch
+                state: "off"
+              - condition: state
+                entity_id: light.den_lamp
+                state: "off"
+              - condition: state
+                entity_id: light.kitchen_all
+                state: "off"
+              - condition: state
+                entity_id: light.tiki_room_lights_tiki_room_strip
+                state: "off"
+              - condition: numeric_state
+                entity_id: sensor.den_motion_illuminance
+                above: 100
+            sequence:
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: true
+              - delay:
+                  seconds: 2
+              - action: light.turn_off
+                target:
+                  entity_id: light.den_ceiling
+              - delay:
+                  seconds: 2
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: false
+              - action: notify.all
+                data:
+                  title: Den ceiling light failsafe
+                  message: >-
+                    Den ceiling Bond failsafe turned the ceiling light off
+                    after the den stayed vacant overnight.
+          - conditions:
+              - condition: sun
+                after: sunset
+                before: sunrise
+              - condition: state
+                entity_id: binary_sensor.den_motion_occupancy
+                state: "on"
+              - condition: state
+                entity_id: light.den_ceiling
+                state: "off"
+              - *den_ceiling_spill_lights_off
+              - condition: state
+                entity_id: light.den_lamp
+                state: "off"
+              - condition: state
+                entity_id: light.kitchen_all
+                state: "off"
+              - condition: state
+                entity_id: light.tiki_room_lights_tiki_room_strip
+                state: "off"
+              - condition: numeric_state
+                entity_id: sensor.den_motion_illuminance
+                above: 100
+            sequence:
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: true
+          - conditions:
+              - condition: sun
+                after: sunset
+                before: sunrise
+              - condition: state
+                entity_id: light.den_ceiling
+                state: "on"
+              - condition: numeric_state
+                entity_id: sensor.den_motion_illuminance
+                below: 10
+            sequence:
+              - action: bond.set_light_power_tracked_state
+                data:
+                  entity_id: light.den_ceiling
+                  power_state: false
+    mode: restart
+
   # - alias: turn_off_fan_if_den_unoccupied
   #   id: turn_off_fan_if_den_unoccupied
   #   trigger:
@@ -130,6 +255,58 @@ automation:
   #     - action: fan.turn_off
   #       data:
   #         entity_id: fan.den_ceiling
+
+  - alias: fan_off_when_timer_ends
+    id: fan_off_when_timer_ends
+    description: >
+      Turns off a fan when its corresponding timer expires. Each fan has a
+      dedicated timer helper (timer.XXX_fan_timer / timer.XXX_exhaust_timer).
+      Start the timer from the dashboard timer-bar-card; when it fires, this
+      automation turns the fan off.
+    mode: parallel
+    max: 7
+    triggers:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.owner_suite_fan_timer
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.owner_suite_bathroom_exhaust_timer
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.office_ceiling_fan_timer
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.basement_bathroom_exhaust_timer
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.den_ceiling_fan_timer
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.guest_room_fan_timer
+      - trigger: event
+        event_type: timer.finished
+        event_data:
+          entity_id: timer.guest_bathroom_exhaust_timer
+    actions:
+      - variables:
+          fan_map:
+            timer.owner_suite_fan_timer: fan.owner_suite
+            timer.owner_suite_bathroom_exhaust_timer: fan.owner_suite_bathroom_exhaust
+            timer.office_ceiling_fan_timer: fan.office_ceiling_fan
+            timer.basement_bathroom_exhaust_timer: fan.basement_bathroom_exhaust
+            timer.den_ceiling_fan_timer: fan.den_ceiling
+            timer.guest_room_fan_timer: fan.guest_room
+            timer.guest_bathroom_exhaust_timer: fan.guest_bathroom_exhaust
+      - action: fan.turn_off
+        target:
+          entity_id: "{{ fan_map[trigger.event.data.entity_id] }}"
 
   - alias: bedroom_fan_control
     id: bedroom_fan_control

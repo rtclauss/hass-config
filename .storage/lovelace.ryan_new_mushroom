@@ -126,6 +126,25 @@
                         },
                         {
                           "type": "custom:minimalistic-area-card",
+                          "title": "Office Desk",
+                          "area": "office",
+                          "hide_unavailable": false,
+                          "tap_action": {
+                            "action": "navigate",
+                            "navigation_path": "/ryan-new-mushroom/office-v2"
+                          },
+                          "entities": [
+                            "sensor.uplift_desk_75b205_height",
+                            "button.uplift_desk_75b205_move_to_preset_1",
+                            "button.uplift_desk_75b205_move_to_preset_2"
+                          ],
+                          "background_color": "var(--ha-card-background, var(--card-background-color))",
+                          "card_mod": {
+                            "style": ".box {\n  color: var(--primary-text-color) !important; /** <-- Sets the primary text color **/\n  text-shadow: unset !important; /** <-- No text shadow **/\n}\n.box ha-icon-button.state-on state-badge {\n  color: black !important; /** <-- Black badge icons **/\n}\n.card-header {\n  font-weight: normal !important; /** <-- No bold text **/\n}\n"
+                          }
+                        },
+                        {
+                          "type": "custom:minimalistic-area-card",
                           "title": "Basement",
                           "area": "basement_greatroom",
                           "hide_unavailable": false,
@@ -301,6 +320,219 @@
           ]
         },
         {
+          "title": "Presence",
+          "path": "presence",
+          "icon": "mdi:home-account",
+          "type": "sections",
+          "max_columns": 4,
+          "badges": [
+            {
+              "type": "entity",
+              "entity": "person.ryan",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            },
+            {
+              "type": "entity",
+              "entity": "binary_sensor.bayesian_zeke_home",
+              "name": "Home",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            },
+            {
+              "type": "entity",
+              "entity": "sensor.iphone_17_pro_area",
+              "name": "Phone",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            },
+            {
+              "type": "entity",
+              "entity": "sensor.apple_watch_ultra_2_area",
+              "name": "Watch",
+              "show_name": true,
+              "show_state": true,
+              "show_icon": true
+            }
+          ],
+          "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Current Guess",
+                  "icon": "mdi:crosshairs-gps"
+                },
+                {
+                  "type": "custom:mushroom-template-card",
+                  "entity": "person.ryan",
+                  "primary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Room confidence pending{% elif ns.best_score == 0 %}No likely room{% else %}{{ ns.best_name }}{% endif %}",
+                  "secondary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Deploy or reload the room confidence template sensors to populate this view.{% elif ns.best_score == 0 %}No room has positive confidence right now.{% else %}Score {{ ns.best_score }}{% if ns.best_binary %} \u2022 confident occupancy on{% else %} \u2022 below confident threshold{% endif %}{% endif %}",
+                  "icon": "mdi:crosshairs-gps",
+                  "icon_color": "{% set rooms = ['sensor.bedroom_room_confidence', 'sensor.office_room_confidence', 'sensor.den_room_confidence', 'sensor.basement_room_confidence'] %} {% set ns = namespace(best_score=-1) %} {% for entity_id in rooms %}{% set score = states(entity_id) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_score = score %}{% endif %}{% endfor %} {% if ns.best_score >= 70 %}green{% elif ns.best_score >= 50 %}teal{% elif ns.best_score > 0 %}amber{% else %}grey{% endif %}",
+                  "multiline_secondary": true,
+                  "fill_container": true,
+                  "tap_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "entities",
+                  "title": "Location Inputs",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "person.ryan"
+                    },
+                    {
+                      "entity": "binary_sensor.bayesian_zeke_home"
+                    },
+                    {
+                      "entity": "sensor.iphone_17_pro_area"
+                    },
+                    {
+                      "entity": "sensor.iphone_17_pro_floor"
+                    },
+                    {
+                      "entity": "sensor.apple_watch_ultra_2_area"
+                    },
+                    {
+                      "entity": "sensor.apple_watch_ultra_2_floor"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Room Scores",
+                  "icon": "mdi:chart-box"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.bedroom_room_confidence",
+                  "name": "Bedroom",
+                  "icon": "mdi:bed-queen",
+                  "features_position": "bottom",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.office_room_confidence",
+                  "name": "Office",
+                  "icon": "mdi:desk",
+                  "features_position": "bottom",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.den_room_confidence",
+                  "name": "Den",
+                  "icon": "mdi:sofa",
+                  "features_position": "bottom",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.basement_room_confidence",
+                  "name": "Basement",
+                  "icon": "mdi:stairs-down",
+                  "features_position": "bottom",
+                  "vertical": false
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Confident Rooms",
+                  "icon": "mdi:check-decagram"
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.bedroom_confident_occupancy",
+                  "name": "Bedroom",
+                  "icon": "mdi:bed-queen",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.office_confident_occupancy",
+                  "name": "Office",
+                  "icon": "mdi:desk",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.den_confident_occupancy",
+                  "name": "Den",
+                  "icon": "mdi:sofa",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.basement_confident_occupancy",
+                  "name": "Basement",
+                  "icon": "mdi:stairs-down",
+                  "vertical": false
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Evidence",
+                  "icon": "mdi:home-search"
+                },
+                {
+                  "type": "markdown",
+                  "content": "Watch location is corroboration only. Phone location and room-native sensors are weighted higher.",
+                  "title": "Priority"
+                },
+                {
+                  "type": "entities",
+                  "title": "Room Sensors",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.bedroom_occupancy"
+                    },
+                    {
+                      "entity": "binary_sensor.bayesian_bed_occupancy"
+                    },
+                    {
+                      "entity": "binary_sensor.office_occupancy_2"
+                    },
+                    {
+                      "entity": "binary_sensor.office_motion_occupancy"
+                    },
+                    {
+                      "entity": "binary_sensor.ryan_office_presence"
+                    },
+                    {
+                      "entity": "binary_sensor.den_occupancy_2"
+                    },
+                    {
+                      "entity": "binary_sensor.basement_occupancy_2"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
           "title": "Owner Suite",
           "path": "owner-suite",
           "icon": "mdi:bed-queen",
@@ -378,6 +610,13 @@
                   "primary_info": "none"
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.owner_suite_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
                   "entity": "media_player.bedroom_sonos_2",
                   "group": false,
@@ -398,6 +637,14 @@
                       {
                         "entity_id": "media_player.bathroom_sonos_2",
                         "name": "Bathroom"
+                      },
+                      {
+                        "entity_id": "media_player.den_sonos_2",
+                        "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
                       }
                     ]
                   }
@@ -571,11 +818,44 @@
                   "icon": ""
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.owner_suite_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
                   "entity": "media_player.bathroom_sonos_2",
                   "artwork": "material",
                   "volume_stateless": true,
-                  "sound_mode": "icon"
+                  "sound_mode": "icon",
+                  "speaker_group": {
+                    "platform": "sonos",
+                    "show_group_count": true,
+                    "entities": [
+                      {
+                        "entity_id": "media_player.bedroom_sonos_2",
+                        "name": "Owner Suite"
+                      },
+                      {
+                        "entity_id": "media_player.office_sonos_2",
+                        "name": "Office"
+                      },
+                      {
+                        "entity_id": "media_player.bathroom_sonos_2",
+                        "name": "Bathroom"
+                      },
+                      {
+                        "entity_id": "media_player.den_sonos_2",
+                        "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -697,6 +977,86 @@
                   "icon_animation": true,
                   "show_percentage_control": true,
                   "collapsible_controls": true
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.office_ceiling_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
+                  "type": "custom:mushroom-light-card",
+                  "entity": "light.office_table_lamps",
+                  "icon": "mdi:lamps-outline"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Desk",
+                  "icon": "mdi:desk"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.uplift_desk_75b205_height",
+                  "name": "Current Height",
+                  "icon": "mdi:arrow-expand-vertical",
+                  "vertical": false
+                },
+                {
+                  "type": "tile",
+                  "entity": "button.uplift_desk_75b205_move_to_preset_1",
+                  "name": "Sit",
+                  "icon": "mdi:chair-rolling",
+                  "hide_state": true,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "button.press",
+                    "target": {
+                      "entity_id": "button.uplift_desk_75b205_move_to_preset_1"
+                    }
+                  },
+                  "hold_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "button.uplift_desk_75b205_move_to_preset_2",
+                  "name": "Stand",
+                  "icon": "mdi:human-handsup",
+                  "hide_state": true,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "button.press",
+                    "target": {
+                      "entity_id": "button.uplift_desk_75b205_move_to_preset_2"
+                    }
+                  },
+                  "hold_action": {
+                    "action": "more-info"
+                  }
+                },
+                {
+                  "type": "tile",
+                  "entity": "button.uplift_desk_75b205_move_to_max_height",
+                  "name": "Max Height",
+                  "icon": "mdi:arrow-up-bold-box",
+                  "hide_state": true,
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "button.press",
+                    "target": {
+                      "entity_id": "button.uplift_desk_75b205_move_to_max_height"
+                    }
+                  },
+                  "hold_action": {
+                    "action": "more-info"
+                  }
                 }
               ]
             },
@@ -727,6 +1087,14 @@
                       {
                         "entity_id": "media_player.bathroom_sonos_2",
                         "name": "Bathroom"
+                      },
+                      {
+                        "entity_id": "media_player.den_sonos_2",
+                        "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
                       }
                     ]
                   },
@@ -816,7 +1184,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -873,7 +1241,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -928,7 +1296,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -974,7 +1342,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -993,6 +1361,9 @@
                   "type": "custom:mini-media-player",
                   "entity": "media_player.lg_webos_smart_tv",
                   "name": "TV",
+                  "hide": {
+                    "source": true
+                  },
                   "artwork": "material",
                   "idle_view": {
                     "when_idle": true,
@@ -1005,31 +1376,16 @@
                   "entity": "media_player.basement",
                   "name": "AppleTV",
                   "group": false,
+                  "hide": {
+                    "source": true
+                  },
                   "idle_view": {
                     "when_idle": true,
                     "when_paused": true,
                     "when_standby": true
                   },
                   "volume_stateless": false,
-                  "artwork": "material",
-                  "speaker_group": {
-                    "platform": "sonos",
-                    "show_group_count": true,
-                    "entities": [
-                      {
-                        "entity_id": "media_player.bedroom_sonos_2",
-                        "name": "Owner Suite"
-                      },
-                      {
-                        "entity_id": "media_player.office_sonos_2",
-                        "name": "Office"
-                      },
-                      {
-                        "entity_id": "media_player.bathroom_sonos_2",
-                        "name": "Bathroom"
-                      }
-                    ]
-                  }
+                  "artwork": "material"
                 },
                 {
                   "type": "custom:mini-media-player",
@@ -1060,6 +1416,9 @@
                   "artwork": "material",
                   "name": "Apple TV",
                   "group": false,
+                  "hide": {
+                    "source": true
+                  },
                   "volume_stateless": false,
                   "idle_view": {
                     "when_idle": true,
@@ -1100,7 +1459,7 @@
                 },
                 {
                   "type": "custom:mini-media-player",
-                  "entity": "media_player.tiki_room_2",
+                  "entity": "media_player.tiki_room_3",
                   "name": "Sonos",
                   "group": false,
                   "artwork": "material",
@@ -1129,7 +1488,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -1156,30 +1515,55 @@
                   }
                 }
               ]
-            },
-            {
-              "type": "grid",
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "Music Assistant"
-                },
-                {
-                  "type": "custom:mini-media-player",
-                  "entity": "media_player.bedroom_sonos_2",
-                  "name": "Music Queue",
-                  "artwork": "material",
-                  "idle_view": {
-                    "when_idle": true,
-                    "when_paused": true,
-                    "when_standby": true
-                  },
-                  "group": false
-                }
-              ]
             }
           ],
-          "cards": []
+          "cards": [],
+          "max_columns": 4
+        },
+        {
+          "title": "Music Assistant",
+          "path": "music-assistant",
+          "icon": "mdi:music",
+          "panel": true,
+          "cards": [
+            {
+              "type": "custom:mass-player-card",
+              "default_section": "music_player",
+              "sync_player_across_dashboard": true,
+              "entities": [
+                {
+                  "entity_id": "media_player.bedroom_sonos_2",
+                  "name": "Owner Suite"
+                },
+                {
+                  "entity_id": "media_player.office_sonos_2",
+                  "name": "Office"
+                },
+                {
+                  "entity_id": "media_player.bathroom_sonos_2",
+                  "name": "Bathroom"
+                },
+                {
+                  "entity_id": "media_player.den_sonos_2",
+                  "name": "Den"
+                },
+                {
+                  "entity_id": "media_player.tiki_room_3",
+                  "name": "Tiki"
+                }
+              ],
+              "queue": {
+                "limit_before": 5,
+                "limit_after": 40,
+                "show_album_covers": true,
+                "show_artist_names": true
+              },
+              "media_browser": {
+                "columns": 2,
+                "default_section": "favorites"
+              }
+            }
+          ]
         },
         {
           "title": "Tesla v2",
@@ -1303,15 +1687,44 @@
                 },
                 {
                   "type": "markdown",
-                  "content": "{% if state_attr('sensor.nigori_charging_rate','time_left') > 0 %}\n  {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}\n{% else %}\n  Charging Complete\n{% endif %}\n\n{% if is_state('binary_sensor.upcoming_trip_charging', \"on\") %}\n  ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}\n  #### Start: {{ state_attr('binary_sensor.upcoming_trip_charging', 'start_time') }}\n  #### Distance: {{ state_attr(\"sensor.waze_next_trip_distance\", \"distance\")| int }} mi\n{% else %}\n  Default Schedule\n{% endif %}",
+                  "content": "{% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}\n{% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}\n{% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}\n{% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}\n{% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}\n{% set location_label = location_name | replace('_', ' ') | title %}\n{% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}\n{% set home_planner = location_name == 'home' %}\n{% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}\n{% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}\n{% if state_attr('sensor.nigori_charging_rate','time_left') > 0 %}\n  {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}\n{% else %}\n  Charging Complete\n{% endif %}\n\n{% if is_state('input_boolean.long_range_travel', 'on') %}\n  ### Max-range override is active\n  #### Charge limit pinned to 100% until you return to the daily plan\n{% elif has_calendar_departure and home_planner %}\n  ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}\n  #### Departure plan: {{ trip_start_raw }}\n  #### Distance: {{ state_attr('sensor.waze_next_trip_distance', 'distance')| int(0) }} mi\n{% elif protected_location and not home_planner %}\n  ### Protected location\n  #### Tesla-app charging schedule stays authoritative at {{ location_label }}\n  #### Home Assistant departure planning currently runs only at Home\n{% else %}\n  ### Daily planner is active\n  #### Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs\n  #### Cabin preconditioning only runs when a real next-day departure is scheduled\n{% endif %}\n{% if protected_location and home_planner %}\n  #### {% if home_schedule_override_needed %}Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed{% else %}Tesla-app charging schedule stays authoritative at {{ location_label }}{% endif %}\n{% endif %}",
                   "title": "Status and Reason"
+                },
+                {
+                  "type": "markdown",
+                  "content": "{% set tariff = states('sensor.ev_charging_tariff') %}\n{% set rate = states('sensor.ev_charging_tariff_rate') | float(default=0) %}\n{% set charge_limit = states('number.nigori_charge_limit') | int(default=80) %}\n{% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}\n{% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}\n{% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}\n{% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}\n{% set location_label = location_name | replace('_', ' ') | title %}\n{% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}\n{% set home_planner = location_name == 'home' %}\n{% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}\n{% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}\n### {{ charge_limit }}% target\n{% if is_state('input_boolean.long_range_travel', 'on') %}\n  #### Manual override is forcing max range\n{% elif home_planner and is_state('binary_sensor.upcoming_trip_charging', 'on') %}\n  #### Planner is following the next trip\n{% elif home_planner and planned_departure and charge_limit == 80 %}\n  #### Planner is keeping the Tesla app home schedule because no extra home charging is needed\n{% elif home_planner and has_calendar_departure %}\n  #### Planner is following the next calendar departure\n{% elif home_planner and alarm_enabled %}\n  #### Planner is following tomorrow's alarm for charge-limit planning only\n{% elif protected_location and not home_planner %}\n  #### Tesla-app charging defaults are preserved here\n{% else %}\n  #### No next-day departure plan is active\n{% endif %}\n#### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh\n#### Charging schedule: {% if protected_location and not home_planner %}Preserve Tesla app default at {{ location_label }}{% elif home_schedule_override_needed %}Allow a temporary Home Assistant schedule override at {{ location_label }} because extra home charging is needed{% elif home_planner %}Preserve Tesla app default at {{ location_label }} because no extra home charging is needed{% else %}Allow Home Assistant off-peak charging management{% endif %}",
+                  "title": "Planner Decision"
                 },
                 {
                   "type": "tile",
                   "entity": "input_boolean.long_range_travel",
                   "tap_action": {
-                    "action": "toggle"
+                    "action": "call-service",
+                    "service": "input_boolean.turn_on",
+                    "data": {},
+                    "target": {
+                      "entity_id": "input_boolean.long_range_travel"
+                    }
                   },
+                  "name": "Max Range Override",
+                  "icon": "mdi:backup-restore",
+                  "show_entity_picture": false,
+                  "vertical": true,
+                  "hide_state": true
+                },
+                {
+                  "type": "tile",
+                  "entity": "binary_sensor.tesla_daily_plan_active",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "input_boolean.turn_off",
+                    "data": {},
+                    "target": {
+                      "entity_id": "input_boolean.long_range_travel"
+                    }
+                  },
+                  "name": "Use Daily Plan",
+                  "icon": "mdi:ev-station",
                   "show_entity_picture": false,
                   "vertical": true,
                   "hide_state": true
@@ -1319,6 +1732,50 @@
                 {
                   "type": "tile",
                   "entity": "number.nigori_charge_limit"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff_rate"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_cost"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.average_daily_ev_charging_cost"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.average_daily_vehicle_miles"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.weekly_regular_gas_price_55125"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.average_daily_gas_car_cost_30mpg"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.average_daily_ev_savings_vs_30mpg"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_cost"
                 }
               ]
             },
@@ -1347,6 +1804,92 @@
                   "type": "custom:mushroom-cover-card",
                   "entity": "cover.nigori_trunk",
                   "show_buttons_control": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Energy",
+          "path": "energy",
+          "icon": "mdi:transmission-tower",
+          "type": "sections",
+          "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "House Electricity"
+                },
+                {
+                  "type": "markdown",
+                  "title": "Built-in Energy Panel",
+                  "content": "### Use `sensor.house_electrical_meter_non_ev` for house consumption and `sensor.nigori_energy_added` for EV charging\n#### Keep `sensor.house_electrical_meter` out of the built-in Energy panel if you add EV separately"
+                },
+                {
+                  "type": "tile",
+                  "entity": "select.daily_electricity",
+                  "name": "Current House Tariff"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.house_electrical_rate",
+                  "name": "Current House Rate"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.house_electrical_meter",
+                  "name": "Whole House Meter"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.house_electrical_meter_non_ev",
+                  "name": "House Meter Without EV"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "EV Charging"
+                },
+                {
+                  "type": "markdown",
+                  "title": "Dakota Electric EV TOU",
+                  "content": "### Off-peak before 08:00 and after 21:00\n#### Weekends and Minnesota holidays stay off-peak all day"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff",
+                  "name": "Current EV Tariff"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.ev_charging_tariff_rate",
+                  "name": "Current EV Rate"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_energy",
+                  "name": "Today's EV Energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.daily_ev_charging_cost",
+                  "name": "Today's EV Cost"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_energy",
+                  "name": "This Month EV Energy"
+                },
+                {
+                  "type": "tile",
+                  "entity": "sensor.monthly_ev_charging_cost",
+                  "name": "This Month EV Cost"
                 }
               ]
             }
@@ -1490,6 +2033,9 @@
                   "type": "custom:mini-media-player",
                   "entity": "media_player.lg_webos_smart_tv",
                   "toggle_power": true,
+                  "hide": {
+                    "source": true
+                  },
                   "artwork": "material",
                   "idle_view": {
                     "when_idle": true
@@ -1499,6 +2045,9 @@
                   "type": "custom:mini-media-player",
                   "entity": "media_player.basement",
                   "artwork": "material",
+                  "hide": {
+                    "source": true
+                  },
                   "idle_view": {
                     "when_idle": true
                   }
@@ -1552,6 +2101,13 @@
                   "name": "Exhaust",
                   "icon_animation": true,
                   "collapsible_controls": true
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.basement_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
                 }
               ]
             },
@@ -1656,6 +2212,10 @@
                   "idle_view": {
                     "when_idle": true
                   }
+                },
+                {
+                  "type": "custom:mushroom-light-card",
+                  "entity": "light.kitchen_under_cabinet"
                 }
               ]
             },
@@ -1674,7 +2234,7 @@
                   "show_color_temp_control": true,
                   "collapsible_controls": true,
                   "name": "Flood Lights",
-                  "entity": "light.den_flood_lights"
+                  "entity": "light.den_floods"
                 },
                 {
                   "type": "custom:mushroom-light-card",
@@ -1704,8 +2264,15 @@
                   "show_oscillate_control": true
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.den_ceiling_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
-                  "entity": "media_player.sonos_den",
+                  "entity": "media_player.den_sonos_2",
                   "name": "Sonos",
                   "group": false,
                   "volume_stateless": false,
@@ -1732,6 +2299,10 @@
                       {
                         "entity_id": "media_player.den_sonos_2",
                         "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
                       }
                     ]
                   }
@@ -1747,14 +2318,14 @@
                 },
                 {
                   "type": "custom:mushroom-light-card",
-                  "entity": "light.tiki_room_strip",
                   "name": "Light Strip",
                   "fill_container": true,
                   "use_light_color": true,
                   "show_brightness_control": true,
                   "show_color_control": true,
                   "show_color_temp_control": true,
-                  "collapsible_controls": true
+                  "collapsible_controls": true,
+                  "entity": "light.tiki_room_lights_tiki_room_strip"
                 },
                 {
                   "type": "custom:mushroom-light-card",
@@ -1804,10 +2375,10 @@
                   "type": "entities",
                   "entities": [
                     {
-                      "entity": "sensor.front_load_washer"
+                      "entity": "binary_sensor.washing_machine_running"
                     },
                     {
-                      "entity": "sensor.dryer"
+                      "entity": "binary_sensor.dryer_running"
                     }
                   ]
                 },
@@ -1832,8 +2403,15 @@
                   "chips": [
                     {
                       "type": "entity",
-                      "entity": "binary_sensor.laundry_washer_vibration_vibration",
+                      "entity": "binary_sensor.washing_machine_running",
+                      "name": "Washer",
                       "icon": "mdi:washing-machine"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "binary_sensor.dryer_running",
+                      "name": "Dryer",
+                      "icon": "mdi:tumble-dryer"
                     }
                   ]
                 }
@@ -1859,6 +2437,11 @@
                 {
                   "type": "custom:mushroom-light-card",
                   "entity": "light.dining_room_all"
+                },
+                {
+                  "type": "custom:mushroom-light-card",
+                  "entity": "light.dining_room_lamps",
+                  "icon": "mdi:floor-lamp"
                 }
               ]
             }
@@ -1908,12 +2491,30 @@
                   "show_oscillate_control": false
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.guest_room_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mushroom-light-card",
                   "entity": "light.guest_room_fan_switch"
                 },
                 {
                   "type": "custom:mushroom-light-card",
                   "entity": "light.guest_room_ceiling"
+                },
+                {
+                  "type": "custom:mushroom-fan-card",
+                  "entity": "fan.guest_bathroom_exhaust"
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.guest_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
                 }
               ]
             }
@@ -2040,8 +2641,8 @@
           "cards": [
             {
               "type": "markdown",
-              "title": "Aircraft Overhead (≤5 mi, <10k ft)",
-              "content": "{% set st = states('sensor.closest_aircraft_overhead') %}\n{% if st in ['none','unknown','unavailable'] %}\nNo aircraft currently matching criteria.\n{% else %}\n{% set img = state_attr('sensor.closest_aircraft_photo','url') %}\n{% set mil = state_attr('sensor.closest_aircraft_overhead','is_military') %}\n{% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}\n{% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}\n{% set desc = state_attr('sensor.closest_aircraft_overhead','desc') %}\n{% set type_code = state_attr('sensor.closest_aircraft_overhead','type_code') %}\n{% set alt = state_attr('sensor.closest_aircraft_overhead','altitude_ft') %}\n{% set dist = state_attr('sensor.closest_aircraft_overhead','distance_mi') %}\n{% set route = states('sensor.closest_aircraft_routeset') %}\n{% set names = states('sensor.closest_aircraft_routeset_names') %}\n\n\n{% if img %}\n![aircraft]({{ img }})\n{% endif %}\n\n**Closest:** {{ cs if cs else st }}{% if mil %} 🇺🇸{% endif %}\n\n**Route:** {% if route not in ['unknown','none','unavailable'] %}{{ route }}{% else %}—{% endif %}\n{% if names%}\n  {{names}}\n{% endif %}\n\n**Plane:** {{ desc if desc else 'Unknown' }}{% if type_code %} ({{ type_code }}){% endif %}  \n**Altitude:** {{ alt if alt is not none else '—' }} ft  \n**Distance:** {{ dist if dist is not none else '—' }} mi  \n**HEX:** `{{ hx if hx else '—' }}`\n{% endif %}\n"
+              "title": "Aircraft Overhead (≤5 mi, unlimited altitude)",
+              "content": "{% set st = states('sensor.closest_aircraft_overhead') %}\n{% if st in ['none','unknown','unavailable'] %}\nNo aircraft currently within 5 mi at any altitude.\n{% else %}\n{% set img = state_attr('sensor.closest_aircraft_photo','url') %}\n{% set mil = state_attr('sensor.closest_aircraft_overhead','is_military') %}\n{% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}\n{% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}\n{% set desc = state_attr('sensor.closest_aircraft_overhead','desc') %}\n{% set type_code = state_attr('sensor.closest_aircraft_overhead','type_code') %}\n{% set alt = state_attr('sensor.closest_aircraft_overhead','altitude_ft') %}\n{% set dist = state_attr('sensor.closest_aircraft_overhead','distance_mi') %}\n{% set route = states('sensor.closest_aircraft_routeset') %}\n{% set names = states('sensor.closest_aircraft_routeset_names') %}\n\n\n{% if img %}\n![aircraft]({{ img }})\n{% endif %}\n\n**Closest:** {{ cs if cs else st }}{% if mil %} \ud83c\uddfa\ud83c\uddf8{% endif %}\n\n**Route:** {% if route not in ['unknown','none','unavailable'] %}{{ route }}{% else %}\u2014{% endif %}\n{% if names%}\n  {{names}}\n{% endif %}\n\n**Plane:** {{ desc if desc else 'Unknown' }}{% if type_code %} ({{ type_code }}){% endif %}  \n**Altitude:** {{ alt if alt is not none else '\u2014' }} ft  \n**Distance:** {{ dist if dist is not none else '\u2014' }} mi  \n**HEX:** `{{ hx if hx else '\u2014' }}`\n{% endif %}\n"
             },
             {
               "type": "vertical-stack",
@@ -2180,7 +2781,7 @@
               "show_name": true,
               "show_icon": true,
               "type": "button",
-              "entity": "input_button.reset_inovelli_switch_configurations",
+              "entity": "script.reset_inovelli_switches",
               "show_state": false,
               "tap_action": {
                 "action": "toggle"
@@ -2640,11 +3241,11 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Washer",
-                  "secondary": "{% if is_state(\"sensor.front_load_washer\", \"on\") %}\nRunning {{ state_attr(\"sensor.front_load_washer\", \"current_course\") }}\nCurrently {{ state_attr(\"sensor.front_load_washer\", \"run_state\") }}\n{{ state_attr(\"sensor.front_load_washer\", \"initial_time\") }} total, {{ state_attr(\"sensor.front_load_washer\", \"remain_time\") }} to go\n{% elif state_attr(\"sensor.front_load_washer\", \"run_completed\") == \"on\" %}\nReady to unload\n{% else %}\nOff\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_washing_machine_power\") %}\n{% set current = states(\"sensor.laundry_room_washing_machine_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.washing_machine_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:washing-machine",
-                  "entity": "sensor.front_load_washer",
+                  "entity": "binary_sensor.washing_machine_running",
                   "multiline_secondary": true,
-                  "icon_color": "{{ \"indigo\" if is_state(\"sensor.front_load_washer\", \"on\") else \"\" }}",
+                  "icon_color": "{{ \"indigo\" if is_state(\"binary_sensor.washing_machine_running\", \"on\") else \"\" }}",
                   "tap_action": {
                     "action": "more-info"
                   }
@@ -2652,11 +3253,11 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Dryer",
-                  "secondary": "{% if is_state(\"sensor.dryer\", \"on\") %}\nRunning {{ state_attr(\"sensor.dryer\", \"current_course\") }}\nCurrently {{ state_attr(\"sensor.dryer\", \"run_state\") }}\n{{ state_attr(\"sensor.dryer\", \"initial_time\") }} total, {{ state_attr(\"sensor.dryer\", \"remain_time\") }} to go\n{% elif state_attr(\"sensor.front_load_washer\", \"run_completed\") == \"on\" %}\nReady to unload\n{% else %}\nOff\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_dryer_power\") %}\n{% set current = states(\"sensor.laundry_room_dryer_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.dryer_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:tumble-dryer",
-                  "entity": "sensor.dryer",
+                  "entity": "binary_sensor.dryer_running",
                   "multiline_secondary": true,
-                  "icon_color": "{{ \"indigo\" if is_state(\"sensor.dryer\", \"on\") else \"\" }}",
+                  "icon_color": "{{ \"indigo\" if is_state(\"binary_sensor.dryer_running\", \"on\") else \"\" }}",
                   "tap_action": {
                     "action": "more-info"
                   }
@@ -2688,6 +3289,42 @@
                 {
                   "type": "entity",
                   "entity": "sensor.vacuum_last_ran"
+                },
+                {
+                  "type": "heading",
+                  "heading": "Ground Floor Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_mainlevel_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_mainlevel_stall_status"
+                },
+                {
+                  "type": "heading",
+                  "heading": "Den Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_den_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_den_stall_status"
+                },
+                {
+                  "type": "heading",
+                  "heading": "Upstairs Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_upstairs_vacuum_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_upstairs_vacuum_stall_status"
                 }
               ]
             },
@@ -2753,6 +3390,57 @@
                       "secondary_info": "none"
                     }
                   ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Ground Floor Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_mainlevel_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_mainlevel_stall_status"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Den Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_den_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_den_stall_status"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Upstairs Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_upstairs_vacuum_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_upstairs_vacuum_stall_status"
                 }
               ]
             }
@@ -2878,61 +3566,6 @@
             }
           ],
           "cards": []
-        },
-        {
-          "title": "Bed Debug",
-          "path": "bed-debug",
-          "icon": "mdi:bed-double-outline",
-          "badges": [
-            {
-              "type": "entity",
-              "show_name": true,
-              "show_state": true,
-              "show_icon": true,
-              "entity": "binary_sensor.bayesian_bed_occupancy",
-              "color": ""
-            },
-            {
-              "type": "entity",
-              "show_name": false,
-              "show_state": true,
-              "show_icon": true,
-              "color": "",
-              "entity": "binary_sensor.master_bed_occupancy"
-            }
-          ],
-          "cards": [
-            {
-              "type": "entities",
-              "entities": [
-                {
-                  "entity": "input_boolean.east_bed_occupied"
-                },
-                {
-                  "entity": "input_boolean.west_bed_occupied"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_left_normal"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_right_normal"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_right_fast"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_left_fast"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_either_fast"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_either"
-                }
-              ],
-              "title": "Sides"
-            }
-          ]
         },
         {
           "title": "Deliveries",

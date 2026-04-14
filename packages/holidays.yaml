@@ -1,0 +1,1527 @@
+# Home Assistant package for holiday and seasonal scenes.
+# It manages when seasonal lights, tabs, and reset scenes appear so holiday behavior can be enabled without touching everyday automations.
+
+################################################################
+## Packages / Holidays
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "holidays"
+
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
+    ################################################
+    ## Automations
+    ################################################
+
+    automation.christmas_tree_on:
+      <<: *customize
+      friendly_name: "Turn on Christmas Tree"
+
+    automation.christmas_tree_off_midnight:
+      <<: *customize
+      friendly_name: "Turn off Christmas Tree"
+
+    automation.christmas_lights_off_bedroom_off:
+      <<: *customize
+      friendly_name: "Turn off Christmas Tree if bedroom lights turned off"
+
+    automation.toggle_christmas_automations_on_season_change:
+      <<: *customize
+      friendly_name: "Display Christmas tab"
+
+    automation.reset_after_holiday:
+      <<: *customize
+      friendly_name: "Reset lights after holiday"
+
+    automation.outdoor_holiday_light_loop:
+      <<: *customize
+      friendly_name: "Outdoor holiday lights"
+
+    automation.notify_holiday_lighting_day:
+      <<: *customize
+      friendly_name: "Notify holiday lighting day"
+
+    binary_sensor.christmas_season:
+      <<: *customize
+      friendly_name: "Christmas Season"
+      icon: mdi:calendar
+
+    binary_sensor.st_andrews_day:
+      <<: *customize
+      friendly_name: "St Andrews Day"
+      icon: mdi:calendar
+
+    binary_sensor.halloween:
+      <<: *customize
+      friendly_name: "Halloween"
+      icon: mdi:calendar
+
+    ################################################
+    ## Groups
+    ################################################
+
+    group.christmas_lights:
+      <<: *customize
+      friendly_name: "Christmas Sensors"
+
+    group.christmas_automations:
+      <<: *customize
+      friendly_name: "Christmas Automations"
+
+    ################################################
+    ## Scripts
+    ################################################
+
+    script.toggle_christmas_automation_during_christmas_season:
+      <<: *customize
+      friendly_name: "Toggle Christmas Automation Based on Boolean Sensor"
+
+    switch.christmas_tree:
+      <<: *customize
+      friendly_name: "Christmas Tree"
+      icon: mdi:pine-tree
+
+    script.apply_outdoor_holiday_scene:
+      <<: *customize
+      friendly_name: "Apply outdoor holiday scene"
+
+    sensor.active_outdoor_holiday:
+      <<: *customize
+      friendly_name: "Active outdoor holiday"
+      icon: mdi:string-lights
+
+    light.outdoor_holiday_facade_rgb_lights:
+      <<: *customize
+      friendly_name: "Outdoor holiday facade lights"
+
+    light.outdoor_holiday_front_ambient_light:
+      <<: *customize
+      friendly_name: "Outdoor holiday front ambient light"
+
+########################
+# Automations
+########################
+automation:
+  - id: christmas_tree_on
+    alias: christmas_tree_on
+    initial_state: false
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.christmas_tree
+      - action: light.turn_on
+        target:
+          entity_id: light.christmas_lights
+      - action: notify.all
+        data:
+          message: Turning on Christmas Tree.
+
+  - id: christmas_tree_off_midnight
+    alias: christmas_tree_off_midnight
+    initial_state: false
+    trigger:
+      - trigger: time
+        at: 00:00:00
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.christmas_tree
+      - action: light.turn_off
+        target:
+          entity_id: light.christmas_lights
+      - action: notify.all
+        data:
+          message: Turning off Christmas Tree.
+
+  - id: christmas_lights_off_bedroom_off
+    alias: christmas_lights_off_bedroom_off
+    initial_state: false
+    trigger:
+      - trigger: state
+        entity_id: light.bedroom_lamp, light.bedroom_lamp_2
+        to: "off"
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.christmas_tree
+      - action: light.turn_off
+        target:
+          entity_id: light.christmas_lights
+
+  - id: toggle_christmas_automations_on_season_change
+    alias: toggle_christmas_automations_on_season_change
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.christmas_season
+      - trigger: homeassistant
+        event: start
+    condition:
+      - alias: "It's christmas"
+        condition: state
+        entity_id: binary_sensor.christmas_season
+        state: "on"
+    action:
+      - action: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_tree_on
+      - action: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_tree_off_midnight
+      - action: script.toggle_christmas_automation_during_christmas_season
+        data:
+          entity_id: automation.christmas_lights_off_bedroom_off
+
+  - id: reset_after_holiday
+    alias: reset_after_holiday
+    trigger:
+      - trigger: sun
+        event: sunrise
+        offset: +00:45:00
+    action:
+      - action: scene.turn_on
+        data:
+          entity_id: scene.reset_front_lights
+      - delay:
+          seconds: 15
+      - action: light.turn_off
+        data:
+          entity_id: light.outside_front_hue
+
+  - id: outdoor_holiday_light_loop
+    alias: outdoor_holiday_light_loop
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+      - trigger: time_pattern
+        minutes: "/1"
+    condition:
+      - alias: "Dynamic outdoor holiday active"
+        condition: template
+        value_template: >-
+          {{ states('sensor.active_outdoor_holiday') | trim not in ['none', 'unknown', 'unavailable', ''] }}
+      - condition: or
+        conditions:
+          - alias: "Sunset"
+            condition: sun
+            after: sunset
+            after_offset: -00:45:00
+          - alias: "Sunrise"
+            condition: sun
+            before: sunrise
+            before_offset: 00:45:00
+    action:
+      - action: script.apply_outdoor_holiday_scene
+        data:
+          holiday_key: "{{ states('sensor.active_outdoor_holiday') | trim }}"
+
+  - id: notify_holiday_lighting_day
+    alias: notify_holiday_lighting_day
+    trigger:
+      - trigger: sun
+        event: sunset
+        offset: -00:45:00
+    condition:
+      - alias: "Holiday lighting active today"
+        condition: template
+        value_template: >-
+          {{ states('sensor.active_outdoor_holiday') | trim not in ['none', 'unknown', 'unavailable', ''] }}
+      - alias: "Notification message available"
+        condition: template
+        value_template: >-
+          {{ state_attr('sensor.active_outdoor_holiday', 'notification_message') | default('', true) | trim != '' }}
+    action:
+      - action: notify.all
+        data:
+          title: Holiday lighting
+          message: "{{ state_attr('sensor.active_outdoor_holiday', 'notification_message') }}"
+
+  - alias: Garbage Holiday Update
+    id: garbage_holiday_update
+    trigger:
+      - trigger: event
+        event_type: garbage_collection_loaded
+        event_data:
+          entity_id: sensor.waste_management
+    action:
+      - variables:
+          holiday_entity: calendar.mn_holidays
+      - alias: "Iterate through the dates"
+        repeat:
+          for_each: "{{ trigger.event.data.collection_dates }}"
+          sequence:
+            - alias: "Is there a public holiday on the week?"
+              condition: template
+              value_template: >-
+                {%- set collection_date = as_datetime(repeat.item) %}
+                {%- set ns = namespace(found=false) %}
+                {%- for i in range(collection_date.weekday()+1) %}
+                  {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                  {%- if d in state_attr(holiday_entity,'holidays') %}
+                    {%- set ns.found = true %}
+                  {%- endif %}
+                {%- endfor %}
+                {{ ns.found }}
+            - alias: "Move the date"
+              continue_on_error: true
+              action: garbage_collection.offset_date
+              data:
+                entity_id: "{{ trigger.event.data.entity_id }}"
+                date: "{{ repeat.item }}"
+                offset: >-
+                  {%- set collection_date = as_datetime(repeat.item) %}
+                  {%- set ns = namespace(found_free=false, offset=0) %}
+                  {# Count holidays in the week, increase offset for each found public holiday #}
+                  {%- for i in range(collection_date.weekday()+1) %}
+                    {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                    {%- if d in state_attr(holiday_entity,'holidays') %}
+                      {%- set ns.offset = ns.offset + 1 %}
+                    {%- endif %}
+                  {%- endfor %}
+                  {# Increase offset until we find a date that is not public holiday #}
+                  {%- for _ in range(7) if not ns.found_free %}
+                    {%- set d = ( collection_date + timedelta( days=ns.offset) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
+                    {%- if d in state_attr(holiday_entity,'holidays') %}
+                      {%- set ns.offset = ns.offset + 1 %}
+                    {% else %}
+                      {%- set ns.found_free = true %}
+                    {%- endif %}
+                  {% endfor %}
+                  {{ ns.offset }}
+      - alias: "Update the garbage_collection entity"
+        continue_on_error: true
+        action: garbage_collection.update_state
+        data:
+          entity_id: "{{ trigger.event.data.entity_id }}"
+
+########################
+# Binary Sensors
+########################
+binary_sensor: []
+
+########################
+# Groups
+########################
+group:
+  christmas_lights:
+    entities:
+      - switch.christmas_tree
+      - light.christmas_lights
+  christmas_automations:
+    entities:
+      - automation.christmas_tree_on
+      - automation.christmas_tree_off_midnight
+      - automation.christmas_lights_off_bedroom_off
+
+########################
+# Light
+########################
+light:
+  - platform: group
+    name: outdoor_holiday_facade_rgb_lights
+    unique_id: outdoor_holiday_facade_rgb_lights
+    entities:
+      - light.outside_front_door
+      - light.outside_north_west_garage
+      - light.outside_south_west_garage
+
+  - platform: group
+    name: outdoor_holiday_front_ambient_light
+    unique_id: outdoor_holiday_front_ambient_light
+    entities:
+      - light.outside_front_hue
+
+########################
+# Scenes
+########################
+scene:
+  - name: scene_christmas_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+  - name: scene_christmas_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+  - name: scene_christmas_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+  - name: scene_christmas_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 255, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+  - name: reset_front_lights
+    entities:
+      light.outside_front_door:
+        state: "on"
+        color_temp_kelvin: 2732
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        color_temp_kelvin: 2732
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        color_temp_kelvin: 2732
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 0, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 0, 255]
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 0, 255]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0]
+        brightness: 255
+  - name: scene_st_andrews_day_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 255, 255]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 69, 0]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [30, 144, 255]
+        brightness: 255
+  - name: scene_halloween_outdoors_1
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 0, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 50, 50]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [120, 0, 0]
+        brightness: 255
+  - name: scene_halloween_outdoors_2
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [255, 120, 0]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [255, 180, 50]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [180, 60, 0]
+        brightness: 255
+  - name: scene_halloween_outdoors_3
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [60, 0, 120]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [180, 0, 255]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [30, 0, 60]
+        brightness: 255
+  - name: scene_halloween_outdoors_4
+    entities:
+      light.outside_front_door:
+        state: "on"
+        rgb_color: [0, 255, 100]
+        brightness: 255
+      light.outside_north_west_garage:
+        state: "on"
+        rgb_color: [0, 120, 40]
+        brightness: 255
+      light.outside_south_west_garage:
+        state: "on"
+        rgb_color: [0, 60, 20]
+        brightness: 255
+
+########################
+# Scripts
+########################
+script:
+  toggle_christmas_automation_during_christmas_season:
+    sequence:
+      - if:
+          - condition: state
+            entity_id: binary_sensor.christmas_season
+            state: "on"
+        then:
+          - action: automation.turn_on
+            target:
+              entity_id: "{{ entity_id }}"
+        else:
+          - action: automation.turn_off
+            target:
+              entity_id: "{{ entity_id }}"
+
+  apply_outdoor_holiday_scene:
+    mode: queued
+    fields:
+      holiday_key:
+        description: Holiday key from sensor.active_outdoor_holiday.
+        example: burns_night
+    sequence:
+      - variables:
+          # Keep palette metadata in JSON so pytest can validate the scene engine
+          # without adding a YAML parser dependency to the ephemeral uv test env.
+          holiday_target_groups_json: >-
+            {
+              "facade_rgb_lights": [
+                "light.outside_front_door",
+                "light.outside_north_west_garage",
+                "light.outside_south_west_garage"
+              ],
+              "front_ambient_light": [
+                "light.outside_front_hue"
+              ],
+              "accent_path_lights": []
+            }
+          holiday_definitions_json: >-
+            {
+              "christmas_season": {
+                "label": "Christmas Season",
+                "cadence_minutes": 1,
+                "transition_seconds": 30,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Classic red and green Christmas facade loop.",
+                  "front_ambient_light": "Warm white porch glow with subtle holiday red and green accents.",
+                  "accent_path_lights": "Warm white base with alternating red and green accents when path lights exist."
+                },
+                "facade_palette": [
+                  {"rgb_color": [0, 255, 0], "brightness": 255},
+                  {"rgb_color": [255, 0, 0], "brightness": 255},
+                  {"rgb_color": [0, 255, 0], "brightness": 255},
+                  {"rgb_color": [255, 0, 0], "brightness": 255}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2500, "brightness": 155},
+                  {"rgb_color": [255, 90, 90], "brightness": 135},
+                  {"rgb_color": [90, 220, 120], "brightness": 135},
+                  {"color_temp_kelvin": 2400, "brightness": 160}
+                ],
+                "path_palette": [
+                  {"color_temp_kelvin": 2600, "brightness": 112},
+                  {"rgb_color": [255, 0, 0], "brightness": 108},
+                  {"rgb_color": [0, 255, 0], "brightness": 108},
+                  {"color_temp_kelvin": 2600, "brightness": 112}
+                ]
+              },
+              "st_andrews_day": {
+                "label": "St Andrew's Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 30,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Saltire-inspired blue and white with warm amber accents.",
+                  "front_ambient_light": "Cool white and blue porch wash with a restrained amber variant.",
+                  "accent_path_lights": "Blue and white stepping pattern with amber accents when path lights exist."
+                },
+                "facade_palette": [
+                  {"rgb_color": [0, 0, 255], "brightness": 255},
+                  {"rgb_color": [255, 255, 255], "brightness": 255},
+                  {"rgb_color": [255, 69, 0], "brightness": 255},
+                  {"rgb_color": [30, 144, 255], "brightness": 255}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [0, 0, 255], "brightness": 145},
+                  {"rgb_color": [255, 255, 255], "brightness": 150},
+                  {"color_temp_kelvin": 2600, "brightness": 135},
+                  {"rgb_color": [30, 144, 255], "brightness": 145}
+                ],
+                "path_palette": [
+                  {"rgb_color": [0, 0, 255], "brightness": 112},
+                  {"rgb_color": [255, 255, 255], "brightness": 112},
+                  {"color_temp_kelvin": 2600, "brightness": 108},
+                  {"rgb_color": [30, 144, 255], "brightness": 110}
+                ]
+              },
+              "halloween": {
+                "label": "Halloween",
+                "cadence_minutes": 2,
+                "transition_seconds": 30,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Spooky Halloween facade loop with red, orange, purple, and eerie green.",
+                  "front_ambient_light": "Porch glow shifts between jack-o-lantern orange, ghostly purple, and toxic green.",
+                  "accent_path_lights": "Warm orange base with purple and green accents when path lights exist."
+                },
+                "facade_palette": [
+                  {"rgb_color": [255, 0, 0], "brightness": 255},
+                  {"rgb_color": [255, 120, 0], "brightness": 255},
+                  {"rgb_color": [60, 0, 120], "brightness": 255},
+                  {"rgb_color": [0, 255, 100], "brightness": 255}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [255, 64, 0], "brightness": 145},
+                  {"rgb_color": [255, 150, 0], "brightness": 150},
+                  {"rgb_color": [120, 0, 220], "brightness": 140},
+                  {"rgb_color": [0, 180, 70], "brightness": 140}
+                ],
+                "path_palette": [
+                  {"rgb_color": [255, 120, 0], "brightness": 112},
+                  {"rgb_color": [120, 0, 220], "brightness": 108},
+                  {"rgb_color": [0, 180, 70], "brightness": 108},
+                  {"rgb_color": [255, 64, 0], "brightness": 110}
+                ]
+              },
+              "burns_night": {
+                "label": "Burns Night",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 3,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Saltire blue and white with restrained whisky amber accents.",
+                  "front_ambient_light": "Warm amber supper glow at the porch.",
+                  "accent_path_lights": "Blue and white stepping pattern with amber closest to the entry."
+                },
+                "facade_palette": [
+                  {"rgb_color": [0, 82, 165], "brightness": 220},
+                  {"rgb_color": [255, 255, 255], "brightness": 255},
+                  {"rgb_color": [214, 151, 66], "brightness": 200}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2100, "brightness": 155},
+                  {"rgb_color": [255, 196, 128], "brightness": 165},
+                  {"color_temp_kelvin": 2400, "brightness": 150}
+                ],
+                "path_palette": [
+                  {"rgb_color": [0, 82, 165], "brightness": 120},
+                  {"rgb_color": [255, 255, 255], "brightness": 120},
+                  {"color_temp_kelvin": 2200, "brightness": 115}
+                ]
+              },
+              "national_curling_month": {
+                "label": "National Curling Month",
+                "cadence_minutes": 2,
+                "transition_seconds": 45,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Ice white and arena blue with granite gray, handle red, and scoreboard amber accents.",
+                  "front_ambient_light": "Alternate scoreboard amber and neutral ice-white.",
+                  "accent_path_lights": "Blue and white sheet markings with a red hammer marker when path lights arrive."
+                },
+                "facade_palette": [
+                  {"rgb_color": [240, 247, 255], "brightness": 255},
+                  {"rgb_color": [102, 170, 255], "brightness": 225},
+                  {"rgb_color": [112, 112, 124], "brightness": 170},
+                  {"rgb_color": [196, 42, 42], "brightness": 185}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [255, 191, 94], "brightness": 155},
+                  {"color_temp_kelvin": 4000, "brightness": 150},
+                  {"color_temp_kelvin": 3500, "brightness": 145},
+                  {"rgb_color": [240, 247, 255], "brightness": 150}
+                ],
+                "path_palette": [
+                  {"rgb_color": [102, 170, 255], "brightness": 120},
+                  {"rgb_color": [240, 247, 255], "brightness": 120},
+                  {"rgb_color": [196, 42, 42], "brightness": 115},
+                  {"color_temp_kelvin": 2700, "brightness": 110}
+                ]
+              },
+              "groundhog_day": {
+                "label": "Groundhog Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 35,
+                "scene_count": 3,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Warm sunrise amber versus cool overcast blue with a forecast-toggling white.",
+                  "front_ambient_light": "Choose the amber or blue side of the forecast joke.",
+                  "accent_path_lights": "Amber and blue split down the path with cool-white splash points."
+                },
+                "facade_palette": [
+                  {"rgb_color": [245, 175, 82], "brightness": 215},
+                  {"rgb_color": [132, 170, 220], "brightness": 210},
+                  {"rgb_color": [235, 244, 255], "brightness": 225}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [245, 175, 82], "brightness": 155},
+                  {"rgb_color": [132, 170, 220], "brightness": 150},
+                  {"color_temp_kelvin": 4000, "brightness": 145}
+                ],
+                "path_palette": [
+                  {"rgb_color": [245, 175, 82], "brightness": 120},
+                  {"rgb_color": [132, 170, 220], "brightness": 120},
+                  {"rgb_color": [235, 244, 255], "brightness": 115}
+                ]
+              },
+              "presidents_day": {
+                "label": "Presidents' Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Formal navy, white, burgundy, and brass-gold accents.",
+                  "front_ambient_light": "Brass-gold or warm white, never the loudest color.",
+                  "accent_path_lights": "Mostly navy and warm white with burgundy or brass markers at the ends."
+                },
+                "facade_palette": [
+                  {"rgb_color": [34, 53, 93], "brightness": 210},
+                  {"rgb_color": [245, 245, 240], "brightness": 255},
+                  {"rgb_color": [120, 30, 45], "brightness": 190},
+                  {"rgb_color": [186, 147, 64], "brightness": 175}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [186, 147, 64], "brightness": 150},
+                  {"color_temp_kelvin": 2800, "brightness": 150},
+                  {"rgb_color": [245, 245, 240], "brightness": 145},
+                  {"rgb_color": [186, 147, 64], "brightness": 155}
+                ],
+                "path_palette": [
+                  {"rgb_color": [34, 53, 93], "brightness": 118},
+                  {"color_temp_kelvin": 2800, "brightness": 112},
+                  {"rgb_color": [120, 30, 45], "brightness": 108},
+                  {"rgb_color": [186, 147, 64], "brightness": 105}
+                ]
+              },
+              "leap_day": {
+                "label": "Leap Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 35,
+                "scene_count": 3,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Pond green, splash blue, and white leap-year silliness.",
+                  "front_ambient_light": "Slow pond-green to cool-white splash light.",
+                  "accent_path_lights": "Short green-blue-white hops along the path."
+                },
+                "facade_palette": [
+                  {"rgb_color": [72, 160, 96], "brightness": 205},
+                  {"rgb_color": [90, 180, 255], "brightness": 215},
+                  {"rgb_color": [245, 255, 255], "brightness": 225}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [72, 160, 96], "brightness": 145},
+                  {"color_temp_kelvin": 4200, "brightness": 145},
+                  {"rgb_color": [90, 180, 255], "brightness": 145}
+                ],
+                "path_palette": [
+                  {"rgb_color": [72, 160, 96], "brightness": 118},
+                  {"rgb_color": [90, 180, 255], "brightness": 118},
+                  {"rgb_color": [245, 255, 255], "brightness": 112}
+                ]
+              },
+              "pi_day": {
+                "label": "Pi Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Crust amber, cream, cherry red, and blueberry blue bakery palette.",
+                  "front_ambient_light": "Warm cream or crust-amber entry light.",
+                  "accent_path_lights": "Mostly crust and cream with sparse cherry and blueberry accents."
+                },
+                "facade_palette": [
+                  {"rgb_color": [210, 140, 70], "brightness": 210},
+                  {"rgb_color": [255, 244, 220], "brightness": 225},
+                  {"rgb_color": [160, 30, 40], "brightness": 185},
+                  {"rgb_color": [80, 110, 180], "brightness": 185}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2500, "brightness": 150},
+                  {"rgb_color": [255, 244, 220], "brightness": 155},
+                  {"rgb_color": [210, 140, 70], "brightness": 145},
+                  {"color_temp_kelvin": 2700, "brightness": 145}
+                ],
+                "path_palette": [
+                  {"rgb_color": [210, 140, 70], "brightness": 116},
+                  {"rgb_color": [255, 244, 220], "brightness": 116},
+                  {"rgb_color": [160, 30, 40], "brightness": 108},
+                  {"rgb_color": [80, 110, 180], "brightness": 108}
+                ]
+              },
+              "tartan_day": {
+                "label": "Tartan Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Blue, green, red, and white tartan-inspired asymmetry.",
+                  "front_ambient_light": "Follow the least-represented tartan accent color.",
+                  "accent_path_lights": "Repeat a tartan-border stepping pattern down the path."
+                },
+                "facade_palette": [
+                  {"rgb_color": [26, 102, 153], "brightness": 210},
+                  {"rgb_color": [0, 140, 70], "brightness": 205},
+                  {"rgb_color": [179, 0, 0], "brightness": 190},
+                  {"rgb_color": [245, 245, 245], "brightness": 225}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [0, 140, 70], "brightness": 150},
+                  {"rgb_color": [179, 0, 0], "brightness": 150},
+                  {"rgb_color": [26, 102, 153], "brightness": 150},
+                  {"rgb_color": [245, 245, 245], "brightness": 150}
+                ],
+                "path_palette": [
+                  {"rgb_color": [179, 0, 0], "brightness": 116},
+                  {"rgb_color": [0, 140, 70], "brightness": 116},
+                  {"rgb_color": [26, 102, 153], "brightness": 116},
+                  {"rgb_color": [245, 245, 245], "brightness": 116}
+                ]
+              },
+              "star_wars_day": {
+                "label": "Star Wars Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 35,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Blue versus red, green versus purple, plus a starfield white neutral.",
+                  "front_ambient_light": "Either neutral starfield white or the current dominant saber tone.",
+                  "accent_path_lights": "Opposing saber halves with occasional white starfield nodes."
+                },
+                "facade_palette": [
+                  {"rgb_color": [40, 120, 255], "brightness": 215},
+                  {"rgb_color": [220, 40, 40], "brightness": 205},
+                  {"rgb_color": [50, 220, 100], "brightness": 205},
+                  {"rgb_color": [180, 90, 255], "brightness": 205}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [240, 240, 255], "brightness": 155},
+                  {"rgb_color": [40, 120, 255], "brightness": 150},
+                  {"rgb_color": [180, 90, 255], "brightness": 150},
+                  {"rgb_color": [50, 220, 100], "brightness": 150}
+                ],
+                "path_palette": [
+                  {"rgb_color": [40, 120, 255], "brightness": 118},
+                  {"rgb_color": [220, 40, 40], "brightness": 118},
+                  {"rgb_color": [240, 240, 255], "brightness": 112},
+                  {"rgb_color": [50, 220, 100], "brightness": 112}
+                ]
+              },
+              "minnesota_fishing_opener": {
+                "label": "Minnesota Fishing Opener",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Lake blue, walleye gold, pine green, and dock-light warm white with campy restraint.",
+                  "front_ambient_light": "Dock-light warm white or a pine-green porch tint.",
+                  "accent_path_lights": "Alternate lake blue and dock light with gold or green bobber accents."
+                },
+                "facade_palette": [
+                  {"rgb_color": [0, 96, 148], "brightness": 215},
+                  {"rgb_color": [255, 230, 200], "brightness": 225},
+                  {"rgb_color": [220, 180, 70], "brightness": 190},
+                  {"rgb_color": [41, 90, 55], "brightness": 185}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2600, "brightness": 150},
+                  {"rgb_color": [41, 90, 55], "brightness": 145},
+                  {"color_temp_kelvin": 2800, "brightness": 145},
+                  {"rgb_color": [0, 96, 148], "brightness": 145}
+                ],
+                "path_palette": [
+                  {"rgb_color": [0, 96, 148], "brightness": 118},
+                  {"color_temp_kelvin": 2700, "brightness": 114},
+                  {"rgb_color": [220, 180, 70], "brightness": 110},
+                  {"rgb_color": [41, 90, 55], "brightness": 108}
+                ]
+              },
+              "minnesota_statehood_day": {
+                "label": "Minnesota Statehood Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 3,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Deep lake blue plus star white with optional aurora-green accent scenes.",
+                  "front_ambient_light": "Soft aurora-green or warm-white porch wash, never the star color.",
+                  "accent_path_lights": "Mostly lake blue with every third light reading as a North Star marker."
+                },
+                "facade_palette": [
+                  {"rgb_color": [0, 102, 179], "brightness": 215},
+                  {"rgb_color": [255, 255, 255], "brightness": 230},
+                  {"rgb_color": [120, 220, 170], "brightness": 190}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [120, 220, 170], "brightness": 145},
+                  {"color_temp_kelvin": 2800, "brightness": 145},
+                  {"rgb_color": [180, 255, 220], "brightness": 140}
+                ],
+                "path_palette": [
+                  {"rgb_color": [0, 102, 179], "brightness": 118},
+                  {"rgb_color": [255, 255, 255], "brightness": 114},
+                  {"rgb_color": [120, 220, 170], "brightness": 108}
+                ]
+              },
+              "memorial_day": {
+                "label": "Memorial Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 45,
+                "scene_count": 3,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Restrained commemorative red, warm white, and blue.",
+                  "front_ambient_light": "Stay mostly warm white with only subtle flag-color shifts.",
+                  "accent_path_lights": "Predominantly warm white with sparse red and blue markers."
+                },
+                "facade_palette": [
+                  {"rgb_color": [255, 236, 214], "brightness": 225},
+                  {"rgb_color": [170, 50, 60], "brightness": 180},
+                  {"rgb_color": [60, 90, 160], "brightness": 180}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2700, "brightness": 150},
+                  {"rgb_color": [255, 236, 214], "brightness": 145},
+                  {"color_temp_kelvin": 3000, "brightness": 145}
+                ],
+                "path_palette": [
+                  {"color_temp_kelvin": 2800, "brightness": 112},
+                  {"rgb_color": [170, 50, 60], "brightness": 105},
+                  {"rgb_color": [60, 90, 160], "brightness": 105}
+                ]
+              },
+              "juneteenth": {
+                "label": "Juneteenth",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Red, black-toned charcoal, green, and restrained gold accents.",
+                  "front_ambient_light": "Gold accent or soft green porch wash.",
+                  "accent_path_lights": "Repeat red and green with warm white replacing black for visibility."
+                },
+                "facade_palette": [
+                  {"rgb_color": [196, 30, 58], "brightness": 200},
+                  {"rgb_color": [40, 40, 40], "brightness": 150},
+                  {"rgb_color": [0, 122, 77], "brightness": 195},
+                  {"rgb_color": [220, 190, 90], "brightness": 175}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [220, 190, 90], "brightness": 145},
+                  {"rgb_color": [0, 122, 77], "brightness": 145},
+                  {"color_temp_kelvin": 2800, "brightness": 140},
+                  {"rgb_color": [196, 30, 58], "brightness": 140}
+                ],
+                "path_palette": [
+                  {"rgb_color": [196, 30, 58], "brightness": 112},
+                  {"color_temp_kelvin": 2700, "brightness": 108},
+                  {"rgb_color": [0, 122, 77], "brightness": 112},
+                  {"rgb_color": [220, 190, 90], "brightness": 104}
+                ]
+              },
+              "independence_day": {
+                "label": "Independence Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 35,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Saturated but clean red, white, and blue with one sparkle-white scene.",
+                  "front_ambient_light": "Sparkle-white or flag-blue so the porch reads brighter than the facade.",
+                  "accent_path_lights": "Clear red-white-blue tricolor kept slightly dimmer than the facade."
+                },
+                "facade_palette": [
+                  {"rgb_color": [210, 26, 52], "brightness": 215},
+                  {"rgb_color": [255, 255, 255], "brightness": 230},
+                  {"rgb_color": [0, 60, 170], "brightness": 215},
+                  {"rgb_color": [220, 240, 255], "brightness": 225}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [220, 240, 255], "brightness": 150},
+                  {"rgb_color": [0, 60, 170], "brightness": 145},
+                  {"color_temp_kelvin": 3500, "brightness": 145},
+                  {"rgb_color": [255, 255, 255], "brightness": 145}
+                ],
+                "path_palette": [
+                  {"rgb_color": [210, 26, 52], "brightness": 115},
+                  {"rgb_color": [255, 255, 255], "brightness": 115},
+                  {"rgb_color": [0, 60, 170], "brightness": 115},
+                  {"rgb_color": [220, 240, 255], "brightness": 110}
+                ]
+              },
+              "labor_day": {
+                "label": "Labor Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 40,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Muted red, denim blue, warm white, and fairground amber late-summer Americana.",
+                  "front_ambient_light": "Fairground amber or warm-white porch glow.",
+                  "accent_path_lights": "Warm white and amber base with denim and muted-red accents."
+                },
+                "facade_palette": [
+                  {"rgb_color": [255, 236, 214], "brightness": 225},
+                  {"rgb_color": [255, 190, 90], "brightness": 195},
+                  {"rgb_color": [70, 100, 150], "brightness": 190},
+                  {"rgb_color": [173, 72, 72], "brightness": 185}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [255, 190, 90], "brightness": 145},
+                  {"color_temp_kelvin": 2800, "brightness": 145},
+                  {"rgb_color": [255, 236, 214], "brightness": 145},
+                  {"rgb_color": [255, 190, 90], "brightness": 150}
+                ],
+                "path_palette": [
+                  {"color_temp_kelvin": 2800, "brightness": 112},
+                  {"rgb_color": [255, 190, 90], "brightness": 110},
+                  {"rgb_color": [70, 100, 150], "brightness": 106},
+                  {"rgb_color": [173, 72, 72], "brightness": 104}
+                ]
+              },
+              "sealand_independence_day": {
+                "label": "Sealand Independence Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 35,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Sealand flag red, black-toned charcoal, and white with one bright beacon scene.",
+                  "front_ambient_light": "Alternate between bright white entry beacon and restrained red.",
+                  "accent_path_lights": "Red and white path rhythm with warm-white substitutions for dark tones."
+                },
+                "facade_palette": [
+                  {"rgb_color": [210, 16, 52], "brightness": 205},
+                  {"rgb_color": [240, 240, 240], "brightness": 225},
+                  {"rgb_color": [32, 32, 32], "brightness": 150},
+                  {"rgb_color": [255, 255, 255], "brightness": 255}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [255, 255, 255], "brightness": 170},
+                  {"rgb_color": [210, 16, 52], "brightness": 145},
+                  {"color_temp_kelvin": 3200, "brightness": 145},
+                  {"rgb_color": [255, 255, 255], "brightness": 165}
+                ],
+                "path_palette": [
+                  {"rgb_color": [210, 16, 52], "brightness": 112},
+                  {"rgb_color": [255, 255, 255], "brightness": 112},
+                  {"color_temp_kelvin": 2700, "brightness": 108},
+                  {"rgb_color": [255, 255, 255], "brightness": 110}
+                ]
+              },
+              "talk_like_a_pirate_day": {
+                "label": "International Talk Like a Pirate Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 35,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Crimson, gold, sea-blue, and black-toned lantern scenes.",
+                  "front_ambient_light": "Sea-blue or lantern-gold at the door.",
+                  "accent_path_lights": "Sea-blue and gold with crimson accents and warm-white substitutions for black."
+                },
+                "facade_palette": [
+                  {"rgb_color": [153, 0, 0], "brightness": 195},
+                  {"rgb_color": [230, 180, 60], "brightness": 185},
+                  {"rgb_color": [40, 110, 170], "brightness": 190},
+                  {"rgb_color": [56, 56, 56], "brightness": 150}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [230, 180, 60], "brightness": 145},
+                  {"rgb_color": [40, 110, 170], "brightness": 145},
+                  {"color_temp_kelvin": 2600, "brightness": 140},
+                  {"rgb_color": [153, 0, 0], "brightness": 140}
+                ],
+                "path_palette": [
+                  {"rgb_color": [40, 110, 170], "brightness": 112},
+                  {"rgb_color": [230, 180, 60], "brightness": 110},
+                  {"rgb_color": [153, 0, 0], "brightness": 106},
+                  {"color_temp_kelvin": 2700, "brightness": 106}
+                ]
+              },
+              "veterans_day": {
+                "label": "Veterans Day",
+                "cadence_minutes": 2,
+                "transition_seconds": 45,
+                "scene_count": 3,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Flag-inspired but muted red, white, and blue.",
+                  "front_ambient_light": "Warm white with only gentle blue or red nudges.",
+                  "accent_path_lights": "Warm white path treatment with muted anchors instead of a loud tricolor."
+                },
+                "facade_palette": [
+                  {"rgb_color": [255, 236, 214], "brightness": 225},
+                  {"rgb_color": [60, 88, 150], "brightness": 185},
+                  {"rgb_color": [165, 48, 64], "brightness": 180}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2800, "brightness": 145},
+                  {"rgb_color": [255, 236, 214], "brightness": 145},
+                  {"color_temp_kelvin": 3000, "brightness": 145}
+                ],
+                "path_palette": [
+                  {"color_temp_kelvin": 2800, "brightness": 112},
+                  {"rgb_color": [60, 88, 150], "brightness": 104},
+                  {"rgb_color": [165, 48, 64], "brightness": 104}
+                ]
+              },
+              "thanksgiving": {
+                "label": "Thanksgiving",
+                "cadence_minutes": 2,
+                "transition_seconds": 45,
+                "scene_count": 4,
+                "target_behaviors": {
+                  "facade_rgb_lights": "Harvest amber, pumpkin orange, cranberry red, and corn-gold warm white.",
+                  "front_ambient_light": "Keep the porch in corn-gold firelight the whole evening.",
+                  "accent_path_lights": "Mostly warm white and amber with cranberry accents near the ends."
+                },
+                "facade_palette": [
+                  {"rgb_color": [255, 166, 77], "brightness": 210},
+                  {"rgb_color": [214, 102, 0], "brightness": 195},
+                  {"rgb_color": [128, 18, 48], "brightness": 175},
+                  {"rgb_color": [255, 214, 120], "brightness": 220}
+                ],
+                "ambient_palette": [
+                  {"color_temp_kelvin": 2400, "brightness": 155},
+                  {"rgb_color": [255, 214, 120], "brightness": 150},
+                  {"rgb_color": [255, 166, 77], "brightness": 145},
+                  {"color_temp_kelvin": 2600, "brightness": 145}
+                ],
+                "path_palette": [
+                  {"color_temp_kelvin": 2600, "brightness": 112},
+                  {"rgb_color": [255, 166, 77], "brightness": 110},
+                  {"rgb_color": [128, 18, 48], "brightness": 104},
+                  {"rgb_color": [255, 214, 120], "brightness": 108}
+                ]
+              },
+              "hogmanay": {
+                "label": "Hogmanay",
+                "cadence_minutes": 2,
+                "transition_seconds": 30,
+                "scene_count": 4,
+                "midnight_window": {
+                  "start_hour": 23,
+                  "start_minute": 45,
+                  "cadence_minutes": 1
+                },
+                "target_behaviors": {
+                  "facade_rgb_lights": "Midnight blue, white, and gold with a faster pre-midnight rotation window.",
+                  "front_ambient_light": "Gold glow anchor or cool-white shimmer before midnight.",
+                  "accent_path_lights": "Mostly warm white and gold with cool-white countdown markers."
+                },
+                "facade_palette": [
+                  {"rgb_color": [22, 36, 92], "brightness": 215},
+                  {"rgb_color": [255, 255, 255], "brightness": 230},
+                  {"rgb_color": [255, 200, 64], "brightness": 195},
+                  {"rgb_color": [205, 232, 255], "brightness": 220}
+                ],
+                "ambient_palette": [
+                  {"rgb_color": [255, 200, 64], "brightness": 150},
+                  {"rgb_color": [205, 232, 255], "brightness": 150},
+                  {"rgb_color": [255, 255, 255], "brightness": 145},
+                  {"rgb_color": [255, 200, 64], "brightness": 155}
+                ],
+                "path_palette": [
+                  {"color_temp_kelvin": 2800, "brightness": 114},
+                  {"rgb_color": [255, 200, 64], "brightness": 110},
+                  {"rgb_color": [205, 232, 255], "brightness": 108},
+                  {"rgb_color": [22, 36, 92], "brightness": 108}
+                ]
+              }
+            }
+          holiday_target_groups: "{{ holiday_target_groups_json | from_json }}"
+          holiday_definitions: "{{ holiday_definitions_json | from_json }}"
+          holiday: "{{ holiday_definitions[holiday_key] if holiday_key in holiday_definitions else dict() }}"
+          facade_palette: "{{ holiday.facade_palette | default([], true) }}"
+          ambient_palette: "{{ holiday.ambient_palette | default([], true) }}"
+          path_palette: "{{ holiday.path_palette | default([], true) }}"
+          scene_count: "{{ holiday.scene_count | default(facade_palette | count, true) | int }}"
+          fast_window_active: >-
+            {% set fast = holiday.midnight_window | default(none, true) %}
+            {% if fast is mapping %}
+              {{ now().hour == (fast.start_hour | int) and now().minute >= (fast.start_minute | int) }}
+            {% else %}
+              false
+            {% endif %}
+          cadence_minutes: >-
+            {% set fast = holiday.midnight_window | default(none, true) %}
+            {% if fast_window_active in [true, 'true', 'True', 'on'] and fast is mapping %}
+              {{ fast.cadence_minutes | int }}
+            {% else %}
+              {{ holiday.cadence_minutes | default(2) | int }}
+            {% endif %}
+          scene_position: >-
+            {% if (scene_count | int) > 0 %}
+              {{ ((now().minute // (cadence_minutes | int)) % (scene_count | int)) | int }}
+            {% else %}
+              0
+            {% endif %}
+          facade_entities: "{{ holiday_target_groups.facade_rgb_lights | default([], true) }}"
+          ambient_entities: "{{ holiday_target_groups.front_ambient_light | default([], true) }}"
+          path_entities: "{{ holiday_target_groups.accent_path_lights | default([], true) }}"
+          scene_entities: >-
+            {% set ns = namespace(entities={}) %}
+            {% if holiday is mapping and (facade_palette | count) > 0 and (ambient_palette | count) > 0 %}
+              {% for entity_id in facade_entities %}
+                {% set attrs = facade_palette[((loop.index0 + (scene_position | int)) % (facade_palette | count))] | combine({'state': 'on'}, recursive=True) %}
+                {% set ns.entities = ns.entities | combine({entity_id: attrs}, recursive=True) %}
+              {% endfor %}
+              {% set ambient_attrs = ambient_palette[(scene_position | int) % (ambient_palette | count)] | combine({'state': 'on'}, recursive=True) %}
+              {% for entity_id in ambient_entities %}
+                {% set ns.entities = ns.entities | combine({entity_id: ambient_attrs}, recursive=True) %}
+              {% endfor %}
+              {% if (path_palette | count) > 0 %}
+                {% for entity_id in path_entities %}
+                  {% set attrs = path_palette[((loop.index0 + (scene_position | int)) % (path_palette | count))] | combine({'state': 'on'}, recursive=True) %}
+                  {% set ns.entities = ns.entities | combine({entity_id: attrs}, recursive=True) %}
+                {% endfor %}
+              {% endif %}
+            {% endif %}
+            {{ ns.entities }}
+      - condition: template
+        value_template: >-
+          {{ holiday is mapping and (scene_count | int) > 0 and (scene_entities | count) > 0 }}
+      - action: scene.apply
+        data:
+          transition: "{{ holiday.transition_seconds | default(40) | int }}"
+          entities: "{{ scene_entities }}"
+
+########################
+# Template
+########################
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.christmas_season
+        state: '{{ now().strftime("%m") |int in [12] }}'
+        name: christmas_season
+
+      - name: st_andrews_day
+        unique_id: st_andrews_day
+        state: "{{ now().month == 11 and now().day == 30 }}"
+
+      - name: halloween
+        unique_id: halloween
+        state: "{{ now().month == 10 and now().day == 31 }}"
+
+      - name: burns_night
+        unique_id: burns_night
+        state: "{{ now().month == 1 and now().day == 25 }}"
+
+      - name: national_curling_month
+        unique_id: national_curling_month
+        state: "{{ now().month == 1 }}"
+
+      - name: groundhog_day
+        unique_id: groundhog_day
+        state: "{{ now().month == 2 and now().day == 2 }}"
+
+      - name: presidents_day
+        unique_id: presidents_day
+        state: "{{ now().month == 2 and now().weekday() == 0 and 15 <= now().day <= 21 }}"
+
+      - name: leap_day
+        unique_id: leap_day
+        state: "{{ now().month == 2 and now().day == 29 }}"
+
+      - name: pi_day
+        unique_id: pi_day
+        state: "{{ now().month == 3 and now().day == 14 }}"
+
+      - name: tartan_day
+        unique_id: tartan_day
+        state: "{{ now().month == 4 and now().day == 6 }}"
+
+      - name: star_wars_day
+        unique_id: star_wars_day
+        state: "{{ now().month == 5 and now().day == 4 }}"
+
+      - name: minnesota_fishing_opener
+        unique_id: minnesota_fishing_opener
+        state: >-
+          {% set memorial_day = strptime(now().year ~ '-05-31', '%Y-%m-%d').date() - timedelta(days=strptime(now().year ~ '-05-31', '%Y-%m-%d').date().weekday()) %}
+          {% set opener = memorial_day - timedelta(days=16) %}
+          {{ now().date() == opener }}
+
+      - name: minnesota_statehood_day
+        unique_id: minnesota_statehood_day
+        state: "{{ now().month == 5 and now().day == 11 }}"
+
+      - name: memorial_day
+        unique_id: memorial_day
+        state: "{{ now().month == 5 and now().weekday() == 0 and (now().date() + timedelta(days=7)).month != 5 }}"
+
+      - name: juneteenth
+        unique_id: juneteenth
+        state: "{{ now().month == 6 and now().day == 19 }}"
+
+      - name: independence_day
+        unique_id: independence_day
+        state: "{{ now().month == 7 and now().day == 4 }}"
+
+      - name: labor_day
+        unique_id: labor_day
+        state: "{{ now().month == 9 and now().weekday() == 0 and 1 <= now().day <= 7 }}"
+
+      - name: sealand_independence_day
+        unique_id: sealand_independence_day
+        state: "{{ now().month == 9 and now().day == 2 }}"
+
+      - name: talk_like_a_pirate_day
+        unique_id: talk_like_a_pirate_day
+        state: "{{ now().month == 9 and now().day == 19 }}"
+
+      - name: veterans_day
+        unique_id: veterans_day
+        state: "{{ now().month == 11 and now().day == 11 }}"
+
+      - name: thanksgiving
+        unique_id: thanksgiving
+        state: "{{ now().month == 11 and now().weekday() == 3 and 22 <= now().day <= 28 }}"
+
+      - name: hogmanay
+        unique_id: hogmanay
+        state: "{{ now().month == 12 and now().day == 31 }}"
+
+  - sensor:
+      - name: active_outdoor_holiday
+        unique_id: active_outdoor_holiday
+        state: >-
+          {%- if is_state('binary_sensor.hogmanay', 'on') -%}
+            hogmanay
+          {%- elif is_state('binary_sensor.halloween', 'on') -%}
+            halloween
+          {%- elif is_state('binary_sensor.st_andrews_day', 'on') -%}
+            st_andrews_day
+          {%- elif is_state('binary_sensor.burns_night', 'on') -%}
+            burns_night
+          {%- elif is_state('binary_sensor.national_curling_month', 'on') -%}
+            national_curling_month
+          {%- elif is_state('binary_sensor.groundhog_day', 'on') -%}
+            groundhog_day
+          {%- elif is_state('binary_sensor.presidents_day', 'on') -%}
+            presidents_day
+          {%- elif is_state('binary_sensor.leap_day', 'on') -%}
+            leap_day
+          {%- elif is_state('binary_sensor.pi_day', 'on') -%}
+            pi_day
+          {%- elif is_state('binary_sensor.tartan_day', 'on') -%}
+            tartan_day
+          {%- elif is_state('binary_sensor.star_wars_day', 'on') -%}
+            star_wars_day
+          {%- elif is_state('binary_sensor.minnesota_fishing_opener', 'on') -%}
+            minnesota_fishing_opener
+          {%- elif is_state('binary_sensor.minnesota_statehood_day', 'on') -%}
+            minnesota_statehood_day
+          {%- elif is_state('binary_sensor.memorial_day', 'on') -%}
+            memorial_day
+          {%- elif is_state('binary_sensor.juneteenth', 'on') -%}
+            juneteenth
+          {%- elif is_state('binary_sensor.independence_day', 'on') -%}
+            independence_day
+          {%- elif is_state('binary_sensor.sealand_independence_day', 'on') -%}
+            sealand_independence_day
+          {%- elif is_state('binary_sensor.labor_day', 'on') -%}
+            labor_day
+          {%- elif is_state('binary_sensor.talk_like_a_pirate_day', 'on') -%}
+            talk_like_a_pirate_day
+          {%- elif is_state('binary_sensor.veterans_day', 'on') -%}
+            veterans_day
+          {%- elif is_state('binary_sensor.thanksgiving', 'on') -%}
+            thanksgiving
+          {%- elif is_state('binary_sensor.christmas_season', 'on') -%}
+            christmas_season
+          {%- else -%}
+            none
+          {%- endif -%}
+        attributes:
+          friendly_label: >-
+            {% set labels = {
+              'none': 'No holiday lighting',
+              'christmas_season': 'Christmas Season',
+              'st_andrews_day': "St Andrew's Day",
+              'halloween': 'Halloween',
+              'hogmanay': "Hogmanay",
+              'burns_night': "Burns Night",
+              'national_curling_month': "National Curling Month",
+              'groundhog_day': "Groundhog Day",
+              'presidents_day': "Presidents' Day",
+              'leap_day': "Leap Day",
+              'pi_day': "Pi Day",
+              'tartan_day': "Tartan Day",
+              'star_wars_day': "Star Wars Day",
+              'minnesota_fishing_opener': "Minnesota Fishing Opener",
+              'minnesota_statehood_day': "Minnesota Statehood Day",
+              'memorial_day': "Memorial Day",
+              'juneteenth': "Juneteenth",
+              'independence_day': "Independence Day",
+              'sealand_independence_day': "Sealand Independence Day",
+              'labor_day': "Labor Day",
+              'talk_like_a_pirate_day': "Talk Like a Pirate Day",
+              'veterans_day': "Veterans Day",
+              'thanksgiving': "Thanksgiving"
+            } %}
+            {% set active = states('sensor.active_outdoor_holiday') | trim %}
+            {{ labels.get(active, active | replace('_', ' ') | title) }}
+          notification_message: >-
+            {% set active = states('sensor.active_outdoor_holiday') | trim %}
+            {% if active in ['none', 'unknown', 'unavailable', ''] %}
+              {{ '' }}
+            {% elif active == 'christmas_season' %}
+              Today's special lighting is Christmas Season. The tree and palette-driven outdoor Christmas scenes will start before sunset.
+            {% elif active == 'halloween' %}
+              Today's special lighting is Halloween. The palette-driven outdoor holiday scenes will start before sunset.
+            {% elif active == 'st_andrews_day' %}
+              Today's special lighting is St Andrew's Day. The palette-driven outdoor holiday scenes will start before sunset.
+            {% else %}
+              Today's special lighting is {{ state_attr('sensor.active_outdoor_holiday', 'friendly_label') | default(active | replace('_', ' ') | title, true) }}. The palette-driven outdoor holiday scenes will start before sunset.
+            {% endif %}
+
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time
+        at: "00:05:00"
+      - trigger: time
+        at: "12:05:00"
+      - trigger: state
+        entity_id: calendar.mn_holidays
+    action:
+      - variables:
+          today: "{{ now().date().isoformat() }}"
+          today_weekday: "{{ now().weekday() }}"
+          is_wed: "{{ today_weekday | int == 2 }}"
+          after_pickup_time: "{{ now().hour >= 12 }}"
+          days_until_wed: >
+            {% set d = 2 - (today_weekday | int) %}
+            {% if d < 0 %}{% set d = d + 7 %}{% endif %}
+            {{ d }}
+          base_wed: >
+            {% set today_date = strptime(today, '%Y-%m-%d').date() %}
+            {% if is_wed and not after_pickup_time %}
+              {{ today }}
+            {% else %}
+              {{ (today_date + timedelta(days=(days_until_wed | int) if (not is_wed) else 7)).isoformat() }}
+            {% endif %}
+          week_mon: >
+            {% set base_wed_date = strptime(base_wed, '%Y-%m-%d').date() %}
+            {{ (base_wed_date - timedelta(days=base_wed_date.weekday())).isoformat() }}
+          range_start: "{{ week_mon }}T00:00:00"
+          range_end: >
+            {% set base_wed_date = strptime(base_wed, '%Y-%m-%d').date() %}
+            {{ (base_wed_date + timedelta(days=1)).isoformat() }}T23:59:59
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.mn_holidays
+        data:
+          start_date_time: "{{ range_start }}"
+          end_date_time: "{{ range_end }}"
+        response_variable: hols
+      - variables:
+          holiday_events: "{{ hols.events | default([]) }}"
+          holiday_mon_to_wed: >
+            {% set ws = strptime(week_mon, '%Y-%m-%d').date() %}
+            {% set we = strptime(base_wed, '%Y-%m-%d').date() %}
+            {% set ns = namespace(hit=false) %}
+            {% for e in holiday_events %}
+              {% set d = as_datetime(e.start).date() %}
+              {% if d >= ws and d <= we %}
+                {% set ns.hit = true %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.hit }}
+          pickup_date: >
+            {% if holiday_mon_to_wed in [true, 'true', 'True', 'on'] %}
+              {{ (strptime(base_wed, '%Y-%m-%d').date() + timedelta(days=1)).isoformat() }}
+            {% else %}
+              {{ base_wed }}
+            {% endif %}
+    sensor:
+      - name: Garbage pickup date
+        unique_id: garbage_pickup_date_apple_valley
+        state: "{{ pickup_date }}"
+        attributes:
+          base_wednesday: "{{ base_wed }}"
+          holiday_shift_applied: "{{ holiday_mon_to_wed in [true, 'true', 'True', 'on'] }}"
+          holiday_events_in_range: "{{ holiday_events | map(attribute='summary') | list }}"
+
+########################
+# Zone
+########################
+zone: {}

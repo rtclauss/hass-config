@@ -1,3 +1,6 @@
+# Home Assistant package that mirrors an iPhone wake-up alarm into Home Assistant helpers.
+# The webhook data from iOS Shortcuts lands here and becomes the canonical alarm state used by workday and wake-up automations.
+
 ################################################################
 ## Packages / iOS Wakeup
 ################################################################
@@ -17,15 +20,14 @@ homeassistant:
         haaska_hidden: false
         homebridge_hidden: false
 
+    ################################################
+    ## Automations
+    ################################################
+
     automation.sync_phone_wakeup_alarm_from_ios_shortcut:
       <<: *customize
       friendly_name: "Sync Phone Wake-up Alarm"
       icon: mdi:cellphone-message
-
-    input_text.phone_wakeup_alarm_time:
-      <<: *customize
-      friendly_name: "Phone Wake-up Alarm Time"
-      icon: mdi:alarm
 
 ################################################
 ## Automation
@@ -121,11 +123,6 @@ automation:
               - condition: template
                 value_template: "{{ alarm_state_provided }}"
             sequence:
-              - action: input_text.set_value
-                target:
-                  entity_id: input_text.phone_wakeup_alarm_time
-                data:
-                  value: "{{ alarm_time_raw if alarm_enabled else '' }}"
               - action: script.set_wakeup_from_phone_alarm
                 data:
                   alarm_time: "{{ alarm_time }}"
@@ -139,11 +136,3 @@ automation:
                 data:
                   meeting_time: "{{ meeting_time }}"
                   meeting_enabled: "{{ meeting_enabled }}"
-
-################################################
-## Input Text
-################################################
-
-input_text:
-  phone_wakeup_alarm_time:
-    max: 16

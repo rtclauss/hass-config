@@ -1,3 +1,7 @@
+# Main Home Assistant bootstrap file for this repo.
+# It defines instance-wide settings, loads package-based domain logic, and registers shared frontend, recorder, proxy, and cloud integrations.
+# Complex areas: trusted network auth, recorder/influx exclusions, and Lovelace/HACS resources all live here because they affect the whole system.
+
 homeassistant:
   name: The Brewery
   unit_system: us_customary
@@ -29,7 +33,7 @@ config:
 
 logger:
   #default: warn
-  default: error
+  default: warning
   # logs:
   #   custom_components.adaptive_lighting: debug
   #  default: warn
@@ -47,6 +51,8 @@ logger:
 #    homeassistant.components.zha: debug
 #    zigpy: debug
 #    homeassistant.components.alarm_control_panel: debug
+
+system_log:
 
 http:
   use_x_forwarded_for: true
@@ -75,10 +81,10 @@ frontend:
 logbook:
   exclude:
     entities:
-      - automation.battery_sensor_from_attributes
-      - automation.update_battery_status_group_members
-      - automation.battery_persistent_notification
-      - automation.battery_persistent_notification_clear
+      - automation.notify_battery_dying_20
+      - automation.notify_battery_dying_10
+      - sensor.battery_low_20
+      - sensor.battery_low_10
 
 tts:
   - platform: google_translate
@@ -129,7 +135,7 @@ influxdb:
 cloud:
   alexa:
     entity_config:
-      cover.owner_suite_blinds:
+      cover.owner_suite_blinds_ha:
         display_categories: INTERIOR_BLIND
       cover.owner_suite_north_blind:
         display_categories: INTERIOR_BLIND
@@ -216,6 +222,10 @@ lovelace:
     - url: /hacsfiles/lovelace-time-picker-card/time-picker-card.js
       type: module
     - url: /hacsfiles/apexcharts-card/apexcharts-card.js
+      type: module
+    - url: /hacsfiles/timer-bar-card/timer-bar-card.js
+      type: module
+    - url: /hacsfiles/mass-player-card/mass-player-card.js
       type: module
 
   dashboards:

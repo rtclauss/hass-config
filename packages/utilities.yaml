@@ -1,3 +1,6 @@
+# Home Assistant package for utility and infrastructure monitoring.
+# Complex areas: it covers electrical and water tariff switching, water-meter recovery, sump-pump alerts, garbage reminders, and a few small device watchdog automations.
+
 ################################################################
 ## Packages / utilities
 ################################################################
@@ -188,26 +191,41 @@ automation:
     trigger:
       - trigger: time_pattern
         hours: "/12"
+    variables:
+      stale_threshold_hours: 12
+      stale_entities: >-
+        {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
+          not is_state_attr(item.entity_id, 'hidden', true)
+          and (now()-as_local(item.last_reported) > timedelta(hours=stale_threshold_hours))
+          and not (item.entity_id | lower).find('update') != -1
+          and not (item.entity_id | lower).find('heading') != -1
+          and not (item.entity_id | lower).find('alert') != -1
+          and not (item.entity_id | lower).find('season') != -1
+          and not (item.entity_id | lower).endswith('microphone')
+          and not (item.entity_id | lower).endswith('hacs')
+          and not (item.entity_id | lower).find('sonos') != -1
+        )-%}
+          {{ item.entity_id }}
+        {% if not loop.last %}, {% endif %}
+        {%- endfor -%}
     action:
-      - action: persistent_notification.create
-        data:
-          title: Stale Entities
-          message: >-
-            The following entities have not updated in 24 hours:
-            {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
-              not is_state_attr(item.entity_id, 'hidden', true)
-              and (now()-as_local(item.last_updated) > timedelta(hours=12))
-              and not (item.entity_id | lower).find('update') != -1
-              and not (item.entity_id | lower).find('heading') != -1
-              and not (item.entity_id | lower).find('alert') != -1
-              and not (item.entity_id | lower).find('season') != -1
-              and not (item.entity_id | lower).endswith('microphone')
-              and not (item.entity_id | lower).endswith('hacs')
-              and not (item.entity_id | lower).find('sonos') != -1
-            )-%}
-              {{ item.entity_id }}
-            {% if not loop.last %}, {% endif %}
-            {%- endfor -%}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ stale_entities | trim != '' }}
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: stale-entities
+                  title: Stale Entities
+                  message: >-
+                    The following entities have not reported in {{ stale_threshold_hours }} hours:
+                    {{ stale_entities }}
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: stale-entities
 
   - id: switch_electrical_tariff
     alias: switch_electrical_tariff
@@ -232,21 +250,25 @@ automation:
       #   id: nonsummer
     action:
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.hourly_electricity
         data:
           option: "{{ tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.daily_electricity
         data:
           option: "{{ tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.monthly_electricity
         data:
           option: "{{ tariff }}"
       - action: input_number.set_value
+        continue_on_error: true
         target:
           entity_id: input_number.electrical_rate
         data:
@@ -256,6 +278,80 @@ automation:
             {% else %}
               .1258
             {% endif %}
+
+  - id: switch_ev_charging_tariff
+    alias: switch_ev_charging_tariff
+    description: >
+      Keep the EV charging utility meters on Dakota Electric's time-of-use
+      schedule. Weekends and holidays stay off-peak all day.
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: binary_sensor.workday_sensor
+      - trigger: time
+        at: "00:05:00"
+      - trigger: time
+        at: "08:00:00"
+      - trigger: time
+        at: "16:00:00"
+      - trigger: time
+        at: "21:00:00"
+    variables:
+      ev_season: >-
+        {% set seasonal_tariff = states('select.daily_electricity') %}
+        {% if seasonal_tariff in ['summer', 'non-summer'] %}
+          {{ seasonal_tariff }}
+        {% elif now().month in [6, 7, 8, 9] %}
+          summer
+        {% else %}
+          non-summer
+        {% endif %}
+      ev_tariff: >-
+        {% if is_state('binary_sensor.workday_sensor', 'off') %}
+          off_peak
+        {% elif now().hour < 8 or now().hour >= 21 %}
+          off_peak
+        {% elif now().hour < 16 %}
+          mid_peak
+        {% else %}
+          on_peak
+        {% endif %}
+      ev_rate: >-
+        {% if ev_tariff == 'off_peak' %}
+          0.0755
+        {% elif ev_tariff == 'on_peak' %}
+          0.4420
+        {% elif ev_season == 'summer' %}
+          0.1377
+        {% else %}
+          0.1238
+        {% endif %}
+    action:
+      - action: select.select_option
+        continue_on_error: true
+        target:
+          entity_id: select.hourly_ev_charging
+        data:
+          option: "{{ ev_tariff }}"
+      - action: select.select_option
+        continue_on_error: true
+        target:
+          entity_id: select.daily_ev_charging
+        data:
+          option: "{{ ev_tariff }}"
+      - action: select.select_option
+        continue_on_error: true
+        target:
+          entity_id: select.monthly_ev_charging
+        data:
+          option: "{{ ev_tariff }}"
+      - action: input_number.set_value
+        continue_on_error: true
+        target:
+          entity_id: input_number.ev_electrical_rate
+        data:
+          value: "{{ ev_rate }}"
 
   - id: switch_water_tariff
     alias: switch_water_tariff
@@ -298,6 +394,26 @@ automation:
         data:
           addon: a0d7b954_appdaemon
 
+  - alias: Restart Music Assistant every 12.17 hours
+    description: >
+      Restart the Music Assistant add-on on a self-rescheduling loop to work
+      around Sonos DNS issues.
+    id: restart_music_assistant_every_12_17_hours
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - repeat:
+          while:
+            - condition: template
+              value_template: "{{ true }}"
+          sequence:
+            # 12.17 hours interpreted as decimal hours: 12 hours, 10 minutes, 12 seconds.
+            - delay: "12:10:12"
+            - action: hassio.addon_restart
+              data:
+                addon: d5369777_music_assistant
+
   - alias: Turn Sump Back On
     id: turn_sump_back_on
     trigger:
@@ -316,6 +432,28 @@ automation:
         target:
           entity_id:
             - switch.basement_sump_pump
+
+  - alias: Turn Laundry Plugs Back On
+    id: turn_laundry_plugs_back_on
+    trigger:
+      - trigger: state
+        entity_id:
+          - switch.laundry_room_washing_machine
+          - switch.laundry_room_dryer
+        to: "off"
+      - trigger: state
+        entity_id:
+          - switch.laundry_room_washing_machine
+          - switch.laundry_room_dryer
+        not_to: "on"
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id:
+            - switch.laundry_room_washing_machine
+            - switch.laundry_room_dryer
 
   - alias: Notify Sump Pit Getting Full
     id: notify_sump_pit_getting_full
@@ -381,42 +519,33 @@ automation:
     id: notify_garbage_day
     description: Notify garbage day
     trigger:
-      - trigger: calendar
-        id: day_changed
-        entity_id: calendar.garbage_collection
-        event: start
-        offset: "-33:30:00"
-      - trigger: calendar
-        id: pickup_tomorrow
-        entity_id: calendar.garbage_collection
-        event: start
-        offset: "-09:30:00"
-    variables:
-      garbage_summary: "{{ state_attr('sensor.waste_management', 'friendly_name') | default('Waste Management', true) }}"
+      - trigger: time
+        at: "14:30:00"
+    condition:
+      - condition: template
+        value_template: "{{ states('sensor.garbage_pickup_date') not in ['unknown', 'unavailable', 'none', 'None', ''] }}"
     action:
       - choose:
           - conditions:
-              - condition: trigger
-                id: day_changed
               - alias: Only on Tuesdays (Day before Garbage Day/Wednesday)
                 condition: time
                 weekday:
                   - tue
-              - alias: Waste Management event
+              - alias: Pickup shifted to Thursday this week
                 condition: template
                 value_template: >-
-                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
+                  {% set pickup_date = as_datetime(states('sensor.garbage_pickup_date')).date() %}
+                  {{ pickup_date == (now().date() + timedelta(days=2)) }}
             sequence:
               - action: notify.all
                 data:
                   message: DO NOT put out bins tonight. Garbage day has changed!
           - conditions:
-              - condition: trigger
-                id: pickup_tomorrow
-              - alias: Waste Management event
+              - alias: Pickup is tomorrow
                 condition: template
                 value_template: >-
-                  {{ trigger.calendar_event.summary | default('', true) == garbage_summary }}
+                  {% set pickup_date = as_datetime(states('sensor.garbage_pickup_date')).date() %}
+                  {{ pickup_date == (now().date() + timedelta(days=1)) }}
             sequence:
               - action: notify.all
                 data:
@@ -467,62 +596,6 @@ automation:
         target:
           entity_id:
             - switch.owner_suite_cpap_plug
-
-  - alias: Garbage Holiday Update
-    id: garbage_holiday_update
-    trigger:
-      - trigger: event
-        event_type: garbage_collection_loaded
-        event_data:
-          entity_id: sensor.waste_management
-    action:
-      - variables:
-          holiday_entity: calendar.mn_holidays
-      - alias: "Iterate through the dates"
-        repeat:
-          for_each: "{{ trigger.event.data.collection_dates }}"
-          sequence:
-            - alias: "Is there a public holiday on the week?"
-              condition: template
-              value_template: >-
-                {%- set collection_date = as_datetime(repeat.item) %}
-                {%- set ns = namespace(found=false) %}
-                {%- for i in range(collection_date.weekday()+1) %}
-                  {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
-                  {%- if d in state_attr(holiday_entity,'holidays') %}
-                    {%- set ns.found = true %}
-                  {%- endif %}
-                {%- endfor %}
-                {{ ns.found }}
-            - alias: "Move the date"
-              action: garbage_collection.offset_date
-              data:
-                entity_id: "{{ trigger.event.data.entity_id }}"
-                date: "{{ repeat.item }}"
-                offset: >-
-                  {%- set collection_date = as_datetime(repeat.item) %}
-                  {%- set ns = namespace(found_free=false, offset=0) %}
-                  {# Count holidays in the week, increase offset for each found public holiday #}
-                  {%- for i in range(collection_date.weekday()+1) %}
-                    {%- set d = ( collection_date + timedelta( days=-i) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
-                    {%- if d in state_attr(holiday_entity,'holidays') %}
-                      {%- set ns.offset = ns.offset + 1 %}
-                    {%- endif %}
-                  {%- endfor %}
-                  {# Increase offset until we find a date that is not public holiday #}
-                  {%- for _ in range(7) if not ns.found_free %}
-                    {%- set d = ( collection_date + timedelta( days=ns.offset) ) | as_timestamp | timestamp_custom("%Y-%m-%d") %}
-                    {%- if d in state_attr(holiday_entity,'holidays') %}
-                      {%- set ns.offset = ns.offset + 1 %}
-                    {% else %}
-                      {%- set ns.found_free = true %}
-                    {%- endif %}
-                  {% endfor %}
-                  {{ ns.offset }}
-      - alias: "Update the garbage_collection entity"
-        action: garbage_collection.update_state
-        data:
-          entity_id: "{{ trigger.event.data.entity_id }}"
 
 ########################
 # Binary Sensors
@@ -597,6 +670,24 @@ input_number:
     mode: box
     # TODO update the unit of measure
     unit_of_measurement: USD/kWh
+  ev_electrical_rate:
+    name: EV Electrical Rate
+    min: .00001
+    max: 1.00000
+    step: 0.00001
+    mode: box
+    unit_of_measurement: USD/kWh
+  # Seeded from the current Woodbury, MN regular "Week Ago Avg." value on
+  # https://www.way.com/gas/prices/minnesota/woodbury and used as a manual
+  # fallback if the live scrape ever fails. Woodbury is the city for ZIP 55125.
+  weekly_regular_gas_price_55125_fallback:
+    name: 55125 Weekly Gas Price Fallback
+    min: 0.50000
+    max: 8.00000
+    step: 0.01000
+    mode: box
+    unit_of_measurement: USD/gal
+    initial: 3.76
 
 ########################
 # Input Select
@@ -649,6 +740,29 @@ rest_command:
     method: GET
 
 ########################
+# REST
+########################
+rest:
+  - resource: https://www.way.com/gas/prices/minnesota/woodbury
+    scan_interval: 43200
+    timeout: 30
+    headers:
+      Accept: text/html
+      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0
+    sensor:
+      - name: Woodbury Weekly Regular Gas Price Live
+        unique_id: woodbury_weekly_regular_gas_price_live
+        icon: mdi:gas-station
+        unit_of_measurement: USD/gal
+        value_template: >-
+          {% set matches = value | regex_findall('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)') %}
+          {% if matches | count > 0 %}
+            {{ matches[0] | float(default=0) | round(2) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+
+########################
 # Scenes
 ########################
 scene: []
@@ -699,20 +813,45 @@ switch: []
 template:
   - sensor:
       - name: house_electrical_meter
+        unique_id: house_electrical_meter
         device_class: energy
+        state_class: total_increasing
         unit_of_measurement: kWh
         availability: >
-          {% if is_state("sensor.filtered_raw_electrical_sensor", "unavailable") %}
-            false
-          {% else %}
-            true
-          {%- endif %}
+          {{ states('sensor.filtered_raw_electrical_sensor') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
         state: >-
-          {% if not states('sensor.filtered_raw_electrical_sensor') in ['unavailable','unknown','Unavailable','Unknown'] %}
-            {{(states("sensor.filtered_raw_electrical_sensor")| int)/100.0}}
+          {% if states('sensor.filtered_raw_electrical_sensor') in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ none }}
           {% else %}
-            unavailable
+            {{ (states('sensor.filtered_raw_electrical_sensor') | float(default=0)) / 100.0 }}
           {% endif %}
+      - name: house_electrical_meter_non_ev
+        unique_id: house_electrical_meter_non_ev
+        device_class: energy
+        state_class: total_increasing
+        unit_of_measurement: kWh
+        availability: >
+          {{
+            states('sensor.house_electrical_meter') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+            and (
+              states('device_tracker.nigori_location_tracker') | default('', true) | lower != 'home'
+              or states('sensor.nigori_energy_added') not in ['unavailable', 'unknown', 'Unavailable', 'Unknown']
+            )
+          }}
+        state: >-
+          {% set house_kwh = states('sensor.house_electrical_meter') | float(default=0) %}
+          {% set ev_kwh = states('sensor.nigori_energy_added') | float(default=0) %}
+          {% set home_charging = (states('device_tracker.nigori_location_tracker') | default('', true) | lower) == 'home' %}
+          {% set calculated = house_kwh - ev_kwh if home_charging else house_kwh %}
+          {% set calculated = [calculated, 0] | max %}
+          {% set previous = this.state | float(default=calculated) %}
+          {{ [calculated, previous] | max | round(3) }}
+      - name: house_electrical_rate
+        unique_id: house_electrical_rate
+        icon: mdi:currency-usd
+        state_class: measurement
+        unit_of_measurement: USD/kWh
+        state: "{{ states('input_number.electrical_rate') }}"
       - name: tariff_under_15k_water
         unique_id: tariff_under_15k_water
         icon: mdi:cash-minus
@@ -723,6 +862,170 @@ template:
         icon: mdi:cash-minus
         unit_of_measurement: $/gal
         state: "0.00497"
+      - name: ev_charging_tariff
+        unique_id: ev_charging_tariff
+        icon: mdi:cash-clock
+        state: >-
+          {% set tariff = states('select.daily_ev_charging') %}
+          {% if tariff in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set tariff = states('select.hourly_ev_charging') %}
+          {% endif %}
+          {% set labels = {
+            'off_peak': 'Off-Peak',
+            'mid_peak': 'Mid-Peak',
+            'on_peak': 'On-Peak'
+          } %}
+          {{ labels.get(tariff, 'Unknown') }}
+      - name: ev_charging_tariff_rate
+        unique_id: ev_charging_tariff_rate
+        icon: mdi:currency-usd
+        state_class: measurement
+        unit_of_measurement: USD/kWh
+        state: "{{ states('input_number.ev_electrical_rate') }}"
+      - name: daily_ev_charging_energy
+        unique_id: daily_ev_charging_energy
+        icon: mdi:car-electric
+        device_class: energy
+        unit_of_measurement: kWh
+        state: >-
+          {{
+            (
+              states('sensor.daily_ev_charging_off_peak') | float(default=0)
+              + states('sensor.daily_ev_charging_mid_peak') | float(default=0)
+              + states('sensor.daily_ev_charging_on_peak') | float(default=0)
+            ) | round(2)
+          }}
+      - name: monthly_ev_charging_energy
+        unique_id: monthly_ev_charging_energy
+        icon: mdi:car-electric
+        device_class: energy
+        unit_of_measurement: kWh
+        state: >-
+          {{
+            (
+              states('sensor.monthly_ev_charging_off_peak') | float(default=0)
+              + states('sensor.monthly_ev_charging_mid_peak') | float(default=0)
+              + states('sensor.monthly_ev_charging_on_peak') | float(default=0)
+            ) | round(2)
+          }}
+      - name: daily_ev_charging_cost
+        unique_id: daily_ev_charging_cost
+        icon: mdi:cash
+        unit_of_measurement: USD
+        state: >-
+          {% set season = states('select.daily_electricity') %}
+          {% if season in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set season = 'summer' if now().month in [6, 7, 8, 9] else 'non-summer' %}
+          {% endif %}
+          {% set off_peak_kwh = states('sensor.daily_ev_charging_off_peak') | float(default=0) %}
+          {% set mid_peak_kwh = states('sensor.daily_ev_charging_mid_peak') | float(default=0) %}
+          {% set on_peak_kwh = states('sensor.daily_ev_charging_on_peak') | float(default=0) %}
+          {% set mid_peak_rate = 0.1377 if season == 'summer' else 0.1238 %}
+          {{
+            (
+              (off_peak_kwh * 0.0755)
+              + (mid_peak_kwh * mid_peak_rate)
+              + (on_peak_kwh * 0.4420)
+            ) | round(2)
+          }}
+      - name: monthly_ev_charging_cost
+        unique_id: monthly_ev_charging_cost
+        icon: mdi:cash-multiple
+        unit_of_measurement: USD
+        state: >-
+          {% set season = states('select.daily_electricity') %}
+          {% if season in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set season = 'summer' if now().month in [6, 7, 8, 9] else 'non-summer' %}
+          {% endif %}
+          {% set off_peak_kwh = states('sensor.monthly_ev_charging_off_peak') | float(default=0) %}
+          {% set mid_peak_kwh = states('sensor.monthly_ev_charging_mid_peak') | float(default=0) %}
+          {% set on_peak_kwh = states('sensor.monthly_ev_charging_on_peak') | float(default=0) %}
+          {% set mid_peak_rate = 0.1377 if season == 'summer' else 0.1238 %}
+          {{
+            (
+              (off_peak_kwh * 0.0755)
+              + (mid_peak_kwh * mid_peak_rate)
+              + (on_peak_kwh * 0.4420)
+            ) | round(2)
+          }}
+      - name: weekly_ev_charging_cost
+        unique_id: weekly_ev_charging_cost
+        icon: mdi:cash-clock
+        unit_of_measurement: USD
+        state: >-
+          {% set season = states('select.daily_electricity') %}
+          {% if season in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {% set season = 'summer' if now().month in [6, 7, 8, 9] else 'non-summer' %}
+          {% endif %}
+          {% set off_peak_kwh = states('sensor.weekly_ev_charging_off_peak') | float(default=0) %}
+          {% set mid_peak_kwh = states('sensor.weekly_ev_charging_mid_peak') | float(default=0) %}
+          {% set on_peak_kwh = states('sensor.weekly_ev_charging_on_peak') | float(default=0) %}
+          {% set mid_peak_rate = 0.1377 if season == 'summer' else 0.1238 %}
+          {{
+            (
+              (off_peak_kwh * 0.0755)
+              + (mid_peak_kwh * mid_peak_rate)
+              + (on_peak_kwh * 0.4420)
+            ) | round(2)
+          }}
+      - name: average_daily_ev_charging_cost
+        unique_id: average_daily_ev_charging_cost
+        icon: mdi:cash-fast
+        state_class: measurement
+        unit_of_measurement: USD/day
+        state: >-
+          {% set elapsed_days = [now().weekday() + 1, 1] | max %}
+          {% set weekly_cost = states('sensor.weekly_ev_charging_cost') | float(default=0) %}
+          {{ (weekly_cost / elapsed_days) | round(2) }}
+      - name: weekly_regular_gas_price_55125
+        unique_id: weekly_regular_gas_price_55125
+        icon: mdi:gas-station
+        state_class: measurement
+        unit_of_measurement: USD/gal
+        attributes:
+          source: >-
+            {% set live = states('sensor.woodbury_weekly_regular_gas_price_live') %}
+            {% if live not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+              live
+            {% else %}
+              fallback
+            {% endif %}
+          source_url: https://www.way.com/gas/prices/minnesota/woodbury
+          coverage_area: Woodbury, Minnesota (ZIP 55125 local market)
+        state: >-
+          {% set live = states('sensor.woodbury_weekly_regular_gas_price_live') %}
+          {% if live not in ['unknown', 'unavailable', 'none', 'None', ''] %}
+            {{ live | float(default=0) | round(2) }}
+          {% else %}
+            {{ states('input_number.weekly_regular_gas_price_55125_fallback') | float(default=0) | round(2) }}
+          {% endif %}
+      - name: average_daily_vehicle_miles
+        unique_id: average_daily_vehicle_miles
+        icon: mdi:map-marker-distance
+        state_class: measurement
+        unit_of_measurement: mi/day
+        state: >-
+          {% set elapsed_days = [now().weekday() + 1, 1] | max %}
+          {% set weekly_miles = states('sensor.weekly_vehicle_mileage') | float(default=0) %}
+          {{ (weekly_miles / elapsed_days) | round(1) }}
+      - name: average_daily_gas_car_cost_30mpg
+        unique_id: average_daily_gas_car_cost_30mpg
+        icon: mdi:gas-station-outline
+        state_class: measurement
+        unit_of_measurement: USD/day
+        state: >-
+          {% set daily_miles = states('sensor.average_daily_vehicle_miles') | float(default=0) %}
+          {% set gas_price = states('sensor.weekly_regular_gas_price_55125') | float(default=0) %}
+          {{ ((daily_miles / 30) * gas_price) | round(2) }}
+      - name: average_daily_ev_savings_vs_30mpg
+        unique_id: average_daily_ev_savings_vs_30mpg
+        icon: mdi:piggy-bank
+        state_class: measurement
+        unit_of_measurement: USD/day
+        state: >-
+          {% set gas_cost = states('sensor.average_daily_gas_car_cost_30mpg') | float(default=0) %}
+          {% set ev_cost = states('sensor.average_daily_ev_charging_cost') | float(default=0) %}
+          {{ (gas_cost - ev_cost) | round(2) }}
 
 ########################
 # Utility Meter
@@ -746,6 +1049,41 @@ utility_meter:
     tariffs:
       - non-summer
       - summer
+  # Dakota Electric EV TOU is modeled from the Tesla integration's cumulative
+  # energy-added sensor. This tracks energy added to the car battery, not
+  # utility-side wall losses, but it is the best EV-specific counter available
+  # in the current configuration.
+  hourly_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: hourly
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
+  daily_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: daily
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
+  weekly_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: weekly
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
+  monthly_ev_charging:
+    source: sensor.nigori_energy_added
+    cycle: monthly
+    tariffs:
+      - off_peak
+      - mid_peak
+      - on_peak
+  weekly_vehicle_mileage:
+    source: sensor.nigori_odometer
+    cycle: weekly
   # hourly_water:
   #   source: sensor.watermeter_value
   #   name: Hourly Water Usage

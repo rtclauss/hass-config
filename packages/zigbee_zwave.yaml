@@ -1,3 +1,6 @@
+# Home Assistant package for Zigbee and legacy Z-Wave device normalization.
+# Complex areas: it gives contact, motion, and battery entities stable names and keeps the button and device-health logic that many other packages rely on.
+
 ################################################################
 ## Packages / Zigbee
 ################################################################
@@ -28,19 +31,109 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
-    binary_sensor.basement_door_contact:
+    binary_sensor.any_egress_open:
       <<: *customize
+      friendly_name: "Any egress open"
       device_class: opening
-      friendly_name: "Basement Door"
+
+    binary_sensor.basement_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Basement Window"
+
+    binary_sensor.dining_room_north_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Dining Room North Window"
+
+    binary_sensor.dining_room_south_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Dining Room South Window"
+
+    binary_sensor.guest_bathroom_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Guest Bathroom Window"
+
+    binary_sensor.guest_room_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Guest Room Window"
+
+    binary_sensor.kitchen_bay_middle_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Kitchen Bay Middle Window"
+
+    binary_sensor.kitchen_bay_north_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Kitchen Bay North Window"
+
+    binary_sensor.kitchen_bay_south_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Kitchen Bay South Window"
+
+    binary_sensor.kitchen_north_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Kitchen North Window"
+
+    binary_sensor.kitchen_south_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Kitchen South Window"
+
+    binary_sensor.office_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Office Window"
+
+    binary_sensor.owner_suite_bathroom_bay_north_middle_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Owner Suite Bathroom Bay North Middle Window"
+
+    binary_sensor.owner_suite_bathroom_bay_north_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Owner Suite Bathroom Bay North Window"
+
+    binary_sensor.owner_suite_bathroom_bay_south_middle_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Owner Suite Bathroom Bay South Middle Window"
+
+    binary_sensor.owner_suite_bathroom_bay_south_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Owner Suite Bathroom Bay South Window"
+
+    binary_sensor.owner_suite_north_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Owner Suite North Window"
+
+    binary_sensor.owner_suite_south_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Owner Suite South Window"
+
+    binary_sensor.powder_room_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Powder Room Window"
 
     binary_sensor.se_basement_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "South East Basement Window"
 
     binary_sensor.sw_basement_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "South West Basement Window"
 
     binary_sensor.deck_door_contact:
@@ -55,12 +148,12 @@ homeassistant:
 
     binary_sensor.ene_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "East North East Window"
 
     binary_sensor.ese_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "East South East Window"
 
     binary_sensor.main_foyer_front_door_contact:
@@ -68,7 +161,7 @@ homeassistant:
       device_class: opening
       friendly_name: "Front Door"
 
-    binary_sensor.hallway_motion:
+    binary_sensor.hall_upstairs_motion_occupancy:
       <<: *customize
       device_class: motion
       friendly_name: "Hallway Motion"
@@ -103,22 +196,22 @@ homeassistant:
 
     binary_sensor.nne_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "North North East Window"
 
     binary_sensor.north_kitchen_sink_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "Kitchen Sink Window"
 
     binary_sensor.north_master_bedroom_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "Master Bedroom Window"
 
     binary_sensor.nw_basement_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "North West Basement Window"
 
     binary_sensor.office_button:
@@ -127,12 +220,17 @@ homeassistant:
 
     binary_sensor.office_north_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "Office Window"
+
+    binary_sensor.unfinished_basement_window_contact:
+      <<: *customize
+      device_class: window
+      friendly_name: "Unfinished Basement Window"
 
     binary_sensor.sse_window_contact:
       <<: *customize
-      device_class: opening
+      device_class: window
       friendly_name: "South South East Living Room Window"
 
     ################################################
@@ -140,34 +238,16 @@ homeassistant:
     ################################################
 
     ################################################
-    ## Groups
-    ################################################
-    group.egress_points:
-      <<: *customize
-      friendly_name: Sensors on Doors and Windows
-
-    ################################################
-    ## Input Boolean
-    ################################################
-
-    ################################################
-    ## Input Numbers
-    ################################################
-
-    ################################################
-    ## Scripts
-    ################################################
-
-    ################################################
     ## Sensors
     ################################################
+    sensor.open_egress_points:
+      <<: *customize
+      friendly_name: "Open egress points"
+      icon: mdi:door-open
+
     sensor.arrival_sensor_battery:
       <<: *customize
       friendly_name: "Arrival Sensor Battery"
-
-    sensor.basement_door_battery:
-      <<: *customize
-      friendly_name: "Basement Door Battery"
 
     sensor.deck_door_battery:
       <<: *customize
@@ -404,11 +484,39 @@ homeassistant:
     ################################################
     ## Zone
     ################################################
+  customize_glob:
+    "binary_sensor.*window*_contact":
+      <<: *customize
+      device_class: window
 
 ################################################
 ## Automation
 ################################################
 automation:
+  - alias: replay_inovelli_led_policy_on_recovery
+    id: replay_inovelli_led_policy_on_recovery
+    mode: restart
+    trigger:
+      - trigger: event
+        event_type: state_changed
+    condition:
+      - condition: template
+        value_template: >-
+          {% set entity_id = trigger.event.data.entity_id | default('') %}
+          {% set from_state = trigger.event.data.old_state %}
+          {% set to_state = trigger.event.data.new_state %}
+          {{
+            entity_id is match('^number\\..*_led(?:color|intensity)when(?:on|off)$')
+            and from_state is not none
+            and from_state.state == 'unavailable'
+            and to_state is not none
+            and to_state.state not in ['unavailable', 'unknown']
+          }}
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.replay_inovelli_led_policy_after_recovery
+
   - alias: basement_bathroom_switch_actions
     id: basement_bathroom_switch_actions
     trigger:
@@ -472,7 +580,7 @@ automation:
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id: light.dining_room_overhead
+                  entity_id: light.dining_room_all
                   brightness_pct: 100
           - conditions:
               - condition: trigger
@@ -480,7 +588,7 @@ automation:
             sequence:
               - action: light.turn_off
                 data:
-                  entity_id: light.dining_room_overhead
+                  entity_id: light.dining_room_all
                   transition: 5
           - conditions:
               - condition: trigger
@@ -488,22 +596,46 @@ automation:
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id:
-                    - light.dining_room_overhead
-                    - light.dining_room
+                  entity_id: light.dining_room_all
                   kelvin: >-
-                    {{state_attr("light.dining_room","color_temp_kelvin")+200}}
+                    {{ state_attr("light.dining_room_all", "color_temp_kelvin") | int(4000) + 200 }}
           - conditions:
               - condition: trigger
                 id: down-double
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id:
-                    - light.dining_room_overhead
-                    - light.dining_room
+                  entity_id: light.dining_room_all
                   kelvin: >-
-                    {{state_attr("light.dining_room","color_temp_kelvin")-200}}
+                    {{ state_attr("light.dining_room_all", "color_temp_kelvin") | int(4000) - 200 }}
+
+  - alias: dining_room_table_switch_actions
+    id: dining_room_table_switch_actions
+    trigger:
+      - trigger: state
+        entity_id: sensor.dining_room_table_switch_action
+        to: "up_double"
+        id: up-double
+      - trigger: state
+        entity_id: sensor.dining_room_table_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.kitchen_all
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.kitchen_all
 
   - alias: side_of_bed_toggles
     id: side_of_bed_toggles
@@ -515,14 +647,15 @@ automation:
         to: "on"
         for:
           seconds: 30
-        id: "west_bed_light_on"
-      - trigger: state
-        # entity_id: binary_sensor.bayesian_bed_occupancy
-        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
-        to: "on"
-        for:
-          seconds: 30
         id: "west_bed_on"
+      - trigger: state
+        # Turn on the west bedside lamp after leaving bed for a bit.
+        # Keep this delay/window easy to tune if the sensor still feels jumpy.
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        to: "off"
+        for:
+          seconds: 10
+        id: "west_bed_left_bed"
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
@@ -536,14 +669,15 @@ automation:
         to: "off"
         for:
           seconds: 30
-        id: "west_bed_light_off"
-      - trigger: state
-        # entity_id: binary_sensor.bayesian_bed_occupancy
-        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
-        to: "off"
-        for:
-          seconds: 30
         id: "west_bed_off"
+      - trigger: state
+        # Turn the west bedside lamp back off after settling into bed.
+        # Adjust this delay alongside west_bed_left_bed if nighttime behavior needs refinement.
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        to: "on"
+        for:
+          seconds: 10
+        id: "west_bed_back_in_bed"
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
@@ -627,6 +761,35 @@ automation:
               - action: input_boolean.turn_off
                 data:
                   entity_id: input_boolean.west_bed_occupied
+          - conditions:
+              - condition: trigger
+                id: west_bed_left_bed
+              - condition: state
+                entity_id: input_boolean.west_bed_occupied
+                state: "on"
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_1
+          - conditions:
+              - condition: trigger
+                id: west_bed_back_in_bed
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_1
           # control the lights
           - conditions:
               - condition: trigger
@@ -923,6 +1086,34 @@ automation:
                 data:
                   entity_id: fan.guest_room
 
+  - alias: garage_overhead_switch_actions
+    id: garage_overhead_switch_actions
+    trigger:
+      - trigger: state
+        entity_id: sensor.garage_overhead_switch_action
+        to: "up_double"
+        id: up-double
+      - trigger: state
+        entity_id: sensor.garage_overhead_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - action: cover.open_cover
+                target:
+                  entity_id: cover.garage_door
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - action: cover.close_cover
+                target:
+                  entity_id: cover.garage_door
+
   - alias: kitchen_overhead_switch_actions
     id: kitchen_overhead_switch_actions
     mode: restart
@@ -959,7 +1150,7 @@ automation:
             sequence:
               - action: light.turn_on
                 data:
-                  entity_id: light.kitchen_overhead
+                  entity_id: light.kitchen_all
                   transition: 1
           - conditions:
               - condition: trigger
@@ -967,7 +1158,7 @@ automation:
             sequence:
               - action: light.turn_off
                 data:
-                  entity_id: light.kitchen_overhead
+                  entity_id: light.kitchen_all
                   transition: 5
           - conditions:
               - condition: trigger
@@ -977,9 +1168,9 @@ automation:
                 sequence:
                   - action: light.turn_on
                     data:
-                      entity_id: light.kitchen_overhead
+                      entity_id: light.kitchen_all
                       brightness: >-
-                        {{state_attr('light.kitchen_overhead', 'brightness') + 10 }}
+                        {{ state_attr('light.kitchen_all', 'brightness') | int(0) + 10 }}
                   - delay:
                       milliseconds: 50
                 until:
@@ -990,7 +1181,7 @@ automation:
                         state: "up_release"
                       - alias: "condition alias (name)"
                         condition: numeric_state
-                        entity_id: light.kitchen_overhead
+                        entity_id: light.kitchen_all
                         attribute: brightness
                         above: 254
           - conditions:
@@ -1001,9 +1192,9 @@ automation:
                 sequence:
                   - action: light.turn_on
                     data:
-                      entity_id: light.kitchen_overhead
+                      entity_id: light.kitchen_all
                       brightness: >-
-                        {{state_attr('light.kitchen_overhead', 'brightness') - 10}}
+                        {{ state_attr('light.kitchen_all', 'brightness') | int(0) - 10 }}
                   - delay:
                       milliseconds: 50
                 until:
@@ -1014,7 +1205,7 @@ automation:
                         state: "down_release"
                       - alias: "condition alias (name)"
                         condition: numeric_state
-                        entity_id: light.kitchen_overhead
+                        entity_id: light.kitchen_all
                         attribute: brightness
                         below: 1
 
@@ -1224,311 +1415,60 @@ automation:
     action:
       - action: script.reset_inovelli_switches
 
-  - id: reset_z2m_reboot_counter
-    alias: reset_z2m_reboot_counter
+  - id: sync_trip_mode_inovelli_leds
+    alias: sync_trip_mode_inovelli_leds
+    description: Keep all Inovelli LED bars dark during trips and restore the normal LED profile when trip mode clears.
     trigger:
-      - trigger: event
-        event_type: mobile_app_notification_action
-        event_data:
-          action: REBOOT_Z2M_COUNTER
-    action:
-      - action: counter.reset
-        target:
-          entity_id: counter.reboot_counter
-
-  - id: reset_z2m_reboot_counter_on_recovery
-    alias: reset_z2m_reboot_counter_on_recovery
-    trigger:
+      - trigger: homeassistant
+        event: start
+        id: startup
       - trigger: state
-        entity_id: binary_sensor.zigbee2mqtt_running
+        entity_id: input_boolean.trip
         to: "on"
-        for:
-          minutes: 10
+        id: trip_on
       - trigger: state
-        entity_id: binary_sensor.z2m_failing
+        entity_id: input_boolean.trip
         to: "off"
-        for:
-          minutes: 10
-      - trigger: numeric_state
-        entity_id: sensor.z2m_recovery_candidates
-        below: 21
-        for:
-          minutes: 10
-    condition:
-      - condition: state
-        entity_id: binary_sensor.zigbee2mqtt_running
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.z2m_failing
-        state: "off"
-      - condition: numeric_state
-        entity_id: sensor.z2m_recovery_candidates
-        below: 21
-      - condition: numeric_state
-        entity_id: counter.reboot_counter
-        above: 0
+        id: trip_off
     action:
-      - action: counter.reset
-        target:
-          entity_id: counter.reboot_counter
+      - choose:
+          - conditions:
+              - condition: trigger
+                id:
+                  - startup
+                  - trip_on
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "on"
+            sequence:
+              - action: script.turn_on
+                target:
+                  entity_id: script.turn_off_all_inovelli_switch_leds
+          - conditions:
+              - condition: trigger
+                id: trip_off
+            sequence:
+              - action: script.turn_on
+                target:
+                  entity_id: script.restore_inovelli_switch_leds_from_trip
 
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
+    # Reconfigures Zigbee2MQTT and all Valetudo vacuums after HA startup.
+    # Fixed: added continue_on_error: true to each rest_command so that a single
+    # unreachable vacuum (e.g. den vacuum offline at boot) does not abort the
+    # sequence and leave the remaining vacuums un-reconfigured.
     trigger:
       - trigger: homeassistant
         event: start
     action:
       - delay: "00:01:00"
       - action: rest_command.reload_den_vacuum
+        continue_on_error: true
       - action: rest_command.reload_upstairs_vacuum
+        continue_on_error: true
       - action: rest_command.reload_main_level_vacuum
-
-  - id: refresh_z2m_router_inventory
-    alias: refresh_z2m_router_inventory
-    trigger:
-      - trigger: homeassistant
-        event: start
-      - trigger: time_pattern
-        minutes: "/30"
-      - trigger: mqtt
-        topic: zigbee2mqtt/bridge/state
-        payload: online
-    action:
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/devices
-          payload: >-
-            {"id":"z2m_router_health_devices"}
-
-  # this automation depends on a HA on RaspberryPi with WOL configured to restart HA after shutdown
-  # Sometimes z2m loses communication with the adapter and so the whole server needs to be rebooted.
-  - id: shutdown_proxmox_z2m_unavailable
-    alias: shutdown_proxmox_z2m_unavailable
-    mode: single
-    max_exceeded: silent
-    trigger:
-      - trigger: state
-        entity_id: binary_sensor.z2m_failing
-        to: "on"
-        for:
-          minutes: 5
-        id: routers_offline
-      - trigger: state
-        entity_id: binary_sensor.zigbee2mqtt_running
-        to: "off"
-        for:
-          minutes: 15
-        id: z2m_not_running
-      - trigger: mqtt
-        topic: "zigbee2mqtt/bridge/state"
-        payload: "offline"
-        value_template: "{{ value_json.state }}"
-        id: bridge_offline
-      - trigger: time_pattern
-        minutes: "/10"
-        id: watchdog_tick
-      - trigger: numeric_state
-        entity_id: sensor.z2m_recovery_candidates
-        above: 20
-        for:
-          minutes: 5
-        id: recovery_candidates_high
-    variables:
-      max_restart_attempts: 3
-      issue_active: >-
-        {{
-          is_state('binary_sensor.zigbee2mqtt_running', 'off')
-          or is_state('binary_sensor.z2m_failing', 'on')
-          or (states('sensor.z2m_recovery_candidates') | int(0) > 20)
-        }}
-      issue_reason: >-
-        {% if is_state('binary_sensor.zigbee2mqtt_running', 'off') %}
-          Zigbee2MQTT add-on is not running
-        {% elif is_state('binary_sensor.z2m_failing', 'on') %}
-          Router offline threshold exceeded
-        {% elif states('sensor.z2m_recovery_candidates') | int(0) > 20 %}
-          Z2M recovery candidates exceeded threshold (20)
-        {% else %}
-          Unknown
-        {% endif %}
-    condition:
-      - condition: template
-        value_template: "{{ issue_active }}"
-    action:
-      - if:
-          - condition: numeric_state
-            entity_id: sensor.z2m_ota_updates_in_progress
-            above: 0
-        then:
-          - repeat:
-              while:
-                - condition: numeric_state
-                  entity_id: sensor.z2m_ota_updates_in_progress
-                  above: 0
-                - condition: template
-                  value_template: "{{ repeat.index <= 36 }}"
-              sequence:
-                - action: notify.mobile_app_wethop
-                  data:
-                    message: >-
-                      Zigbee2MQTT OTA update(s) in progress ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
-                - delay: "00:10:00"
-          - if:
-              - condition: numeric_state
-                entity_id: sensor.z2m_ota_updates_in_progress
-                above: 0
-            then:
-              - action: notify.mobile_app_wethop
-                data:
-                  message: >-
-                    Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping restart/shutdown to avoid interruption.
-              - stop: OTA update still in progress
-      - if:
-          - condition: numeric_state
-            entity_id: counter.reboot_counter
-            below: 3
-        then:
-          - action: counter.increment
-            target:
-              entity_id: counter.reboot_counter
-          - action: notify.mobile_app_wethop
-            data:
-              message: >-
-                Z2M recovery attempt {{ states('counter.reboot_counter') }} of {{ max_restart_attempts }}. Reason: {{ issue_reason }}. Restarting Zigbee2MQTT.
-          - action: hassio.addon_restart
-            data:
-              addon: 45df7312_zigbee2mqtt
-          - delay:
-              minutes: 5
-          - action: mqtt.publish
-            data:
-              topic: zigbee2mqtt/bridge/request/options
-              payload: >-
-                {"options": {"homeassistant": true}}
-          - action: mqtt.publish
-            data:
-              topic: zigbee2mqtt/bridge/request/devices
-              payload: >-
-                {"id":"z2m_router_health_devices"}
-          - delay:
-              minutes: 2
-          - if:
-              - condition: template
-                value_template: >-
-                  {{
-                    not is_state('binary_sensor.zigbee2mqtt_running', 'off')
-                    and not is_state('binary_sensor.z2m_failing', 'on')
-                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
-                  }}
-            then:
-              - action: notify.mobile_app_wethop
-                data:
-                  message: >-
-                    Zigbee2MQTT recovered after restart attempt {{ states('counter.reboot_counter') }}. Resetting recovery counter.
-              - action: counter.reset
-                target:
-                  entity_id: counter.reboot_counter
-              - stop: Z2M recovered after restart attempt
-      - if:
-          - condition: template
-            value_template: >-
-              {{
-                is_state('binary_sensor.zigbee2mqtt_running', 'off')
-                or is_state('binary_sensor.z2m_failing', 'on')
-                or (states('sensor.z2m_recovery_candidates') | int(0) > 20)
-              }}
-          - condition: numeric_state
-            entity_id: counter.reboot_counter
-            above: 2
-        then:
-          - action: notify.mobile_app_wethop
-            data:
-              title: Z2M Recovery Escalation
-              message: >-
-                Z2M is still unhealthy after {{ states('counter.reboot_counter') }} restart attempts. Restarting EMQX, then Zigbee2MQTT, before host shutdown.
-          - action: hassio.addon_restart
-            data:
-              addon: a0d7b954_emqx
-          - delay:
-              minutes: 2
-          - action: hassio.addon_restart
-            data:
-              addon: 45df7312_zigbee2mqtt
-          - delay:
-              minutes: 5
-          - action: mqtt.publish
-            data:
-              topic: zigbee2mqtt/bridge/request/options
-              payload: >-
-                {"options": {"homeassistant": true}}
-          - action: mqtt.publish
-            data:
-              topic: zigbee2mqtt/bridge/request/devices
-              payload: >-
-                {"id":"z2m_router_health_devices"}
-          - delay:
-              minutes: 2
-          - if:
-              - condition: template
-                value_template: >-
-                  {{
-                    not is_state('binary_sensor.zigbee2mqtt_running', 'off')
-                    and not is_state('binary_sensor.z2m_failing', 'on')
-                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
-                  }}
-            then:
-              - action: notify.mobile_app_wethop
-                data:
-                  message: >-
-                    Z2M recovered after EMQX + Z2M restart escalation. Resetting recovery counter.
-              - action: counter.reset
-                target:
-                  entity_id: counter.reboot_counter
-              - stop: Z2M recovered before host shutdown
-          - action: notify.mobile_app_wethop
-            data:
-              title: Z2M Failed
-              message: >-
-                {{ states('sensor.z2m_failing') }} of {{ states('sensor.z2m_router_total') }} Zigbee routers are offline ({{ states('sensor.z2m_router_offline_pct') }}%, threshold {{ states('input_number.z2m_router_offline_threshold_pct') }}%). Zigbee2MQTT running: {{ states('binary_sensor.zigbee2mqtt_running') }}. We've rebooted Z2M {{ states('counter.reboot_counter') }} times. Restarting host.
-              data:
-                actions:
-                  - action: "REBOOT_Z2M_COUNTER"
-                    title: Z2M failed
-                    activationMode: background
-                    authenticationRequired: false
-                    destructive: false
-                    behavior: default
-          - if:
-              - condition: numeric_state
-                entity_id: sensor.z2m_ota_updates_in_progress
-                above: 0
-            then:
-              - repeat:
-                  while:
-                    - condition: numeric_state
-                      entity_id: sensor.z2m_ota_updates_in_progress
-                      above: 0
-                    - condition: template
-                      value_template: "{{ repeat.index <= 36 }}"
-                  sequence:
-                    - action: notify.mobile_app_wethop
-                      data:
-                        message: >-
-                          Zigbee2MQTT OTA update(s) started while recovery was running ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
-                    - delay: "00:10:00"
-              - if:
-                  - condition: numeric_state
-                    entity_id: sensor.z2m_ota_updates_in_progress
-                    above: 0
-                then:
-                  - action: notify.mobile_app_wethop
-                    data:
-                      message: >-
-                        Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping host shutdown.
-                  - stop: OTA update still in progress
-          - delay:
-              minutes: 2
-          - action: rest_command.proxmox_shutdown
+        continue_on_error: true
 
 ########################
 # Binary Sensors
@@ -1536,6 +1476,7 @@ automation:
 binary_sensor:
   - platform: bayesian
     name: "Bayesian Bed Occupancy"
+    unique_id: bayesian_bed_occupancy
     prior: 0.40
     probability_threshold: 0.60
     observations:
@@ -1585,48 +1526,22 @@ binary_sensor:
 device_tracker: []
 
 ########################
-# Groups
-########################
-group:
-  egress_points:
-    entities:
-      # The doors
-      - binary_sensor.den_doors_contact
-      - binary_sensor.kitchen_deck_contact
-      - binary_sensor.main_foyer_front_door_contact
-      - binary_sensor.tiki_room_deck_contact
-      - binary_sensor.hall_garage_entry_contact
-
-########################
 # Input Booleans
 ########################
 input_boolean:
   master_bed_occupancy:
   mail_delivered:
+  front_door_lock:
 
 ########################
 # Input Numbers
 ########################
-input_number:
-  z2m_router_offline_threshold_pct:
-    name: Z2M router offline threshold
-    min: 1
-    max: 100
-    step: 1
-    mode: box
-    unit_of_measurement: "%"
-    initial: 15
+input_number: {}
 
 ########################
 # Counters
 ########################
-counter:
-  reboot_counter:
-    name: Reboot Counter
-    initial: 0
-    step: 1
-    restore: true
-    icon: mdi:restart-alert
+counter: {}
 
 ########################
 # Input Select
@@ -1680,6 +1595,19 @@ script:
             {{ devices
               | selectattr('friendly_name', 'defined')
               | rejectattr('friendly_name', 'equalto', 'Coordinator')
+              | rejectattr('disabled', 'eq', true)
+              | rejectattr('type', 'eq', 'EndDevice')
+              | map(attribute='friendly_name')
+              | unique
+              | list }}
+          z2m_skipped_end_devices: >
+            {% set payload = wait.trigger.payload_json %}
+            {% set devices = payload.data if payload and payload.data is defined else [] %}
+            {{ devices
+              | selectattr('friendly_name', 'defined')
+              | rejectattr('friendly_name', 'equalto', 'Coordinator')
+              | rejectattr('disabled', 'eq', true)
+              | selectattr('type', 'eq', 'EndDevice')
               | map(attribute='friendly_name')
               | unique
               | list }}
@@ -1688,7 +1616,17 @@ script:
         data:
           name: Zigbee2MQTT Reset
           message: >
-            Resetting {{ z2m_devices | count }} devices: {{ z2m_devices | join(', ') }}
+            Resetting {{ z2m_devices | count }} mains-powered devices: {{ z2m_devices | join(', ') }}
+      - if:
+          - condition: template
+            value_template: "{{ z2m_skipped_end_devices | count > 0 }}"
+        then:
+          - alias: Log skipped sleepy end devices
+            service: logbook.log
+            data:
+              name: Zigbee2MQTT Reset
+              message: >
+                Skipped {{ z2m_skipped_end_devices | count }} Zigbee end devices because sleeping remotes can miss unbind/rebind requests: {{ z2m_skipped_end_devices | join(', ') }}
       - condition: template
         value_template: "{{ z2m_devices | count > 0 }}"
       - repeat:
@@ -1731,6 +1669,10 @@ script:
       all_switches_led_intensity_off: >
         {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
     sequence:
+      - &trip_led_updates_allowed
+        condition: state
+        entity_id: input_boolean.trip
+        state: "off"
       - action: logbook.log
         data:
           entity_id: script.night_tv_mode_switches
@@ -1738,41 +1680,72 @@ script:
           message: "Setting all light Inovelli switch led colors to red"
           domain: script
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_switches_led_color_off}}
-        data:
           value: "0"
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_switches_led_intensity_off}}
-        data:
           value: "1"
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_switches_led_intensity_on}}
-        data:
           value: "50"
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_switches_led_color_on}}
-        data:
           value: "0"
 
   day_mode_switches:
     icon: mdi:light-switch
+    sequence:
+      - *trip_led_updates_allowed
+      - action: script.turn_on
+        target:
+          entity_id:
+            - script.day_mode_switches_general
+            - script.day_mode_switches_owner_suite_bedroom
+            - script.day_mode_switches_office_guest_room
+
+  day_mode_switches_general:
+    icon: mdi:light-switch
     variables:
       all_off_led_switches: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_on_led_switches: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_on: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_off: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'office_fan_switch')
+          | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_day_mode_singletapbehavior_switches: >
         {%- for device in states.select
           | selectattr('entity_id', 'search', 'singletapbehavior')
@@ -1781,51 +1754,233 @@ script:
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
+      all_day_mode_defaultlevellocal_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'defaultlevellocal')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'search', 'fan_switch')
+          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      all_day_mode_defaultlevelremote_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'defaultlevelremote')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'search', 'fan_switch')
+          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
+      - *trip_led_updates_allowed
       - action: logbook.log
         data:
-          entity_id: script.day_mode_switches
+          entity_id: script.day_mode_switches_general
           name: Exclude log
-          message: "Setting light switch day mode colors and full-brightness single tap"
+          message: "Setting light switch day mode colors and full-brightness defaults"
           domain: script
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_off_led_switches}}
-        data:
           value: "170"
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_switches_led_intensity_off}}
+          value: "1"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{all_switches_led_intensity_on}}
+          value: "75"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{all_on_led_switches}}
+          value: "170"
+      - action: select.select_option
+        data:
+          entity_id: >
+            {{all_day_mode_singletapbehavior_switches}}
+          option: "Old Behavior"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{all_day_mode_defaultlevellocal_switches}}
+          value: "254"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{all_day_mode_defaultlevelremote_switches}}
+          value: "254"
+
+  day_mode_switches_owner_suite_bedroom:
+    icon: mdi:light-switch
+    variables:
+      owner_suite_bedroom_off_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bedroom_on_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bedroom_led_intensity_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bedroom_led_intensity_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+    sequence:
+      - *trip_led_updates_allowed
+      - action: logbook.log
+        data:
+          entity_id: script.day_mode_switches_owner_suite_bedroom
+          name: Exclude log
+          message: "Setting owner suite bedroom switch day mode colors"
+          domain: script
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_off_led_switches}}
+          value: "170"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_led_intensity_off_switches}}
+          value: "1"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_led_intensity_on_switches}}
+          value: "75"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bedroom_on_led_switches}}
+          value: "170"
+
+  night_mode_switches_owner_suite:
+    icon: mdi:light-switch
+    sequence:
+      - *trip_led_updates_allowed
+      - action: logbook.log
+        data:
+          entity_id: script.night_mode_switches_owner_suite
+          name: Exclude log
+          message: "Setting owner suite switch LED colors to nighttime red"
+          domain: script
+      - action: number.set_value
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledcolorwhenoff
+            - number.owner_suite_fan_switch_ledcolorwhenoff
+            - number.owner_suite_bathroom_vanity_ledcolorwhenoff
+        data:
+          value: "0"
+      - action: number.set_value
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledintensitywhenoff
+            - number.owner_suite_fan_switch_ledintensitywhenoff
+            - number.owner_suite_bathroom_vanity_ledintensitywhenoff
         data:
           value: "1"
       - action: number.set_value
-        data_template:
-          entity_id: >
-            {{all_switches_led_intensity_on}}
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledintensitywhenon
+            - number.owner_suite_fan_switch_ledintensitywhenon
+            - number.owner_suite_bathroom_vanity_ledintensitywhenon
         data:
+          value: "50"
+      - action: number.set_value
+        target:
+          entity_id:
+            - number.owner_suite_closet_ledcolorwhenon
+            - number.owner_suite_fan_switch_ledcolorwhenon
+            - number.owner_suite_bathroom_vanity_ledcolorwhenon
+        data:
+          value: "0"
+
+  day_mode_switches_office_guest_room:
+    icon: mdi:light-switch
+    variables:
+      office_guest_room_off_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      office_guest_room_on_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      office_guest_room_led_intensity_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      office_guest_room_led_intensity_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+    sequence:
+      - *trip_led_updates_allowed
+      - action: logbook.log
+        data:
+          entity_id: script.day_mode_switches_office_guest_room
+          name: Exclude log
+          message: "Setting office and guest room switch day mode colors"
+          domain: script
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{office_guest_room_off_led_switches}}
+          value: "170"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{office_guest_room_led_intensity_off_switches}}
+          value: "1"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{office_guest_room_led_intensity_on_switches}}
           value: "75"
       - action: number.set_value
-        data_template:
-          entity_id: >
-            {{all_on_led_switches}}
         data:
+          entity_id: >
+            {{office_guest_room_on_led_switches}}
           value: "170"
-      - action: select.select_option
-        data_template:
-          entity_id: >
-            {{all_day_mode_singletapbehavior_switches}}
-        data:
-          option: "New Behavior"
 
   reset_inovelli_switches:
     icon: mdi:light-switch
     variables:
-      all_inovelli_switches_sb_mode: >
-        {%- for device in states.select | select('match', '.*_smartbulbmode.*')  | reject('match','.*exhaust.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
-      all_inovelli_switches_ouput_mode: >
-        {%- for device in states.select | select('match', '.*outputmode.*') | reject('match','.*exhaust.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      ha_write_delay: "00:00:01"
+      mqtt_bind_delay: "00:00:03"
+      aurora_effect: aurora
+      aurora_color: 187
+      aurora_level: 51
+      # Keep the aurora notification visible for 10 minutes, then let the
+      # devices fall back to whichever LED defaults are already active.
+      # 1-60 is in seconds calculated 61-120 is in minutes calculated by(value-60) Example a value of 65 would be 65-60 = 5 minutes - 120-254 Is in hours calculated by(value-120) Example a value of 132 would be 132-120 would be 12 hours. - 255 Indefinitely
+      aurora_duration: 70
       all_inovelli_switches_energy_report_rate: >
         {%- for device in states.number | select('match', '.*periodicpowerandenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_active_energy_report_rate: >
@@ -1838,309 +1993,649 @@ script:
         {%- for device in states.number | select('match', '.*brightnesslevelfordoubletapup.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_bindingofftoonsynclevel_mode: >
         {%- for device in states.select | select('match', '.*bindingofftoonsynclevel.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+      all_inovelli_switches_singletapbehavior_mode: >
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', 'singletapbehavior')
+          | rejectattr('entity_id', 'search', 'exhaust')
+          | rejectattr('entity_id', 'search', 'fan_switch')
+          | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      # Snapshot captured from the live Zigbee2MQTT MQTT bridge on 2026-03-28.
+      inovelli_led_notification_targets: &inovelli_led_notification_targets
+        - Basement/Bathroom/Exhaust
+        - Basement/Bathroom/Shower Switch
+        - Basement/Great Room East and Middle Switch
+        - Basement/Great Room Landing Switch 2
+        - Basement/Great Room West Switch
+        - Basement/Landing Switch
+        - Basement/North Hallway Switch
+        - Basement/Overhead Outlet
+        - Deck/Flood Lights
+        - Deck/Kitchen Door
+        - Den/Flood Switch
+        - Dining Room/Table Switch
+        - Dining Room/Wall Switch
+        - Garage/Overhead Switch
+        - Guest Bathroom/Exhaust
+        - Guest Room/Fan Switch
+        - Hall/Foyer Switch
+        - Hall/Garage Laundry Switch
+        - Hall/Stairway
+        - Hall/Transition Switch
+        - Hall/Upstairs/Switch
+        - Kitchen/Bay Switch
+        - Kitchen/Sink Overhead Switch
+        - Kitchen/Switch
+        - Kitchen/Under Cabinet
+        - Laundry/Wall Switch
+        - Office/Fan Switch
+        - Outside/Front Lights
+        - Owner Suite/Bathroom/Exhaust
+        - Owner Suite/Bathroom/Shower Switch
+        - Owner Suite/Bathroom/Tub Switch
+        - Owner Suite/Bathroom/Vanity
+        - Owner Suite/Closet
+        - Owner Suite/Fan Switch
+      inovelli_smart_bulb_mode_replay:
+        - option: "Smart Bulb Mode"
+          entities:
+            - select.owner_suite_fan_switch_smartbulbmode
+            - select.basement_great_room_west_switch_smartbulbmode
+            - select.basement_great_room_landing_switch_2_smartbulbmode
+            - select.hall_transition_switch_smartbulbmode
+            - select.hall_foyer_switch_smartbulbmode
+            - select.kitchen_sink_overhead_switch_smartbulbmode
+            - select.deck_kitchen_door_smartbulbmode
+            - select.dining_room_wall_switch_smartbulbmode
+            - select.office_fan_switch_smartbulbmode
+            - select.owner_suite_bathroom_tub_switch_smartbulbmode
+            - select.basement_great_room_east_and_middle_switch_smartbulbmode
+            - select.hall_garage_laundry_switch_smartbulbmode
+            - select.basement_north_hallway_switch_smartbulbmode
+            - select.basement_bathroom_shower_switch_smartbulbmode
+            - select.basement_landing_switch_smartbulbmode
+            - select.hall_upstairs_switch_smartbulbmode
+            - select.guest_room_fan_switch_smartbulbmode
+            - select.outside_front_lights_smartbulbmode
+            - select.owner_suite_bathroom_shower_switch_smartbulbmode
+            - select.dining_room_table_switch_smartbulbmode
+            - select.den_flood_switch_smartbulbmode
+            - select.kitchen_switch_smartbulbmode
+            - select.kitchen_bay_switch_smartbulbmode
+        - option: "Disabled"
+          entities:
+            - select.deck_flood_lights_smartbulbmode
+            - select.guest_bathroom_exhaust_smartbulbmode
+            - select.owner_suite_bathroom_exhaust_smartbulbmode
+            - select.basement_bathroom_exhaust_smartbulbmode
+            - select.basement_overhead_outlet_smartbulbmode
+            - select.garage_overhead_switch_smartbulbmode
+            - select.laundry_wall_switch_smartbulbmode
+            - select.owner_suite_closet_smartbulbmode
+            - select.owner_suite_bathroom_vanity_smartbulbmode
+            - select.hall_stairway_smartbulbmode
+            - select.kitchen_under_cabinet_smartbulbmode
+      inovelli_output_mode_replay:
+        - option: "Dimmer"
+          entities:
+            - select.owner_suite_fan_switch_outputmode
+            - select.basement_great_room_west_switch_outputmode
+            - select.basement_great_room_landing_switch_2_outputmode
+            - select.hall_transition_switch_outputmode
+            - select.hall_foyer_switch_outputmode
+            - select.kitchen_sink_overhead_switch_outputmode
+            - select.deck_kitchen_door_outputmode
+            - select.dining_room_wall_switch_outputmode
+            - select.office_fan_switch_outputmode
+            - select.owner_suite_bathroom_tub_switch_outputmode
+            - select.basement_great_room_east_and_middle_switch_outputmode
+            - select.hall_garage_laundry_switch_outputmode
+            - select.basement_north_hallway_switch_outputmode
+            - select.basement_bathroom_shower_switch_outputmode
+            - select.owner_suite_closet_outputmode
+            - select.basement_landing_switch_outputmode
+            - select.hall_upstairs_switch_outputmode
+            - select.guest_room_fan_switch_outputmode
+            - select.outside_front_lights_outputmode
+            - select.owner_suite_bathroom_shower_switch_outputmode
+            - select.owner_suite_bathroom_vanity_outputmode
+            - select.hall_stairway_outputmode
+            - select.dining_room_table_switch_outputmode
+            - select.den_flood_switch_outputmode
+            - select.kitchen_switch_outputmode
+            - select.kitchen_bay_switch_outputmode
+        - option: "Exhaust Fan (On/Off)"
+          entities:
+            - select.guest_bathroom_exhaust_outputmode
+            - select.owner_suite_bathroom_exhaust_outputmode
+            - select.basement_bathroom_exhaust_outputmode
+        - option: "On/Off"
+          entities:
+            - select.deck_flood_lights_outputmode
+            - select.basement_overhead_outlet_outputmode
+            - select.garage_overhead_switch_outputmode
+            - select.laundry_wall_switch_outputmode
+            - select.kitchen_under_cabinet_outputmode
+      inovelli_switch_type_replay:
+        - option: "Single Pole"
+          entities:
+            - select.owner_suite_fan_switch_switchtype
+            - select.basement_great_room_west_switch_switchtype
+            - select.basement_great_room_landing_switch_2_switchtype
+            - select.guest_bathroom_exhaust_switchtype
+            - select.owner_suite_bathroom_exhaust_switchtype
+            - select.basement_bathroom_exhaust_switchtype
+            - select.kitchen_sink_overhead_switch_switchtype
+            - select.deck_flood_lights_switchtype
+            - select.basement_overhead_outlet_switchtype
+            - select.deck_kitchen_door_switchtype
+            - select.dining_room_wall_switch_switchtype
+            - select.office_fan_switch_switchtype
+            - select.owner_suite_bathroom_tub_switch_switchtype
+            - select.laundry_wall_switch_switchtype
+            - select.basement_north_hallway_switch_switchtype
+            - select.owner_suite_closet_switchtype
+            - select.basement_landing_switch_switchtype
+            - select.outside_front_lights_switchtype
+            - select.owner_suite_bathroom_shower_switch_switchtype
+            - select.owner_suite_bathroom_vanity_switchtype
+            - select.kitchen_under_cabinet_switchtype
+            - select.dining_room_table_switch_switchtype
+            - select.den_flood_switch_switchtype
+            - select.kitchen_switch_switchtype
+            - select.kitchen_bay_switch_switchtype
+        - option: "Aux Switch"
+          entities:
+            - select.hall_transition_switch_switchtype
+        - option: "3-Way Aux Switch"
+          entities:
+            - select.hall_foyer_switch_switchtype
+            - select.garage_overhead_switch_switchtype
+            - select.hall_garage_laundry_switch_switchtype
+            - select.hall_upstairs_switch_switchtype
+            - select.hall_stairway_switchtype
+      # Recreate switch endpoint memberships in Zigbee groups after a reset.
+      # For smart-bulb groups, endpoint 1 receives group state so the switch
+      # load/LED stays in sync while endpoint 2 remains the bound controller.
+      inovelli_group_membership_replay:
+        - group: "Basement/Great Room"
+          members:
+            - device: "Basement/Great Room East and Middle Switch"
+              endpoint: 1
+            - device: "Basement/Great Room Landing Switch 2"
+              endpoint: 1
+            - device: "Basement/Great Room West Switch"
+              endpoint: 1
+            - device: "Basement/Landing Switch"
+              endpoint: 1
+            - device: "Basement/North Hallway Switch"
+              endpoint: 1
+        - group: "Deck/All"
+          members:
+            - device: "Deck/Kitchen Door"
+              endpoint: 2
+        - group: "Deck/Hue"
+          members:
+            - device: "Deck/Kitchen Door"
+              endpoint: 1
+        - group: "Den/Floods"
+          members:
+            - device: "Den/Flood Switch"
+              endpoint: 1
+        - group: "Dining Room/Over Table"
+          members:
+            - device: "Dining Room/Table Switch"
+              endpoint: 1
+            - device: "Dining Room/Wall Switch"
+              endpoint: 1
+        - group: "Hall/All"
+          members:
+            - device: "Hall/Foyer Switch"
+              endpoint: 1
+            - device: "Hall/Garage Laundry Switch"
+              endpoint: 1
+            - device: "Hall/Transition Switch"
+              endpoint: 1
+            - device: "Hall/Upstairs/Switch"
+              endpoint: 1
+        - group: "Kitchen/All"
+          members:
+            - device: "Kitchen/Bay Switch"
+              endpoint: 1
+            - device: "Kitchen/Switch"
+              endpoint: 1
+        - group: "Outside/Front Hue"
+          members:
+            - device: "Outside/Front Lights"
+              endpoint: 1
+        - group: "Owner Suite/Bathroom/Lights"
+          members:
+            - device: "Owner Suite/Bathroom/Shower Switch"
+              endpoint: 1
+            - device: "Owner Suite/Bathroom/Tub Switch"
+              endpoint: 1
+      # Recreate custom switch bindings to bulbs or Zigbee groups after a reset.
+      inovelli_binding_replay:
+        - from: "Basement/Bathroom/Shower Switch"
+          from_endpoint: 2
+          to: "Basement/Bathroom Shower"
+          to_endpoint: 1
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Great Room East and Middle Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Great Room Landing Switch 2"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Great Room West Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/Landing Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Basement/North Hallway Switch"
+          from_endpoint: 2
+          to: "Basement/Great Room"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Deck/Kitchen Door"
+          from_endpoint: 2
+          to: "Deck/Hue"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Den/Flood Switch"
+          from_endpoint: 2
+          to: "Den/Floods"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+            - genScenes
+        - from: "Den/Flood Switch"
+          from_endpoint: 2
+          to: "Den/Lamp"
+          to_endpoint: 1
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Dining Room/Table Switch"
+          from_endpoint: 2
+          to: "Dining Room/Over Table"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+            - genScenes
+        - from: "Dining Room/Wall Switch"
+          from_endpoint: 2
+          to: "Dining Room/Over Table"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+            - genScenes
+        - from: "Hall/Foyer Switch"
+          from_endpoint: 2
+          to: "Hall/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Hall/Garage Laundry Switch"
+          from_endpoint: 2
+          to: "Hall/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Hall/Transition Switch"
+          from_endpoint: 3
+          to: "Hall/Transition"
+          to_endpoint: 11
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Hall/Upstairs/Switch"
+          from_endpoint: 2
+          to: "Hall/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Kitchen/Bay Switch"
+          from_endpoint: 2
+          to: "Kitchen/Bay Light"
+          to_endpoint: 11
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Kitchen/Sink Overhead Switch"
+          from_endpoint: 2
+          to: "Kitchen/Sink Overhead"
+          to_endpoint: 11
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Kitchen/Switch"
+          from_endpoint: 2
+          to: "Kitchen/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Outside/Front Lights"
+          from_endpoint: 2
+          to: "Outside/Front Hue"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Owner Suite/Bathroom/Shower Switch"
+          from_endpoint: 2
+          to: "Owner Suite/Bathroom/Lights"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Owner Suite/Bathroom/Tub Switch"
+          from_endpoint: 2
+          to: "Owner Suite/Bathroom/Lights"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
     sequence:
       - action: logbook.log
         data:
           entity_id: script.reset_inovelli_switches
           name: Exclude log
-          message: "Setting all appropriate light switches smart bulb mode on and dimmer mode"
+          message: "Replaying saved Inovelli Zigbee2MQTT config after switch resets"
           domain: script
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_inovelli_switches_active_energy_report_rate}}
-        data:
           value: "0"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_inovelli_switches_active_power_report_rate}}
-        data:
           value: "0"
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_inovelli_switches_energy_report_rate}}
-        data:
           # value: "623" # enhanced reporting
           value: 0 # default
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
-        data_template:
+        data:
           entity_id: >
             {{all_inovelli_switches_double_tap_up_mode}}
-        data:
           option: "Enabled"
-      - delay: 10 # seconds
+      - delay: "{{ ha_write_delay }}"
       - action: number.set_value
-        data_template:
+        data:
           entity_id: >
             {{all_inovelli_switches_double_tap_up_brightness}}
-        data:
           value: "254"
-      - delay: 10 # seconds
-        enabled: false
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
-        enabled: false
-        data_template:
-          entity_id: >
-            {{all_inovelli_switches_sb_mode}}
         data:
-          option: "Disabled"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data_template:
           entity_id: >
-            {{all_inovelli_switches_sb_mode}}
-        data:
-          option: "Smart Bulb Mode"
-      - delay: 10 # seconds
+            {{all_inovelli_switches_singletapbehavior_mode}}
+          option: "Old Behavior"
+      - delay: "{{ ha_write_delay }}"
       - action: select.select_option
-        data_template:
+        data:
           entity_id: >
             {{all_inovelli_switches_bindingofftoonsynclevel_mode}}
-        data:
           option: "Enabled"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data_template:
+      - delay: "{{ mqtt_bind_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_smart_bulb_mode_replay }}"
+          sequence:
+            - variables:
+                replay_option: "{{ repeat.item.option }}"
+                replay_entities: "{{ repeat.item.entities }}"
+            - repeat:
+                for_each: "{{ replay_entities }}"
+                sequence:
+                  - action: select.select_option
+                    data:
+                      entity_id: "{{ repeat.item }}"
+                      option: "{{ replay_option }}"
+                  - delay: "{{ ha_write_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_output_mode_replay }}"
+          sequence:
+            - variables:
+                replay_option: "{{ repeat.item.option }}"
+                replay_entities: "{{ repeat.item.entities }}"
+            - repeat:
+                for_each: "{{ replay_entities }}"
+                sequence:
+                  - action: select.select_option
+                    data:
+                      entity_id: "{{ repeat.item }}"
+                      option: "{{ replay_option }}"
+                  - delay: "{{ ha_write_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_switch_type_replay }}"
+          sequence:
+            - variables:
+                replay_option: "{{ repeat.item.option }}"
+                replay_entities: "{{ repeat.item.entities }}"
+            - repeat:
+                for_each: "{{ replay_entities }}"
+                sequence:
+                  - action: select.select_option
+                    data:
+                      entity_id: "{{ repeat.item }}"
+                      option: "{{ replay_option }}"
+                  - delay: "{{ ha_write_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_group_membership_replay }}"
+          sequence:
+            - variables:
+                replay_group: "{{ repeat.item.group }}"
+                replay_members: "{{ repeat.item.members }}"
+            - repeat:
+                for_each: "{{ replay_members }}"
+                sequence:
+                  - action: mqtt.publish
+                    data:
+                      topic: zigbee2mqtt/bridge/request/group/members/add
+                      payload: >
+                        {{ {
+                          'group': replay_group,
+                          'device': repeat.item.device,
+                          'endpoint': repeat.item.endpoint
+                        } | tojson }}
+                  - delay: "{{ mqtt_bind_delay }}"
+      - repeat:
+          for_each: "{{ inovelli_binding_replay }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/bind
+                payload: >
+                  {% set payload = {
+                    'from': repeat.item.from,
+                    'to': repeat.item.to,
+                    'clusters': repeat.item.clusters
+                  } %}
+                  {% if repeat.item.from_endpoint is defined and repeat.item.from_endpoint not in [none, '', 'default'] %}
+                    {% set payload = payload | combine({'from_endpoint': repeat.item.from_endpoint}) %}
+                  {% endif %}
+                  {% if repeat.item.to_endpoint is defined and repeat.item.to_endpoint not in [none, ''] %}
+                    {% set payload = payload | combine({'to_endpoint': repeat.item.to_endpoint}) %}
+                  {% endif %}
+                  {{ payload | tojson }}
+            - delay: "{{ mqtt_bind_delay }}"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
+            sequence:
+              - repeat:
+                  for_each: "{{ inovelli_led_notification_targets }}"
+                  sequence:
+                    - action: mqtt.publish
+                      data:
+                        topic: "zigbee2mqtt/{{ repeat.item }}/set"
+                        payload: >
+                          {{ {
+                            'led_effect': {
+                              'effect': aurora_effect,
+                              'color': aurora_color,
+                              'level': aurora_level,
+                              'duration': aurora_duration
+                            }
+                          } | tojson }}
+                    - delay: "{{ mqtt_bind_delay }}"
+      - action: logbook.log
+        data:
+          name: Zigbee2MQTT Reset
+          message: >
+            Replayed the saved Inovelli smart bulb modes, output modes, switch types,
+            group memberships, and bindings for switches and bulbs/groups.
+
+  turn_off_all_inovelli_switch_leds:
+    icon: mdi:light-switch-off
+    variables:
+      all_switches_led_intensity_on: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      all_switches_led_intensity_off: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      inovelli_led_notification_targets: *inovelli_led_notification_targets
+    sequence:
+      - action: logbook.log
+        data:
+          entity_id: script.turn_off_all_inovelli_switch_leds
+          name: Exclude log
+          message: "Turning off all Inovelli LED bars while trip mode is active"
+          domain: script
+      - action: number.set_value
+        data:
           entity_id: >
-            select.hall_stairway_smartbulbmode,
-            select.owner_suite_bathroom_exhaust_smartbulbmode,
-            select.owner_suite_bathroom_vanity_smartbulbmode,
-            select.owner_suite_closet_smartbulbmode,
-            select.hall_stairway_smartbulbmode,
-            select.garage_overhead_switch_smartbulbmode,
-            select.deck_flood_lights_smartbulbmode,
-            select.laundry_wall_switch_smartbulbmode,
-            select.kitchen_under_cabinet_smartbulbmode,
-            select.basement_overhead_outlet_smartbulbmode
+            {{ all_switches_led_intensity_off }}
+          value: 0
+      - action: number.set_value
         data:
-          option: "Disabled"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data_template:
           entity_id: >
-            {{all_inovelli_switches_ouput_mode}}
-        data:
-          option: "Dimmer"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data_template:
-          entity_id:
-            - select.laundry_wall_switch_outputmode
-            - select.garage_overhead_switch_outputmode
-            - select.deck_flood_lights_outputmode
-            - select.kitchen_under_cabinet_outputmode
-            - select.basement_overhead_outlet_outputmode # Todo maybe remove this when something is plugged in?
-            # - select.hall_stairway_outputmode
-        data:
-          option: "On/Off"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data_template:
-          entity_id:
-            - select.basement_bathroom_exhaust_outputmode
-            - select.guest_bathroom_exhaust_outputmode
-            - select.owner_suite_bathroom_exhaust_outputmode
-        data:
-          option: "Exhaust Fan (On/Off)"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data:
-          entity_id:
-            - select.owner_suite_bathroom_exhaust_switchtype
-            - select.basement_bathroom_exhaust_switchtype
-            - select.guest_bathroom_exhaust_switchtype
-            - select.basement_great_room_landing_switch_2_switchtype
-            - select.basement_great_room_west_switch_switchtype
-            - select.basement_landing_switch_switchtype
-            - select.basement_north_hallway_switch_switchtype
-            - select.basement_overhead_outlet_switchtype
-            - select.deck_flood_lights_switchtype
-            - select.dining_room_wall_switch_switchtype
-            - select.garage_overhead_switch_switchtype
-            - select.kitchen_bay_switch_switchtype
-            - select.kitchen_sink_overhead_switch_switchtype
-            - select.kitchen_switch_switchtype
-            - select.kitchen_under_cabinet_switchtype
-            - select.laundry_wall_switch_switchtype
-            - select.office_fan_switch_switchtype
-            - select.owner_suite_bathroom_shower_switch_switchtype
-            - select.owner_suite_bathroom_tub_switch_switchtype
-            - select.owner_suite_bathroom_vanity_switchtype
-            - select.owner_suite_closet_switchtype
-            - select.owner_suite_fan_switch_switchtype
-          option: "Single Pole"
-      - delay: 10 # seconds
-      - action: select.select_option
-        data:
-          entity_id:
-            - select.hall_garage_laundry_switch_switchtype
-            - select.hall_stairway_switchtype
-            - select.hall_upstairs_switch_switchtype
-          option: "3-Way Aux Switch"
-      - action: select.select_option
-        data:
-          entity_id: select.hall_transition_switch_switchtype
-          option: "Aux Switch"
-      # Now redo the bindings of switches to bulbs/etc
-      - delay: 10 # seconds
-      # TODO: Z2M 2.0 I need to update these bindings: https://github.com/Koenkk/zigbee2mqtt/pull/24432
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Deck/Kitchen Door/2","to":"Deck/Hue"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Outside/Front Lights/2","to":"Outside/Front Hue"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Owner Suite/Bathroom/Tub Switch/2","to":"Owner Suite/Bathroom/Bathtub Lights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Kitchen/Sink Light Switch/2","to":"Kitchen/Sink"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Upstairs/Switch/2","to":"Hall/Upstairs Lights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Living Room/Wall Switch/2","to":"Living Room/Lamps"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Transition Switch/2","to":"Hall/Transition Lights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Transition Switch/2","to":"Hall/Main Foyer"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Garage Laundry Switch/2","to":"Hall/Transition Lights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Foyer Switch/2","to":"Hall/Main Foyer"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Hall/Foyer Switch/2","to":"Hall/Front Door"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Dining Room/Overhead/2","to":"Dining Room/Over Table"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Den/Wall Switch/2","to":"Den/All"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Deck/Flood Lights/2","to":"Deck/All"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/North Hallway Switch/2","to":"Basement/All Down Lights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/North Hallway Switch/2","to":"Basement/North Hallway"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Landing Switch/2","to":"Basement/Landing Group"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room West Switch/2","to":"Basement/All Down Lights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room West Switch/2","to":"Basement/West Downlights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/All Down Lights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Great Room East and Middle Switch/2","to":"Basement/East Downlights"}
-      - delay: 10 # seconds
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/bind
-          payload: >-
-            {"clusters":["genGroups","genLevelCtrl","genOnOff"],
-              "from":"Basement/Bathroom/Shower Switch/2","to":"Basement/Bathroom Shower/1"}
+            {{ all_switches_led_intensity_on }}
+          value: 0
+      - repeat:
+          for_each: "{{ inovelli_led_notification_targets }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: "zigbee2mqtt/{{ repeat.item }}/set"
+                payload: >
+                  {{ {'led_effect': {'effect': 'clear_effect'}} | tojson }}
+
+  restore_inovelli_switch_leds_from_trip:
+    icon: mdi:light-switch
+    variables:
+      office_guest_room_day_mode_ready: >-
+        {{ is_state('input_boolean.guest_mode', 'off') or now() >= today_at('12:00') }}
+      owner_suite_bedroom_day_mode_ready: >-
+        {{
+          now() >= today_at('08:00')
+          and is_state('binary_sensor.bayesian_bed_occupancy', 'off')
+          and (
+            is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
+            or states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed >= today_at('08:00')
+          )
+          and (
+            is_state('binary_sensor.bedroom_occupancy', 'on')
+            or states.binary_sensor.bedroom_occupancy.last_changed >= today_at('08:00')
+          )
+        }}
+    sequence:
+      - *trip_led_updates_allowed
+      - choose:
+          - conditions:
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: switch.sleep_mode
+                    state: "on"
+                  - condition: state
+                    entity_id: sun.sun
+                    state: "below_horizon"
+            sequence:
+              - action: script.turn_on
+                target:
+                  entity_id: script.night_tv_mode_switches
+        default:
+          - action: script.turn_on
+            target:
+              entity_id: script.day_mode_switches_general
+          - if:
+              - condition: template
+                value_template: "{{ office_guest_room_day_mode_ready }}"
+            then:
+              - action: script.turn_on
+                target:
+                  entity_id: script.day_mode_switches_office_guest_room
+          - if:
+              - condition: template
+                value_template: "{{ owner_suite_bedroom_day_mode_ready }}"
+            then:
+              - action: script.turn_on
+                target:
+                  entity_id: script.day_mode_switches_owner_suite_bedroom
+
+  replay_inovelli_led_policy_after_recovery:
+    icon: mdi:light-switch
+    description: >
+      Reapply the current Inovelli LED policy after any LED number entity
+      recovers from unavailable so missed Zigbee2MQTT writes are replayed.
+    mode: queued
+    variables:
+      owner_suite_leds_should_be_dark: >-
+        {{
+          (now() >= today_at('22:00') or now() < today_at('06:00'))
+          and (
+            is_state('binary_sensor.bayesian_bed_occupancy', 'on')
+            or is_state('light.owner_suite_lamps', 'off')
+          )
+        }}
+    sequence:
+      - if:
+          - condition: state
+            entity_id: input_boolean.trip
+            state: "on"
+        then:
+          - action: script.turn_on
+            target:
+              entity_id: script.turn_off_all_inovelli_switch_leds
+        else:
+          - action: script.turn_on
+            target:
+              entity_id: script.restore_inovelli_switch_leds_from_trip
+          - if:
+              - condition: template
+                value_template: "{{ owner_suite_leds_should_be_dark }}"
+            then:
+              - action: script.turn_off_owner_suite_inovelli_switch_leds
 
   turn_off_owner_suite_inovelli_switch_leds:
     icon: mdi:light-switch
@@ -2158,7 +2653,7 @@ script:
                   - number.owner_suite_bathroom_vanity_ledintensitywhenoff
                   - number.office_fan_switch_ledintensitywhenoff
                   - number.guest_room_fan_switch_ledintensitywhenoff
-          initial_grace_period: 10
+          initial_grace_period: 30
           expected_state: 0
       - delay:
           seconds: 30
@@ -2224,7 +2719,14 @@ sensor: []
 ########################
 template:
   - binary_sensor:
+      - name: any_egress_open
+        unique_id: any_egress_open
+        default_entity_id: binary_sensor.any_egress_open
+        device_class: opening
+        state: "{{ states('sensor.open_egress_points') | int(0) > 0 }}"
+
       - name: master_bed_occupancy
+        unique_id: master_bed_occupancy
         delay_on: 00:00:30
         device_class: occupancy
         state: >-
@@ -2243,16 +2745,102 @@ template:
         # state: >-
         #   {{ states('sensor.average_bed_load')| int(0) > 20 }}
 
-      - name: z2m_failing
-        device_class: problem
+  - sensor:
+      # Build the egress inventory from live contact entities so stale IDs do
+      # not accumulate in a manually maintained group.
+      - name: open_egress_points
+        unique_id: open_egress_points
+        default_entity_id: sensor.open_egress_points
+        icon: mdi:door-open
         state: >-
-          {% set total = states('sensor.z2m_router_total') | int(0) %}
-          {% set offline_pct = states('sensor.z2m_router_offline_pct') | float(0) %}
-          {% set threshold_pct = states('input_number.z2m_router_offline_threshold_pct') | float(15) %}
-          {{ total > 0 and offline_pct >= threshold_pct }}
+          {% set excluded = [
+            'binary_sensor.mailbox_contact',
+            'binary_sensor.den_doors_contact',
+            'binary_sensor.laundry_room_washing_machine_door_contact',
+            'binary_sensor.nigori_windows',
+            'binary_sensor.nigori_doors',
+            'binary_sensor.nigori_trunk',
+            'binary_sensor.nigori_frunk',
+            'binary_sensor.pressure_falling',
+            'binary_sensor.pressure_falling_quickly',
+            'binary_sensor.pressure_falling_slowly',
+            'binary_sensor.pressure_falling_v_rapidly',
+            'binary_sensor.pressure_rising_quickly',
+            'binary_sensor.pressure_rising_slowly',
+            'binary_sensor.pressure_rising_v_rapidly',
+            'binary_sensor.pressure_rising'
+          ] %}
+          {% set open_entities = namespace(entity_ids=[]) %}
+          {% for sensor in states.binary_sensor %}
+            {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+            {% if sensor.state == 'on'
+                  and sensor.entity_id not in excluded
+                  and device_class in ['door', 'window', 'opening'] %}
+              {% set open_entities.entity_ids = open_entities.entity_ids + [sensor.entity_id] %}
+            {% endif %}
+          {% endfor %}
+          {{ open_entities.entity_ids | count }}
+        attributes:
+          entity_ids: >-
+            {% set excluded = [
+              'binary_sensor.mailbox_contact',
+              'binary_sensor.den_doors_contact',
+              'binary_sensor.laundry_room_washing_machine_door_contact',
+              'binary_sensor.nigori_windows',
+              'binary_sensor.nigori_doors',
+              'binary_sensor.nigori_trunk',
+              'binary_sensor.nigori_frunk',
+              'binary_sensor.pressure_falling',
+              'binary_sensor.pressure_falling_quickly',
+              'binary_sensor.pressure_falling_slowly',
+              'binary_sensor.pressure_falling_v_rapidly',
+              'binary_sensor.pressure_rising_quickly',
+              'binary_sensor.pressure_rising_slowly',
+              'binary_sensor.pressure_rising_v_rapidly',
+              'binary_sensor.pressure_rising'
+            ] %}
+            {% set open_entities = namespace(entity_ids=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on'
+                    and sensor.entity_id not in excluded
+                    and device_class in ['door', 'window', 'opening'] %}
+                {% set open_entities.entity_ids = open_entities.entity_ids + [sensor.entity_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ open_entities.entity_ids | sort | join(', ') }}
+          friendly_names: >-
+            {% set excluded = [
+              'binary_sensor.mailbox_contact',
+              'binary_sensor.den_doors_contact',
+              'binary_sensor.laundry_room_washing_machine_door_contact',
+              'binary_sensor.nigori_windows',
+              'binary_sensor.nigori_doors',
+              'binary_sensor.nigori_trunk',
+              'binary_sensor.nigori_frunk',
+              'binary_sensor.pressure_falling',
+              'binary_sensor.pressure_falling_quickly',
+              'binary_sensor.pressure_falling_slowly',
+              'binary_sensor.pressure_falling_v_rapidly',
+              'binary_sensor.pressure_rising_quickly',
+              'binary_sensor.pressure_rising_slowly',
+              'binary_sensor.pressure_rising_v_rapidly',
+              'binary_sensor.pressure_rising'
+            ] %}
+            {% set open_entities = namespace(names=[]) %}
+            {% for sensor in states.binary_sensor %}
+              {% set device_class = sensor.attributes.device_class | default('', true) | lower %}
+              {% if sensor.state == 'on'
+                    and sensor.entity_id not in excluded
+                    and device_class in ['door', 'window', 'opening'] %}
+                {% set open_entities.names = open_entities.names + [entity_name(sensor.entity_id)] %}
+              {% endif %}
+            {% endfor %}
+            {{ open_entities.names | sort | join(', ') }}
 
   - lock:
       - name: Front door lock
+        unique_id: front_door_lock_template
         optimistic: true
         lock:
           - target:
@@ -2266,161 +2854,16 @@ template:
             action: input_boolean.turn_on
         state: "{{ is_state('input_boolean.front_door_lock', 'off') }}"
 
-  - trigger:
-      - trigger: homeassistant
-        event: start
-      - trigger: time_pattern
-        minutes: "/1"
-    variables:
-      z2m_ota_stats: >-
-        {% set now_ts = as_timestamp(now()) | float(0) %}
-        {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
-        {% set previous_starts = current_attrs.get('started_at_map', {}) %}
-        {% set ns = namespace(count=0, entities=[], progress={}, starts={}, eta_ts=[]) %}
-        {% for entity_id in integration_entities('mqtt') | default([], true) %}
-          {% if entity_id.startswith('update.') %}
-            {% set entity_picture = state_attr(entity_id, 'entity_picture') | default('', true) %}
-            {% set in_progress = state_attr(entity_id, 'in_progress') | default(false, true) %}
-            {% if 'koenkk/zigbee2mqtt' in (entity_picture | lower) and in_progress %}
-              {% set ns.count = ns.count + 1 %}
-              {% set ns.entities = ns.entities + [entity_id] %}
-              {% set pct = state_attr(entity_id, 'update_percentage') %}
-              {% set start_ts = previous_starts.get(entity_id, now_ts) %}
-              {% set ns.starts = ns.starts | combine({entity_id: start_ts}, recursive=True) %}
-              {% if pct is number %}
-                {% set ns.progress = ns.progress | combine({entity_id: pct}, recursive=True) %}
-                {% if pct > 0 and pct < 100 and now_ts > start_ts %}
-                  {% set elapsed = now_ts - start_ts %}
-                  {% if elapsed >= 120 %}
-                    {% set eta_ts = now_ts + (elapsed * (100 - pct) / pct) %}
-                    {% set ns.eta_ts = ns.eta_ts + [eta_ts] %}
-                  {% endif %}
-                {% endif %}
-              {% endif %}
-            {% endif %}
-          {% endif %}
-        {% endfor %}
-        {% set eta_ts = (ns.eta_ts | max) if (ns.eta_ts | count > 0) else none %}
-        {% set eta_minutes = ((eta_ts - now_ts) / 60) | round(0) if eta_ts is not none else none %}
-        {{ {
-            'count': ns.count,
-            'entities': ns.entities | sort,
-            'progress': ns.progress,
-            'started_at_map': ns.starts,
-            'eta_ts': eta_ts,
-            'eta_minutes': eta_minutes
-          } | tojson }}
-    sensor:
-      - name: z2m_ota_updates_in_progress
-        unique_id: z2m_ota_updates_in_progress
-        state: "{{ (z2m_ota_stats | from_json).count }}"
-        attributes:
-          entities: "{{ (z2m_ota_stats | from_json).entities }}"
-          progress_pct: "{{ (z2m_ota_stats | from_json).progress }}"
-          started_at_map: "{{ (z2m_ota_stats | from_json).started_at_map }}"
-          eta_minutes: "{{ (z2m_ota_stats | from_json).eta_minutes }}"
-          estimated_completion_ts: "{{ (z2m_ota_stats | from_json).eta_ts }}"
-
-  - trigger:
-      - trigger: homeassistant
-        event: start
-      - trigger: mqtt
-        topic: zigbee2mqtt/bridge/devices
-      - trigger: mqtt
-        topic: zigbee2mqtt/bridge/response/devices
-      - trigger: mqtt
-        topic: zigbee2mqtt/+/availability
-    variables:
-      z2m_router_stats: >-
-        {% set current_attrs = this.attributes if this is defined and this.attributes is defined else dict() %}
-        {% set previous = {
-            'routers': current_attrs.get('routers', []),
-            'availability_map': current_attrs.get('availability_map', {}),
-            'offline_names': current_attrs.get('offline_routers', []),
-            'offline': current_attrs.get('offline_router_count', 0),
-            'total': current_attrs.get('total_router_count', 0),
-            'pct': (this.state | float(0)) if this is defined else 0
-          } %}
-        {% set topic = trigger.topic if trigger is defined and trigger.topic is defined else '' %}
-        {% set is_devices_topic = topic in ['zigbee2mqtt/bridge/devices', 'zigbee2mqtt/bridge/response/devices'] %}
-        {% set is_availability_topic = topic.endswith('/availability') and not topic.startswith('zigbee2mqtt/bridge/') %}
-
-        {% if not is_devices_topic and not is_availability_topic %}
-          {{ previous }}
-        {% else %}
-          {% set routers = previous.routers %}
-          {% set availability_map = previous.availability_map %}
-
-          {% if is_devices_topic %}
-            {% set payload = trigger.payload_json %}
-            {% if payload is mapping and payload.data is defined %}
-              {% set devices = payload.data %}
-            {% elif payload is sequence and payload is not string %}
-              {% set devices = payload %}
-            {% else %}
-              {% set devices = [] %}
-            {% endif %}
-            {% set routers = devices
-              | selectattr('type', 'eq', 'Router')
-              | rejectattr('friendly_name', 'equalto', 'Coordinator')
-              | rejectattr('disabled', 'eq', true)
-              | map(attribute='friendly_name')
-              | list %}
-          {% endif %}
-
-          {% if is_availability_topic %}
-            {% set friendly_name = topic[12:-13] %}
-            {% if trigger.payload_json is mapping and trigger.payload_json.state is defined %}
-              {% set availability_state = trigger.payload_json.state %}
-            {% else %}
-              {% set availability_state = trigger.payload %}
-            {% endif %}
-            {% set availability_map = availability_map | combine({ friendly_name: (availability_state | string | lower) }) %}
-          {% endif %}
-
-          {% set ns = namespace(offline=[]) %}
-          {% for router in routers %}
-            {% if availability_map.get(router, 'unknown') == 'offline' %}
-              {% set ns.offline = ns.offline + [router] %}
-            {% endif %}
-          {% endfor %}
-
-          {% set total = routers | count %}
-          {% set offline = ns.offline | count %}
-          {% set percent = ((offline / total) * 100) if total > 0 else 0 %}
-          {{ {
-              'routers': routers | sort,
-              'availability_map': availability_map,
-              'offline_names': ns.offline | sort,
-              'offline': offline,
-              'total': total,
-              'pct': percent | round(1)
-            } }}
-        {% endif %}
-    sensor:
-      - name: z2m_router_offline_pct
-        unique_id: z2m_router_offline_pct
-        unit_of_measurement: "%"
-        state: "{{ z2m_router_stats.get('pct', 0) }}"
-        attributes:
-          offline_router_count: "{{ z2m_router_stats.get('offline', 0) }}"
-          total_router_count: "{{ z2m_router_stats.get('total', 0) }}"
-          offline_routers: "{{ z2m_router_stats.get('offline_names', []) }}"
-          routers: "{{ z2m_router_stats.get('routers', []) }}"
-          availability_map: "{{ z2m_router_stats.get('availability_map', {}) }}"
-
   - sensor:
       - unique_id: bedroom_hour_of_day
         unit_of_measurement: h
         default_entity_id: sensor.bedroom_hour_of_day
         name: Bedroom hour of day
-        state: '"{{ now().hour }}"'
+        state: "{{ now().hour }}"
 
       - name: "east_bed_occupied_num"
         unique_id: east_bed_occupied_num
         state_class: measurement
-        unit_of_measurement: "1"
-        device_class: power_factor
         availability: "{{ states('input_boolean.east_bed_occupied') in ['on','off'] }}"
         state: >-
           {% set s = states('input_boolean.east_bed_occupied') %}
@@ -2429,55 +2872,10 @@ template:
       - name: "west_bed_occupied_num"
         unique_id: west_bed_occupied_num
         state_class: measurement
-        unit_of_measurement: "1"
-        device_class: power_factor
         availability: "{{ states('input_boolean.west_bed_occupied') in ['on','off'] }}"
         state: >-
           {% set s = states('input_boolean.west_bed_occupied') %}
           {% if s == 'on' %}1{% elif s == 'off' %}0{% else %}{{ none }}{% endif %}
-
-      - name: z2m_router_total
-        unique_id: z2m_router_total
-        state: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"
-
-      - name: z2m_failing
-        state: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_router_count') | int(0) }}"
-        attributes:
-          total_router_count: "{{ state_attr('sensor.z2m_router_offline_pct', 'total_router_count') | int(0) }}"
-          offline_router_pct: "{{ states('sensor.z2m_router_offline_pct') | float(0) }}"
-          offline_routers: "{{ state_attr('sensor.z2m_router_offline_pct', 'offline_routers') | default([], true) }}"
-
-      - name: z2m_recovery_candidates
-        unique_id: z2m_recovery_candidates
-        icon: mdi:lan-disconnect
-        state: >-
-          {% set ns = namespace(count=0) %}
-          {% for s in states if s.state == 'unavailable' %}
-            {% set eid = s.entity_id %}
-            {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
-              {% set did = device_id(eid) %}
-              {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
-              {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
-                {% set ns.count = ns.count + 1 %}
-              {% endif %}
-            {% endif %}
-          {% endfor %}
-          {{ ns.count }}
-        attributes:
-          entities: >-
-            {% set ns = namespace(items=[]) %}
-            {% for s in states if s.state == 'unavailable' %}
-              {% set eid = s.entity_id %}
-              {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
-                {% set did = device_id(eid) %}
-                {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
-                {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
-                  {% set ns.items = ns.items + [eid] %}
-                {% endif %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.items | join(', ') }}
-          recovery_hint: "Restart Zigbee2MQTT first when this count stays above threshold."
 
 ########################
 # Zone

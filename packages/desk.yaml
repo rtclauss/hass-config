@@ -1,3 +1,6 @@
+# Home Assistant package for the Uplift standing desk.
+# It coordinates desk presets with guest mode, trip mode, work-camera setup, and timed reset logic so the office returns to a known state automatically.
+
 ################################################################
 ## Packages / Desk
 ################################################################
@@ -16,8 +19,13 @@ homeassistant:
       customize: &customize
         package: "desk"
 
+      expose: &expose
+        <<: *customize
+        haaska_hidden: false
+        homebridge_hidden: false
+
     ################################################
-    ## Automation
+    ## Automations
     ################################################
 
     automation.uplift_desk_raise_for_guest_mode:
@@ -51,7 +59,7 @@ homeassistant:
       icon: mdi:weather-night
 
     ################################################
-    ## Script
+    ## Scripts
     ################################################
 
     script.uplift_desk_auto_move_max:
@@ -173,13 +181,48 @@ automation:
     action:
       - action: script.uplift_desk_auto_move_max
 
+  - id: uplift_desk_lower_on_workday_arrival
+    alias: uplift_desk_lower_on_workday_arrival
+    description: >
+      Return the desk to preset 1 when arriving home on workdays. Weekend and
+      holiday arrivals leave the desk raised until the Monday-morning reset.
+    trigger:
+      - trigger: state
+        entity_id: person.ryan
+        to: "home"
+      - trigger: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+        state: "off"
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
+      - condition: state
+        entity_id: person.ryan
+        state: "home"
+      - condition: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+    action:
+      - action: script.uplift_desk_auto_move_preset_1
+
   - id: uplift_desk_raise_in_evening
     alias: uplift_desk_raise_in_evening
     description: >
-      Raise the desk to max height every day at 6 PM or when the work laptop
-      has been inactive long enough to be treated as asleep. These are
-      considered timed moves and are suppressed by guest mode, trip mode, and
-      the work camera rule.
+      Raise the desk to max height at 6 PM or when the work laptop has been
+      inactive long enough to be treated as asleep. These are considered timed
+      moves and are suppressed by guest mode, trip mode, and the work camera
+      rule.
     trigger:
       - trigger: time
         id: evening
@@ -206,12 +249,15 @@ automation:
   - id: uplift_desk_reset_overnight
     alias: uplift_desk_reset_overnight
     description: >
-      Return the desk to preset 1 at 4 AM, but only when no higher-priority
-      mode is active.
+      Return the desk to preset 1 every Monday at 4 AM, but only when no
+      higher-priority mode is active.
     trigger:
       - trigger: time
         at: "04:00:00"
     condition:
+      - condition: time
+        weekday:
+          - mon
       - condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
@@ -238,7 +284,9 @@ script:
       - condition: state
         entity_id: timer.uplift_desk_motion_window
         state: "idle"
-      - action: shell_command.uplift_desk_auto_move_max
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_move_to_max_height
       - action: timer.start
         target:
           entity_id: timer.uplift_desk_motion_window
@@ -253,7 +301,9 @@ script:
       - condition: state
         entity_id: timer.uplift_desk_motion_window
         state: "idle"
-      - action: shell_command.uplift_desk_auto_move_preset_1
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_move_to_preset_1
       - action: timer.start
         target:
           entity_id: timer.uplift_desk_motion_window
@@ -268,7 +318,9 @@ script:
       - condition: state
         entity_id: timer.uplift_desk_motion_window
         state: "idle"
-      - action: shell_command.uplift_desk_auto_move_preset_2
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_move_to_preset_2
       - action: timer.start
         target:
           entity_id: timer.uplift_desk_motion_window
@@ -282,7 +334,9 @@ script:
     mode: single
     icon: mdi:arrow-up-bold-box
     sequence:
-      - action: shell_command.uplift_desk_manual_move_max
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_move_to_max_height
 
   uplift_desk_manual_move_preset_1:
     alias: uplift_desk_manual_move_preset_1
@@ -292,7 +346,9 @@ script:
     mode: single
     icon: mdi:numeric-1-box
     sequence:
-      - action: shell_command.uplift_desk_manual_move_preset_1
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_move_to_preset_1
 
   uplift_desk_manual_move_preset_2:
     alias: uplift_desk_manual_move_preset_2
@@ -302,18 +358,9 @@ script:
     mode: single
     icon: mdi:numeric-2-box
     sequence:
-      - action: shell_command.uplift_desk_manual_move_preset_2
-
-########################
-# Shell Command
-########################
-shell_command:
-  uplift_desk_auto_move_max: "bash /config/scripts/uplift_ble_remote.sh auto-max"
-  uplift_desk_auto_move_preset_1: "bash /config/scripts/uplift_ble_remote.sh auto-preset1"
-  uplift_desk_auto_move_preset_2: "bash /config/scripts/uplift_ble_remote.sh auto-preset2"
-  uplift_desk_manual_move_max: "bash /config/scripts/uplift_ble_remote.sh manual-max"
-  uplift_desk_manual_move_preset_1: "bash /config/scripts/uplift_ble_remote.sh manual-preset1"
-  uplift_desk_manual_move_preset_2: "bash /config/scripts/uplift_ble_remote.sh manual-preset2"
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_move_to_preset_2
 
 ########################
 # Timer

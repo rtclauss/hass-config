@@ -1,24 +1,41 @@
-type: horizontal-stack
+# Whole-home summary tile stack for the main dashboard.
+# This include is meant for top-level health and status cards that summarize the house before the room-specific sections below it.
+
+type: vertical-stack
 cards:
-  - type: custom:mini-graph-card
-    name: Temp
+  - type: horizontal-stack
+    cards:
+      - type: custom:mini-graph-card
+        name: Temp
+        entities:
+          - sensor.average_house_temp
+        color_thresholds:
+          - value: 68
+            color: "red"
+          - value: 65
+            color: "orange"
+          - value: 62
+            color: "yellow"
+          - value: 55
+            color: "blue"
+        graph: line
+      - type: custom:mini-graph-card
+        name: Humdity
+        entities:
+          - sensor.average_house_humidity
+      - type: custom:mini-graph-card
+        name: Pressure
+        entities:
+          - sensor.average_house_pressure
+  - type: entities
+    title: Room Confidence
+    show_header_toggle: false
     entities:
-      - sensor.average_house_temp
-    color_thresholds:
-      - value: 68
-        color: "red"
-      - value: 65
-        color: "orange"
-      - value: 62
-        color: "yellow"
-      - value: 55
-        color: "blue"
-    graph: line
-  - type: custom:mini-graph-card
-    name: Humdity
-    entities:
-      - sensor.average_house_humidity
-  - type: custom:mini-graph-card
-    name: Pressure
-    entities:
-      - sensor.average_house_pressure
+      - entity: sensor.office_room_confidence
+        name: Office
+      - entity: sensor.bedroom_room_confidence
+        name: Bedroom
+      - entity: sensor.den_room_confidence
+        name: Den
+      - entity: sensor.basement_room_confidence
+        name: Basement
