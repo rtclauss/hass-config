@@ -25,11 +25,11 @@ def test_basement_lights_auto_on_retries_after_media_shutdown_handoffs() -> None
 
     for token in (
         'entity_id: binary_sensor.basement_landing_occupancy',
-        'entity_id: media_player.basement\n        from: "playing"',
-        'entity_id: media_player.basement\n        from: "paused"',
-        'entity_id: media_player.plex_basement_apple_tv\n        from: "playing"',
-        'entity_id: media_player.plex_basement_apple_tv\n        from: "paused"',
+        'entity_id: media_player.basement\n        to: "idle"',
+        'entity_id: media_player.basement\n        to: "off"',
+        'entity_id: media_player.lg_webos_smart_tv\n        from: "on"\n        to: "off"',
         "seconds: 3",
+        "seconds: 10",
     ):
         assert token in block
 
