@@ -64,6 +64,24 @@ def test_house_transition_no_longer_queues_later_mode_changes() -> None:
     assert "house_transition:" in text
     assert "mode: restart" in text
     assert "script.lights_off_except" in text
+    assert "continue_on_error: true\n        action: logbook.log" in text
+
+
+def test_house_transition_supports_in_bed_and_asleep_without_forcing_night_scene_defaults() -> None:
+    text = HOUSE_MODE_PATH.read_text(encoding="utf-8")
+    block = _script_block("house_transition")
+
+    for token in (
+        "- in_bed",
+        "- asleep",
+        "House mode to apply: home, away, night, in_bed, or asleep.",
+        "normalized in ['away', 'night', 'in_bed', 'asleep']",
+        "requested_mode in ['home', 'night', 'in_bed', 'asleep']",
+    ):
+        assert token in text or token in block
+
+    assert "elif requested_mode == 'night'" in block
+    assert "resolved_light_scene" in block
 
 
 def test_departure_house_transition_runs_in_parallel_without_embedding_vacuum_logic() -> None:
@@ -75,3 +93,11 @@ def test_departure_house_transition_runs_in_parallel_without_embedding_vacuum_lo
     assert "action: mqtt.publish" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" in vacuum_block
+
+
+def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
+    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+
+    assert "Primary tracker confirms departure" in block
+    assert "device_tracker.bayesian_zeke_home" in block
+    assert "not is_state('device_tracker.bayesian_zeke_home', 'home')" in block

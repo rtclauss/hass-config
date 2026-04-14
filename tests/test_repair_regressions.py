@@ -11,6 +11,7 @@ HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
 HOUSE_MODE_PATH = ROOT / "packages" / "house_mode.yaml"
 LIGHT_PATH = ROOT / "packages" / "light.yaml"
 WEATHER_PATH = ROOT / "packages" / "weather.yaml"
+WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
 ZONE_PATH = ROOT / "packages" / "zone.yaml"
 ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
 
@@ -94,7 +95,7 @@ def test_camera_scenes_toggle_current_camera_controls() -> None:
 
 def test_camera_status_groups_track_current_living_room_and_tiki_room_entities() -> None:
     livingroom_group = _group_block(CAMERA_PATH, "livingroom_camera_status")
-    basement_group = _group_block(CAMERA_PATH, "basement_camera_status")
+    basement_group = _group_block(CAMERA_PATH, "tikiroom_camera_status")
 
     for stale_entity_id in (
         "switch.livingroom_night_mode_auto",
@@ -128,3 +129,32 @@ def test_stale_hallway_motion_entity_is_fully_replaced() -> None:
     assert "binary_sensor.hallway_motion" not in light_text + zigbee_zwave_text
     assert "binary_sensor.hall_upstairs_motion_occupancy" in light_text
     assert "binary_sensor.hall_upstairs_motion_occupancy" in zigbee_zwave_text
+
+
+def test_ios_alarm_sync_preserves_manual_workday_alarm_overrides() -> None:
+    block = _script_block(WORKDAY_PATH, "set_wakeup_from_phone_alarm")
+
+    for helper in (
+        "input_boolean.ios_synced_weekday_alarm",
+        "input_boolean.ios_synced_special_meeting",
+    ):
+        assert helper in block
+
+    assert "weekday_alarm_already_on" in block
+    assert "special_meeting_already_on" in block
+    assert "not weekday_alarm_already_on" in block
+    assert "not special_meeting_already_on" in block
+    assert "tomorrow_is_workday and is_state('input_boolean.ios_synced_weekday_alarm', 'on')" in block
+    assert "tomorrow_is_workday and is_state('input_boolean.ios_synced_special_meeting', 'on')" in block
+    assert re.search(
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id:\s+- input_boolean\.weekday_alarm_on\s+- input_boolean\.ios_synced_weekday_alarm',
+        block,
+    )
+    assert re.search(
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id:\s+- input_boolean\.special_meeting\s+- input_boolean\.ios_synced_special_meeting',
+        block,
+    )
+    assert re.search(
+        r'action: input_boolean\.turn_off\s+target:\s+entity_id: input_boolean\.weekend_alarm_on',
+        block,
+    )

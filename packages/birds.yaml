@@ -223,12 +223,26 @@ mqtt:
         state_topic: "birdpi/apprise"
         json_attributes_topic: "birdpi/apprise"
         value_template: >-
-          {% if value_json is defined and value_json is mapping and value_json.common_name is defined %}
-            {{ value_json.common_name }}
-          {% elif value | default('', true) | trim != '' %}
-            {{ value }}
+          {% set raw_value = value | default('', true) | trim %}
+          {% set raw_json = raw_value | replace('&#34;', '"') | replace('&quot;', '"') %}
+          {% set payload = raw_json | from_json(default={}) %}
+          {% if payload is mapping and payload.common_name is defined and payload.common_name | string | trim != '' %}
+            {{ payload.common_name }}
+          {% elif raw_value in ['unknown', 'unavailable'] %}
+            {{ raw_value }}
+          {% elif raw_value != '' and raw_value[:1] not in ['{', '['] %}
+            {{ raw_value }}
           {% else %}
             {{ states('sensor.garden_birds') | default('unknown', true) }}
+          {% endif %}
+        json_attributes_template: >-
+          {% set raw_value = value | default('', true) | trim %}
+          {% set raw_json = raw_value | replace('&#34;', '"') | replace('&quot;', '"') %}
+          {% set payload = raw_json | from_json(default={}) %}
+          {% if payload is mapping %}
+            {{ payload | tojson }}
+          {% else %}
+            {}
           {% endif %}
 
 ########################

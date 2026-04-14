@@ -1,5 +1,7 @@
 # Home Assistant package for low-battery monitoring.
-# It dynamically scans battery sensors, keeps an explicit exclusion list, and stages notifications consistently across the house.
+# It dynamically scans battery sensors, keeps an explicit exclusion list, and
+# stages notifications consistently across the house. It also catches battery
+# sensors that go unavailable, which is the usual dead-battery failure mode.
 
 ################################################################
 ## Packages / Batteries
@@ -70,6 +72,11 @@ homeassistant:
       friendly_name: "Battery Sensors Below 10%"
       icon: mdi:battery-10
 
+    sensor.battery_dead:
+      <<: *customize
+      friendly_name: "Battery Sensors Offline"
+      icon: mdi:battery-off
+
     ################################################
     ## Thermostats
     ################################################
@@ -85,8 +92,12 @@ template:
         icon: mdi:battery-20
         variables: &battery_monitor_exclusions
           # Exact entity_ids that should never appear in the low-battery monitor.
-          # Leave this list empty for the default include-all behavior.
-          battery_exclude_entities: []
+          # Exclude the monitor sensors themselves so they never recurse into
+          # their own summaries if Home Assistant marks them as battery class.
+          battery_exclude_entities:
+            - sensor.battery_low_20
+            - sensor.battery_low_10
+            - sensor.battery_dead
         state: >-
           {% set monitored_batteries = states.sensor
             | selectattr('attributes.device_class', 'eq', 'battery')
@@ -119,7 +130,7 @@ template:
             {% for battery in monitored_batteries %}
               {% set value = battery.state | float(9999) %}
               {% if value < 20 %}
-                {% set ns.lines = ns.lines + ['- ' ~ (battery.name | default(battery.entity_id, true)) ~ ': ' ~ battery.state ~ '%'] %}
+                {% set ns.lines = ns.lines + ['- ' ~ battery.entity_id ~ ': ' ~ battery.state ~ '%'] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -161,7 +172,53 @@ template:
             {% for battery in monitored_batteries %}
               {% set value = battery.state | float(9999) %}
               {% if value < 10 %}
-                {% set ns.lines = ns.lines + ['- ' ~ (battery.name | default(battery.entity_id, true)) ~ ': ' ~ battery.state ~ '%'] %}
+                {% set ns.lines = ns.lines + ['- ' ~ battery.entity_id ~ ': ' ~ battery.state ~ '%'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
+
+      - name: battery_dead
+        unique_id: battery_dead
+        default_entity_id: sensor.battery_dead
+        icon: mdi:battery-off
+        variables: *battery_monitor_exclusions
+        state: >-
+          {# Limit the dead-battery monitor to Zigbee-style battery entities.
+             The live HA surface also contains laptop/vacuum battery_level
+             sensors that can go unavailable for unrelated reasons. #}
+          {% set monitored_batteries = states.sensor
+            | selectattr('attributes.device_class', 'eq', 'battery')
+            | rejectattr('entity_id', 'in', battery_exclude_entities)
+            | selectattr('entity_id', 'search', '_battery$')
+            | sort(attribute='entity_id')
+            | list %}
+          {% set ns = namespace(dead_count=0) %}
+          {% for battery in monitored_batteries %}
+            {% if battery.state == 'unavailable' %}
+              {% set ns.dead_count = ns.dead_count + 1 %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.dead_count }}
+        attributes:
+          tracked_count: >-
+            {% set monitored_batteries = states.sensor
+              | selectattr('attributes.device_class', 'eq', 'battery')
+              | rejectattr('entity_id', 'in', battery_exclude_entities)
+              | selectattr('entity_id', 'search', '_battery$')
+              | sort(attribute='entity_id')
+              | list %}
+            {{ monitored_batteries | count }}
+          summary: >-
+            {% set monitored_batteries = states.sensor
+              | selectattr('attributes.device_class', 'eq', 'battery')
+              | rejectattr('entity_id', 'in', battery_exclude_entities)
+              | selectattr('entity_id', 'search', '_battery$')
+              | sort(attribute='entity_id')
+              | list %}
+            {% set ns = namespace(lines=[]) %}
+            {% for battery in monitored_batteries %}
+              {% if battery.state == 'unavailable' %}
+                {% set ns.lines = ns.lines + ['- ' ~ battery.entity_id ~ ': ' ~ battery.state] %}
               {% endif %}
             {% endfor %}
             {{ ns.lines | join('\n') }}
@@ -188,19 +245,13 @@ automation:
         {{ states('sensor.battery_low_20') | int(0) }}
       battery_summary: >-
         {{ state_attr('sensor.battery_low_20', 'summary') | default('', true) }}
+      notification_tag: low-battery-20
       battery_label: >-
         {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
       battery_title: >-
         {{ battery_count }} {{ battery_label }} below 20%
       battery_message: >-
         {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
-      count_increased: >-
-        {{ trigger.id == 'summary_change'
-           and trigger.from_state is not none
-           and trigger.to_state is not none
-           and trigger.from_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
       - choose:
           - conditions:
@@ -211,7 +262,16 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: low-battery-20
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ notification_tag }}"
         default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: low-battery-20
           - action: persistent_notification.create
             data:
               title: "{{ battery_title }}"
@@ -219,14 +279,20 @@ automation:
               notification_id: low-battery-20
           - choose:
               - conditions:
+                  - condition: trigger
+                    id: summary_change
                   - condition: template
                     value_template: >-
-                      {{ count_increased }}
+                      {{ battery_summary | trim != '' }}
                 sequence:
-                  - action: notify.all
+                  - continue_on_error: true
+                    action: notify.all
                     data:
                       title: "{{ battery_title }}"
                       message: "{{ battery_message }}"
+                      data:
+                        tag: "{{ notification_tag }}"
+                        persistent: true
 
   - id: notify_battery_dying_10
     alias: notify_battery_dying_10
@@ -246,19 +312,13 @@ automation:
         {{ states('sensor.battery_low_10') | int(0) }}
       battery_summary: >-
         {{ state_attr('sensor.battery_low_10', 'summary') | default('', true) }}
+      notification_tag: low-battery-10
       battery_label: >-
         {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
       battery_title: >-
         {{ battery_count }} {{ battery_label }} below 10%
       battery_message: >-
         {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
-      count_increased: >-
-        {{ trigger.id == 'summary_change'
-           and trigger.from_state is not none
-           and trigger.to_state is not none
-           and trigger.from_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state not in ['unknown', 'unavailable']
-           and trigger.to_state.state | int(0) > trigger.from_state.state | int(0) }}
     action:
       - choose:
           - conditions:
@@ -269,7 +329,16 @@ automation:
               - action: persistent_notification.dismiss
                 data:
                   notification_id: low-battery-10
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ notification_tag }}"
         default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: low-battery-10
           - action: persistent_notification.create
             data:
               title: "{{ battery_title }}"
@@ -277,14 +346,87 @@ automation:
               notification_id: low-battery-10
           - choose:
               - conditions:
+                  - condition: trigger
+                    id: summary_change
                   - condition: template
                     value_template: >-
-                      {{ count_increased }}
+                      {{ battery_summary | trim != '' }}
                 sequence:
-                  - action: notify.all
+                  - continue_on_error: true
+                    action: notify.all
                     data:
                       title: "{{ battery_title }}"
                       message: "{{ battery_message }}"
+                      data:
+                        tag: "{{ notification_tag }}"
+                        persistent: true
+
+  - id: notify_battery_dead
+    alias: notify_battery_dead
+    description: Keep the offline battery notification current and send a push message when a battery-powered device goes unavailable.
+    mode: queued
+    max: 10
+    trigger:
+      - trigger: state
+        id: summary_change
+        entity_id: sensor.battery_dead
+        attribute: summary
+      - trigger: homeassistant
+        id: startup_sync
+        event: start
+    variables:
+      battery_count: >-
+        {{ states('sensor.battery_dead') | int(0) }}
+      battery_summary: >-
+        {{ state_attr('sensor.battery_dead', 'summary') | default('', true) }}
+      notification_tag: battery-dead
+      battery_label: >-
+        {{ 'battery sensor' if battery_count == 1 else 'battery sensors' }}
+      battery_title: >-
+        {{ battery_count }} {{ battery_label }} offline
+      battery_message: >-
+        {{ ('Affected sensor' if battery_count == 1 else 'Affected sensors') ~ ':\n' ~ battery_summary }}
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ battery_count == 0 }}
+            sequence:
+              - action: persistent_notification.dismiss
+                data:
+                  notification_id: battery-dead
+              - continue_on_error: true
+                action: notify.all
+                data:
+                  message: clear_notification
+                  data:
+                    tag: "{{ notification_tag }}"
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: battery-dead
+          - action: persistent_notification.create
+            data:
+              title: "{{ battery_title }}"
+              message: "{{ battery_message }}"
+              notification_id: battery-dead
+          - choose:
+              - conditions:
+                  - condition: trigger
+                    id: summary_change
+                  - condition: template
+                    value_template: >-
+                      {{ battery_summary | trim != '' }}
+                sequence:
+                  - continue_on_error: true
+                    action: notify.all
+                    data:
+                      title: "{{ battery_title }}"
+                      message: "{{ battery_message }}"
+                      data:
+                        tag: "{{ notification_tag }}"
+                        persistent: true
 
 ########################
 # Binary Sensors

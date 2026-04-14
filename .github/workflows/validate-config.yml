@@ -13,11 +13,35 @@ on:
 permissions:
   contents: read
 
+env:
+  # Home Assistant 2026.4.0 regressed `check_config` for trigger-based automation,
+  # script, and template validation. Keep this pinned until upstream fixes
+  # home-assistant/core#167066 in a stable release.
+  HOME_ASSISTANT_CHECK_CONFIG_IMAGE: ghcr.io/home-assistant/home-assistant:2026.3.4
+
 concurrency:
   group: validate-home-assistant-config-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  pytest:
+    name: Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install uv
+        run: python -m pip install --upgrade pip uv
+
+      - name: Run pytest
+        run: uv run --with pytest pytest
+
   yaml-lint:
     name: YAML Lint
     runs-on: ubuntu-latest
@@ -42,13 +66,103 @@ jobs:
             configuration.yaml \
             automations.yaml \
             blueprints \
+            esphome \
             packages \
             zigbee2mqtt
+
+  detect-esphome-changes:
+    name: Detect ESPHome Config Changes
+    runs-on: ubuntu-latest
+    outputs:
+      esphome_changed: ${{ steps.detect.outputs.esphome_changed }}
+      esphome_configs: ${{ steps.detect.outputs.esphome_configs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed ESPHome configs
+        id: detect
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git fetch --no-tags origin "$BASE_REF"
+            diff_output=$(git diff --name-only "origin/$BASE_REF...HEAD")
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+              diff_output=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")
+            else
+              diff_output=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA")
+            fi
+          else
+            echo "esphome_changed=false" >> "$GITHUB_OUTPUT"
+            echo "esphome_configs=" >> "$GITHUB_OUTPUT"
+            echo "ESPHome build skipped for $EVENT_NAME events."
+            exit 0
+          fi
+
+          changed_esphome_files=$(printf '%s\n' "$diff_output" | grep -E '^esphome/.*\.ya?ml$' | sort -u || true)
+
+          config_files=()
+          package_change=false
+
+          while IFS= read -r config; do
+            [[ -z "$config" ]] && continue
+
+            if [[ "$config" =~ ^esphome/[^/]+\.ya?ml$ ]]; then
+              if [[ -f "$config" ]]; then
+                config_files+=("$config")
+              else
+                echo "Skipping removed ESPHome config: $config"
+              fi
+              continue
+            fi
+
+            package_change=true
+          done <<< "$changed_esphome_files"
+
+          if [[ "$package_change" == "true" ]]; then
+            while IFS= read -r config; do
+              [[ -z "$config" ]] && continue
+              config_files+=("$config")
+            done < <(grep -l "^packages:" esphome/*.yaml || true)
+          fi
+
+          if [[ ${#config_files[@]} -gt 0 ]]; then
+            mapfile -t config_files < <(printf '%s\n' "${config_files[@]}" | sort -u)
+          fi
+
+          if [[ ${#config_files[@]} -eq 0 ]]; then
+            echo "esphome_changed=false" >> "$GITHUB_OUTPUT"
+            echo "esphome_configs=" >> "$GITHUB_OUTPUT"
+            echo "No ESPHome config changes detected."
+            exit 0
+          fi
+
+          echo "esphome_changed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "esphome_configs<<EOF"
+            printf '%s\n' "${config_files[@]}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Changed ESPHome configs:"
+          printf '  - %s\n' "${config_files[@]}"
 
   esphome-build:
     name: ESPHome Build
     runs-on: ubuntu-latest
-    needs: yaml-lint
+    if: ${{ needs.detect-esphome-changes.outputs.esphome_changed == 'true' }}
+    needs:
+      - yaml-lint
+      - detect-esphome-changes
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,23 +213,19 @@ jobs:
                 file.write(f"{key}: ci_placeholder\n")
           PY
 
-      - name: Validate and compile ESPHome configs
+      - name: Validate and compile changed ESPHome configs
+        env:
+          ESPHOME_CONFIGS: ${{ needs.detect-esphome-changes.outputs.esphome_configs }}
         run: |
           set -euo pipefail
 
-          shopt -s nullglob
-          config_files=(esphome/*.yaml)
-
-          if [[ ${#config_files[@]} -eq 0 ]]; then
-            echo "No ESPHome configs found."
+          if [[ -z "$ESPHOME_CONFIGS" ]]; then
+            echo "No changed ESPHome configs were provided."
             exit 1
           fi
 
-          for config in "${config_files[@]}"; do
-            if [[ "$(basename "$config")" == "secrets.yaml" ]]; then
-              continue
-            fi
-
+          while IFS= read -r config; do
+            [[ -z "$config" ]] && continue
             echo "::group::ESPHome config check: $config"
             esphome config "$config"
             echo "::endgroup::"
@@ -123,14 +233,12 @@ jobs:
             echo "::group::ESPHome compile: $config"
             esphome compile "$config"
             echo "::endgroup::"
-          done
+          done <<< "$ESPHOME_CONFIGS"
 
   home-assistant-check-config:
     name: Home Assistant Check Config
     runs-on: ubuntu-latest
-    needs:
-      - yaml-lint
-      - esphome-build
+    needs: yaml-lint
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -191,7 +299,7 @@ jobs:
 
           docker run --rm \
             -v "${{ github.workspace }}:/config" \
-            ghcr.io/home-assistant/home-assistant:stable \
+            "$HOME_ASSISTANT_CHECK_CONFIG_IMAGE" \
             python -m homeassistant --config /config --script check_config 2>&1 | tee check-config.log
 
           if grep -Eq "(Failed config|ERROR:homeassistant\\.config:Invalid config|ERROR:homeassistant\\.config:Error loading)" check-config.log; then

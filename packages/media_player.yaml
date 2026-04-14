@@ -124,15 +124,21 @@ automation:
       #     command: "rotate_right"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action_angle
-        not_to: None
+        not_to:
+          - None
+          - "unknown"
+          - "unavailable"
     action:
       - action: media_player.volume_set
         data:
           entity_id: media_player.bedroom_sonos_2
           # volume_level: >-
           # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
+          # Fixed: the inner float() call now carries its own default of 0 so that
+          # transient "unknown"/"unavailable" sensor states (e.g. cube waking up)
+          # do not raise a ValueError and abort the automation.
           volume_level: >-
-            {{ (state_attr('media_player.bedroom_sonos_2', 'volume_level') + (float(trigger.to_state.state)/1000)) | round(2) | float(default=0) }}
+            {{ (state_attr('media_player.bedroom_sonos_2', 'volume_level') + (float(trigger.to_state.state, 0)/1000)) | round(2) | float(default=0) }}
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
@@ -394,6 +400,9 @@ automation:
               - "sat"
               - "sun"
     action:
+      - variables:
+          bathroom_was_playing: "{{ is_state('media_player.bathroom_sonos_2', 'playing') }}"
+          bathroom_volume_above_min: "{{ state_attr('media_player.bathroom_sonos_2', 'volume_level') | float(0) > 0.1 }}"
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.morning_routine
@@ -407,71 +416,83 @@ automation:
             - number.guest_room_fan_switch_ledintensitywhenoff
         data:
           value: 1
-      - alias: "Stop Playback"
-        action: media_player.media_stop
-        target:
-          entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
       - choose:
-          # If we're already playing music, don't turn down the music.
+          # If the bathroom already had audible playback, skip the long fade-in.
           - conditions:
-              - condition: state
-                entity_id: media_player.bathroom_sonos_2
-                state: "playing"
-              - alias: "check volume above minimal"
-                condition: numeric_state
-                entity_id: media_player.bathroom_sonos_2
-                attribute: volume_level
-                above: 0.1
+              - condition: template
+                value_template: "{{ bathroom_was_playing and bathroom_volume_above_min }}"
             sequence:
-              - action: script.turn_on
-                target:
-                  entity_id: script.spotify_wake_up
-              - action: media_player.volume_set
+              - action: script.spotify_wake_up
                 data:
-                  entity_id:
-                    - media_player.bedroom_sonos_2
-                    - media_player.bathroom_sonos_2
-                    - media_player.office_sonos_2
+                  playback_entity_id: media_player.bathroom_sonos_2
+                  regroup_after_play: false
+              - action: media_player.volume_set
+                target:
+                  entity_id: media_player.bathroom_sonos_2
+                data:
                   volume_level: 0.30
         default:
-          # Nothing is playing so ease up the music
+          # Nothing is playing in the bathroom yet, so ease up the music.
           - alias: "Set Volume 0.1"
             action: media_player.volume_set
+            target:
+              entity_id: media_player.bathroom_sonos_2
             data:
               volume_level: 0.1
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
-                - media_player.office_sonos_2
-          - action: script.turn_on
-            target:
-              entity_id: script.spotify_wake_up
-          - alias: "Set Volume 0.09 in office"
-            action: media_player.volume_set
+          - action: script.spotify_wake_up
             data:
-              volume_level: 0.2
-            target:
-              entity_id:
-                - media_player.office_sonos_2
+              playback_entity_id: media_player.bathroom_sonos_2
+              regroup_after_play: false
           - alias: "Repeat until desired volume reached"
             repeat:
               sequence:
                 - alias: "Increase Volume by 0.01"
                   action: media_player.volume_set
+                  target:
+                    entity_id: media_player.bathroom_sonos_2
                   data:
                     volume_level: "{{ 0.01 * repeat.index }}"
-                  target:
-                    entity_id:
-                      - media_player.bedroom_sonos_2
-                      - media_player.bathroom_sonos_2
                 - delay:
                     # As time passes, the delay gets smaller and smaller. 60, 30s, 20s, 15s, 12s,..., 2s
-                    seconds: "{{ (1/(tan(repeat.index/60, 5))) | round(0, 'ceil', 5)}}"
+                    seconds: "{{ (1/(tan(repeat.index/60))) | round(0, 'ceil', 5)}}"
               until: "{{repeat.index == 30}}"
+
+  - id: recover_stuck_morning_audio_scripts
+    alias: recover_stuck_morning_audio_scripts
+    trace:
+      stored_traces: 20
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: script.music_assistant_prepare_bedroom_group
+        to: "on"
+        for:
+          minutes: 1
+      - trigger: state
+        entity_id:
+          - script.spotify_wake_up
+          - script.music_assistant_radio_wake_up
+        to: "on"
+        for:
+          minutes: 3
+    action:
+      - action: logbook.log
+        data:
+          entity_id: "{{ trigger.entity_id }}"
+          domain: script
+          name: Morning audio recovery
+          message: "Stopped a stalled morning audio script and cleared the wake-up latch."
+      - action: script.turn_off
+        continue_on_error: true
+        target:
+          entity_id:
+            - script.music_assistant_prepare_bedroom_group
+            - script.music_assistant_radio_wake_up
+            - script.spotify_wake_up
+      - action: input_boolean.turn_off
+        continue_on_error: true
+        target:
+          entity_id: input_boolean.morning_routine
 
   - id: restart_sonos_unavailable
     alias: restart_sonos_unavailable
@@ -646,7 +667,17 @@ script:
 
   music_assistant_prepare_bedroom_group:
     alias: "Prepare bedroom Music Assistant group"
+    mode: restart
     sequence:
+      - alias: "Split bedroom wake-up players before regrouping"
+        continue_on_error: true
+        action: media_player.unjoin
+        target:
+          entity_id:
+            - media_player.bedroom_sonos_2
+            - media_player.bathroom_sonos_2
+            - media_player.den_sonos_2
+            - media_player.office_sonos_2
       - if:
           - alias: "Check if guests are here."
             condition: state
@@ -665,15 +696,6 @@ script:
                 - media_player.den_sonos_2
                 - media_player.office_sonos_2
         else:
-          - alias: "Split guest-area players before regrouping"
-            continue_on_error: true
-            action: media_player.unjoin
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
-                - media_player.den_sonos_2
-                - media_player.office_sonos_2
           - alias: "Limit wake-up audio to bedroom and bathroom"
             continue_on_error: true
             action: media_player.join
@@ -684,9 +706,29 @@ script:
               group_members:
                 - media_player.bathroom_sonos_2
 
+  music_assistant_try_join_bedroom_group_after_play:
+    alias: "Try joining bedroom Music Assistant followers after playback"
+    mode: restart
+    sequence:
+      - delay:
+          seconds: 2
+      - action: script.turn_on
+        target:
+          entity_id: script.music_assistant_prepare_bedroom_group
+
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
     sequence:
+      - alias: "Split arrival players before regrouping"
+        continue_on_error: true
+        action: media_player.unjoin
+        target:
+          entity_id:
+            - media_player.bedroom_sonos_2
+            - media_player.bathroom_sonos_2
+            - media_player.den_sonos_2
+            - media_player.office_sonos_2
+            - media_player.tiki_room_2
       - if:
           - alias: "Check if guests are here."
             condition: state
@@ -706,16 +748,6 @@ script:
                 - media_player.office_sonos_2
                 - media_player.tiki_room_2
         else:
-          - alias: "Split guest-area players before regrouping"
-            continue_on_error: true
-            action: media_player.unjoin
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
-                - media_player.den_sonos_2
-                - media_player.office_sonos_2
-                - media_player.tiki_room_2
           - alias: "Keep arrival audio in bedroom suite only"
             continue_on_error: true
             action: media_player.join
@@ -1020,15 +1052,46 @@ script:
         description: "Music Assistant radio URI"
       initial_delay:
         description: "Optional delay before playback starts"
+      playback_entity_id:
+        description: "Preferred Music Assistant player for wake-up playback"
+      prepare_group_before_play:
+        description: "Whether to prepare the bedroom wake-up zone before playback starts"
+      regroup_after_play:
+        description: "Whether to regroup the bedroom wake-up zone after playback starts"
+    variables:
+      playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
+      should_prepare_group_before_play: >-
+        {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
+      should_regroup_after_play: >-
+        {{ regroup_after_play | default(false) | bool }}
     sequence:
-      - action: script.music_assistant_prepare_bedroom_group
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-          volume_level: 0.01
+      - if:
+          - condition: template
+            value_template: "{{ should_prepare_group_before_play }}"
+        then:
+          - action: script.music_assistant_prepare_bedroom_group
+        else:
+          - action: media_player.unjoin
+            continue_on_error: true
+            data:
+              entity_id: "{{ playback_player }}"
+      - if:
+          - condition: template
+            value_template: "{{ should_prepare_group_before_play }}"
+        then:
+          - action: media_player.volume_set
+            continue_on_error: true
+            data:
+              entity_id:
+                - media_player.bedroom_sonos_2
+                - media_player.bathroom_sonos_2
+              volume_level: 0.01
+        else:
+          - action: media_player.volume_set
+            continue_on_error: true
+            data:
+              entity_id: "{{ playback_player }}"
+              volume_level: 0.01
       - if:
           - condition: template
             value_template: "{{ (initial_delay | default(0) | int(0)) > 0 }}"
@@ -1038,24 +1101,42 @@ script:
       - action: music_assistant.play_media
         continue_on_error: true
         target:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_player }}"
         data:
           media_id: "{{ radio_uri }}"
           media_type: radio
           enqueue: replace
+      - if:
+          - condition: template
+            value_template: "{{ should_regroup_after_play }}"
+        then:
+          - action: script.turn_on
+            target:
+              entity_id: script.music_assistant_try_join_bedroom_group_after_play
       - repeat:
           sequence:
-            - alias: "Increase Volume by 0.01"
-              continue_on_error: true
-              action: media_player.volume_set
-              data:
-                volume_level: "{{ 0.01 * repeat.index }}"
-              target:
-                entity_id:
-                  - media_player.bedroom_sonos_2
-                  - media_player.bathroom_sonos_2
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ should_prepare_group_before_play }}"
+                  sequence:
+                    - alias: "Increase grouped wake-up volume by 0.01"
+                      continue_on_error: true
+                      action: media_player.volume_set
+                      data:
+                        entity_id:
+                          - media_player.bedroom_sonos_2
+                          - media_player.bathroom_sonos_2
+                        volume_level: "{{ 0.01 * repeat.index }}"
+              default:
+                - alias: "Increase standalone wake-up volume by 0.01"
+                  continue_on_error: true
+                  action: media_player.volume_set
+                  data:
+                    entity_id: "{{ playback_player }}"
+                    volume_level: "{{ 0.01 * repeat.index }}"
             - delay:
-                seconds: "{{ (1/(tan(repeat.index/120, 5))) | round(0, 'ceil', 5)}}"
+                seconds: "{{ (1/(tan(repeat.index/120))) | round(0, 'ceil', 5)}}"
           until: "{{ repeat.index == 30 }}"
 
   bedroom_playlist_0:
@@ -1507,11 +1588,11 @@ script:
         ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
         ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
         ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
-        ## SomaFM Groove Salad
-        ## SomaFM Deep Space One
-        ## SomaFM Mission Control
-        ## SomaFM Space Station Soma
-        ## SomaFM Vaporwaves
+        ## SomaFM Groove Salad: https://somafm.com/groovesalad.pls
+        ## SomaFM Deep Space One: https://somafm.com/deepspaceone.pls
+        ## SomaFM Mission Control: https://somafm.com/missioncontrol.pls
+        ## SomaFM Space Station Soma: https://somafm.com/spacestation.pls
+        ## SomaFM Vaporwaves: https://somafm.com/vaporwaves.pls
         #}
         {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu",
           "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
@@ -1567,25 +1648,16 @@ script:
           "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV",
           "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
           "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2",
-          "Groove Salad",
-          "Deep Space One",
-          "Mission Control",
-          "Space Station Soma",
-          "Vaporwaves"
+          "https://somafm.com/groovesalad.pls",
+          "https://somafm.com/deepspaceone.pls",
+          "https://somafm.com/missioncontrol.pls",
+          "https://somafm.com/spacestation.pls",
+          "https://somafm.com/vaporwaves.pls",
+          "spotify--Tviw9k66://playlist/2I2cwYxeuLbIXaNRccMViZ"
           ] -%}
           {% set pindex =  (range(0, (plists | length))|random) -%}
           {{ plists[pindex] }}
     sequence:
-      # - action: media_player.join
-      #   target:
-      #     entity_id:
-      #       - media_player.bedroom
-      #   data:
-      #     group_members:
-      #       - media_player.bathroom
-      #       - media_player.office
-      #       - media_player.den
-      - action: script.music_assistant_prepare_bedroom_group
       - action: media_player.shuffle_set
         continue_on_error: true
         target:
@@ -1625,17 +1697,26 @@ script:
         data:
           entity_id: media_player.bedroom_sonos_2
           media_item: "{{ playlist }}"
+          media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
+      - action: script.turn_on
+        target:
+          entity_id: script.music_assistant_try_join_bedroom_group_after_play
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
             to: "on"
         timeout:
           minutes: 10 # TODO this as a variable that is passed by the caller. Different timeouts for tv off and for laying in bed automation
-        continue_on_timeout: false
-      - delay:
-          minutes: 3
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.completed }}"
+        then:
+          - delay:
+              minutes: 3
       - action: script.turn_on
-        entity_id: script.spotify_bedtime_volume
+        target:
+          entity_id: script.spotify_bedtime_volume
 
   spotify_bedtime_volume:
     alias: "Spotify Bedtime Rampdown"
@@ -1683,7 +1764,19 @@ script:
     alias: "Spotify Wake Up"
     icon: mdi:weather-sunset-up
     description: "Play music in the morning when I visit the bathroom."
+    fields:
+      playback_entity_id:
+        description: "Preferred Music Assistant player for wake-up playback"
+      prepare_group_before_play:
+        description: "Whether to prepare the bedroom wake-up zone before playback starts"
+      regroup_after_play:
+        description: "Whether to regroup the bedroom wake-up zone after playback starts"
     variables:
+      playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
+      should_prepare_group_before_play: >-
+        {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
+      should_regroup_after_play: >-
+        {{ regroup_after_play | default(false) | bool }}
       playlist: >-
         {#
         ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
@@ -1795,21 +1888,30 @@ script:
           {% set pindex =  (range(0, (plists | length - 1 ) )|random) -%}
           {{ plists[pindex] }}
     sequence:
-      - action: script.music_assistant_prepare_bedroom_group
+      - if:
+          - condition: template
+            value_template: "{{ should_prepare_group_before_play }}"
+        then:
+          - action: script.music_assistant_prepare_bedroom_group
+        else:
+          - action: media_player.unjoin
+            continue_on_error: true
+            data:
+              entity_id: "{{ playback_player }}"
       - delay:
           seconds: 2
       - alias: "Pause currently playing media"
         continue_on_error: true
         action: media_player.media_pause
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_player }}"
       - delay:
           seconds: 2
       - alias: "Enable Shuffle"
         continue_on_error: true
         action: media_player.shuffle_set
         target:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_player }}"
         data:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1820,31 +1922,48 @@ script:
         data:
           repeat: all
         target:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_player }}"
       - delay:
           seconds: 2
       - alias: "Set volume low"
-        continue_on_error: true
-        action: media_player.volume_set
-        data:
-          entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
-          volume_level: 0.05
+        if:
+          - condition: template
+            value_template: "{{ should_prepare_group_before_play }}"
+        then:
+          - continue_on_error: true
+            action: media_player.volume_set
+            data:
+              entity_id:
+                - media_player.bedroom_sonos_2
+                - media_player.bathroom_sonos_2
+                - media_player.office_sonos_2
+              volume_level: 0.05
+        else:
+          - continue_on_error: true
+            action: media_player.volume_set
+            data:
+              entity_id: "{{ playback_player }}"
+              volume_level: 0.05
       - delay:
           seconds: 2
       - action: logbook.log
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_player }}"
           domain: media_player
           name: Spotify Wake Up is
           message: " playing wakeup playlist: {{ playlist }}"
       - alias: "Play wake-up music"
         action: script.music_assistant_play_spotify_uri
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_player }}"
           spotify_uri: "{{ playlist }}"
+      - if:
+          - condition: template
+            value_template: "{{ should_regroup_after_play }}"
+        then:
+          - action: script.turn_on
+            target:
+              entity_id: script.music_assistant_try_join_bedroom_group_after_play
 
 ########################
 # Sensor

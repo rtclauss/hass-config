@@ -3,7 +3,7 @@
 # consume it directly, but automations and docs should stay aligned with it.
 
 version: 1
-last_updated: "2026-03-29"
+last_updated: "2026-04-13"
 owner: rtclauss
 summary: >
   Treat room purpose as durable context, not chat memory. Guest-capable rooms
@@ -160,8 +160,9 @@ rooms:
       baseline: shared-use room
       priority: low
     automation_guidance:
-      disabled_automations:
-        - kitchen motion lighting
+      safe_defaults:
+        - motion-activated lighting is acceptable when guest mode is off
+        - keep motion lighting practical and low-friction for food prep
 
   outside:
     primary_purpose: exterior circulation and outdoor use
@@ -180,6 +181,37 @@ rooms:
     automation_guidance:
       notes:
         - legacy living-room references should be audited and renamed here where appropriate
+
+  hallway:
+    primary_purpose: main-level circulation (hallway + upstairs hallway combined key)
+    secondary_purposes:
+      - entry path from front door and garage
+    privacy_policy:
+      baseline: shared circulation space, not privacy-sensitive
+      priority: low
+    automation_guidance:
+      safe_defaults:
+        - motion-activated lighting is acceptable at all times
+        - use dimmed scenes late at night instead of full-bright
+        - lights should stay on while occupancy moves through the path
+        - turn off promptly after vacancy
+      notes:
+        - the upstairs hallway (Hall/Upstairs) and main-level hallway share this key but have independent motion sensors
+        - use hallway_main vs hallway_upstairs sub-context when automations need to distinguish the two levels
+
+  main_foyer:
+    primary_purpose: welcoming entry sub-space at the front door
+    privacy_policy:
+      baseline: semi-public entry, not privacy-sensitive
+      priority: low
+    automation_guidance:
+      safe_defaults:
+        - foyer lights may be turned on independently of the full hallway group for welcoming scenes
+        - use Hall/Main Foyer Zigbee2MQTT group (or light.hall_main_foyer entity) for targeted arrival and guest scenes
+        - foyer is a sub-space of the main-level hallway; Hall/All still controls it for bulk operations
+      notes:
+        - front door contact sensor is binary_sensor.main_foyer_front_door_contact
+        - motion sensor is binary_sensor.hall_main_foyer_motion_occupancy
 
 decision_rules:
   guest_capable_rooms:

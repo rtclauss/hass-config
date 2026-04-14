@@ -249,7 +249,7 @@ automation:
                   entity_id:
                     - light.dining_room_all
                     - light.basement_great_room
-                    - light.owner_suite_all
+                    - light.owner_suite_lamps
                   flash: long
               - action: light.turn_on
                 data:
@@ -291,17 +291,28 @@ automation:
       - trigger: numeric_state
         entity_id: sensor.nws_alerts
         above: 0
-    condition:
-      - condition: template
-        value_template: >-
-          {% set alert_type = state_attr('sensor.nws_alerts', 'TYPE') | default('', true) %}
-          {% set description = state_attr('sensor.nws_alerts', 'Description') | default('', true) %}
-          {{ not (alert_type == "TOR" or description == "Tornado Warning") }}
     action:
-      - action: notify.all
-        data:
-          message: >-
-            {{ state_attr('sensor.nws_alerts', 'Description') }}
+      - variables:
+          nws_alerts: "{{ state_attr('sensor.nws_alerts', 'Alerts') | default([], true) }}"
+          primary_alert: "{{ nws_alerts[0] if nws_alerts is sequence and nws_alerts | count > 0 else dict() }}"
+          alert_type: >-
+            {{ primary_alert.Event | default(state_attr('sensor.nws_alerts', 'TYPE') | default('', true), true) }}
+          alert_message: >-
+            {% set description = primary_alert.Description | default(state_attr('sensor.nws_alerts', 'Description') | default('', true), true) %}
+            {% if description | trim != '' %}
+              {{ description }}
+            {% else %}
+              {{ primary_alert.Headline | default('', true) }}
+            {% endif %}
+      - if:
+          - condition: template
+            value_template: >-
+              {{ alert_type not in ['TOR', 'Tornado Warning'] and alert_message | trim != '' }}
+        then:
+          - action: notify.notify_all
+            data:
+              title: "{{ alert_type if alert_type | trim != '' else 'Weather alert' }}"
+              message: "{{ alert_message }}"
 
   - id: window_open_departure_rain_warning
     alias: window_open_departure_rain_warning
@@ -698,11 +709,6 @@ sensor:
   #  - visibility
   #  - ozone
 
-  - platform: weatheralerts
-    state: !secret home_state
-    zone: !secret nws_zone
-    county: !secret nws_county
-
   # Follow the Tesla's coordinates so rain detection works away from home.
   - platform: rest
     name: nigori_precip_next_2hr
@@ -720,6 +726,7 @@ sensor:
         {% endif %}
       {% endif %}
     scan_interval: 900
+    timeout: 20
     unit_of_measurement: "%"
     value_template: >-
       {% set probabilities = value_json.hourly.precipitation_probability if value_json.hourly is defined and value_json.hourly.precipitation_probability is defined else [] %}
@@ -3397,6 +3404,7 @@ template:
     - name: outside_humidity
       unique_id: outside_humidity
       device_class: humidity
+      unit_of_measurement: "%"
       state: "{{ state_attr('sensor.active_weather_entity_id', 'humidity') | int(default=0) }}"
 
     - name: outside_temperature

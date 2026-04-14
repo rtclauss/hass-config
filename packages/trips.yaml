@@ -28,11 +28,6 @@ homeassistant:
     ## Automations
     ################################################
 
-    automation.initialize_vacation_items:
-      <<: *customize
-      friendly_name: "Initialize Vacation Items"
-      icon: mdi:beach
-
     automation.trip_mode_manager:
       <<: *customize
       friendly_name: "Trip Mode Manager"
@@ -78,10 +73,6 @@ homeassistant:
     automation.vacuum_flying_home:
       <<: *customize
       friendly_name: "Vacuum house when flying home"
-
-    automation.toggle_vacation_tab:
-      <<: *customize
-      friendly_name: "Show/Hide Vacation tab"
 
     ################################################
     ## Binary Sensors
@@ -330,6 +321,11 @@ automation:
         to: "off"
         for:
           hours: 20
+      - trigger: state
+        id: depart_for_scheduled_trip
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
+        to: "off"
       - trigger: template
         id: away_over_radius_mi
         value_template: >-
@@ -367,6 +363,7 @@ automation:
       - trigger: state
         id: return_home
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     action:
       - choose:
@@ -415,12 +412,32 @@ automation:
                   - away_over_radius_mi
                   - planned_work_trip
                   - planned_vacation
+                  - depart_for_scheduled_trip
               - condition: state
                 entity_id: binary_sensor.bayesian_zeke_home
                 state: "off"
               - condition: state
                 entity_id: input_boolean.trip
                 state: "off"
+              - condition: or
+                conditions:
+                  - condition: template
+                    value_template: "{{ trigger.id != 'depart_for_scheduled_trip' }}"
+                  - condition: state
+                    entity_id: binary_sensor.planned_work_trip_calendar
+                    state: "on"
+                  - condition: template
+                    value_template: >-
+                      {% set start_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'start'), default=none) %}
+                      {% set end_ts = as_timestamp(state_attr('sensor.ecobee_calendar_vacation_schedule', 'end'), default=none) %}
+                      {% set now_ts = as_timestamp(now()) %}
+                      {% set scheduled_departure_lead_seconds = 6 * 3600 %}
+                      {{
+                        start_ts is not none
+                        and end_ts is not none
+                        and now_ts >= (start_ts - scheduled_departure_lead_seconds)
+                        and now_ts < end_ts
+                      }}
             sequence:
               - action: input_boolean.turn_on
                 target:
@@ -480,7 +497,7 @@ automation:
                   {{
                     looks_like_flight
                     and is_msp_departure
-                    and destination_code not in ["", "MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER"]
+                    and destination_code not in ["", "MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER", "MINNESOTA"]
                     and "friend" not in trip_text
                   }}
             sequence:
@@ -628,7 +645,8 @@ automation:
       destination_name: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'destination_name') | default('', true) | string | trim }}"
       ignored_reason: "{{ state_attr('sensor.ecobee_calendar_vacation_schedule', 'ignored_reason') | default('', true) | string | trim }}"
     action:
-      - action: logbook.log
+      - continue_on_error: true
+        action: logbook.log
         data:
           entity_id: sensor.ecobee_calendar_vacation_schedule
           domain: sensor
@@ -641,6 +659,7 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
         for:
           hours: 1
@@ -697,7 +716,10 @@ automation:
               - action: notify.mobile_app_wethop
                 data:
                   title: "Garage opened while on a trip"
-                  # message: "Close the door?"
+                  # Fixed: `message` is a required field for all HA notify services.
+                  # Removing the comment restores the field that was accidentally
+                  # commented out, preventing the "required key not provided" error.
+                  message: "Close the door?"
                   data:
                     tag: "garage-opened-on-trip"
                     persistent: true
@@ -1414,7 +1436,7 @@ template:
               {% if named_destination != '' %}
                 {% set destination_code = named_destination.split(' (', 1)[0].split(' •', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
               {% endif %}
-              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL'] and start_dt is not none and end_dt is not none %}
+              {% if looks_like_flight and not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'MINNESOTA'] and start_dt is not none and end_dt is not none %}
                 {% set start_ts = as_timestamp(start_dt) %}
                 {% set end_ts = as_timestamp(end_dt) %}
                 {% if end_ts > now_ts %}
@@ -1566,7 +1588,7 @@ template:
           vacation_plan_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set future_cutoff_ts = now_ts + (180 * 86400) %}
-            {% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] %}
+            {% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER', 'MINNESOTA'] %}
             {% set curling_events_list = (curling_events | default('[]', true) | string | trim | from_json) %}
             {% set personal_events_list = (personal_events | default('[]', true) | string | trim | from_json) %}
             {% set work_trip_events_list = (work_trip_events | default('[]', true) | string | trim | from_json) %}
@@ -1715,7 +1737,7 @@ template:
                   {% set destination_name = named_destination.split(' (', 1)[0].split(' •', 1)[0].strip() %}
                   {% set destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
                 {% endif %}
-                {% if destination_name == '' and destination_code not in ['', 'MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER'] %}
+                {% if destination_name == '' and destination_code not in ([''] + home_codes) %}
                   {% set destination_name = destination_code %}
                 {% endif %}
                 {% set is_home_origin = origin_code in ['MSP', 'RST'] %}

@@ -57,9 +57,6 @@ homeassistant:
     automation.turn_off_lights_when_i_leave:
       <<: *customize
       friendly_name: Lights Off on Departure
-    automation.update_nest_eta:
-      <<: *customize
-      friendly_name: Update Nest ETA as Approach Home
     automation.vacuum_return_home:
       <<: *customize
       friendly_name: Stop Vacuuming on Arrival
@@ -172,6 +169,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       condition: and
@@ -202,6 +200,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       and:
@@ -233,13 +232,14 @@ automation:
         event: leave
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
         to: "off"
     variables:
       open_egress_points: >-
-        {{ expand('group.egress_points') | selectattr('state', 'eq', 'on') | map(attribute='name') | join(', ') }}
+        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
     condition:
       - condition: state
-        entity_id: group.egress_points
+        entity_id: binary_sensor.any_egress_open
         state: "on"
     action:
       - action: notify.all
@@ -256,6 +256,7 @@ automation:
         event: leave
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
         to: "off"
     condition:
       - condition: state
@@ -300,6 +301,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       - condition: state
@@ -333,6 +335,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       condition: and
@@ -371,6 +374,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     condition:
       condition: and
@@ -473,11 +477,16 @@ automation:
         event: leave
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
         to: "off"
     condition:
       - condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      - alias: "Primary tracker confirms departure"
+        condition: template
+        value_template: >-
+          {{ not is_state('device_tracker.bayesian_zeke_home', 'home') }}
       - alias: "I'm driving away"
         enabled: false
         condition: state
@@ -578,6 +587,7 @@ automation:
         event: enter
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
         to: "on"
     action:
       - action: vacuum.return_to_base
@@ -772,30 +782,28 @@ scene:
 
   - name: goodnight
     entities:
-      switch.christmas_tree:
-        state: "off"
-      switch.deck_all:
-        state: "off"
       light.deck_string:
         state: "off"
-      light.hall_main_foyer:
+      light.hall_foyer_switch:
         state: "off"
       light.hall_stairway:
         state: "off"
       media_player.lg_webos_smart_tv:
         state: "off"
-      # switch.humidifier:
-      #   state: "off"
+      light.deck_kitchen_door:
+        state: "off"
+      switch.christmas_tree:
+        state: "off"
 
   - name: leave_home
     entities:
       media_player.lg_webos_smart_tv:
         state: "off"
-      switch.bathroom_light_fan_switch:
+      light.owner_suite_bathroom_lights:
         state: "off"
       switch.christmas_tree:
         state: "off"
-      switch.deck:
+      light.deck_kitchen_door:
         state: "off"
       light.deck_string:
         state: "off"
@@ -807,7 +815,8 @@ scene:
 ########################
 # Scripts
 ########################
-script: {}
+script:
+  {}
   # update_nest_eta:
   #   sequence:
   #     - action: nest.set_eta
@@ -818,7 +827,8 @@ script: {}
 ########################
 # Sensor
 ########################
-sensor: []
+sensor:
+  []
 
   # - platform: places
   #   name: android

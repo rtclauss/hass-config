@@ -371,7 +371,7 @@
                   "type": "custom:mushroom-template-card",
                   "entity": "person.ryan",
                   "primary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Room confidence pending{% elif ns.best_score == 0 %}No likely room{% else %}{{ ns.best_name }}{% endif %}",
-                  "secondary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Deploy or reload the room confidence template sensors to populate this view.{% elif ns.best_score == 0 %}No room has positive confidence right now.{% else %}Score {{ ns.best_score }}{% if ns.best_binary %} • confident occupancy on{% else %} • below confident threshold{% endif %}{% endif %}",
+                  "secondary": "{% set rooms = [{'name': 'Bedroom', 'entity': 'sensor.bedroom_room_confidence', 'binary': 'binary_sensor.bedroom_confident_occupancy'}, {'name': 'Office', 'entity': 'sensor.office_room_confidence', 'binary': 'binary_sensor.office_confident_occupancy'}, {'name': 'Den', 'entity': 'sensor.den_room_confidence', 'binary': 'binary_sensor.den_confident_occupancy'}, {'name': 'Basement', 'entity': 'sensor.basement_room_confidence', 'binary': 'binary_sensor.basement_confident_occupancy'}] %} {% set ns = namespace(best_name='Pending deploy', best_score=-1, best_binary=false) %} {% for room in rooms %}{% set score = states(room.entity) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_name = room.name %}{% set ns.best_score = score %}{% set ns.best_binary = is_state(room.binary, 'on') %}{% endif %}{% endfor %} {% if ns.best_score < 0 %}Deploy or reload the room confidence template sensors to populate this view.{% elif ns.best_score == 0 %}No room has positive confidence right now.{% else %}Score {{ ns.best_score }}{% if ns.best_binary %} \u2022 confident occupancy on{% else %} \u2022 below confident threshold{% endif %}{% endif %}",
                   "icon": "mdi:crosshairs-gps",
                   "icon_color": "{% set rooms = ['sensor.bedroom_room_confidence', 'sensor.office_room_confidence', 'sensor.den_room_confidence', 'sensor.basement_room_confidence'] %} {% set ns = namespace(best_score=-1) %} {% for entity_id in rooms %}{% set score = states(entity_id) | int(-1) %}{% if score > ns.best_score %}{% set ns.best_score = score %}{% endif %}{% endfor %} {% if ns.best_score >= 70 %}green{% elif ns.best_score >= 50 %}teal{% elif ns.best_score > 0 %}amber{% else %}grey{% endif %}",
                   "multiline_secondary": true,
@@ -610,6 +610,13 @@
                   "primary_info": "none"
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.owner_suite_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
                   "entity": "media_player.bedroom_sonos_2",
                   "group": false,
@@ -630,6 +637,14 @@
                       {
                         "entity_id": "media_player.bathroom_sonos_2",
                         "name": "Bathroom"
+                      },
+                      {
+                        "entity_id": "media_player.den_sonos_2",
+                        "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
                       }
                     ]
                   }
@@ -803,11 +818,44 @@
                   "icon": ""
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.owner_suite_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
                   "entity": "media_player.bathroom_sonos_2",
                   "artwork": "material",
                   "volume_stateless": true,
-                  "sound_mode": "icon"
+                  "sound_mode": "icon",
+                  "speaker_group": {
+                    "platform": "sonos",
+                    "show_group_count": true,
+                    "entities": [
+                      {
+                        "entity_id": "media_player.bedroom_sonos_2",
+                        "name": "Owner Suite"
+                      },
+                      {
+                        "entity_id": "media_player.office_sonos_2",
+                        "name": "Office"
+                      },
+                      {
+                        "entity_id": "media_player.bathroom_sonos_2",
+                        "name": "Bathroom"
+                      },
+                      {
+                        "entity_id": "media_player.den_sonos_2",
+                        "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
+                      }
+                    ]
+                  }
                 }
               ]
             }
@@ -931,6 +979,13 @@
                   "collapsible_controls": true
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.office_ceiling_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mushroom-light-card",
                   "entity": "light.office_table_lamps",
                   "icon": "mdi:lamps-outline"
@@ -1032,6 +1087,14 @@
                       {
                         "entity_id": "media_player.bathroom_sonos_2",
                         "name": "Bathroom"
+                      },
+                      {
+                        "entity_id": "media_player.den_sonos_2",
+                        "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
                       }
                     ]
                   },
@@ -1121,7 +1184,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -1178,7 +1241,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -1233,7 +1296,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -1279,7 +1342,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -1322,25 +1385,7 @@
                     "when_standby": true
                   },
                   "volume_stateless": false,
-                  "artwork": "material",
-                  "speaker_group": {
-                    "platform": "sonos",
-                    "show_group_count": true,
-                    "entities": [
-                      {
-                        "entity_id": "media_player.bedroom_sonos_2",
-                        "name": "Owner Suite"
-                      },
-                      {
-                        "entity_id": "media_player.office_sonos_2",
-                        "name": "Office"
-                      },
-                      {
-                        "entity_id": "media_player.bathroom_sonos_2",
-                        "name": "Bathroom"
-                      }
-                    ]
-                  }
+                  "artwork": "material"
                 },
                 {
                   "type": "custom:mini-media-player",
@@ -1414,7 +1459,7 @@
                 },
                 {
                   "type": "custom:mini-media-player",
-                  "entity": "media_player.tiki_room_2",
+                  "entity": "media_player.tiki_room_3",
                   "name": "Sonos",
                   "group": false,
                   "artwork": "material",
@@ -1443,7 +1488,7 @@
                         "name": "Den"
                       },
                       {
-                        "entity_id": "media_player.tiki_room_2",
+                        "entity_id": "media_player.tiki_room_3",
                         "name": "Tiki"
                       }
                     ]
@@ -1470,113 +1515,55 @@
                   }
                 }
               ]
-            },
-            {
-              "type": "grid",
-              "cards": [
-                {
-                  "type": "heading",
-                  "heading": "Music Assistant"
-                },
-                {
-                  "type": "custom:mini-media-player",
-                  "entity": "media_player.bedroom_sonos_2",
-                  "name": "Music Queue",
-                  "artwork": "material",
-                  "idle_view": {
-                    "when_idle": true,
-                    "when_paused": true,
-                    "when_standby": true
-                  },
-                  "group": false
-                },
-                {
-                  "type": "vertical-stack",
-                  "cards": [
-                    {
-                      "type": "entities",
-                      "title": "Search Music Assistant",
-                      "show_header_toggle": false,
-                      "entities": [
-                        {
-                          "entity": "input_text.music_assistant_search_query",
-                          "name": "Query"
-                        },
-                        {
-                          "entity": "input_select.music_assistant_provider_filter",
-                          "name": "Provider filter"
-                        },
-                        {
-                          "entity": "input_select.music_assistant_search_media_type",
-                          "name": "Type"
-                        },
-                        {
-                          "entity": "input_select.music_assistant_search_results",
-                          "name": "Results"
-                        },
-                        {
-                          "entity": "input_select.music_assistant_playlist_target",
-                          "name": "Playlist target"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "horizontal-stack",
-                      "cards": [
-                        {
-                          "type": "button",
-                          "name": "Search",
-                          "icon": "mdi:magnify",
-                          "tap_action": {
-                            "action": "call-service",
-                            "service": "script.music_assistant_search_music"
-                          }
-                        },
-                        {
-                          "type": "button",
-                          "name": "Play now",
-                          "icon": "mdi:play",
-                          "tap_action": {
-                            "action": "call-service",
-                            "service": "script.music_assistant_play_selected_search_result",
-                            "service_data": {
-                              "enqueue": "replace"
-                            }
-                          }
-                        },
-                        {
-                          "type": "button",
-                          "name": "Add to queue",
-                          "icon": "mdi:playlist-plus",
-                          "tap_action": {
-                            "action": "call-service",
-                            "service": "script.music_assistant_play_selected_search_result",
-                            "service_data": {
-                              "enqueue": "add"
-                            }
-                          }
-                        },
-                        {
-                          "type": "button",
-                          "name": "Add to playlist",
-                          "icon": "mdi:playlist-edit",
-                          "tap_action": {
-                            "action": "call-service",
-                            "service": "script.music_assistant_add_selected_search_result_to_playlist"
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "type": "markdown",
-                      "content": "Search by name, narrow results with a provider token when needed, then choose whether to play now, queue, or append the selected item into one of the supported playlist scripts."
-                    }
-                  ]
-                }
-              ]
             }
           ],
-          "cards": []
+          "cards": [],
+          "max_columns": 4
+        },
+        {
+          "title": "Music Assistant",
+          "path": "music-assistant",
+          "icon": "mdi:music",
+          "panel": true,
+          "cards": [
+            {
+              "type": "custom:mass-player-card",
+              "default_section": "music_player",
+              "sync_player_across_dashboard": true,
+              "entities": [
+                {
+                  "entity_id": "media_player.bedroom_sonos_2",
+                  "name": "Owner Suite"
+                },
+                {
+                  "entity_id": "media_player.office_sonos_2",
+                  "name": "Office"
+                },
+                {
+                  "entity_id": "media_player.bathroom_sonos_2",
+                  "name": "Bathroom"
+                },
+                {
+                  "entity_id": "media_player.den_sonos_2",
+                  "name": "Den"
+                },
+                {
+                  "entity_id": "media_player.tiki_room_3",
+                  "name": "Tiki"
+                }
+              ],
+              "queue": {
+                "limit_before": 5,
+                "limit_after": 40,
+                "show_album_covers": true,
+                "show_artist_names": true
+              },
+              "media_browser": {
+                "columns": 2,
+                "default_section": "favorites"
+              }
+            }
+          ]
         },
         {
           "title": "Tesla v2",
@@ -2114,6 +2101,13 @@
                   "name": "Exhaust",
                   "icon_animation": true,
                   "collapsible_controls": true
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.basement_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
                 }
               ]
             },
@@ -2270,8 +2264,15 @@
                   "show_oscillate_control": true
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.den_ceiling_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mini-media-player",
-                  "entity": "media_player.sonos_den",
+                  "entity": "media_player.den_sonos_2",
                   "name": "Sonos",
                   "group": false,
                   "volume_stateless": false,
@@ -2298,6 +2299,10 @@
                       {
                         "entity_id": "media_player.den_sonos_2",
                         "name": "Den"
+                      },
+                      {
+                        "entity_id": "media_player.tiki_room_3",
+                        "name": "Tiki"
                       }
                     ]
                   }
@@ -2370,10 +2375,10 @@
                   "type": "entities",
                   "entities": [
                     {
-                      "entity": "sensor.front_load_washer"
+                      "entity": "binary_sensor.washing_machine_running"
                     },
                     {
-                      "entity": "sensor.dryer"
+                      "entity": "binary_sensor.dryer_running"
                     }
                   ]
                 },
@@ -2398,8 +2403,15 @@
                   "chips": [
                     {
                       "type": "entity",
-                      "entity": "binary_sensor.laundry_washer_vibration_vibration",
+                      "entity": "binary_sensor.washing_machine_running",
+                      "name": "Washer",
                       "icon": "mdi:washing-machine"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "binary_sensor.dryer_running",
+                      "name": "Dryer",
+                      "icon": "mdi:tumble-dryer"
                     }
                   ]
                 }
@@ -2479,6 +2491,13 @@
                   "show_oscillate_control": false
                 },
                 {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.guest_room_fan_timer"
+                  ],
+                  "mushroom": true
+                },
+                {
                   "type": "custom:mushroom-light-card",
                   "entity": "light.guest_room_fan_switch"
                 },
@@ -2489,6 +2508,13 @@
                 {
                   "type": "custom:mushroom-fan-card",
                   "entity": "fan.guest_bathroom_exhaust"
+                },
+                {
+                  "type": "custom:timer-bar-card",
+                  "entities": [
+                    "timer.guest_bathroom_exhaust_timer"
+                  ],
+                  "mushroom": true
                 }
               ]
             }
@@ -2616,7 +2642,7 @@
             {
               "type": "markdown",
               "title": "Aircraft Overhead (≤5 mi, unlimited altitude)",
-              "content": "{% set st = states('sensor.closest_aircraft_overhead') %}\n{% if st in ['none','unknown','unavailable'] %}\nNo aircraft currently within 5 mi at any altitude.\n{% else %}\n{% set img = state_attr('sensor.closest_aircraft_photo','url') %}\n{% set mil = state_attr('sensor.closest_aircraft_overhead','is_military') %}\n{% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}\n{% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}\n{% set desc = state_attr('sensor.closest_aircraft_overhead','desc') %}\n{% set type_code = state_attr('sensor.closest_aircraft_overhead','type_code') %}\n{% set alt = state_attr('sensor.closest_aircraft_overhead','altitude_ft') %}\n{% set dist = state_attr('sensor.closest_aircraft_overhead','distance_mi') %}\n{% set route = states('sensor.closest_aircraft_routeset') %}\n{% set names = states('sensor.closest_aircraft_routeset_names') %}\n\n\n{% if img %}\n![aircraft]({{ img }})\n{% endif %}\n\n**Closest:** {{ cs if cs else st }}{% if mil %} 🇺🇸{% endif %}\n\n**Route:** {% if route not in ['unknown','none','unavailable'] %}{{ route }}{% else %}—{% endif %}\n{% if names%}\n  {{names}}\n{% endif %}\n\n**Plane:** {{ desc if desc else 'Unknown' }}{% if type_code %} ({{ type_code }}){% endif %}  \n**Altitude:** {{ alt if alt is not none else '—' }} ft  \n**Distance:** {{ dist if dist is not none else '—' }} mi  \n**HEX:** `{{ hx if hx else '—' }}`\n{% endif %}\n"
+              "content": "{% set st = states('sensor.closest_aircraft_overhead') %}\n{% if st in ['none','unknown','unavailable'] %}\nNo aircraft currently within 5 mi at any altitude.\n{% else %}\n{% set img = state_attr('sensor.closest_aircraft_photo','url') %}\n{% set mil = state_attr('sensor.closest_aircraft_overhead','is_military') %}\n{% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}\n{% set hx = state_attr('sensor.closest_aircraft_overhead','hex') %}\n{% set desc = state_attr('sensor.closest_aircraft_overhead','desc') %}\n{% set type_code = state_attr('sensor.closest_aircraft_overhead','type_code') %}\n{% set alt = state_attr('sensor.closest_aircraft_overhead','altitude_ft') %}\n{% set dist = state_attr('sensor.closest_aircraft_overhead','distance_mi') %}\n{% set route = states('sensor.closest_aircraft_routeset') %}\n{% set names = states('sensor.closest_aircraft_routeset_names') %}\n\n\n{% if img %}\n![aircraft]({{ img }})\n{% endif %}\n\n**Closest:** {{ cs if cs else st }}{% if mil %} \ud83c\uddfa\ud83c\uddf8{% endif %}\n\n**Route:** {% if route not in ['unknown','none','unavailable'] %}{{ route }}{% else %}\u2014{% endif %}\n{% if names%}\n  {{names}}\n{% endif %}\n\n**Plane:** {{ desc if desc else 'Unknown' }}{% if type_code %} ({{ type_code }}){% endif %}  \n**Altitude:** {{ alt if alt is not none else '\u2014' }} ft  \n**Distance:** {{ dist if dist is not none else '\u2014' }} mi  \n**HEX:** `{{ hx if hx else '\u2014' }}`\n{% endif %}\n"
             },
             {
               "type": "vertical-stack",
@@ -2755,7 +2781,7 @@
               "show_name": true,
               "show_icon": true,
               "type": "button",
-              "entity": "input_button.reset_inovelli_switch_configurations",
+              "entity": "script.reset_inovelli_switches",
               "show_state": false,
               "tap_action": {
                 "action": "toggle"
@@ -3215,11 +3241,11 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Washer",
-                  "secondary": "{% if is_state(\"sensor.front_load_washer\", \"on\") %}\nRunning {{ state_attr(\"sensor.front_load_washer\", \"current_course\") }}\nCurrently {{ state_attr(\"sensor.front_load_washer\", \"run_state\") }}\n{{ state_attr(\"sensor.front_load_washer\", \"initial_time\") }} total, {{ state_attr(\"sensor.front_load_washer\", \"remain_time\") }} to go\n{% elif state_attr(\"sensor.front_load_washer\", \"run_completed\") == \"on\" %}\nReady to unload\n{% else %}\nOff\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_washing_machine_power\") %}\n{% set current = states(\"sensor.laundry_room_washing_machine_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.washing_machine_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:washing-machine",
-                  "entity": "sensor.front_load_washer",
+                  "entity": "binary_sensor.washing_machine_running",
                   "multiline_secondary": true,
-                  "icon_color": "{{ \"indigo\" if is_state(\"sensor.front_load_washer\", \"on\") else \"\" }}",
+                  "icon_color": "{{ \"indigo\" if is_state(\"binary_sensor.washing_machine_running\", \"on\") else \"\" }}",
                   "tap_action": {
                     "action": "more-info"
                   }
@@ -3227,11 +3253,11 @@
                 {
                   "type": "custom:mushroom-template-card",
                   "primary": "Dryer",
-                  "secondary": "{% if is_state(\"sensor.dryer\", \"on\") %}\nRunning {{ state_attr(\"sensor.dryer\", \"current_course\") }}\nCurrently {{ state_attr(\"sensor.dryer\", \"run_state\") }}\n{{ state_attr(\"sensor.dryer\", \"initial_time\") }} total, {{ state_attr(\"sensor.dryer\", \"remain_time\") }} to go\n{% elif state_attr(\"sensor.front_load_washer\", \"run_completed\") == \"on\" %}\nReady to unload\n{% else %}\nOff\n{% endif %}",
+                  "secondary": "{% set power = states(\"sensor.laundry_room_dryer_power\") %}\n{% set current = states(\"sensor.laundry_room_dryer_current\") %}\n{% if power in [\"unknown\", \"unavailable\"] or current in [\"unknown\", \"unavailable\"] %}\nTelemetry unavailable\n{% elif is_state(\"binary_sensor.dryer_running\", \"on\") %}\nRunning\n{{ power }} W \u00b7 {{ current }} A\n{% else %}\nIdle\n{{ power }} W \u00b7 {{ current }} A\n{% endif %}",
                   "icon": "mdi:tumble-dryer",
-                  "entity": "sensor.dryer",
+                  "entity": "binary_sensor.dryer_running",
                   "multiline_secondary": true,
-                  "icon_color": "{{ \"indigo\" if is_state(\"sensor.dryer\", \"on\") else \"\" }}",
+                  "icon_color": "{{ \"indigo\" if is_state(\"binary_sensor.dryer_running\", \"on\") else \"\" }}",
                   "tap_action": {
                     "action": "more-info"
                   }
@@ -3263,6 +3289,42 @@
                 {
                   "type": "entity",
                   "entity": "sensor.vacuum_last_ran"
+                },
+                {
+                  "type": "heading",
+                  "heading": "Ground Floor Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_mainlevel_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_mainlevel_stall_status"
+                },
+                {
+                  "type": "heading",
+                  "heading": "Den Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_den_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_den_stall_status"
+                },
+                {
+                  "type": "heading",
+                  "heading": "Upstairs Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_upstairs_vacuum_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_upstairs_vacuum_stall_status"
                 }
               ]
             },
@@ -3328,6 +3390,57 @@
                       "secondary_info": "none"
                     }
                   ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Ground Floor Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_mainlevel_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_mainlevel_stall_status"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Den Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_den_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_den_stall_status"
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Upstairs Stall Evidence"
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.valetudo_upstairs_vacuum_stalled"
+                },
+                {
+                  "type": "entity",
+                  "entity": "sensor.valetudo_upstairs_vacuum_stall_status"
                 }
               ]
             }
@@ -3453,61 +3566,6 @@
             }
           ],
           "cards": []
-        },
-        {
-          "title": "Bed Debug",
-          "path": "bed-debug",
-          "icon": "mdi:bed-double-outline",
-          "badges": [
-            {
-              "type": "entity",
-              "show_name": true,
-              "show_state": true,
-              "show_icon": true,
-              "entity": "binary_sensor.bayesian_bed_occupancy",
-              "color": ""
-            },
-            {
-              "type": "entity",
-              "show_name": false,
-              "show_state": true,
-              "show_icon": true,
-              "color": "",
-              "entity": "binary_sensor.master_bed_occupancy"
-            }
-          ],
-          "cards": [
-            {
-              "type": "entities",
-              "entities": [
-                {
-                  "entity": "input_boolean.east_bed_occupied"
-                },
-                {
-                  "entity": "input_boolean.west_bed_occupied"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_left_normal"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_right_normal"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_right_fast"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_left_fast"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_either_fast"
-                },
-                {
-                  "entity": "binary_sensor.bed_presence_2d0670_bed_occupied_either"
-                }
-              ],
-              "title": "Sides"
-            }
-          ]
         },
         {
           "title": "Deliveries",

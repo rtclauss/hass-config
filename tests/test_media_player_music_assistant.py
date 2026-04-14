@@ -31,6 +31,29 @@ def _script_block(script_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _automation_block(automation_id: str) -> str:
+    lines = MEDIA_PLAYER_PATH.read_text(encoding="utf-8").splitlines()
+    start = None
+    needle = f"  - id: {automation_id}"
+
+    for index, line in enumerate(lines):
+        if line == needle:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find automation id {automation_id!r}")
+
+    end = len(lines)
+    next_automation = re.compile(r"^  - id: ")
+    for index in range(start + 1, len(lines)):
+        if next_automation.match(lines[index]):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def test_music_assistant_item_helper_is_generic_pass_through() -> None:
     block = _script_block("music_assistant_play_item")
 
@@ -111,36 +134,157 @@ def test_house_party_helper_joins_every_sonos_zone() -> None:
         assert media_player in block
 
 
-def test_bedtime_playlist_includes_somafm_station_names() -> None:
+def test_bedroom_group_helper_restarts_instead_of_blocking_new_runs() -> None:
+    block = _script_block("music_assistant_prepare_bedroom_group")
+
+    assert 'mode: restart' in block
+    assert 'action: media_player.unjoin' in block
+    for media_player in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.den_sonos_2",
+        "media_player.office_sonos_2",
+    ):
+        assert media_player in block
+
+
+def test_arrival_group_helper_resets_players_before_regrouping() -> None:
+    block = _script_block("music_assistant_prepare_arrival_group")
+
+    assert 'action: media_player.unjoin' in block
+    assert '"Join whole-house arrival group"' in block
+    for media_player in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.den_sonos_2",
+        "media_player.office_sonos_2",
+        "media_player.tiki_room_2",
+    ):
+        assert media_player in block
+
+
+def test_arrival_music_does_not_retry_regroup_after_playback_starts() -> None:
+    arrival_block = _script_block("spotify_arrival")
+
+    assert 'action: script.music_assistant_prepare_arrival_group' in arrival_block
+    assert 'action: script.music_assistant_play_spotify_uri' in arrival_block
+    assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' not in arrival_block
+
+
+def test_bedtime_join_retry_runs_after_playback_starts() -> None:
+    helper_block = _script_block("music_assistant_try_join_bedroom_group_after_play")
+    bedtime_block = _script_block("spotify_bedtime")
+
+    assert 'mode: restart' in helper_block
+    assert 'seconds: 2' in helper_block
+    assert 'action: script.turn_on' in helper_block
+    assert 'entity_id: script.music_assistant_prepare_bedroom_group' in helper_block
+    assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in bedtime_block
+    assert bedtime_block.index('action: script.music_assistant_play_item') < bedtime_block.index(
+        'entity_id: script.music_assistant_try_join_bedroom_group_after_play'
+    )
+
+
+def test_radio_wakeup_prepares_group_before_play_and_only_retries_regroup_when_requested() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    assert 'playback_entity_id:' in block
+    assert 'prepare_group_before_play:' in block
+    assert 'regroup_after_play:' in block
+    assert 'playback_player' in block
+    assert 'should_prepare_group_before_play' in block
+    assert 'should_regroup_after_play' in block
+    assert 'action: media_player.unjoin' in block
+    assert 'action: script.music_assistant_prepare_bedroom_group' in block
+    assert "{{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}" in block
+    assert "{{ regroup_after_play | default(false) | bool }}" in block
+    assert 'entity_id: "{{ playback_player }}"' in block
+    assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
+    assert block.index('action: music_assistant.play_media') < block.index(
+        'entity_id: script.music_assistant_try_join_bedroom_group_after_play'
+    )
+
+
+def test_spotify_wakeup_prepares_group_before_play_and_only_retries_regroup_when_requested() -> None:
+    block = _script_block("spotify_wake_up")
+
+    assert 'playback_entity_id:' in block
+    assert 'prepare_group_before_play:' in block
+    assert 'regroup_after_play:' in block
+    assert 'playback_player' in block
+    assert 'should_prepare_group_before_play' in block
+    assert 'should_regroup_after_play' in block
+    assert 'action: media_player.unjoin' in block
+    assert 'action: script.music_assistant_prepare_bedroom_group' in block
+    assert "{{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}" in block
+    assert "{{ regroup_after_play | default(false) | bool }}" in block
+    assert 'entity_id: "{{ playback_player }}"' in block
+    assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
+    assert block.index('action: script.music_assistant_play_spotify_uri') < block.index(
+        'entity_id: script.music_assistant_try_join_bedroom_group_after_play'
+    )
+
+
+def test_bathroom_wakeup_automation_targets_bathroom_player() -> None:
+    block = _automation_block("play_music_in_bathroom_when_up")
+
+    assert 'action: script.spotify_wake_up' in block
+    assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 2
+    assert block.count('regroup_after_play: false') == 2
+    assert 'media_player.media_stop' not in block
+
+
+def test_stuck_morning_audio_scripts_are_recovered() -> None:
+    block = _automation_block("recover_stuck_morning_audio_scripts")
+
+    assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
+    assert 'entity_id:\n          - script.spotify_wake_up\n          - script.music_assistant_radio_wake_up' in block
+    assert 'minutes: 1' in block
+    assert 'minutes: 3' in block
+    assert 'action: script.turn_off' in block
+    assert 'script.music_assistant_prepare_bedroom_group' in block
+    assert 'script.music_assistant_radio_wake_up' in block
+    assert 'script.spotify_wake_up' in block
+    assert 'entity_id: input_boolean.morning_routine' in block
+
+
+def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     block = _script_block("spotify_bedtime")
 
-    for station in (
+    for station_url in (
+        "https://somafm.com/groovesalad.pls",
+        "https://somafm.com/deepspaceone.pls",
+        "https://somafm.com/missioncontrol.pls",
+        "https://somafm.com/spacestation.pls",
+        "https://somafm.com/vaporwaves.pls",
+    ):
+        assert f'"{station_url}"' in block
+
+    for station_name in (
         "Groove Salad",
         "Deep Space One",
         "Mission Control",
         "Space Station Soma",
         "Vaporwaves",
     ):
-        assert f'"{station}"' in block
+        assert f'"{station_name}"' not in block
 
     assert "range(0, (plists | length))" in block
     assert "action: script.music_assistant_play_item" in block
     assert 'media_item: "{{ playlist }}"' in block
+    assert "playlist.startswith('https://somafm.com/')" in block
 
 
-def test_music_assistant_dashboard_exposes_search_controls() -> None:
+def test_music_assistant_dashboard_exposes_player_card() -> None:
+    # The dashboard uses a dedicated Music Assistant tab with mass-player-card
+    # instead of the old inline search panel.
     dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
 
     for token in (
         "Music Assistant",
-        "input_text.music_assistant_search_query",
-        "input_select.music_assistant_provider_filter",
-        "input_select.music_assistant_playlist_target",
-        "input_select.music_assistant_search_media_type",
-        "input_select.music_assistant_search_results",
-        "script.music_assistant_search_music",
-        "script.music_assistant_play_selected_search_result",
-        "script.music_assistant_add_selected_search_result_to_playlist",
+        '"path": "music-assistant"',
+        "custom:mass-player-card",
+        "media_player.bedroom_sonos_2",
     ):
         assert token in dashboard
 

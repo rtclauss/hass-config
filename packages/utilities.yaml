@@ -191,26 +191,41 @@ automation:
     trigger:
       - trigger: time_pattern
         hours: "/12"
+    variables:
+      stale_threshold_hours: 12
+      stale_entities: >-
+        {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
+          not is_state_attr(item.entity_id, 'hidden', true)
+          and (now()-as_local(item.last_reported) > timedelta(hours=stale_threshold_hours))
+          and not (item.entity_id | lower).find('update') != -1
+          and not (item.entity_id | lower).find('heading') != -1
+          and not (item.entity_id | lower).find('alert') != -1
+          and not (item.entity_id | lower).find('season') != -1
+          and not (item.entity_id | lower).endswith('microphone')
+          and not (item.entity_id | lower).endswith('hacs')
+          and not (item.entity_id | lower).find('sonos') != -1
+        )-%}
+          {{ item.entity_id }}
+        {% if not loop.last %}, {% endif %}
+        {%- endfor -%}
     action:
-      - action: persistent_notification.create
-        data:
-          title: Stale Entities
-          message: >-
-            The following entities have not updated in 24 hours:
-            {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
-              not is_state_attr(item.entity_id, 'hidden', true)
-              and (now()-as_local(item.last_updated) > timedelta(hours=12))
-              and not (item.entity_id | lower).find('update') != -1
-              and not (item.entity_id | lower).find('heading') != -1
-              and not (item.entity_id | lower).find('alert') != -1
-              and not (item.entity_id | lower).find('season') != -1
-              and not (item.entity_id | lower).endswith('microphone')
-              and not (item.entity_id | lower).endswith('hacs')
-              and not (item.entity_id | lower).find('sonos') != -1
-            )-%}
-              {{ item.entity_id }}
-            {% if not loop.last %}, {% endif %}
-            {%- endfor -%}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ stale_entities | trim != '' }}
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  notification_id: stale-entities
+                  title: Stale Entities
+                  message: >-
+                    The following entities have not reported in {{ stale_threshold_hours }} hours:
+                    {{ stale_entities }}
+        default:
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: stale-entities
 
   - id: switch_electrical_tariff
     alias: switch_electrical_tariff
@@ -235,21 +250,25 @@ automation:
       #   id: nonsummer
     action:
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.hourly_electricity
         data:
           option: "{{ tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.daily_electricity
         data:
           option: "{{ tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.monthly_electricity
         data:
           option: "{{ tariff }}"
       - action: input_number.set_value
+        continue_on_error: true
         target:
           entity_id: input_number.electrical_rate
         data:
@@ -310,21 +329,25 @@ automation:
         {% endif %}
     action:
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.hourly_ev_charging
         data:
           option: "{{ ev_tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.daily_ev_charging
         data:
           option: "{{ ev_tariff }}"
       - action: select.select_option
+        continue_on_error: true
         target:
           entity_id: select.monthly_ev_charging
         data:
           option: "{{ ev_tariff }}"
       - action: input_number.set_value
+        continue_on_error: true
         target:
           entity_id: input_number.ev_electrical_rate
         data:
@@ -370,6 +393,26 @@ automation:
       - action: hassio.addon_restart
         data:
           addon: a0d7b954_appdaemon
+
+  - alias: Restart Music Assistant every 12.17 hours
+    description: >
+      Restart the Music Assistant add-on on a self-rescheduling loop to work
+      around Sonos DNS issues.
+    id: restart_music_assistant_every_12_17_hours
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - repeat:
+          while:
+            - condition: template
+              value_template: "{{ true }}"
+          sequence:
+            # 12.17 hours interpreted as decimal hours: 12 hours, 10 minutes, 12 seconds.
+            - delay: "12:10:12"
+            - action: hassio.addon_restart
+              data:
+                addon: d5369777_music_assistant
 
   - alias: Turn Sump Back On
     id: turn_sump_back_on
@@ -712,11 +755,11 @@ rest:
         icon: mdi:gas-station
         unit_of_measurement: USD/gal
         value_template: >-
-          {% set match = value | regex_findall_index('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)', 0) %}
-          {% if match not in [none, ''] %}
-            {{ match | float(default=0) | round(2) }}
+          {% set matches = value | regex_findall('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)') %}
+          {% if matches | count > 0 %}
+            {{ matches[0] | float(default=0) | round(2) }}
           {% else %}
-            {{ 'unknown' }}
+            {{ none }}
           {% endif %}
 
 ########################
@@ -772,7 +815,7 @@ template:
       - name: house_electrical_meter
         unique_id: house_electrical_meter
         device_class: energy
-        state_class: measurement
+        state_class: total_increasing
         unit_of_measurement: kWh
         availability: >
           {{ states('sensor.filtered_raw_electrical_sensor') not in ['unknown', 'unavailable', 'none', 'None', ''] }}

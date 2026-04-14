@@ -1,0 +1,548 @@
+---
+auto_fan_speed_owner_suite:
+  module: auto_fan_speed
+  class: AutoFanSpeed
+  temp_sensor: sensor.owner_suite_tph_temperature
+  fan: fan.owner_suite
+  sun: sun.sun
+  speeds:
+    low: 63
+    medium: 67
+    high: 73
+    sun_offset: 0
+  time:
+    start: "21:00:00"
+    end: "12:30:00"
+    turn_off_at_end_time: True
+  debug: true
+
+# Disabled because it pulls in scikit-learn, which currently prevents the
+# AppDaemon add-on from bootstrapping on Alpine without a working toolchain.
+# bed_side_predictor:
+#   module: bed_side_predictor
+#   class: BedSidePredictor
+#   east_sensor: sensor.east_bed_occupied_num
+#   west_sensor: sensor.west_bed_occupied_num
+#   presence_sensor: person.ryan
+#   guest_mode: input_boolean.guest_mode
+#   train_hour: 16
+#   update_every_minutes: 60
+#   lookback_days: 56
+#   min_dwell_minutes: 5
+#   min_positive_minutes: 300
+#   min_negative_minutes: 600
+#   timezone: America/Chicago
+#   debug: true
+
+# bed_fusion_detector:
+#   module: bed_fusion
+#   class: BedFusionDetector
+
+#   # Probabilities (auto-scales 0-1 or 0-100)
+#   source_prob_sensors:
+#     - sensor.chatgpt_prob_east_bed_occupied
+#     - sensor.chatgpt_prob_west_bed_occupied
+#     # - sensor.chatgpt_bed_prob_occupied    # if you expose one from bed_occupancy.py
+
+#   # Ground truth-ish + gating
+#   base_occupancy_boolean: input_boolean.chatgpt_bed_occupied
+#   person_entity: person.ryan
+#   away_values: ["away","not_home"]
+
+#   # Optional context features, each normalized to [0..1] with min/max
+#   context_numeric_sensors:
+#     sensor.bedroom_hour_of_day: {min: 0, max: 23}
+#     sensor.average_house_temp: {min: 60, max: 85}
+
+#   # Override
+#   override_entity: input_select.chatgpt_bed_override
+#   override_values: ["off","force_occupied","force_unoccupied"]
+
+#   # Outputs
+#   sensor_prob: sensor.chatgpt_bed_fused_probability
+#   binary_occupied: binary_sensor.chatgpt_bed_fused_occupied
+#   sensor_robustness: sensor.chatgpt_bed_fusion_robustness
+#   sensor_confidence: sensor.chatgpt_bed_fusion_confidence
+#   binary_training_needed: binary_sensor.chatgpt_bed_fusion_training_needed
+#   sensor_meta: sensor.chatgpt_bed_fusion_meta
+
+#   # Behavior knobs
+#   decision_threshold: 0.65
+#   min_publish_interval_sec: 10
+#   min_hold_time_sec: 30
+#   train_every_minutes: 60
+#   min_samples_to_train: 100
+#   required_pos_neg: [50, 100]
+#   training_window_minutes: 40320  # 28 days
+#   robust_agreement_power: 1.5
+#   robust_entropy_power: 1.0
+#   training_recency_half_life_h: 72
+
+# brighten_office_lights:
+#   module: brighten_lights
+#   class: BrightenLights
+#   # TODO use entire area of office
+#   lights:
+#     - light.office_all
+#     # - light.office_floor_lamp
+#     # - light.office_ceiling
+#     # - light.office_fan_switch
+#   sensors:
+#     - binary_sensor.office_motion_occupancy
+#   camera_on_sensor: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+#   transition_time_sec: 600
+#   constrain_input_boolean: input_boolean.guest_mode,off
+#   constrain_input_boolean: input_boolean.bayesian_zeke_home
+#   constrain_input_boolean: input_boolean.master_bed_occupancy,off
+#   constrain_input_boolean: input_boolean.morning_routine,off
+#   constrain_input_boolean: binary_sensor.workday_sensor
+#   constrain_start_time: "06:50:00"
+#   constrain_end_time: "11:30:00"
+
+# brighten_master_bedroom_lights_in_the_morning:
+#   module: brighten_lights
+#   class: BrightenLights
+#   lights:
+#     - light.master_bedroom
+#   sensors:
+#     - binary_sensor.master_bedroom_motion
+#     - binary_sensor.hallway_motion
+#   transition_time_sec: 600
+#   constrain_input_boolean: input_boolean.master_bed_occupancy,off
+#   constrain_input_boolean: input_boolean.guest_mode,off
+#   constrain_input_boolean: input_boolean.bayesian_zeke_home
+#   constrain_input_boolean: input_boolean.morning_routine,off
+#   constrain_input_boolean: binary_sensor.workday_sensor
+#   constrain_start_time: "06:50:00"
+#   constrain_end_time: "11:30:00"
+
+bayesian_device_tracker:
+  class: BayesianDeviceTracker
+  module: tracker
+  gps_location_sources:
+    - device_tracker.wethop
+    - device_tracker.nigori_location_tracker
+  bayesian_input: binary_sensor.bayesian_zeke_home
+  bayesian_device_tracker_name: "bayesian_zeke_home"
+  gps_accuracy_tolerance: 2000
+  minimum_update_distance: 3
+  minimum_update_window: 5
+
+# Occupancy Simulator:
+#   module: occusim
+#   class: OccuSim
+#   # log_msg: "0"
+#   #notify: "1"
+#   enable: input_boolean.trip,on
+#   #enable: input_boolean.house_unoccupied,on
+#   # test: "1"
+#   # dump_times: "0"
+#   # reset_time: 02:00:00
+
+#   step_morning_name: Morning
+#   step_morning_start: "06:00:00"
+#   step_morning_end: "12:00:00"
+
+#   step_afternoon_name: Afternoon
+#   step_afternoon_start: "12:00:01"
+#   step_afternoon_end: "16:00:00"
+
+#   step_evening_name: Evening
+#   step_evening_start: "16:00:01"
+#   step_evening_end: "21:30:00"
+
+#   step_night_end: "23:59:00"
+#   step_night_name: Night
+#   step_night_start: "21:30:01"
+
+#   random_morning_bathroom_end: Afternoon
+#   random_morning_bathroom_maxduration: "00:45:00"
+#   random_morning_bathroom_minduration: "00:03:00"
+#   random_morning_bathroom_name: Morning Bathroom
+#   random_morning_bathroom_number: "3"
+#   random_morning_bathroom_off_1: light.owner_suite_bathroom_lights
+#   random_morning_bathroom_on_1: light.owner_suite_bathroom_lights
+#   random_morning_bathroom_start: Morning
+
+#   random_morning_office_days: mon,tue,wed,thu,fri
+#   random_morning_office_end: Afternoon
+#   random_morning_office_maxduration: "04:00:00"
+#   random_morning_office_minduration: "00:15:00"
+#   random_morning_office_name: Morning office
+#   random_morning_office_number: "1"
+#   random_morning_office_off_1: light.office_all
+#   random_morning_office_on_1: light.office_all
+#   random_morning_office_start: Morning
+
+#   random_afternoon_office_days: mon,tue,wed,thu,fri
+#   random_afternoon_office_end: Evening
+#   random_afternoon_office_maxduration: "04:00:00"
+#   random_afternoon_office_minduration: "00:15:00"
+#   random_afternoon_office_name: Afternoon office
+#   random_afternoon_office_number: "1"
+#   random_afternoon_office_office_off_1: light.office_all
+#   random_afternoon_office_office_on_1: light.office_all
+#   random_afternoon_office_start: Afternoon
+
+#   random_afternoon_livingroom_end: Evening
+#   random_afternoon_livingroom_maxduration: "04:00:00"
+#   random_afternoon_livingroom_minduration: "00:15:00"
+#   random_afternoon_livingroom_name: Afternoon Living Room
+#   random_afternoon_livingroom_number: "1"
+#   random_afternoon_livingroom_livingroom_off_1: light.living_room_lamps
+#   random_afternoon_livingroom_livingroom_on_1: light.living_room_lamps
+#   random_afternoon_livingroom_start: Afternoon
+
+#   random_evening_bathroom_end: Night
+#   random_evening_bathroom_maxduration: "00:15:00"
+#   random_evening_bathroom_minduration: "00:01:30"
+#   random_evening_bathroom_name: Evening Bathroom
+#   random_evening_bathroom_number: "3"
+#   random_evening_bathroom_off_1: light.owner_suite_bathroom_lights
+#   random_evening_bathroom_on_1: light.owner_suite_bathroom_lights
+#   random_evening_bathroom_start: Evening
+
+#   random_evening_kitchen_end: Night
+#   random_evening_kitchen_maxduration: "00:35:00"
+#   random_evening_kitchen_minduration: "00:04:00"
+#   random_evening_kitchen_name: Evening Kitchen
+#   random_evening_kitchen_number: "4"
+#   random_evening_kitchen_off_1: light.kitchen_sink
+#   random_evening_kitchen_on_1: light.kitchen_sink
+#   random_evening_kitchen_start: Evening
+
+#   random_evening_guest_days: mon,thu,fri
+#   random_evening_guest_end: Night
+#   random_evening_guest_maxduration: "00:17:12"
+#   random_evening_guest_minduration: "00:01:00"
+#   random_evening_guest_name: Evening Guest
+#   random_evening_guest_number: "1"
+#   random_evening_guest_off_1: light.guest_ceiling
+#   random_evening_guest_on_1: light.guest_ceiling
+#   random_evening_guest_start: Evening
+
+#   random_evening_kitchen_1_end: Night
+#   random_evening_kitchen_1_maxduration: "01:35:00"
+#   random_evening_kitchen_1_minduration: "00:24:00"
+#   random_evening_kitchen_1_name: Evening Kitchen
+#   random_evening_kitchen_1_number: "4"
+#   random_evening_kitchen_1_off_1: light.kitchen_sink
+#   random_evening_kitchen_1_on_1: light.kitchen_sink
+#   random_evening_kitchen_1_start: Evening
+
+#   random_evening_bedroom_entry_end: Night
+#   random_evening_bedroom_entry_maxduration: "03:0:12"
+#   random_evening_bedroom_entry_minduration: "00:45:00"
+#   random_evening_bedroom_entry_name: Evening Owner Bedroom
+#   random_evening_bedroom_entry_number: "3"
+#   random_evening_bedroom_entry_off_1: light.owner_suite_lamps
+#   random_evening_bedroom_entry_on_1: light.owner_suite_lamps
+#   random_evening_bedroom_entry_start: Evening
+
+#   random_evening_tmp_hallway_end: Night
+#   random_evening_tmp_hallway_maxduration: "03:0:12"
+#   random_evening_tmp_hallway_minduration: "00:45:00"
+#   random_evening_tmp_hallway_name: Evening Entry Tmp
+#   random_evening_tmp_hallway_number: "3"
+#   random_evening_tmp_hallway_off_1: light.hall_all_downlights
+#   random_evening_tmp_hallway_on_1: light.hall_all_downlights
+#   random_evening_tmp_hallway_start: Evening
+
+#   random_evening_den_end: Night
+#   random_evening_den_maxduration: "03:0:12"
+#   random_evening_den_minduration: "00:45:00"
+#   random_evening_den_name: Evening Den Tmp
+#   random_evening_den_number: "2"
+#   random_evening_den_off_1: light.den_floods
+#   random_evening_den_on_1: light.den_floods
+#   random_evening_den_off_3: light.den_leather_chair
+#   random_evening_den_on_3: light.den_leather_chair
+#   random_evening_den_start: Evening
+
+#   random_evening_tmp_basement_end: Night
+#   random_evening_tmp_basement_maxduration: "03:0:12"
+#   random_evening_tmp_basement_minduration: "00:45:00"
+#   random_evening_tmp_basement_name: Evening Basement Tmp
+#   random_evening_tmp_basement_number: "2"
+#   random_evening_tmp_basement_off_1: light.basement_all_down_lights
+#   random_evening_tmp_basement_on_1: light.basement_all_down_lights
+#   random_evening_tmp_basement_start: Evening
+
+Restart HA if network down:
+  class: restart_ha
+  module: reboot
+  host_to_ping: "8.8.8.8"
+
+  # original ryan 6/3/2025
+# Get Bed Load Cell Average Empty Data:
+#   class: bed_history
+#   module: bed_history
+#   load_cells:
+#     - "sensor.raw_bed_load_cell_1"
+#     # - "sensor.raw_bed_load_cell_2"
+
+# From ChatGPT 6/3/2025
+# chatgpt_bed_occupancy:
+#   module: bed_occupancy
+#   class: BedOccupancy
+#   load_cell_sensor: sensor.raw_bed_load_cell_1
+#   baseline_sensor: sensor.chatgpt_bed_baseline
+#   threshold_sensor: sensor.chatgpt_bed_threshold
+#   delta_sensor: sensor.chatgpt_bed_delta
+#   occupancy_boolean: binary_sensor.chatgpt_bed_occupied
+#   presence_entity: person.ryan
+#   input_threshold_entity: input_number.bed_manual_threshold
+#   cooldown_minutes: 120
+#   min_occupied_duration: 900
+#   notify: true
+
+# # From ChatGPT 6/4/2025
+# chatgpt_bed_occupancy:
+#   module: bed_occupancy
+#   class: BedOccupancy
+#   # log: chatgpt_bed_log
+
+#   # Required sensors
+#   load_cell_sensor: sensor.raw_bed_load_cell_1
+#   delta_sensor: sensor.chatgpt_bed_delta
+#   baseline_sensor: sensor.chatgpt_bed_baseline
+#   threshold_sensor: sensor.chatgpt_bed_threshold
+#   input_threshold_entity: input_number.bed_threshold_max
+#   occupancy_boolean: binary_sensor.chatgpt_bed_occupied
+
+#   # Optional
+#   presence_entity: person.ryan  # or device_tracker, or remove if not used
+#   cooldown_minutes: 120
+#   min_occupied_duration: 900  # seconds
+
+#   # Notifications
+#   notify: true  # requires notify group set up in HA
+
+# From ChatGPT 6/5/2025
+# bed_occupancy:
+#   module: bed_occupancy
+#   class: BedOccupancy
+
+#   # The raw HX711 (load‐cell) sensor providing weight readings
+#   load_cell_sensor: sensor.raw_bed_load_cell_1
+
+#   # The binary_sensor reflecting occupancy (will be set "on"/"off")
+#   occupancy_boolean: binary_sensor.chatgpt_bed_occupied
+
+#   # Optional: if provided, used only by dynamic‐history filtering (not for baseline updates)
+#   presence_entity: person.ryan
+
+#   # Sensor storing current threshold (numeric)
+#   threshold_sensor: sensor.chatgpt_bed_threshold
+
+#   # Sensor publishing (baseline – smoothed) for graphing
+#   delta_sensor: sensor.chatgpt_bed_delta
+
+#   # Day vs. night separate “vacant” baselines
+#   baseline_day_sensor: sensor.chatgpt_bed_baseline_day
+#   baseline_night_sensor: sensor.chatgpt_bed_baseline_night
+
+#   # “Max threshold” input_number in HA, used as an upper bound for dynamic threshold
+#   input_threshold_entity: input_number.chatgpt_bed_max_threshold
+
+#   # Rolling‐buffer size
+#   buffer_size: 5
+
+#   # Minutes bed must be vacant before updating vacant baseline
+#   cooldown_minutes: 120
+
+#   # Seconds bed must have been continuously occupied before we consider saving
+#   min_occupied_duration: 900
+#   # HD nighttime definition: start at 22:00, end at 08:00
+#   night_start_hour: 22
+#   night_end_hour: 8
+
+#   # Enable HA notifications?
+#   notify: true
+
+# # From ChatGPT 6/8/2025
+# bed_occupancy:
+#   module: bed_occupancy
+#   class: BedOccupancy
+
+#   # Raw load cell
+#   load_cell_sensor: sensor.raw_bed_load_cell_1
+
+#   # Binary sensor to reflect occupancy
+#   occupancy_boolean: input_boolean.chatgpt_bed_occupied
+
+#   # Delta and threshold
+#   delta_sensor: sensor.chatgpt_bed_delta
+#   threshold_sensor: sensor.chatgpt_bed_threshold
+#   input_threshold_entity: input_button.bed_threshold_max
+#   override_boolean: input_boolean.chatgpt_bed_occupied_override
+
+#   # Day/night baselines
+#   baseline_day_sensor: sensor.chatgpt_bed_baseline_day
+#   baseline_night_sensor: sensor.chatgpt_bed_baseline_night
+
+#   # Optional presence gating for threshold updates
+#   presence_entity: person.ryan
+
+#   # Smoothing and logic
+#   buffer_size: 5
+#   hysteresis: 2000       # deadband around threshold
+#   night_start_hour: 22
+#   night_end_hour: 8
+#   decay: 0.85
+#   # NEW: Calibration to convert raw ADC → kilograms
+#   zero_offset:  -147000.0    # raw reading when no load
+#   scale_factor: 0.00236    # kg per ADC-count
+#   # drift tolerance and clamp bounds
+#   zero_drift_tolerance: 5
+#   min_empty_kg: 200
+#   max_empty_kg: 600
+#   db_url: !secret recorder_db_url
+#   use_sql_history: True
+#   min_threshold_raw: 4000.0
+
+# ChatGPT Bed History:
+#   class: bed_occupancy
+#   module: BedOccupancy
+#   load_cell_sensor: sensor.raw_bed_load_cell_1
+#   binary_sensor: binary_sensor.bed_occupied
+#   input_boolean: input_boolean.chatgpt_bed_occupied
+#   occupancy_threshold: 100000
+#   baseline_sensor: sensor.bed_baseline
+#   delta_sensor: sensor.bed_delta
+#   presence_entity: person.ryan
+#   notify_service: notify.all
+#   max_skips_before_notify: 3
+
+# deconz_helper:
+#   module: deconz_helper
+#   class: DeconzHelper
+
+living_room_magic_cube:
+  module: magic_cube
+  class: RemoteControl
+  event: zha_event
+  id: "00:15:8d:00:02:8a:f0:5f"
+  light: light.living_room_lamps_except_tv
+
+# Not used
+# automatic_helper:
+#   module: automatic_helper
+#   class: AutomaticHelper
+#   tracker_input: device_tracker.bayesian_zeke_home
+#   calendar: calendar.curling
+#   notify_target: notify/all
+#   driving_time: 120
+
+# May not be needed anymore thanks to Schedy
+# nest_travel_helper:
+#   module: nest_travel_helper
+#   class: NestTravelHelper
+#   outside_temp_feels_like: sensor.dark_sky_apparent_temperature
+#   outside_temp: sensor.dark_sky_temperature
+#   driving_sensor: binary_sensor.car_in_motion
+#   phone: device_tracker.bayesian_zeke_home
+#   thermostat: climate.my_ecobee
+
+# 08/25/2022: Moved to automation in media_player
+# Fade-in music:
+#   class: FadeInMusic
+#   module: fade_in_music
+#   sensors:
+#     - binary_sensor.bedroom_occupancy
+#     # - binary_sensor.hallway_motion
+#     - binary_sensor.owner_suite_bathroom_room_occupancy
+#   transition_time_sec: 120
+#   constrain_input_boolean: input_boolean.guest_mode,off
+#   constrain_input_boolean: input_boolean.bayesian_zeke_home
+#   constrain_input_boolean: input_boolean.master_bed_occupancy,off
+#   constrain_start_time: "06:50:00"
+#   constrain_end_time: "11:30:00"
+#   #should this be a constraint?
+#   already_fading_in_spotify: input_boolean.morning_routine
+
+#living_room_group:
+#  module: group
+#  class: create_group
+#  name: my_name
+#  device_type: "binary_sensor"
+#  entity_part: "living_room"
+#  hidden: False
+#  view: True
+#  assumed_state: False
+#  friendly_name: Last Updates
+#  nested_view: True #creates a second group inside a viewed group
+
+thermostat_stats:
+  module: thermostat_stats
+  class: ThermostatStats
+  outside_temp_feels_like: sensor.tomorrow_io_the_brewery_feels_like
+  outside_temp: sensor.outside_temperature
+  outside_humidity: sensor.outside_humidity
+  outside_cloud_cover: sensor.tomorrow_io_the_brewery_cloud_cover
+  occupancy: binary_sensor.ecobee_home
+  window_open: binary_sensor.fresh_air_open
+  # Optional wind entities for better HVAC ETA modeling:
+  # wind_speed: sensor.tomorrow_io_the_brewery_wind_speed
+  # wind_gust: sensor.tomorrow_io_the_brewery_wind_gust
+  # wind_bearing: sensor.tomorrow_io_the_brewery_wind_direction
+  # Optional humidifier entities:
+  humidifier: humidifier.my_ecobee
+  thermostat_db: !secret thermostat_recorder_db_url
+  thermostat: climate.my_ecobee
+  house_average_temp: sensor.average_house_temp
+  house_average_humidity: sensor.average_house_humidity
+  sun: sun.sun
+
+# groups:
+#   module: group_all
+#   class: GroupAll
+
+ench:
+  module: ench
+  class: EnCh
+  notify: notify.all
+  show_friendly_name: false
+  # exclude:
+  #   - sensor.out_of_order
+  #   - binary_sensor.always_unavailable
+  battery:
+    interval_min: 360
+    min_level: 10
+
+follow_laundry_room:
+  # Office does not using a bound zigbee group to control the floor lamp
+  module: inovelli_mirror
+  class: Follow
+  leader: light.laundry_room
+  follower: light.laundry_wall_switch
+# follow_office:
+#   # Office does not using a bound zigbee group to control the floor lamp
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.office_floor_lamp
+#   follower: light.office_fan_switch
+
+# follow_dining_room:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.dining_room
+#   follower: light.dining_room_overhead
+
+# follow_den_room:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.den_all
+#   follower: light.den_wall_switch
+
+# follow_kitchen_sink:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.kitchen_sink
+#   follower: light.kitchen_sink_light_switch
+
+# follow_hallway:
+#   module: inovelli_mirror
+#   class: Follow
+#   leader: light.hall_lights_all
+#   follower: light.hallway_light_switch
