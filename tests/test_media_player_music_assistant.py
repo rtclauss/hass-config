@@ -163,18 +163,12 @@ def test_arrival_group_helper_resets_players_before_regrouping() -> None:
         assert media_player in block
 
 
-def test_arrival_join_retry_runs_after_playback_starts() -> None:
-    helper_block = _script_block("music_assistant_try_join_arrival_group_after_play")
+def test_arrival_music_does_not_retry_regroup_after_playback_starts() -> None:
     arrival_block = _script_block("spotify_arrival")
 
-    assert 'mode: restart' in helper_block
-    assert 'seconds: 2' in helper_block
-    assert 'action: script.turn_on' in helper_block
-    assert 'entity_id: script.music_assistant_prepare_arrival_group' in helper_block
-    assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' in arrival_block
-    assert arrival_block.index('action: script.music_assistant_play_spotify_uri') < arrival_block.index(
-        'entity_id: script.music_assistant_try_join_arrival_group_after_play'
-    )
+    assert 'action: script.music_assistant_prepare_arrival_group' in arrival_block
+    assert 'action: script.music_assistant_play_spotify_uri' in arrival_block
+    assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' not in arrival_block
 
 
 def test_bedtime_join_retry_runs_after_playback_starts() -> None:
@@ -191,14 +185,19 @@ def test_bedtime_join_retry_runs_after_playback_starts() -> None:
     )
 
 
-def test_radio_wakeup_join_retry_runs_after_playback_starts() -> None:
+def test_radio_wakeup_prepares_group_before_play_and_only_retries_regroup_when_requested() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
     assert 'playback_entity_id:' in block
+    assert 'prepare_group_before_play:' in block
+    assert 'regroup_after_play:' in block
     assert 'playback_player' in block
-    assert 'action: script.music_assistant_prepare_bedroom_group' not in block
-    assert 'action: script.turn_on' in block
-    assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
+    assert 'should_prepare_group_before_play' in block
+    assert 'should_regroup_after_play' in block
+    assert 'action: media_player.unjoin' in block
+    assert 'action: script.music_assistant_prepare_bedroom_group' in block
+    assert "{{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}" in block
+    assert "{{ regroup_after_play | default(false) | bool }}" in block
     assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
     assert block.index('action: music_assistant.play_media') < block.index(
@@ -206,14 +205,19 @@ def test_radio_wakeup_join_retry_runs_after_playback_starts() -> None:
     )
 
 
-def test_spotify_wakeup_join_retry_runs_after_playback_starts() -> None:
+def test_spotify_wakeup_prepares_group_before_play_and_only_retries_regroup_when_requested() -> None:
     block = _script_block("spotify_wake_up")
 
     assert 'playback_entity_id:' in block
+    assert 'prepare_group_before_play:' in block
+    assert 'regroup_after_play:' in block
     assert 'playback_player' in block
-    assert 'action: script.music_assistant_prepare_bedroom_group' not in block
-    assert 'action: script.turn_on' in block
-    assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
+    assert 'should_prepare_group_before_play' in block
+    assert 'should_regroup_after_play' in block
+    assert 'action: media_player.unjoin' in block
+    assert 'action: script.music_assistant_prepare_bedroom_group' in block
+    assert "{{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}" in block
+    assert "{{ regroup_after_play | default(false) | bool }}" in block
     assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' in block
     assert block.index('action: script.music_assistant_play_spotify_uri') < block.index(
@@ -224,8 +228,10 @@ def test_spotify_wakeup_join_retry_runs_after_playback_starts() -> None:
 def test_bathroom_wakeup_automation_targets_bathroom_player() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
-    assert 'entity_id: script.spotify_wake_up' in block
+    assert 'action: script.spotify_wake_up' in block
     assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 2
+    assert block.count('regroup_after_play: false') == 2
+    assert 'media_player.media_stop' not in block
 
 
 def test_stuck_morning_audio_scripts_are_recovered() -> None:

@@ -95,8 +95,8 @@ def test_trip_restore_script_reuses_existing_day_and_night_profiles() -> None:
         "is_state('input_boolean.guest_mode', 'off')",
         "today_at('12:00')",
         "binary_sensor.bayesian_bed_occupancy",
+        "binary_sensor.bedroom_occupancy",
         "binary_sensor.owner_suite_bathroom_room_occupancy",
-        "binary_sensor.hall_upstairs_motion_occupancy",
         "today_at('08:00')",
     ):
         assert token in block
