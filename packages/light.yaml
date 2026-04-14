@@ -376,6 +376,22 @@ automation:
       - trigger: state
         entity_id: binary_sensor.basement_landing_occupancy
         to: "on"
+      - trigger: state
+        entity_id: media_player.basement
+        to: "idle"
+        for:
+          seconds: 3
+      - trigger: state
+        entity_id: media_player.basement
+        to: "off"
+        for:
+          seconds: 3
+      - trigger: state
+        entity_id: media_player.lg_webos_smart_tv
+        from: "on"
+        to: "off"
+        for:
+          seconds: 10
     condition:
       - alias: "Not in bed"
         condition: state
@@ -383,6 +399,10 @@ automation:
           - binary_sensor.bayesian_bed_occupancy
           # - input_boolean.chatgpt_bed_occupied
         state: "off"
+      - alias: "Basement landing still occupied"
+        condition: state
+        entity_id: binary_sensor.basement_landing_occupancy
+        state: "on"
       - condition: not
         conditions:
           - condition: or
@@ -391,10 +411,18 @@ automation:
                 condition: state
                 entity_id: media_player.basement
                 state: "playing"
+              - alias: "paused something"
+                condition: state
+                entity_id: media_player.basement
+                state: "paused"
               - alias: "watching Apple TV"
                 condition: state
                 entity_id: media_player.plex_basement_apple_tv
                 state: "playing"
+              - alias: "paused Apple TV"
+                condition: state
+                entity_id: media_player.plex_basement_apple_tv
+                state: "paused"
       - condition: state
         entity_id:
           - input_boolean.bayesian_zeke_home
@@ -987,8 +1015,7 @@ automation:
 
   - id: kitchen_lights_toggle
     alias: kitchen_lights_toggle
-    description: Disabled pending a new kitchen policy; broad guest mode should not rely on this automation.
-    initial_state: false
+    description: Kitchen motion lighting; enabled when guest mode is off.
     mode: restart
     trigger:
       - trigger: state
