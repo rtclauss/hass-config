@@ -2579,6 +2579,35 @@ script:
                 target:
                   entity_id: script.day_mode_switches_owner_suite_bedroom
 
+  replay_hall_transition_inovelli_led_policy_on_recovery:
+    icon: mdi:light-switch
+    description: >
+      Reapply the current Inovelli LED policy after the hall transition switch
+      recovers from unavailable so a missed write gets replayed once Zigbee2MQTT
+      is back.
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id:
+          - number.hall_transition_switch_ledcolorwhenoff
+          - number.hall_transition_switch_ledcolorwhenon
+          - number.hall_transition_switch_ledintensitywhenoff
+          - number.hall_transition_switch_ledintensitywhenon
+        from: "unavailable"
+    condition:
+      condition: or
+      conditions:
+        - condition: state
+          entity_id: switch.sleep_mode
+          state: "on"
+        - condition: state
+          entity_id: sun.sun
+          state: "below_horizon"
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.restore_inovelli_switch_leds_from_trip
+
   turn_off_owner_suite_inovelli_switch_leds:
     icon: mdi:light-switch
     sequence:
