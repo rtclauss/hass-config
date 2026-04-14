@@ -21,9 +21,10 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
     assert "constexpr uint8_t F1_CRASH_MIN_FRAMES = 30;" in text
     assert "constexpr uint8_t F1_CRASH_MAX_FRAMES = 50;" in text
     assert "constexpr uint8_t F1_CRASH_DURATION_FRAMES = 18;" in text
-    assert "constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 64;" in text
+    assert "constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;" in text
     assert "constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;" in text
-    assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 255;" in text
+    assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 168;" in text
+    assert "constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 60;" in text
     assert "constexpr size_t LAVA_FIELD_CELLS = 48;" in text
     assert "constexpr size_t THUNDERSTORM_CELLS = 40;" in text
     assert "inline void add_scaled_inplace(Color &base, const Color &added, uint8_t scale)" in text
@@ -33,18 +34,15 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
 def test_lava_field_layers_heat_and_blends_toward_a_bounded_target() -> None:
     block = _function_block("apply_lava_field")
 
-    assert "std::array<float, 8> cluster_centers{};" in block
-    assert "std::array<float, 8> cluster_activity{};" in block
+    assert "std::array<float, 5> cluster_centers{};" in block
+    assert "std::array<float, 5> cluster_activity{};" in block
     assert "std::array<Color, LAVA_FIELD_CELLS> lava_cells{};" in block
     assert "cluster_phases" in block
     assert "cluster_radii" in block
     assert "clump_heat" in block
     assert "ember_wave" in block
-    assert "color_shift" in block
-    assert "cooled_crust" in block
-    assert "hotspot" in block
-    assert "smoothstep(0.26f, 0.97f, molten_mix)" in block
-    assert "const Color crust_tint(" in block
+    assert "smoothstep(0.18f, 0.96f, molten_mix)" in block
+    assert "Color magma = blend(" in block
     assert "cluster_centers[cluster]" in block
     assert "cluster_activity[cluster]" in block
     assert "lava_cells[cell] = pixel;" in block
@@ -56,13 +54,19 @@ def test_lava_field_layers_heat_and_blends_toward_a_bounded_target() -> None:
 def test_thunderstorm_uses_jungle_canopy_palette_and_bounded_flash_blending() -> None:
     block = _function_block("apply_thunderstorm")
 
+    assert "std::array<float, 4> foliage_centers{};" in block
+    assert "std::array<float, 4> foliage_activity{};" in block
+    assert "std::array<float, 3> rain_centers{};" in block
+    assert "std::array<float, 3> rain_pulses{};" in block
     assert "foliage_phases" in block
     assert "rain_phases" in block
     assert "std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};" in block
     assert "ambient_cells[cell] = pixel;" in block
     assert "rain_group" in block
     assert "Color pixel = sample_coarse_cells(ambient_cells, i);" in block
-    assert "add_inplace(pixel, scale_color(flash_overlay, 88));" in block
+    assert "foliage_centers[cluster]" in block
+    assert "rain_centers[cluster]" in block
+    assert "add_inplace(pixel, scale_color(flash_overlay, THUNDERSTORM_FLASH_SCALE));" in block
     assert "const uint8_t blend_amount = flash_on ? THUNDERSTORM_FLASH_BLEND_AMOUNT : THUNDERSTORM_BLEND_AMOUNT;" in block
     assert "rt.leds[i] = blend(rt.leds[i], pixel, blend_amount);" in block
     assert "fade_to_black(GLITTER_FADE_AMOUNT);" not in block
