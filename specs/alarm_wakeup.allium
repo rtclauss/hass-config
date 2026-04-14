@@ -46,7 +46,7 @@ external entity WakeupContext {
     within_weekend_bathroom_window: Boolean
     owner_suite_lamps_on: Boolean
     owner_suite_recent_bathroom_activity: Boolean
-    owner_suite_recent_hall_activity: Boolean
+    owner_suite_recent_bedroom_activity: Boolean
 }
 
 ------------------------------------------------------------
@@ -178,7 +178,7 @@ rule TriggerSpecialMeetingWakeup {
 rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
     when: context.resident_in_bed becomes false
     or context.bathroom_occupied becomes true
-    or context.owner_suite_recent_hall_activity becomes true
+    or context.owner_suite_recent_bedroom_activity becomes true
     requires: calendar.today_is_workday
     requires: context.within_workday_owner_suite_wake_window
     requires: context.resident_home
@@ -188,7 +188,7 @@ rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
     requires: not context.owner_suite_lamps_on
     requires: not context.resident_in_bed
     requires: context.owner_suite_recent_bathroom_activity
-    requires: context.owner_suite_recent_hall_activity
+    requires: context.owner_suite_recent_bedroom_activity
     ensures: WakeupSequenceRequested(workday_morning_activity)
 }
 
@@ -228,10 +228,20 @@ rule OpenBlindsDuringWakeupTransition {
 rule PrepareMorningAudioGroup {
     when: MorningAudioRequested(program, target_room)
     ensures:
-        if context.guest_mode_enabled:
-            WakeupAudioGroupPrepared(bedroom_and_bathroom)
+        if target_room == bathroom:
+            WakeupAudioGroupPrepared(bathroom_only)
         else:
-            WakeupAudioGroupPrepared(bedroom_bathroom_office_den)
+            if context.guest_mode_enabled:
+                WakeupAudioGroupPrepared(bedroom_and_bathroom)
+            else:
+                WakeupAudioGroupPrepared(bedroom_bathroom_office_den)
+    @guidance
+        -- Bedroom-suite wake-up audio should prepare its intended speaker group
+        -- before playback begins and should not trigger a second regroup once
+        -- playback is already underway unless an explicit recovery path needs it.
+        -- Bathroom-triggered follow-up audio should stay independent from the
+        -- owner-suite light ramp and should not depend on regrouping the wider
+        -- bedroom wake-up audio zone.
 }
 
 rule ChooseWakeupPlaylistFromConfiguredPool {

@@ -202,5 +202,11 @@ def test_lights_off_except_skips_light_groups_that_contain_protected_members() -
 
     assert "protected_lights:" in block
     assert "state_attr(light.entity_id, 'entity_id')" in block
+    assert "opaque_group_members" in block
+    assert "'light.outside_front_lights': [" in block
+    assert "'light.outside_front_door'" in block
+    assert "'light.deck_all': [" in block
+    assert "'light.deck_string'" in block
+    assert "light.entity_id in excluded or (members | select('in', excluded)" in block
     assert "members | select('in', excluded)" in block
     assert "rejectattr('entity_id', 'in', protected_lights)" in block

@@ -59,19 +59,17 @@ def _script_block(script_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_default_led_bar_sync_automation_updates_owner_suite_and_office() -> None:
-    block = _automation_block("reconcile_owner_suite_adaptive_lighting")
+def test_default_led_bar_sync_automation_updates_owner_suite_and_office_after_reconcile() -> None:
+    block = _automation_block("sync_selected_inovelli_led_bars_to_adaptive_lighting")
 
-    assert "selected Inovelli LED bars stay aligned" in block
-    assert "Adaptive Lighting" in block
-    assert "trigger: homeassistant" in block
-    assert "event: start" in block
+    assert "owner suite and office Inovelli LED bars" in block
+    assert "trigger: event" in block
+    assert "event_type: adaptive_lighting_startup_reconciled" in block
     assert 'minutes: "/2"' in block
     assert "switch.sleep_mode" in block
     assert "input_boolean.guest_mode" in block
     assert "switch.adaptive_lighting_owner_suite" in block
     assert "switch.adaptive_lighting_sleep_mode_owner_suite" in block
-    assert 'delay: "00:00:30"' in block
     assert "action: script.turn_on" in block
     assert "entity_id: script.sync_inovelli_led_bars_to_adaptive_lighting" in block
     assert "variables:" in block

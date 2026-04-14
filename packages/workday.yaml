@@ -310,7 +310,7 @@ automation:
     alias: workday_owner_suite_wake_transition_from_morning_activity
     description: >
       Start the owner suite workday wake transition when bed occupancy clears
-      and both the bathroom and upstairs hall show fresh wake-up activity.
+      and both the bedroom and bathroom show fresh wake-up activity.
     mode: single
     trigger:
       - trigger: state
@@ -320,7 +320,7 @@ automation:
         entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
         to: "on"
       - trigger: state
-        entity_id: binary_sensor.hall_upstairs_motion_occupancy
+        entity_id: binary_sensor.bedroom_occupancy
         to: "on"
     condition:
       - condition: time
@@ -356,8 +356,8 @@ automation:
              or as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900 }}
       - condition: template
         value_template: >-
-          {{ is_state('binary_sensor.hall_upstairs_motion_occupancy', 'on')
-             or as_timestamp(now()) - as_timestamp(states.binary_sensor.hall_upstairs_motion_occupancy.last_changed) <= 900 }}
+          {{ is_state('binary_sensor.bedroom_occupancy', 'on')
+             or as_timestamp(now()) - as_timestamp(states.binary_sensor.bedroom_occupancy.last_changed) <= 900 }}
     action:
       - action: script.turn_on
         target:
