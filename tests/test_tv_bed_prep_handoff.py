@@ -25,11 +25,14 @@ def test_tv_bed_prep_handles_lg_shutdown_handoff_without_unconditional_offline_f
 
     assert 'id: lg-tv-off' in block
     assert 'id: lg-tv-unavailable' in block
+    assert 'id: lg-tv-off-to-unavailable' in block
     assert 'id: basement-player-off' in block
     assert 'from: "on"\n        to: "off"' in block
     assert 'from: "on"\n        to: "unavailable"' in block
+    assert 'from: "off"\n        to: "unavailable"' in block
     assert 'entity_id: media_player.basement\n        to: "off"' in block
     assert "seconds: 15" in block
+    assert "seconds: 10" in block
     assert "seconds: 5" in block
     assert "trigger.id != 'basement-player-off'" in block
     assert "media_player.plex_basement_apple_tv" in block
