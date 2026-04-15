@@ -15,10 +15,12 @@ def test_utilities_package_defines_weekly_gas_price_and_ev_comparison_sensors() 
     for token in (
         "weekly_regular_gas_price_55125_fallback:",
         "initial: 3.76",
-        "resource: https://www.way.com/gas/prices/minnesota/woodbury",
+        # EIA API replaces the defunct way.com scrape (issue #385)
+        "resource: !secret eia_gas_price_mn_url",
+        "api.eia.gov/v2/petroleum/pri/gnd/data/",
+        "EMM_EPMRU_PTE_SMN_DPG",
         "woodbury_weekly_regular_gas_price_live",
-        "Week Ago Avg.",
-        "regex_findall(",
+        "value_json.get('response'",
         "weekly_regular_gas_price_55125",
         "average_daily_ev_charging_cost",
         "average_daily_vehicle_miles",

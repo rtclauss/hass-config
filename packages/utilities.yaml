@@ -743,21 +743,30 @@ rest_command:
 # REST
 ########################
 rest:
-  - resource: https://www.way.com/gas/prices/minnesota/woodbury
+  # EIA (US Energy Information Administration) weekly Minnesota Regular Conventional
+  # Retail Gasoline Prices. Free API key required — register at https://www.eia.gov/opendata/
+  # Store the full URL (with your key) in secrets.yaml as a single entry so the key
+  # stays out of version control:
+  #
+  #   eia_gas_price_mn_url: >-
+  #     https://api.eia.gov/v2/petroleum/pri/gnd/data/?api_key=YOUR_EIA_KEY_HERE
+  #     &frequency=weekly&data[0]=value&facets[product][]=EPMRU&facets[duoarea][]=SMN
+  #     &sort[0][column]=period&sort[0][direction]=desc&length=1
+  #
+  # Series: EMM_EPMRU_PTE_SMN_DPG  (MN Regular Conventional, $/gal, weekly)
+  # Falls back to input_number.weekly_regular_gas_price_55125_fallback when unavailable.
+  - resource: !secret eia_gas_price_mn_url
     scan_interval: 43200
     timeout: 30
-    headers:
-      Accept: text/html
-      User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:146.0) Gecko/20100101 Firefox/146.0
     sensor:
       - name: Woodbury Weekly Regular Gas Price Live
         unique_id: woodbury_weekly_regular_gas_price_live
         icon: mdi:gas-station
         unit_of_measurement: USD/gal
         value_template: >-
-          {% set matches = value | regex_findall('Week Ago Avg\\.\\s*\\$([0-9]+\\.[0-9]+)') %}
-          {% if matches | count > 0 %}
-            {{ matches[0] | float(default=0) | round(2) }}
+          {% set data = value_json.get('response', {}).get('data', []) %}
+          {% if data | count > 0 and data[0].get('value') is not none %}
+            {{ data[0]['value'] | float(default=0) | round(2) }}
           {% else %}
             {{ none }}
           {% endif %}
