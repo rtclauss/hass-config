@@ -150,7 +150,10 @@ automation:
         to: "on"
         for:
           minutes: 10
-    #condition:
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
       - action: notify.mobile_app_wethop
         data:
@@ -176,9 +179,16 @@ automation:
             id: enable_guest
             event_data:
               action: ENABLE_GUEST
+          - trigger: event
+            event_type: mobile_app_notification_action
+            id: disable_guest
+            event_data:
+              action: DISABLE_GUEST
         timeout:
           hours: 1
         continue_on_timeout: false
+      - condition: template
+        value_template: "{{ wait.trigger.id == 'enable_guest' }}"
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.guest_mode
