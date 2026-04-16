@@ -271,35 +271,52 @@ script:
               - conditions:
                   - "{{ should_apply_media and guest_mode_enabled }}"
                 sequence:
-                  - continue_on_error: true
-                    action: media_player.unjoin
-                    target:
-                      entity_id:
-                        - media_player.bedroom_sonos_2
-                        - media_player.bathroom_sonos_2
-                        - media_player.office_sonos_2
-                        - media_player.den_sonos_2
-                  - continue_on_error: true
-                    action: media_player.join
-                    target:
-                      entity_id:
-                        - media_player.bedroom_sonos_2
-                    data:
-                      group_members:
-                        - media_player.bathroom_sonos_2
+                  - alias: "Reform guest-mode group only if not already correctly formed"
+                    if:
+                      - condition: template
+                        value_template: >
+                          {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
+                          {{ not ('media_player.bathroom_sonos_2' in members and
+                                  'media_player.office_sonos_2' not in members and
+                                  'media_player.den_sonos_2' not in members) }}
+                    then:
+                      - continue_on_error: true
+                        action: media_player.unjoin
+                        target:
+                          entity_id:
+                            - media_player.bedroom_sonos_2
+                            - media_player.bathroom_sonos_2
+                            - media_player.office_sonos_2
+                      - continue_on_error: true
+                        action: media_player.join
+                        target:
+                          entity_id:
+                            - media_player.bedroom_sonos_2
+                        data:
+                          group_members:
+                            - media_player.bathroom_sonos_2
               - conditions:
                   - "{{ should_apply_media and not guest_mode_enabled }}"
                 sequence:
-                  - continue_on_error: true
-                    action: media_player.join
-                    target:
-                      entity_id:
-                        - media_player.bedroom_sonos_2
-                    data:
-                      group_members:
-                        - media_player.bathroom_sonos_2
-                        - media_player.office_sonos_2
-                        - media_player.den_sonos_2
+                  - alias: "Reform full group only if not already correctly formed"
+                    if:
+                      - condition: template
+                        value_template: >
+                          {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
+                          {{ not ('media_player.bathroom_sonos_2' in members and
+                                  'media_player.office_sonos_2' in members and
+                                  'media_player.den_sonos_2' in members) }}
+                    then:
+                      - continue_on_error: true
+                        action: media_player.join
+                        target:
+                          entity_id:
+                            - media_player.bedroom_sonos_2
+                        data:
+                          group_members:
+                            - media_player.bathroom_sonos_2
+                            - media_player.office_sonos_2
+                            - media_player.den_sonos_2
           - choose:
               - conditions:
                   - "{{ should_apply_trip_policy and trip_mode_enabled }}"
