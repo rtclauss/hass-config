@@ -225,12 +225,15 @@ def test_spotify_wakeup_prepares_group_before_play_and_only_retries_regroup_when
     )
 
 
-def test_bathroom_wakeup_automation_targets_bathroom_player() -> None:
+def test_bathroom_wakeup_automation_targets_bathroom_sonos_only() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
     assert 'action: script.spotify_wake_up' in block
     assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 2
-    assert block.count('regroup_after_play: true') == 2
+    assert 'playback_entity_id: media_player.bedroom_sonos_2' not in block
+    assert block.count('prepare_group_before_play: false') == 2
+    assert block.count('regroup_after_play: false') == 2
+    assert 'regroup_after_play: true' not in block
     assert 'media_player.media_stop' not in block
 
 

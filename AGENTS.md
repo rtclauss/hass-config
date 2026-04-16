@@ -22,6 +22,12 @@
 - Read it before changing guest mode, occupancy, lighting, media, vacuum, climate, dashboards, or other room-targeted logic.
 - If convenience behavior conflicts with room intent, preserve privacy-first behavior.
 
+## Media Playback Targets
+- Music playback, Music Assistant, and Sonos grouping logic must target Sonos speakers only.
+- Do not retarget music playback to HomePods, Apple TVs, TVs, receivers, or other non-Sonos media players as a substitute for an unavailable Sonos entity.
+- Before debugging or updating music playback targets, inspect the live media player integration/device type and confirm the entity is a Sonos speaker.
+- The Den turntable is an input source only and is not a valid output target for any music playback, grouping, volume, or pause automation.
+
 ## Behavioral Specs
 - Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
 - Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
