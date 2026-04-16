@@ -424,7 +424,7 @@ automation:
             sequence:
               - action: script.spotify_wake_up
                 data:
-                  playback_entity_id: media_player.bathroom_sonos_2
+                  playback_entity_id: media_player.bedroom_sonos_2
                   regroup_after_play: true
               - action: media_player.volume_set
                 target:
@@ -441,7 +441,7 @@ automation:
               volume_level: 0.1
           - action: script.spotify_wake_up
             data:
-              playback_entity_id: media_player.bathroom_sonos_2
+              playback_entity_id: media_player.bedroom_sonos_2
               regroup_after_play: true
           - alias: "Repeat until desired volume reached"
             repeat:
@@ -669,6 +669,22 @@ script:
     alias: "Prepare bedroom Music Assistant group"
     mode: restart
     sequence:
+      - alias: "Skip unjoin/rejoin if bedroom group is already correctly formed"
+        if:
+          - condition: template
+            value_template: >
+              {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
+              {% if is_state('input_boolean.guest_mode', 'off') %}
+                {{ 'media_player.bathroom_sonos_2' in members and
+                   'media_player.den_sonos_2' in members and
+                   'media_player.office_sonos_2' in members }}
+              {% else %}
+                {{ 'media_player.bathroom_sonos_2' in members and
+                   'media_player.den_sonos_2' not in members and
+                   'media_player.office_sonos_2' not in members }}
+              {% endif %}
+        then:
+          - stop: "Bedroom group already correctly formed"
       - alias: "Split bedroom wake-up players before regrouping"
         continue_on_error: true
         action: media_player.unjoin
@@ -719,6 +735,23 @@ script:
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
     sequence:
+      - alias: "Skip unjoin/rejoin if arrival group is already correctly formed"
+        if:
+          - condition: template
+            value_template: >
+              {% if is_state('input_boolean.guest_mode', 'off') %}
+                {% set members = state_attr('media_player.den_sonos_2', 'group_members') | default([]) %}
+                {{ 'media_player.bedroom_sonos_2' in members and
+                   'media_player.bathroom_sonos_2' in members and
+                   'media_player.office_sonos_2' in members and
+                   'media_player.tiki_room_2' in members }}
+              {% else %}
+                {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
+                {{ 'media_player.bathroom_sonos_2' in members and
+                   'media_player.den_sonos_2' not in members }}
+              {% endif %}
+        then:
+          - stop: "Arrival group already correctly formed"
       - alias: "Split arrival players before regrouping"
         continue_on_error: true
         action: media_player.unjoin
