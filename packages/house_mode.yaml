@@ -271,6 +271,16 @@ script:
               - conditions:
                   - "{{ should_apply_media and guest_mode_enabled }}"
                 sequence:
+                  - alias: "Skip if bedroom suite is already in guest-mode grouping"
+                    if:
+                      - condition: template
+                        value_template: >
+                          {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
+                          {{ 'media_player.bathroom_sonos_2' in members and
+                             'media_player.office_sonos_2' not in members and
+                             'media_player.den_sonos_2' not in members }}
+                    then:
+                      - stop: "Bedroom suite already in guest-mode grouping"
                   - continue_on_error: true
                     action: media_player.unjoin
                     target:
@@ -278,7 +288,6 @@ script:
                         - media_player.bedroom_sonos_2
                         - media_player.bathroom_sonos_2
                         - media_player.office_sonos_2
-                        - media_player.den_sonos_2
                   - continue_on_error: true
                     action: media_player.join
                     target:
@@ -290,6 +299,16 @@ script:
               - conditions:
                   - "{{ should_apply_media and not guest_mode_enabled }}"
                 sequence:
+                  - alias: "Skip if bedroom suite is already in full grouping"
+                    if:
+                      - condition: template
+                        value_template: >
+                          {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
+                          {{ 'media_player.bathroom_sonos_2' in members and
+                             'media_player.office_sonos_2' in members and
+                             'media_player.den_sonos_2' in members }}
+                    then:
+                      - stop: "Bedroom suite already in full grouping"
                   - continue_on_error: true
                     action: media_player.join
                     target:
