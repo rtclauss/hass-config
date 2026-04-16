@@ -171,6 +171,18 @@ def test_arrival_music_does_not_retry_regroup_after_playback_starts() -> None:
     assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' not in arrival_block
 
 
+def test_bedtime_claims_bedroom_group_before_playing() -> None:
+    # spotify_arrival leaves den_sonos_2 as coordinator with bedroom as a follower.
+    # spotify_bedtime must reclaim the group (promote bedroom to coordinator) before
+    # playing, otherwise the play_item call silently fails on a follower.
+    block = _script_block("spotify_bedtime")
+
+    assert 'action: script.music_assistant_prepare_bedroom_group' in block
+    assert block.index('action: script.music_assistant_prepare_bedroom_group') < block.index(
+        'action: script.music_assistant_play_item'
+    )
+
+
 def test_bedtime_join_retry_runs_after_playback_starts() -> None:
     helper_block = _script_block("music_assistant_try_join_bedroom_group_after_play")
     bedtime_block = _script_block("spotify_bedtime")
@@ -225,11 +237,15 @@ def test_spotify_wakeup_prepares_group_before_play_and_only_retries_regroup_when
     )
 
 
-def test_bathroom_wakeup_automation_targets_bathroom_player() -> None:
+def test_bathroom_wakeup_automation_targets_bedroom_coordinator() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
     assert 'action: script.spotify_wake_up' in block
-    assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 2
+    # Must play on the group coordinator (bedroom), not a group member (bathroom),
+    # to avoid the race condition where the playback queue is lost when
+    # music_assistant_prepare_bedroom_group reforms the group.
+    assert block.count('playback_entity_id: media_player.bedroom_sonos_2') == 2
+    assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 0
     assert block.count('regroup_after_play: true') == 2
     assert 'media_player.media_stop' not in block
 
