@@ -128,6 +128,9 @@ def test_house_transition_media_grouping_is_idempotent() -> None:
 
     # Both guest-mode and non-guest-mode branches must guard against redundant
     # unjoin/rejoin cycles so repeated house_transition calls are safe.
-    assert "Bedroom suite already in guest-mode grouping" in block
-    assert "Bedroom suite already in full grouping" in block
+    # Must use if/then (not stop:) so parallel branches and the post-parallel
+    # notification step are never skipped.
+    assert "Reform guest-mode group only if not already correctly formed" in block
+    assert "Reform full group only if not already correctly formed" in block
+    assert "stop:" not in block
     assert block.count("state_attr('media_player.bedroom_sonos_2', 'group_members') | default([])") >= 2
