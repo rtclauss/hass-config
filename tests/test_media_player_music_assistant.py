@@ -225,11 +225,15 @@ def test_spotify_wakeup_prepares_group_before_play_and_only_retries_regroup_when
     )
 
 
-def test_bathroom_wakeup_automation_targets_bathroom_player() -> None:
+def test_bathroom_wakeup_automation_targets_bedroom_coordinator() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
     assert 'action: script.spotify_wake_up' in block
-    assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 2
+    # Must play on the group coordinator (bedroom), not a group member (bathroom),
+    # to avoid the race condition where the playback queue is lost when
+    # music_assistant_prepare_bedroom_group reforms the group.
+    assert block.count('playback_entity_id: media_player.bedroom_sonos_2') == 2
+    assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 0
     assert block.count('regroup_after_play: true') == 2
     assert 'media_player.media_stop' not in block
 
@@ -304,3 +308,53 @@ def test_music_assistant_search_helpers_are_restart_safe() -> None:
         'music_assistant_append_playlist_item:',
     ):
         assert token in package
+
+
+def test_bedroom_playlist_scripts_use_sequence_level_random_selection() -> None:
+    # Playlist selection must be a sequence-level `variables:` action so that
+    # `random` is evaluated fresh on every run rather than being cached when
+    # the script definition is loaded.
+    for script_id in (
+        "bedroom_playlist_0",
+        "bedroom_playlist_1",
+        "bedroom_playlist_2",
+        "bedroom_playlist_3",
+        "bedroom_playlist_4",
+        "bedroom_playlist_5",
+    ):
+        block = _script_block(script_id)
+        # Script-level `variables:` must not contain playlist
+        lines = block.splitlines()
+        in_script_vars = False
+        for line in lines:
+            if line == "    variables:":
+                in_script_vars = True
+            elif in_script_vars and line.startswith("    ") and not line.startswith("      "):
+                in_script_vars = False
+            if in_script_vars and "playlist:" in line:
+                raise AssertionError(
+                    f"{script_id}: playlist found in script-level variables (must be sequence-level)"
+                )
+        # Sequence must begin with a variables action containing playlist
+        assert "      - variables:" in block, f"{script_id}: missing sequence-level variables action"
+        assert "          playlist: >-" in block, f"{script_id}: missing sequence-level playlist"
+
+
+def test_arrival_and_wakeup_scripts_use_sequence_level_playlist_selection() -> None:
+    # Same caching concern as bedroom_playlist scripts.
+    for script_id in ("spotify_arrival", "spotify_wake_up"):
+        block = _script_block(script_id)
+        assert "      - variables:" in block, f"{script_id}: missing sequence-level variables action"
+        assert "          playlist: >-" in block, f"{script_id}: missing sequence-level playlist"
+        # The top-level variables block (for state-dependent fields) must NOT contain playlist
+        lines = block.splitlines()
+        in_script_vars = False
+        for line in lines:
+            if line == "    variables:":
+                in_script_vars = True
+            elif in_script_vars and line.startswith("    ") and not line.startswith("      "):
+                in_script_vars = False
+            if in_script_vars and line.strip().startswith("playlist:"):
+                raise AssertionError(
+                    f"{script_id}: playlist found in script-level variables (must be sequence-level)"
+                )
