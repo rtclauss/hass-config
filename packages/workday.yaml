@@ -733,6 +733,15 @@ script:
           seconds: 1
       - parallel:
           - sequence:
+              - alias: "Lock adaptive lighting manual control to protect the 3-minute wake ramp"
+                continue_on_error: true
+                action: adaptive_lighting.set_manual_control
+                data:
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamps
+                    - light.bed_lightstrip
+                  manual_control: true
               - alias: "Ramp the owner suite lights to the current adaptive daytime target"
                 continue_on_error: true
                 action: switch.turn_off
@@ -751,6 +760,9 @@ script:
                   adapt_color: true
                   turn_on_lights: true
                   transition: 180
+              - alias: "Wait for the wake ramp to complete before releasing adaptive lighting control"
+                delay:
+                  seconds: 180
               - alias: "Keep owner suite adaptive lighting in control after the wake ramp"
                 continue_on_error: true
                 action: switch.turn_on
