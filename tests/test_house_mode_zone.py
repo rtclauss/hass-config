@@ -101,3 +101,33 @@ def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
     assert "Primary tracker confirms departure" in block
     assert "device_tracker.bayesian_zeke_home" in block
     assert "not is_state('device_tracker.bayesian_zeke_home', 'home')" in block
+
+
+def test_house_transition_guest_mode_grouping_never_unjoins_den() -> None:
+    block = _script_block("house_transition")
+
+    # den_sonos_2 must not appear in any unjoin target — it is the Den Turntable
+    # line-in recipient and disrupting it via a mode transition would cut off
+    # turntable audio unexpectedly.
+    lines = block.splitlines()
+    in_unjoin = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "action: media_player.unjoin":
+            in_unjoin = True
+        elif in_unjoin and stripped.startswith("action:"):
+            in_unjoin = False
+        if in_unjoin and "media_player.den_sonos_2" in stripped:
+            raise AssertionError(
+                "house_transition unjoins den_sonos_2 — this disrupts the Den Turntable"
+            )
+
+
+def test_house_transition_media_grouping_is_idempotent() -> None:
+    block = _script_block("house_transition")
+
+    # Both guest-mode and non-guest-mode branches must guard against redundant
+    # unjoin/rejoin cycles so repeated house_transition calls are safe.
+    assert "Bedroom suite already in guest-mode grouping" in block
+    assert "Bedroom suite already in full grouping" in block
+    assert block.count("state_attr('media_player.bedroom_sonos_2', 'group_members') | default([])") >= 2
