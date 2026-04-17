@@ -424,8 +424,7 @@ automation:
             sequence:
               - action: script.spotify_wake_up
                 data:
-                  playback_entity_id: media_player.bedroom_sonos_2
-                  regroup_after_play: true
+                  playback_entity_id: media_player.everywhere_sonos
               - action: media_player.volume_set
                 target:
                   entity_id: media_player.bathroom_sonos
@@ -441,8 +440,7 @@ automation:
               volume_level: 0.1
           - action: script.spotify_wake_up
             data:
-              playback_entity_id: media_player.bedroom_sonos_2
-              regroup_after_play: true
+              playback_entity_id: media_player.everywhere_sonos
           - alias: "Repeat until desired volume reached"
             repeat:
               sequence:
@@ -668,144 +666,48 @@ script:
   music_assistant_prepare_bedroom_group:
     alias: "Prepare bedroom Music Assistant group"
     mode: restart
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - alias: "Skip unjoin/rejoin if bedroom group is already correctly formed"
-        if:
-          - condition: template
-            value_template: >
-              {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
-              {% if is_state('input_boolean.guest_mode', 'off') %}
-                {{ 'media_player.bathroom_sonos_2' in members and
-                   'media_player.den_sonos_2' in members and
-                   'media_player.office_sonos_2' in members }}
-              {% else %}
-                {{ 'media_player.bathroom_sonos_2' in members and
-                   'media_player.den_sonos_2' not in members and
-                   'media_player.office_sonos_2' not in members }}
-              {% endif %}
-        then:
-          - stop: "Bedroom group already correctly formed"
-      - alias: "Split bedroom wake-up players before regrouping"
-        continue_on_error: true
-        action: media_player.unjoin
-        target:
-          entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.den_sonos_2
-            - media_player.office_sonos_2
-      - if:
-          - alias: "Check if guests are here."
-            condition: state
-            entity_id: input_boolean.guest_mode
-            state: "off"
-        then:
-          - alias: "Join bedroom suite into one group"
-            continue_on_error: true
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-            data:
-              group_members:
-                - media_player.bathroom_sonos_2
-                - media_player.den_sonos_2
-                - media_player.office_sonos_2
-        else:
-          - alias: "Limit wake-up audio to bedroom and bathroom"
-            continue_on_error: true
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-            data:
-              group_members:
-                - media_player.bathroom_sonos_2
+      - action: logbook.log
+        data:
+          name: "Sync Group Migration"
+          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
+          domain: script
 
   music_assistant_try_join_bedroom_group_after_play:
     alias: "Try joining bedroom Music Assistant followers after playback"
     mode: restart
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - delay:
-          seconds: 2
-      - action: script.turn_on
-        target:
-          entity_id: script.music_assistant_prepare_bedroom_group
+      - action: logbook.log
+        data:
+          name: "Sync Group Migration"
+          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
+          domain: script
 
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - alias: "Skip unjoin/rejoin if arrival group is already correctly formed"
-        if:
-          - condition: template
-            value_template: >
-              {% if is_state('input_boolean.guest_mode', 'off') %}
-                {% set members = state_attr('media_player.den_sonos_2', 'group_members') | default([]) %}
-                {{ 'media_player.bedroom_sonos_2' in members and
-                   'media_player.bathroom_sonos_2' in members and
-                   'media_player.office_sonos_2' in members and
-                   'media_player.tiki_room_2' in members }}
-              {% else %}
-                {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
-                {{ 'media_player.bathroom_sonos_2' in members and
-                   'media_player.den_sonos_2' not in members }}
-              {% endif %}
-        then:
-          - stop: "Arrival group already correctly formed"
-      - alias: "Split arrival players before regrouping"
-        continue_on_error: true
-        action: media_player.unjoin
-        target:
-          entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.den_sonos_2
-            - media_player.office_sonos_2
-            - media_player.tiki_room_2
-      - if:
-          - alias: "Check if guests are here."
-            condition: state
-            entity_id: input_boolean.guest_mode
-            state: "off"
-        then:
-          - alias: "Join whole-house arrival group"
-            continue_on_error: true
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.den_sonos_2
-            data:
-              group_members:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
-                - media_player.office_sonos_2
-                - media_player.tiki_room_2
-        else:
-          - alias: "Keep arrival audio in bedroom suite only"
-            continue_on_error: true
-            action: media_player.join
-            target:
-              entity_id:
-                - media_player.bedroom_sonos_2
-            data:
-              group_members:
-                - media_player.bathroom_sonos_2
+      - action: logbook.log
+        data:
+          name: "Sync Group Migration"
+          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
+          domain: script
 
   music_assistant_prepare_house_party_group:
     alias: "Prepare house party Music Assistant group"
+    # TODO: Remove once Music Assistant sync group verified working in production
+    # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - alias: "Join the whole Sonos house group"
-        continue_on_error: true
-        action: media_player.join
-        target:
-          entity_id:
-            - media_player.den_sonos_2
+      - action: logbook.log
         data:
-          group_members:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
-            - media_player.tiki_room_2
+          name: "Sync Group Migration"
+          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
+          domain: script
 
   music_assistant_play_item:
     alias: "Play Music Assistant item"
@@ -1088,46 +990,21 @@ script:
       initial_delay:
         description: "Optional delay before playback starts"
       playback_entity_id:
-        description: "Preferred Music Assistant player for wake-up playback"
-      prepare_group_before_play:
-        description: "Whether to prepare the bedroom wake-up zone before playback starts"
+        description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
-        description: "Whether to regroup the bedroom wake-up zone after playback starts"
+        description: "Kept for backwards compatibility; ignored — sync groups manage membership"
     variables:
-      playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
-      volume_player: "{{ playback_player.replace('_sonos_2', '_sonos').replace('_2', '') }}"
-      should_prepare_group_before_play: >-
-        {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
-      should_regroup_after_play: >-
-        {{ regroup_after_play | default(false) | bool }}
+      playback_player: >-
+        {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+           else 'media_player.everywhere_sonos' }}
     sequence:
-      - if:
-          - condition: template
-            value_template: "{{ should_prepare_group_before_play }}"
-        then:
-          - action: script.music_assistant_prepare_bedroom_group
-        else:
-          - action: media_player.unjoin
-            continue_on_error: true
-            data:
-              entity_id: "{{ playback_player }}"
-      - if:
-          - condition: template
-            value_template: "{{ should_prepare_group_before_play }}"
-        then:
-          - action: media_player.volume_set
-            continue_on_error: true
-            data:
-              entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-              volume_level: 0.01
-        else:
-          - action: media_player.volume_set
-            continue_on_error: true
-            data:
-              entity_id: "{{ volume_player }}"
-              volume_level: 0.01
+      - action: media_player.volume_set
+        continue_on_error: true
+        data:
+          entity_id:
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+          volume_level: 0.01
       - if:
           - condition: template
             value_template: "{{ (initial_delay | default(0) | int(0)) > 0 }}"
@@ -1142,35 +1019,16 @@ script:
           media_id: "{{ radio_uri }}"
           media_type: radio
           enqueue: replace
-      - if:
-          - condition: template
-            value_template: "{{ should_regroup_after_play }}"
-        then:
-          - action: script.turn_on
-            target:
-              entity_id: script.music_assistant_try_join_bedroom_group_after_play
       - repeat:
           sequence:
-            - choose:
-                - conditions:
-                    - condition: template
-                      value_template: "{{ should_prepare_group_before_play }}"
-                  sequence:
-                    - alias: "Increase grouped wake-up volume by 0.01"
-                      continue_on_error: true
-                      action: media_player.volume_set
-                      data:
-                        entity_id:
-                          - media_player.bedroom_sonos
-                          - media_player.bathroom_sonos
-                        volume_level: "{{ 0.01 * repeat.index }}"
-              default:
-                - alias: "Increase standalone wake-up volume by 0.01"
-                  continue_on_error: true
-                  action: media_player.volume_set
-                  data:
-                    entity_id: "{{ volume_player }}"
-                    volume_level: "{{ 0.01 * repeat.index }}"
+            - alias: "Increase grouped wake-up volume by 0.01"
+              continue_on_error: true
+              action: media_player.volume_set
+              data:
+                entity_id:
+                  - media_player.bedroom_sonos
+                  - media_player.bathroom_sonos
+                volume_level: "{{ 0.01 * repeat.index }}"
             - delay:
                 seconds: "{{ (1/(tan(repeat.index/120))) | round(0, 'ceil', 5)}}"
           until: "{{ repeat.index == 30 }}"
@@ -1422,8 +1280,8 @@ script:
     alias: "Spotify Arrive Home"
     variables:
       playback_entity: >-
-        {{ 'media_player.den_sonos_2' if is_state('input_boolean.guest_mode', 'off')
-        else 'media_player.bedroom_sonos_2' }}
+        {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+           else 'media_player.everywhere_sonos' }}
     sequence:
       - variables:
           playlist: >-
@@ -1529,7 +1387,6 @@ script:
               {{ plists[pindex] }}
       - delay:
           seconds: 90
-      - action: script.music_assistant_prepare_arrival_group
       - action: media_player.shuffle_set
         continue_on_error: true
         target:
@@ -1695,12 +1552,12 @@ script:
               ] -%}
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
-      - alias: "Claim bedroom group before playing — unjoins from any arrival group"
-        action: script.music_assistant_prepare_bedroom_group
       - action: media_player.shuffle_set
         continue_on_error: true
         target:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: >-
+            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.everywhere_sonos' }}
         data:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1711,7 +1568,9 @@ script:
         data:
           repeat: all
         target:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: >-
+            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.everywhere_sonos' }}
       - delay:
           seconds: 2
       - action: media_player.volume_set
@@ -1727,19 +1586,20 @@ script:
           seconds: 2
       - action: logbook.log
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: >-
+            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.everywhere_sonos' }}
           domain: media_player
           name: Spotify Bedtime is
           message: " playing Bedtime playlist: {{ playlist }}"
-      - alias: "Play bedtime music"
+      - alias: "Play bedtime music on sync group"
         action: script.music_assistant_play_item
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: >-
+            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.everywhere_sonos' }}
           media_item: "{{ playlist }}"
           media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
-      - action: script.turn_on
-        target:
-          entity_id: script.music_assistant_try_join_bedroom_group_after_play
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
@@ -1805,18 +1665,13 @@ script:
     description: "Play music in the morning when I visit the bathroom."
     fields:
       playback_entity_id:
-        description: "Preferred Music Assistant player for wake-up playback"
-      prepare_group_before_play:
-        description: "Whether to prepare the bedroom wake-up zone before playback starts"
+        description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
-        description: "Whether to regroup the bedroom wake-up zone after playback starts"
+        description: "Kept for backwards compatibility; ignored — sync groups manage membership"
     variables:
-      playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
-      volume_player: "{{ playback_player.replace('_sonos_2', '_sonos').replace('_2', '') }}"
-      should_prepare_group_before_play: >-
-        {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
-      should_regroup_after_play: >-
-        {{ regroup_after_play | default(false) | bool }}
+      playback_player: >-
+        {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+           else 'media_player.everywhere_sonos' }}
     sequence:
       - variables:
           playlist: >-
@@ -1929,25 +1784,6 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - if:
-          - condition: template
-            value_template: "{{ should_prepare_group_before_play }}"
-        then:
-          - action: script.music_assistant_prepare_bedroom_group
-        else:
-          - action: media_player.unjoin
-            continue_on_error: true
-            data:
-              entity_id: "{{ playback_player }}"
-      - delay:
-          seconds: 2
-      - alias: "Pause currently playing media"
-        continue_on_error: true
-        action: media_player.media_pause
-        data:
-          entity_id: "{{ playback_player }}"
-      - delay:
-          seconds: 2
       - alias: "Enable Shuffle"
         continue_on_error: true
         action: media_player.shuffle_set
@@ -1964,47 +1800,17 @@ script:
           repeat: all
         target:
           entity_id: "{{ playback_player }}"
-      - delay:
-          seconds: 2
-      - alias: "Set volume low"
-        if:
-          - condition: template
-            value_template: "{{ should_prepare_group_before_play }}"
-        then:
-          - continue_on_error: true
-            action: media_player.volume_set
-            data:
-              entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-                - media_player.office_sonos
-              volume_level: 0.05
-        else:
-          - continue_on_error: true
-            action: media_player.volume_set
-            data:
-              entity_id: "{{ volume_player }}"
-              volume_level: 0.05
-      - delay:
-          seconds: 2
       - action: logbook.log
         data:
           entity_id: "{{ playback_player }}"
           domain: media_player
           name: Spotify Wake Up is
           message: " playing wakeup playlist: {{ playlist }}"
-      - alias: "Play wake-up music"
+      - alias: "Play wake-up music on sync group"
         action: script.music_assistant_play_spotify_uri
         data:
           entity_id: "{{ playback_player }}"
           spotify_uri: "{{ playlist }}"
-      - if:
-          - condition: template
-            value_template: "{{ should_regroup_after_play }}"
-        then:
-          - action: script.turn_on
-            target:
-              entity_id: script.music_assistant_try_join_bedroom_group_after_play
 
 ########################
 # Sensor
