@@ -10,6 +10,7 @@ ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
 BIRDS_PATH = ROOT / "packages" / "birds.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
+CONFIGURATION_PATH = ROOT / "configuration.yaml"
 
 
 def _read(path: Path) -> str:
@@ -103,6 +104,14 @@ def test_bird_templates_guard_missing_json_fields() -> None:
     assert "payload is mapping and payload.common_name is defined" in text
     assert "value_json is defined and value_json is mapping and value_json.species is defined and value_json.species | count > 0" in text
     assert "value_json is defined and value_json is mapping and value_json.detections is defined and value_json.detections | length > 0" in text
+
+
+def test_garden_birds_sensor_is_excluded_from_influxdb() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    influx_block = text.split("influxdb:\n", 1)[1].split("\ncloud:", 1)[0]
+
+    assert "sensor.garden_birds" in influx_block
 
 
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
