@@ -1,0 +1,100 @@
+-- allium: 3
+-- arrival_lighting.allium
+--
+-- Scope: Adaptive lighting application on resident home arrival.
+-- Includes:
+--   - instant adaptive lighting correction when arrival lights turn on
+--   - adaptive lighting switch enforcement for all participating rooms after arrival
+-- Excludes:
+--   - which specific lights turn on on arrival (governed by house_transition and scenes)
+--   - transport mode detection and presence-sensor logic
+--   - audio, climate, and security behaviour on arrival
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    arrival: ArrivalContext
+}
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity ArrivalContext {
+    bed_occupied: Boolean
+    home_was_empty_before_arrival: Boolean
+}
+
+external entity HouseModeStateMachine {
+    mode: home | away | night | in_bed | asleep
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    arrival_adaptive_transition: Duration = 1.seconds
+    arrival_adaptive_delay: Duration = 2.seconds
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule ApplyAdaptiveLightingOnArrival {
+    when: ResidentArrivedHome()
+    requires: not arrival.bed_occupied
+    ensures: ArrivalAdaptiveLightingApplied()
+    @guidance
+        -- A delay of config.arrival_adaptive_delay lets arrival-scene actions
+        -- begin turning on lights before the adaptive correction fires.
+        -- Rooms in scope: kitchen, den, hallway, owner suite.
+        -- If the house was empty before this arrival, the apply may target
+        -- each room's adaptive lighting switch globally with
+        -- adapt_brightness=true, adapt_color=true, turn_on_lights=false, and
+        -- transition=config.arrival_adaptive_transition (1 s, near-instant).
+        -- If someone was already home, the implementation must apply each
+        -- switch only to configured lights that are not currently present in
+        -- that switch's manual_control attribute, preserving active manual
+        -- brightness or color choices in occupied rooms.
+        -- turn_on_lights=false ensures the correction only adjusts lights that
+        -- are already on or transitioning on from the arrival scene; lights
+        -- that are off are not disturbed.
+        -- This rule fires for any transport mode: Tesla, Uber, Lyft, taxi,
+        -- drop-off, or walking — presence detection is transport-agnostic.
+}
+
+rule PreserveManualLightingDuringOccupiedArrival {
+    when: ResidentArrivedHome()
+    requires: not arrival.bed_occupied
+    requires: not arrival.home_was_empty_before_arrival
+    ensures: ManualControlledArrivalLightsPreserved()
+    @guidance
+        -- Occupied-house arrivals must not send a broad switch-level
+        -- adaptive_lighting.apply. They derive eligible lights from each
+        -- switch's configured lights minus the current manual_control list
+        -- and apply only to that whitelist.
+}
+
+rule PreserveAdaptiveLightingAfterArrival {
+    when: ArrivalAdaptiveLightingApplied()
+    ensures: ArrivalRoomAdaptiveSwitchesEnabled()
+    @guidance
+        -- All room adaptive lighting switches (kitchen, den, hallway, owner
+        -- suite) must remain enabled after arrival so subsequent light events —
+        -- motion triggers, manual presses, and timed automations — receive
+        -- adaptive color and brightness updates without requiring an explicit
+        -- re-enable. The arrival adaptive apply does not disable any switch,
+        -- so this obligation is satisfied as long as no other automation
+        -- disables a switch during the arrival sequence.
+}
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "Should the dining room adaptive lighting switch also be included in the arrival apply scope, or only rooms with interior lights in the arrival scenes?"
+open question "If bed_occupied is true on arrival (unusual), should adaptive lighting still be applied to non-bedroom rooms (kitchen, den, hallway)?"
