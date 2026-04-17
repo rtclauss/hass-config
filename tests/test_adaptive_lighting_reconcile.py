@@ -6,6 +6,9 @@ from pathlib import Path
 ADAPTIVE_LIGHTING_PATH = (
     Path(__file__).resolve().parents[1] / "packages" / "adaptive_lighting.yaml"
 )
+ARRIVAL_LIGHTING_SPEC_PATH = (
+    Path(__file__).resolve().parents[1] / "specs" / "arrival_lighting.allium"
+)
 
 
 def _automation_block(automation_id: str) -> str:
@@ -128,3 +131,57 @@ def test_basement_adaptive_lighting_reconciles_live_media_safe_settings() -> Non
     assert "sleep_brightness: 1" in block
     assert "sleep_color_temp: 1000" in block
     assert "detect_non_ha_changes: false" in block
+
+
+def test_arrival_adaptive_lighting_scopes_occupied_arrivals_to_non_manual_lights() -> None:
+    block = _automation_block("apply_adaptive_lighting_on_arrival")
+
+    for token in (
+        "id: bayesian-device-entered-home",
+        "id: bayesian-presence-turned-on",
+        "arrival_home_was_empty",
+        "trigger.from_state.state == 'off'",
+        "is_state('binary_sensor.bayesian_zeke_home', 'off')",
+        "arrival_adaptive_switches:",
+        "switch.adaptive_lighting_kitchen",
+        "switch.adaptive_lighting_den",
+        "switch.adaptive_lighting_hallway",
+        "switch.adaptive_lighting_owner_suite",
+        "turn_on_lights: false",
+    ):
+        assert token in block
+
+    empty_house_branch = block.split(
+        'alias: "Apply globally when this arrival starts from an empty house"', maxsplit=1
+    )[1].split("default:", maxsplit=1)[0]
+    assert "entity_id: \"{{ arrival_adaptive_switches }}\"" in empty_house_branch
+    assert not any(line.strip() == "lights:" for line in empty_house_branch.splitlines())
+
+    occupied_house_branch = block.split("default:", maxsplit=1)[1]
+    for token in (
+        'for_each: "{{ arrival_adaptive_switches }}"',
+        "state_attr(repeat.item, 'configuration') or {}",
+        "manual_controlled_lights",
+        "state_attr(repeat.item, 'manual_control') or []",
+        "reject('in', manual_controlled_lights)",
+        "eligible_arrival_lights | count > 0",
+        "entity_id: \"{{ repeat.item }}\"",
+        "lights: \"{{ eligible_arrival_lights }}\"",
+    ):
+        assert token in occupied_house_branch
+
+
+def test_arrival_lighting_spec_documents_empty_house_and_manual_control_gates() -> None:
+    text = ARRIVAL_LIGHTING_SPEC_PATH.read_text(encoding="utf-8")
+
+    for token in (
+        "home_was_empty_before_arrival: Boolean",
+        "If the house was empty before this arrival",
+        "If someone was already home",
+        "manual_control attribute",
+        "rule PreserveManualLightingDuringOccupiedArrival",
+        "requires: not arrival.home_was_empty_before_arrival",
+        "ManualControlledArrivalLightsPreserved",
+        "configured lights minus the current manual_control list",
+    ):
+        assert token in text

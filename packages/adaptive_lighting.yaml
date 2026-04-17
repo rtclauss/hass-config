@@ -87,16 +87,20 @@ automation:
       turn on as part of home-arrival automations. Fires for all transport
       modes (car, Uber, Lyft, walking) via the Bayesian presence sensor.
       A 2-second delay lets arrival-scene transitions begin before the
-      adaptive apply fires. turn_on_lights=false ensures only lights that
-      are already transitioning on receive the correction; lights that remain
-      off are not disturbed. Resolves #486.
+      adaptive apply fires. Empty-house arrivals can apply across all
+      configured arrival switches; occupied-house arrivals only apply to
+      configured lights that Adaptive Lighting has not marked as manually
+      controlled. turn_on_lights=false keeps off lights undisturbed. Resolves
+      #486.
     mode: single
     trigger:
       - trigger: zone
+        id: bayesian-device-entered-home
         entity_id: device_tracker.bayesian_zeke_home
         zone: zone.home
         event: enter
       - trigger: state
+        id: bayesian-presence-turned-on
         entity_id: binary_sensor.bayesian_zeke_home
         from: "off"
         to: "on"
@@ -105,19 +109,68 @@ automation:
         entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
     action:
-      - delay:
-          seconds: 2
-      - action: adaptive_lighting.apply
-        data:
-          entity_id:
+      - variables:
+          arrival_home_was_empty: >-
+            {{
+              (
+                trigger.id == 'bayesian-presence-turned-on'
+                and trigger.from_state is not none
+                and trigger.from_state.state == 'off'
+              )
+              or
+              (
+                trigger.id == 'bayesian-device-entered-home'
+                and is_state('binary_sensor.bayesian_zeke_home', 'off')
+              )
+            }}
+          arrival_adaptive_switches:
             - switch.adaptive_lighting_kitchen
             - switch.adaptive_lighting_den
             - switch.adaptive_lighting_hallway
             - switch.adaptive_lighting_owner_suite
-          adapt_brightness: true
-          adapt_color: true
-          turn_on_lights: false
-          transition: 1
+      - delay:
+          seconds: 2
+      - choose:
+          - alias: "Apply globally when this arrival starts from an empty house"
+            conditions:
+              - condition: template
+                value_template: "{{ arrival_home_was_empty }}"
+            sequence:
+              - action: adaptive_lighting.apply
+                data:
+                  entity_id: "{{ arrival_adaptive_switches }}"
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: false
+                  transition: 1
+        default:
+          - repeat:
+              for_each: "{{ arrival_adaptive_switches }}"
+              sequence:
+                - variables:
+                    configured_arrival_lights: >-
+                      {% set configuration = state_attr(repeat.item, 'configuration') or {} %}
+                      {{ configuration.get('lights', []) }}
+                    manual_controlled_lights: >-
+                      {{ state_attr(repeat.item, 'manual_control') or [] }}
+                    eligible_arrival_lights: >-
+                      {{
+                        configured_arrival_lights
+                        | reject('in', manual_controlled_lights)
+                        | list
+                      }}
+                - if:
+                    - condition: template
+                      value_template: "{{ eligible_arrival_lights | count > 0 }}"
+                  then:
+                    - action: adaptive_lighting.apply
+                      data:
+                        entity_id: "{{ repeat.item }}"
+                        lights: "{{ eligible_arrival_lights }}"
+                        adapt_brightness: true
+                        adapt_color: true
+                        turn_on_lights: false
+                        transition: 1
 
   - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
     alias: sync_selected_inovelli_led_bars_to_adaptive_lighting
