@@ -85,6 +85,7 @@ config {
     special_meeting_lead: Duration = 5.minutes
     snooze_duration: Duration = 8.minutes
     morning_blinds_delay: Duration = 175.seconds
+    morning_light_ramp_duration: Duration = 3.minutes
 }
 
 ------------------------------------------------------------
@@ -198,15 +199,17 @@ rule BeginWakeupSequence {
     ensures: house_mode.mode = home
     ensures: wakeup.wakeup_alarm_firing = true
     ensures: owner_suite.adaptive_lighting_enabled = true
-    ensures: owner_suite.lighting_state = daylight_ramp
+    ensures: owner_suite.lighting_state = dim_warm
     ensures: WakeupRampRequested(kind)
     ensures: WakeupBlindTransitionRequested(kind)
     @guidance
-        -- The live owner-suite morning transition immediately hands brightness
-        -- and color back to adaptive lighting. It starts with a short apply
-        -- from the current owner-suite sleep target and then settles into a
-        -- longer adaptive daytime ramp instead of forcing an explicit 2700K to
-        -- 6500K sequence in the wake-up script itself.
+        -- Implementation enables the adaptive lighting switch and immediately
+        -- applies the sleep target: minimum brightness (1 %) and warmest color
+        -- temperature (sleep_color_temp K) with a short transition (≤ 2 s).
+        -- Sleep mode is left on until the ramp begins so the sleep target values
+        -- remain in effect. WakeupRampRequested then hands control to
+        -- FinishWakeupSequence which performs the full config.morning_light_ramp_duration
+        -- transition to the current adaptive daytime target.
 }
 
 rule FinishWakeupSequence {
@@ -214,6 +217,14 @@ rule FinishWakeupSequence {
     ensures: owner_suite.lighting_state = daytime
     ensures: owner_suite.sleep_mode_enabled = false
     ensures: owner_suite.adaptive_lighting_enabled = true
+    @guidance
+        -- Implementation turns off sleep mode and calls adaptive_lighting.apply
+        -- with transition = config.morning_light_ramp_duration (3 minutes).
+        -- During the ramp, manual-control is locked on the owner-suite lights
+        -- to prevent adaptive lighting's periodic updates from interrupting the
+        -- transition. After config.morning_light_ramp_duration elapses, manual
+        -- control is cleared so adaptive lighting resumes normal periodic
+        -- adjustments without requiring an explicit re-enable.
 }
 
 rule OpenBlindsDuringWakeupTransition {

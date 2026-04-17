@@ -34,6 +34,14 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
             "rule ApplyGoodnightIntegrity",
             "wait_for_bathroom_visit_or_timeout",
         ],
+        "arrival_lighting.allium": [
+            "-- allium: 3",
+            "external entity ArrivalContext",
+            "home_was_empty_before_arrival: Boolean",
+            "rule ApplyAdaptiveLightingOnArrival",
+            "rule PreserveManualLightingDuringOccupiedArrival",
+            "manual_control attribute",
+        ],
         "z2m_lifecycle.allium": [
             "-- allium: 3",
             "entity ZigbeeDeviceLifecycle",
