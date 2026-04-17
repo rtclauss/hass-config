@@ -822,6 +822,12 @@ script:
       raw_item: "{{ media_item | trim }}"
       raw_media_type: "{{ media_type | default('') | trim }}"
       raw_enqueue: "{{ enqueue | default('replace') }}"
+      normalized_item: >-
+        {% if raw_item.startswith('spotify:user:spotify:') %}
+          {{ 'spotify:' ~ raw_item.split('spotify:user:spotify:')[1] }}
+        {% else %}
+          {{ raw_item }}
+        {% endif %}
     sequence:
       - choose:
           - conditions:
@@ -833,7 +839,7 @@ script:
                 target:
                   entity_id: "{{ entity_id }}"
                 data:
-                  media_id: "{{ raw_item }}"
+                  media_id: "{{ normalized_item }}"
                   media_type: "{{ raw_media_type }}"
                   enqueue: "{{ raw_enqueue }}"
         default:
@@ -842,7 +848,7 @@ script:
             target:
               entity_id: "{{ entity_id }}"
             data:
-              media_id: "{{ raw_item }}"
+              media_id: "{{ normalized_item }}"
               enqueue: "{{ raw_enqueue }}"
 
   music_assistant_play_spotify_uri:
