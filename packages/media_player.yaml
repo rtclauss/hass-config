@@ -725,7 +725,7 @@ script:
       raw_media_type: "{{ media_type | default('') | trim }}"
       raw_enqueue: "{{ enqueue | default('replace') }}"
       normalized_item: >-
-        {{ 'spotify:' ~ raw_item.split('spotify:user:spotify:')[1] if raw_item.startswith('spotify:user:spotify:') else raw_item }}
+        {{ ('spotify:' ~ raw_item.split(':')[3] ~ ':' ~ raw_item.split(':')[4]) if (raw_item.startswith('spotify:user:') and (raw_item.split(':') | length) == 5) else raw_item }}
     sequence:
       - choose:
           - conditions:
@@ -1406,7 +1406,7 @@ script:
             - media_player.bathroom_sonos
             - media_player.den_sonos
             - media_player.office_sonos
-            - media_player.tiki_room
+            - media_player.tiki_room_3
           volume_level: 0.30
       - alias: "Play arrival music via Music Assistant"
         action: script.music_assistant_play_spotify_uri
@@ -1794,7 +1794,7 @@ script:
             - media_player.bedroom_sonos
             - media_player.office_sonos
             - media_player.den_sonos
-            - media_player.tiki_room
+            - media_player.tiki_room_3
           volume_level: 0.05
       - alias: "Enable Shuffle"
         continue_on_error: true
