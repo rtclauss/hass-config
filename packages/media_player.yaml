@@ -131,14 +131,14 @@ automation:
     action:
       - action: media_player.volume_set
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: media_player.bedroom_sonos
           # volume_level: >-
           # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
           # Fixed: the inner float() call now carries its own default of 0 so that
           # transient "unknown"/"unavailable" sensor states (e.g. cube waking up)
           # do not raise a ValueError and abort the automation.
           volume_level: >-
-            {{ (state_attr('media_player.bedroom_sonos_2', 'volume_level') + (float(trigger.to_state.state, 0)/1000)) | round(2) | float(default=0) }}
+            {{ (state_attr('media_player.bedroom_sonos', 'volume_level') + (float(trigger.to_state.state, 0)/1000)) | round(2) | float(default=0) }}
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
@@ -428,7 +428,7 @@ automation:
                   regroup_after_play: true
               - action: media_player.volume_set
                 target:
-                  entity_id: media_player.bathroom_sonos_2
+                  entity_id: media_player.bathroom_sonos
                 data:
                   volume_level: 0.30
         default:
@@ -436,7 +436,7 @@ automation:
           - alias: "Set Volume 0.1"
             action: media_player.volume_set
             target:
-              entity_id: media_player.bathroom_sonos_2
+              entity_id: media_player.bathroom_sonos
             data:
               volume_level: 0.1
           - action: script.spotify_wake_up
@@ -449,7 +449,7 @@ automation:
                 - alias: "Increase Volume by 0.01"
                   action: media_player.volume_set
                   target:
-                    entity_id: media_player.bathroom_sonos_2
+                    entity_id: media_player.bathroom_sonos
                   data:
                     volume_level: "{{ 0.01 * repeat.index }}"
                 - delay:
@@ -823,11 +823,7 @@ script:
       raw_media_type: "{{ media_type | default('') | trim }}"
       raw_enqueue: "{{ enqueue | default('replace') }}"
       normalized_item: >-
-        {% if raw_item.startswith('spotify:user:spotify:') %}
-          {{ 'spotify:' ~ raw_item.split('spotify:user:spotify:')[1] }}
-        {% else %}
-          {{ raw_item }}
-        {% endif %}
+        {{ 'spotify:' ~ raw_item.split('spotify:user:spotify:')[1] if raw_item.startswith('spotify:user:spotify:') else raw_item }}
     sequence:
       - choose:
           - conditions:
@@ -1099,6 +1095,7 @@ script:
         description: "Whether to regroup the bedroom wake-up zone after playback starts"
     variables:
       playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
+      volume_player: "{{ playback_player.replace('_sonos_2', '_sonos').replace('_2', '') }}"
       should_prepare_group_before_play: >-
         {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
       should_regroup_after_play: >-
@@ -1122,14 +1119,14 @@ script:
             continue_on_error: true
             data:
               entity_id:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
               volume_level: 0.01
         else:
           - action: media_player.volume_set
             continue_on_error: true
             data:
-              entity_id: "{{ playback_player }}"
+              entity_id: "{{ volume_player }}"
               volume_level: 0.01
       - if:
           - condition: template
@@ -1164,15 +1161,15 @@ script:
                       action: media_player.volume_set
                       data:
                         entity_id:
-                          - media_player.bedroom_sonos_2
-                          - media_player.bathroom_sonos_2
+                          - media_player.bedroom_sonos
+                          - media_player.bathroom_sonos
                         volume_level: "{{ 0.01 * repeat.index }}"
               default:
                 - alias: "Increase standalone wake-up volume by 0.01"
                   continue_on_error: true
                   action: media_player.volume_set
                   data:
-                    entity_id: "{{ playback_player }}"
+                    entity_id: "{{ volume_player }}"
                     volume_level: "{{ 0.01 * repeat.index }}"
             - delay:
                 seconds: "{{ (1/(tan(repeat.index/120))) | round(0, 'ceil', 5)}}"
@@ -1548,11 +1545,11 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.den_sonos_2
-            - media_player.office_sonos_2
-            - media_player.tiki_room_2
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.den_sonos
+            - media_player.office_sonos
+            - media_player.tiki_room
           volume_level: 0.30
       - alias: "Play arrival music via Music Assistant"
         action: script.music_assistant_play_spotify_uri
@@ -1721,10 +1718,10 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
-            - media_player.den_sonos_2
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
+            - media_player.den_sonos
           volume_level: 0.20
       - delay:
           seconds: 2
@@ -1767,10 +1764,10 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.office_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.den_sonos_2
+            - media_player.bedroom_sonos
+            - media_player.office_sonos
+            - media_player.bathroom_sonos
+            - media_player.den_sonos
           volume_level: 0.1
       - delay:
           minutes: 2
@@ -1778,18 +1775,18 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
           volume_level: 0.07
       - delay:
           minutes: 2
       - action: media_player.volume_set
         data:
           entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
           volume_level: 0.05
       - delay:
           minutes: 2
@@ -1797,9 +1794,9 @@ script:
         continue_on_error: true
         data:
           entity_id:
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
+            - media_player.bedroom_sonos
+            - media_player.bathroom_sonos
+            - media_player.office_sonos
           volume_level: 0.01
 
   spotify_wake_up:
@@ -1815,6 +1812,7 @@ script:
         description: "Whether to regroup the bedroom wake-up zone after playback starts"
     variables:
       playback_player: "{{ playback_entity_id | default('media_player.bedroom_sonos_2') }}"
+      volume_player: "{{ playback_player.replace('_sonos_2', '_sonos').replace('_2', '') }}"
       should_prepare_group_before_play: >-
         {{ prepare_group_before_play | default(playback_player == 'media_player.bedroom_sonos_2') | bool }}
       should_regroup_after_play: >-
@@ -1977,15 +1975,15 @@ script:
             action: media_player.volume_set
             data:
               entity_id:
-                - media_player.bedroom_sonos_2
-                - media_player.bathroom_sonos_2
-                - media_player.office_sonos_2
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
               volume_level: 0.05
         else:
           - continue_on_error: true
             action: media_player.volume_set
             data:
-              entity_id: "{{ playback_player }}"
+              entity_id: "{{ volume_player }}"
               volume_level: 0.05
       - delay:
           seconds: 2
