@@ -80,6 +80,45 @@ automation:
           detect_non_ha_changes: false
       - event: adaptive_lighting_startup_reconciled
 
+  - id: apply_adaptive_lighting_on_arrival
+    alias: apply_adaptive_lighting_on_arrival
+    description: >
+      Instantly correct color temperature and brightness for any lights that
+      turn on as part of home-arrival automations. Fires for all transport
+      modes (car, Uber, Lyft, walking) via the Bayesian presence sensor.
+      A 2-second delay lets arrival-scene transitions begin before the
+      adaptive apply fires. turn_on_lights=false ensures only lights that
+      are already transitioning on receive the correction; lights that remain
+      off are not disturbed. Resolves #486.
+    mode: single
+    trigger:
+      - trigger: zone
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
+      - trigger: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        state: "off"
+    action:
+      - delay:
+          seconds: 2
+      - action: adaptive_lighting.apply
+        data:
+          entity_id:
+            - switch.adaptive_lighting_kitchen
+            - switch.adaptive_lighting_den
+            - switch.adaptive_lighting_hallway
+            - switch.adaptive_lighting_owner_suite
+          adapt_brightness: true
+          adapt_color: true
+          turn_on_lights: false
+          transition: 1
+
   - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
     alias: sync_selected_inovelli_led_bars_to_adaptive_lighting
     description: >
