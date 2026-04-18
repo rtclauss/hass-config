@@ -26,6 +26,19 @@ def test_shared_notifications_mirror_to_lg_tv_only_when_on() -> None:
     assert "service: all" in text
     assert "service: notify_all" in text
     assert "trigger.event.data.service_data" in text
+    assert "notify_payload.title | default('Home Assistant', true)" in text
+    assert "notify_payload.data | default({}, true)" in text
     assert "entity_id: media_player.lg_webos_smart_tv" in text
     assert 'state: "on"' in text
     assert "action: notify.lg_webos_tv_oled65c4aua_dusqljr" in text
+
+
+def test_laundry_leak_dry_trigger_detects_return_to_dry() -> None:
+    text = ALERTS_PATH.read_text(encoding="utf-8")
+
+    assert (
+        'entity_id: binary_sensor.laundry_room_leak_water_leak\n'
+        '        from: "on"\n'
+        '        to: "off"\n'
+        "        id: dry"
+    ) in text

@@ -162,20 +162,12 @@ def test_bathroom_morning_routine_requires_time_window_and_fresh_state() -> None
 
 
 def test_bedroom_wakeup_group_is_guest_aware() -> None:
-    block = _script_block(MEDIA_PLAYER_PATH, "music_assistant_prepare_bedroom_group")
+    for script_id in ("spotify_wake_up", "music_assistant_radio_wake_up"):
+        block = _script_block(MEDIA_PLAYER_PATH, script_id)
 
-    for token in (
-        "media_player.unjoin",
-        "media_player.bedroom_sonos_2",
-        "media_player.bathroom_sonos_2",
-        "media_player.den_sonos_2",
-        "media_player.office_sonos_2",
-        "entity_id: input_boolean.guest_mode",
-        "state: \"off\"",
-        "Join bedroom suite into one group",
-        "Limit wake-up audio to bedroom and bathroom",
-    ):
-        assert token in block
+        assert "media_player.guest_sonos" in block
+        assert "media_player.everywhere_sonos" in block
+        assert "is_state('input_boolean.guest_mode', 'on')" in block
 
 
 def test_tv_bed_prep_is_guest_suppressed_and_defers_sleep_mode_shutdown() -> None:
