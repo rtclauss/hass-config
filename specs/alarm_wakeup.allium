@@ -71,6 +71,7 @@ entity OwnerSuiteWakeEnvironment {
     adaptive_lighting_enabled: Boolean
     sleep_mode_enabled: Boolean
     blinds_state: closed | opening | mostly_open
+    switch_leds_off: Boolean
 }
 
 entity HouseModeStateMachine {
@@ -217,6 +218,10 @@ rule FinishWakeupSequence {
     ensures: owner_suite.lighting_state = daytime
     ensures: owner_suite.sleep_mode_enabled = false
     ensures: owner_suite.adaptive_lighting_enabled = true
+    ensures:
+        if calendar.today_is_workday:
+            owner_suite.switch_leds_off = false
+        -- weekends: switch_leds_off remains true (set by goodnight integrity)
     @guidance
         -- Implementation turns off sleep mode and calls adaptive_lighting.apply
         -- with transition = config.morning_light_ramp_duration (3 minutes).
@@ -273,6 +278,10 @@ rule StartBathroomMorningRoutine {
     ensures: wakeup.morning_routine_started = true
     ensures: MorningAudioRequested(morning_playlist, bathroom)
     ensures: BathroomWakeupVolumeStrategyChosen(gentle_fade_in_or_existing_boost)
+    ensures:
+        if calendar.today_is_workday:
+            owner_suite.switch_leds_off = false
+        -- weekends: LED bars remain off; morning routine audio still plays
 }
 
 rule SnoozeWakeup {
