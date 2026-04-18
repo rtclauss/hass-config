@@ -182,21 +182,21 @@ def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:
     assert "number.owner_suite_bathroom_vanity_ledintensitywhenoff" not in block
 
 
-def test_bedroom_wakeup_group_is_guest_aware() -> None:
-    block = _script_block(MEDIA_PLAYER_PATH, "music_assistant_prepare_bedroom_group")
+def test_wakeup_audio_uses_guest_aware_sync_groups() -> None:
+    spotify_block = _script_block(MEDIA_PLAYER_PATH, "spotify_wake_up")
+    radio_block = _script_block(MEDIA_PLAYER_PATH, "music_assistant_radio_wake_up")
 
     for token in (
-        "media_player.unjoin",
-        "media_player.bedroom_sonos_2",
-        "media_player.bathroom_sonos_2",
-        "media_player.den_sonos_2",
-        "media_player.office_sonos_2",
-        "entity_id: input_boolean.guest_mode",
-        "state: \"off\"",
-        "Join bedroom suite into one group",
-        "Limit wake-up audio to bedroom and bathroom",
+        "input_boolean.guest_mode",
+        "media_player.guest_sonos",
+        "media_player.everywhere_sonos",
+        'entity_id: "{{ playback_player }}"',
     ):
-        assert token in block
+        assert token in spotify_block
+        assert token in radio_block
+
+    assert "media_player.unjoin" not in spotify_block
+    assert "media_player.unjoin" not in radio_block
 
 
 def test_tv_bed_prep_is_guest_suppressed_and_defers_sleep_mode_shutdown() -> None:

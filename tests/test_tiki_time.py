@@ -34,10 +34,10 @@ def test_tiki_time_uses_shared_music_assistant_helpers() -> None:
     block = _script_block("tiki_time")
 
     assert "Start the Tiki Time party mode" in block
-    assert "action: script.music_assistant_prepare_house_party_group" in block
     assert "action: script.music_assistant_play_item" in block
+    assert "action: script.music_assistant_prepare_house_party_group" not in block
     assert 'media_item: "somafm://radio/tikitime"' in block
-    assert "media_player.den_sonos_2" in block
+    assert "media_player.everywhere_sonos" in block
     assert "media_player.basement" in block
     assert "source: Photos" in block
     assert "flash: short" in block
