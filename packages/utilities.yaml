@@ -414,6 +414,59 @@ automation:
               data:
                 addon: d5369777_music_assistant
 
+  - alias: water_shutoff_on_trip
+    id: water_shutoff_on_trip
+    description: Close the water main valve when trip mode activates.
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "on"
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.basement_water_shutoff
+      - action: notify.all
+        data:
+          message: Water main shut off — trip mode active.
+
+  - alias: water_restore_on_return_home
+    id: water_restore_on_return_home
+    description: Reopen the water main valve when trip mode ends.
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: switch.basement_water_shutoff
+        state: "off"
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.basement_water_shutoff
+      - action: notify.all
+        data:
+          message: Water main restored — trip mode ended.
+
+  - alias: water_restore_on_guest_arrival
+    id: water_restore_on_guest_arrival
+    description: Reopen the water main valve when a guest arrives during a trip.
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.guest_mode
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: switch.basement_water_shutoff
+        state: "off"
+    action:
+      - action: switch.turn_on
+        target:
+          entity_id: switch.basement_water_shutoff
+      - action: notify.all
+        data:
+          message: Water main restored — guest arrived while on trip.
+
   - alias: Turn Sump Back On
     id: turn_sump_back_on
     trigger:
