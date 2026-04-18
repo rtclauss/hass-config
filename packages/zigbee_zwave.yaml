@@ -1718,6 +1718,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1726,6 +1728,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1734,6 +1738,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1742,6 +1748,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1868,6 +1876,62 @@ script:
         data:
           entity_id: >
             {{owner_suite_bedroom_on_led_switches}}
+          value: "170"
+
+  day_mode_switches_owner_suite_bathroom:
+    icon: mdi:light-switch
+    variables:
+      owner_suite_bathroom_off_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | selectattr('entity_id', 'search', '(owner_suite_bathroom_vanity|owner_suite_closet)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bathroom_on_led_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | selectattr('entity_id', 'search', '(owner_suite_bathroom_vanity|owner_suite_closet)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bathroom_led_intensity_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | selectattr('entity_id', 'search', '(owner_suite_bathroom_vanity|owner_suite_closet)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_bathroom_led_intensity_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | selectattr('entity_id', 'search', '(owner_suite_bathroom_vanity|owner_suite_closet)') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+    sequence:
+      - *trip_led_updates_allowed
+      - action: logbook.log
+        data:
+          entity_id: script.day_mode_switches_owner_suite_bathroom
+          name: Exclude log
+          message: "Setting owner suite bathroom and closet switch day mode colors"
+          domain: script
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bathroom_off_led_switches}}
+          value: "170"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bathroom_led_intensity_off_switches}}
+          value: "1"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bathroom_led_intensity_on_switches}}
+          value: "75"
+      - action: number.set_value
+        data:
+          entity_id: >
+            {{owner_suite_bathroom_on_led_switches}}
           value: "170"
 
   night_mode_switches_owner_suite:
@@ -2555,9 +2619,12 @@ script:
     variables:
       office_guest_room_day_mode_ready: >-
         {{ is_state('input_boolean.guest_mode', 'off') or now() >= today_at('12:00') }}
+      owner_suite_bathroom_day_mode_ready: >-
+        {{ now() >= today_at('08:00') and now().weekday() < 5 }}
       owner_suite_bedroom_day_mode_ready: >-
         {{
           now() >= today_at('08:00')
+          and now().weekday() < 5
           and is_state('binary_sensor.bayesian_bed_occupancy', 'off')
           and (
             is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
@@ -2595,6 +2662,13 @@ script:
               - action: script.turn_on
                 target:
                   entity_id: script.day_mode_switches_office_guest_room
+          - if:
+              - condition: template
+                value_template: "{{ owner_suite_bathroom_day_mode_ready }}"
+            then:
+              - action: script.turn_on
+                target:
+                  entity_id: script.day_mode_switches_owner_suite_bathroom
           - if:
               - condition: template
                 value_template: "{{ owner_suite_bedroom_day_mode_ready }}"
