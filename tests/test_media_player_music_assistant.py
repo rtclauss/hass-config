@@ -120,6 +120,20 @@ def test_spotify_wrapper_delegates_to_generic_music_assistant_helper() -> None:
     assert 'media_item: "{{ normalized_uri }}"' in block
 
 
+def test_bedroom_playlist_helper_logs_and_plays_selected_playlist() -> None:
+    block = _script_block("music_assistant_play_bedroom_playlist_choice")
+
+    for token in (
+        "playlist:",
+        "playlist_name:",
+        "Cube Playlist is",
+        "media_player.bedroom_sonos_2",
+        "script.music_assistant_play_spotify_uri",
+        'spotify_uri: "{{ playlist }}"',
+    ):
+        assert token in block
+
+
 def test_house_party_helper_is_stubbed_after_sync_group_migration() -> None:
     block = _script_block("music_assistant_prepare_house_party_group")
     common_block = _script_block("music_assistant_sync_group_migration_stub")
@@ -168,6 +182,7 @@ def test_arrival_music_targets_guest_aware_sync_group_without_regroup_retry() ->
 def test_bedtime_targets_guest_aware_sync_group_before_playing() -> None:
     block = _script_block("spotify_bedtime")
 
+    assert "bedtime_playback_entity" in block
     assert "media_player.guest_sonos" in block
     assert "media_player.everywhere_sonos" in block
     assert "input_boolean.guest_mode" in block
@@ -276,6 +291,7 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     assert "range(0, (plists | length))" in block
     assert "action: script.music_assistant_play_item" in block
     assert 'media_item: "{{ playlist }}"' in block
+    assert 'media_type: "{{ bedtime_media_type }}"' in block
     assert "playlist.startswith('https://somafm.com/')" in block
 
 
@@ -338,6 +354,37 @@ def test_bedroom_playlist_scripts_use_sequence_level_random_selection() -> None:
         # Sequence must begin with a variables action containing playlist
         assert "      - variables:" in block, f"{script_id}: missing sequence-level variables action"
         assert "          playlist: >-" in block, f"{script_id}: missing sequence-level playlist"
+        assert (
+            "action: script.music_assistant_play_bedroom_playlist_choice" in block
+        ), f"{script_id}: missing shared bedroom playlist playback helper"
+        assert "action: logbook.log" not in block, f"{script_id}: should delegate logging"
+        assert (
+            "action: script.music_assistant_play_spotify_uri" not in block
+        ), f"{script_id}: should delegate Music Assistant playback"
+
+
+def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    for token in (
+        "bedtime_rampdown_steps:",
+        "delay_minutes: 0",
+        "delay_minutes: 2",
+        "volume_level: 0.1",
+        "volume_level: 0.07",
+        "volume_level: 0.05",
+        "volume_level: 0.01",
+        "repeat:",
+        'for_each: "{{ bedtime_rampdown_steps }}"',
+        'minutes: "{{ repeat.item.delay_minutes }}"',
+        'entity_id: "{{ repeat.item.entity_id }}"',
+        'volume_level: "{{ repeat.item.volume_level }}"',
+    ):
+        assert token in block
+
+    assert block.count("- delay:") == 1
+    assert block.count("action: media_player.volume_set") == 2
+    assert "continue_on_error: false" in block
 
 
 def test_arrival_and_wakeup_scripts_use_sequence_level_playlist_selection() -> None:
