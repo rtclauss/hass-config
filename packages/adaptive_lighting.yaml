@@ -90,8 +90,10 @@ automation:
       adaptive apply fires. Empty-house arrivals can apply across all
       configured arrival switches; occupied-house arrivals only apply to
       configured lights that Adaptive Lighting has not marked as manually
-      controlled. turn_on_lights=false keeps off lights undisturbed. Resolves
-      #486.
+      controlled. If the bed is occupied, only common-area arrival switches
+      are eligible so the owner suite is not disturbed. Arrival only applies
+      to switches that are already enabled; turn_on_lights=false keeps off
+      lights undisturbed. Resolves #486.
     mode: single
     trigger:
       - trigger: zone
@@ -104,10 +106,6 @@ automation:
         entity_id: binary_sensor.bayesian_zeke_home
         from: "off"
         to: "on"
-    condition:
-      - condition: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
-        state: "off"
     action:
       - variables:
           arrival_home_was_empty: >-
@@ -123,29 +121,49 @@ automation:
                 and is_state('binary_sensor.bayesian_zeke_home', 'off')
               )
             }}
-          arrival_adaptive_switches:
+          arrival_common_adaptive_switches:
             - switch.adaptive_lighting_kitchen
             - switch.adaptive_lighting_den
             - switch.adaptive_lighting_hallway
+          arrival_owner_suite_adaptive_switches:
             - switch.adaptive_lighting_owner_suite
+      - variables:
+          arrival_adaptive_switches: >-
+            {{
+              arrival_common_adaptive_switches
+              + (
+                arrival_owner_suite_adaptive_switches
+                if is_state('binary_sensor.bayesian_bed_occupancy', 'off')
+                else []
+              )
+            }}
+      - variables:
+          arrival_enabled_adaptive_switches: >-
+            {% set enabled = namespace(switches=[]) %}
+            {% for adaptive_switch in arrival_adaptive_switches %}
+              {% if is_state(adaptive_switch, 'on') %}
+                {% set enabled.switches = enabled.switches + [adaptive_switch] %}
+              {% endif %}
+            {% endfor %}
+            {{ enabled.switches }}
       - delay:
           seconds: 2
       - choose:
           - alias: "Apply globally when this arrival starts from an empty house"
             conditions:
               - condition: template
-                value_template: "{{ arrival_home_was_empty }}"
+                value_template: "{{ arrival_home_was_empty and arrival_enabled_adaptive_switches | count > 0 }}"
             sequence:
               - action: adaptive_lighting.apply
                 data:
-                  entity_id: "{{ arrival_adaptive_switches }}"
+                  entity_id: "{{ arrival_enabled_adaptive_switches }}"
                   adapt_brightness: true
                   adapt_color: true
                   turn_on_lights: false
                   transition: 1
         default:
           - repeat:
-              for_each: "{{ arrival_adaptive_switches }}"
+              for_each: "{{ arrival_enabled_adaptive_switches }}"
               sequence:
                 - variables:
                     configured_arrival_lights: >-
