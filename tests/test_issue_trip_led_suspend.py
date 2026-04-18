@@ -91,13 +91,17 @@ def test_trip_restore_script_reuses_existing_day_and_night_profiles() -> None:
         "script.night_tv_mode_switches",
         "script.day_mode_switches_general",
         "script.day_mode_switches_office_guest_room",
-        "script.day_mode_switches_owner_suite_bedroom",
+        "script.apply_owner_suite_inovelli_led_policy",
         "is_state('input_boolean.guest_mode', 'off')",
         "today_at('12:00')",
+        "owner_suite_bathroom_day_mode_ready",
+        "binary_sensor.workday_sensor",
         "binary_sensor.bayesian_bed_occupancy",
         "binary_sensor.bedroom_occupancy",
         "binary_sensor.owner_suite_bathroom_room_occupancy",
         "today_at('08:00')",
+        "scope: bathroom",
+        "scope: bedroom",
     ):
         assert token in block
 
@@ -108,6 +112,8 @@ def test_trip_mode_blocks_day_and_night_led_scripts_from_relighting_switches() -
         "day_mode_switches",
         "day_mode_switches_general",
         "day_mode_switches_owner_suite_bedroom",
+        "day_mode_switches_owner_suite_bathroom",
+        "day_mode_switches_owner_suite_scope",
         "day_mode_switches_office_guest_room",
     ):
         block = _script_block(script_id)
@@ -118,4 +124,5 @@ def test_trip_mode_blocks_day_and_night_led_scripts_from_relighting_switches() -
                 block,
             )
             or "*trip_led_updates_allowed" in block
+            or "script.day_mode_switches_owner_suite_scope" in block
         ), f"{script_id} should stop when trip mode is active"

@@ -159,3 +159,18 @@ def test_goodnight_integrity_verifies_guest_sleep_and_away_preset_exceptions() -
         "Ecobee is still in an away preset during bedtime.",
     ):
         assert token in block
+
+
+def test_night_routines_spec_owns_owner_suite_led_policy_enum() -> None:
+    text = (ROOT / "specs" / "night_routines.allium").read_text(encoding="utf-8")
+
+    for token in (
+        "enum OwnerSuiteSwitchLedMode { dark | night_red | day }",
+        "owner_suite_switch_led_mode: OwnerSuiteSwitchLedMode",
+        "ensures: house.owner_suite_switch_led_mode = dark",
+        "rule RestoreOwnerSuiteSwitchLedsToNightRed",
+        "rule ApplyOwnerSuiteWorkdayMorningLedPolicy",
+        "today_is_workday is holiday-aware",
+        "rule KeepOwnerSuiteSwitchLedsDarkOnNonWorkdayMornings",
+    ):
+        assert token in text

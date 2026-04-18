@@ -346,7 +346,8 @@ def test_inovelli_led_recovery_replays_trip_day_night_and_owner_suite_darkening(
         "owner_suite_leds_should_be_dark",
         "binary_sensor.bayesian_bed_occupancy",
         "light.owner_suite_lamps",
-        "script.turn_off_owner_suite_inovelli_switch_leds",
+        "script.apply_owner_suite_inovelli_led_policy",
+        "policy: dark",
     ):
         assert token in block
 
