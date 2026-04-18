@@ -686,6 +686,18 @@ automation:
           seconds: 30
         id: "east_bed_off"
       - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        to: "off"
+        for:
+          seconds: 10
+        id: "east_bed_left_bed"
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        to: "on"
+        for:
+          seconds: 10
+        id: "east_bed_back_in_bed"
+      - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: sensor.east_bed_button_action
         to: "1_short_release"
@@ -767,6 +779,9 @@ automation:
               - condition: state
                 entity_id: input_boolean.west_bed_occupied
                 state: "on"
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
               - condition: or
                 conditions:
                   - condition: sun
@@ -780,6 +795,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: west_bed_back_in_bed
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
               - condition: or
                 conditions:
                   - condition: sun
@@ -790,6 +808,41 @@ automation:
               - action: light.turn_off
                 data:
                   entity_id: light.owner_suite_lamp_bulb_1
+          - conditions:
+              - condition: trigger
+                id: east_bed_left_bed
+              - condition: state
+                entity_id: input_boolean.east_bed_occupied
+                state: "on"
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_2
+          - conditions:
+              - condition: trigger
+                id: east_bed_back_in_bed
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_2
           # control the lights
           - conditions:
               - condition: trigger
