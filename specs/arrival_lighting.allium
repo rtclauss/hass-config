@@ -4,9 +4,10 @@
 -- Scope: Adaptive lighting application on resident home arrival.
 -- Includes:
 --   - instant adaptive lighting correction when arrival lights turn on
---   - adaptive lighting switch enforcement for all participating rooms after arrival
+--   - preserving the existing enabled/disabled state of participating adaptive lighting switches
 -- Excludes:
 --   - which specific lights turn on on arrival (governed by house_transition and scenes)
+--   - dining room adaptive lighting, which is governed by its own scene-safe tuning
 --   - transport mode detection and presence-sensor logic
 --   - audio, climate, and security behaviour on arrival
 
@@ -46,12 +47,17 @@ config {
 
 rule ApplyAdaptiveLightingOnArrival {
     when: ResidentArrivedHome()
-    requires: not arrival.bed_occupied
     ensures: ArrivalAdaptiveLightingApplied()
     @guidance
         -- A delay of config.arrival_adaptive_delay lets arrival-scene actions
         -- begin turning on lights before the adaptive correction fires.
-        -- Rooms in scope: kitchen, den, hallway, owner suite.
+        -- Rooms in scope for normal arrivals: kitchen, den, hallway, owner
+        -- suite. Dining room remains out of scope.
+        -- If bed_occupied is true, the owner suite is excluded, but common
+        -- areas (kitchen, den, hallway) still receive adaptive correction.
+        -- The implementation only applies to participating adaptive lighting
+        -- switches that are already enabled; arrival never re-enables a
+        -- disabled adaptive lighting switch.
         -- If the house was empty before this arrival, the apply may target
         -- each room's adaptive lighting switch globally with
         -- adapt_brightness=true, adapt_color=true, turn_on_lights=false, and
@@ -69,7 +75,6 @@ rule ApplyAdaptiveLightingOnArrival {
 
 rule PreserveManualLightingDuringOccupiedArrival {
     when: ResidentArrivedHome()
-    requires: not arrival.bed_occupied
     requires: not arrival.home_was_empty_before_arrival
     ensures: ManualControlledArrivalLightsPreserved()
     @guidance
@@ -81,20 +86,22 @@ rule PreserveManualLightingDuringOccupiedArrival {
 
 rule PreserveAdaptiveLightingAfterArrival {
     when: ArrivalAdaptiveLightingApplied()
-    ensures: ArrivalRoomAdaptiveSwitchesEnabled()
+    ensures: ArrivalRoomAdaptiveSwitchStatePreserved()
     @guidance
-        -- All room adaptive lighting switches (kitchen, den, hallway, owner
-        -- suite) must remain enabled after arrival so subsequent light events —
-        -- motion triggers, manual presses, and timed automations — receive
-        -- adaptive color and brightness updates without requiring an explicit
-        -- re-enable. The arrival adaptive apply does not disable any switch,
-        -- so this obligation is satisfied as long as no other automation
-        -- disables a switch during the arrival sequence.
+        -- Arrival adaptive correction does not toggle adaptive lighting
+        -- switches. Enabled switches remain enabled, and disabled switches
+        -- remain disabled until another explicit owner action or maintenance
+        -- automation changes them.
 }
 
-------------------------------------------------------------
--- Open Questions
-------------------------------------------------------------
-
-open question "Should the dining room adaptive lighting switch also be included in the arrival apply scope, or only rooms with interior lights in the arrival scenes?"
-open question "If bed_occupied is true on arrival (unusual), should adaptive lighting still be applied to non-bedroom rooms (kitchen, den, hallway)?"
+rule SyncSelectedInovelliLedBarsToAdaptiveLighting {
+    when: AdaptiveLightingTargetChanged(room)
+    requires: room in {owner_suite, office}
+    requires: not arrival.bed_occupied
+    ensures: SelectedInovelliLedBarsMirrorAdaptiveLighting(room)
+    @guidance
+        -- Selected Inovelli LED bars in owner suite and office mirror the
+        -- current adaptive-lighting target color and brightness. The
+        -- implementation suppresses this sync during trip mode, sleep mode,
+        -- guest-mode office privacy, and owner-suite late-night quiet windows.
+}

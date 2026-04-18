@@ -32,6 +32,9 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
             "rule TriggerGoodnightFromCPAPSleep",
             "rule EnterAsleepHouseModeFromBedsideShutdown",
             "rule ApplyGoodnightIntegrity",
+            "owner_suite_switch_led_mode: OwnerSuiteSwitchLedMode",
+            "enum OwnerSuiteSwitchLedMode { dark | night_red | day }",
+            "rule ApplyOwnerSuiteWorkdayMorningLedPolicy",
             "wait_for_bathroom_visit_or_timeout",
         ],
         "arrival_lighting.allium": [
@@ -40,6 +43,8 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
             "home_was_empty_before_arrival: Boolean",
             "rule ApplyAdaptiveLightingOnArrival",
             "rule PreserveManualLightingDuringOccupiedArrival",
+            "ArrivalRoomAdaptiveSwitchStatePreserved",
+            "rule SyncSelectedInovelliLedBarsToAdaptiveLighting",
             "manual_control attribute",
         ],
         "z2m_lifecycle.allium": [

@@ -1607,7 +1607,7 @@ automation:
                     - light.hall_upstairs_switch
                     - light.hall_stairway
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_owner_suite
+                  entity_id: switch.adaptive_lighting_hallway
                   adapt_brightness: true
                   adapt_color: true
                   turn_on_lights: true
@@ -1697,17 +1697,14 @@ automation:
         target:
           entity_id: script.day_mode_switches_general
       - if:
-          - condition: time
-            weekday:
-              - mon
-              - tue
-              - wed
-              - thu
-              - fri
+          - condition: state
+            entity_id: binary_sensor.workday_sensor
+            state: "on"
         then:
-          - action: script.turn_on
-            target:
-              entity_id: script.day_mode_switches_owner_suite_bathroom
+          - action: script.apply_owner_suite_inovelli_led_policy
+            data:
+              policy: day
+              scope: bathroom
       - if:
           - condition: state
             entity_id: input_boolean.guest_mode
@@ -1751,12 +1748,9 @@ automation:
       - condition: time
         after: "07:59:59"
         before: "12:00:00"
-        weekday:
-          - mon
-          - tue
-          - wed
-          - thu
-          - fri
+      - condition: state
+        entity_id: binary_sensor.workday_sensor
+        state: "on"
       - condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
@@ -1767,9 +1761,10 @@ automation:
         {{ is_state('binary_sensor.bedroom_occupancy', 'on')
            or states.binary_sensor.bedroom_occupancy.last_changed >= today_at('08:00') }}
     action:
-      - action: script.turn_on
-        target:
-          entity_id: script.day_mode_switches_owner_suite_bedroom
+      - action: script.apply_owner_suite_inovelli_led_policy
+        data:
+          policy: day
+          scope: bedroom
 
   - alias: owner_suite_switch_leds_red_when_lamps_on_at_night
     id: owner_suite_switch_leds_red_when_lamps_on_at_night
@@ -1783,9 +1778,9 @@ automation:
         after: "22:00:00"
         before: "06:00:00"
     action:
-      - action: script.turn_on
-        target:
-          entity_id: script.night_mode_switches_owner_suite
+      - action: script.apply_owner_suite_inovelli_led_policy
+        data:
+          policy: night_red
 
   - alias: button_reset_basement
     id: button_reset_basement
@@ -1875,7 +1870,9 @@ automation:
             after: "22:00:00"
             before: "06:00:00"
         then:
-          - action: script.turn_off_owner_suite_inovelli_switch_leds
+          - action: script.apply_owner_suite_inovelli_led_policy
+            data:
+              policy: dark
 
   - id: turn_on_bedroom_light_when_leave_bathroom
     alias: turn_on_bedroom_light_when_leave_bathroom

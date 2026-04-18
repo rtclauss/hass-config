@@ -92,6 +92,12 @@ def test_phone_alarm_sync_uses_holiday_calendar_to_compute_tomorrow_workday() ->
         assert token in block
 
 
+def test_alarm_spec_documents_today_workday_as_holiday_aware() -> None:
+    text = (ROOT / "specs" / "alarm_wakeup.allium").read_text(encoding="utf-8")
+
+    assert "Holiday-aware: true only on a weekday that is not a configured holiday." in text
+
+
 def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> None:
     block = _automation_block(WORKDAY_PATH, "alarm_wake_up")
 
@@ -159,6 +165,21 @@ def test_bathroom_morning_routine_requires_time_window_and_fresh_state() -> None
         '- "sun"',
     ):
         assert token in block
+
+
+def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    for token in (
+        "binary_sensor.workday_sensor",
+        "script.apply_owner_suite_inovelli_led_policy",
+        "policy: day",
+        "scope: bathroom",
+        "script.day_mode_switches_office_guest_room",
+    ):
+        assert token in block
+
+    assert "number.owner_suite_bathroom_vanity_ledintensitywhenoff" not in block
 
 
 def test_bedroom_wakeup_group_is_guest_aware() -> None:

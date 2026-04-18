@@ -51,3 +51,17 @@ def test_owner_suite_light_auto_on_uses_home_presence_sensor() -> None:
     assert "manual_control: false" in block
     assert "\n          brightness_pct:" not in block
     assert "\n          color_temp_kelvin:" not in block
+
+
+def test_upstairs_hallway_motion_uses_hallway_adaptive_lighting_switch() -> None:
+    block = _automation_block("toggle_hallway_day")
+
+    upstairs_branch = block.split("condition: trigger\n                id: upstairs-motion-sensed", maxsplit=1)[1].split(
+        "id: upstairs-motion-not-detected",
+        maxsplit=1,
+    )[0]
+
+    assert "light.hall_upstairs_switch" in upstairs_branch
+    assert "light.hall_stairway" in upstairs_branch
+    assert "entity_id: switch.adaptive_lighting_hallway" in upstairs_branch
+    assert "entity_id: switch.adaptive_lighting_owner_suite" not in upstairs_branch

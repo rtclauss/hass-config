@@ -185,7 +185,9 @@ automation:
       - action: script.turn_on
         data:
           entity_id: script.night_tv_mode_switches
-      - action: script.turn_off_owner_suite_inovelli_switch_leds
+      - action: script.apply_owner_suite_inovelli_led_policy
+        data:
+          policy: dark
       - action: script.turn_on
         data:
           entity_id: script.spotify_bedtime_volume
@@ -407,24 +409,17 @@ automation:
         target:
           entity_id: input_boolean.morning_routine
       - if:
-          - condition: time
-            weekday:
-              - mon
-              - tue
-              - wed
-              - thu
-              - fri
+          - condition: state
+            entity_id: binary_sensor.workday_sensor
+            state: "on"
         then:
-          - action: number.set_value
-            target:
-              entity_id:
-                - number.owner_suite_closet_ledintensitywhenoff
-                - number.owner_suite_fan_switch_ledintensitywhenoff
-                - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-                - number.office_fan_switch_ledintensitywhenoff
-                - number.guest_room_fan_switch_ledintensitywhenoff
+          - action: script.apply_owner_suite_inovelli_led_policy
             data:
-              value: 1
+              policy: day
+              scope: bathroom
+          - action: script.turn_on
+            target:
+              entity_id: script.day_mode_switches_office_guest_room
       - choose:
           # If the bathroom already had audible playback, skip the long fade-in.
           - conditions:
