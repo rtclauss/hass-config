@@ -35,13 +35,13 @@ def test_dining_room_confidence_uses_bermuda_area_without_local_motion_weight() 
 
     assert "sensor.iphone_17_pro_area" in block
     assert "sensor.apple_watch_ultra_2_area" in block
-    assert "dining_area_names = ['dining room']" in block
+    assert "dining_area_names = ['dining room', 'living room']" in block
     assert "score.value = score.value + 45" in block
     assert "score.value = score.value + 10" in block
     assert "score.value = score.value + 5" in block
     assert "binary_sensor.dining_room_bt_proxy_dining_room_bluetooth_proxy_status" in block
     assert "_occupancy" not in block
-    assert "living room" not in block
+    assert "living room" in block
 
 
 def test_dining_room_confident_occupancy_threshold_matches_other_rooms() -> None:
