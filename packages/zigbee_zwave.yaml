@@ -2772,28 +2772,20 @@ script:
                   - number.guest_room_fan_switch_ledintensitywhenoff
           initial_grace_period: 30
           expected_state: 0
-      - delay:
-          seconds: 30
-      - action: number.set_value
-        entity_id:
-          - number.owner_suite_closet_ledintensitywhenoff
-          - number.owner_suite_fan_switch_ledintensitywhenoff
-          - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-          - number.office_fan_switch_ledintensitywhenoff
-          - number.guest_room_fan_switch_ledintensitywhenoff
-        data:
-          value: 0
-      - delay:
-          seconds: 30
-      - action: number.set_value
-        entity_id:
-          - number.owner_suite_closet_ledintensitywhenoff
-          - number.owner_suite_fan_switch_ledintensitywhenoff
-          - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-          - number.office_fan_switch_ledintensitywhenoff
-          - number.guest_room_fan_switch_ledintensitywhenoff
-        data:
-          value: 0
+      - repeat:
+          count: 2
+          sequence:
+            - delay:
+                seconds: 30
+            - action: number.set_value
+              entity_id:
+                - number.owner_suite_closet_ledintensitywhenoff
+                - number.owner_suite_fan_switch_ledintensitywhenoff
+                - number.owner_suite_bathroom_vanity_ledintensitywhenoff
+                - number.office_fan_switch_ledintensitywhenoff
+                - number.guest_room_fan_switch_ledintensitywhenoff
+              data:
+                value: 0
 
 ########################
 # REST Command

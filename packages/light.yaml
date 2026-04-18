@@ -1211,13 +1211,18 @@ automation:
       condition: and
       conditions:
         - condition: state
-          entity_id: input_boolean.owner_suite_bedroom_auto_on
-          state: "on"
-        - condition: state
           entity_id: binary_sensor.bayesian_bed_occupancy
           # entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
           # enabled: false
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: input_boolean.owner_suite_bedroom_auto_on
+              state: "on"
+            - condition: time
+              after: "00:06:00"
+              before: "12:00:00"
     action:
       - action: light.turn_off
         data:
@@ -1229,38 +1234,14 @@ automation:
       - action: fan.turn_off
         target:
           entity_id: fan.owner_suite
-      - action: input_boolean.turn_off
-        data:
-          entity_id: input_boolean.owner_suite_bedroom_auto_on
-
-  - id: owner_suite_light_auto_off_in_morning
-    alias: owner_suite_light_auto_off_in_morning
-    trigger:
-      - trigger: state
-        entity_id: binary_sensor.bedroom_occupancy
-        to: "off"
-    condition:
-      condition: and
-      conditions:
-        - condition: time
-          after: "00:06:00"
-          before: "12:00:00"
-        - condition: state
-          entity_id: binary_sensor.bayesian_bed_occupancy
-          # entity_id: input_boolean.chatgpt_bed_occupied
-          state: "off"
-          # enabled: false
-    action:
-      - action: fan.turn_off
-        target:
-          entity_id: fan.owner_suite
-      - action: light.turn_off
-        data:
-          entity_id:
-            - light.owner_suite_lamps
-            - light.owner_suite_ceiling
-            - light.owner_suite_closet
-            - light.bed_lightstrip
+      - if:
+          - condition: state
+            entity_id: input_boolean.owner_suite_bedroom_auto_on
+            state: "on"
+        then:
+          - action: input_boolean.turn_off
+            data:
+              entity_id: input_boolean.owner_suite_bedroom_auto_on
 
   # - id: owner_suite_light_auto_boolean_off
   #   alias: owner_suite_light_auto_boolean_off

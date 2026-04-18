@@ -667,17 +667,27 @@ script:
             - media_player.den_sonos_2
             - media_player.tiki_room_2
 
+  music_assistant_sync_group_migration_stub:
+    alias: "Log disabled Music Assistant sync-group migration helper"
+    fields:
+      caller_entity_id:
+        description: "Deprecated helper script entity that was called"
+    sequence:
+      - action: logbook.log
+        data:
+          name: "Sync Group Migration"
+          message: "{{ caller_entity_id | default(this.entity_id) }} called but disabled — targeting sync groups directly now"
+          domain: script
+
   music_assistant_prepare_bedroom_group:
     alias: "Prepare bedroom Music Assistant group"
     mode: restart
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_prepare_bedroom_group
 
   music_assistant_try_join_bedroom_group_after_play:
     alias: "Try joining bedroom Music Assistant followers after playback"
@@ -685,33 +695,27 @@ script:
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_try_join_bedroom_group_after_play
 
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_prepare_arrival_group
 
   music_assistant_prepare_house_party_group:
     alias: "Prepare house party Music Assistant group"
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_prepare_house_party_group
 
   music_assistant_play_item:
     alias: "Play Music Assistant item"

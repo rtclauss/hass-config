@@ -53,6 +53,23 @@ def test_owner_suite_light_auto_on_uses_home_presence_sensor() -> None:
     assert "\n          color_temp_kelvin:" not in block
 
 
+def test_owner_suite_light_auto_off_combines_latch_and_morning_paths() -> None:
+    package = LIGHT_PATH.read_text(encoding="utf-8")
+    block = _automation_block("owner_suite_light_auto_off")
+
+    assert "owner_suite_light_auto_off_in_morning" not in package
+    assert "binary_sensor.bedroom_occupancy" in block
+    assert "binary_sensor.bayesian_bed_occupancy" in block
+    assert "condition: or" in block
+    assert "input_boolean.owner_suite_bedroom_auto_on" in block
+    assert 'after: "00:06:00"' in block
+    assert 'before: "12:00:00"' in block
+    assert "action: light.turn_off" in block
+    assert "light.owner_suite_lamps" in block
+    assert "fan.owner_suite" in block
+    assert "action: input_boolean.turn_off" in block
+
+
 def test_upstairs_hallway_motion_uses_hallway_adaptive_lighting_switch() -> None:
     block = _automation_block("toggle_hallway_day")
 

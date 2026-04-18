@@ -122,26 +122,35 @@ def test_spotify_wrapper_delegates_to_generic_music_assistant_helper() -> None:
 
 def test_house_party_helper_is_stubbed_after_sync_group_migration() -> None:
     block = _script_block("music_assistant_prepare_house_party_group")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
 
-    assert "Sync Group Migration" in block
-    assert "targeting sync groups directly now" in block
+    assert "script.music_assistant_sync_group_migration_stub" in block
+    assert "caller_entity_id: script.music_assistant_prepare_house_party_group" in block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
     assert "action: media_player.join" not in block
 
 
 def test_bedroom_group_helper_is_restartable_migration_stub() -> None:
     block = _script_block("music_assistant_prepare_bedroom_group")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
 
     assert 'mode: restart' in block
-    assert "Sync Group Migration" in block
-    assert "targeting sync groups directly now" in block
+    assert "script.music_assistant_sync_group_migration_stub" in block
+    assert "caller_entity_id: script.music_assistant_prepare_bedroom_group" in block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
     assert "action: media_player.unjoin" not in block
 
 
 def test_arrival_group_helper_is_stubbed_after_sync_group_migration() -> None:
     block = _script_block("music_assistant_prepare_arrival_group")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
 
-    assert "Sync Group Migration" in block
-    assert "targeting sync groups directly now" in block
+    assert "script.music_assistant_sync_group_migration_stub" in block
+    assert "caller_entity_id: script.music_assistant_prepare_arrival_group" in block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
     assert "action: media_player.unjoin" not in block
 
 
@@ -171,11 +180,14 @@ def test_bedtime_targets_guest_aware_sync_group_before_playing() -> None:
 
 def test_bedtime_join_retry_helper_is_stubbed_after_sync_group_migration() -> None:
     helper_block = _script_block("music_assistant_try_join_bedroom_group_after_play")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
     bedtime_block = _script_block("spotify_bedtime")
 
     assert 'mode: restart' in helper_block
-    assert "Sync Group Migration" in helper_block
-    assert "targeting sync groups directly now" in helper_block
+    assert "script.music_assistant_sync_group_migration_stub" in helper_block
+    assert "caller_entity_id: script.music_assistant_try_join_bedroom_group_after_play" in helper_block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in bedtime_block
 
 
