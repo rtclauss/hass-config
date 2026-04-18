@@ -172,6 +172,46 @@ automation:
                         turn_on_lights: false
                         transition: 1
 
+  - id: nightly_adaptive_lighting_cycle_reset
+    alias: nightly_adaptive_lighting_cycle_reset
+    description: >
+      Nightly at 4 AM, cycle every main adaptive lighting switch off then back on
+      to unstick color or brightness matching that has drifted. A startup trigger
+      acts as a recovery path: if HA restarts during the 10-second off window the
+      next boot immediately re-enables all switches so they are never stranded off.
+      Control switches (sleep_mode, adapt_brightness, adapt_color) are excluded to
+      preserve their settings. At 4 AM nearly all lights are off so no downstream
+      on/off transitions occur when the switches are re-enabled.
+    mode: single
+    trigger:
+      - trigger: time
+        id: nightly-cycle
+        at: "04:00:00"
+      - trigger: homeassistant
+        id: ha-start
+        event: start
+    variables:
+      main_adaptive_switches:
+        - switch.adaptive_lighting_basement
+        - switch.adaptive_lighting_den
+        - switch.adaptive_lighting_hallway
+        - switch.adaptive_lighting_kitchen
+        - switch.adaptive_lighting_office
+        - switch.adaptive_lighting_owner_suite
+        - switch.dining_room_adaptive_lighting_dining_room
+    action:
+      - if:
+          - condition: trigger
+            id: nightly-cycle
+        then:
+          - action: switch.turn_off
+            target:
+              entity_id: "{{ main_adaptive_switches }}"
+          - delay: "00:00:10"
+      - action: switch.turn_on
+        target:
+          entity_id: "{{ main_adaptive_switches }}"
+
   - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
     alias: sync_selected_inovelli_led_bars_to_adaptive_lighting
     description: >
