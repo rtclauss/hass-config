@@ -406,16 +406,25 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.morning_routine
-      - action: number.set_value
-        target:
-          entity_id:
-            - number.owner_suite_closet_ledintensitywhenoff
-            - number.owner_suite_fan_switch_ledintensitywhenoff
-            - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-            - number.office_fan_switch_ledintensitywhenoff
-            - number.guest_room_fan_switch_ledintensitywhenoff
-        data:
-          value: 1
+      - if:
+          - condition: time
+            weekday:
+              - mon
+              - tue
+              - wed
+              - thu
+              - fri
+        then:
+          - action: number.set_value
+            target:
+              entity_id:
+                - number.owner_suite_closet_ledintensitywhenoff
+                - number.owner_suite_fan_switch_ledintensitywhenoff
+                - number.owner_suite_bathroom_vanity_ledintensitywhenoff
+                - number.office_fan_switch_ledintensitywhenoff
+                - number.guest_room_fan_switch_ledintensitywhenoff
+            data:
+              value: 1
       - choose:
           # If the bathroom already had audible playback, skip the long fade-in.
           - conditions:
