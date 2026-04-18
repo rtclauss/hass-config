@@ -782,6 +782,26 @@ script:
           media_item: "{{ normalized_uri }}"
           enqueue: "{{ enqueue | default('replace') }}"
 
+  music_assistant_play_bedroom_playlist_choice:
+    alias: "Play bedroom playlist choice via Music Assistant"
+    fields:
+      playlist:
+        description: "Spotify URI selected by a bedroom playlist script"
+      playlist_name:
+        description: "Human-readable playlist group name for logbook"
+    sequence:
+      - action: logbook.log
+        data:
+          entity_id: media_player.bedroom_sonos_2
+          domain: media_player
+          name: Cube Playlist is
+          message: " playing {{ playlist_name }} playlist: {{ playlist }}"
+      - alias: "Play playlist via Music Assistant"
+        action: script.music_assistant_play_spotify_uri
+        data:
+          entity_id: media_player.bedroom_sonos_2
+          spotify_uri: "{{ playlist }}"
+
   music_assistant_search_music:
     alias: "Search Music Assistant"
     sequence:
@@ -1067,17 +1087,10 @@ script:
                 ] -%}
               {% set pindex =  (range(0, (plists | length) )|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Lowfi playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Lowfi
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_1:
     alias: "Play Guster"
@@ -1111,17 +1124,10 @@ script:
             ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Guster playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Guster
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_2:
     alias: "Play Joe Pera"
@@ -1141,17 +1147,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Joe Pera playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Joe Pera
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_3:
     alias: "Play VaporWave and Retro"
@@ -1171,17 +1170,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing RetroWave playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: RetroWave
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_4:
     alias: "Play Alt/Independent"
@@ -1215,17 +1207,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Alt/Independent playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Alt/Independent
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_5:
     alias: "Play LoFi"
@@ -1251,17 +1236,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Lowfi playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Lowfi
+          playlist: "{{ playlist }}"
 
   play_video_games:
     alias: "Play Video Games"
@@ -1560,12 +1538,15 @@ script:
               ] -%}
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
+      - variables:
+          bedtime_playback_entity: >-
+            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.everywhere_sonos' }}
+          bedtime_media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
       - action: media_player.shuffle_set
         continue_on_error: true
         target:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
         data:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1576,9 +1557,7 @@ script:
         data:
           repeat: all
         target:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
       - delay:
           seconds: 2
       - action: media_player.volume_set
@@ -1594,20 +1573,16 @@ script:
           seconds: 2
       - action: logbook.log
         data:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
           domain: media_player
           name: Spotify Bedtime is
           message: " playing Bedtime playlist: {{ playlist }}"
       - alias: "Play bedtime music on sync group"
         action: script.music_assistant_play_item
         data:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
           media_item: "{{ playlist }}"
-          media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
+          media_type: "{{ bedtime_media_type }}"
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
@@ -1628,44 +1603,61 @@ script:
   spotify_bedtime_volume:
     alias: "Spotify Bedtime Rampdown"
     sequence:
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.office_sonos
-            - media_player.bathroom_sonos
-            - media_player.den_sonos
-          volume_level: 0.1
-      - delay:
-          minutes: 2
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-            - media_player.office_sonos
-          volume_level: 0.07
-      - delay:
-          minutes: 2
-      - action: media_player.volume_set
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-            - media_player.office_sonos
-          volume_level: 0.05
-      - delay:
-          minutes: 2
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-            - media_player.office_sonos
-          volume_level: 0.01
+      - variables:
+          bedtime_rampdown_steps:
+            - delay_minutes: 0
+              continue_on_error: true
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.office_sonos
+                - media_player.bathroom_sonos
+                - media_player.den_sonos
+              volume_level: 0.1
+            - delay_minutes: 2
+              continue_on_error: true
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+              volume_level: 0.07
+            - delay_minutes: 2
+              continue_on_error: false
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+              volume_level: 0.05
+            - delay_minutes: 2
+              continue_on_error: true
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+              volume_level: 0.01
+      - repeat:
+          for_each: "{{ bedtime_rampdown_steps }}"
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ repeat.item.delay_minutes | int(0) > 0 }}"
+              then:
+                - delay:
+                    minutes: "{{ repeat.item.delay_minutes }}"
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ repeat.item.continue_on_error }}"
+                  sequence:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      data:
+                        entity_id: "{{ repeat.item.entity_id }}"
+                        volume_level: "{{ repeat.item.volume_level }}"
+              default:
+                - action: media_player.volume_set
+                  data:
+                    entity_id: "{{ repeat.item.entity_id }}"
+                    volume_level: "{{ repeat.item.volume_level }}"
 
   spotify_wake_up:
     alias: "Spotify Wake Up"
