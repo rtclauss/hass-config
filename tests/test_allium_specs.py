@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -71,3 +72,20 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
 
         for token in expected_tokens:
             assert token in text, f"{filename} is missing {token!r}"
+
+
+def test_alarm_wakeup_spec_uses_checker_supported_context_events() -> None:
+    text = (SPECS_DIR / "alarm_wakeup.allium").read_text(encoding="utf-8")
+
+    for token in (
+        "wakeup_context: WakeupContext",
+        "when: OwnerSuiteMorningActivityDetected()",
+        "when: BathroomMorningOccupancyDetected()",
+        "if target_room = bathroom:",
+    ):
+        assert token in text
+
+    assert not re.search(r"\bcontext\.", text)
+    assert "context.resident_in_bed becomes" not in text
+    assert "context.bathroom_occupied becomes" not in text
+    assert "target_room == bathroom" not in text
