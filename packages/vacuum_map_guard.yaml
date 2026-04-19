@@ -54,10 +54,8 @@ script:
   valetudo_reject_pending_map_change:
     alias: "Reject Pending Valetudo Map Change"
     description: >-
-      Rejects a pending Valetudo map change for one robot and notifies.
-      Call with robot_name ("Main Level" or "Upstairs") and
-      rest_command_id ("valetudo_mainlevel_reject_map_change" or
-      "valetudo_upstairs_reject_map_change").
+      Rejects a pending Valetudo map change for one robot and sends an
+      actionable notification with an "Accept New Map" button for manual override.
     mode: parallel
     max: 2
     fields:
@@ -67,6 +65,9 @@ script:
       rest_command_id:
         description: "rest_command service ID to call for the reject action"
         example: "valetudo_mainlevel_reject_map_change"
+      notify_action_id:
+        description: "Unique action identifier for the Accept button in the notification"
+        example: "ACCEPT_MAP_MAINLEVEL"
     sequence:
       - choose:
           - conditions:
@@ -82,10 +83,12 @@ script:
         data:
           title: "{{ robot_name }} Vacuum: Map Change Rejected"
           message: >-
-            The {{ robot_name }} vacuum proposed a new map. It was automatically
-            rejected to preserve the existing room layout. If drift is severe,
-            accept the change manually via Developer Tools → Services →
-            rest_command.valetudo_{{ 'mainlevel' if 'mainlevel' in rest_command_id else 'upstairs' }}_accept_map_change.
+            New map proposed and auto-rejected to preserve room layout.
+            Tap Accept if the current map is too skewed to be useful.
+          data:
+            actions:
+              - action: "{{ notify_action_id }}"
+                title: "Accept New Map"
 
 ########################
 # Automations
@@ -103,6 +106,7 @@ automation:
         data:
           robot_name: "Main Level"
           rest_command_id: "valetudo_mainlevel_reject_map_change"
+          notify_action_id: "ACCEPT_MAP_MAINLEVEL"
 
   - alias: "Guard Upstairs Vacuum Map"
     id: valetudo_upstairs_map_guard
@@ -116,3 +120,28 @@ automation:
         data:
           robot_name: "Upstairs"
           rest_command_id: "valetudo_upstairs_reject_map_change"
+          notify_action_id: "ACCEPT_MAP_UPSTAIRS"
+
+  - alias: "Accept Main Level Vacuum Map Change"
+    id: valetudo_mainlevel_map_accept_action
+    mode: single
+    trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "ACCEPT_MAP_MAINLEVEL"
+    action:
+      - action: rest_command.valetudo_mainlevel_accept_map_change
+        continue_on_error: true
+
+  - alias: "Accept Upstairs Vacuum Map Change"
+    id: valetudo_upstairs_map_accept_action
+    mode: single
+    trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "ACCEPT_MAP_UPSTAIRS"
+    action:
+      - action: rest_command.valetudo_upstairs_accept_map_change
+        continue_on_error: true
