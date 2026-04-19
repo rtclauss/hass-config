@@ -12,6 +12,7 @@ from scripts.ha_label_taxonomy import (  # noqa: E402
     ALLOWED_SCOPES,
     LABEL_ID_PATTERN,
     audit_live,
+    find_apply_conflicts,
     load_label_specs,
     plan_label_operations,
     validate_specs,
@@ -63,6 +64,12 @@ def test_hallway_label_remains_area_scoped_for_live_hallway_areas() -> None:
     assert "area" in hallway.scopes
     assert "hallway" in hallway.reason
     assert "upstairs_hallway" in hallway.reason
+
+
+def test_wake_up_scope_matches_home_assistant_generated_label_id() -> None:
+    specs = {spec.label_id: spec for spec in load_label_specs(TAXONOMY_PATH)}
+
+    assert specs["wake_up_scope"].name == "Wake-Up Scope"
 
 
 def test_ha_label_docs_explain_source_of_truth_and_no_inheritance() -> None:
@@ -137,3 +144,28 @@ def test_apply_label_plan_never_removes_unknown_live_labels() -> None:
     assert operations[0]["label_id"] == "hallway"
     assert all(operation["action"] in {"create", "update"} for operation in operations)
     assert all(operation["label_id"] != "ad_hoc" for operation in operations)
+
+
+def test_apply_label_plan_reports_live_name_id_conflicts_before_writes() -> None:
+    specs = load_label_specs(TAXONOMY_PATH)
+    live = {
+        "labels": [
+            {
+                "label_id": "wake-upscope",
+                "name": "Wake-Up Scope",
+                "description": "Legacy partial apply",
+                "icon": "mdi:alarm",
+                "color": "orange",
+            }
+        ],
+        "areas": [],
+    }
+
+    assert find_apply_conflicts(specs, live) == [
+        {
+            "label_id": "wake_up_scope",
+            "name": "Wake-Up Scope",
+            "live_label_id": "wake-upscope",
+            "reason": "live label name already exists with a different label_id",
+        }
+    ]
