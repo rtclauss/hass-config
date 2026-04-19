@@ -344,6 +344,36 @@ def plan_label_operations(specs: list[LabelSpec], live: dict[str, Any]) -> list[
     return operations
 
 
+def find_apply_conflicts(specs: list[LabelSpec], live: dict[str, Any]) -> list[dict[str, str]]:
+    live_labels = {
+        label["label_id"]: label
+        for label in live.get("labels", [])
+        if isinstance(label, dict) and label.get("label_id")
+    }
+    live_ids_by_name = {
+        str(label.get("name", "")).casefold(): str(label["label_id"])
+        for label in live_labels.values()
+        if label.get("name")
+    }
+    conflicts: list[dict[str, str]] = []
+
+    for spec in specs:
+        if spec.lifecycle == "deprecated":
+            continue
+        live_id_for_name = live_ids_by_name.get(spec.name.casefold())
+        if live_id_for_name is not None and live_id_for_name != spec.label_id:
+            conflicts.append(
+                {
+                    "label_id": spec.label_id,
+                    "name": spec.name,
+                    "live_label_id": live_id_for_name,
+                    "reason": "live label name already exists with a different label_id",
+                }
+            )
+
+    return conflicts
+
+
 class HomeAssistantWebSocket:
     def __init__(self, url: str, token: str, timeout: int = 30) -> None:
         parsed = urlparse(url)
@@ -565,6 +595,17 @@ def command_apply_labels(args: argparse.Namespace) -> int:
         return 1
     live = load_live_export(args.live_json) if args.live_json else fetch_live_from_ha()
     operations = plan_label_operations(specs, live)
+    conflicts = find_apply_conflicts(specs, live)
+    if conflicts:
+        print_json(
+            {
+                "status": "conflict",
+                "dry_run": not args.execute,
+                "conflicts": conflicts,
+                "operations": operations,
+            }
+        )
+        return 1
     if not args.execute:
         print_json({"dry_run": True, "operations": operations})
         return 0
