@@ -2130,13 +2130,6 @@ script:
     variables:
       ha_write_delay: "00:00:01"
       mqtt_bind_delay: "00:00:03"
-      aurora_effect: aurora
-      aurora_color: 187
-      aurora_level: 51
-      # Keep the aurora notification visible for 10 minutes, then let the
-      # devices fall back to whichever LED defaults are already active.
-      # 1-60 is in seconds calculated 61-120 is in minutes calculated by(value-60) Example a value of 65 would be 65-60 = 5 minutes - 120-254 Is in hours calculated by(value-120) Example a value of 132 would be 132-120 would be 12 hours. - 255 Indefinitely
-      aurora_duration: 70
       all_inovelli_switches_energy_report_rate: >
         {%- for device in states.number | select('match', '.*periodicpowerandenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_active_energy_report_rate: >
@@ -2157,42 +2150,6 @@ script:
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
-      # Snapshot captured from the live Zigbee2MQTT MQTT bridge on 2026-03-28.
-      inovelli_led_notification_targets: &inovelli_led_notification_targets
-        - Basement/Bathroom/Exhaust
-        - Basement/Bathroom/Shower Switch
-        - Basement/Great Room East and Middle Switch
-        - Basement/Great Room Landing Switch 2
-        - Basement/Great Room West Switch
-        - Basement/Landing Switch
-        - Basement/North Hallway Switch
-        - Basement/Overhead Outlet
-        - Deck/Flood Lights
-        - Deck/Kitchen Door
-        - Den/Flood Switch
-        - Dining Room/Table Switch
-        - Dining Room/Wall Switch
-        - Garage/Overhead Switch
-        - Guest Bathroom/Exhaust
-        - Guest Room/Fan Switch
-        - Hall/Foyer Switch
-        - Hall/Garage Laundry Switch
-        - Hall/Stairway
-        - Hall/Transition Switch
-        - Hall/Upstairs/Switch
-        - Kitchen/Bay Switch
-        - Kitchen/Sink Overhead Switch
-        - Kitchen/Switch
-        - Kitchen/Under Cabinet
-        - Laundry/Wall Switch
-        - Office/Fan Switch
-        - Outside/Front Lights
-        - Owner Suite/Bathroom/Exhaust
-        - Owner Suite/Bathroom/Shower Switch
-        - Owner Suite/Bathroom/Tub Switch
-        - Owner Suite/Bathroom/Vanity
-        - Owner Suite/Closet
-        - Owner Suite/Fan Switch
       inovelli_smart_bulb_mode_replay:
         - option: "Smart Bulb Mode"
           entities:
@@ -2643,22 +2600,7 @@ script:
                 entity_id: binary_sensor.bayesian_bed_occupancy
                 state: "off"
             sequence:
-              - repeat:
-                  for_each: "{{ inovelli_led_notification_targets }}"
-                  sequence:
-                    - action: mqtt.publish
-                      data:
-                        topic: "zigbee2mqtt/{{ repeat.item }}/set"
-                        payload: >
-                          {{ {
-                            'led_effect': {
-                              'effect': aurora_effect,
-                              'color': aurora_color,
-                              'level': aurora_level,
-                              'duration': aurora_duration
-                            }
-                          } | tojson }}
-                    - delay: "{{ mqtt_bind_delay }}"
+              - action: script.inovelli_led_aurora_notification
       - action: logbook.log
         data:
           name: Zigbee2MQTT Reset
@@ -2679,7 +2621,6 @@ script:
           | selectattr('entity_id', 'search', 'ledintensitywhenoff') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
-      inovelli_led_notification_targets: *inovelli_led_notification_targets
     sequence:
       - action: logbook.log
         data:
@@ -2697,14 +2638,7 @@ script:
           entity_id: >
             {{ all_switches_led_intensity_on }}
           value: 0
-      - repeat:
-          for_each: "{{ inovelli_led_notification_targets }}"
-          sequence:
-            - action: mqtt.publish
-              data:
-                topic: "zigbee2mqtt/{{ repeat.item }}/set"
-                payload: >
-                  {{ {'led_effect': {'effect': 'clear_effect'}} | tojson }}
+      - action: script.inovelli_led_clear_all_effects
 
   restore_inovelli_switch_leds_from_trip:
     icon: mdi:light-switch
