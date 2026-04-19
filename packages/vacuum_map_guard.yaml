@@ -14,6 +14,9 @@
 #
 # MQTT trigger topic pattern (subtopic-per-field, consistent with BatteryStateAttribute/level):
 #   valetudo/{identifier}/PendingMapChangeHandlingCapability/pending  →  "true" | "false"
+#
+# Flow: notify with Accept/Keep buttons → wait up to 10 min → act on tap or auto-reject on timeout.
+# The reject never fires before the user has a chance to respond.
 
 ################################################################
 ## Packages / Vacuum Map Guard
@@ -48,49 +51,6 @@ rest_command:
     payload: '{"action": "accept"}'
 
 ########################
-# Scripts
-########################
-script:
-  valetudo_reject_pending_map_change:
-    alias: "Reject Pending Valetudo Map Change"
-    description: >-
-      Rejects a pending Valetudo map change for one robot and sends an
-      actionable notification with an "Accept New Map" button for manual override.
-    mode: parallel
-    max: 2
-    fields:
-      robot_name:
-        description: "Human-readable robot label used in the notification title"
-        example: "Main Level"
-      rest_command_id:
-        description: "rest_command service ID to call for the reject action"
-        example: "valetudo_mainlevel_reject_map_change"
-      notify_action_id:
-        description: "Unique action identifier for the Accept button in the notification"
-        example: "ACCEPT_MAP_MAINLEVEL"
-    sequence:
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: "{{ rest_command_id == 'valetudo_mainlevel_reject_map_change' }}"
-            sequence:
-              - action: rest_command.valetudo_mainlevel_reject_map_change
-                continue_on_error: true
-        default:
-          - action: rest_command.valetudo_upstairs_reject_map_change
-            continue_on_error: true
-      - action: notify.mobile_app_wethop
-        data:
-          title: "{{ robot_name }} Vacuum: Map Change Rejected"
-          message: >-
-            New map proposed and auto-rejected to preserve room layout.
-            Tap Accept if the current map is too skewed to be useful.
-          data:
-            actions:
-              - action: "{{ notify_action_id }}"
-                title: "Accept New Map"
-
-########################
 # Automations
 ########################
 automation:
@@ -102,11 +62,39 @@ automation:
         topic: "valetudo/mainlevel/PendingMapChangeHandlingCapability/pending"
         payload: "true"
     action:
-      - action: script.valetudo_reject_pending_map_change
+      - action: notify.mobile_app_wethop
         data:
-          robot_name: "Main Level"
-          rest_command_id: "valetudo_mainlevel_reject_map_change"
-          notify_action_id: "ACCEPT_MAP_MAINLEVEL"
+          title: "Main Level Vacuum: New Map Pending"
+          message: "New map proposed. Accept to use it or keep the current room layout (auto-keeps in 10 min)."
+          data:
+            actions:
+              - action: "ACCEPT_MAP_MAINLEVEL"
+                title: "Accept New Map"
+              - action: "REJECT_MAP_MAINLEVEL"
+                title: "Keep Current"
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "ACCEPT_MAP_MAINLEVEL"
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "REJECT_MAP_MAINLEVEL"
+        timeout: "00:10:00"
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ wait.trigger is not none
+                     and wait.trigger.event.data.action == 'ACCEPT_MAP_MAINLEVEL' }}
+            sequence:
+              - action: rest_command.valetudo_mainlevel_accept_map_change
+                continue_on_error: true
+        default:
+          - action: rest_command.valetudo_mainlevel_reject_map_change
+            continue_on_error: true
 
   - alias: "Guard Upstairs Vacuum Map"
     id: valetudo_upstairs_map_guard
@@ -116,32 +104,36 @@ automation:
         topic: "valetudo/upstairs-vacuum/PendingMapChangeHandlingCapability/pending"
         payload: "true"
     action:
-      - action: script.valetudo_reject_pending_map_change
+      - action: notify.mobile_app_wethop
         data:
-          robot_name: "Upstairs"
-          rest_command_id: "valetudo_upstairs_reject_map_change"
-          notify_action_id: "ACCEPT_MAP_UPSTAIRS"
-
-  - alias: "Accept Main Level Vacuum Map Change"
-    id: valetudo_mainlevel_map_accept_action
-    mode: single
-    trigger:
-      - trigger: event
-        event_type: mobile_app_notification_action
-        event_data:
-          action: "ACCEPT_MAP_MAINLEVEL"
-    action:
-      - action: rest_command.valetudo_mainlevel_accept_map_change
-        continue_on_error: true
-
-  - alias: "Accept Upstairs Vacuum Map Change"
-    id: valetudo_upstairs_map_accept_action
-    mode: single
-    trigger:
-      - trigger: event
-        event_type: mobile_app_notification_action
-        event_data:
-          action: "ACCEPT_MAP_UPSTAIRS"
-    action:
-      - action: rest_command.valetudo_upstairs_accept_map_change
-        continue_on_error: true
+          title: "Upstairs Vacuum: New Map Pending"
+          message: "New map proposed. Accept to use it or keep the current room layout (auto-keeps in 10 min)."
+          data:
+            actions:
+              - action: "ACCEPT_MAP_UPSTAIRS"
+                title: "Accept New Map"
+              - action: "REJECT_MAP_UPSTAIRS"
+                title: "Keep Current"
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "ACCEPT_MAP_UPSTAIRS"
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "REJECT_MAP_UPSTAIRS"
+        timeout: "00:10:00"
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ wait.trigger is not none
+                     and wait.trigger.event.data.action == 'ACCEPT_MAP_UPSTAIRS' }}
+            sequence:
+              - action: rest_command.valetudo_upstairs_accept_map_change
+                continue_on_error: true
+        default:
+          - action: rest_command.valetudo_upstairs_reject_map_change
+            continue_on_error: true
