@@ -1,0 +1,139 @@
+# Home Assistant package for Valetudo map preservation.
+# Automatically rejects pending map changes on the two Dreame Z10 Pro robots
+# (Main Level and Upstairs) to keep room assignments intact when the robot
+# loses localization and proposes a fresh map.
+#
+# Den Vacuum (Roborock V1) lacks PendingMapChangeHandlingCapability and is excluded.
+#
+# Capability confirmed present via:
+#   GET http://192.168.1.208/api/v2/robot/capabilities   (Main Level)
+#   GET http://192.168.1.163/api/v2/robot/capabilities   (Upstairs)
+# REST action confirmed via:
+#   PUT /api/v2/robot/capabilities/PendingMapChangeHandlingCapability
+#   payload: {"action": "reject"} | {"action": "accept"}
+#
+# MQTT trigger topic pattern (subtopic-per-field, consistent with BatteryStateAttribute/level):
+#   valetudo/{identifier}/PendingMapChangeHandlingCapability/pending  →  "true" | "false"
+#
+# Flow: notify with Accept/Keep buttons → wait up to 10 min → act on tap or auto-reject on timeout.
+# The reject never fires before the user has a chance to respond.
+
+################################################################
+## Packages / Vacuum Map Guard
+################################################################
+
+########################
+# REST Commands
+########################
+rest_command:
+  valetudo_mainlevel_reject_map_change:
+    url: "http://valetudo-activeexoticlion.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    method: PUT
+    content_type: application/json
+    payload: '{"action": "reject"}'
+
+  valetudo_mainlevel_accept_map_change:
+    url: "http://valetudo-activeexoticlion.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    method: PUT
+    content_type: application/json
+    payload: '{"action": "accept"}'
+
+  valetudo_upstairs_reject_map_change:
+    url: "http://valetudo-zestycurvycaribou.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    method: PUT
+    content_type: application/json
+    payload: '{"action": "reject"}'
+
+  valetudo_upstairs_accept_map_change:
+    url: "http://valetudo-zestycurvycaribou.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    method: PUT
+    content_type: application/json
+    payload: '{"action": "accept"}'
+
+########################
+# Automations
+########################
+automation:
+  - alias: "Guard Main Level Vacuum Map"
+    id: valetudo_mainlevel_map_guard
+    mode: single
+    trigger:
+      - trigger: mqtt
+        topic: "valetudo/mainlevel/PendingMapChangeHandlingCapability/pending"
+        payload: "true"
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Main Level Vacuum: New Map Pending"
+          message: "New map proposed. Accept to use it or keep the current room layout (auto-keeps in 10 min)."
+          data:
+            actions:
+              - action: "ACCEPT_MAP_MAINLEVEL"
+                title: "Accept New Map"
+              - action: "REJECT_MAP_MAINLEVEL"
+                title: "Keep Current"
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "ACCEPT_MAP_MAINLEVEL"
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "REJECT_MAP_MAINLEVEL"
+        timeout: "00:10:00"
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ wait.trigger is not none
+                     and wait.trigger.event.data.action == 'ACCEPT_MAP_MAINLEVEL' }}
+            sequence:
+              - action: rest_command.valetudo_mainlevel_accept_map_change
+                continue_on_error: true
+        default:
+          - action: rest_command.valetudo_mainlevel_reject_map_change
+            continue_on_error: true
+
+  - alias: "Guard Upstairs Vacuum Map"
+    id: valetudo_upstairs_map_guard
+    mode: single
+    trigger:
+      - trigger: mqtt
+        topic: "valetudo/upstairs-vacuum/PendingMapChangeHandlingCapability/pending"
+        payload: "true"
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Upstairs Vacuum: New Map Pending"
+          message: "New map proposed. Accept to use it or keep the current room layout (auto-keeps in 10 min)."
+          data:
+            actions:
+              - action: "ACCEPT_MAP_UPSTAIRS"
+                title: "Accept New Map"
+              - action: "REJECT_MAP_UPSTAIRS"
+                title: "Keep Current"
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "ACCEPT_MAP_UPSTAIRS"
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: "REJECT_MAP_UPSTAIRS"
+        timeout: "00:10:00"
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ wait.trigger is not none
+                     and wait.trigger.event.data.action == 'ACCEPT_MAP_UPSTAIRS' }}
+            sequence:
+              - action: rest_command.valetudo_upstairs_accept_map_change
+                continue_on_error: true
+        default:
+          - action: rest_command.valetudo_upstairs_reject_map_change
+            continue_on_error: true
