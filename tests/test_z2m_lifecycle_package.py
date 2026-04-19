@@ -40,6 +40,16 @@ def test_z2m_lifecycle_package_tracks_join_drop_leave_and_mesh_health() -> None:
         assert token in text
 
 
+def test_z2m_lifecycle_notification_uses_latest_state_and_bounded_attributes() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    block = _automation_block("notify_z2m_lifecycle_issues")
+
+    assert "mode: restart" in block
+    assert "mode: queued" not in block
+    assert "max: 10" not in block
+    assert "devices: \"{{ z2m_lifecycle_stats.get('devices', {}) }}\"" not in text
+
+
 def test_z2m_lifecycle_package_debounces_transient_coordinator_router_alerts() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
 

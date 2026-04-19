@@ -78,6 +78,16 @@ def test_default_led_bar_sync_automation_updates_owner_suite_and_office_after_re
     assert "- office" in block
 
 
+def test_nightly_adaptive_lighting_cycle_filters_missing_candidate_switches() -> None:
+    block = _automation_block("nightly_adaptive_lighting_cycle_reset")
+
+    assert "candidate_main_adaptive_switches:" in block
+    assert "switch.adaptive_lighting_office" in block
+    assert "states(entity_id) not in ['unknown', 'unavailable']" in block
+    assert "main_adaptive_switches | count > 0" in block
+    assert block.count('entity_id: "{{ main_adaptive_switches }}"') == 2
+
+
 def test_led_bar_sync_script_accepts_room_inputs_and_maps_owner_suite_and_office() -> None:
     block = _script_block("sync_inovelli_led_bars_to_adaptive_lighting")
 

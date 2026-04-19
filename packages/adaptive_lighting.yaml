@@ -209,7 +209,7 @@ automation:
         id: ha-start
         event: start
     variables:
-      main_adaptive_switches:
+      candidate_main_adaptive_switches:
         - switch.adaptive_lighting_basement
         - switch.adaptive_lighting_den
         - switch.adaptive_lighting_hallway
@@ -217,18 +217,34 @@ automation:
         - switch.adaptive_lighting_office
         - switch.adaptive_lighting_owner_suite
         - switch.dining_room_adaptive_lighting_dining_room
+      main_adaptive_switches: >-
+        {% set ns = namespace(items=[]) %}
+        {% for entity_id in candidate_main_adaptive_switches %}
+          {% if states(entity_id) not in ['unknown', 'unavailable'] %}
+            {% set ns.items = ns.items + [entity_id] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
     action:
       - if:
           - condition: trigger
             id: nightly-cycle
         then:
-          - action: switch.turn_off
+          - if:
+              - condition: template
+                value_template: "{{ main_adaptive_switches | count > 0 }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "{{ main_adaptive_switches }}"
+          - delay: "00:00:10"
+      - if:
+          - condition: template
+            value_template: "{{ main_adaptive_switches | count > 0 }}"
+        then:
+          - action: switch.turn_on
             target:
               entity_id: "{{ main_adaptive_switches }}"
-          - delay: "00:00:10"
-      - action: switch.turn_on
-        target:
-          entity_id: "{{ main_adaptive_switches }}"
 
   - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
     alias: sync_selected_inovelli_led_bars_to_adaptive_lighting
