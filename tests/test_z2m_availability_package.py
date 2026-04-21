@@ -66,14 +66,18 @@ def test_all_named_devices_have_sensors() -> None:
 def test_device_sensors_have_availability_gate() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
     assert 'availability_topic: "zigbee2mqtt/bridge/state"' in text
-    assert 'availability_template: "{{ value_json.state }}"' in text
+    assert 'availability_template: "{{ value_json.state }}"' not in text
     assert 'payload_available: "online"' in text
     assert 'payload_not_available: "offline"' in text
 
 
-def test_device_sensors_use_json_state_template() -> None:
+def test_device_sensors_accept_raw_or_json_state_payload() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
-    assert 'value_template: "{{ value_json.state }}"' in text
+    assert 'value_template: "{{ value_json.state }}"' not in text
+    assert (
+        'value_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"'
+        in text
+    )
     assert 'payload_on: "online"' in text
     assert 'payload_off: "offline"' in text
 
