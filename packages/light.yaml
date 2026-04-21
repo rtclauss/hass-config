@@ -83,6 +83,12 @@ homeassistant:
       icon: mdi:home
       hidden: true
 
+    input_boolean.garage_entry_auto_on:
+      <<: *customize
+      friendly_name: "Garage Entry Lights Automatically Turned on"
+      icon: mdi:garage-open-variant
+      hidden: true
+
     input_boolean.owner_suite_bathroom_auto_on:
       <<: *customize
       friendly_name: "Owner Suite Lights Automatically Turned on"
@@ -546,53 +552,98 @@ automation:
 
   - id: front_door_light_auto_toggle
     alias: front_door_light_auto_toggle
+    mode: restart
     trigger:
       - trigger: state
         entity_id: binary_sensor.main_foyer_front_door_contact
         to: "off"
         for:
-          minutes: 30
-        id: door-closed
+          minutes: 2
+        id: front-path-vacant
       - trigger: state
         entity_id: binary_sensor.main_foyer_front_door_contact
         to: "on"
-        id: door-opened
-    condition:
-      - or:
-          - alias: "after sunset"
-            condition: sun
-            after: sunset
-            after_offset: "-00:45:00"
-          - alias: "before sunrise"
-            condition: sun
-            before: sunrise
-            before_offset: "-00:45:00"
-      # condition: state
-      # entity_id: input_boolean.front_door_auto_on
-      # state: "on"
+        id: front-door-opened
+      - trigger: state
+        entity_id:
+          - binary_sensor.hall_transition_switch_occupancy
+          - binary_sensor.hall_transition_switch_area1occupancy
+          - binary_sensor.hall_transition_switch_area2occupancy
+        to: "off"
+        for:
+          minutes: 2
+        id: front-path-vacant
     action:
       - choose:
           - conditions:
               - condition: trigger
-                id: door-closed
+                id: front-door-opened
+              - condition: state
+                entity_id:
+                  - light.hall_foyer_switch
+                  - light.hall_transition_switch
+                state: "off"
             sequence:
-              # TODO maybe don't turn off the lights.
-              # - action: light.turn_off
-              #   data:
-              #     entity_id: light.outside_front_hue
-              - action: input_boolean.turn_off
-                data:
+              - choose:
+                  - conditions:
+                      - or:
+                          - condition: time
+                            after: "23:00:00"
+                            before: "06:00:00"
+                          - condition: state
+                            entity_id: binary_sensor.bayesian_bed_occupancy
+                            state: "on"
+                    sequence:
+                      - action: light.turn_on
+                        target:
+                          entity_id:
+                            - light.hall_foyer_switch
+                            - light.hall_transition_switch
+                        data:
+                          brightness_pct: 20
+                          transition: 2
+                default:
+                  - action: adaptive_lighting.apply
+                    data:
+                      lights:
+                        - light.hall_foyer_switch
+                        - light.hall_transition_switch
+                      entity_id: switch.adaptive_lighting_hallway
+                      adapt_brightness: true
+                      adapt_color: true
+                      turn_on_lights: true
+              - action: input_boolean.turn_on
+                target:
                   entity_id: input_boolean.front_door_auto_on
           - conditions:
               - condition: trigger
-                id: door-opened
+                id: front-path-vacant
+              - condition: state
+                entity_id: input_boolean.front_door_auto_on
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.main_foyer_front_door_contact
+                state: "off"
+                for:
+                  minutes: 2
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_transition_switch_occupancy
+                  - binary_sensor.hall_transition_switch_area1occupancy
+                  - binary_sensor.hall_transition_switch_area2occupancy
+                state: "off"
+                for:
+                  minutes: 2
             sequence:
-              - action: light.turn_on
-                data:
+              - action: light.turn_off
+                target:
                   entity_id:
-                    - light.hall_all
-              - action: input_boolean.turn_on
+                    - light.hall_foyer_switch
+                    - light.hall_transition_switch
                 data:
+                  transition: 5
+              - action: input_boolean.turn_off
+                target:
                   entity_id: input_boolean.front_door_auto_on
 
   - id: front_lights_toggle
@@ -673,43 +724,96 @@ automation:
 
   - id: garage_entry_door_light_auto_toggle
     alias: garage_entry_light_auto_toggle
+    mode: restart
     trigger:
       - trigger: state
         entity_id: binary_sensor.hall_garage_entry_contact
         to: "off"
         for:
-          minutes: 5
-        id: door-closed
+          minutes: 2
+        id: garage-path-vacant
       - trigger: state
         entity_id: binary_sensor.hall_garage_entry_contact
         to: "on"
-        id: door-opened
-    condition: []
+        id: garage-door-opened
+      - trigger: state
+        entity_id:
+          - binary_sensor.hall_transition_switch_occupancy
+          - binary_sensor.hall_transition_switch_area1occupancy
+          - binary_sensor.hall_transition_switch_area2occupancy
+        to: "off"
+        for:
+          minutes: 2
+        id: garage-path-vacant
     action:
       - choose:
           - conditions:
               - condition: trigger
-                id: door-closed
+                id: garage-door-opened
             sequence:
-              - action: light.turn_off
-                data:
-                  entity_id:
-                    - light.hall_foyer_switch
-                    - light.hall_transition
-                    - light.hall_garage_laundry_switch
-                    - light.garage_overhead_switch
-      - choose:
+              - choose:
+                  - conditions:
+                      - or:
+                          - condition: time
+                            after: "23:00:00"
+                            before: "06:00:00"
+                          - condition: state
+                            entity_id: binary_sensor.bayesian_bed_occupancy
+                            state: "on"
+                    sequence:
+                      - action: light.turn_on
+                        target:
+                          entity_id:
+                            - light.hall_transition_switch
+                            - light.hall_garage_laundry_switch
+                            - light.garage_overhead_switch
+                        data:
+                          brightness_pct: 15
+                          transition: 2
+                default:
+                  - action: light.turn_on
+                    target:
+                      entity_id:
+                        - light.hall_transition_switch
+                        - light.hall_garage_laundry_switch
+                        - light.garage_overhead_switch
+                    data:
+                      brightness_pct: 75
+                      transition: 2
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.garage_entry_auto_on
           - conditions:
               - condition: trigger
-                id: door-opened
+                id: garage-path-vacant
+              - condition: state
+                entity_id: input_boolean.garage_entry_auto_on
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.hall_garage_entry_contact
+                state: "off"
+                for:
+                  minutes: 2
+              - condition: state
+                entity_id:
+                  - binary_sensor.hall_transition_switch_occupancy
+                  - binary_sensor.hall_transition_switch_area1occupancy
+                  - binary_sensor.hall_transition_switch_area2occupancy
+                state: "off"
+                for:
+                  minutes: 2
             sequence:
-              - action: light.turn_on
-                data:
+              - action: light.turn_off
+                target:
                   entity_id:
-                    - light.hall_foyer_switch
-                    - light.hall_transition
+                    - light.hall_transition_switch
                     - light.hall_garage_laundry_switch
                     - light.garage_overhead_switch
+                data:
+                  transition: 5
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.garage_entry_auto_on
 
   - id: guest_room_ceiling_lights_on_off
     alias: guest_room_ceiling_lights_on_off
@@ -734,11 +838,13 @@ automation:
       - trigger: state
         entity_id:
           - binary_sensor.hall_main_foyer_motion_occupancy
+          - binary_sensor.hall_transition_switch_occupancy
         to: "on"
         id: main-motion-sensed
       - trigger: state
         entity_id:
           - binary_sensor.hall_main_foyer_motion_occupancy
+          - binary_sensor.hall_transition_switch_occupancy
         to: "off"
         id: main-motion-not-detected
       - trigger: state
@@ -816,6 +922,7 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_transition_switch_occupancy
                 state: "off"
                 for:
                   minutes: 3
@@ -845,6 +952,7 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_transition_switch_occupancy
                 state: "off"
                 for:
                   minutes: 15
@@ -906,6 +1014,7 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_transition_switch_occupancy
                 state: "off"
                 for:
                   minutes: 15
@@ -934,6 +1043,7 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_transition_switch_occupancy
                 state: "off"
                 for:
                   minutes: 3
@@ -1502,11 +1612,13 @@ automation:
       - trigger: state
         entity_id:
           - binary_sensor.hall_main_foyer_motion_occupancy
+          - binary_sensor.hall_transition_switch_occupancy
         to: "on"
         id: main-motion-sensed
       - trigger: state
         entity_id:
           - binary_sensor.hall_main_foyer_motion_occupancy
+          - binary_sensor.hall_transition_switch_occupancy
         to: "off"
         for:
           minutes: 15
@@ -1563,6 +1675,7 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_transition_switch_occupancy
                 state: "off"
                 for:
                   minutes: 15
@@ -1608,6 +1721,7 @@ automation:
               - condition: state
                 entity_id:
                   - binary_sensor.hall_main_foyer_motion_occupancy
+                  - binary_sensor.hall_transition_switch_occupancy
                 state: "off"
                 for:
                   minutes: 15
@@ -2189,6 +2303,7 @@ group: {}
 input_boolean:
   deck_auto_on:
   front_door_auto_on:
+  garage_entry_auto_on:
   basement_auto_on:
   office_auto_on:
   owner_suite_bedroom_auto_on:
