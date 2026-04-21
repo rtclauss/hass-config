@@ -193,18 +193,17 @@ automation:
   - id: nightly_adaptive_lighting_cycle_reset
     alias: nightly_adaptive_lighting_cycle_reset
     description: >
-      Nightly at 4 AM, cycle every main adaptive lighting switch off then back on
+      Every 4 hours, cycle every main adaptive lighting switch off then back on
       to unstick color or brightness matching that has drifted. A startup trigger
       acts as a recovery path: if HA restarts during the 10-second off window the
       next boot immediately re-enables all switches so they are never stranded off.
       Control switches (sleep_mode, adapt_brightness, adapt_color) are excluded to
-      preserve their settings. At 4 AM nearly all lights are off so no downstream
-      on/off transitions occur when the switches are re-enabled.
+      preserve their settings.
     mode: single
     trigger:
-      - trigger: time
+      - trigger: time_pattern
         id: nightly-cycle
-        at: "04:00:00"
+        hours: "/4"
       - trigger: homeassistant
         id: ha-start
         event: start
