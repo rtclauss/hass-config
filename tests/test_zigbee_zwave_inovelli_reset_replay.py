@@ -4,7 +4,9 @@ import re
 from pathlib import Path
 
 
-ZIGBEE_ZWAVE_PATH = Path(__file__).resolve().parents[1] / "packages" / "zigbee_zwave.yaml"
+ROOT = Path(__file__).resolve().parents[1]
+ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
+INOVELLI_LED_NOTIFICATIONS_PATH = ROOT / "packages" / "inovelli_led_notifications.yaml"
 
 
 def _script_block(script_id: str) -> str:
@@ -354,13 +356,15 @@ def test_inovelli_led_recovery_replays_trip_day_night_and_owner_suite_darkening(
 
 def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
     block = _script_block("reset_inovelli_switches")
+    notification_text = INOVELLI_LED_NOTIFICATIONS_PATH.read_text(encoding="utf-8")
 
-    assert "aurora_effect: aurora" in block
-    assert "aurora_color: 187" in block
-    assert "aurora_level: 51" in block
-    assert "aurora_duration: 70" in block
-    assert 'topic: "zigbee2mqtt/{{ repeat.item }}/set"' in block
-    assert "'led_effect': {" in block
+    assert "script.inovelli_led_aurora_notification" in block
+    assert "effect: Aurora" in notification_text
+    assert "brightness: 5.1" in notification_text
+    assert "color: Purple" in notification_text
+    assert "duration: 10 Minutes" in notification_text
+    assert 'topic: "zigbee2mqtt/{{ repeat.item }}/set"' not in block
+    assert "'led_effect': {" not in block
 
 
 def test_reset_script_skips_aurora_notification_while_bed_is_occupied() -> None:
@@ -369,5 +373,5 @@ def test_reset_script_skips_aurora_notification_while_bed_is_occupied() -> None:
     assert "binary_sensor.bayesian_bed_occupancy" in block
     assert 'state: "off"' in block
     assert block.index("binary_sensor.bayesian_bed_occupancy") < block.index(
-        'topic: "zigbee2mqtt/{{ repeat.item }}/set"'
+        "script.inovelli_led_aurora_notification"
     )
