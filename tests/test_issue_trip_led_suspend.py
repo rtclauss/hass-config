@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
+INOVELLI_LED_NOTIFICATIONS_PATH = ROOT / "packages" / "inovelli_led_notifications.yaml"
 
 
 def _script_block(script_id: str) -> str:
@@ -73,11 +74,14 @@ def test_trip_mode_sync_automation_suspends_and_restores_inovelli_leds() -> None
 
 def test_trip_suspend_script_zeros_led_intensities_and_clears_active_effects() -> None:
     block = _script_block("turn_off_all_inovelli_switch_leds")
+    led_notification_text = INOVELLI_LED_NOTIFICATIONS_PATH.read_text(encoding="utf-8")
 
     assert "all_switches_led_intensity_on" in block
     assert "all_switches_led_intensity_off" in block
     assert "value: 0" in block
-    assert "script.inovelli_led_clear_all_effects" in block
+    assert "action: script.inovelli_led_clear_all_effects" in block
+    assert "inovelli_led_clear_all_effects:" in led_notification_text
+    assert "effect: Clear Effect" in led_notification_text
     assert "'clear_effect'" not in block
     assert "zigbee2mqtt/{{ repeat.item }}/set" not in block
 

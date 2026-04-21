@@ -358,7 +358,8 @@ def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
     block = _script_block("reset_inovelli_switches")
     notification_text = INOVELLI_LED_NOTIFICATIONS_PATH.read_text(encoding="utf-8")
 
-    assert "script.inovelli_led_aurora_notification" in block
+    assert "action: script.inovelli_led_aurora_notification" in block
+    assert "inovelli_led_aurora_notification:" in notification_text
     assert "effect: Aurora" in notification_text
     assert "brightness: 5.1" in notification_text
     assert "color: Purple" in notification_text
@@ -373,5 +374,5 @@ def test_reset_script_skips_aurora_notification_while_bed_is_occupied() -> None:
     assert "binary_sensor.bayesian_bed_occupancy" in block
     assert 'state: "off"' in block
     assert block.index("binary_sensor.bayesian_bed_occupancy") < block.index(
-        "script.inovelli_led_aurora_notification"
+        "action: script.inovelli_led_aurora_notification"
     )
