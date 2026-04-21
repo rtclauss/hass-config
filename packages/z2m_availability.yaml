@@ -1,0 +1,1970 @@
+# Z2M device availability monitoring package
+#
+# Tracks per-device MQTT availability published by Zigbee2MQTT when
+# availability: true is set in zigbee2mqtt/configuration.yaml.
+# Each binary_sensor goes offline when the device stops responding.
+# The aggregate binary_sensor.z2m_devices_offline fires when ANY device is offline.
+# Related: packages/z2m_lifecycle.yaml (router health, reboot watchdog)
+
+################################################################
+## MQTT binary sensors — per-device availability
+################################################################
+
+mqtt:
+  binary_sensor:
+
+    # Bridge availability (the Z2M bridge itself)
+    - name: "Z2M Bridge"
+      unique_id: z2m_bridge_availability
+      state_topic: "zigbee2mqtt/bridge/state"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+
+    - name: "Z2M Arrival Sensor Availability"
+      unique_id: z2m_arrival_sensor_availability
+      state_topic: "zigbee2mqtt/Arrival Sensor/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Bathroom Shower Availability"
+      unique_id: z2m_basement_bathroom_shower_availability
+      state_topic: "zigbee2mqtt/Basement/Bathroom Shower/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Bathroom/Exhaust Availability"
+      unique_id: z2m_basement_bathroom_exhaust_availability
+      state_topic: "zigbee2mqtt/Basement/Bathroom/Exhaust/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Bathroom/Shower Switch Availability"
+      unique_id: z2m_basement_bathroom_shower_switch_availability
+      state_topic: "zigbee2mqtt/Basement/Bathroom/Shower Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Bathroom/TPH Availability"
+      unique_id: z2m_basement_bathroom_tph_availability
+      state_topic: "zigbee2mqtt/Basement/Bathroom/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Closet TPH Availability"
+      unique_id: z2m_basement_closet_tph_availability
+      state_topic: "zigbee2mqtt/Basement/Closet TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great East Room 2 Availability"
+      unique_id: z2m_basement_great_east_room_2_availability
+      state_topic: "zigbee2mqtt/Basement/Great East Room 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room East 1 Availability"
+      unique_id: z2m_basement_great_room_east_1_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room East 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room East and Middle Switch Availability"
+      unique_id: z2m_basement_great_room_east_and_middle_switch_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room East and Middle Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room Landing Switch 2 Availability"
+      unique_id: z2m_basement_great_room_landing_switch_2_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room Landing Switch 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room Middle 1 Availability"
+      unique_id: z2m_basement_great_room_middle_1_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room Middle 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room Middle 2 Availability"
+      unique_id: z2m_basement_great_room_middle_2_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room Middle 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room West 1 Availability"
+      unique_id: z2m_basement_great_room_west_1_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room West 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room West 2 Availability"
+      unique_id: z2m_basement_great_room_west_2_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room West 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room West 3 Availability"
+      unique_id: z2m_basement_great_room_west_3_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room West 3/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Great Room West Switch Availability"
+      unique_id: z2m_basement_great_room_west_switch_availability
+      state_topic: "zigbee2mqtt/Basement/Great Room West Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Landing Availability"
+      unique_id: z2m_basement_landing_availability
+      state_topic: "zigbee2mqtt/Basement/Landing/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Landing 1 Availability"
+      unique_id: z2m_basement_landing_1_availability
+      state_topic: "zigbee2mqtt/Basement/Landing 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Landing 2 Availability"
+      unique_id: z2m_basement_landing_2_availability
+      state_topic: "zigbee2mqtt/Basement/Landing 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Landing Switch Availability"
+      unique_id: z2m_basement_landing_switch_availability
+      state_topic: "zigbee2mqtt/Basement/Landing Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/North Hallway 1 Availability"
+      unique_id: z2m_basement_north_hallway_1_availability
+      state_topic: "zigbee2mqtt/Basement/North Hallway 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/North Hallway 2 Availability"
+      unique_id: z2m_basement_north_hallway_2_availability
+      state_topic: "zigbee2mqtt/Basement/North Hallway 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/North Hallway Switch Availability"
+      unique_id: z2m_basement_north_hallway_switch_availability
+      state_topic: "zigbee2mqtt/Basement/North Hallway Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Overhead Outlet Availability"
+      unique_id: z2m_basement_overhead_outlet_availability
+      state_topic: "zigbee2mqtt/Basement/Overhead Outlet/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Stair Landing Availability"
+      unique_id: z2m_basement_stair_landing_availability
+      state_topic: "zigbee2mqtt/Basement/Stair Landing/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Sump Pump Availability"
+      unique_id: z2m_basement_sump_pump_availability
+      state_topic: "zigbee2mqtt/Basement/Sump Pump/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/TPH Availability"
+      unique_id: z2m_basement_tph_availability
+      state_topic: "zigbee2mqtt/Basement/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Unfinished Leak Availability"
+      unique_id: z2m_basement_unfinished_leak_availability
+      state_topic: "zigbee2mqtt/Basement/Unfinished Leak/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Water Shutoff Availability"
+      unique_id: z2m_basement_water_shutoff_availability
+      state_topic: "zigbee2mqtt/Basement/Water Shutoff/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Basement/Window Availability"
+      unique_id: z2m_basement_window_availability
+      state_topic: "zigbee2mqtt/Basement/Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Deck/Flood Lights Availability"
+      unique_id: z2m_deck_flood_lights_availability
+      state_topic: "zigbee2mqtt/Deck/Flood Lights/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Deck/Kitchen Door Availability"
+      unique_id: z2m_deck_kitchen_door_availability
+      state_topic: "zigbee2mqtt/Deck/Kitchen Door/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Deck/Kitchen Door Light Availability"
+      unique_id: z2m_deck_kitchen_door_light_availability
+      state_topic: "zigbee2mqtt/Deck/Kitchen Door Light/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Deck/String Availability"
+      unique_id: z2m_deck_string_availability
+      state_topic: "zigbee2mqtt/Deck/String/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Deck/Tiki Room Door Availability"
+      unique_id: z2m_deck_tiki_room_door_availability
+      state_topic: "zigbee2mqtt/Deck/Tiki Room Door/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Doors Availability"
+      unique_id: z2m_den_doors_availability
+      state_topic: "zigbee2mqtt/Den/Doors/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Flood 1 Availability"
+      unique_id: z2m_den_flood_1_availability
+      state_topic: "zigbee2mqtt/Den/Flood 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Flood 2 Availability"
+      unique_id: z2m_den_flood_2_availability
+      state_topic: "zigbee2mqtt/Den/Flood 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Flood Switch Availability"
+      unique_id: z2m_den_flood_switch_availability
+      state_topic: "zigbee2mqtt/Den/Flood Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Lamp Availability"
+      unique_id: z2m_den_lamp_availability
+      state_topic: "zigbee2mqtt/Den/Lamp/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Leather Chair Availability"
+      unique_id: z2m_den_leather_chair_availability
+      state_topic: "zigbee2mqtt/Den/Leather Chair/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Motion Availability"
+      unique_id: z2m_den_motion_availability
+      state_topic: "zigbee2mqtt/Den/Motion/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Sonos Controls Availability"
+      unique_id: z2m_den_sonos_controls_availability
+      state_topic: "zigbee2mqtt/Den/Sonos Controls/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Den/Wall Switch Availability"
+      unique_id: z2m_den_wall_switch_availability
+      state_topic: "zigbee2mqtt/Den/Wall Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Lamp 1 Availability"
+      unique_id: z2m_dining_room_lamp_1_availability
+      state_topic: "zigbee2mqtt/Dining Room/Lamp 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Lamp 2 Availability"
+      unique_id: z2m_dining_room_lamp_2_availability
+      state_topic: "zigbee2mqtt/Dining Room/Lamp 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/North Window Availability"
+      unique_id: z2m_dining_room_north_window_availability
+      state_topic: "zigbee2mqtt/Dining Room/North Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Overhead Availability"
+      unique_id: z2m_dining_room_overhead_availability
+      state_topic: "zigbee2mqtt/Dining Room/Overhead/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Overhead 1 Availability"
+      unique_id: z2m_dining_room_overhead_1_availability
+      state_topic: "zigbee2mqtt/Dining Room/Overhead 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Overhead 2 Availability"
+      unique_id: z2m_dining_room_overhead_2_availability
+      state_topic: "zigbee2mqtt/Dining Room/Overhead 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Overhead 3 Availability"
+      unique_id: z2m_dining_room_overhead_3_availability
+      state_topic: "zigbee2mqtt/Dining Room/Overhead 3/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Overhead 4 Availability"
+      unique_id: z2m_dining_room_overhead_4_availability
+      state_topic: "zigbee2mqtt/Dining Room/Overhead 4/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/South Window Availability"
+      unique_id: z2m_dining_room_south_window_availability
+      state_topic: "zigbee2mqtt/Dining Room/South Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Table Switch Availability"
+      unique_id: z2m_dining_room_table_switch_availability
+      state_topic: "zigbee2mqtt/Dining Room/Table Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Dining Room/Wall Switch Availability"
+      unique_id: z2m_dining_room_wall_switch_availability
+      state_topic: "zigbee2mqtt/Dining Room/Wall Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Doorbell Availability"
+      unique_id: z2m_doorbell_availability
+      state_topic: "zigbee2mqtt/Doorbell/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M East Bed Button Availability"
+      unique_id: z2m_east_bed_button_availability
+      state_topic: "zigbee2mqtt/East Bed Button/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Garage/Back Door Availability"
+      unique_id: z2m_garage_back_door_availability
+      state_topic: "zigbee2mqtt/Garage/Back Door/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Garage/Overhead Switch Availability"
+      unique_id: z2m_garage_overhead_switch_availability
+      state_topic: "zigbee2mqtt/Garage/Overhead Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Guest Bathroom/Exhaust Availability"
+      unique_id: z2m_guest_bathroom_exhaust_availability
+      state_topic: "zigbee2mqtt/Guest Bathroom/Exhaust/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Guest Bathroom/TPH Availability"
+      unique_id: z2m_guest_bathroom_tph_availability
+      state_topic: "zigbee2mqtt/Guest Bathroom/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Guest Bathroom/Window Availability"
+      unique_id: z2m_guest_bathroom_window_availability
+      state_topic: "zigbee2mqtt/Guest Bathroom/Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Guest Room/Fan Switch Availability"
+      unique_id: z2m_guest_room_fan_switch_availability
+      state_topic: "zigbee2mqtt/Guest Room/Fan Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Guest Room/TPH Availability"
+      unique_id: z2m_guest_room_tph_availability
+      state_topic: "zigbee2mqtt/Guest Room/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Guest Room/Window Availability"
+      unique_id: z2m_guest_room_window_availability
+      state_topic: "zigbee2mqtt/Guest Room/Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Button Availability"
+      unique_id: z2m_hall_button_availability
+      state_topic: "zigbee2mqtt/Hall/Button/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Foyer Switch Availability"
+      unique_id: z2m_hall_foyer_switch_availability
+      state_topic: "zigbee2mqtt/Hall/Foyer Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Garage Entry Availability"
+      unique_id: z2m_hall_garage_entry_availability
+      state_topic: "zigbee2mqtt/Hall/Garage Entry/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Garage Laundry Switch Availability"
+      unique_id: z2m_hall_garage_laundry_switch_availability
+      state_topic: "zigbee2mqtt/Hall/Garage Laundry Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Laundry Availability"
+      unique_id: z2m_hall_laundry_availability
+      state_topic: "zigbee2mqtt/Hall/Laundry/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Main Foyer 1 Availability"
+      unique_id: z2m_hall_main_foyer_1_availability
+      state_topic: "zigbee2mqtt/Hall/Main Foyer 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Main Foyer 2 Availability"
+      unique_id: z2m_hall_main_foyer_2_availability
+      state_topic: "zigbee2mqtt/Hall/Main Foyer 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Main Foyer/Motion Availability"
+      unique_id: z2m_hall_main_foyer_motion_availability
+      state_topic: "zigbee2mqtt/Hall/Main Foyer/Motion/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Stairway Availability"
+      unique_id: z2m_hall_stairway_availability
+      state_topic: "zigbee2mqtt/Hall/Stairway/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Transition Availability"
+      unique_id: z2m_hall_transition_availability
+      state_topic: "zigbee2mqtt/Hall/Transition/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Transition Switch Availability"
+      unique_id: z2m_hall_transition_switch_availability
+      state_topic: "zigbee2mqtt/Hall/Transition Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Upstairs 1 Availability"
+      unique_id: z2m_hall_upstairs_1_availability
+      state_topic: "zigbee2mqtt/Hall/Upstairs 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Upstairs 2 Availability"
+      unique_id: z2m_hall_upstairs_2_availability
+      state_topic: "zigbee2mqtt/Hall/Upstairs 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Upstairs/Linen Closet/TPH Availability"
+      unique_id: z2m_hall_upstairs_linen_closet_tph_availability
+      state_topic: "zigbee2mqtt/Hall/Upstairs/Linen Closet/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Upstairs/Motion Availability"
+      unique_id: z2m_hall_upstairs_motion_availability
+      state_topic: "zigbee2mqtt/Hall/Upstairs/Motion/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Hall/Upstairs/Switch Availability"
+      unique_id: z2m_hall_upstairs_switch_availability
+      state_topic: "zigbee2mqtt/Hall/Upstairs/Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Bay Light Availability"
+      unique_id: z2m_kitchen_bay_light_availability
+      state_topic: "zigbee2mqtt/Kitchen/Bay Light/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Bay Middle Window Availability"
+      unique_id: z2m_kitchen_bay_middle_window_availability
+      state_topic: "zigbee2mqtt/Kitchen/Bay Middle Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Bay North Window Availability"
+      unique_id: z2m_kitchen_bay_north_window_availability
+      state_topic: "zigbee2mqtt/Kitchen/Bay North Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Bay South Window Availability"
+      unique_id: z2m_kitchen_bay_south_window_availability
+      state_topic: "zigbee2mqtt/Kitchen/Bay South Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Bay Switch Availability"
+      unique_id: z2m_kitchen_bay_switch_availability
+      state_topic: "zigbee2mqtt/Kitchen/Bay Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Deck Availability"
+      unique_id: z2m_kitchen_deck_availability
+      state_topic: "zigbee2mqtt/Kitchen/Deck/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Dishwasher Leak Availability"
+      unique_id: z2m_kitchen_dishwasher_leak_availability
+      state_topic: "zigbee2mqtt/Kitchen/Dishwasher Leak/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Kitchen Sink Availability"
+      unique_id: z2m_kitchen_kitchen_sink_availability
+      state_topic: "zigbee2mqtt/Kitchen/Kitchen Sink/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/North Window Availability"
+      unique_id: z2m_kitchen_north_window_availability
+      state_topic: "zigbee2mqtt/Kitchen/North Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead 1 Availability"
+      unique_id: z2m_kitchen_overhead_1_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead 2 Availability"
+      unique_id: z2m_kitchen_overhead_2_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead 3 Availability"
+      unique_id: z2m_kitchen_overhead_3_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead 3/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead 4 Availability"
+      unique_id: z2m_kitchen_overhead_4_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead 4/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead 5 Availability"
+      unique_id: z2m_kitchen_overhead_5_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead 5/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead 6 Availability"
+      unique_id: z2m_kitchen_overhead_6_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead 6/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead 7 Availability"
+      unique_id: z2m_kitchen_overhead_7_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead 7/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Overhead Lights Switch Availability"
+      unique_id: z2m_kitchen_overhead_lights_switch_availability
+      state_topic: "zigbee2mqtt/Kitchen/Overhead Lights Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Sink Leak Availability"
+      unique_id: z2m_kitchen_sink_leak_availability
+      state_topic: "zigbee2mqtt/Kitchen/Sink Leak/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Sink Overhead Availability"
+      unique_id: z2m_kitchen_sink_overhead_availability
+      state_topic: "zigbee2mqtt/Kitchen/Sink Overhead/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Sink Overhead Switch Availability"
+      unique_id: z2m_kitchen_sink_overhead_switch_availability
+      state_topic: "zigbee2mqtt/Kitchen/Sink Overhead Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/South Window Availability"
+      unique_id: z2m_kitchen_south_window_availability
+      state_topic: "zigbee2mqtt/Kitchen/South Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Switch Availability"
+      unique_id: z2m_kitchen_switch_availability
+      state_topic: "zigbee2mqtt/Kitchen/Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Kitchen/Under Cabinet Availability"
+      unique_id: z2m_kitchen_under_cabinet_availability
+      state_topic: "zigbee2mqtt/Kitchen/Under Cabinet/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Laundry Room/Dryer Availability"
+      unique_id: z2m_laundry_room_dryer_availability
+      state_topic: "zigbee2mqtt/Laundry Room/Dryer/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Laundry Room/Washing Machine Availability"
+      unique_id: z2m_laundry_room_washing_machine_availability
+      state_topic: "zigbee2mqtt/Laundry Room/Washing Machine/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Laundry Room/Washing Machine Door Availability"
+      unique_id: z2m_laundry_room_washing_machine_door_availability
+      state_topic: "zigbee2mqtt/Laundry Room/Washing Machine Door/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Laundry/Leak Availability"
+      unique_id: z2m_laundry_leak_availability
+      state_topic: "zigbee2mqtt/Laundry/Leak/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Laundry/Outlet Repeater Availability"
+      unique_id: z2m_laundry_outlet_repeater_availability
+      state_topic: "zigbee2mqtt/Laundry/Outlet Repeater/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Laundry/Wall Switch Availability"
+      unique_id: z2m_laundry_wall_switch_availability
+      state_topic: "zigbee2mqtt/Laundry/Wall Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Laundry/Washer Vibration Availability"
+      unique_id: z2m_laundry_washer_vibration_availability
+      state_topic: "zigbee2mqtt/Laundry/Washer Vibration/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Mailbox Availability"
+      unique_id: z2m_mailbox_availability
+      state_topic: "zigbee2mqtt/Mailbox/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Main Foyer/Front Door Availability"
+      unique_id: z2m_main_foyer_front_door_availability
+      state_topic: "zigbee2mqtt/Main Foyer/Front Door/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Fan Switch Availability"
+      unique_id: z2m_office_fan_switch_availability
+      state_topic: "zigbee2mqtt/Office/Fan Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Floor Lamp 1 Availability"
+      unique_id: z2m_office_floor_lamp_1_availability
+      state_topic: "zigbee2mqtt/Office/Floor Lamp 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Floor Lamp 2 Availability"
+      unique_id: z2m_office_floor_lamp_2_availability
+      state_topic: "zigbee2mqtt/Office/Floor Lamp 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Light Button 1 Availability"
+      unique_id: z2m_office_light_button_1_availability
+      state_topic: "zigbee2mqtt/Office/Light Button 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Light Button 2 Availability"
+      unique_id: z2m_office_light_button_2_availability
+      state_topic: "zigbee2mqtt/Office/Light Button 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Motion Availability"
+      unique_id: z2m_office_motion_availability
+      state_topic: "zigbee2mqtt/Office/Motion/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Red Lava Lamp Availability"
+      unique_id: z2m_office_red_lava_lamp_availability
+      state_topic: "zigbee2mqtt/Office/Red Lava Lamp/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/TPH Availability"
+      unique_id: z2m_office_tph_availability
+      state_topic: "zigbee2mqtt/Office/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Office/Window Availability"
+      unique_id: z2m_office_window_availability
+      state_topic: "zigbee2mqtt/Office/Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Outside/Front Door Availability"
+      unique_id: z2m_outside_front_door_availability
+      state_topic: "zigbee2mqtt/Outside/Front Door/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Outside/Front Lights Availability"
+      unique_id: z2m_outside_front_lights_availability
+      state_topic: "zigbee2mqtt/Outside/Front Lights/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Outside/North West Garage Availability"
+      unique_id: z2m_outside_north_west_garage_availability
+      state_topic: "zigbee2mqtt/Outside/North West Garage/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Outside/South West Garage Availability"
+      unique_id: z2m_outside_south_west_garage_availability
+      state_topic: "zigbee2mqtt/Outside/South West Garage/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Bay North Middle Window Availability"
+      unique_id: z2m_owner_suite_bathroom_bay_north_middle_window_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Bay North Middle Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Bay North Window Availability"
+      unique_id: z2m_owner_suite_bathroom_bay_north_window_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Bay North Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Bay South Middle Window Availability"
+      unique_id: z2m_owner_suite_bathroom_bay_south_middle_window_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Bay South Middle Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Bay South Window Availability"
+      unique_id: z2m_owner_suite_bathroom_bay_south_window_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Bay South Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Exhaust Availability"
+      unique_id: z2m_owner_suite_bathroom_exhaust_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Exhaust/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Room Availability"
+      unique_id: z2m_owner_suite_bathroom_room_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Room/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Shower Availability"
+      unique_id: z2m_owner_suite_bathroom_shower_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Shower/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Shower Switch Availability"
+      unique_id: z2m_owner_suite_bathroom_shower_switch_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Shower Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/TPH Availability"
+      unique_id: z2m_owner_suite_bathroom_tph_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Tub 1 Availability"
+      unique_id: z2m_owner_suite_bathroom_tub_1_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Tub 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Tub 2 Availability"
+      unique_id: z2m_owner_suite_bathroom_tub_2_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Tub 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Tub Switch Availability"
+      unique_id: z2m_owner_suite_bathroom_tub_switch_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Tub Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Bathroom/Vanity Availability"
+      unique_id: z2m_owner_suite_bathroom_vanity_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Bathroom/Vanity/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Blind Control Availability"
+      unique_id: z2m_owner_suite_blind_control_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Blind Control/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/CPAP Plug Availability"
+      unique_id: z2m_owner_suite_cpap_plug_availability
+      state_topic: "zigbee2mqtt/Owner Suite/CPAP Plug/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Closet Availability"
+      unique_id: z2m_owner_suite_closet_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Closet/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Cube Availability"
+      unique_id: z2m_owner_suite_cube_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Cube/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Fan Switch Availability"
+      unique_id: z2m_owner_suite_fan_switch_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Fan Switch/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Lamp Bulb 1 Availability"
+      unique_id: z2m_owner_suite_lamp_bulb_1_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Lamp Bulb 1/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Lamp Bulb 2 Availability"
+      unique_id: z2m_owner_suite_lamp_bulb_2_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Lamp Bulb 2/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/North Blind Availability"
+      unique_id: z2m_owner_suite_north_blind_availability
+      state_topic: "zigbee2mqtt/Owner Suite/North Blind/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/North Window Availability"
+      unique_id: z2m_owner_suite_north_window_availability
+      state_topic: "zigbee2mqtt/Owner Suite/North Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/South Blind Availability"
+      unique_id: z2m_owner_suite_south_blind_availability
+      state_topic: "zigbee2mqtt/Owner Suite/South Blind/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/South Window Availability"
+      unique_id: z2m_owner_suite_south_window_availability
+      state_topic: "zigbee2mqtt/Owner Suite/South Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/TPH Availability"
+      unique_id: z2m_owner_suite_tph_availability
+      state_topic: "zigbee2mqtt/Owner Suite/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Powder Room/Window Availability"
+      unique_id: z2m_powder_room_window_availability
+      state_topic: "zigbee2mqtt/Powder Room/Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Tiki Room/Camera Availability"
+      unique_id: z2m_tiki_room_camera_availability
+      state_topic: "zigbee2mqtt/Tiki Room/Camera/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Tiki Room/Deck Availability"
+      unique_id: z2m_tiki_room_deck_availability
+      state_topic: "zigbee2mqtt/Tiki Room/Deck/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Tiki Room/Floor Lamp Availability"
+      unique_id: z2m_tiki_room_floor_lamp_availability
+      state_topic: "zigbee2mqtt/Tiki Room/Floor Lamp/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Tiki Room/Heater Availability"
+      unique_id: z2m_tiki_room_heater_availability
+      state_topic: "zigbee2mqtt/Tiki Room/Heater/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Tiki Room/Sonos Control Availability"
+      unique_id: z2m_tiki_room_sonos_control_availability
+      state_topic: "zigbee2mqtt/Tiki Room/Sonos Control/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Tiki Room/TPH Availability"
+      unique_id: z2m_tiki_room_tph_availability
+      state_topic: "zigbee2mqtt/Tiki Room/TPH/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Unfinished Basement/Window Availability"
+      unique_id: z2m_unfinished_basement_window_availability
+      state_topic: "zigbee2mqtt/Unfinished Basement/Window/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M West Bed Button Availability"
+      unique_id: z2m_west_bed_button_availability
+      state_topic: "zigbee2mqtt/West Bed Button/availability"
+      value_template: "{{ value_json.state }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+################################################################
+## Template sensors — aggregate Z2M availability status
+################################################################
+
+template:
+  - binary_sensor:
+      - name: "Z2M Devices Offline"
+        unique_id: z2m_devices_offline
+        device_class: problem
+        state: >
+          {{ states.binary_sensor | selectattr('attributes.device_class', 'eq', 'connectivity')
+             | selectattr('entity_id', 'search', 'z2m_')
+             | selectattr('state', 'eq', 'off') | list | count > 0 }}
+        attributes:
+          offline_devices: >
+            {{ states.binary_sensor | selectattr('attributes.device_class', 'eq', 'connectivity')
+               | selectattr('entity_id', 'search', 'z2m_')
+               | selectattr('state', 'eq', 'off')
+               | map(attribute='name') | list }}
+          total_devices: >
+            {{ states.binary_sensor | selectattr('attributes.device_class', 'eq', 'connectivity')
+               | selectattr('entity_id', 'search', 'z2m_') | list | count }}
+          online_count: >
+            {{ states.binary_sensor | selectattr('attributes.device_class', 'eq', 'connectivity')
+               | selectattr('entity_id', 'search', 'z2m_')
+               | selectattr('state', 'eq', 'on') | list | count }}
