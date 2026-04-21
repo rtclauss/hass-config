@@ -1,0 +1,12 @@
+services:
+  loki:
+    image: grafana/loki:2.9.10
+    container_name: loki
+    restart: unless-stopped
+    user: "0:0"
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./config/loki-config.yaml:/etc/loki/local-config.yaml
+      - ./data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
