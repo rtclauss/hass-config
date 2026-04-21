@@ -53,7 +53,16 @@ Common optional fields:
 - `packages/guest.yaml`
   guest-mode enable/disable and guest climate refresh automations
 - `packages/trips.yaml`
-  trip-mode manager enable/disable paths
+  trip-mode manager enable/disable paths, startup reconciliation, and the
+  one-hour home watchdog
+
+## Trip Mode
+
+Trip-mode behavior is documented in `docs/trip_mode_orchestration.md`. The
+important contract is that automated trip resolution delegates to
+`automation.trip_mode_manager`, and the manager calls `script.house_transition`
+with `apply_trip_policy: true` so vacation simulation stays in sync with
+`input_boolean.trip`.
 
 ## Manual Verification
 
