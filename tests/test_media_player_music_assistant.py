@@ -250,6 +250,7 @@ def test_bathroom_wakeup_automation_uses_sync_group_playback() -> None:
     assert block.count('playback_entity_id: media_player.bedroom_sonos_2') == 0
     assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 0
     assert 'regroup_after_play: true' not in block
+    assert 'number.guest_room_fan_switch_ledintensitywhenoff' not in block
     assert 'media_player.media_stop' not in block
 
 
