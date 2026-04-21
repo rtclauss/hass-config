@@ -315,6 +315,12 @@ automation:
         event_data:
           desired_state: "off"
           reason: startup_reconcile
+      - trigger: event
+        id: watchdog_home_disable
+        event_type: trip_mode_resolution_requested
+        event_data:
+          desired_state: "off"
+          reason: watchdog_home_1h
       - trigger: state
         id: away_for_20h
         entity_id: binary_sensor.bayesian_zeke_home
@@ -388,8 +394,18 @@ automation:
                   message: "Trip mode enabled."
           - conditions:
               - condition: trigger
-                id: startup_reconcile_disable
+                id:
+                  - startup_reconcile_disable
+                  - watchdog_home_disable
             sequence:
+              - variables:
+                  trip_disable_message: >-
+                    {% if trigger.id == 'watchdog_home_disable' %}
+                      Trip mode watchdog cleared vacation mode after 1 hour
+                      at home.
+                    {% else %}
+                      Back from trip. 💺
+                    {% endif %}
               - action: input_boolean.turn_off
                 target:
                   entity_id: input_boolean.trip
@@ -404,7 +420,7 @@ automation:
                   apply_trip_policy: true
               - action: notify.all
                 data:
-                  message: "Back from trip. \U0001F4BA"
+                  message: "{{ trip_disable_message }}"
           - conditions:
               - condition: trigger
                 id:
@@ -668,19 +684,12 @@ automation:
         entity_id: input_boolean.trip
         state: "on"
     action:
-      - action: switch.turn_off
-        target:
-          entity_id: switch.vacation_simulation
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.trip
-      - action: input_number.set_value
-        data:
-          entity_id: input_number.random_vacation_light_group
-          value: "{{ (0|int) }}"
-      - action: notify.all
-        data:
-          message: "Trip mode watchdog cleared vacation mode after 1 hour at home."
+      # Delegate to trip_mode_manager so trip state, vacation simulation, and
+      # related notifications stay on the same reconciliation path.
+      - event: trip_mode_resolution_requested
+        event_data:
+          desired_state: "off"
+          reason: watchdog_home_1h
 
   - id: garage_opened_on_a_trip
     alias: Garage Door Opened while on a Trip
@@ -701,10 +710,12 @@ automation:
     condition:
       condition: and
       conditions:
-        - condition: state
+        - alias: "garage trip mode is active"
+          condition: state
           entity_id: input_boolean.trip
           state: "on"
-        - condition: state
+        - alias: "garage primary resident is away"
+          condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
     action:
@@ -762,6 +773,7 @@ automation:
     alias: random_off_time
     trigger:
       - trigger: homeassistant
+        id: random_off_time_startup
         event: start
       - trigger: time
         at: "12:00:00"
@@ -769,7 +781,8 @@ automation:
         entity_id: input_boolean.trip
         to: "on"
     condition:
-      - condition: state
+      - alias: "random vacation group only while trip mode is active"
+        condition: state
         entity_id: input_boolean.trip
         state: "on"
     action:
@@ -809,10 +822,9 @@ automation:
       #   entity_id: climate.my_ecobee
       #   data:
       #     preset_mode: "Away"
-      - action: ecobee.resume_program
+      - action: script.resume_ecobee_program_for_return_home
         data:
-          resume_all: true
-          entity_id: climate.my_ecobee
+          reason: return_home_from_parents
       - action: notify.all
         data:
           data:
@@ -840,10 +852,9 @@ automation:
       #   entity_id: climate.my_ecobee
       #   data:
       #     preset_mode: "Home"
-      - action: ecobee.resume_program
+      - action: script.resume_ecobee_program_for_return_home
         data:
-          resume_all: true
-          entity_id: climate.my_ecobee
+          reason: send_nest_airport_home_eta
       - action: notify.all
         data:
           data: url:"/ryan-new-mushroom/climate"
@@ -859,10 +870,12 @@ automation:
     condition:
       condition: and
       conditions:
-        - condition: state
+        - alias: "vacation lights on while trip mode is active"
+          condition: state
           entity_id: input_boolean.trip
           state: "on"
-        - condition: state
+        - alias: "vacation lights on while primary resident is away"
+          condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
     action:
@@ -884,10 +897,12 @@ automation:
     condition:
       condition: and
       conditions:
-        - condition: state
+        - alias: "vacation lights off while trip mode is active"
+          condition: state
           entity_id: input_boolean.trip
           state: "on"
-        - condition: state
+        - alias: "vacation lights off while primary resident is away"
+          condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
     action:
@@ -914,7 +929,8 @@ automation:
 
   - id: vacuum_on_trip
     alias: vacuum_on_trip
-    description: Run one full-floor pass on the main and upstairs levels during trips.
+    description: >-
+      Run one full-floor pass on the main and upstairs levels during trips.
     trigger:
       - trigger: time
         at: "13:00:00"
@@ -934,16 +950,16 @@ automation:
           entity_id: input_boolean.guest_mode
           state: "off"
     action:
-      - action: script.vacuum_main_and_upstairs_levels
-      - action: notify.all
+      - action: script.trip_vacuum_main_and_upstairs_levels
         data:
-          data:
-            url: "/ryan-new-mushroom/cleaning"
-          message: "Vacuuming the main and upstairs levels while you're away \U0001F4BA"
+          notify_message: >-
+            Vacuuming the main and upstairs levels while you're away 💺
 
   - id: vacuum_flying_home
     alias: vacuum_flying_home
-    description: Run one full-floor pass on the main and upstairs levels before Ryan flies home.
+    description: >-
+      Run one full-floor pass on the main and upstairs levels before Ryan flies
+      home.
     trigger:
       - entity_id: binary_sensor.flying_home_today
         from: "off"
@@ -962,12 +978,10 @@ automation:
           entity_id: input_boolean.guest_mode
           state: "off"
     action:
-      - action: script.vacuum_main_and_upstairs_levels
-      - action: notify.all
+      - action: script.trip_vacuum_main_and_upstairs_levels
         data:
-          data:
-            url: "/ryan-new-mushroom/cleaning"
-          message: "Vacuuming the main and upstairs levels while you fly home \U0001F4BA"
+          notify_message: >-
+            Vacuuming the main and upstairs levels while you fly home 💺
 
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab
@@ -1154,7 +1168,48 @@ scene:
 ########################
 # Scripts
 ########################
-script: {}
+script:
+  resume_ecobee_program_for_return_home:
+    alias: resume_ecobee_program_for_return_home
+    description: >-
+      Resume the Ecobee program when a return-home travel signal fires.
+    mode: queued
+    fields:
+      reason:
+        description: Return-home travel source requesting Ecobee resume.
+        example: send_nest_airport_home_eta
+    sequence:
+      - continue_on_error: true
+        action: logbook.log
+        data:
+          name: Travel climate
+          entity_id: script.resume_ecobee_program_for_return_home
+          message: >-
+            Resuming Ecobee program for
+            {{ reason | default('return_home', true) }}.
+          domain: script
+      - action: ecobee.resume_program
+        data:
+          resume_all: true
+          entity_id: climate.my_ecobee
+
+  trip_vacuum_main_and_upstairs_levels:
+    alias: trip_vacuum_main_and_upstairs_levels
+    description: >-
+      Run trip-safe whole-floor vacuuming and send the travel notification.
+    mode: queued
+    fields:
+      notify_message:
+        description: >-
+          Notification text describing why the trip vacuum pass started.
+        example: "Vacuuming the main and upstairs levels while you're away."
+    sequence:
+      - action: script.vacuum_main_and_upstairs_levels
+      - action: notify.all
+        data:
+          data:
+            url: "/ryan-new-mushroom/cleaning"
+          message: "{{ notify_message }}"
   # toggle_automations_showing_house:
   #   sequence:
   #     - action: homeassistant.toggle
