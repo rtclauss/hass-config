@@ -244,3 +244,11 @@ def test_circadian_template_sensors_have_adaptive_lighting_fallbacks() -> None:
     assert "color_temp_kelvin') | int(1000)" in block
     assert "brightness_pct') |int" not in block
     assert "color_temp_kelvin') }}\n" not in block
+
+
+def test_light_package_uses_kelvin_color_temperature_keys() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    assert "\n        color_temp:" not in text
+    assert "color_temp_kelvin: 2000" in text
+    assert "color_temp_kelvin: 2591" in text
