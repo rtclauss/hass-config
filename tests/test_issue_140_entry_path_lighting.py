@@ -48,6 +48,19 @@ def test_front_door_entry_path_is_targeted_and_preserves_manual_offs() -> None:
     assert "action: input_boolean.turn_off" in block
 
 
+def test_front_door_entry_path_only_marks_auto_on_after_off_state_guard() -> None:
+    block = _automation_block("front_door_light_auto_toggle")
+
+    auto_on_marker = block.index("action: input_boolean.turn_on")
+    off_state_guard = block.index(
+        "entity_id:\n"
+        "                  - light.hall_foyer_switch\n"
+        "                  - light.hall_transition_switch\n"
+        '                state: "off"'
+    )
+    assert off_state_guard < auto_on_marker
+
+
 def test_garage_entry_path_uses_contact_mmwave_and_auto_on_guard() -> None:
     block = _automation_block("garage_entry_door_light_auto_toggle")
 
