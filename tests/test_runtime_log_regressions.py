@@ -114,6 +114,15 @@ def test_garden_birds_sensor_is_excluded_from_influxdb() -> None:
     assert "sensor.garden_birds" in influx_block
 
 
+def test_large_z2m_lifecycle_helper_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.z2m_lifecycle_issues" in recorder_block
+    assert "large selection maps as attributes" in recorder_block
+
+
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
     text = _read(UTILITIES_PATH)
 
@@ -221,3 +230,17 @@ def test_lights_off_except_skips_light_groups_that_contain_protected_members() -
     assert "light.entity_id in excluded or (members | select('in', excluded)" in block
     assert "members | select('in', excluded)" in block
     assert "rejectattr('entity_id', 'in', protected_lights)" in block
+
+
+def test_circadian_template_sensors_have_adaptive_lighting_fallbacks() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    block = text.split("name: circadian_brightness", 1)[1].split(
+        "\n########################\n# Zone",
+        1,
+    )[0]
+
+    assert "brightness_pct') | int(1)" in block
+    assert "color_temp_kelvin') | int(1000)" in block
+    assert "brightness_pct') |int" not in block
+    assert "color_temp_kelvin') }}\n" not in block

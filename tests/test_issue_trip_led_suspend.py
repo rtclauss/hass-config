@@ -77,8 +77,9 @@ def test_trip_suspend_script_zeros_led_intensities_and_clears_active_effects() -
     assert "all_switches_led_intensity_on" in block
     assert "all_switches_led_intensity_off" in block
     assert "value: 0" in block
-    assert "'clear_effect'" in block
-    assert "zigbee2mqtt/{{ repeat.item }}/set" in block
+    assert "script.inovelli_led_clear_all_effects" in block
+    assert "'clear_effect'" not in block
+    assert "zigbee2mqtt/{{ repeat.item }}/set" not in block
 
 
 def test_trip_restore_script_reuses_existing_day_and_night_profiles() -> None:
