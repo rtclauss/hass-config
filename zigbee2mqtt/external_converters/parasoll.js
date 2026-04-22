@@ -28,9 +28,23 @@ module.exports = {
     // Explicitly bind ssIasZone — the missing binding is the root cause of
     // sensors silently stopping state reports after a few hours.
     bindCluster({ cluster: "ssIasZone", clusterType: "input" }),
-    iasZoneAlarm({ zoneType: "contact", zoneAttributes: ["alarm_1"] }),
+    iasZoneAlarm({
+      zoneType: "contact",
+      zoneAttributes: ["alarm_1"],
+      // Required so configure sets up zoneStatus attribute reporting on ep2.
+      // Without this, sensors that have never had the interval bounded will
+      // silently oversleep at the factory default of 65000 s (~18 h) and drop
+      // off the network. The blueprint automation then tightens max to 14400 s.
+      zoneStatusReporting: true,
+    }),
     identify({ isSleepy: true }),
-    battery(),
+    battery({
+      // Enable voltage so both batteryVoltage and batteryPercentageRemaining
+      // are reported and visible in HA — matches what the stock IKEA converter
+      // configures and ensures the blueprint can enforce intervals on both.
+      voltage: true,
+      voltageReporting: true,
+    }),
     // genPollCtrl deliberately omitted — binding it writes an aggressive
     // check-in interval that drains AAA batteries in days/weeks.
   ],

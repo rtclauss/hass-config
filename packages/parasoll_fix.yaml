@@ -62,6 +62,19 @@ script:
                     entity_id: "{{ repeat.item.identify }}"
             - delay:
                 milliseconds: 500
+            # Unbind genPollCtrl — devices paired with the stock converter
+            # retain this binding even after the patched converter is loaded.
+            # genPollCtrl is the cluster that writes an aggressive check-in
+            # interval and is the primary cause of rapid battery drain.
+            - action: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/unbind
+                payload: >
+                  {"from": "{{ repeat.item.ieee }}", "from_endpoint": "1",
+                   "to": "Coordinator",
+                   "clusters": ["genPollCtrl"]}
+            - delay:
+                milliseconds: 500
             - action: mqtt.publish
               data:
                 topic: zigbee2mqtt/bridge/request/device/configure
@@ -138,6 +151,15 @@ automation:
               entity_id: "{{ parasoll_identify_btn }}"
           - delay:
               seconds: 2
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/device/unbind
+          payload: >
+            {"from": "{{ trigger.payload_json.data.ieee_address }}",
+             "from_endpoint": "1", "to": "Coordinator",
+             "clusters": ["genPollCtrl"]}
+      - delay:
+          milliseconds: 500
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/configure
