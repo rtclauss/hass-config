@@ -62,6 +62,19 @@ script:
                     entity_id: "{{ repeat.item.identify }}"
             - delay:
                 milliseconds: 500
+            # Unbind genPollCtrl — devices paired with the stock converter
+            # retain this binding even after the patched converter is loaded.
+            # genPollCtrl is the cluster that writes an aggressive check-in
+            # interval and is the primary cause of rapid battery drain.
+            - action: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/unbind
+                payload: >
+                  {"from": "{{ repeat.item.ieee }}", "from_endpoint": "1",
+                   "to": "Coordinator",
+                   "clusters": ["genPollCtrl"]}
+            - delay:
+                milliseconds: 500
             - action: mqtt.publish
               data:
                 topic: zigbee2mqtt/bridge/request/device/configure
@@ -115,6 +128,8 @@ automation:
       - delay:
           seconds: 5
       - variables:
+          _ieee: "{{ trigger.payload_json.data.ieee_address }}"
+          _name: "{{ trigger.payload_json.data.friendly_name }}"
           parasoll_identify_btn: >
             {% set ieee = trigger.payload_json.data.ieee_address %}
             {% set ns = namespace(entity='') %}
@@ -138,7 +153,39 @@ automation:
               entity_id: "{{ parasoll_identify_btn }}"
           - delay:
               seconds: 2
+      - action: notify.mobile_app_wethop
+        data:
+          title: "PARASOLL"
+          message: "Reconfiguring {{ _name }}…"
+      - action: mqtt.publish
+        data:
+          topic: zigbee2mqtt/bridge/request/device/unbind
+          payload: >
+            {"from": "{{ _ieee }}",
+             "from_endpoint": "1", "to": "Coordinator",
+             "clusters": ["genPollCtrl"]}
+      - delay:
+          milliseconds: 500
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/configure
-          payload: '{"id": "{{ trigger.payload_json.data.ieee_address }}"}'
+          payload: '{"id": "{{ _ieee }}"}'
+      - wait_for_trigger:
+          - platform: mqtt
+            topic: zigbee2mqtt/bridge/response/device/configure
+            value_template: "{{ value_json.data.get('id') == _ieee }}"
+        timeout:
+          seconds: 60
+        continue_on_timeout: true
+      - action: notify.mobile_app_wethop
+        data:
+          title: "PARASOLL"
+          message: >
+            {% set resp = wait.trigger.payload_json if wait.trigger else none %}
+            {% if resp and resp.get('status') == 'ok' %}
+              ✓ {{ _name }} — all settings applied
+            {% elif resp %}
+              ✗ {{ _name }} — {{ resp.get('data', {}).get('error', 'configure failed') }}
+            {% else %}
+              ⏳ {{ _name }} — configure queued (sleepy; settings apply on next wakeup)
+            {% endif %}
