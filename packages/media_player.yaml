@@ -1028,10 +1028,13 @@ script:
     sequence:
       - action: media_player.volume_set
         continue_on_error: true
-        data:
+        target:
           entity_id:
             - media_player.bedroom_sonos
+            - media_player.bedroom_sonos_2
             - media_player.bathroom_sonos
+            - media_player.bathroom_sonos_2
+        data:
           volume_level: 0.01
       - if:
           - condition: template
@@ -1052,10 +1055,13 @@ script:
             - alias: "Increase grouped wake-up volume by 0.01"
               continue_on_error: true
               action: media_player.volume_set
-              data:
+              target:
                 entity_id:
                   - media_player.bedroom_sonos
+                  - media_player.bedroom_sonos_2
                   - media_player.bathroom_sonos
+                  - media_player.bathroom_sonos_2
+              data:
                 volume_level: "{{ 0.01 * repeat.index }}"
             - delay:
                 seconds: "{{ (1/(tan(repeat.index/120))) | round(0, 'ceil', 5)}}"
