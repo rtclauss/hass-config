@@ -4,6 +4,7 @@
 -- Scope: Owner bedtime preparation and privacy-aware overnight shutdown.
 -- Includes:
 --   - soft bedtime-prep flow triggered by nighttime TV/button actions
+--   - owner-suite blind privacy close around sunset
 --   - CPAP-triggered escalation into the stricter goodnight integrity flow
 --   - guest/privacy-aware shutdown choices derived from docs/room_intent.yaml
 --   - lock, cover, climate, media, and notification expectations
@@ -70,6 +71,12 @@ entity HouseSleepSafety {
     climate_mode: resumed_program | guest_sleep | unavailable | away_like
 }
 
+entity OwnerSuiteBlindsPrivacySchedule {
+    selected_close_offset_after_window_start: Duration
+    scheduled_close_at: Timestamp
+    closed_for_current_sunset: Boolean
+}
+
 entity HouseModeStateMachine {
     mode: home | away | night | in_bed | asleep
 
@@ -94,6 +101,9 @@ config {
     bedtime_audio_timeout: Duration = 10.minutes
     bedtime_audio_rampdown_delay: Duration = 3.minutes
     goodnight_verification_delay: Duration = 30.seconds
+    owner_suite_blinds_sunset_window_start_lead: Duration = 45.minutes
+    owner_suite_blinds_sunset_window_end_lag: Duration = 2.minutes
+    owner_suite_blinds_sunset_window_duration: Duration = owner_suite_blinds_sunset_window_start_lead + owner_suite_blinds_sunset_window_end_lag
 }
 
 ------------------------------------------------------------
@@ -137,6 +147,29 @@ rule ScheduleBedtimeAudioRampdown {
 rule ChooseBedtimeAudioFromConfiguredPool {
     when: BedtimeAudioRequested(zone)
     ensures: BedtimeAudioSelectionChosen(configured_bedtime_media_pool, shuffle_optional, repeat_all)
+}
+
+rule ScheduleOwnerSuiteBlindsSunsetPrivacyClose {
+    when: SunsetTimeKnown(sunset_at)
+    let close_offset = RandomDurationBetween(0.minutes, config.owner_suite_blinds_sunset_window_duration)
+    ensures: OwnerSuiteBlindsPrivacySchedule.created(
+        selected_close_offset_after_window_start: close_offset,
+        scheduled_close_at: sunset_at - config.owner_suite_blinds_sunset_window_start_lead + close_offset,
+        closed_for_current_sunset: false
+    )
+    @guidance
+        -- The selected close time varies day to day so the owner-suite blinds
+        -- close in the privacy window from 45 minutes before sunset through
+        -- 2 minutes after sunset, inclusive.
+}
+
+rule CloseOwnerSuiteBlindsAroundSunset {
+    when: schedule: OwnerSuiteBlindsPrivacySchedule.scheduled_close_at <= now
+    requires: not schedule.closed_for_current_sunset
+    requires: schedule.selected_close_offset_after_window_start >= 0.minutes
+    requires: schedule.selected_close_offset_after_window_start <= config.owner_suite_blinds_sunset_window_duration
+    ensures: house.owner_suite_blinds_closed = true
+    ensures: schedule.closed_for_current_sunset = true
 }
 
 rule TriggerGoodnightFromCPAPSleep {
