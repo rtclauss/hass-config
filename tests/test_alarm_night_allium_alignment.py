@@ -116,6 +116,17 @@ def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> No
     ):
         assert token in block
 
+    assert re.search(
+        r"action: media_player\.volume_set\s+"
+        r"target:\s+"
+        r"entity_id:\s+"
+        r"- media_player\.bedroom_sonos\s+"
+        r"- media_player\.bedroom_sonos_2\s+"
+        r"data:\s+"
+        r"volume_level: 0\.2",
+        block,
+    )
+
 
 def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
     snooze_automation = _automation_block(WORKDAY_PATH, "alarm_snooze")
