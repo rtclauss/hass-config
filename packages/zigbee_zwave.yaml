@@ -686,6 +686,18 @@ automation:
           seconds: 30
         id: "east_bed_off"
       - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        to: "off"
+        for:
+          seconds: 10
+        id: "east_bed_left_bed"
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        to: "on"
+        for:
+          seconds: 10
+        id: "east_bed_back_in_bed"
+      - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: sensor.east_bed_button_action
         to: "1_short_release"
@@ -767,6 +779,9 @@ automation:
               - condition: state
                 entity_id: input_boolean.west_bed_occupied
                 state: "on"
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
               - condition: or
                 conditions:
                   - condition: sun
@@ -780,6 +795,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: west_bed_back_in_bed
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
               - condition: or
                 conditions:
                   - condition: sun
@@ -790,6 +808,41 @@ automation:
               - action: light.turn_off
                 data:
                   entity_id: light.owner_suite_lamp_bulb_1
+          - conditions:
+              - condition: trigger
+                id: east_bed_left_bed
+              - condition: state
+                entity_id: input_boolean.east_bed_occupied
+                state: "on"
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_on
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_2
+          - conditions:
+              - condition: trigger
+                id: east_bed_back_in_bed
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
+              - condition: or
+                conditions:
+                  - condition: sun
+                    after: sunset
+                  - condition: time
+                    before: "12:00:00"
+            sequence:
+              - action: light.turn_off
+                data:
+                  entity_id: light.owner_suite_lamp_bulb_2
           # control the lights
           - conditions:
               - condition: trigger
@@ -1708,8 +1761,10 @@ script:
         target:
           entity_id:
             - script.day_mode_switches_general
-            - script.day_mode_switches_owner_suite_bedroom
             - script.day_mode_switches_office_guest_room
+      - action: script.apply_owner_suite_inovelli_led_policy
+        data:
+          policy: day
 
   day_mode_switches_general:
     icon: mdi:light-switch
@@ -1718,6 +1773,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1726,6 +1783,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1734,6 +1793,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1742,6 +1803,8 @@ script:
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
+          | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
+          | rejectattr('entity_id', 'search', 'owner_suite_closet')
           | rejectattr('entity_id', 'search', 'office_fan_switch')
           | rejectattr('entity_id', 'search', 'guest_room_fan_switch') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
@@ -1816,59 +1879,152 @@ script:
 
   day_mode_switches_owner_suite_bedroom:
     icon: mdi:light-switch
+    sequence:
+      - action: script.day_mode_switches_owner_suite_scope
+        data:
+          scope: bedroom
+
+  day_mode_switches_owner_suite_bathroom:
+    icon: mdi:light-switch
+    sequence:
+      - action: script.day_mode_switches_owner_suite_scope
+        data:
+          scope: bathroom
+
+  day_mode_switches_owner_suite_scope:
+    icon: mdi:light-switch
+    fields:
+      scope:
+        name: Scope
+        description: Owner-suite switch group to restore to day mode.
+        selector:
+          select:
+            options:
+              - bedroom
+              - bathroom
     variables:
-      owner_suite_bedroom_off_led_switches: >
+      requested_scope: "{{ scope | default('bedroom') }}"
+      owner_suite_day_mode_entity_pattern: >-
+        {{
+          'owner_suite_fan_switch'
+          if requested_scope == 'bedroom'
+          else '(owner_suite_bathroom_vanity|owner_suite_closet)'
+        }}
+      owner_suite_day_mode_script_entity: >-
+        {{
+          'script.day_mode_switches_owner_suite_bedroom'
+          if requested_scope == 'bedroom'
+          else 'script.day_mode_switches_owner_suite_bathroom'
+        }}
+      owner_suite_day_mode_log_message: >-
+        {{
+          'Setting owner suite bedroom switch day mode colors'
+          if requested_scope == 'bedroom'
+          else 'Setting owner suite bathroom and closet switch day mode colors'
+        }}
+      owner_suite_day_mode_off_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
-          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
-      owner_suite_bedroom_on_led_switches: >
+      owner_suite_day_mode_on_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
-          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
-      owner_suite_bedroom_led_intensity_on_switches: >
+      owner_suite_day_mode_led_intensity_on_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
-          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
-      owner_suite_bedroom_led_intensity_off_switches: >
+      owner_suite_day_mode_led_intensity_off_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
-          | selectattr('entity_id', 'search', 'owner_suite_fan_switch') -%}
+          | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
     sequence:
       - *trip_led_updates_allowed
       - action: logbook.log
         data:
-          entity_id: script.day_mode_switches_owner_suite_bedroom
+          entity_id: "{{ owner_suite_day_mode_script_entity }}"
           name: Exclude log
-          message: "Setting owner suite bedroom switch day mode colors"
+          message: "{{ owner_suite_day_mode_log_message }}"
           domain: script
       - action: number.set_value
         data:
           entity_id: >
-            {{owner_suite_bedroom_off_led_switches}}
+            {{owner_suite_day_mode_off_led_switches}}
           value: "170"
       - action: number.set_value
         data:
           entity_id: >
-            {{owner_suite_bedroom_led_intensity_off_switches}}
+            {{owner_suite_day_mode_led_intensity_off_switches}}
           value: "1"
       - action: number.set_value
         data:
           entity_id: >
-            {{owner_suite_bedroom_led_intensity_on_switches}}
+            {{owner_suite_day_mode_led_intensity_on_switches}}
           value: "75"
       - action: number.set_value
         data:
           entity_id: >
-            {{owner_suite_bedroom_on_led_switches}}
+            {{owner_suite_day_mode_on_led_switches}}
           value: "170"
+
+  apply_owner_suite_inovelli_led_policy:
+    icon: mdi:light-switch
+    fields:
+      policy:
+        name: Policy
+        description: Owner-suite switch LED policy to apply.
+        selector:
+          select:
+            options:
+              - dark
+              - night_red
+              - day
+      scope:
+        name: Scope
+        description: Owner-suite switch group for day-mode policy. Night-red and dark always apply to the full owner suite.
+        selector:
+          select:
+            options:
+              - all
+              - bedroom
+              - bathroom
+    variables:
+      requested_policy: "{{ policy | default('day') }}"
+      requested_scope: "{{ scope | default('all') }}"
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ requested_policy == 'day' }}"
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: "{{ requested_scope in ['all', 'bedroom'] }}"
+                then:
+                  - action: script.day_mode_switches_owner_suite_bedroom
+              - if:
+                  - condition: template
+                    value_template: "{{ requested_scope in ['all', 'bathroom'] }}"
+                then:
+                  - action: script.day_mode_switches_owner_suite_bathroom
+          - conditions:
+              - condition: template
+                value_template: "{{ requested_policy == 'night_red' }}"
+            sequence:
+              - action: script.night_mode_switches_owner_suite
+          - conditions:
+              - condition: template
+                value_template: "{{ requested_policy == 'dark' }}"
+            sequence:
+              - action: script.turn_off_owner_suite_inovelli_switch_leds
 
   night_mode_switches_owner_suite:
     icon: mdi:light-switch
@@ -1974,13 +2130,6 @@ script:
     variables:
       ha_write_delay: "00:00:01"
       mqtt_bind_delay: "00:00:03"
-      aurora_effect: aurora
-      aurora_color: 187
-      aurora_level: 51
-      # Keep the aurora notification visible for 10 minutes, then let the
-      # devices fall back to whichever LED defaults are already active.
-      # 1-60 is in seconds calculated 61-120 is in minutes calculated by(value-60) Example a value of 65 would be 65-60 = 5 minutes - 120-254 Is in hours calculated by(value-120) Example a value of 132 would be 132-120 would be 12 hours. - 255 Indefinitely
-      aurora_duration: 70
       all_inovelli_switches_energy_report_rate: >
         {%- for device in states.number | select('match', '.*periodicpowerandenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
       all_inovelli_switches_active_energy_report_rate: >
@@ -2001,42 +2150,6 @@ script:
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
-      # Snapshot captured from the live Zigbee2MQTT MQTT bridge on 2026-03-28.
-      inovelli_led_notification_targets: &inovelli_led_notification_targets
-        - Basement/Bathroom/Exhaust
-        - Basement/Bathroom/Shower Switch
-        - Basement/Great Room East and Middle Switch
-        - Basement/Great Room Landing Switch 2
-        - Basement/Great Room West Switch
-        - Basement/Landing Switch
-        - Basement/North Hallway Switch
-        - Basement/Overhead Outlet
-        - Deck/Flood Lights
-        - Deck/Kitchen Door
-        - Den/Flood Switch
-        - Dining Room/Table Switch
-        - Dining Room/Wall Switch
-        - Garage/Overhead Switch
-        - Guest Bathroom/Exhaust
-        - Guest Room/Fan Switch
-        - Hall/Foyer Switch
-        - Hall/Garage Laundry Switch
-        - Hall/Stairway
-        - Hall/Transition Switch
-        - Hall/Upstairs/Switch
-        - Kitchen/Bay Switch
-        - Kitchen/Sink Overhead Switch
-        - Kitchen/Switch
-        - Kitchen/Under Cabinet
-        - Laundry/Wall Switch
-        - Office/Fan Switch
-        - Outside/Front Lights
-        - Owner Suite/Bathroom/Exhaust
-        - Owner Suite/Bathroom/Shower Switch
-        - Owner Suite/Bathroom/Tub Switch
-        - Owner Suite/Bathroom/Vanity
-        - Owner Suite/Closet
-        - Owner Suite/Fan Switch
       inovelli_smart_bulb_mode_replay:
         - option: "Smart Bulb Mode"
           entities:
@@ -2487,22 +2600,7 @@ script:
                 entity_id: binary_sensor.bayesian_bed_occupancy
                 state: "off"
             sequence:
-              - repeat:
-                  for_each: "{{ inovelli_led_notification_targets }}"
-                  sequence:
-                    - action: mqtt.publish
-                      data:
-                        topic: "zigbee2mqtt/{{ repeat.item }}/set"
-                        payload: >
-                          {{ {
-                            'led_effect': {
-                              'effect': aurora_effect,
-                              'color': aurora_color,
-                              'level': aurora_level,
-                              'duration': aurora_duration
-                            }
-                          } | tojson }}
-                    - delay: "{{ mqtt_bind_delay }}"
+              - action: script.inovelli_led_aurora_notification
       - action: logbook.log
         data:
           name: Zigbee2MQTT Reset
@@ -2523,7 +2621,6 @@ script:
           | selectattr('entity_id', 'search', 'ledintensitywhenoff') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
-      inovelli_led_notification_targets: *inovelli_led_notification_targets
     sequence:
       - action: logbook.log
         data:
@@ -2541,23 +2638,19 @@ script:
           entity_id: >
             {{ all_switches_led_intensity_on }}
           value: 0
-      - repeat:
-          for_each: "{{ inovelli_led_notification_targets }}"
-          sequence:
-            - action: mqtt.publish
-              data:
-                topic: "zigbee2mqtt/{{ repeat.item }}/set"
-                payload: >
-                  {{ {'led_effect': {'effect': 'clear_effect'}} | tojson }}
+      - action: script.inovelli_led_clear_all_effects
 
   restore_inovelli_switch_leds_from_trip:
     icon: mdi:light-switch
     variables:
       office_guest_room_day_mode_ready: >-
         {{ is_state('input_boolean.guest_mode', 'off') or now() >= today_at('12:00') }}
+      owner_suite_bathroom_day_mode_ready: >-
+        {{ is_state('binary_sensor.workday_sensor', 'on') and now() >= today_at('08:00') }}
       owner_suite_bedroom_day_mode_ready: >-
         {{
           now() >= today_at('08:00')
+          and is_state('binary_sensor.workday_sensor', 'on')
           and is_state('binary_sensor.bayesian_bed_occupancy', 'off')
           and (
             is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
@@ -2597,11 +2690,20 @@ script:
                   entity_id: script.day_mode_switches_office_guest_room
           - if:
               - condition: template
+                value_template: "{{ owner_suite_bathroom_day_mode_ready }}"
+            then:
+              - action: script.apply_owner_suite_inovelli_led_policy
+                data:
+                  policy: day
+                  scope: bathroom
+          - if:
+              - condition: template
                 value_template: "{{ owner_suite_bedroom_day_mode_ready }}"
             then:
-              - action: script.turn_on
-                target:
-                  entity_id: script.day_mode_switches_owner_suite_bedroom
+              - action: script.apply_owner_suite_inovelli_led_policy
+                data:
+                  policy: day
+                  scope: bedroom
 
   replay_inovelli_led_policy_after_recovery:
     icon: mdi:light-switch
@@ -2635,7 +2737,9 @@ script:
               - condition: template
                 value_template: "{{ owner_suite_leds_should_be_dark }}"
             then:
-              - action: script.turn_off_owner_suite_inovelli_switch_leds
+              - action: script.apply_owner_suite_inovelli_led_policy
+                data:
+                  policy: dark
 
   turn_off_owner_suite_inovelli_switch_leds:
     icon: mdi:light-switch
@@ -2652,31 +2756,21 @@ script:
                   - number.owner_suite_fan_switch_ledintensitywhenoff
                   - number.owner_suite_bathroom_vanity_ledintensitywhenoff
                   - number.office_fan_switch_ledintensitywhenoff
-                  - number.guest_room_fan_switch_ledintensitywhenoff
           initial_grace_period: 30
           expected_state: 0
-      - delay:
-          seconds: 30
-      - action: number.set_value
-        entity_id:
-          - number.owner_suite_closet_ledintensitywhenoff
-          - number.owner_suite_fan_switch_ledintensitywhenoff
-          - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-          - number.office_fan_switch_ledintensitywhenoff
-          - number.guest_room_fan_switch_ledintensitywhenoff
-        data:
-          value: 0
-      - delay:
-          seconds: 30
-      - action: number.set_value
-        entity_id:
-          - number.owner_suite_closet_ledintensitywhenoff
-          - number.owner_suite_fan_switch_ledintensitywhenoff
-          - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-          - number.office_fan_switch_ledintensitywhenoff
-          - number.guest_room_fan_switch_ledintensitywhenoff
-        data:
-          value: 0
+      - repeat:
+          count: 2
+          sequence:
+            - delay:
+                seconds: 30
+            - action: number.set_value
+              entity_id:
+                - number.owner_suite_closet_ledintensitywhenoff
+                - number.owner_suite_fan_switch_ledintensitywhenoff
+                - number.owner_suite_bathroom_vanity_ledintensitywhenoff
+                - number.office_fan_switch_ledintensitywhenoff
+              data:
+                value: 0
 
 ########################
 # REST Command

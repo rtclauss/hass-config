@@ -20,7 +20,7 @@
 given {
     wakeup: WakeupState
     calendar: CalendarContext
-    context: WakeupContext
+    wakeup_context: WakeupContext
     owner_suite: OwnerSuiteWakeEnvironment
     house_mode: HouseModeStateMachine
 }
@@ -30,6 +30,7 @@ given {
 ------------------------------------------------------------
 
 external entity CalendarContext {
+    -- Holiday-aware: true only on a weekday that is not a configured holiday.
     today_is_workday: Boolean
     tomorrow_is_weekday: Boolean
     tomorrow_has_holiday: Boolean
@@ -71,6 +72,7 @@ entity OwnerSuiteWakeEnvironment {
     adaptive_lighting_enabled: Boolean
     sleep_mode_enabled: Boolean
     blinds_state: closed | opening | mostly_open
+    switch_leds_off: Boolean
 }
 
 entity HouseModeStateMachine {
@@ -146,9 +148,9 @@ rule TriggerWeekdayWakeup {
     requires: calendar.today_is_workday
     requires: wakeup.weekday_alarm_enabled
     requires: not wakeup.special_meeting_enabled
-    requires: context.resident_home
-    requires: not context.planned_vacation_active
-    requires: context.resident_in_bed
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
+    requires: wakeup_context.resident_in_bed
     ensures: WakeupSequenceRequested(weekday)
     ensures: MorningAudioRequested(news_briefing, bedroom_suite)
 }
@@ -157,9 +159,9 @@ rule TriggerWeekendWakeup {
     when: wakeup.weekend_alarm_time <= now
     requires: not calendar.today_is_workday
     requires: wakeup.weekend_alarm_enabled
-    requires: context.resident_home
-    requires: not context.planned_vacation_active
-    requires: context.resident_in_bed
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
+    requires: wakeup_context.resident_in_bed
     ensures: WakeupSequenceRequested(weekend)
     ensures: MorningAudioRequested(random_weekend_station, bedroom_suite)
 }
@@ -168,29 +170,32 @@ rule TriggerSpecialMeetingWakeup {
     when: wakeup.next_work_meeting_alarm_time <= now
     requires: calendar.today_is_workday
     requires: wakeup.special_meeting_enabled
-    requires: context.resident_home
-    requires: not context.planned_vacation_active
-    requires: context.resident_in_bed
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
+    requires: wakeup_context.resident_in_bed
     ensures: wakeup.special_meeting_enabled = false
     ensures: WakeupSequenceRequested(special_meeting)
     ensures: MorningAudioRequested(meeting_track, bedroom_suite)
 }
 
 rule TriggerWorkdayOwnerSuiteWakeTransitionFromMorningActivity {
-    when: context.resident_in_bed becomes false
-    or context.bathroom_occupied becomes true
-    or context.owner_suite_recent_bedroom_activity becomes true
+    when: OwnerSuiteMorningActivityDetected()
     requires: calendar.today_is_workday
-    requires: context.within_workday_owner_suite_wake_window
-    requires: context.resident_home
-    requires: not context.planned_vacation_active
+    requires: wakeup_context.within_workday_owner_suite_wake_window
+    requires: wakeup_context.resident_home
+    requires: not wakeup_context.planned_vacation_active
     requires: house_mode.mode in {night, in_bed, asleep}
     requires: not wakeup.wakeup_alarm_firing
-    requires: not context.owner_suite_lamps_on
-    requires: not context.resident_in_bed
-    requires: context.owner_suite_recent_bathroom_activity
-    requires: context.owner_suite_recent_bedroom_activity
+    requires: not wakeup_context.owner_suite_lamps_on
+    requires: not wakeup_context.resident_in_bed
+    requires: wakeup_context.owner_suite_recent_bathroom_activity
+    requires: wakeup_context.owner_suite_recent_bedroom_activity
     ensures: WakeupSequenceRequested(workday_morning_activity)
+    @guidance
+        -- The implementation may raise this event from bed-exit, bathroom
+        -- occupancy, or owner-suite bedroom activity signals. The guards keep
+        -- the wake transition scoped to confirmed morning activity in the
+        -- holiday-aware workday wake window.
 }
 
 rule BeginWakeupSequence {
@@ -217,6 +222,10 @@ rule FinishWakeupSequence {
     ensures: owner_suite.lighting_state = daytime
     ensures: owner_suite.sleep_mode_enabled = false
     ensures: owner_suite.adaptive_lighting_enabled = true
+    ensures:
+        if calendar.today_is_workday:
+            owner_suite.switch_leds_off = false
+        -- weekends: switch_leds_off remains true (set by goodnight integrity)
     @guidance
         -- Implementation turns off sleep mode and calls adaptive_lighting.apply
         -- with transition = config.morning_light_ramp_duration (3 minutes).
@@ -239,10 +248,10 @@ rule OpenBlindsDuringWakeupTransition {
 rule PrepareMorningAudioGroup {
     when: MorningAudioRequested(program, target_room)
     ensures:
-        if target_room == bathroom:
+        if target_room = bathroom:
             WakeupAudioGroupPrepared(bathroom_only)
         else:
-            if context.guest_mode_enabled:
+            if wakeup_context.guest_mode_enabled:
                 WakeupAudioGroupPrepared(bedroom_and_bathroom)
             else:
                 WakeupAudioGroupPrepared(bedroom_bathroom_office_den)
@@ -266,20 +275,25 @@ rule ChooseWeekendStationFromConfiguredPool {
 }
 
 rule StartBathroomMorningRoutine {
-    when: context.bathroom_occupied becomes true
-    requires: not context.resident_in_bed
+    when: BathroomMorningOccupancyDetected()
+    requires: wakeup_context.bathroom_occupied
+    requires: not wakeup_context.resident_in_bed
     requires: not wakeup.morning_routine_started
-    requires: context.within_weekday_bathroom_window or context.within_weekend_bathroom_window
+    requires: wakeup_context.within_weekday_bathroom_window or wakeup_context.within_weekend_bathroom_window
     ensures: wakeup.morning_routine_started = true
     ensures: MorningAudioRequested(morning_playlist, bathroom)
     ensures: BathroomWakeupVolumeStrategyChosen(gentle_fade_in_or_existing_boost)
+    ensures:
+        if calendar.today_is_workday:
+            owner_suite.switch_leds_off = false
+        -- weekends: LED bars remain off; morning routine audio still plays
 }
 
 rule SnoozeWakeup {
     when: BedsideSnoozeButtonPressed()
     requires: wakeup.wakeup_alarm_firing
-    requires: context.resident_home
-    requires: context.resident_in_bed
+    requires: wakeup_context.resident_home
+    requires: wakeup_context.resident_in_bed
     ensures: owner_suite.lighting_state = sleeping
     ensures: MorningAudioStopped(bedroom_suite)
     ensures: WakeupSequenceRequested(snooze_resume)

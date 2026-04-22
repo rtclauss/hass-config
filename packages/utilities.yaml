@@ -414,6 +414,176 @@ automation:
               data:
                 addon: d5369777_music_assistant
 
+  - alias: water_shutoff_on_trip
+    id: water_shutoff_on_trip
+    description: >
+      Notify when trip mode activates and offer a cancel window.
+      Shuts off the water main automatically after 4 hours if not cancelled.
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "on"
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Water Main Shutoff"
+          message: "Trip mode active — water main will shut off in 4 hours. Cancel?"
+          data:
+            tag: water-shutoff-on-trip
+            actions:
+              - action: CANCEL_WATER_SHUTOFF
+                title: "Cancel"
+              - action: CONFIRM_WATER_SHUTOFF
+                title: "Shut Off Now"
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: CANCEL_WATER_SHUTOFF
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: CONFIRM_WATER_SHUTOFF
+        timeout:
+          hours: 4
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'CANCEL_WATER_SHUTOFF' }}"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: "Water main shutoff cancelled."
+                  data:
+                    tag: water-shutoff-on-trip
+        default:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.basement_water_shutoff
+          - action: notify.mobile_app_wethop
+            data:
+              message: "Water main shut off."
+              data:
+                tag: water-shutoff-on-trip
+
+  - alias: water_restore_on_return_home
+    id: water_restore_on_return_home
+    description: >
+      Notify when trip mode ends and offer a cancel window.
+      Restores the water main automatically after 5 minutes if not cancelled.
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: switch.basement_water_shutoff
+        state: "off"
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Water Main Restore"
+          message: "Trip ended — water main will turn on in 5 minutes. Cancel?"
+          data:
+            tag: water-restore-return-home
+            actions:
+              - action: CANCEL_WATER_RESTORE_HOME
+                title: "Cancel"
+              - action: CONFIRM_WATER_RESTORE_HOME
+                title: "Turn On Now"
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: CANCEL_WATER_RESTORE_HOME
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: CONFIRM_WATER_RESTORE_HOME
+        timeout:
+          minutes: 5
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'CANCEL_WATER_RESTORE_HOME' }}"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: "Water main restore cancelled."
+                  data:
+                    tag: water-restore-return-home
+        default:
+          - action: switch.turn_on
+            target:
+              entity_id: switch.basement_water_shutoff
+          - action: notify.mobile_app_wethop
+            data:
+              message: "Water main restored."
+              data:
+                tag: water-restore-return-home
+
+  - alias: water_restore_on_guest_arrival
+    id: water_restore_on_guest_arrival
+    description: >
+      Notify when a guest arrives during a trip and offer a cancel window.
+      Restores the water main automatically after 4 hours if not cancelled.
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.guest_mode
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: switch.basement_water_shutoff
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+    action:
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Water Main Restore"
+          message: "Guest arrived during trip — water main will turn on in 5 minutes. Cancel?"
+          data:
+            tag: water-restore-guest-arrival
+            actions:
+              - action: CANCEL_WATER_RESTORE_GUEST
+                title: "Cancel"
+              - action: CONFIRM_WATER_RESTORE_GUEST
+                title: "Turn On Now"
+      - wait_for_trigger:
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: CANCEL_WATER_RESTORE_GUEST
+          - trigger: event
+            event_type: mobile_app_notification_action
+            event_data:
+              action: CONFIRM_WATER_RESTORE_GUEST
+        timeout:
+          minutes: 5
+        continue_on_timeout: true
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ wait.trigger is not none and wait.trigger.event.data.action == 'CANCEL_WATER_RESTORE_GUEST' }}"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: "Water main restore cancelled."
+                  data:
+                    tag: water-restore-guest-arrival
+        default:
+          - action: switch.turn_on
+            target:
+              entity_id: switch.basement_water_shutoff
+          - action: notify.mobile_app_wethop
+            data:
+              message: "Water main restored for guest."
+              data:
+                tag: water-restore-guest-arrival
+
   - alias: Turn Sump Back On
     id: turn_sump_back_on
     trigger:

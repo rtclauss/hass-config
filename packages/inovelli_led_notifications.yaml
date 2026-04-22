@@ -1,0 +1,32 @@
+# Inovelli LED notification scripts backed by the Inovelli LED Settings and Effects
+# Blueprint (blueprints/script/kschlichter/inovelli_led_blueprint.yaml).
+# Targets are selected via the inovelli_switch label — add that label to any new
+# Inovelli switch/dimmer/fan-controller entity to include it automatically.
+#
+# Color note: the blueprint uses named colors; aurora_color 187 maps to "Purple" (190)
+# which is the closest named value. The visual difference is imperceptible at low brightness.
+
+script:
+  # Aurora effect shown on all Inovelli switches after a configuration reset.
+  # Runs for 10 minutes then auto-clears. Skipped when the bed is occupied
+  # (caller is responsible for the occupancy condition check before calling).
+  inovelli_led_aurora_notification:
+    use_blueprint:
+      path: kschlichter/inovelli_led_blueprint.yaml
+      input:
+        label:
+          - inovelli_switch
+        effect: Aurora
+        # brightness 5.1 × 10 = 51 on the Z2M 0-100 level scale
+        brightness: 5.1
+        color: Purple
+        duration: 10 Minutes
+
+  # Clears any active LED effect on every Inovelli switch (e.g. trip mode).
+  inovelli_led_clear_all_effects:
+    use_blueprint:
+      path: kschlichter/inovelli_led_blueprint.yaml
+      input:
+        label:
+          - inovelli_switch
+        effect: Clear Effect

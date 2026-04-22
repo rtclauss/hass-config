@@ -142,11 +142,16 @@ def test_arrival_adaptive_lighting_scopes_occupied_arrivals_to_non_manual_lights
         "arrival_home_was_empty",
         "trigger.from_state.state == 'off'",
         "is_state('binary_sensor.bayesian_zeke_home', 'off')",
+        "arrival_common_adaptive_switches:",
+        "arrival_owner_suite_adaptive_switches:",
         "arrival_adaptive_switches:",
+        "arrival_enabled_adaptive_switches:",
         "switch.adaptive_lighting_kitchen",
         "switch.adaptive_lighting_den",
         "switch.adaptive_lighting_hallway",
         "switch.adaptive_lighting_owner_suite",
+        "if is_state('binary_sensor.bayesian_bed_occupancy', 'off')",
+        "is_state(adaptive_switch, 'on')",
         "turn_on_lights: false",
     ):
         assert token in block
@@ -154,12 +159,13 @@ def test_arrival_adaptive_lighting_scopes_occupied_arrivals_to_non_manual_lights
     empty_house_branch = block.split(
         'alias: "Apply globally when this arrival starts from an empty house"', maxsplit=1
     )[1].split("default:", maxsplit=1)[0]
-    assert "entity_id: \"{{ arrival_adaptive_switches }}\"" in empty_house_branch
+    assert "arrival_home_was_empty and arrival_enabled_adaptive_switches | count > 0" in empty_house_branch
+    assert "entity_id: \"{{ arrival_enabled_adaptive_switches }}\"" in empty_house_branch
     assert not any(line.strip() == "lights:" for line in empty_house_branch.splitlines())
 
     occupied_house_branch = block.split("default:", maxsplit=1)[1]
     for token in (
-        'for_each: "{{ arrival_adaptive_switches }}"',
+        'for_each: "{{ arrival_enabled_adaptive_switches }}"',
         "state_attr(repeat.item, 'configuration') or {}",
         "manual_controlled_lights",
         "state_attr(repeat.item, 'manual_control') or []",
@@ -178,10 +184,14 @@ def test_arrival_lighting_spec_documents_empty_house_and_manual_control_gates() 
         "home_was_empty_before_arrival: Boolean",
         "If the house was empty before this arrival",
         "If someone was already home",
+        "Dining room remains out of scope",
+        "If bed_occupied is true",
+        "arrival never re-enables a",
         "manual_control attribute",
         "rule PreserveManualLightingDuringOccupiedArrival",
         "requires: not arrival.home_was_empty_before_arrival",
         "ManualControlledArrivalLightsPreserved",
         "configured lights minus the current manual_control list",
+        "rule SyncSelectedInovelliLedBarsToAdaptiveLighting",
     ):
         assert token in text

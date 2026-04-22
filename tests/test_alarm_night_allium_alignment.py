@@ -92,6 +92,12 @@ def test_phone_alarm_sync_uses_holiday_calendar_to_compute_tomorrow_workday() ->
         assert token in block
 
 
+def test_alarm_spec_documents_today_workday_as_holiday_aware() -> None:
+    text = (ROOT / "specs" / "alarm_wakeup.allium").read_text(encoding="utf-8")
+
+    assert "Holiday-aware: true only on a weekday that is not a configured holiday." in text
+
+
 def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> None:
     block = _automation_block(WORKDAY_PATH, "alarm_wake_up")
 
@@ -109,6 +115,17 @@ def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> No
         'spotify_uri: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ"',
     ):
         assert token in block
+
+    assert re.search(
+        r"action: media_player\.volume_set\s+"
+        r"target:\s+"
+        r"entity_id:\s+"
+        r"- media_player\.bedroom_sonos\s+"
+        r"- media_player\.bedroom_sonos_2\s+"
+        r"data:\s+"
+        r"volume_level: 0\.2",
+        block,
+    )
 
 
 def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
@@ -161,13 +178,36 @@ def test_bathroom_morning_routine_requires_time_window_and_fresh_state() -> None
         assert token in block
 
 
-def test_bedroom_wakeup_group_is_guest_aware() -> None:
-    for script_id in ("spotify_wake_up", "music_assistant_radio_wake_up"):
-        block = _script_block(MEDIA_PLAYER_PATH, script_id)
+def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 
-        assert "media_player.guest_sonos" in block
-        assert "media_player.everywhere_sonos" in block
-        assert "is_state('input_boolean.guest_mode', 'on')" in block
+    for token in (
+        "binary_sensor.workday_sensor",
+        "script.apply_owner_suite_inovelli_led_policy",
+        "policy: day",
+        "scope: bathroom",
+        "script.day_mode_switches_office_guest_room",
+    ):
+        assert token in block
+
+    assert "number.owner_suite_bathroom_vanity_ledintensitywhenoff" not in block
+
+
+def test_wakeup_audio_uses_guest_aware_sync_groups() -> None:
+    spotify_block = _script_block(MEDIA_PLAYER_PATH, "spotify_wake_up")
+    radio_block = _script_block(MEDIA_PLAYER_PATH, "music_assistant_radio_wake_up")
+
+    for token in (
+        "input_boolean.guest_mode",
+        "media_player.guest_sonos",
+        "media_player.everywhere_sonos",
+        'entity_id: "{{ playback_player }}"',
+    ):
+        assert token in spotify_block
+        assert token in radio_block
+
+    assert "media_player.unjoin" not in spotify_block
+    assert "media_player.unjoin" not in radio_block
 
 
 def test_tv_bed_prep_is_guest_suppressed_and_defers_sleep_mode_shutdown() -> None:

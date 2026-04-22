@@ -90,13 +90,20 @@ def test_away_automations_use_shared_whole_floor_helper() -> None:
     automation_locations = [
         (ZONE_PATH, "vacuum_leave_home"),
         (WORKDAY_PATH, "vacuum_while_working"),
-        (TRIPS_PATH, "vacuum_on_trip"),
-        (TRIPS_PATH, "vacuum_flying_home"),
         (CURLING_PATH, "leave_home_for_curling"),
     ]
 
     for path, automation_id in automation_locations:
         block = _automation_block(path, automation_id)
         assert "action: script.vacuum_main_and_upstairs_levels" in block
+        assert "MapSegmentationCapability/clean/set" not in block
+        assert '"iterations": 4' not in block
+
+    trip_wrapper = _script_block(TRIPS_PATH, "trip_vacuum_main_and_upstairs_levels")
+    assert "action: script.vacuum_main_and_upstairs_levels" in trip_wrapper
+
+    for automation_id in ("vacuum_on_trip", "vacuum_flying_home"):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        assert "action: script.trip_vacuum_main_and_upstairs_levels" in block
         assert "MapSegmentationCapability/clean/set" not in block
         assert '"iterations": 4' not in block

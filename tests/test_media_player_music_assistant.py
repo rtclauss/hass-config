@@ -120,99 +120,148 @@ def test_spotify_wrapper_delegates_to_generic_music_assistant_helper() -> None:
     assert 'media_item: "{{ normalized_uri }}"' in block
 
 
-def test_house_party_helper_is_disabled_during_sync_group_migration() -> None:
-    block = _script_block("music_assistant_prepare_house_party_group")
+def test_bedroom_playlist_helper_logs_and_plays_selected_playlist() -> None:
+    block = _script_block("music_assistant_play_bedroom_playlist_choice")
 
-    assert "Sync Group Migration" in block
-    assert "targeting sync groups directly now" in block
-    assert "media_player.unjoin" not in block
+    for token in (
+        "playlist:",
+        "playlist_name:",
+        "Cube Playlist is",
+        "media_player.bedroom_sonos_2",
+        "script.music_assistant_play_spotify_uri",
+        'spotify_uri: "{{ playlist }}"',
+    ):
+        assert token in block
+
+
+def test_house_party_helper_is_stubbed_after_sync_group_migration() -> None:
+    block = _script_block("music_assistant_prepare_house_party_group")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
+
+    assert "script.music_assistant_sync_group_migration_stub" in block
+    assert "caller_entity_id: script.music_assistant_prepare_house_party_group" in block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
+    assert "action: media_player.join" not in block
 
 
 def test_bedroom_group_helper_is_restartable_migration_stub() -> None:
     block = _script_block("music_assistant_prepare_bedroom_group")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
 
     assert 'mode: restart' in block
-    assert "Sync Group Migration" in block
-    assert "targeting sync groups directly now" in block
-    assert 'action: media_player.unjoin' not in block
+    assert "script.music_assistant_sync_group_migration_stub" in block
+    assert "caller_entity_id: script.music_assistant_prepare_bedroom_group" in block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
+    assert "action: media_player.unjoin" not in block
 
 
-def test_arrival_group_helper_is_disabled_during_sync_group_migration() -> None:
+def test_arrival_group_helper_is_stubbed_after_sync_group_migration() -> None:
     block = _script_block("music_assistant_prepare_arrival_group")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
 
-    assert "Sync Group Migration" in block
-    assert "targeting sync groups directly now" in block
-    assert 'action: media_player.unjoin' not in block
+    assert "script.music_assistant_sync_group_migration_stub" in block
+    assert "caller_entity_id: script.music_assistant_prepare_arrival_group" in block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
+    assert "action: media_player.unjoin" not in block
 
 
-def test_arrival_music_targets_music_assistant_sync_group() -> None:
+def test_arrival_music_targets_guest_aware_sync_group_without_regroup_retry() -> None:
     arrival_block = _script_block("spotify_arrival")
 
     assert "media_player.guest_sonos" in arrival_block
     assert "media_player.everywhere_sonos" in arrival_block
+    assert "input_boolean.guest_mode" in arrival_block
     assert 'action: script.music_assistant_play_spotify_uri' in arrival_block
-    assert 'entity_id: "{{ playback_entity }}"' in arrival_block
     assert 'action: script.music_assistant_prepare_arrival_group' not in arrival_block
     assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' not in arrival_block
 
 
-def test_bedtime_targets_music_assistant_sync_group() -> None:
+def test_bedtime_targets_guest_aware_sync_group_before_playing() -> None:
     block = _script_block("spotify_bedtime")
 
-    assert 'action: script.music_assistant_play_item' in block
+    assert "bedtime_playback_entity" in block
     assert "media_player.guest_sonos" in block
     assert "media_player.everywhere_sonos" in block
+    assert "input_boolean.guest_mode" in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
+    assert 'action: script.music_assistant_play_item' in block
+    assert block.index("media_player.guest_sonos") < block.index(
+        'action: script.music_assistant_play_item'
+    )
 
 
-def test_bedroom_join_retry_helper_is_disabled_during_sync_group_migration() -> None:
+def test_bedtime_join_retry_helper_is_stubbed_after_sync_group_migration() -> None:
     helper_block = _script_block("music_assistant_try_join_bedroom_group_after_play")
+    common_block = _script_block("music_assistant_sync_group_migration_stub")
     bedtime_block = _script_block("spotify_bedtime")
 
     assert 'mode: restart' in helper_block
-    assert "Sync Group Migration" in helper_block
-    assert "targeting sync groups directly now" in helper_block
+    assert "script.music_assistant_sync_group_migration_stub" in helper_block
+    assert "caller_entity_id: script.music_assistant_try_join_bedroom_group_after_play" in helper_block
+    assert "Sync Group Migration" in common_block
+    assert "targeting sync groups directly now" in common_block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in bedtime_block
 
 
-def test_radio_wakeup_uses_sync_group_and_native_volume_targets() -> None:
+def test_radio_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
     assert 'playback_player' in block
-    assert "media_player.guest_sonos" in block
-    assert "media_player.everywhere_sonos" in block
-    assert "media_player.bedroom_sonos" in block
-    assert "media_player.bathroom_sonos" in block
+    assert 'media_player.guest_sonos' in block
+    assert 'media_player.everywhere_sonos' in block
+    assert 'input_boolean.guest_mode' in block
+    assert 'prepare_group_before_play:' not in block
+    assert 'should_prepare_group_before_play' not in block
+    assert 'should_regroup_after_play' not in block
     assert 'action: media_player.unjoin' not in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
+    assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
 
 
-def test_spotify_wakeup_uses_sync_group_and_native_volume_targets() -> None:
+def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos$", block, re.MULTILINE)) == 2
+    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos_2$", block, re.MULTILINE)) == 2
+    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos$", block, re.MULTILINE)) == 2
+    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos_2$", block, re.MULTILINE)) == 2
+    assert "volume_level: 0.01" in block
+    assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
+
+
+def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:
     block = _script_block("spotify_wake_up")
 
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
     assert 'playback_player' in block
-    assert "media_player.guest_sonos" in block
-    assert "media_player.everywhere_sonos" in block
-    assert "media_player.bedroom_sonos" in block
-    assert "media_player.office_sonos" in block
-    assert "media_player.den_sonos" in block
-    assert "Bathroom volume is ramped separately by the calling automation" in block
+    assert 'media_player.guest_sonos' in block
+    assert 'media_player.everywhere_sonos' in block
+    assert 'input_boolean.guest_mode' in block
+    assert 'prepare_group_before_play:' not in block
+    assert 'should_prepare_group_before_play' not in block
+    assert 'should_regroup_after_play' not in block
     assert 'action: media_player.unjoin' not in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
+    assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
 
 
-def test_bathroom_wakeup_automation_targets_sync_group() -> None:
+def test_bathroom_wakeup_automation_uses_sync_group_playback() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
     assert 'action: script.spotify_wake_up' in block
     assert block.count('playback_entity_id: media_player.everywhere_sonos') == 2
+    assert block.count('playback_entity_id: media_player.bedroom_sonos_2') == 0
     assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 0
+    assert 'regroup_after_play: true' not in block
+    assert 'number.guest_room_fan_switch_ledintensitywhenoff' not in block
     assert 'media_player.media_stop' not in block
 
 
@@ -254,6 +303,7 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     assert "range(0, (plists | length))" in block
     assert "action: script.music_assistant_play_item" in block
     assert 'media_item: "{{ playlist }}"' in block
+    assert 'media_type: "{{ bedtime_media_type }}"' in block
     assert "playlist.startswith('https://somafm.com/')" in block
 
 
@@ -316,6 +366,37 @@ def test_bedroom_playlist_scripts_use_sequence_level_random_selection() -> None:
         # Sequence must begin with a variables action containing playlist
         assert "      - variables:" in block, f"{script_id}: missing sequence-level variables action"
         assert "          playlist: >-" in block, f"{script_id}: missing sequence-level playlist"
+        assert (
+            "action: script.music_assistant_play_bedroom_playlist_choice" in block
+        ), f"{script_id}: missing shared bedroom playlist playback helper"
+        assert "action: logbook.log" not in block, f"{script_id}: should delegate logging"
+        assert (
+            "action: script.music_assistant_play_spotify_uri" not in block
+        ), f"{script_id}: should delegate Music Assistant playback"
+
+
+def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    for token in (
+        "bedtime_rampdown_steps:",
+        "delay_minutes: 0",
+        "delay_minutes: 2",
+        "volume_level: 0.1",
+        "volume_level: 0.07",
+        "volume_level: 0.05",
+        "volume_level: 0.01",
+        "repeat:",
+        'for_each: "{{ bedtime_rampdown_steps }}"',
+        'minutes: "{{ repeat.item.delay_minutes }}"',
+        'entity_id: "{{ repeat.item.entity_id }}"',
+        'volume_level: "{{ repeat.item.volume_level }}"',
+    ):
+        assert token in block
+
+    assert block.count("- delay:") == 1
+    assert block.count("action: media_player.volume_set") == 2
+    assert "continue_on_error: false" in block
 
 
 def test_arrival_and_wakeup_scripts_use_sequence_level_playlist_selection() -> None:

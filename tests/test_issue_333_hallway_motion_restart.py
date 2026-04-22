@@ -23,10 +23,18 @@ def _automation_block(path: Path, automation_name: str) -> str:
 
 def _off_condition_durations(block: str) -> Counter[tuple[str, str]]:
     pattern = re.compile(
-        r"entity_id:\n\s+- (binary_sensor\.hall_(?:main_foyer|upstairs)_motion_occupancy)\n"
+        r"entity_id:\n"
+        r"((?:\s+- binary_sensor\.hall_(?:main_foyer_motion|upstairs_motion|transition_switch)_occupancy\n)+)"
         r"\s+state: \"off\"\n\s+for:\n\s+minutes: (\d+)"
     )
-    return Counter(pattern.findall(block))
+    durations: Counter[tuple[str, str]] = Counter()
+    for entity_list, minutes in pattern.findall(block):
+        for entity_id in re.findall(
+            r"binary_sensor\.hall_(?:main_foyer_motion|upstairs_motion|transition_switch)_occupancy",
+            entity_list,
+        ):
+            durations[(entity_id, minutes)] += 1
+    return durations
 
 
 def test_toggle_hallway_day_requires_both_sensors_to_stay_clear_for_15_minutes() -> None:

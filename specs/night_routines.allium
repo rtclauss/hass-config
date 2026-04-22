@@ -4,6 +4,7 @@
 -- Scope: Owner bedtime preparation and privacy-aware overnight shutdown.
 -- Includes:
 --   - soft bedtime-prep flow triggered by nighttime TV/button actions
+--   - owner-suite blind privacy close around sunset
 --   - CPAP-triggered escalation into the stricter goodnight integrity flow
 --   - guest/privacy-aware shutdown choices derived from docs/room_intent.yaml
 --   - lock, cover, climate, media, and notification expectations
@@ -31,9 +32,18 @@ external entity NightContext {
     guest_room_occupied: Boolean
     resident_in_bed: Boolean
     wakeup_alarm_firing: Boolean
+    today_is_workday: Boolean
+    after_owner_suite_led_day_start: Boolean
+    owner_suite_morning_activity_ready: Boolean
     within_bedtime_prep_window: Boolean
     after_dark: Boolean
 }
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum OwnerSuiteSwitchLedMode { dark | night_red | day }
 
 ------------------------------------------------------------
 -- Entities and Variants
@@ -54,11 +64,17 @@ entity HouseSleepSafety {
     decorative_lamps_off: Boolean
     common_area_media_off: Boolean
     non_bedroom_audio_paused: Boolean
-    owner_suite_switch_leds_off: Boolean
+    owner_suite_switch_led_mode: OwnerSuiteSwitchLedMode
     front_door_locked: Boolean
     garage_closed: Boolean
     owner_suite_blinds_closed: Boolean
     climate_mode: resumed_program | guest_sleep | unavailable | away_like
+}
+
+entity OwnerSuiteBlindsPrivacySchedule {
+    selected_close_offset_after_window_start: Duration
+    scheduled_close_at: Timestamp
+    closed_for_current_sunset: Boolean
 }
 
 entity HouseModeStateMachine {
@@ -85,6 +101,9 @@ config {
     bedtime_audio_timeout: Duration = 10.minutes
     bedtime_audio_rampdown_delay: Duration = 3.minutes
     goodnight_verification_delay: Duration = 30.seconds
+    owner_suite_blinds_sunset_window_start_lead: Duration = 45.minutes
+    owner_suite_blinds_sunset_window_end_lag: Duration = 2.minutes
+    owner_suite_blinds_sunset_window_duration: Duration = owner_suite_blinds_sunset_window_start_lead + owner_suite_blinds_sunset_window_end_lag
 }
 
 ------------------------------------------------------------
@@ -130,6 +149,29 @@ rule ChooseBedtimeAudioFromConfiguredPool {
     ensures: BedtimeAudioSelectionChosen(configured_bedtime_media_pool, shuffle_optional, repeat_all)
 }
 
+rule ScheduleOwnerSuiteBlindsSunsetPrivacyClose {
+    when: SunsetTimeKnown(sunset_at)
+    let close_offset = RandomDurationBetween(0.minutes, config.owner_suite_blinds_sunset_window_duration)
+    ensures: OwnerSuiteBlindsPrivacySchedule.created(
+        selected_close_offset_after_window_start: close_offset,
+        scheduled_close_at: sunset_at - config.owner_suite_blinds_sunset_window_start_lead + close_offset,
+        closed_for_current_sunset: false
+    )
+    @guidance
+        -- The selected close time varies day to day so the owner-suite blinds
+        -- close in the privacy window from 45 minutes before sunset through
+        -- 2 minutes after sunset, inclusive.
+}
+
+rule CloseOwnerSuiteBlindsAroundSunset {
+    when: schedule: OwnerSuiteBlindsPrivacySchedule.scheduled_close_at <= now
+    requires: not schedule.closed_for_current_sunset
+    requires: schedule.selected_close_offset_after_window_start >= 0.minutes
+    requires: schedule.selected_close_offset_after_window_start <= config.owner_suite_blinds_sunset_window_duration
+    ensures: house.owner_suite_blinds_closed = true
+    ensures: schedule.closed_for_current_sunset = true
+}
+
 rule TriggerGoodnightFromCPAPSleep {
     when: CPAPSleepDetected()
     requires: not night.wakeup_alarm_firing
@@ -167,7 +209,7 @@ rule ApplyGoodnightIntegrity {
                 house.non_bedroom_audio_paused = true
     ensures: house.decorative_lamps_off = true
     ensures: house.common_area_media_off = true
-    ensures: house.owner_suite_switch_leds_off = true
+    ensures: house.owner_suite_switch_led_mode = dark
     ensures: house.front_door_locked = true
     ensures: house.garage_closed = true
     ensures: house.owner_suite_blinds_closed = true
@@ -177,6 +219,49 @@ rule ApplyGoodnightIntegrity {
         else:
             house.climate_mode = resumed_program
     ensures: GoodnightVerificationScheduled(reason, config.goodnight_verification_delay)
+}
+
+rule RestoreOwnerSuiteSwitchLedsToNightRed {
+    when: OwnerSuiteLampsTurnedOnOvernight()
+    requires: night.after_dark
+    requires: not night.wakeup_alarm_firing
+    ensures: house.owner_suite_switch_led_mode = night_red
+    @guidance
+        -- When owner-suite lamps come back on during the overnight window,
+        -- the switch LEDs return to the low red night profile instead of
+        -- day mode.
+}
+
+rule ApplyOwnerSuiteWorkdayMorningLedPolicy {
+    when: OwnerSuiteMorningLedPolicyRequested(scope)
+    requires: night.today_is_workday
+    requires: night.after_owner_suite_led_day_start
+    ensures:
+        if scope = bathroom:
+            house.owner_suite_switch_led_mode = day
+        else:
+            if scope = bedroom and night.owner_suite_morning_activity_ready:
+                house.owner_suite_switch_led_mode = day
+            else:
+                if scope = all and night.owner_suite_morning_activity_ready:
+                    house.owner_suite_switch_led_mode = day
+    @guidance
+        -- today_is_workday is holiday-aware: weekends and configured
+        -- holidays keep owner-suite switch LEDs dark even if the clock has
+        -- reached the normal workday wake window. The implementation may
+        -- apply the day policy to bathroom/closet LEDs at the 08:00
+        -- sleep-mode timeout while delaying bedroom switch LEDs until bed,
+        -- bedroom, and bathroom activity show that the owner is up.
+}
+
+rule KeepOwnerSuiteSwitchLedsDarkOnNonWorkdayMornings {
+    when: OwnerSuiteMorningLedPolicyRequested(scope)
+    requires: not night.today_is_workday
+    ensures: house.owner_suite_switch_led_mode = dark
+    @guidance
+        -- Weekend and holiday morning audio may still play, but the
+        -- owner-suite switch LEDs stay dark unless an explicit manual day
+        -- policy is requested.
 }
 
 rule PreserveBedroomSleepAudioAndPauseUnrelatedRooms {

@@ -143,7 +143,7 @@ automation:
     trigger:
       - trigger: sun
         event: sunset
-        offset: -00:30:00
+        offset: -00:45:00
         id: sunset
       - trigger: state
         entity_id: cover.owner_suite_blinds_ha
@@ -160,12 +160,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: sunset
-              - condition: state
-                entity_id: cover.owner_suite_blinds_ha
-                state: "open"
             sequence:
               - variables:
-                  blind_close_delay_minutes: "{{ range(5, 45) | random | int }}"
+                  blind_close_delay_minutes: "{{ range(0, 48) | random | int }}"
               - delay:
                   minutes: "{{ blind_close_delay_minutes }}"
               - action: cover.close_cover
@@ -178,8 +175,9 @@ automation:
                 id: recovery
               - condition: sun
                 after: sunset
-              - condition: time
-                before: "23:00:00"
+                after_offset: -00:45:00
+                before: sunset
+                before_offset: "+00:02:00"
             sequence:
               - delay:
                   minutes: 1

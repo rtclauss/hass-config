@@ -39,6 +39,10 @@ homeassistant:
       <<: *customize
       friendly_name: Den confidently occupied
       icon: mdi:sofa
+    binary_sensor.dining_room_confident_occupancy:
+      <<: *customize
+      friendly_name: Dining room confidently occupied
+      icon: mdi:silverware-fork-knife
     binary_sensor.office_confident_occupancy:
       <<: *customize
       friendly_name: Office confidently occupied
@@ -58,6 +62,10 @@ homeassistant:
     sensor.den_room_confidence:
       <<: *customize
       friendly_name: Den room confidence
+      icon: mdi:signal-distance-variant
+    sensor.dining_room_room_confidence:
+      <<: *customize
+      friendly_name: Dining room room confidence
       icon: mdi:signal-distance-variant
     sensor.office_room_confidence:
       <<: *customize
@@ -91,6 +99,7 @@ template:
           - binary_sensor.bayesian_bed_occupancy
           - binary_sensor.bedroom_occupancy
           - binary_sensor.den_occupancy_2
+          - binary_sensor.dining_room_bt_proxy_dining_room_bluetooth_proxy_status
           - binary_sensor.office_occupancy_2
           - binary_sensor.office_motion_occupancy
           - binary_sensor.ryan_office_presence
@@ -245,6 +254,46 @@ template:
           phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
           watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
 
+      - name: dining_room_room_confidence
+        unique_id: dining_room_room_confidence
+        unit_of_measurement: "%"
+        state: >-
+          {% set home_present = is_state('person.ryan', 'home') or is_state('binary_sensor.bayesian_zeke_home', 'on') %}
+          {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
+          {% set dining_area_names = ['dining room'] %}
+          {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
+          {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
+          {% set score = namespace(value=0) %}
+          {% if not home_present %}
+            0
+          {% else %}
+            {% if phone_area in dining_area_names %}
+              {% set score.value = score.value + 45 %}
+            {% elif phone_area not in unknown_states %}
+              {% set score.value = score.value - 25 %}
+            {% endif %}
+            {% if watch_area in dining_area_names %}
+              {% set score.value = score.value + 10 %}
+            {% elif watch_area not in unknown_states %}
+              {% set score.value = score.value - 5 %}
+            {% endif %}
+            {% if phone_area in dining_area_names and watch_area in dining_area_names %}
+              {% set score.value = score.value + 5 %}
+            {% endif %}
+            {{ [[score.value, 0] | max, 100] | min }}
+          {% endif %}
+        attributes:
+          band: >-
+            {% set score = states('sensor.dining_room_room_confidence') | int(0) %}
+            {% if score >= 80 %}certain
+            {% elif score >= 50 %}likely
+            {% elif score >= 25 %}possible
+            {% else %}clear
+            {% endif %}
+          phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
+          watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
+          bluetooth_proxy_status: "{{ states('binary_sensor.dining_room_bt_proxy_dining_room_bluetooth_proxy_status') }}"
+
       - name: basement_room_confidence
         unique_id: basement_room_confidence
         unit_of_measurement: "%"
@@ -380,6 +429,11 @@ template:
         unique_id: den_confident_occupancy
         device_class: occupancy
         state: "{{ states('sensor.den_room_confidence') | int(0) >= 50 }}"
+
+      - name: dining_room_confident_occupancy
+        unique_id: dining_room_confident_occupancy
+        device_class: occupancy
+        state: "{{ states('sensor.dining_room_room_confidence') | int(0) >= 50 }}"
 
       - name: basement_confident_occupancy
         unique_id: basement_confident_occupancy

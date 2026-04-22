@@ -185,7 +185,9 @@ automation:
       - action: script.turn_on
         data:
           entity_id: script.night_tv_mode_switches
-      - action: script.turn_off_owner_suite_inovelli_switch_leds
+      - action: script.apply_owner_suite_inovelli_led_policy
+        data:
+          policy: dark
       - action: script.turn_on
         data:
           entity_id: script.spotify_bedtime_volume
@@ -406,16 +408,18 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.morning_routine
-      - action: number.set_value
-        target:
-          entity_id:
-            - number.owner_suite_closet_ledintensitywhenoff
-            - number.owner_suite_fan_switch_ledintensitywhenoff
-            - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-            - number.office_fan_switch_ledintensitywhenoff
-            - number.guest_room_fan_switch_ledintensitywhenoff
-        data:
-          value: 1
+      - if:
+          - condition: state
+            entity_id: binary_sensor.workday_sensor
+            state: "on"
+        then:
+          - action: script.apply_owner_suite_inovelli_led_policy
+            data:
+              policy: day
+              scope: bathroom
+          - action: script.turn_on
+            target:
+              entity_id: script.day_mode_switches_office_guest_room
       - choose:
           # If the bathroom already had audible playback, skip the long fade-in.
           - conditions:
@@ -663,17 +667,27 @@ script:
             - media_player.den_sonos_2
             - media_player.tiki_room_2
 
+  music_assistant_sync_group_migration_stub:
+    alias: "Log disabled Music Assistant sync-group migration helper"
+    fields:
+      caller_entity_id:
+        description: "Deprecated helper script entity that was called"
+    sequence:
+      - action: logbook.log
+        data:
+          name: "Sync Group Migration"
+          message: "{{ caller_entity_id | default(this.entity_id) }} called but disabled — targeting sync groups directly now"
+          domain: script
+
   music_assistant_prepare_bedroom_group:
     alias: "Prepare bedroom Music Assistant group"
     mode: restart
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_prepare_bedroom_group
 
   music_assistant_try_join_bedroom_group_after_play:
     alias: "Try joining bedroom Music Assistant followers after playback"
@@ -681,33 +695,27 @@ script:
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_try_join_bedroom_group_after_play
 
   music_assistant_prepare_arrival_group:
     alias: "Prepare arrival Music Assistant group"
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_prepare_arrival_group
 
   music_assistant_prepare_house_party_group:
     alias: "Prepare house party Music Assistant group"
     # TODO: Remove once Music Assistant sync group verified working in production
     # sequence: (commented out — replaced by targeting sync group entities directly)
     sequence:
-      - action: logbook.log
+      - action: script.music_assistant_sync_group_migration_stub
         data:
-          name: "Sync Group Migration"
-          message: "{{ this.entity_id }} called but disabled — targeting sync groups directly now"
-          domain: script
+          caller_entity_id: script.music_assistant_prepare_house_party_group
 
   music_assistant_play_item:
     alias: "Play Music Assistant item"
@@ -773,6 +781,26 @@ script:
           entity_id: "{{ entity_id }}"
           media_item: "{{ normalized_uri }}"
           enqueue: "{{ enqueue | default('replace') }}"
+
+  music_assistant_play_bedroom_playlist_choice:
+    alias: "Play bedroom playlist choice via Music Assistant"
+    fields:
+      playlist:
+        description: "Spotify URI selected by a bedroom playlist script"
+      playlist_name:
+        description: "Human-readable playlist group name for logbook"
+    sequence:
+      - action: logbook.log
+        data:
+          entity_id: media_player.bedroom_sonos_2
+          domain: media_player
+          name: Cube Playlist is
+          message: " playing {{ playlist_name }} playlist: {{ playlist }}"
+      - alias: "Play playlist via Music Assistant"
+        action: script.music_assistant_play_spotify_uri
+        data:
+          entity_id: media_player.bedroom_sonos_2
+          spotify_uri: "{{ playlist }}"
 
   music_assistant_search_music:
     alias: "Search Music Assistant"
@@ -1000,10 +1028,13 @@ script:
     sequence:
       - action: media_player.volume_set
         continue_on_error: true
-        data:
+        target:
           entity_id:
             - media_player.bedroom_sonos
+            - media_player.bedroom_sonos_2
             - media_player.bathroom_sonos
+            - media_player.bathroom_sonos_2
+        data:
           volume_level: 0.01
       - if:
           - condition: template
@@ -1024,10 +1055,13 @@ script:
             - alias: "Increase grouped wake-up volume by 0.01"
               continue_on_error: true
               action: media_player.volume_set
-              data:
+              target:
                 entity_id:
                   - media_player.bedroom_sonos
+                  - media_player.bedroom_sonos_2
                   - media_player.bathroom_sonos
+                  - media_player.bathroom_sonos_2
+              data:
                 volume_level: "{{ 0.01 * repeat.index }}"
             - delay:
                 seconds: "{{ (1/(tan(repeat.index/120))) | round(0, 'ceil', 5)}}"
@@ -1059,17 +1093,10 @@ script:
                 ] -%}
               {% set pindex =  (range(0, (plists | length) )|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Lowfi playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Lowfi
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_1:
     alias: "Play Guster"
@@ -1103,17 +1130,10 @@ script:
             ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Guster playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Guster
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_2:
     alias: "Play Joe Pera"
@@ -1133,17 +1153,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Joe Pera playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Joe Pera
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_3:
     alias: "Play VaporWave and Retro"
@@ -1163,17 +1176,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing RetroWave playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: RetroWave
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_4:
     alias: "Play Alt/Independent"
@@ -1207,17 +1213,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Alt/Independent playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Alt/Independent
+          playlist: "{{ playlist }}"
 
   bedroom_playlist_5:
     alias: "Play LoFi"
@@ -1243,17 +1242,10 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - action: logbook.log
+      - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          entity_id: media_player.bedroom_sonos_2
-          domain: media_player
-          name: Cube Playlist is
-          message: " playing Lowfi playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
-        action: script.music_assistant_play_spotify_uri
-        data:
-          entity_id: media_player.bedroom_sonos_2
-          spotify_uri: "{{ playlist }}"
+          playlist_name: Lowfi
+          playlist: "{{ playlist }}"
 
   play_video_games:
     alias: "Play Video Games"
@@ -1552,12 +1544,15 @@ script:
               ] -%}
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
+      - variables:
+          bedtime_playback_entity: >-
+            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.everywhere_sonos' }}
+          bedtime_media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
       - action: media_player.shuffle_set
         continue_on_error: true
         target:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
         data:
           shuffle: >-
             {%- set shuffle = [true, false] -%}
@@ -1568,9 +1563,7 @@ script:
         data:
           repeat: all
         target:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
       - delay:
           seconds: 2
       - action: media_player.volume_set
@@ -1586,20 +1579,16 @@ script:
           seconds: 2
       - action: logbook.log
         data:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
           domain: media_player
           name: Spotify Bedtime is
           message: " playing Bedtime playlist: {{ playlist }}"
       - alias: "Play bedtime music on sync group"
         action: script.music_assistant_play_item
         data:
-          entity_id: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+          entity_id: "{{ bedtime_playback_entity }}"
           media_item: "{{ playlist }}"
-          media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
+          media_type: "{{ bedtime_media_type }}"
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
@@ -1620,44 +1609,61 @@ script:
   spotify_bedtime_volume:
     alias: "Spotify Bedtime Rampdown"
     sequence:
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.office_sonos
-            - media_player.bathroom_sonos
-            - media_player.den_sonos
-          volume_level: 0.1
-      - delay:
-          minutes: 2
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-            - media_player.office_sonos
-          volume_level: 0.07
-      - delay:
-          minutes: 2
-      - action: media_player.volume_set
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-            - media_player.office_sonos
-          volume_level: 0.05
-      - delay:
-          minutes: 2
-      - action: media_player.volume_set
-        continue_on_error: true
-        data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos
-            - media_player.office_sonos
-          volume_level: 0.01
+      - variables:
+          bedtime_rampdown_steps:
+            - delay_minutes: 0
+              continue_on_error: true
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.office_sonos
+                - media_player.bathroom_sonos
+                - media_player.den_sonos
+              volume_level: 0.1
+            - delay_minutes: 2
+              continue_on_error: true
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+              volume_level: 0.07
+            - delay_minutes: 2
+              continue_on_error: false
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+              volume_level: 0.05
+            - delay_minutes: 2
+              continue_on_error: true
+              entity_id:
+                - media_player.bedroom_sonos
+                - media_player.bathroom_sonos
+                - media_player.office_sonos
+              volume_level: 0.01
+      - repeat:
+          for_each: "{{ bedtime_rampdown_steps }}"
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ repeat.item.delay_minutes | int(0) > 0 }}"
+              then:
+                - delay:
+                    minutes: "{{ repeat.item.delay_minutes }}"
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ repeat.item.continue_on_error }}"
+                  sequence:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      data:
+                        entity_id: "{{ repeat.item.entity_id }}"
+                        volume_level: "{{ repeat.item.volume_level }}"
+              default:
+                - action: media_player.volume_set
+                  data:
+                    entity_id: "{{ repeat.item.entity_id }}"
+                    volume_level: "{{ repeat.item.volume_level }}"
 
   spotify_wake_up:
     alias: "Spotify Wake Up"

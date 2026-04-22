@@ -151,6 +151,7 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
 ## Feature Docs
 
 - [House Transition Framework](docs/house_transition_framework.md)
+- [Home Assistant Label Model](docs/ha_labels.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
 - [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)

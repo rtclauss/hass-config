@@ -90,8 +90,10 @@ automation:
       adaptive apply fires. Empty-house arrivals can apply across all
       configured arrival switches; occupied-house arrivals only apply to
       configured lights that Adaptive Lighting has not marked as manually
-      controlled. turn_on_lights=false keeps off lights undisturbed. Resolves
-      #486.
+      controlled. If the bed is occupied, only common-area arrival switches
+      are eligible so the owner suite is not disturbed. Arrival only applies
+      to switches that are already enabled; turn_on_lights=false keeps off
+      lights undisturbed. Resolves #486.
     mode: single
     trigger:
       - trigger: zone
@@ -104,10 +106,6 @@ automation:
         entity_id: binary_sensor.bayesian_zeke_home
         from: "off"
         to: "on"
-    condition:
-      - condition: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
-        state: "off"
     action:
       - variables:
           arrival_home_was_empty: >-
@@ -123,29 +121,49 @@ automation:
                 and is_state('binary_sensor.bayesian_zeke_home', 'off')
               )
             }}
-          arrival_adaptive_switches:
+          arrival_common_adaptive_switches:
             - switch.adaptive_lighting_kitchen
             - switch.adaptive_lighting_den
             - switch.adaptive_lighting_hallway
+          arrival_owner_suite_adaptive_switches:
             - switch.adaptive_lighting_owner_suite
+      - variables:
+          arrival_adaptive_switches: >-
+            {{
+              arrival_common_adaptive_switches
+              + (
+                arrival_owner_suite_adaptive_switches
+                if is_state('binary_sensor.bayesian_bed_occupancy', 'off')
+                else []
+              )
+            }}
+      - variables:
+          arrival_enabled_adaptive_switches: >-
+            {% set enabled = namespace(switches=[]) %}
+            {% for adaptive_switch in arrival_adaptive_switches %}
+              {% if is_state(adaptive_switch, 'on') %}
+                {% set enabled.switches = enabled.switches + [adaptive_switch] %}
+              {% endif %}
+            {% endfor %}
+            {{ enabled.switches }}
       - delay:
           seconds: 2
       - choose:
           - alias: "Apply globally when this arrival starts from an empty house"
             conditions:
               - condition: template
-                value_template: "{{ arrival_home_was_empty }}"
+                value_template: "{{ arrival_home_was_empty and arrival_enabled_adaptive_switches | count > 0 }}"
             sequence:
               - action: adaptive_lighting.apply
                 data:
-                  entity_id: "{{ arrival_adaptive_switches }}"
+                  entity_id: "{{ arrival_enabled_adaptive_switches }}"
                   adapt_brightness: true
                   adapt_color: true
                   turn_on_lights: false
                   transition: 1
         default:
           - repeat:
-              for_each: "{{ arrival_adaptive_switches }}"
+              for_each: "{{ arrival_enabled_adaptive_switches }}"
               sequence:
                 - variables:
                     configured_arrival_lights: >-
@@ -171,6 +189,61 @@ automation:
                         adapt_color: true
                         turn_on_lights: false
                         transition: 1
+
+  - id: nightly_adaptive_lighting_cycle_reset
+    alias: nightly_adaptive_lighting_cycle_reset
+    description: >
+      Every 4 hours, cycle every main adaptive lighting switch off then back on
+      to unstick color or brightness matching that has drifted. A startup trigger
+      acts as a recovery path: if HA restarts during the 10-second off window the
+      next boot immediately re-enables all switches so they are never stranded off.
+      Control switches (sleep_mode, adapt_brightness, adapt_color) are excluded to
+      preserve their settings.
+    mode: single
+    trigger:
+      - trigger: time_pattern
+        id: nightly-cycle
+        hours: "/4"
+      - trigger: homeassistant
+        id: ha-start
+        event: start
+    variables:
+      candidate_main_adaptive_switches:
+        - switch.adaptive_lighting_basement
+        - switch.adaptive_lighting_den
+        - switch.adaptive_lighting_hallway
+        - switch.adaptive_lighting_kitchen
+        - switch.adaptive_lighting_office
+        - switch.adaptive_lighting_owner_suite
+        - switch.dining_room_adaptive_lighting_dining_room
+      main_adaptive_switches: >-
+        {% set ns = namespace(items=[]) %}
+        {% for entity_id in candidate_main_adaptive_switches %}
+          {% if states(entity_id) not in ['unknown', 'unavailable'] %}
+            {% set ns.items = ns.items + [entity_id] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+    action:
+      - if:
+          - condition: trigger
+            id: nightly-cycle
+        then:
+          - if:
+              - condition: template
+                value_template: "{{ main_adaptive_switches | count > 0 }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "{{ main_adaptive_switches }}"
+          - delay: "00:00:10"
+      - if:
+          - condition: template
+            value_template: "{{ main_adaptive_switches | count > 0 }}"
+        then:
+          - action: switch.turn_on
+            target:
+              entity_id: "{{ main_adaptive_switches }}"
 
   - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
     alias: sync_selected_inovelli_led_bars_to_adaptive_lighting

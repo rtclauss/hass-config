@@ -10,6 +10,7 @@ ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
 BIRDS_PATH = ROOT / "packages" / "birds.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
+CONFIGURATION_PATH = ROOT / "configuration.yaml"
 
 
 def _read(path: Path) -> str:
@@ -105,6 +106,23 @@ def test_bird_templates_guard_missing_json_fields() -> None:
     assert "value_json is defined and value_json is mapping and value_json.detections is defined and value_json.detections | length > 0" in text
 
 
+def test_garden_birds_sensor_is_excluded_from_influxdb() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    influx_block = text.split("influxdb:\n", 1)[1].split("\ncloud:", 1)[0]
+
+    assert "sensor.garden_birds" in influx_block
+
+
+def test_large_z2m_lifecycle_helper_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.z2m_lifecycle_issues" in recorder_block
+    assert "large selection maps as attributes" in recorder_block
+
+
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
     text = _read(UTILITIES_PATH)
 
@@ -177,7 +195,9 @@ def test_owner_suite_led_shutdown_waits_for_inovelli_state_settle() -> None:
 
     assert "initial_grace_period: 30" in block
     assert "expected_state: 0" in block
-    assert block.count("action: number.set_value") == 3
+    assert block.count("action: number.set_value") == 2
+    assert "count: 2" in block
+    assert block.count("seconds: 30") == 1
 
 
 def test_lights_off_except_only_targets_currently_on_lights() -> None:
@@ -210,3 +230,25 @@ def test_lights_off_except_skips_light_groups_that_contain_protected_members() -
     assert "light.entity_id in excluded or (members | select('in', excluded)" in block
     assert "members | select('in', excluded)" in block
     assert "rejectattr('entity_id', 'in', protected_lights)" in block
+
+
+def test_circadian_template_sensors_have_adaptive_lighting_fallbacks() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    block = text.split("name: circadian_brightness", 1)[1].split(
+        "\n########################\n# Zone",
+        1,
+    )[0]
+
+    assert "brightness_pct') | int(1)" in block
+    assert "color_temp_kelvin') | int(1000)" in block
+    assert "brightness_pct') |int" not in block
+    assert "color_temp_kelvin') }}\n" not in block
+
+
+def test_light_package_uses_kelvin_color_temperature_keys() -> None:
+    text = _read(ROOT / "packages" / "light.yaml")
+
+    assert "\n        color_temp:" not in text
+    assert "color_temp_kelvin: 2000" in text
+    assert "color_temp_kelvin: 2591" in text
