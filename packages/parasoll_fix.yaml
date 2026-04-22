@@ -151,9 +151,10 @@ automation:
           {% endif %}
     action:
       # Join/announce: wait for Z2M to finish interview setup.
-      # Contact-change: device is already awake — act within 1 s.
+      # Contact-change: no delay — device is awake right now; every ms counts
+      # before it goes back to sleep and Z2M loses the unbind command.
       - delay:
-          milliseconds: "{{ 5000 if trigger.id == 'bridge_event' else 1000 }}"
+          milliseconds: "{{ 5000 if trigger.id == 'bridge_event' else 0 }}"
       - variables:
           _silent: "{{ trigger.id == 'contact_change' }}"
           _ieee: >
