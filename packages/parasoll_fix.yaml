@@ -90,73 +90,128 @@ automation:
   - alias: "PARASOLL - Auto-Reconfigure on Join or Announce"
     id: parasoll_auto_reconfigure_on_join
     description: >
-      Watches Z2M bridge events and sends a reconfigure request when:
-        • A brand-new PARASOLL joins (device_interview event, model E2013).
-        • A known PARASOLL re-announces after a battery pull or reconnect
-          (device_announce event, cross-checked against HA device registry).
-      Waits 5 s for Z2M to finish setup, presses identify to keep the device
-      awake, waits 2 s more, then sends configure.
+      Reconfigures PARASOLL sensors on three events:
+        • device_interview  — brand-new join, model E2013
+        • device_announce   — re-join after battery pull / reconnect
+        • contact_change    — any Z2M message containing a contact field from a
+                              known PARASOLL device (silent; device is already
+                              awake so commands land immediately)
+      Join/announce path: waits 5 s, presses identify, sends notifications.
+      Contact-change path: acts within 1 s, no notifications (idempotent).
+      No hardcoded entity list — new sensors are picked up automatically.
     mode: queued
     max: 10
     trigger:
       - platform: mqtt
         topic: zigbee2mqtt/bridge/event
+        id: bridge_event
+      # Single-level wildcard matches per-device topics (e.g. zigbee2mqtt/Office
+      # Window) but NOT zigbee2mqtt/bridge/event or deeper sub-topics.
+      - platform: mqtt
+        topic: "zigbee2mqtt/+"
+        id: contact_change
     condition:
       - condition: template
         value_template: >
-          {% set type = trigger.payload_json.type %}
-          {% set ieee = trigger.payload_json.data.ieee_address %}
-          {% if type == 'device_interview' %}
-            {{ trigger.payload_json.data.get('definition', {}).get('model', '') == 'E2013' }}
-          {% elif type == 'device_announce' %}
-            {% set ns = namespace(found=false) %}
-            {% for entity in states.binary_sensor %}
-              {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)' %}
-                {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
-                {% for id_tuple in ids %}
-                  {% if id_tuple[0] == 'mqtt' and id_tuple[1] == 'zigbee2mqtt_' ~ ieee %}
-                    {% set ns.found = true %}
-                  {% endif %}
-                {% endfor %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.found }}
+          {% if trigger.id == 'contact_change' %}
+            {% if 'contact' not in trigger.payload_json %}
+              false
+            {% else %}
+              {% set fname = trigger.topic | replace('zigbee2mqtt/', '') %}
+              {% set ns = namespace(found=false) %}
+              {% for entity in states.binary_sensor %}
+                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)'
+                   and device_attr(entity.entity_id, 'name') == fname %}
+                  {% set ns.found = true %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.found }}
+            {% endif %}
           {% else %}
-            {{ false }}
+            {% set type = trigger.payload_json.type %}
+            {% set ieee = trigger.payload_json.data.ieee_address %}
+            {% if type == 'device_interview' %}
+              {{ trigger.payload_json.data.get('definition', {}).get('model', '') == 'E2013' }}
+            {% elif type == 'device_announce' %}
+              {% set ns = namespace(found=false) %}
+              {% for entity in states.binary_sensor %}
+                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)' %}
+                  {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
+                  {% for id_tuple in ids %}
+                    {% if id_tuple[0] == 'mqtt' and id_tuple[1] == 'zigbee2mqtt_' ~ ieee %}
+                      {% set ns.found = true %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.found }}
+            {% else %}
+              {{ false }}
+            {% endif %}
           {% endif %}
     action:
+      # Join/announce: wait for Z2M to finish interview setup.
+      # Contact-change: no delay — device is awake right now; every ms counts
+      # before it goes back to sleep and Z2M loses the unbind command.
       - delay:
-          seconds: 5
+          milliseconds: "{{ 5000 if trigger.id == 'bridge_event' else 0 }}"
       - variables:
-          _ieee: "{{ trigger.payload_json.data.ieee_address }}"
-          _name: "{{ trigger.payload_json.data.friendly_name }}"
+          _silent: "{{ trigger.id == 'contact_change' }}"
+          _ieee: >
+            {% if trigger.id == 'bridge_event' %}
+              {{ trigger.payload_json.data.ieee_address }}
+            {% else %}
+              {% set fname = trigger.topic | replace('zigbee2mqtt/', '') %}
+              {% set ns = namespace(value='') %}
+              {% for entity in states.binary_sensor %}
+                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)'
+                   and device_attr(entity.entity_id, 'name') == fname %}
+                  {% for id_tuple in device_attr(entity.entity_id, 'identifiers') | list %}
+                    {% if id_tuple[0] == 'mqtt' %}
+                      {% set ns.value = id_tuple[1] | replace('zigbee2mqtt_', '') %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.value }}
+            {% endif %}
+          _name: >
+            {% if trigger.id == 'bridge_event' %}
+              {{ trigger.payload_json.data.friendly_name }}
+            {% else %}
+              {{ trigger.topic | replace('zigbee2mqtt/', '') }}
+            {% endif %}
           parasoll_identify_btn: >
-            {% set ieee = trigger.payload_json.data.ieee_address %}
             {% set ns = namespace(entity='') %}
             {% for entity in states.button %}
               {% if 'identify' in entity.entity_id %}
-                {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
-                {% for id_tuple in ids %}
-                  {% if id_tuple[0] == 'mqtt' and id_tuple[1] == 'zigbee2mqtt_' ~ ieee %}
+                {% for id_tuple in device_attr(entity.entity_id, 'identifiers') | list %}
+                  {% if id_tuple[0] == 'mqtt' and id_tuple[1] == 'zigbee2mqtt_' ~ _ieee %}
                     {% set ns.entity = entity.entity_id %}
                   {% endif %}
                 {% endfor %}
               {% endif %}
             {% endfor %}
             {{ ns.entity }}
+      # Press identify only on join/announce to nudge the device awake.
+      # On contact_change the device is already awake — no need.
       - if:
           - condition: template
-            value_template: "{{ parasoll_identify_btn != '' }}"
+            value_template: "{{ parasoll_identify_btn != '' and not _silent }}"
         then:
           - action: button.press
             target:
               entity_id: "{{ parasoll_identify_btn }}"
           - delay:
               seconds: 2
-      - action: notify.mobile_app_wethop
-        data:
-          title: "PARASOLL"
-          message: "Reconfiguring {{ _name }}…"
+      - if:
+          - condition: template
+            value_template: "{{ not _silent }}"
+        then:
+          - action: notify.mobile_app_wethop
+            data:
+              title: "PARASOLL"
+              message: "Reconfiguring {{ _name }}…"
       - action: mqtt.publish
         data:
           topic: zigbee2mqtt/bridge/request/device/unbind
@@ -177,15 +232,19 @@ automation:
         timeout:
           seconds: 60
         continue_on_timeout: true
-      - action: notify.mobile_app_wethop
-        data:
-          title: "PARASOLL"
-          message: >
-            {% set resp = wait.trigger.payload_json if wait.trigger else none %}
-            {% if resp and resp.get('status') == 'ok' %}
-              ✓ {{ _name }} — all settings applied
-            {% elif resp %}
-              ✗ {{ _name }} — {{ resp.get('data', {}).get('error', 'configure failed') }}
-            {% else %}
-              ⏳ {{ _name }} — configure queued (sleepy; settings apply on next wakeup)
-            {% endif %}
+      - if:
+          - condition: template
+            value_template: "{{ not _silent }}"
+        then:
+          - action: notify.mobile_app_wethop
+            data:
+              title: "PARASOLL"
+              message: >
+                {% set resp = wait.trigger.payload_json if wait.trigger else none %}
+                {% if resp and resp.get('status') == 'ok' %}
+                  ✓ {{ _name }} — all settings applied
+                {% elif resp %}
+                  ✗ {{ _name }} — {{ resp.get('data', {}).get('error', 'configure failed') }}
+                {% else %}
+                  ⏳ {{ _name }} — configure queued (sleepy; settings apply on next wakeup)
+                {% endif %}
