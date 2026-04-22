@@ -224,6 +224,17 @@ def test_radio_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() ->
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
 
 
+def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos$", block, re.MULTILINE)) == 2
+    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos_2$", block, re.MULTILINE)) == 2
+    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos$", block, re.MULTILINE)) == 2
+    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos_2$", block, re.MULTILINE)) == 2
+    assert "volume_level: 0.01" in block
+    assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
+
+
 def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:
     block = _script_block("spotify_wake_up")
 
