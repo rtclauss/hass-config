@@ -93,40 +93,43 @@ automation:
       Reconfigures PARASOLL sensors on three events:
         • device_interview  — brand-new join, model E2013
         • device_announce   — re-join after battery pull / reconnect
-        • contact_change    — any Z2M message containing a contact field from a
-                              known PARASOLL device (silent; device is already
-                              awake so commands land immediately)
+        • contact_change    — window/door opened or closed (silent; device is
+                              already awake so commands land immediately)
       Join/announce path: waits 5 s, presses identify, sends notifications.
       Contact-change path: acts within 1 s, no notifications (idempotent).
-      No hardcoded entity list — new sensors are picked up automatically.
+      Add new PARASOLL entity IDs to the contact_change trigger list when pairing.
     mode: queued
     max: 10
     trigger:
       - platform: mqtt
         topic: zigbee2mqtt/bridge/event
         id: bridge_event
-      # Single-level wildcard matches per-device topics (e.g. zigbee2mqtt/Office
-      # Window) but NOT zigbee2mqtt/bridge/event or deeper sub-topics.
-      - platform: mqtt
-        topic: "zigbee2mqtt/+"
+      - platform: state
+        entity_id:
+          - binary_sensor.mailbox_contact
+          - binary_sensor.powder_room_window_contact
+          - binary_sensor.dining_room_south_window_contact
+          - binary_sensor.dining_room_north_window_contact
+          - binary_sensor.kitchen_north_window_contact
+          - binary_sensor.kitchen_south_window_contact
+          - binary_sensor.kitchen_bay_north_window_contact
+          - binary_sensor.owner_suite_north_window_contact
+          - binary_sensor.owner_suite_bathroom_bay_north_window_contact
+          - binary_sensor.owner_suite_bathroom_bay_north_middle_window_contact
+          - binary_sensor.office_window_contact
+          - binary_sensor.unfinished_basement_window_contact
+          - binary_sensor.basement_window_contact
+          - binary_sensor.guest_bathroom_window_contact
+          - binary_sensor.kitchen_bay_middle_window_contact
+          - binary_sensor.owner_suite_bathroom_bay_south_middle_window_contact
+          - binary_sensor.owner_suite_south_window_contact
+          - binary_sensor.kitchen_bay_south_window_contact
         id: contact_change
     condition:
       - condition: template
         value_template: >
           {% if trigger.id == 'contact_change' %}
-            {% if 'contact' not in trigger.payload_json %}
-              false
-            {% else %}
-              {% set fname = trigger.topic | replace('zigbee2mqtt/', '') %}
-              {% set ns = namespace(found=false) %}
-              {% for entity in states.binary_sensor %}
-                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)'
-                   and device_attr(entity.entity_id, 'name') == fname %}
-                  {% set ns.found = true %}
-                {% endif %}
-              {% endfor %}
-              {{ ns.found }}
-            {% endif %}
+            true
           {% else %}
             {% set type = trigger.payload_json.type %}
             {% set ieee = trigger.payload_json.data.ieee_address %}
@@ -160,16 +163,10 @@ automation:
             {% if trigger.id == 'bridge_event' %}
               {{ trigger.payload_json.data.ieee_address }}
             {% else %}
-              {% set fname = trigger.topic | replace('zigbee2mqtt/', '') %}
               {% set ns = namespace(value='') %}
-              {% for entity in states.binary_sensor %}
-                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)'
-                   and device_attr(entity.entity_id, 'name') == fname %}
-                  {% for id_tuple in device_attr(entity.entity_id, 'identifiers') | list %}
-                    {% if id_tuple[0] == 'mqtt' %}
-                      {% set ns.value = id_tuple[1] | replace('zigbee2mqtt_', '') %}
-                    {% endif %}
-                  {% endfor %}
+              {% for id_tuple in device_attr(trigger.entity_id, 'identifiers') | list %}
+                {% if id_tuple[0] == 'mqtt' %}
+                  {% set ns.value = id_tuple[1] | replace('zigbee2mqtt_', '') %}
                 {% endif %}
               {% endfor %}
               {{ ns.value }}
@@ -178,7 +175,7 @@ automation:
             {% if trigger.id == 'bridge_event' %}
               {{ trigger.payload_json.data.friendly_name }}
             {% else %}
-              {{ trigger.topic | replace('zigbee2mqtt/', '') }}
+              {{ device_attr(trigger.entity_id, 'name') }}
             {% endif %}
           parasoll_identify_btn: >
             {% set ns = namespace(entity='') %}
