@@ -31,6 +31,8 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
             "ensures: house.overnight_exterior_lighting_preserved = true",
             "rule ChooseBedtimeAudioFromConfiguredPool",
             "rule TriggerGoodnightFromCPAPSleep",
+            "rule ScheduleOwnerSuiteBlindsSunsetPrivacyClose",
+            "rule CloseOwnerSuiteBlindsAroundSunset",
             "rule EnterAsleepHouseModeFromBedsideShutdown",
             "rule ApplyGoodnightIntegrity",
             "owner_suite_switch_led_mode: OwnerSuiteSwitchLedMode",

@@ -123,7 +123,22 @@ def test_close_owner_suite_blinds_catches_evening_recovery_after_missed_sunset()
     assert 'to: "open"' in block
     assert 'id: recovery' in block
     assert 'after: sunset' in block
-    assert 'before: "23:00:00"' in block
+    assert 'after_offset: -00:45:00' in block
+    assert 'before: sunset' in block
+    assert 'before_offset: "+00:02:00"' in block
+    assert "blind_close_delay_minutes: \"{{ range(0, 48) | random | int }}\"" in block
     assert 'minutes: "{{ blind_close_delay_minutes }}"' in block
+    assert "offset: -00:45:00" in block
+    assert "range(0, 24)" not in block
+    assert "range(5, 45)" not in block
     assert "action: cover.close_cover" in block
     assert "cover.owner_suite_blinds_ha" in block
+
+
+def test_close_owner_suite_blinds_sunset_path_does_not_require_open_state() -> None:
+    block = _automation_block(WINDOWS_PATH, "close_owner_suite_blinds_at_night")
+    sunset_marker = "              - condition: trigger\n                id: sunset"
+    sunset_branch = block.split(sunset_marker, 1)[1].split("          - conditions:", 1)[0]
+
+    assert "condition: state" not in sunset_branch
+    assert 'state: "open"' not in sunset_branch

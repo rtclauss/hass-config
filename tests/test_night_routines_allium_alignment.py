@@ -174,3 +174,22 @@ def test_night_routines_spec_owns_owner_suite_led_policy_enum() -> None:
         "rule KeepOwnerSuiteSwitchLedsDarkOnNonWorkdayMornings",
     ):
         assert token in text
+
+
+def test_night_routines_spec_closes_owner_suite_blinds_around_sunset() -> None:
+    text = (ROOT / "specs" / "night_routines.allium").read_text(encoding="utf-8")
+
+    for token in (
+        "owner_suite_blinds_sunset_window_start_lead: Duration = 45.minutes",
+        "owner_suite_blinds_sunset_window_end_lag: Duration = 2.minutes",
+        "owner_suite_blinds_sunset_window_duration: Duration = owner_suite_blinds_sunset_window_start_lead + owner_suite_blinds_sunset_window_end_lag",
+        "rule ScheduleOwnerSuiteBlindsSunsetPrivacyClose",
+        "RandomDurationBetween(0.minutes, config.owner_suite_blinds_sunset_window_duration)",
+        "selected_close_offset_after_window_start: close_offset",
+        "scheduled_close_at: sunset_at - config.owner_suite_blinds_sunset_window_start_lead + close_offset",
+        "rule CloseOwnerSuiteBlindsAroundSunset",
+        "requires: schedule.selected_close_offset_after_window_start >= 0.minutes",
+        "requires: schedule.selected_close_offset_after_window_start <= config.owner_suite_blinds_sunset_window_duration",
+        "ensures: house.owner_suite_blinds_closed = true",
+    ):
+        assert token in text
