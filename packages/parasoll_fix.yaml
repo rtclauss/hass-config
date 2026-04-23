@@ -229,8 +229,17 @@ automation:
             {{ (states('input_text.parasoll_configure_state') or '{}') | from_json }}
           _key: "{{ _ieee[-4:] }}"
           _cur_h: "{{ (now().timestamp() / 3600) | int % 10000 }}"
-          _prev_h: "{{ _store.get(_ieee[-4:], 0) | int }}"
-          _hours_since: "{{ (_cur_h | int - _prev_h | int) % 10000 }}"
+          # None when the device has never been successfully configured.
+          # Using none (not 0) avoids a false "recently configured" result if
+          # the current mod_hour happens to be in the 0–5 window.
+          _prev_h: "{{ _store.get(_ieee[-4:]) }}"
+          # 9999 when no prior record → always treated as expired.
+          _hours_since: >
+            {% if _prev_h is none %}
+              9999
+            {% else %}
+              {{ (_cur_h | int - _prev_h | int) % 10000 }}
+            {% endif %}
           # bridge_event always reconfigures — device just re-joined and lost settings.
           # contact_change skips if configured within the last 6 h.
           _needs_configure: >
