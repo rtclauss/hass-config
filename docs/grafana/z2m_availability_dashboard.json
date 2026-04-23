@@ -54,7 +54,7 @@
       }
     ]
   },
-  "description": "Zigbee2MQTT device availability monitoring — tracks per-device online/offline state via MQTT availability topics recorded in InfluxDB",
+  "description": "Zigbee2MQTT device availability and battery monitoring - tracks per-device online/offline state and Z2M battery levels recorded in InfluxDB",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -356,12 +356,137 @@
           "resultFormat": "table"
         }
       ]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 },
+      "id": 13,
+      "title": "Z2M Battery Levels",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "description": "90-day battery percentage trend for Zigbee2MQTT battery sensors. Home Assistant stores percent sensors in the InfluxDB '%' measurement.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Battery %",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "hideFrom": { "legend": false, "tooltip": false, "viz": false },
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "spanNulls": true,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "green", "value": 20 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 12, "w": 16, "x": 0, "y": 36 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": ["lastNotNull", "min"], "displayMode": "table", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      },
+      "timeFrom": "90d",
+      "title": "Z2M Battery Level Trend",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT mean(\"value\") FROM \"%\" WHERE \"entity_id\" =~ /^$battery$/ AND $timeFilter GROUP BY time($__interval), \"entity_id\" fill(previous)",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "time_series"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "description": "Latest recorded battery level per Zigbee2MQTT battery sensor over the last 90 days.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "custom": {
+            "align": "auto",
+            "cellOptions": { "type": "auto" },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "green", "value": 20 }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "entity_id" },
+            "properties": [
+              { "id": "displayName", "value": "Battery Sensor" },
+              { "id": "custom.width", "value": 360 }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "battery_pct" },
+            "properties": [
+              { "id": "displayName", "value": "Battery %" },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "gridPos": { "h": 12, "w": 8, "x": 16, "y": 36 },
+      "id": 7,
+      "options": {
+        "footer": { "countRows": false, "fields": "", "reducer": ["min"], "show": false },
+        "showHeader": true,
+        "sortBy": [{ "desc": false, "displayName": "Battery %" }]
+      },
+      "timeFrom": "90d",
+      "title": "Current Z2M Battery Levels",
+      "type": "table",
+      "targets": [
+        {
+          "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+          "query": "SELECT last(\"value\") AS \"battery_pct\" FROM \"%\" WHERE \"entity_id\" =~ /^$battery$/ AND $timeFilter GROUP BY \"entity_id\"",
+          "rawQuery": true,
+          "refId": "A",
+          "resultFormat": "table"
+        }
+      ]
     }
   ],
   "refresh": "1m",
   "schemaVersion": 36,
   "style": "dark",
-  "tags": ["zigbee", "z2m", "availability", "mqtt"],
+  "tags": ["zigbee", "z2m", "availability", "battery", "mqtt"],
   "templating": {
     "list": [
       {
@@ -379,14 +504,30 @@
         "sort": 1,
         "type": "query",
         "label": "Device"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+        "definition": "SHOW TAG VALUES FROM \"%\" WITH KEY = \"entity_id\" WHERE \"entity_id\" =~ /^(arrival_sensor_battery|basement_landing_battery|basement_tph_battery|basement_unfinished_leak_battery|basement_window_battery|den_doors_battery|den_motion_battery|den_sonos_controls_battery|dining_room_north_window_battery|dining_room_south_window_battery|east_bed_button_battery|guest_bathroom_tph_battery|guest_bathroom_window_battery|guest_room_tph_battery|guest_room_window_battery|hall_button_battery|hall_garage_entry_battery|hall_main_foyer_motion_battery|hall_upstairs_linen_closet_tph_battery|hall_upstairs_motion_battery|kitchen_bay_middle_window_battery_2|kitchen_bay_north_window_battery|kitchen_bay_south_window_battery|kitchen_deck_battery|kitchen_north_window_battery|kitchen_south_window_battery|laundry_room_washing_machine_door_battery|laundry_washer_vibration_battery|mailbox_battery|main_foyer_front_door_battery|office_light_button_1_battery|office_light_button_2_battery|office_motion_battery|office_tph_battery|office_window_battery|owner_suite_bathroom_bay_north_middle_window_battery|owner_suite_bathroom_bay_north_window_battery|owner_suite_bathroom_bay_south_middle_window_battery|owner_suite_bathroom_bay_south_window_battery|owner_suite_bathroom_room_battery|owner_suite_bathroom_tph_battery|owner_suite_cube_battery|owner_suite_north_blind_battery|owner_suite_north_window_battery|owner_suite_south_blind_battery|owner_suite_south_window_battery|owner_suite_tph_battery|powder_room_window_battery|tiki_room_deck_battery|tiki_room_sonos_control_battery|tiki_room_tph_battery|unfinished_basement_window_battery)$/",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "battery",
+        "options": [],
+        "query": "SHOW TAG VALUES FROM \"%\" WITH KEY = \"entity_id\" WHERE \"entity_id\" =~ /^(arrival_sensor_battery|basement_landing_battery|basement_tph_battery|basement_unfinished_leak_battery|basement_window_battery|den_doors_battery|den_motion_battery|den_sonos_controls_battery|dining_room_north_window_battery|dining_room_south_window_battery|east_bed_button_battery|guest_bathroom_tph_battery|guest_bathroom_window_battery|guest_room_tph_battery|guest_room_window_battery|hall_button_battery|hall_garage_entry_battery|hall_main_foyer_motion_battery|hall_upstairs_linen_closet_tph_battery|hall_upstairs_motion_battery|kitchen_bay_middle_window_battery_2|kitchen_bay_north_window_battery|kitchen_bay_south_window_battery|kitchen_deck_battery|kitchen_north_window_battery|kitchen_south_window_battery|laundry_room_washing_machine_door_battery|laundry_washer_vibration_battery|mailbox_battery|main_foyer_front_door_battery|office_light_button_1_battery|office_light_button_2_battery|office_motion_battery|office_tph_battery|office_window_battery|owner_suite_bathroom_bay_north_middle_window_battery|owner_suite_bathroom_bay_north_window_battery|owner_suite_bathroom_bay_south_middle_window_battery|owner_suite_bathroom_bay_south_window_battery|owner_suite_bathroom_room_battery|owner_suite_bathroom_tph_battery|owner_suite_cube_battery|owner_suite_north_blind_battery|owner_suite_north_window_battery|owner_suite_south_blind_battery|owner_suite_south_window_battery|owner_suite_tph_battery|powder_room_window_battery|tiki_room_deck_battery|tiki_room_sonos_control_battery|tiki_room_tph_battery|unfinished_basement_window_battery)$/",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query",
+        "label": "Battery Sensor"
       }
     ]
   },
   "time": { "from": "now-24h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Z2M Device Availability",
+  "title": "Z2M Device Availability & Batteries",
   "uid": "z2m-availability-v1",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
