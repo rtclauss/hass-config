@@ -51,8 +51,9 @@ def render_payload(payload: DisplayPayload) -> bytes:
             level = row.get("level", "normal")
             row_color = LEVEL_COLORS.get(level, BLACK)
             if level in {"emphasis", "urgent"}:
-                canvas.rectangle(18, y - 8, 382, y + 28, ACCENT_COLORS[payload.accent])
-                row_color = WHITE if level == "urgent" else BLACK
+                background_color = ACCENT_COLORS[payload.accent]
+                canvas.rectangle(18, y - 8, 382, y + 28, background_color)
+                row_color = _text_color_for_background(background_color)
             canvas.icon(26, y - 4, row.get("icon", ""), scale=2, color=row_color)
             canvas.text(56, y, row.get("label", ""), scale=2, color=row_color)
             canvas.text(170, y, row.get("value", ""), scale=2, color=row_color)
@@ -163,6 +164,12 @@ def _chunk(kind: bytes, data: bytes) -> bytes:
         + body
         + struct.pack(">I", binascii.crc32(body) & 0xFFFFFFFF)
     )
+
+
+def _text_color_for_background(background: tuple[int, int, int]) -> tuple[int, int, int]:
+    if background in {BLACK, RED}:
+        return WHITE
+    return BLACK
 
 
 FONT: dict[str, tuple[str, ...]] = {
