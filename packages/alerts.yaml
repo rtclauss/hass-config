@@ -121,8 +121,8 @@ automation:
         id: wet
       - trigger: state
         entity_id: binary_sensor.laundry_room_leak_water_leak
-        from: "off"
-        to: "on"
+        from: "on"
+        to: "off"
         id: dry
 
     action:
@@ -239,8 +239,8 @@ automation:
     variables:
       notify_payload: "{{ trigger.event.data.service_data | default({}, true) }}"
       notify_message: "{{ notify_payload.message | default('', true) }}"
-      notify_title: "{{ notify_payload.title | default(none, true) }}"
-      notify_data: "{{ notify_payload.data | default(none, true) }}"
+      notify_title: "{{ notify_payload.title | default('Home Assistant', true) }}"
+      notify_data: "{{ notify_payload.data | default({}, true) }}"
     condition:
       - condition: state
         entity_id: media_player.lg_webos_smart_tv
@@ -429,9 +429,7 @@ script:
         action: light.turn_off
         data:
           entity_id: all
-      - delay:
-          # time for flash light off
-          seconds: 1
+      - delay: "00:00:01" # time for flash light off
       - alias: loop_lights
         action: script.turn_on
         data:
