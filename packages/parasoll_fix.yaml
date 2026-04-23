@@ -122,16 +122,18 @@ automation:
       - platform: mqtt
         topic: zigbee2mqtt/bridge/event
         id: bridge_event
-      # Single-level wildcard matches per-device topics (e.g. zigbee2mqtt/Office
-      # Window) but NOT zigbee2mqtt/bridge/event or deeper sub-topics.
+      # Multi-level wildcard so friendly names containing "/" (e.g.
+      # "Office/Window" → zigbee2mqtt/Office/Window) are matched.
+      # Bridge sub-topics are excluded in the condition below.
       - platform: mqtt
-        topic: "zigbee2mqtt/+"
+        topic: "zigbee2mqtt/#"
         id: contact_change
     condition:
       - condition: template
         value_template: >
           {% if trigger.id == 'contact_change' %}
-            {% if 'contact' not in trigger.payload_json %}
+            {% if 'contact' not in trigger.payload_json
+               or trigger.topic.startswith('zigbee2mqtt/bridge') %}
               false
             {% else %}
               {% set fname = trigger.topic | replace('zigbee2mqtt/', '') %}
