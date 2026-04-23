@@ -71,3 +71,20 @@ def test_payload_validation_skips_unknown_sections() -> None:
 
     assert len(payload.sections) == 1
 
+
+def test_payload_validation_normalizes_mdi_icon_names() -> None:
+    data = _sample("owner_suite_night_preview.json")
+    data["sections"][0]["rows"][0]["icon"] = "weather-rainy"
+
+    payload = validate_payload(data)
+
+    assert payload.sections[0]["rows"][0]["icon"] == "mdi:weather-rainy"
+
+
+def test_renderer_tolerates_unknown_icons() -> None:
+    data = _sample("owner_suite_night_preview.json")
+    data["sections"][0]["rows"][0]["icon"] = "mdi:weather-hail"
+
+    rendered = render_payload(validate_payload(data))
+
+    assert _png_size(rendered) == (WIDTH, HEIGHT)

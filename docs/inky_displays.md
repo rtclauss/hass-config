@@ -81,8 +81,8 @@ Payloads are compact JSON. Required fields:
     {
       "type": "rows",
       "rows": [
-        {"label": "Weather", "value": "24F Snow", "level": "normal"},
-        {"label": "Doors", "value": "Closed", "level": "normal"}
+        {"icon": "mdi:weather-snowy", "label": "Weather", "value": "24F Snow", "level": "normal"},
+        {"icon": "mdi:door-closed", "label": "Doors", "value": "Closed", "level": "normal"}
       ]
     }
   ],
@@ -101,6 +101,20 @@ Supported row `level` values:
 - `normal`
 - `emphasis`
 - `urgent`
+
+Rows may include an optional `icon` field. Use Material Design Icons names with
+the `mdi:` prefix so payloads stay aligned with Home Assistant icon names. The
+Pi renderer should support a small weather-first fallback icon set and skip
+unknown icons instead of failing the render.
+
+Initial weather icon names:
+
+- `mdi:weather-sunny`
+- `mdi:weather-partly-cloudy`
+- `mdi:weather-cloudy`
+- `mdi:weather-rainy`
+- `mdi:weather-snowy`
+- `mdi:weather-lightning`
 
 The renderer must tolerate missing optional fields and unknown section types.
 Unknown content should be skipped, not rendered as an error screen.
