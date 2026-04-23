@@ -65,8 +65,13 @@ def test_all_named_devices_have_sensors() -> None:
 
 def test_device_sensors_have_availability_gate() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
-    assert 'availability_topic: "zigbee2mqtt/bridge/state"' in text
-    assert 'availability_template: "{{ value_json.state }}"' not in text
+    availability_topics = text.count('availability_topic: "zigbee2mqtt/bridge/state"')
+    availability_templates = text.count(
+        'availability_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"'
+    )
+
+    assert availability_topics > 0
+    assert availability_templates == availability_topics
     assert 'payload_available: "online"' in text
     assert 'payload_not_available: "offline"' in text
 
@@ -108,7 +113,7 @@ def test_aggregate_template_searches_z2m_entities() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
     assert "selectattr('entity_id', 'search', 'z2m_')" in text
     assert "selectattr('attributes.device_class', 'eq', 'connectivity')" in text
-    assert "selectattr('state', 'eq', 'off')" in text
+    assert "selectattr('state', 'in', ['off', 'unavailable', 'unknown'])" in text
 
 
 def test_package_does_not_duplicate_z2m_lifecycle_sensors() -> None:
