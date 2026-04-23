@@ -16,6 +16,19 @@
 #      the automation below handles them automatically as they re-join.
 
 ################################################################
+## Helpers
+################################################################
+
+input_text:
+  parasoll_config_state:
+    name: "PARASOLL Configuration State"
+    # JSON dict: { "<ieee>": { "configured_at": "<iso>", "notified_at": "<iso>" } }
+    # Written by the automation after each successful configure / notification.
+    # Used to skip redundant reconfigures and suppress repeat notifications.
+    max: 3000
+    initial: "{}"
+
+################################################################
 ## Scripts
 ################################################################
 
@@ -91,13 +104,12 @@ automation:
     id: parasoll_auto_reconfigure_on_join
     description: >
       Reconfigures PARASOLL sensors on three events:
-        • device_interview  — brand-new join, model E2013
-        • device_announce   — re-join after battery pull / reconnect
-        • contact_change    — any Z2M message containing a contact field from a
-                              known PARASOLL device (silent; device is already
-                              awake so commands land immediately)
-      Join/announce path: waits 5 s, presses identify, sends notifications.
-      Contact-change path: acts within 1 s, no notifications (idempotent).
+        • device_interview  — brand-new join, model E2013 (always reconfigures)
+        • device_announce   — re-join after battery pull / reconnect (always reconfigures)
+        • contact_change    — any Z2M message with a contact field from a known
+                              PARASOLL device (skipped if configured within 6 h)
+      Notifications are suppressed for 1 h per device after the last one sent,
+      regardless of trigger type. contact_change is always silent.
       No hardcoded entity list — new sensors are picked up automatically.
     mode: queued
     max: 10
@@ -155,6 +167,8 @@ automation:
       # before it goes back to sleep and Z2M loses the unbind command.
       - delay:
           milliseconds: "{{ 5000 if trigger.id == 'bridge_event' else 0 }}"
+
+      # ── Resolve device identity ──────────────────────────────────────────────
       - variables:
           _silent: "{{ trigger.id == 'contact_change' }}"
           _ieee: >
@@ -193,58 +207,119 @@ automation:
               {% endif %}
             {% endfor %}
             {{ ns.entity }}
-      # Press identify only on join/announce to nudge the device awake.
-      # On contact_change the device is already awake — no need.
+
+      # ── Check per-device cooldowns from persistent store ─────────────────────
+      - variables:
+          _store: >
+            {{ (states('input_text.parasoll_config_state') or '{}') | from_json }}
+          _dev_state: "{{ _store.get(_ieee, {}) }}"
+          _last_configured: "{{ _dev_state.get('configured_at', '') }}"
+          _last_notified: "{{ _dev_state.get('notified_at', '') }}"
+          # bridge_event always reconfigures (device just re-joined, settings are gone).
+          # contact_change skips if configured within the last 6 h — settings are
+          # likely still correct; this prevents redundant work on every open/close.
+          _needs_configure: >
+            {% if trigger.id == 'bridge_event' %}
+              true
+            {% elif _last_configured == '' %}
+              true
+            {% else %}
+              {{ (now() - _last_configured | as_datetime).total_seconds() > 21600 }}
+            {% endif %}
+          # Suppress repeat notifications within 1 h per device.
+          # contact_change is always silent regardless.
+          _can_notify: >
+            {% if _silent %}
+              false
+            {% elif _last_notified == '' %}
+              true
+            {% else %}
+              {{ (now() - _last_notified | as_datetime).total_seconds() > 3600 }}
+            {% endif %}
+
+      # ── Skip if settings are current ─────────────────────────────────────────
       - if:
           - condition: template
-            value_template: "{{ parasoll_identify_btn != '' and not _silent }}"
+            value_template: "{{ _needs_configure }}"
         then:
-          - action: button.press
-            target:
-              entity_id: "{{ parasoll_identify_btn }}"
+          # Press identify only on join/announce to nudge the device awake.
+          # On contact_change the device is already awake — no need.
+          - if:
+              - condition: template
+                value_template: "{{ parasoll_identify_btn != '' and not _silent }}"
+            then:
+              - action: button.press
+                target:
+                  entity_id: "{{ parasoll_identify_btn }}"
+              - delay:
+                  seconds: 2
+
+          - if:
+              - condition: template
+                value_template: "{{ _can_notify }}"
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "PARASOLL"
+                  message: "Reconfiguring {{ _name }}…"
+
+          - action: mqtt.publish
+            data:
+              topic: zigbee2mqtt/bridge/request/device/unbind
+              payload: >
+                {"from": "{{ _ieee }}",
+                 "from_endpoint": "1", "to": "Coordinator",
+                 "clusters": ["genPollCtrl"]}
           - delay:
-              seconds: 2
-      - if:
-          - condition: template
-            value_template: "{{ not _silent }}"
-        then:
-          - action: notify.mobile_app_wethop
+              milliseconds: 500
+          - action: mqtt.publish
             data:
-              title: "PARASOLL"
-              message: "Reconfiguring {{ _name }}…"
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/unbind
-          payload: >
-            {"from": "{{ _ieee }}",
-             "from_endpoint": "1", "to": "Coordinator",
-             "clusters": ["genPollCtrl"]}
-      - delay:
-          milliseconds: 500
-      - action: mqtt.publish
-        data:
-          topic: zigbee2mqtt/bridge/request/device/configure
-          payload: '{"id": "{{ _ieee }}"}'
-      - wait_for_trigger:
-          - platform: mqtt
-            topic: zigbee2mqtt/bridge/response/device/configure
-            value_template: "{{ value_json.data.get('id') == _ieee }}"
-        timeout:
-          seconds: 60
-        continue_on_timeout: true
-      - if:
-          - condition: template
-            value_template: "{{ not _silent }}"
-        then:
-          - action: notify.mobile_app_wethop
-            data:
-              title: "PARASOLL"
-              message: >
+              topic: zigbee2mqtt/bridge/request/device/configure
+              payload: '{"id": "{{ _ieee }}"}'
+          - wait_for_trigger:
+              - platform: mqtt
+                topic: zigbee2mqtt/bridge/response/device/configure
+                value_template: "{{ value_json.data.get('id') == _ieee }}"
+            timeout:
+              seconds: 60
+            continue_on_timeout: true
+
+          # ── Update persistent store ───────────────────────────────────────────
+          # configured_at is stamped only on a successful response — a failed or
+          # queued configure leaves it unset so the next trigger retries.
+          # notified_at is stamped whenever a notification was sent this run.
+          - variables:
+              _configure_ok: >
                 {% set resp = wait.trigger.payload_json if wait.trigger else none %}
-                {% if resp and resp.get('status') == 'ok' %}
-                  ✓ {{ _name }} — all settings applied
-                {% elif resp %}
-                  ✗ {{ _name }} — {{ resp.get('data', {}).get('error', 'configure failed') }}
-                {% else %}
-                  ⏳ {{ _name }} — configure queued (sleepy; settings apply on next wakeup)
+                {{ resp is not none and resp.get('status') == 'ok' }}
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.parasoll_config_state
+            data:
+              value: >
+                {% set store = (states('input_text.parasoll_config_state') or '{}') | from_json %}
+                {% set dev = store.get(_ieee, {}) %}
+                {% if _configure_ok %}
+                  {% set dev = dict(dev, **{'configured_at': now().isoformat()}) %}
                 {% endif %}
+                {% if _can_notify %}
+                  {% set dev = dict(dev, **{'notified_at': now().isoformat()}) %}
+                {% endif %}
+                {{ dict(store, **{_ieee: dev}) | tojson }}
+
+          - if:
+              - condition: template
+                value_template: "{{ _can_notify }}"
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: "PARASOLL"
+                  message: >
+                    {% set resp = wait.trigger.payload_json if wait.trigger else none %}
+                    {% if resp and resp.get('status') == 'ok' %}
+                      ✓ {{ _name }} — all settings applied
+                    {% elif resp %}
+                      ✗ {{ _name }} — {{ resp.get('data', {}).get('error', 'configure failed') }}
+                    {% else %}
+                      ⏳ {{ _name }} — configure queued (sleepy; settings apply on next wakeup)
+                    {% endif %}
