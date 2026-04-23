@@ -109,11 +109,14 @@ automation:
   - alias: "PARASOLL - Auto-Reconfigure on Join or Announce"
     id: parasoll_auto_reconfigure_on_join
     description: >
-      Reconfigures PARASOLL sensors on three events:
-        • device_interview  — brand-new join, model E2013 (always reconfigures)
-        • device_announce   — re-join after battery pull / reconnect (always reconfigures)
-        • contact_change    — state change on any known PARASOLL sensor
-                              (skipped if configured within 6 h)
+      Reconfigures PARASOLL sensors only when actually needed:
+        • device_interview  — brand-new join (always reconfigures; settings definitely lost)
+        • device_announce   — re-join / reboot (skipped if configured within 6 h;
+                              Zigbee binding tables survive power cycles, so a plain
+                              announce does not mean settings were lost)
+        • contact_change    — state change on a known PARASOLL sensor (skipped if the
+                              device has ever been successfully configured; an active
+                              contact report proves IAS zone enrollment is working)
       Notifications gated by 1 h since last successful configure per device;
       contact_change is always silent.
     mode: queued
@@ -240,13 +243,21 @@ automation:
             {% else %}
               {{ (_cur_h | int - _prev_h | int) % 10000 }}
             {% endif %}
-          # bridge_event always reconfigures — device just re-joined and lost settings.
-          # contact_change skips if configured within the last 6 h.
+          # device_interview: always reconfigure — settings are definitively lost on new join.
+          # device_announce: reconfigure only if never confirmed OR last configure > 6 h ago;
+          #   Zigbee binding tables survive reboots/power cycles, so a plain announce
+          #   does not mean settings were lost.
+          # contact_change: skip if device has ever been successfully configured;
+          #   an active contact report is proof the IAS zone is enrolled and working.
           _needs_configure: >
             {% if trigger.id == 'bridge_event' %}
-              true
+              {% if trigger.payload_json.type == 'device_interview' %}
+                true
+              {% else %}
+                {{ _prev_h is none or _hours_since | int >= 6 }}
+              {% endif %}
             {% else %}
-              {{ _hours_since | int >= 6 }}
+              {{ _prev_h is none }}
             {% endif %}
           # Suppress notifications within 1 h of the last successful configure.
           # contact_change is always silent regardless.
