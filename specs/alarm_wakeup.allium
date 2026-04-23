@@ -147,7 +147,9 @@ rule TriggerWeekdayWakeup {
     when: wakeup.weekday_alarm_time <= now
     requires: calendar.today_is_workday
     requires: wakeup.weekday_alarm_enabled
-    requires: not wakeup.special_meeting_enabled
+    requires:
+        not wakeup.special_meeting_enabled
+        or wakeup.weekday_alarm_time < wakeup.next_work_meeting_alarm_time
     requires: wakeup_context.resident_home
     requires: not wakeup_context.planned_vacation_active
     requires: wakeup_context.resident_in_bed

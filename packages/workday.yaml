@@ -240,9 +240,17 @@ automation:
               - condition: state
                 entity_id: input_boolean.weekday_alarm_on
                 state: "on"
-              - condition: state
-                entity_id: input_boolean.special_meeting
-                state: "off"
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: input_boolean.special_meeting
+                    state: "off"
+                  - condition: template
+                    alias: "weekday alarm is before meeting reminder"
+                    value_template: >-
+                      {% set weekday_alarm_timestamp = state_attr('input_datetime.weekday_alarm', 'timestamp') | int(0) %}
+                      {% set meeting_alarm_timestamp = state_attr('input_datetime.next_work_meeting', 'timestamp') | int(0) %}
+                      {{ weekday_alarm_timestamp > 0 and meeting_alarm_timestamp > 0 and weekday_alarm_timestamp < meeting_alarm_timestamp }}
             sequence:
               - parallel:
                   - action: script.turn_on
