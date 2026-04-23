@@ -24,8 +24,8 @@ constexpr uint8_t F1_CRASH_MAX_FRAMES = 50;
 constexpr uint8_t F1_CRASH_DURATION_FRAMES = 18;
 constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;
 constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;
-constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 168;
-constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 60;
+constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 148;
+constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 52;
 constexpr size_t LAVA_FIELD_CELLS = 48;
 constexpr size_t THUNDERSTORM_CELLS = 40;
 constexpr float PI_F = 3.14159265f;
@@ -978,18 +978,18 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
   } else if (burst_active && now >= next_event_ms) {
     if (flash_on) {
       flash_on = false;
-      next_event_ms = now + random_u8(95, 190);
+      next_event_ms = now + random_u8(110, 220);
     } else {
       flashes_remaining--;
       if (flashes_remaining == 0) {
         burst_active = false;
         flash_level = 0;
         next_event_ms =
-            now + (1450U + (static_cast<uint32_t>(clamp_interval(speed, 240, 60)) * 9U));
+            now + (1600U + (static_cast<uint32_t>(clamp_interval(speed, 260, 70)) * 10U));
       } else {
         flash_on = true;
         flash_level = random_u8(120, 220);
-        next_event_ms = now + random_u8(30, 65);
+        next_event_ms = now + random_u8(30, 60);
       }
     }
   }
@@ -1030,9 +1030,9 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
         pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
 
     Color pixel(
-        clamp_u8(static_cast<int>(1 + (fog_noise * 4.0f))),
-        clamp_u8(static_cast<int>(9 + ambient_roll + (fog_noise * 14.0f))),
-        clamp_u8(static_cast<int>(5 + (fog_noise * 11.0f))));
+        clamp_u8(static_cast<int>(fog_noise * 2.0f)),
+        clamp_u8(static_cast<int>(14 + ambient_roll + (fog_noise * 18.0f))),
+        clamp_u8(static_cast<int>(3 + (fog_noise * 8.0f))));
 
     for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
       const float distance = std::fabs(static_cast<float>(cell) - foliage_centers[cluster]);
@@ -1040,9 +1040,9 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
           smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (foliage_activity[cluster] * 0.72f));
       if (canopy > 0.0f) {
         const Color foliage(
-            clamp_u8(static_cast<int>(2 + (cluster % 2 == 0 ? canopy * 10.0f : canopy * 6.0f))),
-            clamp_u8(static_cast<int>(16 + (cluster % 2 == 0 ? canopy * 78.0f : canopy * 58.0f))),
-            clamp_u8(static_cast<int>(6 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
+            clamp_u8(static_cast<int>(1 + (cluster % 2 == 0 ? canopy * 8.0f : canopy * 5.0f))),
+            clamp_u8(static_cast<int>(24 + (cluster % 2 == 0 ? canopy * 96.0f : canopy * 76.0f))),
+            clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
         pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
       }
     }
@@ -1054,9 +1054,9 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
         add_inplace(
             pixel,
             Color(
-                clamp_u8(static_cast<int>(rain_group * 10.0f)),
-                clamp_u8(static_cast<int>(8 + (rain_group * 38.0f))),
-                clamp_u8(static_cast<int>(22 + (rain_group * 100.0f)))));
+                clamp_u8(static_cast<int>(rain_group * 8.0f)),
+                clamp_u8(static_cast<int>(12 + (rain_group * 46.0f))),
+                clamp_u8(static_cast<int>(30 + (rain_group * 120.0f)))));
       }
     }
 
