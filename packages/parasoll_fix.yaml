@@ -20,12 +20,18 @@
 ################################################################
 
 input_text:
-  parasoll_config_state:
-    name: "PARASOLL Configuration State"
-    # JSON dict: { "<ieee>": { "configured_at": "<iso>", "notified_at": "<iso>" } }
-    # Written by the automation after each successful configure / notification.
-    # Used to skip redundant reconfigures and suppress repeat notifications.
-    max: 3000
+  parasoll_configure_state:
+    name: "PARASOLL Configure State"
+    # Compact JSON: {"<last4_ieee>": <mod_hour>, ...}
+    # mod_hour = floor(unix_time / 3600) % 10000  — 4-digit cyclical counter
+    #            that wraps every ~416 days; cooldown checks use modular diff.
+    # Key is the last 4 hex chars of the device IEEE address, giving 65 536
+    # possible values — collision is extremely unlikely across ~20 home devices.
+    # Capacity: 21 devices fit within the 255-char HA state limit.
+    # Written only on a confirmed Z2M configure success.
+    # Used to gate contact_change reconfigure (>6 h) and bridge_event
+    # notifications (>1 h since last successful configure).
+    max: 255
     initial: "{}"
 
 ################################################################
@@ -108,9 +114,8 @@ automation:
         • device_announce   — re-join after battery pull / reconnect (always reconfigures)
         • contact_change    — any Z2M message with a contact field from a known
                               PARASOLL device (skipped if configured within 6 h)
-      Notifications are suppressed for 1 h per device after the last one sent,
-      regardless of trigger type. contact_change is always silent.
-      No hardcoded entity list — new sensors are picked up automatically.
+      Notifications gated by 1 h since last successful configure per device;
+      contact_change is always silent. No hardcoded entity list.
     mode: queued
     max: 10
     trigger:
@@ -208,36 +213,35 @@ automation:
             {% endfor %}
             {{ ns.entity }}
 
-      # ── Check per-device cooldowns from persistent store ─────────────────────
+      # ── Check per-device cooldowns ───────────────────────────────────────────
+      # Store format: {"<last4_ieee>": <mod_hour>}
+      # mod_hour = floor(unix/3600) % 10000.  Diff uses modular arithmetic to
+      # handle the ~416-day wraparound: (cur - prev) % 10000.
+      # Only a successful configure response updates the store, so a queued or
+      # failed configure leaves the slot empty and the next trigger retries.
+      # Notifications are gated by the same timestamp (1 h window); if configure
+      # keeps failing the user still receives alerts — which is the desired
+      # signal for a stuck device.
       - variables:
           _store: >
-            {{ (states('input_text.parasoll_config_state') or '{}') | from_json }}
-          _dev_state: "{{ _store.get(_ieee, {}) }}"
-          _last_configured: "{{ _dev_state.get('configured_at', '') }}"
-          _last_notified: "{{ _dev_state.get('notified_at', '') }}"
-          # bridge_event always reconfigures (device just re-joined, settings are gone).
-          # contact_change skips if configured within the last 6 h — settings are
-          # likely still correct; this prevents redundant work on every open/close.
+            {{ (states('input_text.parasoll_configure_state') or '{}') | from_json }}
+          _key: "{{ _ieee[-4:] }}"
+          _cur_h: "{{ (now().timestamp() / 3600) | int % 10000 }}"
+          _prev_h: "{{ _store.get(_ieee[-4:], 0) | int }}"
+          _hours_since: "{{ (_cur_h | int - _prev_h | int) % 10000 }}"
+          # bridge_event always reconfigures — device just re-joined and lost settings.
+          # contact_change skips if configured within the last 6 h.
           _needs_configure: >
             {% if trigger.id == 'bridge_event' %}
               true
-            {% elif _last_configured == '' %}
-              true
             {% else %}
-              {{ (now() - _last_configured | as_datetime).total_seconds() > 21600 }}
+              {{ _hours_since | int >= 6 }}
             {% endif %}
-          # Suppress repeat notifications within 1 h per device.
+          # Suppress notifications within 1 h of the last successful configure.
           # contact_change is always silent regardless.
-          _can_notify: >
-            {% if _silent %}
-              false
-            {% elif _last_notified == '' %}
-              true
-            {% else %}
-              {{ (now() - _last_notified | as_datetime).total_seconds() > 3600 }}
-            {% endif %}
+          _can_notify: "{{ not _silent and _hours_since | int >= 1 }}"
 
-      # ── Skip if settings are current ─────────────────────────────────────────
+      # ── Skip if settings are likely still current ─────────────────────────────
       - if:
           - condition: template
             value_template: "{{ _needs_configure }}"
@@ -284,28 +288,22 @@ automation:
               seconds: 60
             continue_on_timeout: true
 
-          # ── Update persistent store ───────────────────────────────────────────
-          # configured_at is stamped only on a successful response — a failed or
-          # queued configure leaves it unset so the next trigger retries.
-          # notified_at is stamped whenever a notification was sent this run.
+          # ── Update persistent store on success ────────────────────────────────
           - variables:
               _configure_ok: >
                 {% set resp = wait.trigger.payload_json if wait.trigger else none %}
                 {{ resp is not none and resp.get('status') == 'ok' }}
-          - action: input_text.set_value
-            target:
-              entity_id: input_text.parasoll_config_state
-            data:
-              value: >
-                {% set store = (states('input_text.parasoll_config_state') or '{}') | from_json %}
-                {% set dev = store.get(_ieee, {}) %}
-                {% if _configure_ok %}
-                  {% set dev = dict(dev, **{'configured_at': now().isoformat()}) %}
-                {% endif %}
-                {% if _can_notify %}
-                  {% set dev = dict(dev, **{'notified_at': now().isoformat()}) %}
-                {% endif %}
-                {{ dict(store, **{_ieee: dev}) | tojson }}
+          - if:
+              - condition: template
+                value_template: "{{ _configure_ok }}"
+            then:
+              - action: input_text.set_value
+                target:
+                  entity_id: input_text.parasoll_configure_state
+                data:
+                  value: >
+                    {% set store = (states('input_text.parasoll_configure_state') or '{}') | from_json %}
+                    {{ dict(store, **{_ieee[-4:]: (now().timestamp() / 3600) | int % 10000}) | tojson }}
 
           - if:
               - condition: template
