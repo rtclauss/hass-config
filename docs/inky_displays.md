@@ -11,11 +11,12 @@ services.
 
 | Display ID | Panel | Color semantics | Location | Driver |
 | --- | --- | --- | --- | --- |
-| `owner_suite` | Pimoroni Inky wHAT PIM408, red/black/white, 400x300 | Red means urgency or exception | Owner suite, exact placement TBD | Raspberry Pi TBD |
+| `owner_suite` | Pimoroni Inky wHAT PIM408, red/black/white, 400x300 | Red means urgency or exception | Owner suite, exact placement TBD | Raspberry Pi Zero W |
 | `office` | Yellow/black/white Inky display, 400x300, not yet confirmed | Yellow means emphasis or hospitality | Office, exact placement TBD | Raspberry Pi TBD |
 
 Available Raspberry Pi hardware from issue #313:
 
+- Raspberry Pi Zero W, assigned to `owner_suite`
 - Raspberry Pi Zero
 - Raspberry Pi 1
 - Raspberry Pi 3 Model B
@@ -169,4 +170,3 @@ details on the office display.
    rendering on the physical panel.
 5. Confirm and add the office panel hardware.
 6. Add `office` private modes and `guest_info`.
-
