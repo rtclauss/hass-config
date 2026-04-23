@@ -127,6 +127,8 @@ def _required_text(data: dict[str, Any], key: str) -> str:
 
 
 def _text(value: Any) -> str:
+    if value is None:
+        return ""
     return str(value).strip()
 
 

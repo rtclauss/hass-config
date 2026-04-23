@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import struct
+import zlib
 
 import pytest
 
@@ -21,6 +22,28 @@ def _png_size(data: bytes) -> tuple[int, int]:
     assert data.startswith(b"\x89PNG\r\n\x1a\n")
     assert data[12:16] == b"IHDR"
     return struct.unpack(">II", data[16:24])
+
+
+def _png_rgb(data: bytes) -> bytes:
+    width, height = _png_size(data)
+    offset = 8
+    compressed = bytearray()
+    while offset < len(data):
+        length = struct.unpack(">I", data[offset : offset + 4])[0]
+        chunk_type = data[offset + 4 : offset + 8]
+        chunk_data = data[offset + 8 : offset + 8 + length]
+        if chunk_type == b"IDAT":
+            compressed.extend(chunk_data)
+        offset += length + 12
+
+    raw = zlib.decompress(bytes(compressed))
+    row_size = width * 3
+    pixels = bytearray()
+    for y in range(height):
+        row_start = y * (row_size + 1)
+        assert raw[row_start] == 0
+        pixels.extend(raw[row_start + 1 : row_start + 1 + row_size])
+    return bytes(pixels)
 
 
 @pytest.mark.parametrize(
@@ -88,3 +111,30 @@ def test_renderer_tolerates_unknown_icons() -> None:
     rendered = render_payload(validate_payload(data))
 
     assert _png_size(rendered) == (WIDTH, HEIGHT)
+
+
+def test_null_optional_fields_render_as_blank_text() -> None:
+    data = _sample("owner_suite_night_preview.json")
+    data["title"] = None
+    data["subtitle"] = None
+    data["footer"] = None
+    data["sections"][0]["rows"][0]["label"] = None
+    data["sections"][0]["rows"][0]["value"] = None
+
+    payload = validate_payload(data)
+
+    assert payload.title == ""
+    assert payload.subtitle == ""
+    assert payload.footer == ""
+    assert payload.sections[0]["rows"][0]["label"] == ""
+    assert payload.sections[0]["rows"][0]["value"] == ""
+
+
+def test_black_accent_emphasis_rows_keep_visible_text() -> None:
+    data = _sample("owner_suite_night_preview.json")
+    data["accent"] = "black"
+    data["sections"][0]["rows"][0]["level"] = "emphasis"
+
+    pixels = _png_rgb(render_payload(validate_payload(data)))
+
+    assert b"\xff\xff\xff" in pixels
