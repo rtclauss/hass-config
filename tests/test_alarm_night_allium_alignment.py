@@ -128,6 +128,22 @@ def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> No
     )
 
 
+def test_weekday_alarm_runs_when_it_is_before_meeting_reminder() -> None:
+    spec_text = (ROOT / "specs" / "alarm_wakeup.allium").read_text(encoding="utf-8")
+    block = _automation_block(WORKDAY_PATH, "alarm_wake_up")
+
+    assert "or wakeup.weekday_alarm_time < wakeup.next_work_meeting_alarm_time" in spec_text
+
+    for token in (
+        "condition: or",
+        "weekday alarm is before meeting reminder",
+        "state_attr('input_datetime.weekday_alarm', 'timestamp') | int(0)",
+        "state_attr('input_datetime.next_work_meeting', 'timestamp') | int(0)",
+        "weekday_alarm_timestamp < meeting_alarm_timestamp",
+    ):
+        assert token in block
+
+
 def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
     snooze_automation = _automation_block(WORKDAY_PATH, "alarm_snooze")
     cancel_automation = _automation_block(WORKDAY_PATH, "cancel_alarms")
