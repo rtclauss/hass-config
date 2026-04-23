@@ -156,6 +156,41 @@ def test_grafana_dashboard_targets_z2m_availability_entities() -> None:
     assert "binary_sensor.state" in content
 
 
+def test_grafana_dashboard_targets_z2m_battery_entities() -> None:
+    content = GRAFANA_DASHBOARD_PATH.read_text(encoding="utf-8")
+    dashboard = json.loads(content)
+    variables = dashboard.get("templating", {}).get("list", [])
+    battery_variable = next((variable for variable in variables if variable.get("name") == "battery"), None)
+
+    assert battery_variable is not None, "Missing Z2M battery variable"
+    battery_query = battery_variable.get("query", "")
+    assert 'FROM "%"' in battery_query
+    assert "arrival_sensor_battery" in battery_query
+    assert "owner_suite_north_blind_battery" in battery_query
+    assert "unfinished_basement_window_battery" in battery_query
+    assert "valetudo_" not in battery_query
+    assert "nepenthes" not in battery_query
+    assert "terrarium_battery" not in battery_query
+
+
+def test_grafana_dashboard_has_z2m_battery_panels() -> None:
+    content = GRAFANA_DASHBOARD_PATH.read_text(encoding="utf-8")
+    dashboard = json.loads(content)
+    panels = dashboard.get("panels", [])
+    battery_panels = [panel for panel in panels if panel.get("title") in {
+        "Z2M Battery Level Trend",
+        "Current Z2M Battery Levels",
+    }]
+
+    assert len(battery_panels) == 2
+    for panel in battery_panels:
+        assert panel.get("timeFrom") == "90d"
+        assert panel.get("fieldConfig", {}).get("defaults", {}).get("unit") == "percent"
+        queries = [target.get("query", "") for target in panel.get("targets", [])]
+        assert any('FROM "%"' in query for query in queries)
+        assert any("$battery" in query for query in queries)
+
+
 def test_grafana_dashboard_has_influxdb_datasource() -> None:
     content = GRAFANA_DASHBOARD_PATH.read_text(encoding="utf-8")
     dashboard = json.loads(content)
