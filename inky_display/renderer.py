@@ -53,7 +53,8 @@ def render_payload(payload: DisplayPayload) -> bytes:
             if level in {"emphasis", "urgent"}:
                 canvas.rectangle(18, y - 8, 382, y + 28, ACCENT_COLORS[payload.accent])
                 row_color = WHITE if level == "urgent" else BLACK
-            canvas.text(26, y, row.get("label", ""), scale=2, color=row_color)
+            canvas.icon(26, y - 4, row.get("icon", ""), scale=2, color=row_color)
+            canvas.text(56, y, row.get("label", ""), scale=2, color=row_color)
             canvas.text(170, y, row.get("value", ""), scale=2, color=row_color)
             y += 42
 
@@ -102,6 +103,12 @@ class Canvas:
                 break
             self._glyph(x, top, glyph, scale, color)
             x += 6 * scale
+
+    def icon(self, left: int, top: int, name: str, scale: int, color: tuple[int, int, int]) -> None:
+        glyph = ICONS.get(name)
+        if glyph is None:
+            return
+        self._glyph(left, top, glyph, scale, color)
 
     def to_png(self) -> bytes:
         raw = bytearray()
@@ -202,4 +209,80 @@ FONT: dict[str, tuple[str, ...]] = {
     "X": ("10001", "10001", "01010", "00100", "01010", "10001", "10001"),
     "Y": ("10001", "10001", "01010", "00100", "00100", "00100", "00100"),
     "Z": ("11111", "00001", "00010", "00100", "01000", "10000", "11111"),
+}
+
+
+ICONS: dict[str, tuple[str, ...]] = {
+    "mdi:weather-sunny": (
+        "0010000100",
+        "0001001000",
+        "1000000001",
+        "0001111000",
+        "0011111100",
+        "0011111100",
+        "0001111000",
+        "1000000001",
+        "0001001000",
+        "0010000100",
+    ),
+    "mdi:weather-partly-cloudy": (
+        "0000100000",
+        "0010010000",
+        "0001110000",
+        "0011111000",
+        "0001110010",
+        "0011111111",
+        "0111111111",
+        "1111111110",
+        "0111111100",
+        "0000000000",
+    ),
+    "mdi:weather-cloudy": (
+        "0000000000",
+        "0001110000",
+        "0011111000",
+        "0111111100",
+        "1111111110",
+        "1111111111",
+        "0111111111",
+        "0011111110",
+        "0000000000",
+        "0000000000",
+    ),
+    "mdi:weather-rainy": (
+        "0001110000",
+        "0011111000",
+        "0111111100",
+        "1111111110",
+        "0111111111",
+        "0011111110",
+        "0000000000",
+        "0100100100",
+        "0010010010",
+        "0100100100",
+    ),
+    "mdi:weather-snowy": (
+        "0001110000",
+        "0011111000",
+        "0111111100",
+        "1111111110",
+        "0111111111",
+        "0011111110",
+        "0000000000",
+        "0101010100",
+        "0010101000",
+        "0101010100",
+    ),
+    "mdi:weather-lightning": (
+        "0001110000",
+        "0011111000",
+        "0111111100",
+        "1111111110",
+        "0111111111",
+        "0011111110",
+        "0000110000",
+        "0001100000",
+        "0000110000",
+        "0001100000",
+    ),
 }

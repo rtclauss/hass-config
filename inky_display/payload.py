@@ -113,6 +113,7 @@ def _normalize_rows(rows: list[Any]) -> list[dict[str, str]]:
                 "label": _clip(_text(row.get("label", "")), 18),
                 "value": _clip(_text(row.get("value", "")), 28),
                 "level": level,
+                "icon": _clip(_normalize_icon(row.get("icon", "")), 32),
             }
         )
     return normalized
@@ -127,6 +128,15 @@ def _required_text(data: dict[str, Any], key: str) -> str:
 
 def _text(value: Any) -> str:
     return str(value).strip()
+
+
+def _normalize_icon(value: Any) -> str:
+    icon = _text(value)
+    if icon == "":
+        return ""
+    if icon.startswith("mdi:"):
+        return icon
+    return f"mdi:{icon}"
 
 
 def _clip(value: str, limit: int = MAX_TEXT_LENGTH) -> str:
