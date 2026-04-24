@@ -1,0 +1,105 @@
+-- allium: 3
+-- tv_watching.allium
+--
+-- Scope: Basement TV session lifecycle and whole-house lighting response.
+-- Includes:
+--   - ambient lighting response when TV starts playing or pauses
+--   - audio pause/handoff on TV resume
+--   - TV power on/off basement light reset
+--   - guest-mode gate: none of the evening automations run when guest mode is on
+-- Excludes:
+--   - specific watch scripts (watch_plex, watch_netflix, etc.)
+--   - bedtime handoff triggered by TV off (see night_routines.allium)
+--   - the exact light brightness/color values (those live in scene definitions)
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity TVContext {
+    guest_mode_enabled: Boolean
+    within_evening_window: Boolean    -- true between 19:30 and 23:59
+    bed_occupied: Boolean
+}
+
+external entity BasementTV {
+    status: playing | paused | idle | off | unavailable
+}
+
+external entity Light {
+    is_outside: Boolean
+    is_tv_bias: Boolean
+    on: Boolean
+    brightness: Integer               -- 0–255
+}
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    ctx: TVContext
+    basement_great_room: Light
+    kitchen_sink_overhead: Light
+    den_floods: Light
+    basement_tv_bias: Light
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule TVResumesPlaying {
+    -- When any basement media source goes to playing, silence common-area
+    -- audio and kill all inside lights so the space reads as "movie mode".
+    -- Outside lights and TV bias are preserved.
+    when: _: BasementTV.status becomes playing
+    requires: ctx.within_evening_window
+    requires: not ctx.guest_mode_enabled
+    ensures: common_area_sonos_paused = true
+    ensures: house_audio_paused = true
+    ensures:
+        for light in Light where not light.is_outside and not light.is_tv_bias:
+            light.on = false
+    @guidance
+        -- Transition over 15 s. outside_front_hue, outside_north_west_garage,
+        -- outside_south_west_garage, outside_front_door, and basement_tv_bias
+        -- are excluded from the off sweep.
+}
+
+rule TVPauses {
+    -- When TV pauses, restore enough light for the owner to move around —
+    -- basement at half brightness, kitchen and den at full so upstairs spaces
+    -- are usable if the owner has stepped away from the basement.
+    when: _: BasementTV.status becomes paused
+    requires: ctx.within_evening_window
+    requires: not ctx.guest_mode_enabled
+    ensures: basement_great_room.on = true
+    ensures: basement_great_room.brightness = 128
+    ensures: kitchen_sink_overhead.on = true
+    ensures: kitchen_sink_overhead.brightness = 255
+    ensures: den_floods.on = true
+    ensures: den_floods.brightness = 255
+}
+
+rule TVPowerOn {
+    -- Physical TV power-on turns on the bias light for ambient viewing comfort
+    -- and pauses house audio.
+    when: _: BasementTV.status becomes playing
+    requires: not ctx.bed_occupied
+    ensures: basement_tv_bias.on = true
+    ensures: house_audio_paused = true
+    @guidance
+        -- 2 s delay before pausing audio, 10 s debounce on the LG TV trigger.
+}
+
+rule TVPowerOff {
+    -- TV off or unavailable resets the basement to normal occupancy lighting.
+    when: _: BasementTV.status becomes off | unavailable
+    ensures: basement_great_room.on = true
+    ensures: basement_great_room.brightness = 255
+    ensures: basement_tv_bias.on = false
+    @guidance
+        -- 15 s debounce to handle off-to-unavailable handoff without double-firing.
+        -- basement_tv_bias transitions off over 4 s.
+}
