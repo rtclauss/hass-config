@@ -28,9 +28,9 @@ input_text:
     # Key is the last 4 hex chars of the device IEEE address, giving 65 536
     # possible values — collision is extremely unlikely across ~20 home devices.
     # Capacity: 21 devices fit within the 255-char HA state limit.
-    # Written only on a confirmed Z2M configure success.
-    # Used to gate contact_change reconfigure (>6 h) and bridge_event
-    # notifications (>1 h since last successful configure).
+    # Written on every configure attempt (success, failure, or timeout).
+    # Used solely to gate notification frequency (1 h cooldown per device);
+    # the configure decision is made from Z2M bridge/devices binding state.
     max: 255
     initial: "{}"
 
@@ -111,14 +111,17 @@ automation:
     trace:
       stored_traces: 200
     description: >
-      Reconfigures PARASOLL sensors only when actually needed:
-        • device_interview  — brand-new join (always reconfigures; settings definitely lost)
-        • device_announce   — re-join / reboot (skipped if configured within 6 h;
-                              Zigbee binding tables survive power cycles, so a plain
-                              announce does not mean settings were lost)
-        • contact_change    — state change on a known PARASOLL sensor (skipped if the
-                              device has ever been successfully configured; an active
-                              contact report proves IAS zone enrollment is working)
+      Reconfigures PARASOLL sensors only when the Z2M bridge/devices binding
+      state shows a gap.  Three invariants are checked on every trigger:
+        • ssIasZone bound on ep1       — device will send contact-state reports
+        • genPollCtrl NOT bound on ep1 — no aggressive check-in → no battery drain
+        • genPowerCfg has configured reportings — battery/voltage actively reported
+      Triggers:
+        • device_interview — brand-new join (always reconfigures; no bindings yet)
+        • device_announce  — re-join / reboot (reconfigures only if bridge shows gap)
+        • contact_change   — PARASOLL state change (reconfigures only if bridge shows
+                             genPollCtrl bound or power reporting absent; active contact
+                             report already proves IAS zone is enrolled)
       Notifications gated by 1 h since last successful configure per device;
       contact_change is always silent.
     mode: queued
@@ -127,7 +130,8 @@ automation:
       - platform: mqtt
         topic: zigbee2mqtt/bridge/event
         id: bridge_event
-      # State triggers fire only for the 20 known PARASOLL sensors.
+      # State triggers fire for indoor/low-frequency PARASOLL sensors only.
+      # High-frequency sensors (mailbox) are omitted — bridge_event handles them.
       # Using state (not MQTT wildcard) avoids triggering on every Z2M message.
       - platform: state
         entity_id:
@@ -141,7 +145,6 @@ automation:
           - binary_sensor.kitchen_bay_south_window_contact
           - binary_sensor.kitchen_north_window_contact
           - binary_sensor.kitchen_south_window_contact
-          - binary_sensor.mailbox_contact
           - binary_sensor.office_window_contact
           - binary_sensor.owner_suite_bathroom_bay_north_middle_window_contact
           - binary_sensor.owner_suite_bathroom_bay_north_window_contact
@@ -220,52 +223,74 @@ automation:
             {% endfor %}
             {{ ns.entity }}
 
-      # ── Check per-device cooldowns ───────────────────────────────────────────
-      # Store format: {"<last4_ieee>": <mod_hour>}
-      # mod_hour = floor(unix/3600) % 10000.  Diff uses modular arithmetic to
-      # handle the ~416-day wraparound: (cur - prev) % 10000.
-      # Only a successful configure response updates the store, so a queued or
-      # failed configure leaves the slot empty and the next trigger retries.
-      # Notifications are gated by the same timestamp (1 h window); if configure
-      # keeps failing the user still receives alerts — which is the desired
-      # signal for a stuck device.
+      # ── Query Z2M for current binding state (retained → instant) ────────────
+      # bridge/devices is a retained topic; the broker delivers it immediately
+      # on subscribe, so this wait completes in milliseconds in practice.
+      - wait_for_trigger:
+          - platform: mqtt
+            topic: zigbee2mqtt/bridge/devices
+        timeout:
+          seconds: 5
+        continue_on_timeout: true
+
+      # ── Determine whether reconfiguration is actually needed ──────────────────
+      # Parse the bridge/devices payload to find this device and inspect ep1.
+      # Three invariants must hold for the device to be considered fully configured:
+      #   _ias_ok      — ssIasZone is bound on ep1 (device sends contact reports)
+      #   _pollctrl_ok — genPollCtrl is NOT bound (no aggressive check-in interval)
+      #   _power_ok    — genPowerCfg has at least one configured reporting
+      # device_interview always reconfigures (fresh join: no bindings exist yet).
+      # If bridge/devices times out or device is absent, defaults to true (safe).
       - variables:
+          _z2m_device: >
+            {% if wait.trigger %}
+              {{ (wait.trigger.payload_json
+                   | selectattr('ieee_address', 'eq', _ieee)
+                   | first | default(none)) }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          _ep1_bindings: >
+            {% if _z2m_device %}
+              {{ (_z2m_device.get('endpoints', {}).get('1', {})
+                   .get('bindings', []) | map(attribute='cluster') | list) }}
+            {% else %}
+              []
+            {% endif %}
+          _ep1_reportings: >
+            {% if _z2m_device %}
+              {{ (_z2m_device.get('endpoints', {}).get('1', {})
+                   .get('configured_reportings', []) | map(attribute='cluster') | list) }}
+            {% else %}
+              []
+            {% endif %}
+          _ias_ok: "{{ 'ssIasZone' in _ep1_bindings }}"
+          _pollctrl_ok: "{{ 'genPollCtrl' not in _ep1_bindings }}"
+          _power_ok: "{{ 'genPowerCfg' in _ep1_reportings }}"
+          _needs_configure: >
+            {% if trigger.id == 'bridge_event' and trigger.payload_json.type == 'device_interview' %}
+              true
+            {% elif _z2m_device is none %}
+              true
+            {% else %}
+              {{ not _ias_ok or not _pollctrl_ok or not _power_ok }}
+            {% endif %}
+          # Notification cooldown: suppress within 1 h of last confirmed configure.
+          # Store format: {"<last4_ieee>": <mod_hour>}  (wraps every ~416 days).
+          # contact_change is always silent regardless.
           _store: >
             {{ (states('input_text.parasoll_configure_state') or '{}') | from_json }}
-          _key: "{{ _ieee[-4:] }}"
           _cur_h: "{{ (now().timestamp() / 3600) | int % 10000 }}"
-          # None when the device has never been successfully configured.
-          # Using none (not 0) avoids a false "recently configured" result if
-          # the current mod_hour happens to be in the 0–5 window.
           _prev_h: "{{ _store.get(_ieee[-4:]) }}"
-          # 9999 when no prior record → always treated as expired.
           _hours_since: >
             {% if _prev_h is none %}
               9999
             {% else %}
               {{ (_cur_h | int - _prev_h | int) % 10000 }}
             {% endif %}
-          # device_interview: always reconfigure — settings are definitively lost on new join.
-          # device_announce: reconfigure only if never confirmed OR last configure > 6 h ago;
-          #   Zigbee binding tables survive reboots/power cycles, so a plain announce
-          #   does not mean settings were lost.
-          # contact_change: skip if device has ever been successfully configured;
-          #   an active contact report is proof the IAS zone is enrolled and working.
-          _needs_configure: >
-            {% if trigger.id == 'bridge_event' %}
-              {% if trigger.payload_json.type == 'device_interview' %}
-                true
-              {% else %}
-                {{ _prev_h is none or _hours_since | int >= 6 }}
-              {% endif %}
-            {% else %}
-              {{ _prev_h is none }}
-            {% endif %}
-          # Suppress notifications within 1 h of the last successful configure.
-          # contact_change is always silent regardless.
           _can_notify: "{{ not _silent and _hours_since | int >= 1 }}"
 
-      # ── Skip if settings are likely still current ─────────────────────────────
+      # ── Skip if bridge/devices confirms all three invariants hold ───────────────
       - if:
           - condition: template
             value_template: "{{ _needs_configure }}"
@@ -312,22 +337,21 @@ automation:
               seconds: 60
             continue_on_timeout: true
 
-          # ── Update persistent store on success ────────────────────────────────
+          # ── Update persistent store (gates notification cooldown) ───────────────
+          # Always stamp the device after a configure attempt so _can_notify
+          # suppresses repeat notifications for 1 h regardless of outcome.
+          # configure failed / queued still counts — the user was already told.
           - variables:
               _configure_ok: >
                 {% set resp = wait.trigger.payload_json if wait.trigger else none %}
                 {{ resp is not none and resp.get('status') == 'ok' }}
-          - if:
-              - condition: template
-                value_template: "{{ _configure_ok }}"
-            then:
-              - action: input_text.set_value
-                target:
-                  entity_id: input_text.parasoll_configure_state
-                data:
-                  value: >
-                    {% set store = (states('input_text.parasoll_configure_state') or '{}') | from_json %}
-                    {{ dict(store, **{_ieee[-4:]: (now().timestamp() / 3600) | int % 10000}) | tojson }}
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.parasoll_configure_state
+            data:
+              value: >
+                {% set store = (states('input_text.parasoll_configure_state') or '{}') | from_json %}
+                {{ dict(store, **{_ieee[-4:]: (now().timestamp() / 3600) | int % 10000}) | tojson }}
 
           - if:
               - condition: template
