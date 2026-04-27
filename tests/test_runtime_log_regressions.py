@@ -195,7 +195,7 @@ def test_owner_suite_led_shutdown_waits_for_inovelli_state_settle() -> None:
 
     assert "initial_grace_period: 30" in block
     assert "expected_state: 0" in block
-    assert block.count("action: number.set_value") == 2
+    assert block.count("action: number.set_value") == 3
     assert "count: 2" in block
     assert block.count("seconds: 30") == 1
 
