@@ -265,6 +265,42 @@ Expected result for each rendered sample:
 - Text stays high-contrast against emphasis or urgent row backgrounds.
 - Optional JSON `null` values render as blank text.
 
+Run the Pi service cache/dedup tests:
+
+```bash
+python3 -m pytest tests/test_inky_display_service.py
+```
+
+Run the MQTT-backed Pi service locally after installing `paho-mqtt` on the Pi:
+
+```bash
+python3 -m pip install paho-mqtt
+python3 -m inky_display.service --check-config
+
+INKY_DISPLAY_ID=owner_suite \
+INKY_MQTT_HOST=homeassistant.local \
+INKY_MQTT_PORT=1883 \
+INKY_MQTT_TOPIC=home/inky/owner_suite/state \
+INKY_CACHE_DIR=/var/lib/inky-display/owner_suite \
+python3 -m inky_display.service
+```
+
+The service writes:
+
+- `last_payload.json`
+- `last_image.png`
+- `last_hash.txt`
+
+Duplicate payload hashes are ignored. Invalid payloads are logged and do not
+overwrite the last good cache.
+
+## Raspberry Pi Service
+
+The first Pi target is the owner-suite Pi Zero W. Use
+`deploy/systemd/inky-owner-suite.service` as the starting systemd unit and
+adjust `WorkingDirectory`, `INKY_MQTT_HOST`, and optional MQTT credentials for
+the deployed Pi.
+
 ## Rollout Order
 
 1. Build local renderer and sample payloads for `owner_suite`.

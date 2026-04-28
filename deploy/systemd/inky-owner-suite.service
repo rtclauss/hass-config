@@ -1,0 +1,19 @@
+[Unit]
+Description=Owner Suite Inky display renderer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/hass-config
+Environment=INKY_DISPLAY_ID=owner_suite
+Environment=INKY_MQTT_HOST=homeassistant.local
+Environment=INKY_MQTT_PORT=1883
+Environment=INKY_MQTT_TOPIC=home/inky/owner_suite/state
+Environment=INKY_CACHE_DIR=/var/lib/inky-display/owner_suite
+ExecStart=/usr/bin/python3 -m inky_display.service
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
