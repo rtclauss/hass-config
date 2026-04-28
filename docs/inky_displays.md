@@ -166,6 +166,24 @@ bed/owner-suite activity, trip/vacation state, garage/front-door exceptions,
 weather alerts, active weather, and a noon refresh. It does not listen to
 `sensor.time`, so it will not redraw on clock ticks.
 
+Current owner-suite modes:
+
+| Mode | Selected when | Title | Subtitle |
+| --- | --- | --- | --- |
+| `night_preview` | Explicit mode or house mode is `night`, `in_bed`, or `asleep` | `Tonight` | `Next alarm and overnight status` |
+| `morning` | Explicit mode or `input_boolean.wakeup_alarm_firing` is on | `Good Morning` | `Wake sequence active` |
+| `up_for_day` | Explicit mode or automatic pre-noon non-sleep state | `Up For Day` | `Morning activity confirmed` |
+| `midday` | Explicit mode, noon trigger, or automatic afternoon state | `Midday` | `Low-frequency refresh` |
+
+Current owner-suite rows:
+
+| Row | Value source | Level behavior |
+| --- | --- | --- |
+| Weather | `sensor.outside_temperature` plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
+| Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | `emphasis` in `night_preview` when alarm is enabled |
+| Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | `emphasis` when special meeting is on |
+| Status | First active status from weather alert, garage door, front door, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage, `emphasis` for trip/vacation |
+
 Manual publish from Home Assistant Developer Tools:
 
 ```yaml
