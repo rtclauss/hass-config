@@ -150,6 +150,30 @@ Known source-of-truth areas:
 - Wake-up behavior specification: `specs/alarm_wakeup.allium`
 - Room privacy policy: `docs/room_intent.yaml`
 
+## Home Assistant Payload Builder
+
+Owner-suite publishing lives in `packages/inky_displays.yaml`.
+
+Primary entities:
+
+- `script.publish_owner_suite_inky_display`: builds and publishes the compact
+  owner-suite payload to `home/inky/owner_suite/state`.
+- `automation.publish_owner_suite_inky_display`: coalesces meaningful source
+  changes with a 15-second restart delay, then calls the publish script.
+
+The automation listens to wake alarm helpers, wake-up firing state, house mode,
+bed/owner-suite activity, trip/vacation state, garage/front-door exceptions,
+weather alerts, active weather, and a noon refresh. It does not listen to
+`sensor.time`, so it will not redraw on clock ticks.
+
+Manual publish from Home Assistant Developer Tools:
+
+```yaml
+action: script.publish_owner_suite_inky_display
+data:
+  mode: night_preview
+```
+
 ## Office Modes
 
 The office is guest-capable. When guest mode is active, office display content
