@@ -1,0 +1,200 @@
+# Home Assistant package for e-ink display payload publishing.
+# The Raspberry Pi renderer owns panel refresh, caching, and hardware recovery.
+
+################################################################
+## Packages / Inky Displays
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "inky_displays"
+
+    automation.publish_owner_suite_inky_display:
+      <<: *customize
+      friendly_name: "Publish Owner Suite Inky Display"
+      icon: mdi:tablet-dashboard
+
+    script.publish_owner_suite_inky_display:
+      <<: *customize
+      friendly_name: "Publish Owner Suite Inky Display"
+      icon: mdi:tablet-dashboard
+
+################################################
+## Automation
+################################################
+
+automation:
+  - id: publish_owner_suite_inky_display
+    alias: publish_owner_suite_inky_display
+    description: Publish owner-suite e-ink desired state after meaningful source changes.
+    mode: restart
+    trigger:
+      - trigger: homeassistant
+        event: start
+        id: startup
+      - trigger: time
+        at: "12:00:00"
+        id: midday
+      - trigger: state
+        entity_id:
+          - input_boolean.weekday_alarm_on
+          - input_boolean.weekend_alarm_on
+          - input_boolean.special_meeting
+          - input_boolean.wakeup_alarm_firing
+          - input_boolean.trip
+          - input_select.house_mode
+          - binary_sensor.bayesian_bed_occupancy
+          - binary_sensor.bedroom_occupancy
+          - binary_sensor.owner_suite_bathroom_room_occupancy
+          - binary_sensor.planned_vacation_calendar
+          - binary_sensor.main_foyer_front_door_contact
+          - cover.garage_door
+          - sensor.nws_dakota_county_alerts_alerts_are_active
+          - sensor.outside_temperature
+          - sensor.active_weather_entity_id
+        id: state-change
+      - trigger: state
+        entity_id:
+          - input_datetime.weekday_alarm
+          - input_datetime.weekend_alarm
+          - input_datetime.next_work_meeting
+        id: schedule-change
+    action:
+      - delay:
+          seconds: 15
+      - action: script.publish_owner_suite_inky_display
+        data:
+          mode: >-
+            {% if trigger.id == 'midday' %}
+              midday
+            {% else %}
+              auto
+            {% endif %}
+
+################################################
+## Script
+################################################
+
+script:
+  publish_owner_suite_inky_display:
+    alias: Publish Owner Suite Inky Display
+    description: Build and publish the compact owner-suite Inky display payload.
+    mode: restart
+    fields:
+      mode:
+        description: "Display mode override: auto, night_preview, morning, up_for_day, or midday."
+        example: night_preview
+    sequence:
+      - variables:
+          requested_mode: "{{ mode | default('auto', true) | string | trim }}"
+          resolved_mode: >-
+            {% set requested = requested_mode %}
+            {% set house_mode = states('input_select.house_mode') %}
+            {% if requested in ['night_preview', 'morning', 'up_for_day', 'midday'] %}
+              {{ requested }}
+            {% elif is_state('input_boolean.wakeup_alarm_firing', 'on') %}
+              morning
+            {% elif house_mode in ['night', 'in_bed', 'asleep'] %}
+              night_preview
+            {% elif now().hour >= 12 %}
+              midday
+            {% else %}
+              up_for_day
+            {% endif %}
+      - action: mqtt.publish
+        data:
+          topic: home/inky/owner_suite/state
+          qos: 1
+          retain: true
+          payload: >-
+            {% set weather_entity = states('sensor.active_weather_entity_id') %}
+            {% set weather_state = states(weather_entity) %}
+            {% set weather_icon_map = {
+              'clear-night': 'mdi:weather-sunny',
+              'cloudy': 'mdi:weather-cloudy',
+              'fog': 'mdi:weather-cloudy',
+              'hail': 'mdi:weather-lightning',
+              'lightning': 'mdi:weather-lightning',
+              'lightning-rainy': 'mdi:weather-lightning',
+              'partlycloudy': 'mdi:weather-partly-cloudy',
+              'pouring': 'mdi:weather-rainy',
+              'rainy': 'mdi:weather-rainy',
+              'snowy': 'mdi:weather-snowy',
+              'snowy-rainy': 'mdi:weather-snowy',
+              'sunny': 'mdi:weather-sunny',
+              'windy': 'mdi:weather-cloudy',
+              'windy-variant': 'mdi:weather-cloudy'
+            } %}
+            {% set weather_icon = weather_icon_map.get(weather_state, 'mdi:weather-cloudy') %}
+            {% set temperature = states('sensor.outside_temperature') %}
+            {% set weather_value = (temperature ~ 'F ' ~ weather_state.replace('-', ' ')) if temperature not in ['unknown', 'unavailable'] else weather_state.replace('-', ' ') %}
+            {% set weekday_alarm = is_state('input_boolean.weekday_alarm_on', 'on') %}
+            {% set weekend_alarm = is_state('input_boolean.weekend_alarm_on', 'on') %}
+            {% set meeting_alarm = is_state('input_boolean.special_meeting', 'on') %}
+            {% if weekday_alarm %}
+              {% set alarm_value = states('input_datetime.weekday_alarm')[0:5] %}
+            {% elif weekend_alarm %}
+              {% set alarm_value = states('input_datetime.weekend_alarm')[0:5] %}
+            {% else %}
+              {% set alarm_value = 'Off' %}
+            {% endif %}
+            {% set meeting_value = states('input_datetime.next_work_meeting')[0:5] if meeting_alarm else 'Off' %}
+            {% set garage_open = states('cover.garage_door') not in ['closed', 'closing'] %}
+            {% set front_door_open = is_state('binary_sensor.main_foyer_front_door_contact', 'on') %}
+            {% set weather_alert_state = states('sensor.nws_dakota_county_alerts_alerts_are_active') | lower %}
+            {% set weather_alert = weather_alert_state not in ['no', 'off', '0', 'false', 'unknown', 'unavailable'] %}
+            {% set trip_mode = is_state('input_boolean.trip', 'on') %}
+            {% set vacation = is_state('binary_sensor.planned_vacation_calendar', 'on') %}
+            {% if weather_alert %}
+              {% set status_value = 'Weather alert' %}
+              {% set status_level = 'urgent' %}
+            {% elif garage_open %}
+              {% set status_value = 'Garage ' ~ states('cover.garage_door') %}
+              {% set status_level = 'urgent' %}
+            {% elif front_door_open %}
+              {% set status_value = 'Front door open' %}
+              {% set status_level = 'urgent' %}
+            {% elif trip_mode %}
+              {% set status_value = 'Trip mode' %}
+              {% set status_level = 'emphasis' %}
+            {% elif vacation %}
+              {% set status_value = 'Vacation' %}
+              {% set status_level = 'emphasis' %}
+            {% else %}
+              {% set status_value = 'All clear' %}
+              {% set status_level = 'normal' %}
+            {% endif %}
+            {% set title_map = {
+              'night_preview': 'Tonight',
+              'morning': 'Good Morning',
+              'up_for_day': 'Up For Day',
+              'midday': 'Midday'
+            } %}
+            {% set subtitle_map = {
+              'night_preview': 'Next alarm and overnight status',
+              'morning': 'Wake sequence active',
+              'up_for_day': 'Morning activity confirmed',
+              'midday': 'Low-frequency refresh'
+            } %}
+            {% set rows = [
+              {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+              {'label': 'Alarm', 'value': alarm_value, 'level': 'emphasis' if resolved_mode == 'night_preview' and alarm_value != 'Off' else 'normal'},
+              {'label': 'Meeting', 'value': meeting_value, 'level': 'emphasis' if meeting_alarm else 'normal'},
+              {'label': 'Status', 'value': status_value, 'level': status_level}
+            ] %}
+            {{ {
+              'schema_version': 1,
+              'display_id': 'owner_suite',
+              'mode': resolved_mode,
+              'accent': 'red',
+              'title': title_map.get(resolved_mode, 'Owner Suite'),
+              'subtitle': subtitle_map.get(resolved_mode, 'Owner-suite display'),
+              'sections': [{'type': 'rows', 'rows': rows}],
+              'footer': 'Updated from Home Assistant'
+            } | tojson }}
