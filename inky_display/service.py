@@ -104,12 +104,12 @@ def run_mqtt_service(config: ServiceConfig) -> None:
     if restored is not None:
         LOG.info("Restored cached image from %s", cache.image_path)
 
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     if config.mqtt_username:
         client.username_pw_set(config.mqtt_username, config.mqtt_password)
 
     def on_connect(client, _userdata, _flags, reason_code, _properties=None) -> None:
-        if int(reason_code) == 0:
+        if mqtt_connection_succeeded(reason_code):
             LOG.info("Connected to MQTT broker %s:%s", config.mqtt_host, config.mqtt_port)
             client.subscribe(config.mqtt_topic)
             return
@@ -146,6 +146,17 @@ def _decode_payload(raw_payload: bytes | str) -> str:
     if isinstance(raw_payload, bytes):
         return raw_payload.decode("utf-8")
     return raw_payload
+
+
+def mqtt_connection_succeeded(reason_code: object) -> bool:
+    is_failure = getattr(reason_code, "is_failure", None)
+    if isinstance(is_failure, bool):
+        return not is_failure
+
+    try:
+        return int(reason_code) == 0
+    except (TypeError, ValueError):
+        return str(reason_code).lower() in {"0", "success"}
 
 
 if __name__ == "__main__":

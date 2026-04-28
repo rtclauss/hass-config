@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from inky_display.service import PayloadCache, config_from_env, process_payload
+from inky_display.service import PayloadCache, config_from_env, mqtt_connection_succeeded, process_payload
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -83,6 +83,19 @@ def test_config_from_env_uses_pi_service_environment(monkeypatch, tmp_path: Path
     assert config.cache_dir == tmp_path
     assert config.mqtt_username == "inky"
     assert config.mqtt_password == "secret"
+
+
+def test_mqtt_connection_succeeded_accepts_paho_v2_reason_code() -> None:
+    class SuccessReason:
+        is_failure = False
+
+    class FailureReason:
+        is_failure = True
+
+    assert mqtt_connection_succeeded(SuccessReason()) is True
+    assert mqtt_connection_succeeded(FailureReason()) is False
+    assert mqtt_connection_succeeded(0) is True
+    assert mqtt_connection_succeeded(5) is False
 
 
 def test_service_help_does_not_require_mqtt_dependency() -> None:
