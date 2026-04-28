@@ -175,6 +175,54 @@ must be safe for a guest to read.
 Guest mode must suppress personal, work, meeting, calendar, and owner-location
 details on the office display.
 
+## Local Renderer Testing
+
+Always keep this section current when adding, renaming, or removing renderer
+samples.
+
+Run the focused renderer tests:
+
+```bash
+python3 -m pytest tests/test_inky_display_renderer.py
+```
+
+Render one sample locally:
+
+```bash
+python3 -m inky_display.cli \
+  inky_display/samples/owner_suite_night_preview.json \
+  /tmp/owner_suite_night_preview.png
+```
+
+Render all current owner-suite samples:
+
+```bash
+python3 -m inky_display.cli \
+  inky_display/samples/owner_suite_night_preview.json \
+  /tmp/owner_suite_night_preview.png
+
+python3 -m inky_display.cli \
+  inky_display/samples/owner_suite_morning.json \
+  /tmp/owner_suite_morning.png
+
+python3 -m inky_display.cli \
+  inky_display/samples/owner_suite_up_for_day.json \
+  /tmp/owner_suite_up_for_day.png
+
+python3 -m inky_display.cli \
+  inky_display/samples/owner_suite_midday.json \
+  /tmp/owner_suite_midday.png
+```
+
+Expected result for each rendered sample:
+
+- PNG output is `400x300`.
+- Weather rows show the configured fallback icon when the sample includes an
+  `mdi:weather-*` icon.
+- Unknown icons are skipped instead of failing the render.
+- Text stays high-contrast against emphasis or urgent row backgrounds.
+- Optional JSON `null` values render as blank text.
+
 ## Rollout Order
 
 1. Build local renderer and sample payloads for `owner_suite`.
