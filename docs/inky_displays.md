@@ -285,14 +285,51 @@ INKY_CACHE_DIR=/var/lib/inky-display/owner_suite \
 python3 -m inky_display.service
 ```
 
+Run a real panel refresh on the Pi after the Inky wHAT is attached:
+
+```bash
+sudo raspi-config nonint do_i2c 0
+sudo raspi-config nonint do_spi 0
+sudo apt-get update
+sudo apt-get install -y libopenblas0-pthread
+python3 -m pip install paho-mqtt Pillow inky
+sudo reboot
+```
+
+After the reboot, render the next MQTT payload to the physical red/black/white
+Inky wHAT:
+
+```bash
+INKY_DISPLAY_ID=owner_suite \
+INKY_MQTT_HOST=homeassistant.local \
+INKY_MQTT_PORT=1883 \
+INKY_MQTT_TOPIC=home/inky/owner_suite/state \
+INKY_CACHE_DIR=/var/lib/inky-display/owner_suite \
+INKY_HARDWARE_ENABLED=true \
+INKY_PANEL_TYPE=what \
+INKY_PANEL_COLOR=red \
+INKY_ROTATION=0 \
+python3 -m inky_display.service
+```
+
+For a non-production physical smoke test, use a temporary topic such as
+`home/inky/owner_suite/real_test`, start the service with that topic, and publish
+one sample payload to it. Expected result: the panel refreshes once, the cache
+contains a `400x300` `last_image.png`, and the service log has no traceback,
+deprecation warning, or `Failed to update Inky panel` message.
+
+For older boards that cannot be detected automatically, keep
+`INKY_PANEL_TYPE=what` and `INKY_PANEL_COLOR=red`. If a board with a valid Inky
+EEPROM should be auto-detected instead, set `INKY_PANEL_TYPE=auto`.
+
 The service writes:
 
 - `last_payload.json`
 - `last_image.png`
 - `last_hash.txt`
 
-Duplicate payload hashes are ignored. Invalid payloads are logged and do not
-overwrite the last good cache.
+Duplicate payload hashes are ignored and do not refresh the physical panel.
+Invalid payloads are logged and do not overwrite the last good cache.
 
 ## Raspberry Pi Service
 

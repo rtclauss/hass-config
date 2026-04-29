@@ -5,7 +5,13 @@ from pathlib import Path
 import subprocess
 import sys
 
-from inky_display.service import PayloadCache, config_from_env, mqtt_connection_succeeded, process_payload
+from inky_display.service import (
+    PayloadCache,
+    config_from_env,
+    mqtt_connection_succeeded,
+    process_payload,
+    update_image_sink,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +20,14 @@ SAMPLE_PATH = ROOT / "inky_display" / "samples" / "owner_suite_night_preview.jso
 
 def _sample_text() -> str:
     return SAMPLE_PATH.read_text(encoding="utf-8")
+
+
+class RecordingSink:
+    def __init__(self) -> None:
+        self.images: list[bytes] = []
+
+    def update(self, image: bytes) -> None:
+        self.images.append(image)
 
 
 def test_process_payload_renders_and_caches_last_good_image(tmp_path: Path) -> None:
@@ -30,6 +44,16 @@ def test_process_payload_renders_and_caches_last_good_image(tmp_path: Path) -> N
     assert cache.restore_image() == cache.image_path.read_bytes()
 
 
+def test_process_payload_updates_image_sink_when_rendered(tmp_path: Path) -> None:
+    cache = PayloadCache(tmp_path)
+    sink = RecordingSink()
+
+    result = process_payload(_sample_text(), cache, "owner_suite", image_sink=sink)
+
+    assert result.rendered is True
+    assert sink.images == [cache.image_path.read_bytes()]
+
+
 def test_process_payload_suppresses_duplicate_content_hash(tmp_path: Path) -> None:
     cache = PayloadCache(tmp_path)
     first = process_payload(_sample_text(), cache, "owner_suite")
@@ -40,6 +64,12 @@ def test_process_payload_suppresses_duplicate_content_hash(tmp_path: Path) -> No
     assert duplicate.rendered is False
     assert duplicate.reason == "duplicate"
     assert duplicate.content_hash == first.content_hash
+    sink = RecordingSink()
+
+    duplicate_with_sink = process_payload(_sample_text(), cache, "owner_suite", image_sink=sink)
+
+    assert duplicate_with_sink.reason == "duplicate"
+    assert sink.images == []
 
 
 def test_process_payload_ignores_invalid_payload_without_overwriting_cache(tmp_path: Path) -> None:
@@ -73,6 +103,10 @@ def test_config_from_env_uses_pi_service_environment(monkeypatch, tmp_path: Path
     monkeypatch.setenv("INKY_CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("INKY_MQTT_USERNAME", "inky")
     monkeypatch.setenv("INKY_MQTT_PASSWORD", "secret")
+    monkeypatch.setenv("INKY_HARDWARE_ENABLED", "true")
+    monkeypatch.setenv("INKY_PANEL_TYPE", "what")
+    monkeypatch.setenv("INKY_PANEL_COLOR", "red")
+    monkeypatch.setenv("INKY_ROTATION", "180")
 
     config = config_from_env()
 
@@ -83,6 +117,20 @@ def test_config_from_env_uses_pi_service_environment(monkeypatch, tmp_path: Path
     assert config.cache_dir == tmp_path
     assert config.mqtt_username == "inky"
     assert config.mqtt_password == "secret"
+    assert config.hardware_enabled is True
+    assert config.panel_type == "what"
+    assert config.panel_color == "red"
+    assert config.rotation == 180
+
+
+def test_update_image_sink_logs_and_continues_on_panel_failure(caplog) -> None:
+    class FailingSink:
+        def update(self, _image: bytes) -> None:
+            raise OSError("panel offline")
+
+    update_image_sink(FailingSink(), b"not-a-real-image")
+
+    assert "Failed to update Inky panel" in caplog.text
 
 
 def test_mqtt_connection_succeeded_accepts_paho_v2_reason_code() -> None:
