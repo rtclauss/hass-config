@@ -80,7 +80,7 @@ def config_from_env() -> ServiceConfig:
         mqtt_username=os.environ.get("INKY_MQTT_USERNAME", ""),
         mqtt_password=os.environ.get("INKY_MQTT_PASSWORD", ""),
         hardware_enabled=_env_bool("INKY_HARDWARE_ENABLED", default=False),
-        panel_type=os.environ.get("INKY_PANEL_TYPE", "what"),
+        panel_type=os.environ.get("INKY_PANEL_TYPE", "auto"),
         panel_color=os.environ.get("INKY_PANEL_COLOR", "red"),
         rotation=int(os.environ.get("INKY_ROTATION", "0")),
     )
