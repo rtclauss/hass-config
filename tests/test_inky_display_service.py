@@ -123,6 +123,14 @@ def test_config_from_env_uses_pi_service_environment(monkeypatch, tmp_path: Path
     assert config.rotation == 180
 
 
+def test_config_from_env_defaults_to_auto_panel_detection(monkeypatch) -> None:
+    monkeypatch.delenv("INKY_PANEL_TYPE", raising=False)
+
+    config = config_from_env()
+
+    assert config.panel_type == "auto"
+
+
 def test_update_image_sink_logs_and_continues_on_panel_failure(caplog) -> None:
     class FailingSink:
         def update(self, _image: bytes) -> None:

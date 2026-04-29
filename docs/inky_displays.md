@@ -306,7 +306,7 @@ INKY_MQTT_PORT=1883 \
 INKY_MQTT_TOPIC=home/inky/owner_suite/state \
 INKY_CACHE_DIR=/var/lib/inky-display/owner_suite \
 INKY_HARDWARE_ENABLED=true \
-INKY_PANEL_TYPE=what \
+INKY_PANEL_TYPE=auto \
 INKY_PANEL_COLOR=red \
 INKY_ROTATION=0 \
 python3 -m inky_display.service
@@ -318,9 +318,11 @@ one sample payload to it. Expected result: the panel refreshes once, the cache
 contains a `400x300` `last_image.png`, and the service log has no traceback,
 deprecation warning, or `Failed to update Inky panel` message.
 
-For older boards that cannot be detected automatically, keep
-`INKY_PANEL_TYPE=what` and `INKY_PANEL_COLOR=red`. If a board with a valid Inky
-EEPROM should be auto-detected instead, set `INKY_PANEL_TYPE=auto`.
+Keep `INKY_PANEL_TYPE=auto` for boards with a valid Inky EEPROM. The owner-suite
+red Inky wHAT currently reports as `Red wHAT (SSD1683)`, which needs the
+auto-detected driver rather than the legacy `what` driver. For older boards that
+cannot be detected automatically, set `INKY_PANEL_TYPE=what` and
+`INKY_PANEL_COLOR=red`.
 
 The service writes:
 
