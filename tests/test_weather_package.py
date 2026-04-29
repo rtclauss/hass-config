@@ -21,6 +21,16 @@ def test_car_window_alert_closes_windows_even_when_notification_is_throttled() -
     assert "action: notify.mobile_app_wethop" in text
 
 
+def test_nigori_precip_rest_sensor_handles_non_json_error_responses() -> None:
+    text = WEATHER_PATH.read_text(encoding="utf-8")
+
+    assert "name: nigori_precip_next_2hr" in text
+    assert "{% set payload = value_json if value_json is defined and value_json is mapping else {} %}" in text
+    assert "{% set hourly = payload.get('hourly', {}) %}" in text
+    assert "{% set probabilities = hourly.get('precipitation_probability', []) %}" in text
+    assert "value_json.hourly.precipitation_probability if value_json.hourly is defined" not in text
+
+
 def test_notify_weather_alert_uses_current_nws_alert_payload_shape() -> None:
     text = WEATHER_PATH.read_text(encoding="utf-8")
 
