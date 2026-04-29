@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from io import BytesIO
 import json
 import logging
 import os
 from pathlib import Path
+from typing import Protocol
 
 from .payload import payload_hash, validate_payload
 from .renderer import render_payload
@@ -24,6 +26,10 @@ class ServiceConfig:
     cache_dir: Path
     mqtt_username: str
     mqtt_password: str
+    hardware_enabled: bool
+    panel_type: str
+    panel_color: str
+    rotation: int
 
 
 @dataclass(frozen=True)
@@ -32,6 +38,11 @@ class ProcessResult:
     reason: str
     content_hash: str
     image_path: Path | None
+
+
+class ImageSink(Protocol):
+    def update(self, image: bytes) -> None:
+        ...
 
 
 class PayloadCache:
@@ -68,10 +79,19 @@ def config_from_env() -> ServiceConfig:
         cache_dir=Path(os.environ.get("INKY_CACHE_DIR", ".inky-cache")),
         mqtt_username=os.environ.get("INKY_MQTT_USERNAME", ""),
         mqtt_password=os.environ.get("INKY_MQTT_PASSWORD", ""),
+        hardware_enabled=_env_bool("INKY_HARDWARE_ENABLED", default=False),
+        panel_type=os.environ.get("INKY_PANEL_TYPE", "what"),
+        panel_color=os.environ.get("INKY_PANEL_COLOR", "red"),
+        rotation=int(os.environ.get("INKY_ROTATION", "0")),
     )
 
 
-def process_payload(raw_payload: bytes | str, cache: PayloadCache, display_id: str) -> ProcessResult:
+def process_payload(
+    raw_payload: bytes | str,
+    cache: PayloadCache,
+    display_id: str,
+    image_sink: ImageSink | None = None,
+) -> ProcessResult:
     raw_text = _decode_payload(raw_payload)
     try:
         data = json.loads(raw_text)
@@ -90,6 +110,7 @@ def process_payload(raw_payload: bytes | str, cache: PayloadCache, display_id: s
 
     image = render_payload(payload)
     image_path = cache.save(raw_text, image, content_hash)
+    update_image_sink(image_sink, image)
     return ProcessResult(True, "rendered", content_hash, image_path)
 
 
@@ -100,9 +121,11 @@ def run_mqtt_service(config: ServiceConfig) -> None:
         raise RuntimeError("Install paho-mqtt on the Raspberry Pi to run the MQTT service.") from error
 
     cache = PayloadCache(config.cache_dir)
+    image_sink = build_image_sink(config)
     restored = cache.restore_image()
     if restored is not None:
         LOG.info("Restored cached image from %s", cache.image_path)
+        update_image_sink(image_sink, restored)
 
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     if config.mqtt_username:
@@ -116,7 +139,7 @@ def run_mqtt_service(config: ServiceConfig) -> None:
         LOG.error("MQTT connection failed with code %s", reason_code)
 
     def on_message(_client, _userdata, message) -> None:
-        result = process_payload(message.payload, cache, config.display_id)
+        result = process_payload(message.payload, cache, config.display_id, image_sink=image_sink)
         LOG.info("Processed MQTT payload from %s: %s", message.topic, result.reason)
 
     client.on_connect = on_connect
@@ -146,6 +169,71 @@ def _decode_payload(raw_payload: bytes | str) -> str:
     if isinstance(raw_payload, bytes):
         return raw_payload.decode("utf-8")
     return raw_payload
+
+
+def build_image_sink(config: ServiceConfig) -> ImageSink | None:
+    if not config.hardware_enabled:
+        return None
+    return InkyImageSink(config.panel_type, config.panel_color, config.rotation)
+
+
+def update_image_sink(image_sink: ImageSink | None, image: bytes) -> None:
+    if image_sink is None:
+        return
+    try:
+        image_sink.update(image)
+    except RuntimeError:
+        raise
+    except Exception:
+        LOG.exception("Failed to update Inky panel; keeping last cached image.")
+
+
+class InkyImageSink:
+    def __init__(self, panel_type: str, panel_color: str, rotation: int) -> None:
+        try:
+            from PIL import Image
+        except ImportError as error:
+            raise RuntimeError("Install Pillow on the Raspberry Pi to refresh the Inky panel.") from error
+
+        self.image_module = Image
+        self.display = _build_inky_display(panel_type, panel_color)
+        self.rotation = rotation
+        self.display.set_border(self.display.WHITE)
+
+    def update(self, image: bytes) -> None:
+        rendered = self.image_module.open(BytesIO(image)).convert("RGB")
+        if self.rotation:
+            rendered = rendered.rotate(self.rotation)
+        self.display.set_image(rendered)
+        self.display.show()
+
+
+def _build_inky_display(panel_type: str, panel_color: str):
+    if panel_type == "auto":
+        try:
+            from inky.auto import auto
+        except ImportError as error:
+            raise RuntimeError("Install the Pimoroni Inky library to refresh the Inky panel.") from error
+
+        return auto()
+
+    try:
+        from inky import InkyPHAT, InkyWHAT
+    except ImportError as error:
+        raise RuntimeError("Install the Pimoroni Inky library to refresh the Inky panel.") from error
+
+    if panel_type == "what":
+        return InkyWHAT(panel_color)
+    if panel_type == "phat":
+        return InkyPHAT(panel_color)
+    raise ValueError(f"Unsupported INKY_PANEL_TYPE: {panel_type}")
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
 
 
 def mqtt_connection_succeeded(reason_code: object) -> bool:
