@@ -154,9 +154,44 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
 - [Home Assistant Label Model](docs/ha_labels.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
+- [Inky E-Ink Displays](docs/inky_displays.md)
 - [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
 - [Tesla Departure Planner](docs/tesla_departure_planner.md)
+
+## E-Ink Display Capability
+
+This repo includes MQTT-backed e-ink display support for low-frequency,
+room-aware Home Assistant status surfaces. Home Assistant publishes compact
+desired-state payloads; Raspberry Pi services render, cache, suppress duplicate
+payloads, and refresh the physical panels.
+
+Current deployment:
+
+- `owner_suite`: Pimoroni Inky wHAT red/black/white `400x300`, driven by a
+  Raspberry Pi Zero W on `home/inky/owner_suite/state`.
+- The owner-suite panel reports as `Red wHAT (SSD1683)`, so the Pi service uses
+  `INKY_PANEL_TYPE=auto`.
+
+Use e-ink for information that should persist calmly between meaningful Home
+Assistant events: wake status, weather, door/garage exceptions, trip/vacation
+state, guest-safe info, and similar low-frequency status. Do not use these
+panels for clocks, animation, minute-level dashboards, or cosmetic updates.
+Tri-color Inky wHAT refreshes are whole-panel, slow, and should be driven only
+by meaningful source changes.
+
+Design criteria:
+
+- Keep layouts readable from about 4 feet away on a `400x300` canvas.
+- Prefer one title, one subtitle, and at most four status rows.
+- Use Material Design Icons names in payloads when possible.
+- Preserve color meaning: red is urgency/exception for owner-suite; yellow is
+  emphasis/hospitality for future office displays.
+- The footer's `Updated HH:MM` value is publish-time metadata and must not add a
+  `sensor.time` trigger or clock-tick redraws.
+
+See [docs/inky_displays.md](docs/inky_displays.md) for the payload contract,
+MQTT topics, renderer tests, Pi setup, and physical verification workflow.
 
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
