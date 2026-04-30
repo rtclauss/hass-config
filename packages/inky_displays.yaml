@@ -47,8 +47,10 @@ automation:
           - input_boolean.weekend_alarm_on
           - input_boolean.special_meeting
           - input_boolean.wakeup_alarm_firing
+          - input_boolean.guest_mode
           - input_boolean.trip
           - input_select.house_mode
+          - binary_sensor.bayesian_zeke_home
           - binary_sensor.bayesian_bed_occupancy
           - binary_sensor.bedroom_occupancy
           - binary_sensor.owner_suite_bathroom_room_occupancy
@@ -68,6 +70,14 @@ automation:
     action:
       - delay:
           seconds: 15
+      - condition: template
+        alias: Publish only when Ryan is home or guest mode is active
+        value_template: >-
+          {{ is_state('input_boolean.guest_mode', 'on')
+             or (
+               is_state('binary_sensor.bayesian_zeke_home', 'on')
+               and is_state('input_boolean.trip', 'off')
+             ) }}
       - action: script.publish_owner_suite_inky_display
         data:
           mode: >-
