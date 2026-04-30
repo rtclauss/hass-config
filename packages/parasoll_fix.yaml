@@ -22,17 +22,17 @@
 input_text:
   parasoll_configure_state:
     name: "PARASOLL Configure State"
-    # Compact JSON: {"<last4_ieee>": <mod_hour>, ...}
+    # Compact CSV: <last4_ieee>:<mod_hour>,...
     # mod_hour = floor(unix_time / 3600) % 10000  — 4-digit cyclical counter
     #            that wraps every ~416 days; cooldown checks use modular diff.
     # Key is the last 4 hex chars of the device IEEE address, giving 65 536
     # possible values — collision is extremely unlikely across ~20 home devices.
-    # Capacity: 21 devices fit within the 255-char HA state limit.
+    # Capacity: 25+ devices fit within the 255-char HA state limit.
     # Written on every configure attempt (success, failure, or timeout).
     # Used solely to gate notification frequency (1 h cooldown per device);
     # the configure decision is made from Z2M bridge/devices binding state.
     max: 255
-    initial: "{}"
+    initial: ""
 
 ################################################################
 ## Scripts
@@ -275,11 +275,25 @@ automation:
             {% else %}
               {{ not _ias_ok or not _pollctrl_ok or not _power_ok }}
             {% endif %}
-          # Notification cooldown: suppress within 1 h of last confirmed configure.
-          # Store format: {"<last4_ieee>": <mod_hour>}  (wraps every ~416 days).
+          # Notification cooldown: suppress within 1 h of last configure attempt.
+          # Store format: <last4_ieee>:<mod_hour>,...  (wraps every ~416 days).
           # contact_change is always silent regardless.
           _store: >
-            {{ (states('input_text.parasoll_configure_state') or '{}') | from_json }}
+            {% set raw = states('input_text.parasoll_configure_state') | trim %}
+            {% set ns = namespace(store={}) %}
+            {% if raw.startswith('{') %}
+              {% set ns.store = raw | from_json %}
+            {% else %}
+              {% for item in raw.split(',') if ':' in item %}
+                {% set parts = item.split(':') %}
+                {% set key = parts[0] | trim %}
+                {% set hour = parts[1] | int(default=none) %}
+                {% if key | length == 4 and hour is number %}
+                  {% set ns.store = dict(ns.store, **{key: hour}) %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.store }}
           _cur_h: "{{ (now().timestamp() / 3600) | int % 10000 }}"
           _prev_h: "{{ _store.get(_ieee[-4:]) }}"
           _hours_since: >
@@ -350,8 +364,37 @@ automation:
               entity_id: input_text.parasoll_configure_state
             data:
               value: >
-                {% set store = (states('input_text.parasoll_configure_state') or '{}') | from_json %}
-                {{ dict(store, **{_ieee[-4:]: (now().timestamp() / 3600) | int % 10000}) | tojson }}
+                {% set raw = states('input_text.parasoll_configure_state') | trim %}
+                {% set key = _ieee[-4:] %}
+                {% set hour = ((now().timestamp() / 3600) | int % 10000) | string %}
+                {% set ns = namespace(pairs=[], replaced=false) %}
+                {% if raw.startswith('{') %}
+                  {% set store = raw | from_json %}
+                  {% for item_key, item_hour in store.items() %}
+                    {% if item_key == key %}
+                      {% set ns.pairs = ns.pairs + [key ~ ':' ~ hour] %}
+                      {% set ns.replaced = true %}
+                    {% else %}
+                      {% set ns.pairs = ns.pairs + [item_key ~ ':' ~ item_hour] %}
+                    {% endif %}
+                  {% endfor %}
+                {% else %}
+                  {% for item in raw.split(',') if ':' in item %}
+                    {% set parts = item.split(':') %}
+                    {% set item_key = parts[0] | trim %}
+                    {% set item_hour = parts[1] | int(default=none) %}
+                    {% if item_key == key %}
+                      {% set ns.pairs = ns.pairs + [key ~ ':' ~ hour] %}
+                      {% set ns.replaced = true %}
+                    {% elif item_key | length == 4 and item_hour is number %}
+                      {% set ns.pairs = ns.pairs + [item_key ~ ':' ~ item_hour] %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+                {% if not ns.replaced %}
+                  {% set ns.pairs = ns.pairs + [key ~ ':' ~ hour] %}
+                {% endif %}
+                {{ ns.pairs | join(',') }}
 
           - if:
               - condition: template
