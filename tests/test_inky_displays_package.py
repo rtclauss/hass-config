@@ -118,6 +118,17 @@ def test_owner_suite_automation_coalesces_meaningful_refresh_events() -> None:
     assert "sensor.time" not in block
 
 
+def test_owner_suite_automation_skips_publish_when_house_is_unoccupied() -> None:
+    block = _automation_block("publish_owner_suite_inky_display")
+
+    assert "input_boolean.guest_mode" in block
+    assert "binary_sensor.bayesian_zeke_home" in block
+    assert "alias: Publish only when Ryan is home or guest mode is active" in block
+    assert "is_state('input_boolean.guest_mode', 'on')" in block
+    assert "is_state('binary_sensor.bayesian_zeke_home', 'on')" in block
+    assert "is_state('input_boolean.trip', 'off')" in block
+
+
 def test_owner_suite_sources_are_documented() -> None:
     text = DOC_PATH.read_text(encoding="utf-8")
 
@@ -125,3 +136,5 @@ def test_owner_suite_sources_are_documented() -> None:
     assert "automation.publish_owner_suite_inky_display" in text
     assert "home/inky/owner_suite/state" in text
     assert "Updated 21:42" in text
+    assert "publishes only when guest mode is active" in text
+    assert "Ryan returning home" in text
