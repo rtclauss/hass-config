@@ -139,6 +139,7 @@ def test_stale_entity_notification_only_exists_when_entities_are_present() -> No
     assert "stale_threshold_hours: 12" in block
     assert "stale_entities:" in block
     assert "last_reported" in block
+    assert "item.attributes.device_class != 'connectivity'" in block
     assert "persistent_notification.create" in block
     assert "persistent_notification.dismiss" in block
     assert "notification_id: stale-entities" in block
