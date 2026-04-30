@@ -735,7 +735,9 @@ sensor:
     timeout: 20
     unit_of_measurement: "%"
     value_template: >-
-      {% set probabilities = value_json.hourly.precipitation_probability if value_json.hourly is defined and value_json.hourly.precipitation_probability is defined else [] %}
+      {% set payload = value_json if value_json is defined and value_json is mapping else {} %}
+      {% set hourly = payload.get('hourly', {}) %}
+      {% set probabilities = hourly.get('precipitation_probability', []) %}
       {% set ns = namespace(max_probability = -1) %}
       {% for probability in probabilities %}
         {% set probability_value = probability | int(default=-1) %}
