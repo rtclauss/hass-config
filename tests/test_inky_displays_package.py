@@ -77,6 +77,15 @@ def test_owner_suite_payload_includes_modes_and_four_rows() -> None:
         assert f"'label': '{label}'" in block
 
 
+def test_owner_suite_footer_uses_publish_time_in_24_hour_format() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "'footer': 'Updated ' ~ now().strftime('%H:%M')" in block
+    assert "%I:%M" not in block
+    assert "%p" not in block
+    assert "sensor.time" not in block
+
+
 def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:
     block = _script_block("publish_owner_suite_inky_display")
 
@@ -115,3 +124,4 @@ def test_owner_suite_sources_are_documented() -> None:
     assert "script.publish_owner_suite_inky_display" in text
     assert "automation.publish_owner_suite_inky_display" in text
     assert "home/inky/owner_suite/state" in text
+    assert "Updated 21:42" in text
