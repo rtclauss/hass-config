@@ -86,7 +86,7 @@ Payloads are compact JSON. Required fields:
       ]
     }
   ],
-  "footer": "Updated 9:42 PM"
+  "footer": "Updated 21:42"
 }
 ```
 
@@ -183,6 +183,10 @@ Current owner-suite rows:
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | `emphasis` when special meeting is on |
 | Status | First active status from weather alert, garage door, front door, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage, `emphasis` for trip/vacation |
+
+The footer uses 24-hour local time, for example `Updated 21:42`. This timestamp
+is generated only when the payload is published. Do not add `sensor.time` or a
+minute-level clock trigger for this field.
 
 Manual publish from Home Assistant Developer Tools:
 
