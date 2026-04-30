@@ -197,6 +197,7 @@ automation:
         {%- for item in expand(states.binary_sensor, states.device_tracker, states.fan, states.light, states.lock, states.media_player, states.sensor, states.switch, states.vacuum) if (
           not is_state_attr(item.entity_id, 'hidden', true)
           and (now()-as_local(item.last_reported) > timedelta(hours=stale_threshold_hours))
+          and item.attributes.device_class != 'connectivity'
           and not (item.entity_id | lower).find('update') != -1
           and not (item.entity_id | lower).find('heading') != -1
           and not (item.entity_id | lower).find('alert') != -1
