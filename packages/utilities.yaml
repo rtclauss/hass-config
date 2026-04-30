@@ -264,6 +264,12 @@ automation:
       - action: select.select_option
         continue_on_error: true
         target:
+          entity_id: select.weekly_electricity
+        data:
+          option: "{{ tariff }}"
+      - action: select.select_option
+        continue_on_error: true
+        target:
           entity_id: select.monthly_electricity
         data:
           option: "{{ tariff }}"
@@ -352,6 +358,110 @@ automation:
           entity_id: input_number.ev_electrical_rate
         data:
           value: "{{ ev_rate }}"
+
+  - id: notify_energy_anomaly_high_empty_house_usage
+    alias: notify_energy_anomaly_high_empty_house_usage
+    description: >
+      Alert when the current-hour whole-home energy meter crosses the expected
+      baseload while the house is away or in a sleep-oriented mode.
+    trigger:
+      - trigger: numeric_state
+        entity_id: sensor.hourly_home_electricity_energy
+        above: input_number.energy_anomaly_hourly_kwh_threshold
+        for:
+          minutes: 5
+    condition:
+      - condition: state
+        entity_id: input_select.house_mode
+        state:
+          - away
+          - night
+          - in_bed
+          - asleep
+    variables:
+      anomaly_kwh: "{{ states('sensor.hourly_home_electricity_energy') | float(default=0) }}"
+      anomaly_rate: "{{ states('sensor.house_electrical_rate') | float(default=0) }}"
+      anomaly_cost: "{{ ((anomaly_kwh | float(default=0)) * (anomaly_rate | float(default=0))) | round(2) }}"
+      anomaly_mode: "{{ states('input_select.house_mode') }}"
+      anomaly_threshold: "{{ states('input_number.energy_anomaly_hourly_kwh_threshold') | float(default=0) }}"
+    action:
+      - action: persistent_notification.create
+        data:
+          notification_id: energy-anomaly-high-load
+          title: Energy anomaly
+          message: >-
+            Whole-home electricity is {{ anomaly_kwh | round(2) }} kWh this hour
+            while house mode is {{ anomaly_mode }}. Threshold is
+            {{ anomaly_threshold | round(2) }} kWh. Estimated cost so far:
+            ${{ "%.2f" | format(anomaly_cost | float(default=0)) }} at
+            ${{ "%.4f" | format(anomaly_rate | float(default=0)) }}/kWh.
+      - action: notify.all
+        continue_on_error: true
+        data:
+          title: Energy anomaly
+          message: >-
+            High usage while {{ anomaly_mode }}: {{ anomaly_kwh | round(2) }}
+            kWh this hour, about ${{ "%.2f" | format(anomaly_cost | float(default=0)) }}.
+          data:
+            tag: energy-anomaly-high-load
+
+  - id: notify_weekly_energy_cost_summary
+    alias: notify_weekly_energy_cost_summary
+    description: >
+      Send a weekly energy summary that combines whole-home and EV tariff
+      utility meters into readable cost context.
+    trigger:
+      - trigger: time
+        at: "08:15:00"
+    condition:
+      - condition: time
+        weekday:
+          - mon
+    variables:
+      home_non_summer_kwh: "{{ state_attr('sensor.weekly_electricity_non_summer', 'last_period') | float(default=0) }}"
+      home_summer_kwh: "{{ state_attr('sensor.weekly_electricity_summer', 'last_period') | float(default=0) }}"
+      ev_off_peak_kwh: "{{ state_attr('sensor.weekly_ev_charging_off_peak', 'last_period') | float(default=0) }}"
+      ev_mid_peak_kwh: "{{ state_attr('sensor.weekly_ev_charging_mid_peak', 'last_period') | float(default=0) }}"
+      ev_on_peak_kwh: "{{ state_attr('sensor.weekly_ev_charging_on_peak', 'last_period') | float(default=0) }}"
+      ev_mid_peak_rate: >-
+        {% set season = states('select.daily_electricity') %}
+        {{ 0.1377 if season == 'summer' else 0.1238 }}
+      home_kwh: "{{ (home_non_summer_kwh | float(default=0) + home_summer_kwh | float(default=0)) | round(2) }}"
+      home_cost: >-
+        {{
+          (
+            ((home_non_summer_kwh | float(default=0)) * 0.1397)
+            + ((home_summer_kwh | float(default=0)) * 0.1258)
+          ) | round(2)
+        }}
+      ev_kwh: >-
+        {{
+          (
+            ev_off_peak_kwh | float(default=0)
+            + ev_mid_peak_kwh | float(default=0)
+            + ev_on_peak_kwh | float(default=0)
+          ) | round(2)
+        }}
+      ev_cost: >-
+        {{
+          (
+            ((ev_off_peak_kwh | float(default=0)) * 0.0755)
+            + ((ev_mid_peak_kwh | float(default=0)) * (ev_mid_peak_rate | float(default=0)))
+            + ((ev_on_peak_kwh | float(default=0)) * 0.4420)
+          ) | round(2)
+        }}
+      total_cost: "{{ (home_cost | float(default=0) + ev_cost | float(default=0)) | round(2) }}"
+    action:
+      - action: notify.all
+        continue_on_error: true
+        data:
+          title: Weekly energy summary
+          message: >-
+            Last week: whole-home {{ home_kwh }} kWh / ${{ "%.2f" | format(home_cost | float(default=0)) }};
+            EV charging {{ ev_kwh }} kWh / ${{ "%.2f" | format(ev_cost | float(default=0)) }}.
+            Estimated total: ${{ "%.2f" | format(total_cost | float(default=0)) }}.
+          data:
+            tag: weekly-energy-cost-summary
 
   - id: switch_water_tariff
     alias: switch_water_tariff
@@ -847,6 +957,14 @@ input_number:
     step: 0.00001
     mode: box
     unit_of_measurement: USD/kWh
+  energy_anomaly_hourly_kwh_threshold:
+    name: Energy Anomaly Hourly kWh Threshold
+    min: 0.50000
+    max: 25.00000
+    step: 0.10000
+    mode: box
+    unit_of_measurement: kWh
+    initial: 3.0
   # Seeded from the current Woodbury, MN regular "Week Ago Avg." value on
   # https://www.way.com/gas/prices/minnesota/woodbury and used as a manual
   # fallback if the live scrape ever fails. Woodbury is the city for ZIP 55125.
@@ -1031,6 +1149,52 @@ template:
         state_class: measurement
         unit_of_measurement: USD/kWh
         state: "{{ states('input_number.electrical_rate') }}"
+      - name: hourly_home_electricity_energy
+        unique_id: hourly_home_electricity_energy
+        icon: mdi:home-lightning-bolt
+        device_class: energy
+        state_class: total
+        unit_of_measurement: kWh
+        state: >-
+          {{
+            (
+              states('sensor.hourly_electricity_non_summer') | float(default=0)
+              + states('sensor.hourly_electricity_summer') | float(default=0)
+            ) | round(2)
+          }}
+      - name: daily_home_electricity_cost
+        unique_id: daily_home_electricity_cost
+        icon: mdi:cash
+        unit_of_measurement: USD
+        state: >-
+          {{
+            (
+              ((states('sensor.daily_electricity_non_summer') | float(default=0)) * 0.1397)
+              + ((states('sensor.daily_electricity_summer') | float(default=0)) * 0.1258)
+            ) | round(2)
+          }}
+      - name: weekly_home_electricity_cost
+        unique_id: weekly_home_electricity_cost
+        icon: mdi:cash-clock
+        unit_of_measurement: USD
+        state: >-
+          {{
+            (
+              ((states('sensor.weekly_electricity_non_summer') | float(default=0)) * 0.1397)
+              + ((states('sensor.weekly_electricity_summer') | float(default=0)) * 0.1258)
+            ) | round(2)
+          }}
+      - name: monthly_home_electricity_cost
+        unique_id: monthly_home_electricity_cost
+        icon: mdi:cash-multiple
+        unit_of_measurement: USD
+        state: >-
+          {{
+            (
+              ((states('sensor.monthly_electricity_non_summer') | float(default=0)) * 0.1397)
+              + ((states('sensor.monthly_electricity_summer') | float(default=0)) * 0.1258)
+            ) | round(2)
+          }}
       - name: tariff_under_15k_water
         unique_id: tariff_under_15k_water
         icon: mdi:cash-minus
@@ -1219,6 +1383,12 @@ utility_meter:
   daily_electricity:
     source: sensor.house_electrical_meter
     cycle: daily
+    tariffs:
+      - non-summer
+      - summer
+  weekly_electricity:
+    source: sensor.house_electrical_meter
+    cycle: weekly
     tariffs:
       - non-summer
       - summer
