@@ -117,6 +117,14 @@ script:
             {% else %}
               up_for_day
             {% endif %}
+      - condition: template
+        alias: Publish only when Ryan is home or guest mode is active
+        value_template: >-
+          {{ is_state('input_boolean.guest_mode', 'on')
+             or (
+               is_state('binary_sensor.bayesian_zeke_home', 'on')
+               and is_state('input_boolean.trip', 'off')
+             ) }}
       - action: mqtt.publish
         data:
           topic: home/inky/owner_suite/state
