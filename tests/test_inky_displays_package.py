@@ -73,7 +73,7 @@ def test_owner_suite_payload_includes_modes_and_four_rows() -> None:
     for mode in ("night_preview", "morning", "up_for_day", "midday"):
         assert mode in block
 
-    for label in ("Weather", "Alarm", "Meeting", "Status"):
+    for label in ("Weather", "Alarm", "Meeting", "Status", "Flight", "Airport", "Dest Wx"):
         assert f"'label': '{label}'" in block
 
 
@@ -104,6 +104,25 @@ def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:
     assert "binary_sensor.main_foyer_front_door_contact" in block
     assert "input_boolean.trip" in block
     assert "binary_sensor.planned_vacation_calendar" in block
+
+
+def test_owner_suite_payload_consumes_flight_status_sources() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+    automation = _automation_block("publish_owner_suite_inky_display")
+
+    for entity_id in (
+        "sensor.next_travel_flight",
+        "sensor.next_travel_flight_live_status",
+        "sensor.next_travel_flight_tsa_wait",
+        "sensor.next_travel_flight_airport_delay",
+        "sensor.next_travel_flight_destination_weather",
+    ):
+        assert entity_id in block
+        assert entity_id in automation
+
+    assert "travel_rows" in block
+    assert "exception_active = weather_alert or garage_open or front_door_open" in block
+    assert "resolved_mode in ['morning', 'up_for_day', 'midday']" in block
 
 
 def test_owner_suite_automation_coalesces_meaningful_refresh_events() -> None:
