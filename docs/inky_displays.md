@@ -133,7 +133,7 @@ Unknown content should be skipped, not rendered as an error screen.
 ## Owner-Suite Modes
 
 `owner_suite` is private and owner-focused. It may show personal wake, trip,
-weather, and house-status context.
+flight, weather, and house-status context.
 
 | Mode | Purpose | Candidate fields |
 | --- | --- | --- |
@@ -147,6 +147,8 @@ Known source-of-truth areas:
 - Wake-up alarm sync and helper state: `packages/ios_wakeup.yaml`
 - Owner-suite wake transitions: `packages/workday.yaml`
 - Weather helper sensors: `packages/weather.yaml`
+- Flight status, TSA, airport delay, and destination weather sensors:
+  `packages/flight_status.yaml`
 - Wake-up behavior specification: `specs/alarm_wakeup.allium`
 - Room privacy policy: `docs/room_intent.yaml`
 
@@ -164,9 +166,9 @@ Primary entities:
 
 The automation listens to wake alarm helpers, wake-up firing state, house mode,
 guest mode, Ryan's home state, bed/owner-suite activity, trip/vacation state,
-garage/front-door exceptions, weather alerts, active weather, and a noon
-refresh. It does not listen to `sensor.time`, so it will not redraw on clock
-ticks.
+flight status, garage/front-door exceptions, weather alerts, active weather, and
+a noon refresh. It does not listen to `sensor.time`, so it will not redraw on
+clock ticks.
 
 The publish script only allows updates when guest mode is active, or when Ryan
 is home and trip mode is off. While Ryan is away or trip mode is on with guest
@@ -191,6 +193,43 @@ Current owner-suite rows:
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | `emphasis` when special meeting is on |
 | Status | First active status from weather alert, garage door, front door, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage, `emphasis` for trip/vacation |
+
+When `sensor.next_travel_flight` is inside its active travel window, `morning`,
+`up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
+alarm/meeting rows. Weather alerts, garage-door exceptions, and front-door
+exceptions still take display priority and keep an urgent status row visible.
+
+Flight rows use these normalized entities from `packages/flight_status.yaml`:
+
+| Row | Value source | Level behavior |
+| --- | --- | --- |
+| Flight | `sensor.next_travel_flight` ident, destination code, and best departure time | `emphasis` |
+| Status | `sensor.next_travel_flight_live_status` plus FlightAware delay attributes | `urgent` for cancellation, diversion, or 30+ minute delay |
+| Airport | `sensor.next_travel_flight_tsa_wait` or `sensor.next_travel_flight_airport_delay` | `urgent` when airport delay alerts are present |
+| Dest Wx | `sensor.next_travel_flight_destination_weather` | `normal` |
+
+Required travel integrations and secrets:
+
+- Google Calendar must expose `calendar.ryan_claussen` and `calendar.work_trip`.
+- FlightAware AeroAPI is called by `rest_command.flightaware_next_travel_flight`
+  with `flightaware_aeroapi_key` in `secrets.yaml`. It does not poll when no
+  flight ident was parsed. It polls hourly inside the 3-day preflight window,
+  then every 15 minutes from 24 hours before scheduled departure until
+  FlightAware reports actual takeoff.
+- TSAWaitTimes puts the API key in the URL, so keep complete airport URLs in
+  `secrets.yaml` as `tsawaittimes_msp_airport_url` and
+  `tsawaittimes_rst_airport_url`, for example
+  `https://www.tsawaittimes.com/api/airport/APIKEY/MSP/json`.
+- Open-Meteo destination weather does not require a key. It uses the destination
+  airport coordinate map in `packages/flight_status.yaml`.
+- Add the built-in FAA Delays integration for `MSP` and `RST` from Settings >
+  Devices & services for richer airport-delay visibility elsewhere in Home
+  Assistant. The Inky flight row uses the TSAWaitTimes FAA alert payload when
+  available.
+
+REST sensors require a Home Assistant restart after the package and secrets are
+deployed. Template-only changes can be reloaded, but the travel package includes
+REST resources.
 
 The footer uses 24-hour local time, for example `Updated 21:42`. This timestamp
 is generated only when the payload is published. Do not add `sensor.time` or a

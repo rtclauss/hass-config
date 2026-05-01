@@ -1,0 +1,578 @@
+# Home Assistant package for travel flight status and airport context.
+# It keeps calendar-derived flight details available even when live aviation APIs are unavailable.
+
+################################################################
+## Packages / Flight Status
+################################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "flight_status"
+
+    sensor.next_travel_flight:
+      <<: *customize
+      friendly_name: "Next Travel Flight"
+      icon: mdi:airplane-clock
+
+    sensor.next_travel_flight_live_status:
+      <<: *customize
+      friendly_name: "Next Travel Flight Live Status"
+      icon: mdi:airplane-check
+
+    sensor.next_travel_flight_tsa_wait:
+      <<: *customize
+      friendly_name: "Next Travel Flight TSA Wait"
+      icon: mdi:bag-checked
+
+    sensor.next_travel_flight_airport_delay:
+      <<: *customize
+      friendly_name: "Next Travel Flight Airport Delay"
+      icon: mdi:airplane-alert
+
+    sensor.next_travel_flight_destination_weather:
+      <<: *customize
+      friendly_name: "Next Travel Flight Destination Weather"
+      icon: mdi:weather-partly-cloudy
+
+################################################
+## REST Commands
+################################################
+
+rest_command:
+  flightaware_next_travel_flight:
+    url: "https://aeroapi.flightaware.com/aeroapi/flights/{{ ident }}?max_pages=1"
+    method: GET
+    headers:
+      x-apikey: !secret flightaware_aeroapi_key
+    timeout: 20
+
+################################################
+## REST
+################################################
+
+rest:
+  # TSAWaitTimes requires the API key in the URL. Keep the complete URLs in secrets.yaml.
+  - resource: !secret tsawaittimes_msp_airport_url
+    scan_interval: 900
+    timeout: 20
+    sensor:
+      - name: MSP TSA Wait Times
+        unique_id: msp_tsa_wait_times
+        value_template: "{{ value_json.rightnow | int(default=-1) }}"
+        unit_of_measurement: "min"
+        json_attributes:
+          - code
+          - name
+          - city
+          - state
+          - latitude
+          - longitude
+          - rightnow
+          - rightnow_description
+          - user_reported
+          - precheck
+          - faa_alerts
+          - precheck_checkpoints
+
+  - resource: !secret tsawaittimes_rst_airport_url
+    scan_interval: 900
+    timeout: 20
+    sensor:
+      - name: RST TSA Wait Times
+        unique_id: rst_tsa_wait_times
+        value_template: "{{ value_json.rightnow | int(default=-1) }}"
+        unit_of_measurement: "min"
+        json_attributes:
+          - code
+          - name
+          - city
+          - state
+          - latitude
+          - longitude
+          - rightnow
+          - rightnow_description
+          - user_reported
+          - precheck
+          - faa_alerts
+          - precheck_checkpoints
+
+  - resource_template: >-
+      {% set lat = state_attr('sensor.next_travel_flight', 'destination_latitude') | float(default=none) %}
+      {% set lon = state_attr('sensor.next_travel_flight', 'destination_longitude') | float(default=none) %}
+      {% if lat is number and lon is number %}
+        https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(lat) }}&longitude={{ '%.4f' | format(lon) }}&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
+      {% else %}
+        https://api.open-meteo.com/v1/forecast?latitude=44.8848&longitude=-93.2223&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
+      {% endif %}
+    scan_interval: 1800
+    timeout: 20
+    sensor:
+      - name: Next Travel Flight Destination Weather Raw
+        unique_id: next_travel_flight_destination_weather_raw
+        value_template: >-
+          {% set current = value_json.current if value_json is mapping and value_json.current is mapping else {} %}
+          {% set temperature = current.temperature_2m | float(default=none) %}
+          {{ temperature | round(0) if temperature is number else 'unavailable' }}
+        unit_of_measurement: "°F"
+        json_attributes:
+          - current
+          - current_units
+          - timezone
+
+################################################
+## Templates
+################################################
+
+template:
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: state
+        entity_id:
+          - calendar.ryan_claussen
+          - calendar.work_trip
+    action:
+      - variables:
+          lookahead_start: >-
+            {{ now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat() }}
+          lookahead_end: >-
+            {{ (now() + timedelta(days=14)).replace(hour=23, minute=59, second=59, microsecond=0).isoformat() }}
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.ryan_claussen
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: personal_event_window
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.work_trip
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: work_trip_event_window
+      - variables:
+          personal_events: >-
+            {% if personal_event_window is mapping and personal_event_window.events is defined %}
+              {{ personal_event_window.events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.ryan_claussen'] is defined and personal_event_window['calendar.ryan_claussen'].events is defined %}
+              {{ personal_event_window['calendar.ryan_claussen'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+          work_trip_events: >-
+            {% if work_trip_event_window is mapping and work_trip_event_window.events is defined %}
+              {{ work_trip_event_window.events | to_json }}
+            {% elif work_trip_event_window is mapping and work_trip_event_window['calendar.work_trip'] is defined and work_trip_event_window['calendar.work_trip'].events is defined %}
+              {{ work_trip_event_window['calendar.work_trip'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+          next_flight_json: >-
+            {% set now_ts = as_timestamp(now()) %}
+            {% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER', 'MINNESOTA'] %}
+            {% set airport_map = {
+              'MSP': {'name': 'Minneapolis-Saint Paul', 'lat': 44.8848, 'lon': -93.2223},
+              'RST': {'name': 'Rochester', 'lat': 43.9083, 'lon': -92.5000},
+              'ATL': {'name': 'Atlanta', 'lat': 33.6407, 'lon': -84.4277},
+              'AUS': {'name': 'Austin', 'lat': 30.1975, 'lon': -97.6664},
+              'BNA': {'name': 'Nashville', 'lat': 36.1263, 'lon': -86.6774},
+              'BOS': {'name': 'Boston', 'lat': 42.3656, 'lon': -71.0096},
+              'CLT': {'name': 'Charlotte', 'lat': 35.2140, 'lon': -80.9431},
+              'CMH': {'name': 'Columbus', 'lat': 39.9980, 'lon': -82.8919},
+              'DEN': {'name': 'Denver', 'lat': 39.8561, 'lon': -104.6737},
+              'DFW': {'name': 'Dallas-Fort Worth', 'lat': 32.8998, 'lon': -97.0403},
+              'DTW': {'name': 'Detroit', 'lat': 42.2162, 'lon': -83.3554},
+              'EWR': {'name': 'Newark', 'lat': 40.6895, 'lon': -74.1745},
+              'FLL': {'name': 'Fort Lauderdale', 'lat': 26.0726, 'lon': -80.1527},
+              'IAD': {'name': 'Washington Dulles', 'lat': 38.9531, 'lon': -77.4565},
+              'IAH': {'name': 'Houston', 'lat': 29.9902, 'lon': -95.3368},
+              'JFK': {'name': 'New York JFK', 'lat': 40.6413, 'lon': -73.7781},
+              'LAS': {'name': 'Las Vegas', 'lat': 36.0840, 'lon': -115.1537},
+              'LAX': {'name': 'Los Angeles', 'lat': 33.9416, 'lon': -118.4085},
+              'LGA': {'name': 'New York LaGuardia', 'lat': 40.7769, 'lon': -73.8740},
+              'MCO': {'name': 'Orlando', 'lat': 28.4312, 'lon': -81.3081},
+              'MDW': {'name': 'Chicago Midway', 'lat': 41.7868, 'lon': -87.7522},
+              'MIA': {'name': 'Miami', 'lat': 25.7959, 'lon': -80.2870},
+              'ORD': {'name': 'Chicago O Hare', 'lat': 41.9742, 'lon': -87.9073},
+              'PDX': {'name': 'Portland', 'lat': 45.5898, 'lon': -122.5951},
+              'PHL': {'name': 'Philadelphia', 'lat': 39.8744, 'lon': -75.2424},
+              'PHX': {'name': 'Phoenix', 'lat': 33.4352, 'lon': -112.0101},
+              'PIT': {'name': 'Pittsburgh', 'lat': 40.4915, 'lon': -80.2329},
+              'SAN': {'name': 'San Diego', 'lat': 32.7338, 'lon': -117.1933},
+              'SEA': {'name': 'Seattle', 'lat': 47.4502, 'lon': -122.3088},
+              'SFO': {'name': 'San Francisco', 'lat': 37.6213, 'lon': -122.3790},
+              'SLC': {'name': 'Salt Lake City', 'lat': 40.7899, 'lon': -111.9791}
+            } %}
+            {% set airline_codes = ['AA', 'AC', 'AF', 'AS', 'BA', 'B6', 'DL', 'F9', 'KL', 'NK', 'SY', 'UA', 'WN'] %}
+            {% set events = (personal_events | default('[]', true) | string | trim | from_json) + (work_trip_events | default('[]', true) | string | trim | from_json) %}
+            {% set ns = namespace(match=None) %}
+            {% for event in events %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set summary_lower = summary | lower %}
+              {% set text = [summary, description, location] | join(' ') %}
+              {% set text_lower = text | lower %}
+              {% set route_summary = '→' in summary %}
+              {% set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) %}
+              {% set itinerary_marker = 'synced by flighty' in text_lower or 'created from an email you received in gmail' in text_lower or 'booking code:' in text_lower or 'flight time ' in text_lower %}
+              {% set is_friend_itinerary = 'friend' in text_lower %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set end_raw = event.end.dateTime | default(event.end.date, true) | default(event.end, true) %}
+              {% set start_dt = as_datetime(start_raw) %}
+              {% set end_dt = as_datetime(end_raw) %}
+              {% set is_timed = 'T' in (start_raw | string) %}
+              {% set ident_ns = namespace(value='') %}
+              {% set token_text = text | upper | replace('(', ' ') | replace(')', ' ') | replace('•', ' ') | replace(':', ' ') | replace('-', ' ') | replace('/', ' ') | replace(',', ' ') %}
+              {% set tokens = token_text.split() %}
+              {% for token in tokens %}
+                {% set token_index = loop.index0 %}
+                {% if ident_ns.value == '' %}
+                  {% for code in airline_codes %}
+                    {% set tail = token[code | length:] %}
+                    {% if token.startswith(code) and tail | length >= 1 and tail | length <= 4 and (tail | regex_replace('[^0-9]', '')) == tail %}
+                      {% set ident_ns.value = code ~ tail %}
+                    {% elif token == code and token_index + 1 < tokens | count %}
+                      {% set next_token = tokens[token_index + 1] %}
+                      {% if next_token | length >= 1 and next_token | length <= 4 and (next_token | regex_replace('[^0-9]', '')) == next_token %}
+                        {% set ident_ns.value = code ~ next_token %}
+                      {% endif %}
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+              {% set looks_like_flight = route_summary or named_flight or itinerary_marker or ident_ns.value != '' %}
+              {% set origin_code = '' %}
+              {% set destination_code = '' %}
+              {% set destination_name = '' %}
+              {% if route_summary %}
+                {% set origin_code = summary.split('→', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                {% set destination_name = summary.split('→', 1)[1].split('•', 1)[0].strip() %}
+                {% set route_destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper %}
+                {% if '(' not in destination_name and ' ' not in destination_name and route_destination_code | length == 3 %}
+                  {% set destination_code = route_destination_code %}
+                {% endif %}
+              {% elif summary_lower.startswith('flight to ') %}
+                {% set destination_name = summary[10:].split('•', 1)[0].strip() %}
+              {% elif summary_lower.startswith('flight: ') and ' to ' in summary_lower %}
+                {% set flight_tail = summary[8:] %}
+                {% set flight_tail_lower = summary_lower[8:] %}
+                {% set to_index = flight_tail_lower.find(' to ') %}
+                {% if to_index != -1 %}
+                  {% set destination_name = flight_tail[to_index + 4:].split('•', 1)[0].strip() %}
+                {% endif %}
+              {% endif %}
+              {% if destination_name != '' and destination_code == '' %}
+                {% if '(' in destination_name and ')' in destination_name %}
+                  {% set destination_code = destination_name.split('(', 1)[1].split(')', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                {% else %}
+                  {% set destination_code = destination_name.split(' ', 1)[0] | regex_replace('[^A-Za-z]', '') | upper %}
+                {% endif %}
+              {% endif %}
+              {% if origin_code == '' %}
+                {% if 'msp airport' in text_lower or 'minneapolis-st paul' in text_lower or 'minneapolis st paul' in text_lower or 'wold-chamberlain' in text_lower %}
+                  {% set origin_code = 'MSP' %}
+                {% elif 'rst airport' in text_lower or 'rochester international' in text_lower %}
+                  {% set origin_code = 'RST' %}
+                {% elif destination_code not in home_codes %}
+                  {% set origin_code = 'MSP' %}
+                {% endif %}
+              {% endif %}
+              {% if destination_name == '' and destination_code != '' %}
+                {% set destination_name = airport_map.get(destination_code, {}).get('name', destination_code) %}
+              {% endif %}
+              {% if looks_like_flight and not is_friend_itinerary and is_timed and start_dt is not none and end_dt is not none %}
+                {% set start_ts = as_timestamp(start_dt) %}
+                {% set end_ts = as_timestamp(end_dt) %}
+                {% if end_ts > (now_ts - 7200) and start_ts <= (now_ts + 1209600) %}
+                  {% set source_priority = 0 if route_summary else 1 if ident_ns.value != '' else 2 %}
+                  {% if ns.match is none or source_priority < ns.match.source_priority or (source_priority == ns.match.source_priority and start_ts < ns.match.start_ts) %}
+                    {% set ns.match = {
+                      'ident': ident_ns.value,
+                      'summary': summary,
+                      'start_time': (start_dt | as_local).isoformat(),
+                      'end_time': (end_dt | as_local).isoformat(),
+                      'start_ts': start_ts,
+                      'end_ts': end_ts,
+                      'origin_code': origin_code,
+                      'origin_name': airport_map.get(origin_code, {}).get('name', origin_code),
+                      'destination_code': destination_code,
+                      'destination_name': airport_map.get(destination_code, {}).get('name', destination_name),
+                      'destination_latitude': airport_map.get(destination_code, {}).get('lat', ''),
+                      'destination_longitude': airport_map.get(destination_code, {}).get('lon', ''),
+                      'location': location,
+                      'description': description,
+                      'source': 'calendar',
+                      'source_priority': source_priority,
+                      'active_window': start_ts <= (now_ts + 129600) and end_ts > (now_ts - 7200)
+                    } %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.match is none %}
+              {{ {'ident': 'none', 'summary': '', 'start_time': '', 'end_time': '', 'origin_code': '', 'origin_name': '', 'destination_code': '', 'destination_name': '', 'destination_latitude': '', 'destination_longitude': '', 'location': '', 'description': '', 'source': 'calendar', 'active_window': false} | to_json }}
+            {% else %}
+              {{ ns.match | to_json }}
+            {% endif %}
+    sensor:
+      - name: Next Travel Flight
+        unique_id: next_travel_flight
+        default_entity_id: sensor.next_travel_flight
+        state: >-
+          {% set flight = next_flight_json | from_json %}
+          {% if flight.ident | default('', true) not in ['', 'unknown', 'unavailable'] %}
+            {{ flight.ident }}
+          {% elif flight.summary | default('', true) not in ['', 'unknown', 'unavailable'] %}
+            calendar
+          {% else %}
+            none
+          {% endif %}
+        attributes:
+          ident: "{{ (next_flight_json | from_json).ident | default('') }}"
+          summary: "{{ (next_flight_json | from_json).summary | default('') }}"
+          start_time: "{{ (next_flight_json | from_json).start_time | default('') }}"
+          end_time: "{{ (next_flight_json | from_json).end_time | default('') }}"
+          origin_code: "{{ (next_flight_json | from_json).origin_code | default('') }}"
+          origin_name: "{{ (next_flight_json | from_json).origin_name | default('') }}"
+          destination_code: "{{ (next_flight_json | from_json).destination_code | default('') }}"
+          destination_name: "{{ (next_flight_json | from_json).destination_name | default('') }}"
+          destination_latitude: "{{ (next_flight_json | from_json).destination_latitude | default('') }}"
+          destination_longitude: "{{ (next_flight_json | from_json).destination_longitude | default('') }}"
+          location: "{{ (next_flight_json | from_json).location | default('') }}"
+          description: "{{ (next_flight_json | from_json).description | default('') }}"
+          source: "{{ (next_flight_json | from_json).source | default('calendar') }}"
+          active_window: "{{ (next_flight_json | from_json).active_window | default(false) }}"
+
+  - trigger:
+      - trigger: homeassistant
+        event: start
+        id: startup
+      - trigger: time_pattern
+        minutes: "/15"
+        id: cadence
+      - trigger: state
+        entity_id: sensor.next_travel_flight
+        id: flight_changed
+    action:
+      - variables:
+          ident: "{{ state_attr('sensor.next_travel_flight', 'ident') | default('', true) | string | trim }}"
+          scheduled_departure: "{{ state_attr('sensor.next_travel_flight', 'start_time') | default('', true) }}"
+          previous_actual_takeoff: "{{ state_attr('sensor.next_travel_flight_live_status', 'actual_takeoff') | default('', true) }}"
+          previous_raw_json: "{{ state_attr('sensor.next_travel_flight_live_status', 'raw_json') | default('{}', true) }}"
+          should_poll_flightaware: >-
+            {% set ident_value = state_attr('sensor.next_travel_flight', 'ident') | default('', true) | string | trim %}
+            {% set scheduled_raw = state_attr('sensor.next_travel_flight', 'start_time') | default('', true) %}
+            {% set scheduled_ts = as_timestamp(scheduled_raw, default=none) if scheduled_raw not in ['', none, 'unknown', 'unavailable'] else none %}
+            {% set now_ts = as_timestamp(now()) %}
+            {% set actual_takeoff = state_attr('sensor.next_travel_flight_live_status', 'actual_takeoff') | default('', true) %}
+            {% set has_taken_off = actual_takeoff not in ['', none, 'unknown', 'unavailable'] %}
+            {% set trigger_id = trigger.id | default('') %}
+            {% set has_ident = ident_value not in ['', 'none', 'unknown', 'unavailable'] %}
+            {% set within_3_days = scheduled_ts is number and now_ts >= scheduled_ts - 259200 and now_ts < scheduled_ts + 86400 %}
+            {% set within_24h_until_takeoff = scheduled_ts is number and now_ts >= scheduled_ts - 86400 and not has_taken_off %}
+            {% set hourly_slot = now().minute == 0 %}
+            {{
+              has_ident
+              and within_3_days
+              and not has_taken_off
+              and (
+                within_24h_until_takeoff
+                or hourly_slot
+                or trigger_id in ['startup', 'flight_changed']
+              )
+            }}
+      - choose:
+          - conditions:
+              - "{{ should_poll_flightaware }}"
+            sequence:
+              - action: rest_command.flightaware_next_travel_flight
+                data:
+                  ident: "{{ ident }}"
+                response_variable: flightaware_response
+      - variables:
+          flightaware_raw_json: >-
+            {% if should_poll_flightaware and flightaware_response is defined and flightaware_response.status in [200, '200'] %}
+              {{ flightaware_response.content | default('{}', true) }}
+            {% else %}
+              {{ previous_raw_json if previous_raw_json not in ['', none, 'unknown', 'unavailable'] else '{}' }}
+            {% endif %}
+          flightaware_flight_json: >-
+            {% set payload = flightaware_raw_json | default('{}', true) | from_json %}
+            {% set flights = payload.flights if payload is mapping and payload.flights is sequence else [] %}
+            {{ (flights[0] if flights | count > 0 else {}) | to_json }}
+          flightaware_polled: "{{ should_poll_flightaware and flightaware_response is defined and flightaware_response.status in [200, '200'] }}"
+    sensor:
+      - name: Next Travel Flight Live Status
+        unique_id: next_travel_flight_live_status
+        default_entity_id: sensor.next_travel_flight_live_status
+        state: >-
+          {% set live = flightaware_flight_json | from_json %}
+          {% set live_status = live.status | default('', true) %}
+          {% if live_status not in ['', 'unknown', 'unavailable', 'none'] %}
+            {{ live_status }}
+          {% elif states('sensor.next_travel_flight') not in ['none', 'unknown', 'unavailable'] %}
+            scheduled
+          {% else %}
+            none
+          {% endif %}
+        attributes:
+          ident: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.ident_iata | default(state_attr('sensor.next_travel_flight', 'ident') | default(states('sensor.next_travel_flight'), true), true) }}
+          scheduled_departure: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.scheduled_out | default(state_attr('sensor.next_travel_flight', 'start_time'), true) }}
+          estimated_departure: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.estimated_out | default('', true) }}
+          actual_departure: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.actual_out | default('', true) }}
+          predicted_takeoff: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.estimated_off | default('', true) }}
+          actual_takeoff: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.actual_off | default('', true) }}
+          scheduled_arrival: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.scheduled_in | default(state_attr('sensor.next_travel_flight', 'end_time'), true) }}
+          estimated_arrival: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.estimated_in | default('', true) }}
+          actual_arrival: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {{ live.actual_in | default('', true) }}
+          departure_delay_minutes: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {% set scheduled = live.scheduled_out | default('', true) %}
+            {% set estimated = live.estimated_out | default('', true) %}
+            {% if scheduled not in [none, '', 'unknown', 'unavailable'] and estimated not in [none, '', 'unknown', 'unavailable'] %}
+              {{ ((as_timestamp(estimated) - as_timestamp(scheduled)) / 60) | round(0) | int }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          arrival_delay_minutes: >-
+            {% set live = flightaware_flight_json | from_json %}
+            {% set scheduled = live.scheduled_in | default('', true) %}
+            {% set estimated = live.estimated_in | default('', true) %}
+            {% if scheduled not in [none, '', 'unknown', 'unavailable'] and estimated not in [none, '', 'unknown', 'unavailable'] %}
+              {{ ((as_timestamp(estimated) - as_timestamp(scheduled)) / 60) | round(0) | int }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          raw_json: "{{ flightaware_raw_json }}"
+          last_polled: >-
+            {% if flightaware_polled %}
+              {{ now().isoformat() }}
+            {% else %}
+              {{ state_attr('sensor.next_travel_flight_live_status', 'last_polled') | default('', true) }}
+            {% endif %}
+          poll_policy: >-
+            {% set scheduled_raw = state_attr('sensor.next_travel_flight', 'start_time') | default('', true) %}
+            {% set scheduled_ts = as_timestamp(scheduled_raw, default=none) if scheduled_raw not in ['', none, 'unknown', 'unavailable'] else none %}
+            {% set now_ts = as_timestamp(now()) %}
+            {% set actual_takeoff = state_attr('sensor.next_travel_flight_live_status', 'actual_takeoff') | default('', true) %}
+            {% set has_ident = state_attr('sensor.next_travel_flight', 'ident') | default('', true) not in ['', none, 'none', 'unknown', 'unavailable'] %}
+            {% if not has_ident %}
+              no_ident
+            {% elif actual_takeoff not in ['', none, 'unknown', 'unavailable'] %}
+              stopped_after_takeoff
+            {% elif scheduled_ts is number and now_ts >= scheduled_ts - 86400 %}
+              every_15_minutes_until_takeoff
+            {% elif scheduled_ts is number and now_ts >= scheduled_ts - 259200 %}
+              hourly_within_3_days
+            {% else %}
+              waiting_for_3_day_window
+            {% endif %}
+
+  - sensor:
+
+      - name: Next Travel Flight TSA Wait
+        unique_id: next_travel_flight_tsa_wait
+        default_entity_id: sensor.next_travel_flight_tsa_wait
+        unit_of_measurement: "min"
+        state: >-
+          {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
+          {% if origin == 'MSP' %}
+            {{ states('sensor.msp_tsa_wait_times') | int(default=-1) }}
+          {% elif origin == 'RST' %}
+            {{ states('sensor.rst_tsa_wait_times') | int(default=-1) }}
+          {% else %}
+            -1
+          {% endif %}
+        attributes:
+          description: >-
+            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
+            {% if origin == 'MSP' %}
+              {{ state_attr('sensor.msp_tsa_wait_times', 'rightnow_description') | default('', true) }}
+            {% elif origin == 'RST' %}
+              {{ state_attr('sensor.rst_tsa_wait_times', 'rightnow_description') | default('', true) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+          precheck: >-
+            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
+            {% if origin == 'MSP' %}
+              {{ state_attr('sensor.msp_tsa_wait_times', 'precheck') | default('', true) }}
+            {% elif origin == 'RST' %}
+              {{ state_attr('sensor.rst_tsa_wait_times', 'precheck') | default('', true) }}
+            {% else %}
+              {{ '' }}
+            {% endif %}
+
+      - name: Next Travel Flight Airport Delay
+        unique_id: next_travel_flight_airport_delay
+        default_entity_id: sensor.next_travel_flight_airport_delay
+        state: >-
+          {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
+          {% set attrs = state_attr('sensor.msp_tsa_wait_times', 'faa_alerts') if origin == 'MSP' else state_attr('sensor.rst_tsa_wait_times', 'faa_alerts') if origin == 'RST' else {} %}
+          {% if attrs is mapping and attrs | count > 0 %}
+            alert
+          {% elif origin in ['MSP', 'RST'] %}
+            clear
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          summary: >-
+            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
+            {% set attrs = state_attr('sensor.msp_tsa_wait_times', 'faa_alerts') if origin == 'MSP' else state_attr('sensor.rst_tsa_wait_times', 'faa_alerts') if origin == 'RST' else {} %}
+            {% if attrs is mapping and attrs.ground_stops is defined %}
+              Ground stop: {{ attrs.ground_stops.reason | default('active', true) }}
+            {% elif attrs is mapping and attrs.ground_delays is defined %}
+              Ground delay: {{ attrs.ground_delays.average | default(attrs.ground_delays.reason | default('active', true), true) }}
+            {% elif attrs is mapping and attrs.general_delays is defined %}
+              {{ attrs.general_delays.trend | default(attrs.general_delays.reason | default('Airport delays', true), true) }}
+            {% elif origin in ['MSP', 'RST'] %}
+              No airport delay alerts
+            {% else %}
+              Airport delay unavailable
+            {% endif %}
+
+      - name: Next Travel Flight Destination Weather
+        unique_id: next_travel_flight_destination_weather
+        default_entity_id: sensor.next_travel_flight_destination_weather
+        state: >-
+          {% set temp = states('sensor.next_travel_flight_destination_weather_raw') %}
+          {% set dest = state_attr('sensor.next_travel_flight', 'destination_code') %}
+          {% if temp not in ['', 'unknown', 'unavailable'] and dest not in ['', none, 'unknown', 'unavailable'] %}
+            {{ temp }}F
+          {% else %}
+            unavailable
+          {% endif %}
+        attributes:
+          destination_code: "{{ state_attr('sensor.next_travel_flight', 'destination_code') | default('', true) }}"
+          destination_name: "{{ state_attr('sensor.next_travel_flight', 'destination_name') | default('', true) }}"
+          precipitation: >-
+            {% set current = state_attr('sensor.next_travel_flight_destination_weather_raw', 'current') %}
+            {{ current.precipitation | default('', true) if current is mapping else '' }}
+          wind_speed: >-
+            {% set current = state_attr('sensor.next_travel_flight_destination_weather_raw', 'current') %}
+            {{ current.wind_speed_10m | default('', true) if current is mapping else '' }}
