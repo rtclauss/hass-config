@@ -129,6 +129,16 @@ def test_owner_suite_automation_skips_publish_when_house_is_unoccupied() -> None
     assert "is_state('input_boolean.trip', 'off')" in block
 
 
+def test_owner_suite_publish_script_enforces_occupancy_guard() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "alias: Publish only when Ryan is home or guest mode is active" in block
+    assert "is_state('input_boolean.guest_mode', 'on')" in block
+    assert "is_state('binary_sensor.bayesian_zeke_home', 'on')" in block
+    assert "is_state('input_boolean.trip', 'off')" in block
+    assert block.index("alias: Publish only when Ryan is home") < block.index("action: mqtt.publish")
+
+
 def test_owner_suite_sources_are_documented() -> None:
     text = DOC_PATH.read_text(encoding="utf-8")
 
@@ -136,5 +146,5 @@ def test_owner_suite_sources_are_documented() -> None:
     assert "automation.publish_owner_suite_inky_display" in text
     assert "home/inky/owner_suite/state" in text
     assert "Updated 21:42" in text
-    assert "publishes only when guest mode is active" in text
+    assert "publish script only allows updates when guest mode is active" in text
     assert "Ryan returning home" in text

@@ -157,7 +157,8 @@ Owner-suite publishing lives in `packages/inky_displays.yaml`.
 Primary entities:
 
 - `script.publish_owner_suite_inky_display`: builds and publishes the compact
-  owner-suite payload to `home/inky/owner_suite/state`.
+  owner-suite payload to `home/inky/owner_suite/state`, after enforcing the
+  occupancy/trip publish guard.
 - `automation.publish_owner_suite_inky_display`: coalesces meaningful source
   changes with a 15-second restart delay, then calls the publish script.
 
@@ -167,11 +168,11 @@ garage/front-door exceptions, weather alerts, active weather, and a noon
 refresh. It does not listen to `sensor.time`, so it will not redraw on clock
 ticks.
 
-The automation publishes only when guest mode is active, or when Ryan is home
-and trip mode is off. While Ryan is away or trip mode is on with guest mode off,
-the display keeps its last image and skips refreshes. Turning guest mode on or
-Ryan returning home is itself a meaningful source change and publishes again
-after the normal 15-second coalescing delay.
+The publish script only allows updates when guest mode is active, or when Ryan
+is home and trip mode is off. While Ryan is away or trip mode is on with guest
+mode off, the display keeps its last image and skips refreshes. Turning guest
+mode on or Ryan returning home is itself a meaningful source change and
+publishes again after the normal 15-second coalescing delay.
 
 Current owner-suite modes:
 
