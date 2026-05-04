@@ -124,7 +124,7 @@ automation:
       - alias: "Salt Level Low"
         condition: numeric_state
         entity_id: sensor.water_softener_salt_level
-        above: 500
+        above: input_number.water_softener_low_salt_threshold_mm
     action:
       - alias: "Notify"
         action: notify.all
@@ -134,6 +134,75 @@ automation:
             url: "/ryan-new-mushroom/cleaning"
           message: >-
             Water softener salt is low at {{states('sensor.water_softener_salt_level')}} mm.
+
+  - id: water_softener_forecast_refill_reminder
+    alias: Water Softener Forecast Refill Reminder
+    mode: single
+    trigger:
+      - trigger: numeric_state
+        id: forecast_window
+        entity_id: sensor.water_softener_days_until_low_salt
+        above: 0
+        below: input_number.water_softener_refill_reminder_days
+        for:
+          hours: 6
+      - trigger: time
+        id: daily_recheck
+        at: "16:15:00"
+      - trigger: homeassistant
+        id: startup_recheck
+        event: start
+    condition:
+      - alias: "Reminder not already sent this refill cycle"
+        condition: state
+        entity_id: input_boolean.water_softener_refill_reminder_sent
+        state: "off"
+      - alias: "Forecast is inside the reminder window"
+        condition: numeric_state
+        entity_id: sensor.water_softener_days_until_low_salt
+        above: 0
+        below: input_number.water_softener_refill_reminder_days
+      - alias: "Salt level is not already critical"
+        condition: numeric_state
+        entity_id: sensor.water_softener_salt_level
+        below: input_number.water_softener_low_salt_threshold_mm
+    action:
+      - alias: "Mark reminder sent"
+        action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.water_softener_refill_reminder_sent
+      - alias: "Notify before salt is critical"
+        action: notify.all
+        data:
+          title: Softener salt forecast low
+          data:
+            url: "/ryan-new-mushroom/cleaning"
+            tag: water-softener-forecast-low
+          message: >-
+            Water softener salt is forecast to reach the low threshold in
+            {{ states('sensor.water_softener_days_until_low_salt') }} days.
+            Current level is {{ states('sensor.water_softener_salt_level') }} mm
+            and there are {{ states('input_number.bags_of_salt_at_home') | int(default=0) }} bags at home.
+
+  - id: water_softener_refill_reminder_reset
+    alias: Water Softener Refill Reminder Reset
+    mode: single
+    trigger:
+      - trigger: numeric_state
+        entity_id: sensor.water_softener_salt_level
+        below: input_number.water_softener_refill_reset_threshold_mm
+        for:
+          hours: 6
+    condition:
+      - alias: "Reminder has been sent"
+        condition: state
+        entity_id: input_boolean.water_softener_refill_reminder_sent
+        state: "on"
+    action:
+      - alias: "Allow next refill-cycle reminder"
+        action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.water_softener_refill_reminder_sent
 
   - id: buy_more_salt
     alias: buy_more_salt
@@ -261,7 +330,10 @@ group: {}
 ########################
 # Input Booleans
 ########################
-input_boolean: {}
+input_boolean:
+  water_softener_refill_reminder_sent:
+    name: Water Softener Refill Reminder Sent
+    icon: mdi:bell-check
 
 ########################
 # Input Numbers
@@ -274,6 +346,33 @@ input_number:
     max: 20
     mode: box
     step: 1
+  water_softener_low_salt_threshold_mm:
+    name: Water Softener Low Salt Threshold
+    icon: mdi:arrow-collapse-down
+    min: 200
+    max: 800
+    mode: box
+    step: 10
+    unit_of_measurement: mm
+    initial: 500
+  water_softener_refill_reset_threshold_mm:
+    name: Water Softener Refill Reset Threshold
+    icon: mdi:arrow-expand-up
+    min: 100
+    max: 600
+    mode: box
+    step: 10
+    unit_of_measurement: mm
+    initial: 350
+  water_softener_refill_reminder_days:
+    name: Water Softener Refill Reminder Days
+    icon: mdi:calendar-alert
+    min: 1
+    max: 45
+    mode: box
+    step: 1
+    unit_of_measurement: d
+    initial: 14
 
 ########################
 # Input Select
@@ -352,6 +451,60 @@ sensor:
     #round: 2
     unit_time: d
     time_window: "168:00:00" # we look at the change over the 7 days
+
+########################
+# Template
+########################
+template:
+  - sensor:
+      - name: Water Softener Days Until Low Salt
+        unique_id: water_softener_days_until_low_salt
+        icon: mdi:calendar-clock
+        state_class: measurement
+        unit_of_measurement: d
+        availability: >-
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
+          {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+          {% set rate_7d = states('sensor.water_softener_level_dt_7d') | float(default=none) %}
+          {% set rate_72h = states('sensor.water_softener_level_dt_72hrs') | float(default=none) %}
+          {% set rate = rate_7d if rate_7d is not none and rate_7d > 0 else rate_72h %}
+          {{ level is not none and (level >= threshold or (rate is not none and rate > 0)) }}
+        state: >-
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
+          {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+          {% set rate_7d = states('sensor.water_softener_level_dt_7d') | float(default=none) %}
+          {% set rate_72h = states('sensor.water_softener_level_dt_72hrs') | float(default=none) %}
+          {% set rate = rate_7d if rate_7d is not none and rate_7d > 0 else rate_72h %}
+          {% if level is none %}
+            {{ none }}
+          {% elif level >= threshold %}
+            0
+          {% elif rate is none or rate <= 0 %}
+            {{ none }}
+          {% else %}
+            {{ ((threshold - level) / rate) | round(1) }}
+          {% endif %}
+      - name: Water Softener Forecast Status
+        unique_id: water_softener_forecast_status
+        icon: mdi:shaker-outline
+        availability: >-
+          {{ states('sensor.water_softener_salt_level') | float(default=none) is not none }}
+        state: >-
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
+          {% set reminder_days = states('input_number.water_softener_refill_reminder_days') | float(default=14) %}
+          {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+          {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
+          {% if level is none %}
+            unknown
+          {% elif level >= threshold %}
+            low_now
+          {% elif days is not none and days > 0 and days <= reminder_days %}
+            refill_soon
+          {% elif days is not none %}
+            ok
+          {% else %}
+            trend_unknown
+          {% endif %}
 
 ########################
 # Switch
