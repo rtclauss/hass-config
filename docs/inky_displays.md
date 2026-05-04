@@ -147,7 +147,7 @@ Known source-of-truth areas:
 - Wake-up alarm sync and helper state: `packages/ios_wakeup.yaml`
 - Owner-suite wake transitions: `packages/workday.yaml`
 - Weather helper sensors: `packages/weather.yaml`
-- Flight status, TSA, airport delay, and destination weather sensors:
+- Flight status, airport delay, and destination weather sensors:
   `packages/flight_status.yaml`
 - Wake-up behavior specification: `specs/alarm_wakeup.allium`
 - Room privacy policy: `docs/room_intent.yaml`
@@ -205,7 +205,7 @@ Flight rows use these normalized entities from `packages/flight_status.yaml`:
 | --- | --- | --- |
 | Flight | `sensor.next_travel_flight` ident, destination code, and best departure time | `emphasis` |
 | Status | `sensor.next_travel_flight_live_status` plus FlightAware delay attributes | `urgent` for cancellation, diversion, or 30+ minute delay |
-| Airport | `sensor.next_travel_flight_tsa_wait` or `sensor.next_travel_flight_airport_delay` | `urgent` when airport delay alerts are present |
+| Airport | `sensor.next_travel_flight_airport_delay` | `urgent` when airport delay alerts are present; otherwise shows `Airport n/a` until a free delay source is configured |
 | Dest Wx | `sensor.next_travel_flight_destination_weather` | `normal` |
 
 Required travel integrations and secrets:
@@ -216,16 +216,12 @@ Required travel integrations and secrets:
   flight ident was parsed. It polls hourly inside the 3-day preflight window,
   then every 15 minutes from 24 hours before scheduled departure until
   FlightAware reports actual takeoff.
-- TSAWaitTimes puts the API key in the URL, so keep complete airport URLs in
-  `secrets.yaml` as `tsawaittimes_msp_airport_url` and
-  `tsawaittimes_rst_airport_url`, for example
-  `https://www.tsawaittimes.com/api/airport/APIKEY/MSP/json`.
 - Open-Meteo destination weather does not require a key. It uses the destination
   airport coordinate map in `packages/flight_status.yaml`.
 - Add the built-in FAA Delays integration for `MSP` and `RST` from Settings >
   Devices & services for richer airport-delay visibility elsewhere in Home
-  Assistant. The Inky flight row uses the TSAWaitTimes FAA alert payload when
-  available.
+  Assistant. The Inky flight row currently stays `Airport n/a` unless a free
+  airport-delay source is added later.
 
 REST sensors require a Home Assistant restart after the package and secrets are
 deployed. Template-only changes can be reloaded, but the travel package includes

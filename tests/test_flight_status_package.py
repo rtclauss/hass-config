@@ -21,8 +21,7 @@ def test_flight_status_package_uses_calendar_and_rest_sources() -> None:
     assert "flightaware_next_travel_flight:" in text
     assert "https://aeroapi.flightaware.com/aeroapi/flights/" in text
     assert "!secret flightaware_aeroapi_key" in text
-    assert "!secret tsawaittimes_msp_airport_url" in text
-    assert "!secret tsawaittimes_rst_airport_url" in text
+    assert "tsawaittimes" not in text.lower()
     assert "https://api.open-meteo.com/v1/forecast" in text
 
 
@@ -32,7 +31,6 @@ def test_flight_status_package_exposes_normalized_display_sensors() -> None:
     for entity_name in (
         "Next Travel Flight",
         "Next Travel Flight Live Status",
-        "Next Travel Flight TSA Wait",
         "Next Travel Flight Airport Delay",
         "Next Travel Flight Destination Weather",
     ):
