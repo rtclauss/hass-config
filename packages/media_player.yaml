@@ -1017,6 +1017,10 @@ script:
         description: "Music Assistant radio URI"
       initial_delay:
         description: "Optional delay before playback starts"
+      ramp_steps:
+        description: "Number of 0.01 volume steps to ramp through (default 30 → peak 0.30)"
+      ramp_k_factor:
+        description: "tan-curve k factor controlling total ramp duration (default 120 ≈ 7.5 min for 30 steps)"
       playback_entity_id:
         description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
@@ -1025,15 +1029,13 @@ script:
       playback_player: >-
         {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
            else 'media_player.everywhere_sonos' }}
+      effective_ramp_steps: "{{ ramp_steps | default(30) | int(30) }}"
+      effective_k_factor: "{{ ramp_k_factor | default(120) | int(120) }}"
     sequence:
       - action: media_player.volume_set
         continue_on_error: true
         target:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bedroom_sonos_2
-            - media_player.bathroom_sonos
-            - media_player.bathroom_sonos_2
+          entity_id: "{{ playback_player }}"
         data:
           volume_level: 0.01
       - if:
@@ -1052,20 +1054,16 @@ script:
           enqueue: replace
       - repeat:
           sequence:
-            - alias: "Increase grouped wake-up volume by 0.01"
+            - alias: "Increase wake-up group volume by 0.01"
               continue_on_error: true
               action: media_player.volume_set
               target:
-                entity_id:
-                  - media_player.bedroom_sonos
-                  - media_player.bedroom_sonos_2
-                  - media_player.bathroom_sonos
-                  - media_player.bathroom_sonos_2
+                entity_id: "{{ playback_player }}"
               data:
                 volume_level: "{{ 0.01 * repeat.index }}"
             - delay:
-                seconds: "{{ (1/(tan(repeat.index/120))) | round(0, 'ceil', 5)}}"
-          until: "{{ repeat.index == 30 }}"
+                seconds: "{{ (1/(tan(repeat.index/effective_k_factor))) | round(0, 'ceil', 5)}}"
+          until: "{{ repeat.index == effective_ramp_steps }}"
 
   bedroom_playlist_0:
     alias: "Play LoFi"
@@ -1790,17 +1788,12 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - alias: "Prime non-bathroom wake-up speakers to safe low volume"
-        # Bathroom volume is ramped separately by the calling automation.
-        # Set all other group members low so playback starts quietly.
+      - alias: "Prime wake-up group to safe low volume before playback"
         continue_on_error: true
         action: media_player.volume_set
+        target:
+          entity_id: "{{ playback_player }}"
         data:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.office_sonos
-            - media_player.den_sonos
-            - media_player.tiki_room_3
           volume_level: 0.05
       - alias: "Enable Shuffle"
         continue_on_error: true
