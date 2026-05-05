@@ -113,7 +113,7 @@ script:
             {% set house_mode = states('input_select.house_mode') %}
             {% if requested in ['night_preview', 'morning', 'up_for_day', 'midday'] %}
               {{ requested }}
-            {% elif is_state('input_boolean.wakeup_alarm_firing', 'on') %}
+            {% elif is_state('input_boolean.wakeup_alarm_firing', 'on') and now().hour < 12 %}
               morning
             {% elif house_mode in ['night', 'in_bed', 'asleep'] %}
               night_preview

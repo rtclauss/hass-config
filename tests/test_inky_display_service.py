@@ -9,6 +9,7 @@ from inky_display.service import (
     PayloadCache,
     config_from_env,
     mqtt_connection_succeeded,
+    preserve_cached_weather_rows,
     process_payload,
     update_image_sink,
 )
@@ -82,6 +83,46 @@ def test_process_payload_ignores_invalid_payload_without_overwriting_cache(tmp_p
     assert invalid.reason == "invalid"
     assert cache.last_hash() == first.content_hash
     assert cache.restore_image() is not None
+
+
+def test_process_payload_preserves_cached_weather_when_new_weather_is_unavailable(tmp_path: Path) -> None:
+    cache = PayloadCache(tmp_path)
+    first_data = json.loads(_sample_text())
+    first_data["sections"][0]["rows"][0] = {
+        "icon": "mdi:weather-sunny",
+        "label": "Weather",
+        "value": "73F sunny",
+        "level": "normal",
+    }
+    first = process_payload(json.dumps(first_data), cache, "owner_suite")
+    next_data = json.loads(_sample_text())
+    next_data["footer"] = "Updated 13:05"
+    next_data["sections"][0]["rows"][0] = {
+        "icon": "mdi:weather-cloudy",
+        "label": "Weather",
+        "value": "unavailable",
+        "level": "normal",
+    }
+
+    result = process_payload(json.dumps(next_data), cache, "owner_suite")
+    cached = json.loads(cache.payload_path.read_text(encoding="utf-8"))
+
+    assert first.rendered is True
+    assert result.rendered is True
+    assert cached["sections"][0]["rows"][0]["value"] == "73F sunny"
+    assert cached["sections"][0]["rows"][0]["icon"] == "mdi:weather-sunny"
+    assert cached["footer"] == "Updated 13:05"
+
+
+def test_preserve_cached_weather_rows_preserves_destination_weather() -> None:
+    cached_data = {
+        "sections": [{"type": "rows", "rows": [{"label": "Dest Wx", "value": "65F cloudy", "level": "normal"}]}]
+    }
+    data = {"sections": [{"type": "rows", "rows": [{"label": "Dest Wx", "value": "unknown", "level": "normal"}]}]}
+
+    preserved = preserve_cached_weather_rows(data, cached_data)
+
+    assert preserved["sections"][0]["rows"][0]["value"] == "65F cloudy"
 
 
 def test_process_payload_rejects_payload_for_another_display(tmp_path: Path) -> None:
