@@ -21,11 +21,6 @@ homeassistant:
       friendly_name: "Next Travel Flight Live Status"
       icon: mdi:airplane-check
 
-    sensor.next_travel_flight_tsa_wait:
-      <<: *customize
-      friendly_name: "Next Travel Flight TSA Wait"
-      icon: mdi:bag-checked
-
     sensor.next_travel_flight_airport_delay:
       <<: *customize
       friendly_name: "Next Travel Flight Airport Delay"
@@ -53,51 +48,6 @@ rest_command:
 ################################################
 
 rest:
-  # TSAWaitTimes requires the API key in the URL. Keep the complete URLs in secrets.yaml.
-  - resource: !secret tsawaittimes_example_zone_04_airport_url
-    scan_interval: 900
-    timeout: 20
-    sensor:
-      - name: AAA TSA Wait Times
-        unique_id: example_zone_04_tsa_wait_times
-        value_template: "{{ value_json.rightnow | int(default=-1) }}"
-        unit_of_measurement: "min"
-        json_attributes:
-          - code
-          - name
-          - city
-          - state
-          - latitude
-          - longitude
-          - rightnow
-          - rightnow_description
-          - user_reported
-          - precheck
-          - faa_alerts
-          - precheck_checkpoints
-
-  - resource: !secret tsawaittimes_aab_airport_url
-    scan_interval: 900
-    timeout: 20
-    sensor:
-      - name: AAB TSA Wait Times
-        unique_id: aab_tsa_wait_times
-        value_template: "{{ value_json.rightnow | int(default=-1) }}"
-        unit_of_measurement: "min"
-        json_attributes:
-          - code
-          - name
-          - city
-          - state
-          - latitude
-          - longitude
-          - rightnow
-          - rightnow_description
-          - user_reported
-          - precheck
-          - faa_alerts
-          - precheck_checkpoints
-
   - resource_template: >-
       {% set lat = state_attr('sensor.next_travel_flight', 'destination_latitude') | float(default=none) %}
       {% set lon = state_attr('sensor.next_travel_flight', 'destination_longitude') | float(default=none) %}
@@ -494,66 +444,23 @@ template:
 
   - sensor:
 
-      - name: Next Travel Flight TSA Wait
-        unique_id: next_travel_flight_tsa_wait
-        default_entity_id: sensor.next_travel_flight_tsa_wait
-        unit_of_measurement: "min"
-        state: >-
-          {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
-          {% if origin == 'AAA' %}
-            {{ states('sensor.example_zone_04_tsa_wait_times') | int(default=-1) }}
-          {% elif origin == 'AAB' %}
-            {{ states('sensor.aab_tsa_wait_times') | int(default=-1) }}
-          {% else %}
-            -1
-          {% endif %}
-        attributes:
-          description: >-
-            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
-            {% if origin == 'AAA' %}
-              {{ state_attr('sensor.example_zone_04_tsa_wait_times', 'rightnow_description') | default('', true) }}
-            {% elif origin == 'AAB' %}
-              {{ state_attr('sensor.aab_tsa_wait_times', 'rightnow_description') | default('', true) }}
-            {% else %}
-              {{ '' }}
-            {% endif %}
-          precheck: >-
-            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
-            {% if origin == 'AAA' %}
-              {{ state_attr('sensor.example_zone_04_tsa_wait_times', 'precheck') | default('', true) }}
-            {% elif origin == 'AAB' %}
-              {{ state_attr('sensor.aab_tsa_wait_times', 'precheck') | default('', true) }}
-            {% else %}
-              {{ '' }}
-            {% endif %}
-
       - name: Next Travel Flight Airport Delay
         unique_id: next_travel_flight_airport_delay
         default_entity_id: sensor.next_travel_flight_airport_delay
         state: >-
           {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
-          {% set attrs = state_attr('sensor.example_zone_04_tsa_wait_times', 'faa_alerts') if origin == 'AAA' else state_attr('sensor.aab_tsa_wait_times', 'faa_alerts') if origin == 'AAB' else {} %}
-          {% if attrs is mapping and attrs | count > 0 %}
-            alert
-          {% elif origin in ['AAA', 'AAB'] %}
-            clear
-          {% else %}
+          {% if origin in ['', none, 'unknown', 'unavailable'] %}
             unknown
+          {% else %}
+            unavailable
           {% endif %}
         attributes:
           summary: >-
             {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
-            {% set attrs = state_attr('sensor.example_zone_04_tsa_wait_times', 'faa_alerts') if origin == 'AAA' else state_attr('sensor.aab_tsa_wait_times', 'faa_alerts') if origin == 'AAB' else {} %}
-            {% if attrs is mapping and attrs.ground_stops is defined %}
-              Ground stop: {{ attrs.ground_stops.reason | default('active', true) }}
-            {% elif attrs is mapping and attrs.ground_delays is defined %}
-              Ground delay: {{ attrs.ground_delays.average | default(attrs.ground_delays.reason | default('active', true), true) }}
-            {% elif attrs is mapping and attrs.general_delays is defined %}
-              {{ attrs.general_delays.trend | default(attrs.general_delays.reason | default('Airport delays', true), true) }}
-            {% elif origin in ['AAA', 'AAB'] %}
-              No airport delay alerts
-            {% else %}
+            {% if origin in ['', none, 'unknown', 'unavailable'] %}
               Airport delay unavailable
+            {% else %}
+              Airport delay source not configured
             {% endif %}
 
       - name: Next Travel Flight Destination Weather
