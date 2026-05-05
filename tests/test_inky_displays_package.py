@@ -113,6 +113,23 @@ def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:
     assert "binary_sensor.planned_vacation_calendar" in block
 
 
+def test_owner_suite_payload_warns_about_near_term_and_event_precipitation() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+    automation = _automation_block("publish_owner_suite_inky_display")
+
+    for entity_id in ("sensor.precip_next_1hr", "calendar.ryan_claussen"):
+        assert entity_id in block
+        assert entity_id in automation
+
+    assert "precip_next_hour >= 40" in block
+    assert "'Rain soon ' ~ precip_next_hour ~ '%'" in block
+    assert "state_attr('calendar.ryan_claussen', 'start_time')" in block
+    assert "state_attr('calendar.ryan_claussen', 'end_time')" in block
+    assert "event.max_precip >= 40" in block
+    assert "forecast.condition | default('', true) in precip_conditions" in block
+    assert "'Wx for ' ~ event_title" in block
+
+
 def test_owner_suite_payload_consumes_flight_status_sources() -> None:
     block = _script_block("publish_owner_suite_inky_display")
     automation = _automation_block("publish_owner_suite_inky_display")
@@ -173,3 +190,5 @@ def test_owner_suite_sources_are_documented() -> None:
     assert "Updated 21:42" in text
     assert "publish script only allows updates when guest mode is active" in text
     assert "Ryan returning home" in text
+    assert "rain in the next hour" in text
+    assert "precipitation/weather during the next `calendar.ryan_claussen` event" in text

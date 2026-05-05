@@ -167,8 +167,8 @@ Primary entities:
 The automation listens to wake alarm helpers, wake-up firing state, house mode,
 guest mode, Ryan's home state, bed/owner-suite activity, trip/vacation state,
 flight status, garage/front-door exceptions, weather alerts, active weather, and
-a noon refresh. It does not listen to `sensor.time`, so it will not redraw on
-clock ticks.
+near-term precipitation/calendar weather, and a noon refresh. It does not listen
+to `sensor.time`, so it will not redraw on clock ticks.
 
 The publish script only allows updates when guest mode is active, or when Ryan
 is home and trip mode is off. While Ryan is away or trip mode is on with guest
@@ -192,7 +192,7 @@ Current owner-suite rows:
 | Weather | `sensor.outside_temperature` plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | `emphasis` when special meeting is on |
-| Status | First active status from weather alert, garage door, front door, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage, `emphasis` for trip/vacation |
+| Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next `calendar.ryan_claussen` event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
