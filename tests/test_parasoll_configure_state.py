@@ -36,3 +36,15 @@ def test_parasoll_auto_reconfigure_queue_covers_current_fleet_burst() -> None:
     assert "mode: queued" in text
     assert "max: 30" in text
     assert "full fleet burst plus headroom" in text
+
+
+def test_parasoll_ias_ok_checks_ep2_not_ep1() -> None:
+    # PARASOLL's ssIasZone cluster lives on endpoint 2 (confirmed by Z2M Bind tab
+    # "Source endpoint 2: ssIasZone").  Checking ep1 would always return False,
+    # causing _needs_configure to be True on every contact_change — the original bug.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert "_ep2_bindings" in text
+    assert "'ssIasZone' in _ep2_bindings" in text
+    # Ensure we are NOT using ep1 for the IAS check
+    assert "'ssIasZone' in _ep1_bindings" not in text
