@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from copy import deepcopy
 from dataclasses import dataclass
 from io import BytesIO
 import json
@@ -15,6 +16,8 @@ from .renderer import render_payload
 
 LOG = logging.getLogger(__name__)
 DEFAULT_TOPIC = "home/inky/owner_suite/state"
+UNAVAILABLE_VALUES = {"", "unknown", "unavailable", "none", "null"}
+WEATHER_ROW_LABELS = {"weather", "dest wx"}
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,17 @@ class PayloadCache:
             return None
         return self.image_path.read_bytes()
 
+    def last_payload_data(self) -> dict | None:
+        if not self.payload_path.exists():
+            return None
+        try:
+            data = json.loads(self.payload_path.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if isinstance(data, dict):
+            return data
+        return None
+
     def save(self, raw_payload: str, image: bytes, content_hash: str) -> Path:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.payload_path.write_text(raw_payload, encoding="utf-8")
@@ -94,7 +108,8 @@ def process_payload(
 ) -> ProcessResult:
     raw_text = _decode_payload(raw_payload)
     try:
-        data = json.loads(raw_text)
+        original_data = json.loads(raw_text)
+        data = preserve_cached_weather_rows(deepcopy(original_data), cache.last_payload_data())
         payload = validate_payload(data)
     except (TypeError, ValueError, json.JSONDecodeError) as error:
         LOG.warning("Ignoring invalid Inky payload: %s", error)
@@ -109,9 +124,64 @@ def process_payload(
         return ProcessResult(False, "duplicate", content_hash, cache.image_path)
 
     image = render_payload(payload)
-    image_path = cache.save(raw_text, image, content_hash)
+    payload_text = raw_text if data == original_data else json.dumps(data, separators=(",", ":"))
+    image_path = cache.save(payload_text, image, content_hash)
     update_image_sink(image_sink, image)
     return ProcessResult(True, "rendered", content_hash, image_path)
+
+
+def preserve_cached_weather_rows(data: object, cached_data: dict | None) -> object:
+    if not isinstance(data, dict) or cached_data is None:
+        return data
+
+    cached_rows = _rows_by_label(cached_data)
+    if not cached_rows:
+        return data
+
+    for section in data.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        rows = section.get("rows", [])
+        if not isinstance(rows, list):
+            continue
+        for index, row in enumerate(rows):
+            if not _is_unavailable_weather_row(row):
+                continue
+            cached_row = cached_rows.get(_row_label(row))
+            if cached_row is not None:
+                rows[index] = cached_row
+
+    return data
+
+
+def _rows_by_label(data: dict) -> dict[str, dict]:
+    rows_by_label: dict[str, dict] = {}
+    for section in data.get("sections", []):
+        if not isinstance(section, dict):
+            continue
+        rows = section.get("rows", [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            label = _row_label(row)
+            if label in WEATHER_ROW_LABELS and isinstance(row, dict) and not _is_unavailable_weather_row(row):
+                rows_by_label[label] = dict(row)
+    return rows_by_label
+
+
+def _is_unavailable_weather_row(row: object) -> bool:
+    if not isinstance(row, dict):
+        return False
+    if _row_label(row) not in WEATHER_ROW_LABELS:
+        return False
+    value = str(row.get("value", "")).strip().lower()
+    return value in UNAVAILABLE_VALUES or "unknown" in value or "unavailable" in value
+
+
+def _row_label(row: object) -> str:
+    if not isinstance(row, dict):
+        return ""
+    return str(row.get("label", "")).strip().lower()
 
 
 def run_mqtt_service(config: ServiceConfig) -> None:

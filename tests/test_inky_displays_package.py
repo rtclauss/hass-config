@@ -86,6 +86,13 @@ def test_owner_suite_footer_uses_publish_time_in_24_hour_format() -> None:
     assert "sensor.time" not in block
 
 
+def test_owner_suite_morning_mode_is_limited_to_pre_noon_wake_firing() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "is_state('input_boolean.wakeup_alarm_firing', 'on') and now().hour < 12" in block
+    assert "{% elif now().hour >= 12 %}" in block
+
+
 def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:
     block = _script_block("publish_owner_suite_inky_display")
 
