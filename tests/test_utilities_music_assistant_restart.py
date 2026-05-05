@@ -37,15 +37,23 @@ def _automation_block(automation_id: str) -> str:
     return block
 
 
-def test_music_assistant_restart_loop_uses_the_music_assistant_addon() -> None:
+def test_music_assistant_restart_only_runs_when_ryan_leaves_home() -> None:
     block = _automation_block("restart_music_assistant_every_12_17_hours")
+
+    for token in (
+        "trigger: zone",
+        "entity_id: person.ryan",
+        "zone: zone.home",
+        "event: leave",
+        "addon: d5369777_music_assistant",
+    ):
+        assert token in block
 
     for token in (
         "trigger: homeassistant",
         "event: start",
         "repeat:",
         'delay: "12:10:12"',
-        "addon: d5369777_music_assistant",
         "self-rescheduling loop",
     ):
-        assert token in block
+        assert token not in block

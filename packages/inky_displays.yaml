@@ -1,0 +1,292 @@
+# Home Assistant package for e-ink display payload publishing.
+# The Raspberry Pi renderer owns panel refresh, caching, and hardware recovery.
+
+################################################################
+## Packages / Inky Displays
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "inky_displays"
+
+    automation.publish_owner_suite_inky_display:
+      <<: *customize
+      friendly_name: "Publish Owner Suite Inky Display"
+      icon: mdi:tablet-dashboard
+
+    script.publish_owner_suite_inky_display:
+      <<: *customize
+      friendly_name: "Publish Owner Suite Inky Display"
+      icon: mdi:tablet-dashboard
+
+################################################
+## Automation
+################################################
+
+automation:
+  - id: publish_owner_suite_inky_display
+    alias: publish_owner_suite_inky_display
+    description: Publish owner-suite e-ink desired state after meaningful source changes.
+    mode: restart
+    trigger:
+      - trigger: homeassistant
+        event: start
+        id: startup
+      - trigger: time
+        at: "12:00:00"
+        id: midday
+      - trigger: state
+        entity_id:
+          - input_boolean.weekday_alarm_on
+          - input_boolean.weekend_alarm_on
+          - input_boolean.special_meeting
+          - input_boolean.wakeup_alarm_firing
+          - input_boolean.guest_mode
+          - input_boolean.trip
+          - input_select.house_mode
+          - binary_sensor.bayesian_zeke_home
+          - binary_sensor.bayesian_bed_occupancy
+          - binary_sensor.bedroom_occupancy
+          - binary_sensor.owner_suite_bathroom_room_occupancy
+          - binary_sensor.planned_vacation_calendar
+          - binary_sensor.main_foyer_front_door_contact
+          - cover.garage_door
+          - sensor.next_travel_flight
+          - sensor.next_travel_flight_live_status
+          - sensor.next_travel_flight_airport_delay
+          - sensor.next_travel_flight_destination_weather
+          - sensor.nws_dakota_county_alerts_alerts_are_active
+          - sensor.precip_next_1hr
+          - sensor.outside_temperature
+          - sensor.active_weather_entity_id
+          - calendar.ryan_claussen
+        id: state-change
+      - trigger: state
+        entity_id:
+          - input_datetime.weekday_alarm
+          - input_datetime.weekend_alarm
+          - input_datetime.next_work_meeting
+        id: schedule-change
+    action:
+      - delay:
+          seconds: 15
+      - condition: template
+        alias: Publish only when Ryan is home or guest mode is active
+        value_template: >-
+          {{ is_state('input_boolean.guest_mode', 'on')
+             or (
+               is_state('binary_sensor.bayesian_zeke_home', 'on')
+               and is_state('input_boolean.trip', 'off')
+             ) }}
+      - action: script.publish_owner_suite_inky_display
+        data:
+          mode: >-
+            {% if trigger.id == 'midday' %}
+              midday
+            {% else %}
+              auto
+            {% endif %}
+
+################################################
+## Script
+################################################
+
+script:
+  publish_owner_suite_inky_display:
+    alias: Publish Owner Suite Inky Display
+    description: Build and publish the compact owner-suite Inky display payload.
+    mode: restart
+    fields:
+      mode:
+        description: "Display mode override: auto, night_preview, morning, up_for_day, or midday."
+        example: night_preview
+    sequence:
+      - variables:
+          requested_mode: "{{ mode | default('auto', true) | string | trim }}"
+          resolved_mode: >-
+            {% set requested = requested_mode %}
+            {% set house_mode = states('input_select.house_mode') %}
+            {% if requested in ['night_preview', 'morning', 'up_for_day', 'midday'] %}
+              {{ requested }}
+            {% elif is_state('input_boolean.wakeup_alarm_firing', 'on') and now().hour < 12 %}
+              morning
+            {% elif house_mode in ['night', 'in_bed', 'asleep'] %}
+              night_preview
+            {% elif now().hour >= 12 %}
+              midday
+            {% else %}
+              up_for_day
+            {% endif %}
+      - condition: template
+        alias: Publish only when Ryan is home or guest mode is active
+        value_template: >-
+          {{ is_state('input_boolean.guest_mode', 'on')
+             or (
+               is_state('binary_sensor.bayesian_zeke_home', 'on')
+               and is_state('input_boolean.trip', 'off')
+             ) }}
+      - action: mqtt.publish
+        data:
+          topic: home/inky/owner_suite/state
+          qos: 1
+          retain: true
+          payload: >-
+            {% set weather_entity = states('sensor.active_weather_entity_id') %}
+            {% set weather_state = states(weather_entity) %}
+            {% set weather_icon_map = {
+              'clear-night': 'mdi:weather-sunny',
+              'cloudy': 'mdi:weather-cloudy',
+              'fog': 'mdi:weather-cloudy',
+              'hail': 'mdi:weather-lightning',
+              'lightning': 'mdi:weather-lightning',
+              'lightning-rainy': 'mdi:weather-lightning',
+              'partlycloudy': 'mdi:weather-partly-cloudy',
+              'pouring': 'mdi:weather-rainy',
+              'rainy': 'mdi:weather-rainy',
+              'snowy': 'mdi:weather-snowy',
+              'snowy-rainy': 'mdi:weather-snowy',
+              'sunny': 'mdi:weather-sunny',
+              'windy': 'mdi:weather-cloudy',
+              'windy-variant': 'mdi:weather-cloudy'
+            } %}
+            {% set weather_icon = weather_icon_map.get(weather_state, 'mdi:weather-cloudy') %}
+            {% set temperature = states('sensor.outside_temperature') %}
+            {% set weather_value = (temperature ~ 'F ' ~ weather_state.replace('-', ' ')) if temperature not in ['unknown', 'unavailable'] else weather_state.replace('-', ' ') %}
+            {% set weekday_alarm = is_state('input_boolean.weekday_alarm_on', 'on') %}
+            {% set weekend_alarm = is_state('input_boolean.weekend_alarm_on', 'on') %}
+            {% set meeting_alarm = is_state('input_boolean.special_meeting', 'on') %}
+            {% if weekday_alarm %}
+              {% set alarm_value = states('input_datetime.weekday_alarm')[0:5] %}
+            {% elif weekend_alarm %}
+              {% set alarm_value = states('input_datetime.weekend_alarm')[0:5] %}
+            {% else %}
+              {% set alarm_value = 'Off' %}
+            {% endif %}
+            {% set meeting_value = states('input_datetime.next_work_meeting')[0:5] if meeting_alarm else 'Off' %}
+            {% set garage_open = states('cover.garage_door') not in ['closed', 'closing'] %}
+            {% set front_door_open = is_state('binary_sensor.main_foyer_front_door_contact', 'on') %}
+            {% set weather_alert_state = states('sensor.nws_dakota_county_alerts_alerts_are_active') | lower %}
+            {% set weather_alert = weather_alert_state not in ['no', 'off', '0', 'false', 'unknown', 'unavailable'] %}
+            {% set precip_next_hour = states('sensor.precip_next_1hr') | int(default=-1) %}
+            {% set rain_next_hour = precip_next_hour >= 40 %}
+            {% set event_start = state_attr('calendar.ryan_claussen', 'start_time') | default('', true) %}
+            {% set event_end = state_attr('calendar.ryan_claussen', 'end_time') | default('', true) %}
+            {% set event_title = state_attr('calendar.ryan_claussen', 'message') | default('Event', true) %}
+            {% set event_forecasts = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+            {% set precip_conditions = ['hail', 'lightning-rainy', 'pouring', 'rainy', 'snowy', 'snowy-rainy'] %}
+            {% set event = namespace(max_precip=-1, weather=false) %}
+            {% if event_start not in ['', none, 'unknown', 'unavailable'] and event_end not in ['', none, 'unknown', 'unavailable'] %}
+              {% set event_start_dt = as_datetime(event_start) %}
+              {% set event_end_dt = as_datetime(event_end) %}
+              {% if event_start_dt is not none and event_end_dt is not none and event_start_dt < now() + timedelta(hours=12) and event_end_dt > now() %}
+                {% for forecast in event_forecasts %}
+                  {% set forecast_dt = as_datetime(forecast.datetime) %}
+                  {% if forecast_dt is not none and forecast_dt >= event_start_dt and forecast_dt < event_end_dt %}
+                    {% set probability = forecast.precipitation_probability | int(default=-1) %}
+                    {% if probability > event.max_precip %}
+                      {% set event.max_precip = probability %}
+                    {% endif %}
+                    {% if forecast.condition | default('', true) in precip_conditions %}
+                      {% set event.weather = true %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endif %}
+            {% set event_weather = event.weather or event.max_precip >= 40 %}
+            {% set trip_mode = is_state('input_boolean.trip', 'on') %}
+            {% set vacation = is_state('binary_sensor.planned_vacation_calendar', 'on') %}
+            {% set flight_state = states('sensor.next_travel_flight') %}
+            {% set flight_ident = state_attr('sensor.next_travel_flight', 'ident') | default('', true) %}
+            {% set flight_label = flight_ident if flight_ident not in ['', none, 'unknown', 'unavailable'] else 'Flight' %}
+            {% set flight_active = state_attr('sensor.next_travel_flight', 'active_window') in [true, 'true', 'True', 'on', 'yes', 'Yes'] and flight_state not in ['none', 'unknown', 'unavailable', ''] %}
+            {% set flight_status = states('sensor.next_travel_flight_live_status') %}
+            {% set flight_destination = state_attr('sensor.next_travel_flight', 'destination_code') | default('', true) %}
+            {% set flight_start = state_attr('sensor.next_travel_flight_live_status', 'estimated_departure') | default('', true) %}
+            {% if flight_start in ['', none, 'unknown', 'unavailable'] %}
+              {% set flight_start = state_attr('sensor.next_travel_flight_live_status', 'scheduled_departure') | default(state_attr('sensor.next_travel_flight', 'start_time'), true) %}
+            {% endif %}
+            {% set flight_time = (flight_start | as_datetime | as_local).strftime('%H:%M') if flight_start not in ['', none, 'unknown', 'unavailable'] else 'TBD' %}
+            {% set delay_minutes = state_attr('sensor.next_travel_flight_live_status', 'departure_delay_minutes') %}
+            {% set flight_delay_value = ('Delay ' ~ delay_minutes ~ 'm') if delay_minutes not in ['', none, 'unknown', 'unavailable'] and delay_minutes | int(0) > 0 else (flight_status | replace('_', ' ') | title) %}
+            {% set airport_delay = states('sensor.next_travel_flight_airport_delay') %}
+            {% set airport_summary = state_attr('sensor.next_travel_flight_airport_delay', 'summary') | default('Airport n/a', true) %}
+            {% set airport_value = airport_summary if airport_delay == 'alert' else 'Airport n/a' %}
+            {% set destination_weather = states('sensor.next_travel_flight_destination_weather') %}
+            {% set travel_rows = [
+              {'label': 'Flight', 'value': (flight_label ~ ' ' ~ flight_destination ~ ' ' ~ flight_time) | trim, 'level': 'emphasis'},
+              {'label': 'Status', 'value': flight_delay_value, 'level': 'urgent' if flight_status in ['cancelled', 'diverted'] or delay_minutes | int(0) >= 30 else 'normal'},
+              {'label': 'Airport', 'value': airport_value, 'level': 'urgent' if airport_delay == 'alert' else 'normal'},
+              {'icon': weather_icon, 'label': 'Dest Wx', 'value': destination_weather if destination_weather not in ['unknown', 'unavailable', ''] else weather_value, 'level': 'normal'}
+            ] %}
+            {% if weather_alert %}
+              {% set status_value = 'Weather alert' %}
+              {% set status_level = 'urgent' %}
+            {% elif garage_open %}
+              {% set status_value = 'Garage ' ~ states('cover.garage_door') %}
+              {% set status_level = 'urgent' %}
+            {% elif front_door_open %}
+              {% set status_value = 'Front door open' %}
+              {% set status_level = 'urgent' %}
+            {% elif rain_next_hour %}
+              {% set status_value = 'Rain soon ' ~ precip_next_hour ~ '%' %}
+              {% set status_level = 'urgent' %}
+            {% elif event_weather %}
+              {% set status_value = 'Wx for ' ~ event_title %}
+              {% set status_level = 'urgent' %}
+            {% elif trip_mode %}
+              {% set status_value = 'Trip mode' %}
+              {% set status_level = 'emphasis' %}
+            {% elif vacation %}
+              {% set status_value = 'Vacation' %}
+              {% set status_level = 'emphasis' %}
+            {% else %}
+              {% set status_value = 'All clear' %}
+              {% set status_level = 'normal' %}
+            {% endif %}
+            {% set title_map = {
+              'night_preview': 'Tonight',
+              'morning': 'Good Morning',
+              'up_for_day': 'Up For Day',
+              'midday': 'Midday'
+            } %}
+            {% set subtitle_map = {
+              'night_preview': 'Next alarm and overnight status',
+              'morning': 'Wake sequence active',
+              'up_for_day': 'Morning activity confirmed',
+              'midday': 'Low-frequency refresh'
+            } %}
+            {% set exception_active = weather_alert or garage_open or front_door_open %}
+            {% if flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] and not exception_active %}
+              {% set rows = travel_rows %}
+            {% elif flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] %}
+              {% set rows = [
+                {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                {'label': 'Flight', 'value': (flight_label ~ ' ' ~ flight_destination ~ ' ' ~ flight_time) | trim, 'level': 'emphasis'},
+                {'label': 'Airport', 'value': airport_value, 'level': 'urgent' if airport_delay == 'alert' else 'normal'},
+                {'label': 'Status', 'value': status_value, 'level': status_level}
+              ] %}
+            {% else %}
+              {% set rows = [
+                {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                {'label': 'Alarm', 'value': alarm_value, 'level': 'emphasis' if resolved_mode == 'night_preview' and alarm_value != 'Off' else 'normal'},
+                {'label': 'Meeting', 'value': meeting_value, 'level': 'emphasis' if meeting_alarm else 'normal'},
+                {'label': 'Status', 'value': status_value, 'level': status_level}
+              ] %}
+            {% endif %}
+            {{ {
+              'schema_version': 1,
+              'display_id': 'owner_suite',
+              'mode': resolved_mode,
+              'accent': 'red',
+              'title': title_map.get(resolved_mode, 'Owner Suite'),
+              'subtitle': subtitle_map.get(resolved_mode, 'Owner-suite display'),
+              'sections': [{'type': 'rows', 'rows': rows}],
+              'footer': 'Updated ' ~ now().strftime('%H:%M')
+            } | tojson }}
