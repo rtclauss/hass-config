@@ -118,7 +118,11 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
 
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_cleared
     assert 'to: "on"' in washer_cleared
+    assert "entity_id: input_select.washer_state" in washer_cleared
+    assert 'to: "CLEAN"' in washer_cleared
+    assert 'to: "MUSTY"' in washer_cleared
     assert "input_boolean.washer_wet_load_pending" not in washer_cleared
+    assert 'state: "on"' in washer_cleared
     assert 'state: "CLEAN"' in washer_cleared
     assert 'state: "MUSTY"' in washer_cleared
     assert "option: IDLE" in washer_cleared

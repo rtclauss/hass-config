@@ -86,7 +86,7 @@ Payloads are compact JSON. Required fields:
       ]
     }
   ],
-  "footer": "Updated 9:42 PM"
+  "footer": "Updated 21:42"
 }
 ```
 
@@ -133,7 +133,7 @@ Unknown content should be skipped, not rendered as an error screen.
 ## Owner-Suite Modes
 
 `owner_suite` is private and owner-focused. It may show personal wake, trip,
-weather, and house-status context.
+flight, weather, and house-status context.
 
 | Mode | Purpose | Candidate fields |
 | --- | --- | --- |
@@ -147,6 +147,8 @@ Known source-of-truth areas:
 - Wake-up alarm sync and helper state: `packages/ios_wakeup.yaml`
 - Owner-suite wake transitions: `packages/workday.yaml`
 - Weather helper sensors: `packages/weather.yaml`
+- Flight status, airport delay, and destination weather sensors:
+  `packages/flight_status.yaml`
 - Wake-up behavior specification: `specs/alarm_wakeup.allium`
 - Room privacy policy: `docs/room_intent.yaml`
 
@@ -157,21 +159,29 @@ Owner-suite publishing lives in `packages/inky_displays.yaml`.
 Primary entities:
 
 - `script.publish_owner_suite_inky_display`: builds and publishes the compact
-  owner-suite payload to `home/inky/owner_suite/state`.
+  owner-suite payload to `home/inky/owner_suite/state`, after enforcing the
+  occupancy/trip publish guard.
 - `automation.publish_owner_suite_inky_display`: coalesces meaningful source
   changes with a 15-second restart delay, then calls the publish script.
 
 The automation listens to wake alarm helpers, wake-up firing state, house mode,
-bed/owner-suite activity, trip/vacation state, garage/front-door exceptions,
-weather alerts, active weather, and a noon refresh. It does not listen to
-`sensor.time`, so it will not redraw on clock ticks.
+guest mode, Ryan's home state, bed/owner-suite activity, trip/vacation state,
+flight status, garage/front-door exceptions, weather alerts, active weather, and
+a noon refresh. It does not listen to `sensor.time`, so it will not redraw on
+clock ticks.
+
+The publish script only allows updates when guest mode is active, or when Ryan
+is home and trip mode is off. While Ryan is away or trip mode is on with guest
+mode off, the display keeps its last image and skips refreshes. Turning guest
+mode on or Ryan returning home is itself a meaningful source change and
+publishes again after the normal 15-second coalescing delay.
 
 Current owner-suite modes:
 
 | Mode | Selected when | Title | Subtitle |
 | --- | --- | --- | --- |
 | `night_preview` | Explicit mode or house mode is `night`, `in_bed`, or `asleep` | `Tonight` | `Next alarm and overnight status` |
-| `morning` | Explicit mode or `input_boolean.wakeup_alarm_firing` is on | `Good Morning` | `Wake sequence active` |
+| `morning` | Explicit mode or `input_boolean.wakeup_alarm_firing` is on before noon | `Good Morning` | `Wake sequence active` |
 | `up_for_day` | Explicit mode or automatic pre-noon non-sleep state | `Up For Day` | `Morning activity confirmed` |
 | `midday` | Explicit mode, noon trigger, or automatic afternoon state | `Midday` | `Low-frequency refresh` |
 
@@ -183,6 +193,48 @@ Current owner-suite rows:
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | `emphasis` when special meeting is on |
 | Status | First active status from weather alert, garage door, front door, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage, `emphasis` for trip/vacation |
+
+When `sensor.next_travel_flight` is inside its active travel window, `morning`,
+`up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
+alarm/meeting rows. Weather alerts, garage-door exceptions, and front-door
+exceptions still take display priority and keep an urgent status row visible.
+
+Flight rows use these normalized entities from `packages/flight_status.yaml`:
+
+| Row | Value source | Level behavior |
+| --- | --- | --- |
+| Flight | `sensor.next_travel_flight` ident, destination code, and best departure time | `emphasis` |
+| Status | `sensor.next_travel_flight_live_status` plus FlightAware delay attributes | `urgent` for cancellation, diversion, or 30+ minute delay |
+| Airport | `sensor.next_travel_flight_airport_delay` | `urgent` when airport delay alerts are present; otherwise shows `Airport n/a` until a free delay source is configured |
+| Dest Wx | `sensor.next_travel_flight_destination_weather` | `normal` |
+
+Required travel integrations and secrets:
+
+- Google Calendar must expose `calendar.ryan_claussen` and `calendar.work_trip`.
+- FlightAware AeroAPI is called by `rest_command.flightaware_next_travel_flight`
+  with `flightaware_aeroapi_key` in `secrets.yaml`. It does not poll when no
+  flight ident was parsed. It polls hourly inside the 3-day preflight window,
+  then every 15 minutes from 24 hours before scheduled departure until
+  FlightAware reports actual takeoff.
+- Open-Meteo destination weather does not require a key. It uses the destination
+  airport coordinate map in `packages/flight_status.yaml`.
+- Add the built-in FAA Delays integration for `MSP` and `RST` from Settings >
+  Devices & services for richer airport-delay visibility elsewhere in Home
+  Assistant. The Inky flight row currently stays `Airport n/a` unless a free
+  airport-delay source is added later.
+
+REST sensors require a Home Assistant restart after the package and secrets are
+deployed. Template-only changes can be reloaded, but the travel package includes
+REST resources.
+
+The footer uses 24-hour local time, for example `Updated 21:42`. This timestamp
+is generated only when the payload is published. Do not add `sensor.time` or a
+minute-level clock trigger for this field.
+
+The Pi service preserves the last cached `Weather` and `Dest Wx` rows when a new
+payload marks those rows as `unknown` or `unavailable`. Other rows and the
+footer can still update, but stale weather source failures should not replace a
+previously useful weather value on the display.
 
 Manual publish from Home Assistant Developer Tools:
 
@@ -285,14 +337,53 @@ INKY_CACHE_DIR=/var/lib/inky-display/owner_suite \
 python3 -m inky_display.service
 ```
 
+Run a real panel refresh on the Pi after the Inky wHAT is attached:
+
+```bash
+sudo raspi-config nonint do_i2c 0
+sudo raspi-config nonint do_spi 0
+sudo apt-get update
+sudo apt-get install -y libopenblas0-pthread
+python3 -m pip install paho-mqtt Pillow inky
+sudo reboot
+```
+
+After the reboot, render the next MQTT payload to the physical red/black/white
+Inky wHAT:
+
+```bash
+INKY_DISPLAY_ID=owner_suite \
+INKY_MQTT_HOST=homeassistant.local \
+INKY_MQTT_PORT=1883 \
+INKY_MQTT_TOPIC=home/inky/owner_suite/state \
+INKY_CACHE_DIR=/var/lib/inky-display/owner_suite \
+INKY_HARDWARE_ENABLED=true \
+INKY_PANEL_TYPE=auto \
+INKY_PANEL_COLOR=red \
+INKY_ROTATION=0 \
+python3 -m inky_display.service
+```
+
+For a non-production physical smoke test, use a temporary topic such as
+`home/inky/owner_suite/real_test`, start the service with that topic, and publish
+one sample payload to it. Expected result: the panel refreshes once, the cache
+contains a `400x300` `last_image.png`, and the service log has no traceback,
+deprecation warning, or `Failed to update Inky panel` message.
+
+Keep `INKY_PANEL_TYPE=auto` for boards with a valid Inky EEPROM. The owner-suite
+red Inky wHAT currently reports as `Red wHAT (SSD1683)`, which needs the
+auto-detected driver rather than the legacy `what` driver. For older boards that
+cannot be detected automatically, set `INKY_PANEL_TYPE=what` and
+`INKY_PANEL_COLOR=red`.
+
 The service writes:
 
 - `last_payload.json`
 - `last_image.png`
 - `last_hash.txt`
 
-Duplicate payload hashes are ignored. Invalid payloads are logged and do not
-overwrite the last good cache.
+Duplicate payload hashes are ignored and do not refresh the physical panel.
+Invalid payloads are logged and do not overwrite the last good cache.
 
 ## Raspberry Pi Service
 

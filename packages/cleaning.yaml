@@ -239,15 +239,21 @@ automation:
 
   - id: washer_cleared
     alias: washer_cleared
-    description: Reset the washer back to IDLE once the door opens and the finished load is being handled.
+    description: Reset the washer back to IDLE once the finished load has been handled or is already open.
     trigger:
       - trigger: state
         entity_id: binary_sensor.laundry_room_washing_machine_door_contact
         to: "on"
+      - trigger: state
+        entity_id: input_select.washer_state
+        to: "CLEAN"
+      - trigger: state
+        entity_id: input_select.washer_state
+        to: "MUSTY"
     condition:
       - condition: state
-        entity_id: binary_sensor.washing_machine_running
-        state: "off"
+        entity_id: binary_sensor.laundry_room_washing_machine_door_contact
+        state: "on"
       - condition: or
         conditions:
           - condition: state

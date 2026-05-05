@@ -73,8 +73,24 @@ def test_owner_suite_payload_includes_modes_and_four_rows() -> None:
     for mode in ("night_preview", "morning", "up_for_day", "midday"):
         assert mode in block
 
-    for label in ("Weather", "Alarm", "Meeting", "Status"):
+    for label in ("Weather", "Alarm", "Meeting", "Status", "Flight", "Airport", "Dest Wx"):
         assert f"'label': '{label}'" in block
+
+
+def test_owner_suite_footer_uses_publish_time_in_24_hour_format() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "'footer': 'Updated ' ~ now().strftime('%H:%M')" in block
+    assert "%I:%M" not in block
+    assert "%p" not in block
+    assert "sensor.time" not in block
+
+
+def test_owner_suite_morning_mode_is_limited_to_pre_noon_wake_firing() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "is_state('input_boolean.wakeup_alarm_firing', 'on') and now().hour < 12" in block
+    assert "{% elif now().hour >= 12 %}" in block
 
 
 def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:
@@ -97,6 +113,24 @@ def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:
     assert "binary_sensor.planned_vacation_calendar" in block
 
 
+def test_owner_suite_payload_consumes_flight_status_sources() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+    automation = _automation_block("publish_owner_suite_inky_display")
+
+    for entity_id in (
+        "sensor.next_travel_flight",
+        "sensor.next_travel_flight_live_status",
+        "sensor.next_travel_flight_airport_delay",
+        "sensor.next_travel_flight_destination_weather",
+    ):
+        assert entity_id in block
+        assert entity_id in automation
+
+    assert "travel_rows" in block
+    assert "exception_active = weather_alert or garage_open or front_door_open" in block
+    assert "resolved_mode in ['morning', 'up_for_day', 'midday']" in block
+
+
 def test_owner_suite_automation_coalesces_meaningful_refresh_events() -> None:
     block = _automation_block("publish_owner_suite_inky_display")
 
@@ -109,9 +143,33 @@ def test_owner_suite_automation_coalesces_meaningful_refresh_events() -> None:
     assert "sensor.time" not in block
 
 
+def test_owner_suite_automation_skips_publish_when_house_is_unoccupied() -> None:
+    block = _automation_block("publish_owner_suite_inky_display")
+
+    assert "input_boolean.guest_mode" in block
+    assert "binary_sensor.bayesian_zeke_home" in block
+    assert "alias: Publish only when Ryan is home or guest mode is active" in block
+    assert "is_state('input_boolean.guest_mode', 'on')" in block
+    assert "is_state('binary_sensor.bayesian_zeke_home', 'on')" in block
+    assert "is_state('input_boolean.trip', 'off')" in block
+
+
+def test_owner_suite_publish_script_enforces_occupancy_guard() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "alias: Publish only when Ryan is home or guest mode is active" in block
+    assert "is_state('input_boolean.guest_mode', 'on')" in block
+    assert "is_state('binary_sensor.bayesian_zeke_home', 'on')" in block
+    assert "is_state('input_boolean.trip', 'off')" in block
+    assert block.index("alias: Publish only when Ryan is home") < block.index("action: mqtt.publish")
+
+
 def test_owner_suite_sources_are_documented() -> None:
     text = DOC_PATH.read_text(encoding="utf-8")
 
     assert "script.publish_owner_suite_inky_display" in text
     assert "automation.publish_owner_suite_inky_display" in text
     assert "home/inky/owner_suite/state" in text
+    assert "Updated 21:42" in text
+    assert "publish script only allows updates when guest mode is active" in text
+    assert "Ryan returning home" in text
