@@ -181,7 +181,7 @@ Current owner-suite modes:
 | Mode | Selected when | Title | Subtitle |
 | --- | --- | --- | --- |
 | `night_preview` | Explicit mode or house mode is `night`, `in_bed`, or `asleep` | `Tonight` | `Next alarm and overnight status` |
-| `morning` | Explicit mode or `input_boolean.wakeup_alarm_firing` is on | `Good Morning` | `Wake sequence active` |
+| `morning` | Explicit mode or `input_boolean.wakeup_alarm_firing` is on before noon | `Good Morning` | `Wake sequence active` |
 | `up_for_day` | Explicit mode or automatic pre-noon non-sleep state | `Up For Day` | `Morning activity confirmed` |
 | `midday` | Explicit mode, noon trigger, or automatic afternoon state | `Midday` | `Low-frequency refresh` |
 
@@ -234,6 +234,11 @@ REST resources.
 The footer uses 24-hour local time, for example `Updated 21:42`. This timestamp
 is generated only when the payload is published. Do not add `sensor.time` or a
 minute-level clock trigger for this field.
+
+The Pi service preserves the last cached `Weather` and `Dest Wx` rows when a new
+payload marks those rows as `unknown` or `unavailable`. Other rows and the
+footer can still update, but stale weather source failures should not replace a
+previously useful weather value on the display.
 
 Manual publish from Home Assistant Developer Tools:
 
