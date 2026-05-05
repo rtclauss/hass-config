@@ -403,7 +403,8 @@ template:
               {{ previous_raw_json if previous_raw_json not in ['', none, 'unknown', 'unavailable'] else '{}' }}
             {% endif %}
           flightaware_flight_json: >-
-            {% set payload = flightaware_raw_json | default('{}', true) | from_json %}
+            {% set raw_payload = flightaware_raw_json | default('{}', true) %}
+            {% set payload = raw_payload if raw_payload is mapping else raw_payload | from_json(default={}) %}
             {% set flights = payload.flights if payload is mapping and payload.flights is sequence else [] %}
             {{ (flights[0] if flights | count > 0 else {}) | to_json }}
           flightaware_polled: "{{ should_poll_flightaware and flightaware_response is defined and flightaware_response.status in [200, '200'] }}"
@@ -412,7 +413,7 @@ template:
         unique_id: next_travel_flight_live_status
         default_entity_id: sensor.next_travel_flight_live_status
         state: >-
-          {% set live = flightaware_flight_json | from_json %}
+          {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
           {% set live_status = live.status | default('', true) %}
           {% if live_status not in ['', 'unknown', 'unavailable', 'none'] %}
             {{ live_status }}
@@ -423,34 +424,34 @@ template:
           {% endif %}
         attributes:
           ident: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.ident_iata | default(state_attr('sensor.next_travel_flight', 'ident') | default(states('sensor.next_travel_flight'), true), true) }}
           scheduled_departure: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.scheduled_out | default(state_attr('sensor.next_travel_flight', 'start_time'), true) }}
           estimated_departure: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.estimated_out | default('', true) }}
           actual_departure: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.actual_out | default('', true) }}
           predicted_takeoff: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.estimated_off | default('', true) }}
           actual_takeoff: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.actual_off | default('', true) }}
           scheduled_arrival: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.scheduled_in | default(state_attr('sensor.next_travel_flight', 'end_time'), true) }}
           estimated_arrival: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.estimated_in | default('', true) }}
           actual_arrival: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.actual_in | default('', true) }}
           departure_delay_minutes: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {% set scheduled = live.scheduled_out | default('', true) %}
             {% set estimated = live.estimated_out | default('', true) %}
             {% if scheduled not in [none, '', 'unknown', 'unavailable'] and estimated not in [none, '', 'unknown', 'unavailable'] %}
@@ -459,7 +460,7 @@ template:
               {{ '' }}
             {% endif %}
           arrival_delay_minutes: >-
-            {% set live = flightaware_flight_json | from_json %}
+            {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {% set scheduled = live.scheduled_in | default('', true) %}
             {% set estimated = live.estimated_in | default('', true) %}
             {% if scheduled not in [none, '', 'unknown', 'unavailable'] and estimated not in [none, '', 'unknown', 'unavailable'] %}

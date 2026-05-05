@@ -54,6 +54,8 @@ def test_flight_status_keeps_calendar_fallback_when_live_api_is_unavailable() ->
     text = _package_text()
 
     assert "scheduled" in text
+    assert "from_json(default={})" in text
+    assert "flightaware_flight_json if flightaware_flight_json is mapping" in text
     assert "state_attr('sensor.next_travel_flight', 'start_time')" in text
     assert "state_attr('sensor.next_travel_flight', 'end_time')" in text
     assert "state_attr('sensor.next_travel_flight', 'ident')" in text
