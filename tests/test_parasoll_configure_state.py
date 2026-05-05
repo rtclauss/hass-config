@@ -28,3 +28,11 @@ def test_parasoll_csv_state_has_room_for_current_device_count() -> None:
     device_count = 20
     sample_pairs = [f"{index:04x}:9999" for index in range(device_count)]
     assert len(",".join(sample_pairs)) < 255
+
+
+def test_parasoll_auto_reconfigure_queue_covers_current_fleet_burst() -> None:
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert "mode: queued" in text
+    assert "max: 30" in text
+    assert "full fleet burst plus headroom" in text

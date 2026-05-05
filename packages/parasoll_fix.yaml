@@ -125,7 +125,10 @@ automation:
       Notifications gated by 1 h since last successful configure per device;
       contact_change is always silent.
     mode: queued
-    max: 10
+    # The fleet is roughly 20 PARASOLL sensors, and each run can wait up to 60 s
+    # for a sleepy-device configure response. Keep queued execution to avoid
+    # input_text write races, but allow a full fleet burst plus headroom.
+    max: 30
     trigger:
       - platform: mqtt
         topic: zigbee2mqtt/bridge/event
