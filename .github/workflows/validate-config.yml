@@ -39,6 +39,58 @@ jobs:
       - name: Run pytest
         run: uv run --with pytest pytest
 
+  allium-weed:
+    name: Allium Weed Check
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        (github.event_name == 'pull_request' && github.base_ref == 'develop') ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+        github.event_name == 'schedule' ||
+        github.event_name == 'workflow_dispatch'
+      }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Install Allium CLI
+        run: |
+          set -euo pipefail
+
+          version="3.2.3"
+          archive="allium-x86_64-unknown-linux-gnu.tar.gz"
+          expected_sha="3e1afbed99b039a1fe659b1a3aaa69dbb274bfe18a0680571c9d0a4ab3ac205f"
+          curl -fsSL -o "$archive" "https://github.com/juxt/allium-tools/releases/download/v${version}/${archive}"
+          echo "${expected_sha}  ${archive}" | sha256sum -c -
+          tar -xzf "$archive"
+          sudo install -m 0755 allium /usr/local/bin/allium
+          allium --version
+
+      - name: Run Allium weed check
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          args=(--format markdown --output "$GITHUB_STEP_SUMMARY")
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            git fetch --no-tags origin "$BASE_REF"
+            args+=(--changed-from "origin/$BASE_REF")
+          elif [[ "$EVENT_NAME" == "push" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            args+=(--changed-from "$BEFORE_SHA")
+          fi
+
+          python scripts/allium_weed_check.py --require-allium "${args[@]}"
+
   yaml-lint:
     name: YAML Lint
     runs-on: ubuntu-latest

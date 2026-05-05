@@ -40,3 +40,18 @@ def test_yaml_lint_covers_esphome_directory() -> None:
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "          esphome \\" in workflow_text
+
+
+def test_allium_weed_check_runs_for_develop_validation() -> None:
+    workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
+    allium_section = workflow_text.split("allium-weed:", maxsplit=1)[1].split("yaml-lint:", maxsplit=1)[0]
+
+    assert "github.base_ref == 'develop'" in allium_section
+    assert "github.ref == 'refs/heads/develop'" in allium_section
+    assert "fetch-depth: 0" in allium_section
+    assert "Install Allium CLI" in allium_section
+    assert "allium-tools/releases/download/v${version}/${archive}" in allium_section
+    assert "sha256sum -c -" in allium_section
+    assert 'args=(--format markdown --output "$GITHUB_STEP_SUMMARY")' in allium_section
+    assert 'args+=(--changed-from "origin/$BASE_REF")' in allium_section
+    assert 'python scripts/allium_weed_check.py --require-allium "${args[@]}"' in allium_section
