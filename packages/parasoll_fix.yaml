@@ -251,6 +251,12 @@ automation:
           #   does not mean settings were lost.
           # contact_change: skip if device has ever been successfully configured;
           #   an active contact report is proof the IAS zone is enrolled and working.
+          # Use _hours_since >= 9998 instead of _prev_h is none: the sentinel value
+          # 9999 is set explicitly only when _prev_h is truly unset.  A direct
+          # "is none" check is unreliable after Jinja2 template string coercion
+          # (missing dict keys render as "" or "None", not Jinja2 none), which
+          # caused every contact-change to trigger a spurious reconfigure even after
+          # the device was already configured.
           _needs_configure: >
             {% if trigger.id == 'bridge_event' %}
               {% if trigger.payload_json.type == 'device_interview' %}
@@ -259,7 +265,7 @@ automation:
                 {{ _prev_h is none or _hours_since | int >= 6 }}
               {% endif %}
             {% else %}
-              {{ _prev_h is none }}
+              {{ _hours_since | int >= 9998 }}
             {% endif %}
           # Suppress notifications within 1 h of the last successful configure.
           # contact_change is always silent regardless.
