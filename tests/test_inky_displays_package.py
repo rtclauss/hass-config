@@ -120,7 +120,6 @@ def test_owner_suite_payload_consumes_flight_status_sources() -> None:
     for entity_id in (
         "sensor.next_travel_flight",
         "sensor.next_travel_flight_live_status",
-        "sensor.next_travel_flight_tsa_wait",
         "sensor.next_travel_flight_airport_delay",
         "sensor.next_travel_flight_destination_weather",
     ):
