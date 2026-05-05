@@ -227,10 +227,17 @@ def test_radio_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() ->
 def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
-    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos$", block, re.MULTILINE)) == 2
-    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos_2$", block, re.MULTILINE)) == 2
-    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos$", block, re.MULTILINE)) == 2
-    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos_2$", block, re.MULTILINE)) == 2
+    # Volume operations must target the MA sync group via playback_player,
+    # not individual native Sonos players. The group volume is what governs
+    # audible output when MA is playing.
+    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos$", block, re.MULTILINE)) == 0
+    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos_2$", block, re.MULTILINE)) == 0
+    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos$", block, re.MULTILINE)) == 0
+    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos_2$", block, re.MULTILINE)) == 0
+    assert 'playback_player' in block
+    assert 'media_player.guest_sonos' in block
+    assert 'media_player.everywhere_sonos' in block
+    assert block.count('entity_id: "{{ playback_player }}"') >= 2
     assert "volume_level: 0.01" in block
     assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
 

@@ -139,6 +139,7 @@ def test_stale_entity_notification_only_exists_when_entities_are_present() -> No
     assert "stale_threshold_hours: 12" in block
     assert "stale_entities:" in block
     assert "last_reported" in block
+    assert "item.attributes.device_class != 'connectivity'" in block
     assert "persistent_notification.create" in block
     assert "persistent_notification.dismiss" in block
     assert "notification_id: stale-entities" in block
@@ -195,7 +196,7 @@ def test_owner_suite_led_shutdown_waits_for_inovelli_state_settle() -> None:
 
     assert "initial_grace_period: 30" in block
     assert "expected_state: 0" in block
-    assert block.count("action: number.set_value") == 2
+    assert block.count("action: number.set_value") == 3
     assert "count: 2" in block
     assert block.count("seconds: 30") == 1
 
