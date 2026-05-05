@@ -55,3 +55,7 @@ def test_allium_weed_check_runs_for_develop_validation() -> None:
     assert 'args=(--format markdown --output "$GITHUB_STEP_SUMMARY")' in allium_section
     assert 'args+=(--changed-from "origin/$BASE_REF")' in allium_section
     assert 'python scripts/allium_weed_check.py --require-allium "${args[@]}"' in allium_section
+    assert "issues: write" in allium_section
+    assert "GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}" in allium_section
+    assert 'args+=(--create-issues)' in allium_section
+    assert '"push" || "$EVENT_NAME" == "schedule"' in allium_section

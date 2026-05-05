@@ -150,3 +150,84 @@ def test_config_json_is_valid() -> None:
     data = json.loads(weed.DEFAULT_CONFIG.read_text(encoding="utf-8"))
 
     assert isinstance(data["protected_scopes"], list)
+
+
+def test_sync_github_issues_creates_issue_for_failing_spec(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    spec = tmp_path / "specs" / "bad.allium"
+    spec.parent.mkdir()
+    spec.write_text("-- allium: 3\n", encoding="utf-8")
+    diagnostic = weed.Diagnostic(
+        severity="error",
+        code="allium.syntax.doubleEquals",
+        message="bad equality",
+        file="specs/bad.allium",
+        line=5,
+    )
+    calls: list[tuple[str, str]] = []
+
+    def fake_api(method: str, path: str, token: str, payload=None):
+        calls.append((method, path))
+        if method == "GET":
+            return []
+        return {"number": 1}
+
+    monkeypatch.setattr(weed, "_github_api", fake_api)
+
+    weed.sync_github_issues([spec], [diagnostic], "owner/repo", "tok")
+
+    methods = [c[0] for c in calls]
+    assert "POST" in methods
+    post_path = next(p for m, p in calls if m == "POST" and "issues" in p and "labels" not in p)
+    assert post_path == "/repos/owner/repo/issues"
+
+
+def test_sync_github_issues_updates_existing_issue(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    spec = tmp_path / "specs" / "bad.allium"
+    spec.parent.mkdir()
+    spec.write_text("-- allium: 3\n", encoding="utf-8")
+    diagnostic = weed.Diagnostic(
+        severity="error",
+        code="allium.syntax.doubleEquals",
+        message="bad equality",
+        file="specs/bad.allium",
+    )
+    calls: list[tuple[str, str]] = []
+
+    def fake_api(method: str, path: str, token: str, payload=None):
+        calls.append((method, path))
+        if method == "GET":
+            return [{"number": 42, "title": "Allium weed: specs/bad.allium"}]
+        return {}
+
+    monkeypatch.setattr(weed, "_github_api", fake_api)
+
+    weed.sync_github_issues([spec], [diagnostic], "owner/repo", "tok")
+
+    assert ("PATCH", "/repos/owner/repo/issues/42") in calls
+    assert not any(m == "POST" and "issues" in p and "labels" not in p for m, p in calls)
+
+
+def test_sync_github_issues_closes_resolved_spec(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    spec = tmp_path / "specs" / "good.allium"
+    spec.parent.mkdir()
+    spec.write_text("-- allium: 3\n", encoding="utf-8")
+    monkeypatch.setattr(weed, "ROOT", tmp_path)
+    calls: list[tuple[str, str]] = []
+
+    def fake_api(method: str, path: str, token: str, payload=None):
+        calls.append((method, path))
+        if method == "GET":
+            return [{"number": 7, "title": "Allium weed: specs/good.allium"}]
+        return {}
+
+    monkeypatch.setattr(weed, "_github_api", fake_api)
+
+    weed.sync_github_issues([spec], [], "owner/repo", "tok")
+
+    assert ("PATCH", "/repos/owner/repo/issues/7") in calls

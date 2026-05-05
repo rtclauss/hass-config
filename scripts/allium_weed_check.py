@@ -9,6 +9,8 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -453,6 +455,98 @@ def render_markdown(
     return "\n".join(lines) + "\n"
 
 
+def _github_api(method: str, path: str, token: str, payload: dict[str, Any] | None = None) -> Any:
+    url = f"https://api.github.com{path}"
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(req) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _ensure_allium_weed_label(repo: str, token: str) -> None:
+    try:
+        _github_api("POST", f"/repos/{repo}/labels", token, {
+            "name": "allium-weed",
+            "color": "5319e7",
+            "description": "Allium spec validity failure or spec/code drift",
+        })
+    except urllib.error.HTTPError as exc:
+        if exc.code != 422:  # 422 = label already exists
+            raise
+
+
+def _find_open_weed_issue(repo: str, token: str, title: str) -> dict[str, Any] | None:
+    issues = _github_api("GET", f"/repos/{repo}/issues?state=open&labels=allium-weed&per_page=100", token)
+    return next((i for i in issues if i.get("title") == title), None)
+
+
+def sync_github_issues(
+    specs: list[Path],
+    diagnostics: list[Diagnostic],
+    repo: str,
+    token: str,
+) -> None:
+    """Create or update one GitHub issue per failing spec; close issues for specs that now pass.
+
+    Only diagnostic errors are tracked — drift findings are ephemeral (PR-specific) and
+    are surfaced via the step summary rather than persistent issues.
+    """
+    _ensure_allium_weed_label(repo, token)
+
+    errors_by_spec: dict[str, list[str]] = {}
+    for diag in diagnostics:
+        if diag.is_error:
+            location = f"[{diag.file}{':' + str(diag.line) if diag.line else ''}]({link_for(diag.file, diag.line)})"
+            errors_by_spec.setdefault(diag.file, []).append(
+                f"| `{diag.severity}` | {location} | `{diag.code}` | {diag.message} |"
+            )
+
+    all_spec_keys = {repo_path(spec) for spec in specs}
+
+    for spec_key, rows in errors_by_spec.items():
+        title = f"Allium weed: {spec_key}"
+        body = "\n".join([
+            f"## Allium weed failures: `{spec_key}`",
+            "",
+            "### Spec diagnostics",
+            "",
+            "| Severity | Location | Code | Message |",
+            "| --- | --- | --- | --- |",
+            *rows,
+            "",
+            "_Detected by the Allium weed check. Run `python scripts/allium_weed_check.py "
+            "--require-allium --format terminal` locally to reproduce._",
+        ])
+        existing = _find_open_weed_issue(repo, token, title)
+        if existing:
+            _github_api("PATCH", f"/repos/{repo}/issues/{existing['number']}", token, {"body": body})
+        else:
+            _github_api("POST", f"/repos/{repo}/issues", token, {
+                "title": title,
+                "body": body,
+                "labels": ["allium-weed"],
+            })
+
+    for spec_key in all_spec_keys - set(errors_by_spec):
+        title = f"Allium weed: {spec_key}"
+        existing = _find_open_weed_issue(repo, token, title)
+        if existing:
+            _github_api("PATCH", f"/repos/{repo}/issues/{existing['number']}", token, {
+                "state": "closed",
+                "state_reason": "completed",
+            })
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate Allium specs and gate protected spec/code drift.")
     parser.add_argument("paths", nargs="*", help="Allium files or directories to validate. Defaults to specs/.")
@@ -464,6 +558,15 @@ def main(argv: list[str] | None = None) -> int:
         "--require-allium",
         action="store_true",
         help="Fail instead of using fallback structural checks when the allium CLI is missing.",
+    )
+    parser.add_argument(
+        "--create-issues",
+        action="store_true",
+        help=(
+            "Create or update one GitHub issue per spec with diagnostic errors; "
+            "close issues for specs that now pass. "
+            "Requires GITHUB_TOKEN and GITHUB_REPOSITORY env vars."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -504,6 +607,20 @@ def main(argv: list[str] | None = None) -> int:
             output_path.write_text(report, encoding="utf-8")
     else:
         print(report, end="")
+
+    if args.create_issues:
+        gh_token = os.environ.get("GITHUB_TOKEN")
+        gh_repo = os.environ.get("GITHUB_REPOSITORY")
+        if gh_token and gh_repo:
+            try:
+                sync_github_issues(specs, diagnostics, gh_repo, gh_token)
+            except Exception as exc:  # noqa: BLE001
+                print(f"Warning: failed to sync GitHub issues: {exc}", file=sys.stderr)
+        else:
+            print(
+                "Warning: --create-issues requires GITHUB_TOKEN and GITHUB_REPOSITORY env vars.",
+                file=sys.stderr,
+            )
 
     if any(diag.is_error for diag in diagnostics) or any(finding.is_failure for finding in drift_findings):
         return 1

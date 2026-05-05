@@ -42,6 +42,9 @@ jobs:
   allium-weed:
     name: Allium Weed Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
     if: >-
       ${{
         (github.event_name == 'pull_request' && github.base_ref == 'develop') ||
@@ -78,6 +81,7 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -87,6 +91,9 @@ jobs:
             args+=(--changed-from "origin/$BASE_REF")
           elif [[ "$EVENT_NAME" == "push" && -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
             args+=(--changed-from "$BEFORE_SHA")
+          fi
+          if [[ "$EVENT_NAME" == "push" || "$EVENT_NAME" == "schedule" ]]; then
+            args+=(--create-issues)
           fi
 
           python scripts/allium_weed_check.py --require-allium "${args[@]}"
