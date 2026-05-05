@@ -505,25 +505,20 @@ automation:
         data:
           addon: a0d7b954_appdaemon
 
-  - alias: Restart Music Assistant every 12.17 hours
+  - alias: Restart Music Assistant when Ryan leaves home
     description: >
-      Restart the Music Assistant add-on on a self-rescheduling loop to work
-      around Sonos DNS issues.
+      Restart the Music Assistant app only when Ryan leaves home to refresh
+      Sonos discovery while the house is empty.
     id: restart_music_assistant_every_12_17_hours
     trigger:
-      - trigger: homeassistant
-        event: start
+      - trigger: zone
+        entity_id: person.ryan
+        zone: zone.home
+        event: leave
     action:
-      - repeat:
-          while:
-            - condition: template
-              value_template: "{{ true }}"
-          sequence:
-            # 12.17 hours interpreted as decimal hours: 12 hours, 10 minutes, 12 seconds.
-            - delay: "12:10:12"
-            - action: hassio.addon_restart
-              data:
-                addon: d5369777_music_assistant
+      - action: hassio.addon_restart
+        data:
+          addon: d5369777_music_assistant
 
   - alias: water_shutoff_on_trip
     id: water_shutoff_on_trip
