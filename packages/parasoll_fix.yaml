@@ -237,11 +237,12 @@ automation:
         continue_on_timeout: true
 
       # ── Determine whether reconfiguration is actually needed ──────────────────
-      # Parse the bridge/devices payload to find this device and inspect ep1.
+      # Parse the bridge/devices payload to find this device and inspect endpoints.
       # Three invariants must hold for the device to be considered fully configured:
-      #   _ias_ok      — ssIasZone is bound on ep1 (device sends contact reports)
-      #   _pollctrl_ok — genPollCtrl is NOT bound (no aggressive check-in interval)
-      #   _power_ok    — genPowerCfg has at least one configured reporting
+      #   _ias_ok      — ssIasZone is bound on ep2 (PARASOLL IAS zone cluster is on
+      #                  endpoint 2, confirmed by Z2M Bind tab "Source endpoint 2")
+      #   _pollctrl_ok — genPollCtrl is NOT bound on ep1 (no aggressive check-in)
+      #   _power_ok    — genPowerCfg has at least one configured reporting on ep1
       # device_interview always reconfigures (fresh join: no bindings exist yet).
       # If bridge/devices times out or device is absent, defaults to true (safe).
       - variables:
@@ -260,6 +261,13 @@ automation:
             {% else %}
               []
             {% endif %}
+          _ep2_bindings: >
+            {% if _z2m_device %}
+              {{ (_z2m_device.get('endpoints', {}).get('2', {})
+                   .get('bindings', []) | map(attribute='cluster') | list) }}
+            {% else %}
+              []
+            {% endif %}
           _ep1_reportings: >
             {% if _z2m_device %}
               {{ (_z2m_device.get('endpoints', {}).get('1', {})
@@ -267,7 +275,7 @@ automation:
             {% else %}
               []
             {% endif %}
-          _ias_ok: "{{ 'ssIasZone' in _ep1_bindings }}"
+          _ias_ok: "{{ 'ssIasZone' in _ep2_bindings }}"
           _pollctrl_ok: "{{ 'genPollCtrl' not in _ep1_bindings }}"
           _power_ok: "{{ 'genPowerCfg' in _ep1_reportings }}"
           _needs_configure: >
