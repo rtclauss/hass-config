@@ -125,6 +125,10 @@ def test_owner_suite_payload_warns_about_near_term_and_event_precipitation() -> 
     assert "'Rain soon ' ~ precip_next_hour ~ '%'" in block
     assert "state_attr('calendar.ryan_claussen', 'start_time')" in block
     assert "state_attr('calendar.ryan_claussen', 'end_time')" in block
+    assert "as_timestamp(event_start, default=none)" in block
+    assert "as_timestamp(forecast.datetime, default=none)" in block
+    assert "forecast_ts >= event_start_ts" in block
+    assert "event_start_dt" not in block
     assert "event.max_precip >= 40" in block
     assert "forecast.condition | default('', true) in precip_conditions" in block
     assert "'Wx for ' ~ event_title" in block

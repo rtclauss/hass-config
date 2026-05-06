@@ -182,12 +182,13 @@ script:
             {% set precip_conditions = ['hail', 'lightning-rainy', 'pouring', 'rainy', 'snowy', 'snowy-rainy'] %}
             {% set event = namespace(max_precip=-1, weather=false) %}
             {% if event_start not in ['', none, 'unknown', 'unavailable'] and event_end not in ['', none, 'unknown', 'unavailable'] %}
-              {% set event_start_dt = as_datetime(event_start) %}
-              {% set event_end_dt = as_datetime(event_end) %}
-              {% if event_start_dt is not none and event_end_dt is not none and event_start_dt < now() + timedelta(hours=12) and event_end_dt > now() %}
+              {% set event_start_ts = as_timestamp(event_start, default=none) %}
+              {% set event_end_ts = as_timestamp(event_end, default=none) %}
+              {% set now_ts = as_timestamp(now()) %}
+              {% if event_start_ts is number and event_end_ts is number and event_start_ts < now_ts + 43200 and event_end_ts > now_ts %}
                 {% for forecast in event_forecasts %}
-                  {% set forecast_dt = as_datetime(forecast.datetime) %}
-                  {% if forecast_dt is not none and forecast_dt >= event_start_dt and forecast_dt < event_end_dt %}
+                  {% set forecast_ts = as_timestamp(forecast.datetime, default=none) %}
+                  {% if forecast_ts is number and forecast_ts >= event_start_ts and forecast_ts < event_end_ts %}
                     {% set probability = forecast.precipitation_probability | int(default=-1) %}
                     {% if probability > event.max_precip %}
                       {% set event.max_precip = probability %}
