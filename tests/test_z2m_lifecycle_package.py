@@ -86,6 +86,19 @@ def test_z2m_lifecycle_watchdog_uses_plain_bridge_state_trigger() -> None:
     assert 'value_template: "{{ value_json.state }}"' not in block
 
 
+def test_z2m_ota_template_tracks_progress_attributes_not_simple_availability() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    template_block = text.split("z2m_ota_stats: >-", maxsplit=1)[1].split("  - trigger:", maxsplit=1)[0]
+
+    assert "entity_id.startswith('update.')" in template_block
+    assert "state_attr(entity_id, 'in_progress')" in template_block
+    assert "state_attr(entity_id, 'update_percentage')" in template_block
+    assert "'eta_minutes': eta_minutes" in template_block
+    assert "is_state(entity_id, 'on')" not in template_block
+    assert "states(entity_id) == 'on'" not in template_block
+    assert "states(entity_id) in ['on'" not in template_block
+
+
 def test_zigbee2mqtt_configuration_enables_health_feed_and_does_not_disable_removal() -> None:
     text = Z2M_CONFIG_PATH.read_text(encoding="utf-8")
 
