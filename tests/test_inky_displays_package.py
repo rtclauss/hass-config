@@ -148,7 +148,7 @@ def test_owner_suite_payload_consumes_flight_status_sources() -> None:
         assert entity_id in automation
 
     assert "travel_rows" in block
-    assert "exception_active = weather_alert or garage_open or front_door_open" in block
+    assert "exception_active = weather_alert or garage_open or front_door_open or rain_next_hour or event_weather" in block
     assert "resolved_mode in ['morning', 'up_for_day', 'midday']" in block
 
 
