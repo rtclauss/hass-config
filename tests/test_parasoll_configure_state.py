@@ -38,6 +38,20 @@ def test_parasoll_auto_reconfigure_queue_covers_current_fleet_burst() -> None:
     assert "full fleet burst plus headroom" in text
 
 
+def test_parasoll_contact_change_ignores_startup_restores() -> None:
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert 'id: contact_change' in text
+    assert 'from:\n          - "on"\n          - "off"' in text
+    assert 'to:\n          - "on"\n          - "off"' in text
+
+
+def test_parasoll_contact_change_keeps_restored_south_middle_contact() -> None:
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert "binary_sensor.owner_suite_bathroom_bay_south_middle_window_contact" in text
+
+
 def test_parasoll_ias_ok_checks_ep2_not_ep1() -> None:
     # PARASOLL's ssIasZone cluster lives on endpoint 2 (confirmed by Z2M Bind tab
     # "Source endpoint 2: ssIasZone").  Checking ep1 would always return False,
