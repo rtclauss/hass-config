@@ -733,7 +733,13 @@ script:
       raw_media_type: "{{ media_type | default('') | trim }}"
       raw_enqueue: "{{ enqueue | default('replace') }}"
       normalized_item: >-
-        {{ ('spotify:' ~ raw_item.split(':')[3] ~ ':' ~ raw_item.split(':')[4]) if (raw_item.startswith('spotify:user:') and (raw_item.split(':') | length) == 5) else raw_item }}
+        {%- set s = ('spotify:' ~ raw_item.split(':')[3] ~ ':' ~ raw_item.split(':')[4]) if (raw_item.startswith('spotify:user:') and (raw_item.split(':') | length) == 5) else raw_item -%}
+        {%- if s.startswith('spotify:') and not s.startswith('spotify--') -%}
+          {%- set parts = s.split(':') -%}
+          {{ 'spotify--Tviw9k66://' ~ parts[1] ~ '/' ~ parts[2] if parts | length >= 3 else s }}
+        {%- else -%}
+          {{ s }}
+        {%- endif %}
     sequence:
       - choose:
           - conditions:
@@ -1545,7 +1551,7 @@ script:
       - variables:
           bedtime_playback_entity: >-
             {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.bedroom_sonos_2' }}
+               else 'media_player.everywhere_sonos' }}
           bedtime_media_type: "{{ 'radio' if playlist.startswith('https://somafm.com/') else '' }}"
       - action: media_player.shuffle_set
         continue_on_error: true
@@ -1570,6 +1576,8 @@ script:
           entity_id:
             - media_player.bedroom_sonos_2
             - media_player.bathroom_sonos_2
+            - media_player.office_sonos_2
+            - media_player.den_sonos_2
           volume_level: 0.20
       - delay:
           seconds: 2
