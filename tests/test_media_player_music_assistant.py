@@ -54,14 +54,14 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_music_assistant_item_helper_is_generic_pass_through() -> None:
+def test_music_assistant_item_helper_normalizes_spotify_uris() -> None:
     block = _script_block("music_assistant_play_item")
 
     assert "Music Assistant URI, open.spotify.com URL, or plain item name" in block
     assert "raw_media_type" in block
     assert "music_assistant.play_media" in block
-    assert "spotify--Tviw9k66://" not in block
-    assert "raw_item.startswith('spotify:')" not in block
+    assert "spotify--Tviw9k66://" in block
+    assert "s.startswith('spotify:')" in block
     assert "raw_item.startswith('https://open.spotify.com/')" not in block
 
 
@@ -290,11 +290,11 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     block = _script_block("spotify_bedtime")
 
     for station_url in (
-        "https://somafm.com/groovesalad.pls",
-        "https://somafm.com/deepspaceone.pls",
-        "https://somafm.com/missioncontrol.pls",
-        "https://somafm.com/spacestation.pls",
-        "https://somafm.com/vaporwaves.pls",
+        "https://ice1.somafm.com/groovesalad-128-mp3",
+        "https://ice1.somafm.com/deepspaceone-128-mp3",
+        "https://ice1.somafm.com/missioncontrol-128-mp3",
+        "https://ice1.somafm.com/spacestation-128-mp3",
+        "https://ice1.somafm.com/vaporwaves-128-mp3",
     ):
         assert f'"{station_url}"' in block
 
@@ -311,7 +311,7 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     assert "action: script.music_assistant_play_item" in block
     assert 'media_item: "{{ playlist }}"' in block
     assert 'media_type: "{{ bedtime_media_type }}"' in block
-    assert "playlist.startswith('https://somafm.com/')" in block
+    assert "'somafm.com' in playlist" in block
 
 
 def test_music_assistant_dashboard_exposes_player_card() -> None:

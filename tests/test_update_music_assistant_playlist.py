@@ -54,7 +54,7 @@ def test_append_item_to_playlist_config_deduplicates(media_player_config_text: s
     updated, changed = append_item_to_playlist_config(
         media_player_config_text,
         "spotify_bedtime",
-        "https://somafm.com/groovesalad.pls",
+        "https://ice1.somafm.com/groovesalad-128-mp3",
     )
 
     assert changed is False
