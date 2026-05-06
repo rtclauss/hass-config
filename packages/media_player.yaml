@@ -428,7 +428,7 @@ automation:
             sequence:
               - action: script.spotify_wake_up
                 data:
-                  playback_entity_id: media_player.everywhere_sonos
+                  playback_entity_id: media_player.ma_group_everywhere
               - action: media_player.volume_set
                 target:
                   entity_id: media_player.bathroom_sonos
@@ -444,7 +444,7 @@ automation:
               volume_level: 0.1
           - action: script.spotify_wake_up
             data:
-              playback_entity_id: media_player.everywhere_sonos
+              playback_entity_id: media_player.ma_group_everywhere
           - alias: "Repeat until desired volume reached"
             repeat:
               sequence:
@@ -1033,15 +1033,18 @@ script:
         description: "Kept for backwards compatibility; ignored — sync groups manage membership"
     variables:
       playback_player: >-
-        {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-           else 'media_player.everywhere_sonos' }}
+        {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+           else 'media_player.ma_group_everywhere' }}
       effective_ramp_steps: "{{ ramp_steps | default(30) | int(30) }}"
       effective_k_factor: "{{ ramp_k_factor | default(120) | int(120) }}"
+      group_members: >-
+        {{ state_attr(playback_player, 'group_members') | default([playback_player]) }}
     sequence:
-      - action: media_player.volume_set
+      - alias: "Set each member directly to 0.01 — individual sets are absolute, no MA proportional scaling"
         continue_on_error: true
+        action: media_player.volume_set
         target:
-          entity_id: "{{ playback_player }}"
+          entity_id: "{{ group_members }}"
         data:
           volume_level: 0.01
       - if:
@@ -1060,11 +1063,11 @@ script:
           enqueue: replace
       - repeat:
           sequence:
-            - alias: "Increase wake-up group volume by 0.01"
+            - alias: "Ramp each member directly — individual sets bypass MA proportional group scaling"
               continue_on_error: true
               action: media_player.volume_set
               target:
-                entity_id: "{{ playback_player }}"
+                entity_id: "{{ group_members }}"
               data:
                 volume_level: "{{ 0.01 * repeat.index }}"
             - delay:
@@ -1276,8 +1279,8 @@ script:
     alias: "Spotify Arrive Home"
     variables:
       playback_entity: >-
-        {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-           else 'media_player.everywhere_sonos' }}
+        {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+           else 'media_player.ma_group_everywhere' }}
     sequence:
       - variables:
           playlist: >-
@@ -1550,8 +1553,8 @@ script:
             {{ plists[pindex] }}
       - variables:
           bedtime_playback_entity: >-
-            {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.everywhere_sonos' }}
+            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.ma_group_everywhere' }}
           bedtime_media_type: "{{ 'radio' if 'somafm.com' in playlist else '' }}"
       - action: media_player.shuffle_set
         continue_on_error: true
@@ -1618,31 +1621,31 @@ script:
             - delay_minutes: 0
               continue_on_error: true
               entity_id:
-                - media_player.bedroom_sonos
-                - media_player.office_sonos
-                - media_player.bathroom_sonos
-                - media_player.den_sonos
+                - media_player.bedroom_sonos_2
+                - media_player.office_sonos_2
+                - media_player.bathroom_sonos_2
+                - media_player.den_sonos_2
               volume_level: 0.1
             - delay_minutes: 2
               continue_on_error: true
               entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-                - media_player.office_sonos
+                - media_player.bedroom_sonos_2
+                - media_player.bathroom_sonos_2
+                - media_player.office_sonos_2
               volume_level: 0.07
             - delay_minutes: 2
               continue_on_error: false
               entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-                - media_player.office_sonos
+                - media_player.bedroom_sonos_2
+                - media_player.bathroom_sonos_2
+                - media_player.office_sonos_2
               volume_level: 0.05
             - delay_minutes: 2
               continue_on_error: true
               entity_id:
-                - media_player.bedroom_sonos
-                - media_player.bathroom_sonos
-                - media_player.office_sonos
+                - media_player.bedroom_sonos_2
+                - media_player.bathroom_sonos_2
+                - media_player.office_sonos_2
               volume_level: 0.01
       - repeat:
           for_each: "{{ bedtime_rampdown_steps }}"
@@ -1680,8 +1683,10 @@ script:
         description: "Kept for backwards compatibility; ignored — sync groups manage membership"
     variables:
       playback_player: >-
-        {{ 'media_player.guest_sonos' if is_state('input_boolean.guest_mode', 'on')
-           else 'media_player.everywhere_sonos' }}
+        {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+           else 'media_player.ma_group_everywhere' }}
+      group_members: >-
+        {{ state_attr(playback_player, 'group_members') | default([playback_player]) }}
     sequence:
       - variables:
           playlist: >-
@@ -1794,11 +1799,11 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
-      - alias: "Prime wake-up group to safe low volume before playback"
+      - alias: "Prime each member to safe low volume — individual sets bypass MA proportional group scaling"
         continue_on_error: true
         action: media_player.volume_set
         target:
-          entity_id: "{{ playback_player }}"
+          entity_id: "{{ group_members }}"
         data:
           volume_level: 0.05
       - alias: "Enable Shuffle"
