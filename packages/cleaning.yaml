@@ -167,10 +167,13 @@ automation:
           entity_id: input_select.washer_state
         data:
           option: CLEANING
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.washer_reminder_active
 
   - id: wash_finished
     alias: wash_finished
-    description: Notify when washer power drops back to standby long enough to count as a completed cycle.
+    description: Start the finished-washer reminder sequence when washer power returns to standby.
     trigger:
       - trigger: state
         entity_id: binary_sensor.washing_machine_running
@@ -187,6 +190,9 @@ automation:
           entity_id: input_select.washer_state
         data:
           option: CLEAN
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.washer_reminder_active
       - action: notify.all
         data:
           message: "Washing machine finished! \U0001F9FA"
@@ -206,16 +212,24 @@ automation:
 
   - id: washer_reminder
     alias: washer_reminder
-    description: Escalate a finished load to MUSTY when wet clothes stay in the closed washer for 24 hours after the cycle completes.
+    description: Escalate a finished washer load from lights at 30 minutes to audio at 60 minutes.
     trigger:
       - trigger: time_pattern
-        minutes: "/10"
+        minutes: "/5"
       - trigger: homeassistant
         event: start
     condition:
       - condition: state
-        entity_id: input_select.washer_state
-        state: "CLEAN"
+        entity_id: input_boolean.washer_reminder_active
+        state: "on"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: input_select.washer_state
+            state: "CLEAN"
+          - condition: state
+            entity_id: input_select.washer_state
+            state: "REMINDED"
       - condition: state
         entity_id: binary_sensor.washing_machine_running
         state: "off"
@@ -226,20 +240,55 @@ automation:
         value_template: >-
           {% set finished = states('input_datetime.washer_finished_at') %}
           {{ finished not in ['unknown', 'unavailable', 'none', '']
-             and as_timestamp(now()) - as_timestamp(finished) >= 24 * 60 * 60 }}
+             and as_timestamp(now()) - as_timestamp(finished) >= 30 * 60 }}
     action:
-      - action: input_select.select_option
-        target:
-          entity_id: input_select.washer_state
-        data:
-          option: MUSTY
-      - action: notify.all
-        data:
-          message: "Wet clothes have been sitting in the washer too long and likely need a rewash. \U0001F9FA"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ as_timestamp(now()) - as_timestamp(states('input_datetime.washer_finished_at')) >= 60 * 60 }}
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.washer_state
+                data:
+                  option: MUSTY
+              - action: notify.all
+                data:
+                  message: "Laundry has been sitting in the washer for an hour. \U0001F9FA"
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.guest_mode
+                    state: "off"
+                then:
+                  - action: tts.google_say
+                    continue_on_error: true
+                    data:
+                      entity_id: media_player.everywhere_sonos
+                      message: "Laundry has been sitting in the washer for an hour."
+          - conditions:
+              - condition: state
+                entity_id: input_select.washer_state
+                state: "CLEAN"
+            sequence:
+              - action: light.turn_on
+                continue_on_error: true
+                target:
+                  entity_id: light.laundry_room
+                data:
+                  flash: short
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.washer_state
+                data:
+                  option: REMINDED
+              - action: notify.all
+                data:
+                  message: "Washer load is still waiting; flashing the laundry room lights. \U0001F9FA"
 
   - id: washer_cleared
     alias: washer_cleared
-    description: Reset the washer back to IDLE once the finished load has been handled or is already open.
+    description: Reset the washer back to IDLE once the finished load has been handled or manually acknowledged.
     trigger:
       - trigger: state
         entity_id: binary_sensor.laundry_room_washing_machine_door_contact
@@ -249,16 +298,30 @@ automation:
         to: "CLEAN"
       - trigger: state
         entity_id: input_select.washer_state
+        to: "REMINDED"
+      - trigger: state
+        entity_id: input_select.washer_state
         to: "MUSTY"
+      - trigger: state
+        entity_id: input_boolean.washer_reminder_active
+        to: "off"
     condition:
-      - condition: state
-        entity_id: binary_sensor.laundry_room_washing_machine_door_contact
-        state: "on"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.laundry_room_washing_machine_door_contact
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.washer_reminder_active
+            state: "off"
       - condition: or
         conditions:
           - condition: state
             entity_id: input_select.washer_state
             state: "CLEAN"
+          - condition: state
+            entity_id: input_select.washer_state
+            state: "REMINDED"
           - condition: state
             entity_id: input_select.washer_state
             state: "MUSTY"
@@ -268,6 +331,9 @@ automation:
           entity_id: input_select.washer_state
         data:
           option: IDLE
+      - action: homeassistant.turn_off
+        target:
+          entity_id: input_boolean.washer_reminder_active
 
 ########################
 # Binary Sensors
@@ -297,7 +363,10 @@ group: {}
 ########################
 # Input Booleans
 ########################
-input_boolean: {}
+input_boolean:
+  washer_reminder_active:
+    name: Washer Reminder Active
+    icon: mdi:washing-machine-alert
 
 ########################
 # Input Datetime
@@ -323,6 +392,7 @@ input_select:
       - IDLE
       - CLEANING
       - CLEAN
+      - REMINDED
       - MUSTY
     icon: mdi:washing-machine
 ########################

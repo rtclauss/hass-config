@@ -90,6 +90,8 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert 'to: "on"' in washer_started
     assert 'from: "off"' not in washer_started  # must fire even after unavailable→on
     assert "input_boolean.washer_wet_load_pending" not in washer_started
+    assert "input_boolean.washer_reminder_active" in washer_started
+    assert "input_boolean.turn_off" in washer_started
     assert "option: CLEANING" in washer_started
 
     assert "entity_id: binary_sensor.washing_machine_running" in wash_finished
@@ -97,6 +99,8 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert 'to: "off"' in wash_finished
     assert "input_datetime.washer_finished_at" in wash_finished
     assert "input_boolean.washer_wet_load_pending" not in wash_finished
+    assert "input_boolean.washer_reminder_active" in wash_finished
+    assert "input_boolean.turn_on" in wash_finished
     assert "option: CLEAN" in wash_finished
     assert "binary_sensor.front_load_washer_wash_completed" not in wash_finished
 
@@ -106,36 +110,54 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert 'message: "Dryer finished!' in dryer_finished
 
     assert 'trigger: time_pattern' in washer_reminder
-    assert 'minutes: "/10"' in washer_reminder
+    assert 'minutes: "/5"' in washer_reminder
     assert 'trigger: homeassistant' in washer_reminder
     assert "input_boolean.washer_wet_load_pending" not in washer_reminder
-    assert 'state: "CLEAN"' in washer_reminder  # input_select gates the reminder
+    assert "input_boolean.washer_reminder_active" in washer_reminder
+    assert 'state: "CLEAN"' in washer_reminder
+    assert 'state: "REMINDED"' in washer_reminder
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_reminder
     assert "input_datetime.washer_finished_at" in washer_reminder
-    assert "24 * 60 * 60" in washer_reminder
+    assert "30 * 60" in washer_reminder
+    assert "60 * 60" in washer_reminder
+    assert "action: light.turn_on" in washer_reminder
+    assert "entity_id: light.laundry_room" in washer_reminder
+    assert "flash: short" in washer_reminder
+    assert "option: REMINDED" in washer_reminder
     assert "option: MUSTY" in washer_reminder
+    assert "message: \"Laundry has been sitting in the washer for an hour." in washer_reminder
+    assert "input_boolean.guest_mode" in washer_reminder
+    assert "action: tts.google_say" in washer_reminder
+    assert "entity_id: media_player.everywhere_sonos" in washer_reminder
     assert "binary_sensor.front_load_washer_wash_completed" not in washer_reminder
 
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_cleared
     assert 'to: "on"' in washer_cleared
     assert "entity_id: input_select.washer_state" in washer_cleared
     assert 'to: "CLEAN"' in washer_cleared
+    assert 'to: "REMINDED"' in washer_cleared
     assert 'to: "MUSTY"' in washer_cleared
     assert "input_boolean.washer_wet_load_pending" not in washer_cleared
+    assert "input_boolean.washer_reminder_active" in washer_cleared
     assert 'state: "on"' in washer_cleared
     assert 'state: "CLEAN"' in washer_cleared
+    assert 'state: "REMINDED"' in washer_cleared
     assert 'state: "MUSTY"' in washer_cleared
     assert "option: IDLE" in washer_cleared
+    assert "homeassistant.turn_off" in washer_cleared
 
 
 def test_cleaning_package_tracks_wet_load_helpers() -> None:
     config = CLEANING_PATH.read_text(encoding="utf-8")
 
     assert "washer_wet_load_pending" not in config  # removed; state machine uses input_select
+    assert "washer_reminder_active:" in config
+    assert "Washer Reminder Active" in config
     assert "input_datetime:" in config
     assert "washer_finished_at:" in config
     assert "binary_sensor.laundry_room_washing_machine_door_contact:" in config
     assert "input_select.washer_state:" in config
+    assert "      - REMINDED" in config
 
 
 def test_utilities_package_keeps_laundry_plugs_powered() -> None:
