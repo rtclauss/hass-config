@@ -7,8 +7,8 @@
 
 - This repo pins local tooling Python in `.python-version`.
 - CI validates that this pinned version is still compatible with the latest official `homeassistant` release from [PyPI](https://pypi.org/project/homeassistant/).
-- Config checks run against `ghcr.io/home-assistant/home-assistant:stable` so validation tracks current Home Assistant stable releases.
-- As of 2026-03-15, latest `homeassistant` requires Python `>=3.14.2`, so `.python-version` is set to `3.14.3`.
+- Config checks run against the pinned Home Assistant image in `.github/workflows/validate-config.yml` so PR validation is deterministic for the current upgrade target.
+- As of 2026-05-06, latest `homeassistant` requires Python `>=3.14.2`, so `.python-version` is set to `3.14.3`.
 
 ## Branch Flow
 
@@ -144,7 +144,7 @@ yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disab
   configuration.yaml automations.yaml blueprints packages zigbee2mqtt
 
 # If Docker is available
-docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:stable \
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.5.0 \
   python -m homeassistant --config /config --script check_config
 ```
 

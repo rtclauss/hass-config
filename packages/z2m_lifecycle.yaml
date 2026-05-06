@@ -349,6 +349,7 @@ automation:
               message: >-
                 Z2M recovery attempt {{ states('counter.reboot_counter') }} of {{ max_restart_attempts }}. Reason: {{ issue_reason }}. Restarting Zigbee2MQTT.
           - action: hassio.addon_restart
+            continue_on_error: true
             data:
               addon: 45df7312_zigbee2mqtt
           - delay:
@@ -404,11 +405,13 @@ automation:
               message: >-
                 Z2M is still unhealthy after {{ states('counter.reboot_counter') }} restart attempts. Restarting EMQX, then Zigbee2MQTT, before host shutdown.
           - action: hassio.addon_restart
+            continue_on_error: true
             data:
               addon: a0d7b954_emqx
           - delay:
               minutes: 2
           - action: hassio.addon_restart
+            continue_on_error: true
             data:
               addon: 45df7312_zigbee2mqtt
           - delay:
