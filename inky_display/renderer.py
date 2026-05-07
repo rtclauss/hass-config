@@ -31,8 +31,40 @@ LEVEL_COLORS = {
 def render_payload(payload: DisplayPayload) -> bytes:
     canvas = Canvas(WIDTH, HEIGHT)
     accent = ACCENT_COLORS[payload.accent]
+    rows = _payload_rows(payload)
 
     canvas.rectangle(0, 0, WIDTH, 14, accent)
+    if _has_quote_layout(rows):
+        _render_quote_layout(canvas, payload, rows, accent)
+    else:
+        _render_default_layout(canvas, payload, rows, accent)
+
+    if payload.footer:
+        canvas.rectangle(0, HEIGHT - 30, WIDTH, HEIGHT, BLACK)
+        canvas.text(18, HEIGHT - 22, payload.footer, scale=1, color=WHITE)
+
+    return canvas.to_png()
+
+
+def _payload_rows(payload: DisplayPayload) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for section in payload.sections:
+        if section.get("type") != "rows":
+            continue
+        rows.extend(section.get("rows", ()))
+    return rows
+
+
+def _has_quote_layout(rows: list[dict[str, str]]) -> bool:
+    return any(row.get("label") == "Quote" for row in rows)
+
+
+def _render_default_layout(
+    canvas: Canvas,
+    payload: DisplayPayload,
+    rows: list[dict[str, str]],
+    accent: tuple[int, int, int],
+) -> None:
     canvas.text(
         18,
         30,
@@ -44,26 +76,74 @@ def render_payload(payload: DisplayPayload) -> bytes:
         canvas.text(20, 75, payload.subtitle, scale=2, color=BLACK)
 
     y = 112
-    for section in payload.sections:
-        if section.get("type") != "rows":
+    for row in rows:
+        _render_row(canvas, row, payload.accent, y)
+        y += 42
+
+
+def _render_quote_layout(
+    canvas: Canvas,
+    payload: DisplayPayload,
+    rows: list[dict[str, str]],
+    accent: tuple[int, int, int],
+) -> None:
+    title = payload.title or payload.mode.replace("_", " ")
+    subtitle = payload.subtitle
+    quote = next((row.get("value", "") for row in rows if row.get("label") == "Quote"), "")
+    weather = next((row for row in rows if row.get("label") == "Weather"), None)
+    status = next((row for row in rows if row.get("label") == "Status"), None)
+
+    canvas.text(18, 28, title, scale=3, color=BLACK)
+    if subtitle:
+        canvas.text(20, 60, subtitle, scale=1, color=BLACK)
+
+    quote_lines = _wrap_text(quote, scale=3, max_width=352, max_lines=2)
+    quote_top = 100 if len(quote_lines) == 1 else 86
+    for index, line in enumerate(quote_lines):
+        canvas.text_centered(200, quote_top + index * 34, line, scale=3, color=BLACK)
+    canvas.rectangle(34, quote_top + len(quote_lines) * 34 + 8, 366, quote_top + len(quote_lines) * 34 + 12, accent)
+
+    y = 196
+    for row in (weather, status):
+        if row is None:
             continue
-        for row in section.get("rows", ()):
-            level = row.get("level", "normal")
-            row_color = LEVEL_COLORS.get(level, BLACK)
-            if level in {"emphasis", "urgent"}:
-                background_color = ACCENT_COLORS[payload.accent]
-                canvas.rectangle(18, y - 8, 382, y + 28, background_color)
-                row_color = _text_color_for_background(background_color)
-            canvas.icon(26, y - 4, row.get("icon", ""), scale=2, color=row_color)
-            canvas.text(56, y, row.get("label", ""), scale=2, color=row_color)
-            canvas.text(170, y, row.get("value", ""), scale=2, color=row_color)
-            y += 42
+        _render_row(canvas, row, payload.accent, y)
+        y += 38
 
-    if payload.footer:
-        canvas.rectangle(0, HEIGHT - 30, WIDTH, HEIGHT, BLACK)
-        canvas.text(18, HEIGHT - 22, payload.footer, scale=1, color=WHITE)
 
-    return canvas.to_png()
+def _render_row(canvas: Canvas, row: dict[str, str], accent: str, y: int) -> None:
+    level = row.get("level", "normal")
+    row_color = LEVEL_COLORS.get(level, BLACK)
+    if level in {"emphasis", "urgent"}:
+        background_color = ACCENT_COLORS[accent]
+        canvas.rectangle(18, y - 8, 382, y + 28, background_color)
+        row_color = _text_color_for_background(background_color)
+    canvas.icon(26, y - 4, row.get("icon", ""), scale=2, color=row_color)
+    canvas.text(56, y, row.get("label", ""), scale=2, color=row_color)
+    canvas.text(170, y, row.get("value", ""), scale=2, color=row_color)
+
+
+def _wrap_text(text: str, scale: int, max_width: int, max_lines: int) -> list[str]:
+    words = text.split()
+    if not words:
+        return [""]
+
+    max_chars = max(1, max_width // (6 * scale))
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = word if current == "" else f"{current} {word}"
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+        current = word
+        if len(lines) == max_lines:
+            break
+    if len(lines) < max_lines and current:
+        lines.append(current)
+    return lines[:max_lines]
 
 
 class Canvas:
@@ -104,6 +184,17 @@ class Canvas:
                 break
             self._glyph(x, top, glyph, scale, color)
             x += 6 * scale
+
+    def text_centered(
+        self,
+        center_x: int,
+        top: int,
+        text: str,
+        scale: int,
+        color: tuple[int, int, int],
+    ) -> None:
+        text_width = len(text) * 6 * scale
+        self.text(max(0, center_x - text_width // 2), top, text, scale=scale, color=color)
 
     def icon(self, left: int, top: int, name: str, scale: int, color: tuple[int, int, int]) -> None:
         glyph = ICONS.get(name)
