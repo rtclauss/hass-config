@@ -73,7 +73,7 @@ def test_owner_suite_payload_includes_modes_and_four_rows() -> None:
     for mode in ("night_preview", "morning", "up_for_day", "midday"):
         assert mode in block
 
-    for label in ("Weather", "Alarm", "Meeting", "Status", "Flight", "Airport", "Dest Wx"):
+    for label in ("Weather", "Tomorrow", "Alarm", "Meeting", "Status", "Flight", "Airport", "Dest Wx"):
         assert f"'label': '{label}'" in block
 
 
@@ -91,6 +91,25 @@ def test_owner_suite_morning_mode_is_limited_to_pre_noon_wake_firing() -> None:
 
     assert "is_state('input_boolean.wakeup_alarm_firing', 'on') and now().hour < 12" in block
     assert "{% elif now().hour >= 12 %}" in block
+
+
+def test_owner_suite_evening_auto_mode_uses_night_preview() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "{% elif now().hour >= 20 %}" in block
+    assert block.index("{% elif now().hour >= 20 %}") < block.index("{% elif now().hour >= 12 %}")
+
+
+def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "forecast_rows = (state_attr('sensor.active_weather_entity_id', 'forecast_json')" in block
+    assert "tomorrow_start_ts = as_timestamp(today_at('00:00') + timedelta(days=1))" in block
+    assert "forecast.temperature | int(default=none)" in block
+    assert "resolved_mode == 'night_preview'" in block
+    assert "'label': 'Tomorrow'" in block
+    assert "'value': tomorrow.value" in block
+    assert "'label': 'Meeting'" not in block[block.index("resolved_mode == 'night_preview'") : block.index("{% elif flight_active")]
 
 
 def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:
