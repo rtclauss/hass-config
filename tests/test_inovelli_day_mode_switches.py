@@ -165,7 +165,7 @@ def test_owner_suite_bathroom_day_mode_script_targets_bathroom_and_closet_leds()
     assert "script.day_mode_switches_owner_suite_scope" in wrapper
     assert "scope: bathroom" in wrapper
     assert "requested_scope: \"{{ scope | default('bedroom') }}\"" in block
-    assert "owner_suite_bathroom_vanity|owner_suite_closet" in block
+    assert "owner_suite_bathroom_|owner_suite_closet" in block
     assert "owner_suite_fan_switch" in block
     assert "Setting owner suite bathroom and closet switch day mode colors" in block
     assert "Setting owner suite bedroom switch day mode colors" in block
@@ -178,6 +178,8 @@ def test_owner_suite_led_policy_dispatches_day_night_red_and_dark_modes() -> Non
     block = _script_block(ZIGBEE_ZWAVE_PATH, "apply_owner_suite_inovelli_led_policy")
 
     for token in (
+        "mode: queued",
+        "max: 10",
         "requested_policy",
         "requested_scope",
         "requested_policy == 'day'",
@@ -189,6 +191,22 @@ def test_owner_suite_led_policy_dispatches_day_night_red_and_dark_modes() -> Non
         "script.night_mode_switches_owner_suite",
         "requested_policy == 'dark'",
         "script.turn_off_owner_suite_inovelli_switch_leds",
+    ):
+        assert token in block
+
+
+def test_owner_suite_night_red_policy_targets_all_owner_suite_led_numbers() -> None:
+    block = _script_block(ZIGBEE_ZWAVE_PATH, "night_mode_switches_owner_suite")
+
+    for token in (
+        "^number\\\\.owner_suite_.*ledcolorwhenoff$",
+        "^number\\\\.owner_suite_.*ledcolorwhenon$",
+        "^number\\\\.owner_suite_.*ledintensitywhenoff$",
+        "^number\\\\.owner_suite_.*ledintensitywhenon$",
+        "{{ owner_suite_led_color_off_switches }}",
+        "{{ owner_suite_led_color_on_switches }}",
+        "{{ owner_suite_led_intensity_off_switches }}",
+        "{{ owner_suite_led_intensity_on_switches }}",
     ):
         assert token in block
 
