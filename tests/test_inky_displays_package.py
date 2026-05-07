@@ -103,6 +103,13 @@ def test_owner_suite_evening_auto_mode_uses_night_preview() -> None:
 def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> None:
     block = _script_block("publish_owner_suite_inky_display")
 
+    assert "action: weather.get_forecasts" in block
+    assert "type: daily" in block
+    assert "response_variable: owner_suite_daily_forecast" in block
+    assert "type: hourly" in block
+    assert "response_variable: owner_suite_hourly_forecast" in block
+    assert "daily_forecast_rows = daily_response.get(weather_entity" in block
+    assert "forecast_rows = hourly_response.get(weather_entity" in block
     assert "forecast_rows = (state_attr('sensor.active_weather_entity_id', 'forecast_json')" in block
     assert "tomorrow_start_ts = as_timestamp(today_at('00:00') + timedelta(days=1))" in block
     assert "forecast.temperature | int(default=none)" in block
