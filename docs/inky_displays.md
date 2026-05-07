@@ -195,7 +195,8 @@ Current owner-suite rows:
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | Night-only; shown when no urgent status is active |
 | Next | Next `calendar.ryan_claussen` event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
 | Place | Location from the next `calendar.ryan_claussen` event | Day-only |
-| Quote | Original rotating sci-fi/fantasy fallback text | Day-only when no next event is available |
+| Quote | Rotating short sci-fi/fantasy quote | Day-only when no next event is available |
+| Speaker | Character attribution for the quote | Rendered under the centered quote, not as a standard row |
 | Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next `calendar.ryan_claussen` event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
 
 In `night_preview`, the owner-suite rows are current `Weather`, tomorrow's
@@ -208,10 +209,11 @@ with the legacy `forecast_json` attribute kept only as a fallback.
 In `morning`, `up_for_day`, and `midday`, alarm and meeting-alarm rows are not
 shown. Those modes use current `Weather`, next calendar event time/title,
 calendar event location, and `Status`. If no calendar event is available in the
-next 12 hours, the event rows fall back to an original rotating sci-fi/fantasy
-quote. The renderer gives quote payloads a dedicated full-width quote layout
-instead of spending a row on source/metadata text. This keeps the post-wakeup
-screen focused on what is next instead of repeating wake-up setup state.
+next 12 hours, the event rows fall back to a rotating sci-fi/fantasy quote with
+the character who said it. The renderer gives quote payloads a dedicated
+full-width quote layout instead of spending a row on source/metadata text. This
+keeps the post-wakeup screen focused on what is next instead of repeating
+wake-up setup state.
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal

@@ -144,7 +144,8 @@ def test_quote_payload_uses_full_width_quote_layout_without_source_row() -> None
     payload = validate_payload(_sample("owner_suite_morning.json"))
     rows = payload.sections[0]["rows"]
 
-    assert [row["label"] for row in rows] == ["Weather", "Quote", "Status"]
+    assert [row["label"] for row in rows] == ["Weather", "Quote", "Speaker", "Status"]
+    assert next(row["value"] for row in rows if row["label"] == "Speaker") == "Han Solo"
     assert "Source" not in {row["label"] for row in rows}
 
     pixels = _png_rgb(render_payload(payload))
