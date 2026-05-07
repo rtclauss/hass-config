@@ -133,13 +133,27 @@ script:
                is_state('binary_sensor.bayesian_zeke_home', 'on')
                and is_state('input_boolean.trip', 'off')
              ) }}
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.tomorrow_io_the_brewery_daily
+        data:
+          type: daily
+        response_variable: owner_suite_daily_forecast
+      - action: weather.get_forecasts
+        target:
+          entity_id: weather.tomorrow_io_the_brewery_daily
+        data:
+          type: hourly
+        response_variable: owner_suite_hourly_forecast
       - action: mqtt.publish
         data:
           topic: home/inky/owner_suite/state
           qos: 1
           retain: true
           payload: >-
-            {% set weather_entity = states('sensor.active_weather_entity_id') %}
+            {% set preferred_weather_entity = 'weather.tomorrow_io_the_brewery_daily' %}
+            {% set active_weather_entity = states('sensor.active_weather_entity_id') %}
+            {% set weather_entity = active_weather_entity if active_weather_entity not in ['', 'unknown', 'unavailable'] else preferred_weather_entity %}
             {% set weather_state = states(weather_entity) %}
             {% set weather_icon_map = {
               'clear-night': 'mdi:weather-sunny',
@@ -160,11 +174,17 @@ script:
             {% set weather_icon = weather_icon_map.get(weather_state, 'mdi:weather-cloudy') %}
             {% set temperature = states('sensor.outside_temperature') %}
             {% set weather_value = (temperature ~ 'F ' ~ weather_state.replace('-', ' ')) if temperature not in ['unknown', 'unavailable'] else weather_state.replace('-', ' ') %}
-            {% set forecast_rows = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+            {% set daily_response = owner_suite_daily_forecast if owner_suite_daily_forecast is mapping else {} %}
+            {% set hourly_response = owner_suite_hourly_forecast if owner_suite_hourly_forecast is mapping else {} %}
+            {% set daily_forecast_rows = daily_response.get(weather_entity, daily_response.get(preferred_weather_entity, {})).get('forecast', []) | sort(attribute='datetime') %}
+            {% set forecast_rows = hourly_response.get(weather_entity, hourly_response.get(preferred_weather_entity, {})).get('forecast', []) | sort(attribute='datetime') %}
+            {% if forecast_rows | count == 0 %}
+              {% set forecast_rows = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+            {% endif %}
             {% set tomorrow_start_ts = as_timestamp(today_at('00:00') + timedelta(days=1)) %}
             {% set tomorrow_end_ts = as_timestamp(today_at('00:00') + timedelta(days=2)) %}
             {% set tomorrow = namespace(value='Unavailable') %}
-            {% for forecast in forecast_rows %}
+            {% for forecast in daily_forecast_rows %}
               {% set forecast_ts = as_timestamp(forecast.datetime, default=none) %}
               {% if forecast_ts is number and forecast_ts >= tomorrow_start_ts and forecast_ts < tomorrow_end_ts and tomorrow.value == 'Unavailable' %}
                 {% set forecast_temp = forecast.temperature | int(default=none) %}
