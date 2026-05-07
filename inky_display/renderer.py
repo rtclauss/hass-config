@@ -90,6 +90,7 @@ def _render_quote_layout(
     title = payload.title or payload.mode.replace("_", " ")
     subtitle = payload.subtitle
     quote = next((row.get("value", "") for row in rows if row.get("label") == "Quote"), "")
+    speaker = next((row.get("value", "") for row in rows if row.get("label") == "Speaker"), "")
     weather = next((row for row in rows if row.get("label") == "Weather"), None)
     status = next((row for row in rows if row.get("label") == "Status"), None)
 
@@ -101,7 +102,11 @@ def _render_quote_layout(
     quote_top = 100 if len(quote_lines) == 1 else 86
     for index, line in enumerate(quote_lines):
         canvas.text_centered(200, quote_top + index * 34, line, scale=3, color=BLACK)
-    canvas.rectangle(34, quote_top + len(quote_lines) * 34 + 8, 366, quote_top + len(quote_lines) * 34 + 12, accent)
+    attribution_top = quote_top + len(quote_lines) * 34 + 4
+    if speaker:
+        canvas.text_centered(200, attribution_top, f"- {speaker}", scale=1, color=BLACK)
+        attribution_top += 16
+    canvas.rectangle(34, attribution_top + 4, 366, attribution_top + 8, accent)
 
     y = 196
     for row in (weather, status):

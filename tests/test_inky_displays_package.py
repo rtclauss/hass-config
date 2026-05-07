@@ -149,8 +149,12 @@ def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> 
     assert "'value': next_calendar.place" in daytime_block
     assert "'label': 'Quote'" in daytime_block
     assert "'value': quote_value" in daytime_block
+    assert "'label': 'Speaker'" in quote_block
+    assert "'value': quote_speaker" in quote_block
     assert "'label': 'Source'" not in quote_block
     assert "Sci-fi/fantasy" not in quote_block
+    assert "'speaker': 'Han Solo'" in block
+    assert "'speaker': 'Jean-Luc Picard'" in block
     assert "'label': 'Alarm'" not in daytime_block
     assert "'label': 'Meeting'" not in daytime_block
 
