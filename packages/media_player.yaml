@@ -405,6 +405,9 @@ automation:
       - variables:
           bathroom_was_playing: "{{ is_state('media_player.bathroom_sonos_2', 'playing') }}"
           bathroom_volume_above_min: "{{ state_attr('media_player.bathroom_sonos_2', 'volume_level') | float(0) > 0.1 }}"
+          group_members: >-
+            {{ state_attr('media_player.ma_group_everywhere', 'group_members')
+               | default(['media_player.ma_group_everywhere']) }}
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.morning_routine
@@ -421,7 +424,9 @@ automation:
             target:
               entity_id: script.day_mode_switches_office_guest_room
       - choose:
-          # If the bathroom already had audible playback, skip the long fade-in.
+          # Bathroom already had audible playback (alarm ramped up). Switch to Spotify and
+          # ramp all members back to 0.30 — spotify_wake_up pre-sets everything to 0.05
+          # to avoid MA proportional-scaling, so we must ramp all members back up.
           - conditions:
               - condition: template
                 value_template: "{{ bathroom_was_playing and bathroom_volume_above_min }}"
@@ -429,29 +434,38 @@ automation:
               - action: script.spotify_wake_up
                 data:
                   playback_entity_id: media_player.ma_group_everywhere
-              - action: media_player.volume_set
-                target:
-                  entity_id: media_player.bathroom_sonos_2
-                data:
-                  volume_level: 0.30
+              - alias: "Ramp all group members back to 0.30 — spotify_wake_up left them at 0.05"
+                repeat:
+                  sequence:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ group_members }}"
+                      data:
+                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.30] | min }}"
+                    - delay:
+                        seconds: "{{ (1/(tan((repeat.index + 5)/60))) | round(0, 'ceil', 5) }}"
+                  until: "{{ repeat.index == 25 }}"
         default:
-          # Nothing is playing in the bathroom yet, so ease up the music.
-          - alias: "Set Volume 0.1"
+          # Nothing is playing in the bathroom yet, so ease all members up gently.
+          - alias: "Prime all members to safe starting volume"
             action: media_player.volume_set
+            continue_on_error: true
             target:
-              entity_id: media_player.bathroom_sonos_2
+              entity_id: "{{ group_members }}"
             data:
-              volume_level: 0.1
+              volume_level: 0.05
           - action: script.spotify_wake_up
             data:
               playback_entity_id: media_player.ma_group_everywhere
-          - alias: "Repeat until desired volume reached"
+          - alias: "Ramp all group members to 0.30"
             repeat:
               sequence:
                 - alias: "Increase Volume by 0.01"
                   action: media_player.volume_set
+                  continue_on_error: true
                   target:
-                    entity_id: media_player.bathroom_sonos_2
+                    entity_id: "{{ group_members }}"
                   data:
                     volume_level: "{{ 0.01 * repeat.index }}"
                 - delay:
