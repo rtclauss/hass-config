@@ -132,6 +132,8 @@ homeassistant:
 automation:
   - id: arrive_at_work
     alias: arrive_at_work
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
@@ -157,6 +159,8 @@ automation:
 
   - id: turn_off_morning_routine
     alias: turn_off_morning_routine
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: "00:00:01"
@@ -167,6 +171,8 @@ automation:
 
   - id: alarm_snooze
     alias: alarm_snooze
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: event
         event_type: zha_event
@@ -192,6 +198,8 @@ automation:
 
   - id: cancel_alarms
     alias: cancel_alarms
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: event
         event_type: zha_event
@@ -207,6 +215,8 @@ automation:
 
   - id: alarm_wake_up
     alias: alarm_wake_up
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: input_datetime.weekday_alarm
@@ -328,6 +338,8 @@ automation:
       Start the owner suite workday wake transition when bed occupancy clears
       and both the bedroom and bathroom show fresh wake-up activity.
     mode: single
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_bed_occupancy
@@ -381,6 +393,8 @@ automation:
 
   - id: toggle_lava_lamp_workday
     alias: toggle_lava_lamp_workday
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: template
         id: lava-lamp-off
@@ -436,6 +450,8 @@ automation:
   - id: turn_off_office_lamp_when_work_tp_camera_active
     alias: turn_off_office_lamp_when_work_tp_camera_active
     description: Turn off office ceiling when work laptop camera turns on.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
@@ -465,6 +481,8 @@ automation:
   - id: turn_on_office_lamp_when_work_tp_camera_inactive
     alias: turn_on_office_lamp_when_work_tp_camera_inactive
     description: Turn on office ceiling when work laptop camera turns off.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
@@ -482,6 +500,8 @@ automation:
   - id: vacuum_while_working
     alias: vacuum_while_working
     description: Run one full-floor pass on the main and upstairs levels while Ryan is away.
+    trace:
+      stored_traces: 100
     trigger:
       # - platform: state
       #   entity_id: device_tracker.bayesian_zeke_home
@@ -514,6 +534,8 @@ script:
     alias: Set Wakeup From Phone Alarm
     description: Set the next wakeup time from the phone alarm synced by iOS.
     mode: single
+    trace:
+      stored_traces: 100
     fields:
       alarm_time:
         description: Alarm time from iOS, in HH:mm or HH:mm:ss format.
@@ -654,6 +676,8 @@ script:
 
   snooze_script:
     alias: Snooze Tasks
+    trace:
+      stored_traces: 100
     sequence:
       - action: light.turn_off
         data:
@@ -675,6 +699,8 @@ script:
 
   sonos_ksdj_wake_up:
     alias: Sonos KSDJ Wake Up
+    trace:
+      stored_traces: 100
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
@@ -682,6 +708,8 @@ script:
 
   sonos_mpr_news_wake_up:
     alias: Sonos MPR News Wake Up
+    trace:
+      stored_traces: 100
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
@@ -692,6 +720,8 @@ script:
 
   sonos_the_current_wake_up:
     alias: Sonos The Current Wake Up
+    trace:
+      stored_traces: 100
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
@@ -700,6 +730,8 @@ script:
   owner_suite_morning_transition:
     alias: Owner Suite Morning Transition
     mode: single
+    trace:
+      stored_traces: 100
     sequence:
       - alias: "Start from the owner suite adaptive sleep target"
         continue_on_error: true
@@ -812,6 +844,8 @@ script:
 
   wake_up_script:
     alias: Common Wake Up Tasks
+    trace:
+      stored_traces: 100
     sequence:
       - alias: Have we already done this?
         condition: state
@@ -827,6 +861,8 @@ script:
     alias: Set Next Work Meeting From Phone
     description: Set the next work meeting reminder time from an iPhone shortcut such as Outlook Next Meeting.
     mode: single
+    trace:
+      stored_traces: 100
     fields:
       meeting_time:
         description: Next work meeting start time from iOS, in HH:mm or HH:mm:ss format.

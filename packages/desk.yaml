@@ -104,6 +104,8 @@ automation:
     description: >
       Raise the desk to its configured maximum height whenever guest mode
       turns on. Guest mode is the highest-priority desk state.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: input_boolean.guest_mode
@@ -116,6 +118,8 @@ automation:
     description: >
       Raise the desk to its configured maximum height whenever trip mode
       turns on, unless guest mode is already active.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: input_boolean.trip
@@ -132,6 +136,8 @@ automation:
     description: >
       Move the desk to preset 2 when the work laptop camera turns on,
       unless guest or trip mode has already taken control.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
@@ -152,6 +158,8 @@ automation:
       Raise the desk when leaving home, using both person and zone tracking.
       Time-based moves are suppressed whenever guest mode, trip mode, or the
       work camera has higher priority.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: person.ryan
@@ -186,6 +194,8 @@ automation:
     description: >
       Return the desk to preset 1 when arriving home on workdays. Weekend and
       holiday arrivals leave the desk raised until the Monday-morning reset.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: person.ryan
@@ -223,6 +233,8 @@ automation:
       inactive long enough to be treated as asleep. These are considered timed
       moves and are suppressed by guest mode, trip mode, and the work camera
       rule.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         id: evening
@@ -251,6 +263,8 @@ automation:
     description: >
       Return the desk to preset 1 every Monday at 4 AM, but only when no
       higher-priority mode is active.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: "04:00:00"
@@ -280,6 +294,8 @@ script:
       Automation-only wrapper that sends the desk to the configured maximum
       height when no other automated desk motion is already in progress.
     mode: single
+    trace:
+      stored_traces: 100
     sequence:
       - condition: state
         entity_id: timer.uplift_desk_motion_window
@@ -297,6 +313,8 @@ script:
       Automation-only wrapper that sends the desk to preset 1 when no other
       automated desk motion is already in progress.
     mode: single
+    trace:
+      stored_traces: 100
     sequence:
       - condition: state
         entity_id: timer.uplift_desk_motion_window
@@ -314,6 +332,8 @@ script:
       Automation-only wrapper that sends the desk to preset 2 when no other
       automated desk motion is already in progress.
     mode: single
+    trace:
+      stored_traces: 100
     sequence:
       - condition: state
         entity_id: timer.uplift_desk_motion_window
@@ -333,6 +353,8 @@ script:
       maximum height immediately.
     mode: single
     icon: mdi:arrow-up-bold-box
+    trace:
+      stored_traces: 100
     sequence:
       - action: button.press
         target:
@@ -345,6 +367,8 @@ script:
       Home Assistant automation guard and sends the desk to preset 1.
     mode: single
     icon: mdi:numeric-1-box
+    trace:
+      stored_traces: 100
     sequence:
       - action: button.press
         target:
@@ -357,6 +381,8 @@ script:
       Home Assistant automation guard and sends the desk to preset 2.
     mode: single
     icon: mdi:numeric-2-box
+    trace:
+      stored_traces: 100
     sequence:
       - action: button.press
         target:
