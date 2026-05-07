@@ -514,6 +514,25 @@ automation:
     action:
       - action: homeassistant.restart
 
+  - id: bedtime_music_homekit_trigger
+    alias: "Bedtime Music — HomeKit trigger"
+    description: >-
+      Exposes a momentary switch to HomeKit/Siri. Turning on input_boolean.bedtime_music
+      fires script.spotify_bedtime non-blocking, then immediately resets the boolean so
+      HomeKit always sees it as off (stateless trigger pattern).
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.bedtime_music
+        to: "on"
+    action:
+      - action: script.turn_on
+        target:
+          entity_id: script.spotify_bedtime
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.bedtime_music
+
 
 ########################
 # Binary Sensors
@@ -543,7 +562,10 @@ group: {}
 ########################
 # Input Booleans
 ########################
-input_boolean: {}
+input_boolean:
+  bedtime_music:
+    name: "Bedtime Music"
+    icon: mdi:music-note-plus
 
 ########################
 # Input Numbers
