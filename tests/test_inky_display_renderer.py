@@ -8,6 +8,7 @@ import zlib
 import pytest
 
 from inky_display import HEIGHT, WIDTH, payload_hash, render_payload, validate_payload
+from inky_display import renderer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,3 +153,11 @@ def test_quote_payload_uses_full_width_quote_layout_without_source_row() -> None
 
     assert b"\xd7\x00\x00" in pixels
     assert b"\x00\x00\x00" in pixels
+
+
+def test_renderer_prefers_trebuchet_then_verdana_font_stack() -> None:
+    bold_stack = "\n".join(renderer.BOLD_FONT_CANDIDATES)
+
+    assert "Trebuchet" in bold_stack
+    assert bold_stack.index("Trebuchet") < bold_stack.index("Verdana")
+    assert "DejaVuSansCondensed-Bold.ttf" in bold_stack
