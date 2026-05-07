@@ -195,9 +195,11 @@ Current owner-suite rows:
 | Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next `calendar.ryan_claussen` event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
 
 In `night_preview`, the owner-suite rows are current `Weather`, tomorrow's
-forecast from `sensor.active_weather_entity_id` `forecast_json`, next `Alarm`,
-and `Status`. Meeting is omitted at night to keep the display focused on sleep
-planning and morning conditions.
+daily forecast from `weather.get_forecasts`, next `Alarm`, and `Status`.
+Meeting is omitted at night to keep the display focused on sleep planning and
+morning conditions. The publish script also requests hourly forecast data at
+publish time for event-weather checks, with the legacy `forecast_json` attribute
+kept only as a fallback.
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
