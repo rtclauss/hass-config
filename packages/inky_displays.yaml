@@ -118,6 +118,8 @@ script:
               morning
             {% elif house_mode in ['night', 'in_bed', 'asleep'] %}
               night_preview
+            {% elif now().hour >= 20 %}
+              night_preview
             {% elif now().hour >= 12 %}
               midday
             {% else %}
@@ -158,6 +160,24 @@ script:
             {% set weather_icon = weather_icon_map.get(weather_state, 'mdi:weather-cloudy') %}
             {% set temperature = states('sensor.outside_temperature') %}
             {% set weather_value = (temperature ~ 'F ' ~ weather_state.replace('-', ' ')) if temperature not in ['unknown', 'unavailable'] else weather_state.replace('-', ' ') %}
+            {% set forecast_rows = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+            {% set tomorrow_start_ts = as_timestamp(today_at('00:00') + timedelta(days=1)) %}
+            {% set tomorrow_end_ts = as_timestamp(today_at('00:00') + timedelta(days=2)) %}
+            {% set tomorrow = namespace(value='Unavailable') %}
+            {% for forecast in forecast_rows %}
+              {% set forecast_ts = as_timestamp(forecast.datetime, default=none) %}
+              {% if forecast_ts is number and forecast_ts >= tomorrow_start_ts and forecast_ts < tomorrow_end_ts and tomorrow.value == 'Unavailable' %}
+                {% set forecast_temp = forecast.temperature | int(default=none) %}
+                {% set forecast_condition = forecast.condition | default('', true) | string | replace('-', ' ') %}
+                {% if forecast_temp is number and forecast_condition | trim != '' %}
+                  {% set tomorrow.value = forecast_temp ~ 'F ' ~ forecast_condition %}
+                {% elif forecast_condition | trim != '' %}
+                  {% set tomorrow.value = forecast_condition %}
+                {% elif forecast_temp is number %}
+                  {% set tomorrow.value = forecast_temp ~ 'F' %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
             {% set weekday_alarm = is_state('input_boolean.weekday_alarm_on', 'on') %}
             {% set weekend_alarm = is_state('input_boolean.weekend_alarm_on', 'on') %}
             {% set meeting_alarm = is_state('input_boolean.special_meeting', 'on') %}
@@ -178,7 +198,7 @@ script:
             {% set event_start = state_attr('calendar.ryan_claussen', 'start_time') | default('', true) %}
             {% set event_end = state_attr('calendar.ryan_claussen', 'end_time') | default('', true) %}
             {% set event_title = state_attr('calendar.ryan_claussen', 'message') | default('Event', true) %}
-            {% set event_forecasts = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+            {% set event_forecasts = forecast_rows %}
             {% set precip_conditions = ['hail', 'lightning-rainy', 'pouring', 'rainy', 'snowy', 'snowy-rainy'] %}
             {% set event = namespace(max_precip=-1, weather=false) %}
             {% if event_start not in ['', none, 'unknown', 'unavailable'] and event_end not in ['', none, 'unknown', 'unavailable'] %}
@@ -264,7 +284,14 @@ script:
               'midday': 'Low-frequency refresh'
             } %}
             {% set exception_active = weather_alert or garage_open or front_door_open or rain_next_hour or event_weather %}
-            {% if flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] and not exception_active %}
+            {% if resolved_mode == 'night_preview' %}
+              {% set rows = [
+                {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                {'icon': weather_icon, 'label': 'Tomorrow', 'value': tomorrow.value, 'level': 'normal'},
+                {'label': 'Alarm', 'value': alarm_value, 'level': 'emphasis' if alarm_value != 'Off' else 'normal'},
+                {'label': 'Status', 'value': status_value, 'level': status_level}
+              ] %}
+            {% elif flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] and not exception_active %}
               {% set rows = travel_rows %}
             {% elif flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] %}
               {% set rows = [
