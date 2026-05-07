@@ -29,11 +29,13 @@ def _fan_timer_block() -> str:
     return "\n".join(lines[start:end])
 
 
-def test_fan_timer_automation_uses_ha_2026_5_timer_finished_triggers() -> None:
+def test_fan_timer_automation_uses_stable_timer_finished_event_triggers() -> None:
     block = _fan_timer_block()
 
-    assert "event_type: timer.finished" not in block
-    assert block.count("trigger: timer.finished") == len(FAN_TIMER_MAP)
+    assert "trigger: timer.finished" not in block
+    assert block.count("trigger: event") == len(FAN_TIMER_MAP)
+    assert block.count("event_type: timer.finished") == len(FAN_TIMER_MAP)
+    assert block.count("event_data:") == len(FAN_TIMER_MAP)
 
     for timer_entity in FAN_TIMER_MAP:
         assert f"entity_id: {timer_entity}" in block
@@ -42,8 +44,8 @@ def test_fan_timer_automation_uses_ha_2026_5_timer_finished_triggers() -> None:
 def test_fan_timer_automation_maps_trigger_entity_to_target_fan() -> None:
     block = _fan_timer_block()
 
-    assert '{{ fan_map[trigger.entity_id] }}' in block
-    assert "trigger.event.data.entity_id" not in block
+    assert "{{ fan_map[trigger.event.data.entity_id] }}" in block
+    assert "fan_map[trigger.entity_id]" not in block
 
     for timer_entity, fan_entity in FAN_TIMER_MAP.items():
         assert f"{timer_entity}: {fan_entity}" in block
