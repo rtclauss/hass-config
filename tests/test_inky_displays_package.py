@@ -73,7 +73,19 @@ def test_owner_suite_payload_includes_modes_and_four_rows() -> None:
     for mode in ("night_preview", "morning", "up_for_day", "midday"):
         assert mode in block
 
-    for label in ("Weather", "Tomorrow", "Alarm", "Meeting", "Status", "Flight", "Airport", "Dest Wx"):
+    for label in (
+        "Weather",
+        "Tomorrow",
+        "Alarm",
+        "Meeting",
+        "Status",
+        "Flight",
+        "Airport",
+        "Dest Wx",
+        "Next",
+        "Place",
+        "Quote",
+    ):
         assert f"'label': '{label}'" in block
 
 
@@ -116,7 +128,28 @@ def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> No
     assert "resolved_mode == 'night_preview'" in block
     assert "'label': 'Tomorrow'" in block
     assert "'value': tomorrow.value" in block
-    assert "'label': 'Meeting'" not in block[block.index("resolved_mode == 'night_preview'") : block.index("{% elif flight_active")]
+    night_block = block[block.index("resolved_mode == 'night_preview'") : block.index("{% elif flight_active")]
+    assert "night_detail_row" in night_block
+    assert "'label': 'Alarm'" in night_block
+    assert "'label': 'Meeting'" in night_block
+
+
+def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+    daytime_block = block[block.index("{% else %}\n              {% if next_calendar.has_event %}") : block.index("            {% endif %}\n            {{ {")]
+
+    assert "action: calendar.get_events" in block
+    assert "response_variable: owner_suite_calendar_window" in block
+    assert "calendar_response.get('events'" in block
+    assert "item.location" in block
+    assert "'label': 'Next'" in daytime_block
+    assert "'value': next_calendar.time" in daytime_block
+    assert "'label': 'Place'" in daytime_block
+    assert "'value': next_calendar.place" in daytime_block
+    assert "'label': 'Quote'" in daytime_block
+    assert "'value': quote_value" in daytime_block
+    assert "'label': 'Alarm'" not in daytime_block
+    assert "'label': 'Meeting'" not in daytime_block
 
 
 def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:

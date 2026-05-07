@@ -145,6 +145,13 @@ script:
         data:
           type: hourly
         response_variable: owner_suite_hourly_forecast
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.ryan_claussen
+        data:
+          start_date_time: "{{ (now() - timedelta(minutes=5)).isoformat() }}"
+          end_date_time: "{{ (now() + timedelta(hours=12)).isoformat() }}"
+        response_variable: owner_suite_calendar_window
       - action: mqtt.publish
         data:
           topic: home/inky/owner_suite/state
@@ -209,6 +216,33 @@ script:
               {% set alarm_value = 'Off' %}
             {% endif %}
             {% set meeting_value = states('input_datetime.next_work_meeting')[0:5] if meeting_alarm else 'Off' %}
+            {% set calendar_entity = 'calendar.ryan_claussen' %}
+            {% set calendar_response = owner_suite_calendar_window if owner_suite_calendar_window is mapping else {} %}
+            {% set calendar_items = calendar_response.get('events', calendar_response.get(calendar_entity, {}).get('events', [])) %}
+            {% set next_calendar = namespace(has_event=false, time='No event', place='No location') %}
+            {% set now_ts = as_timestamp(now()) %}
+            {% for item in calendar_items | sort(attribute='start') %}
+              {% set item_start = item.start | default('', true) %}
+              {% set item_end = item.end | default('', true) %}
+              {% set item_start_ts = as_timestamp(item_start, default=none) %}
+              {% set item_end_ts = as_timestamp(item_end, default=none) %}
+              {% if not next_calendar.has_event and item_start_ts is number and item_end_ts is number and item_end_ts > now_ts and item_start_ts < now_ts + 43200 %}
+                {% set item_title = item.summary | default('Calendar', true) | string | trim %}
+                {% set item_location = item.location | default('', true) | string | trim %}
+                {% set item_time = (item_start | as_datetime | as_local).strftime('%H:%M') %}
+                {% set next_calendar.has_event = true %}
+                {% set next_calendar.time = (item_time ~ ' ' ~ item_title) | trim %}
+                {% set next_calendar.place = item_location if item_location != '' else 'No location' %}
+              {% endif %}
+            {% endfor %}
+            {% set quotes = [
+              'Airlocks favor optimism.',
+              'Dragons respect checklists.',
+              'The star map can wait.',
+              'Keep the spell simple.',
+              'Pack snacks for hyperspace.'
+            ] %}
+            {% set quote_value = quotes[(now().strftime('%j') | int) % (quotes | count)] %}
             {% set garage_open = states('cover.garage_door') not in ['closed', 'closing'] %}
             {% set front_door_open = is_state('binary_sensor.main_foyer_front_door_contact', 'on') %}
             {% set weather_alert_state = states('sensor.nws_dakota_county_alerts_alerts_are_active') | lower %}
@@ -305,11 +339,12 @@ script:
             } %}
             {% set exception_active = weather_alert or garage_open or front_door_open or rain_next_hour or event_weather %}
             {% if resolved_mode == 'night_preview' %}
+              {% set night_detail_row = {'label': 'Status', 'value': status_value, 'level': status_level} if status_level != 'normal' else {'label': 'Meeting', 'value': meeting_value, 'level': 'emphasis' if meeting_alarm else 'normal'} %}
               {% set rows = [
                 {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
                 {'icon': weather_icon, 'label': 'Tomorrow', 'value': tomorrow.value, 'level': 'normal'},
                 {'label': 'Alarm', 'value': alarm_value, 'level': 'emphasis' if alarm_value != 'Off' else 'normal'},
-                {'label': 'Status', 'value': status_value, 'level': status_level}
+                night_detail_row
               ] %}
             {% elif flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] and not exception_active %}
               {% set rows = travel_rows %}
@@ -321,12 +356,21 @@ script:
                 {'label': 'Status', 'value': status_value, 'level': status_level}
               ] %}
             {% else %}
-              {% set rows = [
-                {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
-                {'label': 'Alarm', 'value': alarm_value, 'level': 'emphasis' if resolved_mode == 'night_preview' and alarm_value != 'Off' else 'normal'},
-                {'label': 'Meeting', 'value': meeting_value, 'level': 'emphasis' if meeting_alarm else 'normal'},
-                {'label': 'Status', 'value': status_value, 'level': status_level}
-              ] %}
+              {% if next_calendar.has_event %}
+                {% set rows = [
+                  {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                  {'label': 'Next', 'value': next_calendar.time, 'level': 'emphasis'},
+                  {'label': 'Place', 'value': next_calendar.place, 'level': 'normal'},
+                  {'label': 'Status', 'value': status_value, 'level': status_level}
+                ] %}
+              {% else %}
+                {% set rows = [
+                  {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                  {'label': 'Quote', 'value': quote_value, 'level': 'normal'},
+                  {'label': 'Source', 'value': 'Sci-fi/fantasy', 'level': 'normal'},
+                  {'label': 'Status', 'value': status_value, 'level': status_level}
+                ] %}
+              {% endif %}
             {% endif %}
             {{ {
               'schema_version': 1,
