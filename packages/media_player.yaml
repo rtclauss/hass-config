@@ -421,6 +421,9 @@ automation:
       - variables:
           bathroom_was_playing: "{{ is_state('media_player.bathroom_sonos_2', 'playing') }}"
           bathroom_volume_above_min: "{{ state_attr('media_player.bathroom_sonos_2', 'volume_level') | float(0) > 0.1 }}"
+          group_members: >-
+            {{ state_attr('media_player.ma_group_everywhere', 'group_members')
+               | default(['media_player.ma_group_everywhere']) }}
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.morning_routine
@@ -437,7 +440,9 @@ automation:
             target:
               entity_id: script.day_mode_switches_office_guest_room
       - choose:
-          # If the bathroom already had audible playback, skip the long fade-in.
+          # Bathroom already had audible playback (alarm ramped up). Switch to Spotify and
+          # ramp all members back to 0.30 — spotify_wake_up pre-sets everything to 0.05
+          # to avoid MA proportional-scaling, so we must ramp all members back up.
           - conditions:
               - condition: template
                 value_template: "{{ bathroom_was_playing and bathroom_volume_above_min }}"
@@ -445,29 +450,38 @@ automation:
               - action: script.spotify_wake_up
                 data:
                   playback_entity_id: media_player.ma_group_everywhere
-              - action: media_player.volume_set
-                target:
-                  entity_id: media_player.bathroom_sonos_2
-                data:
-                  volume_level: 0.30
+              - alias: "Ramp all group members back to 0.30 — spotify_wake_up left them at 0.05"
+                repeat:
+                  sequence:
+                    - action: media_player.volume_set
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ group_members }}"
+                      data:
+                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.30] | min }}"
+                    - delay:
+                        seconds: "{{ (1/(tan((repeat.index + 5)/60))) | round(0, 'ceil', 5) }}"
+                  until: "{{ repeat.index == 25 }}"
         default:
-          # Nothing is playing in the bathroom yet, so ease up the music.
-          - alias: "Set Volume 0.1"
+          # Nothing is playing in the bathroom yet, so ease all members up gently.
+          - alias: "Prime all members to safe starting volume"
             action: media_player.volume_set
+            continue_on_error: true
             target:
-              entity_id: media_player.bathroom_sonos_2
+              entity_id: "{{ group_members }}"
             data:
-              volume_level: 0.1
+              volume_level: 0.05
           - action: script.spotify_wake_up
             data:
               playback_entity_id: media_player.ma_group_everywhere
-          - alias: "Repeat until desired volume reached"
+          - alias: "Ramp all group members to 0.30"
             repeat:
               sequence:
                 - alias: "Increase Volume by 0.01"
                   action: media_player.volume_set
+                  continue_on_error: true
                   target:
-                    entity_id: media_player.bathroom_sonos_2
+                    entity_id: "{{ group_members }}"
                   data:
                     volume_level: "{{ 0.01 * repeat.index }}"
                 - delay:
@@ -492,7 +506,7 @@ automation:
           - script.music_assistant_radio_wake_up
         to: "on"
         for:
-          minutes: 3
+          minutes: 12
     action:
       - action: logbook.log
         data:
@@ -1198,7 +1212,6 @@ script:
             "spotify:playlist:synthetic038",
             "spotify:playlist:synthetic047",
             "spotify:playlist:synthetic040",
-            "spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
             "spotify:playlist:synthetic044",
             "spotify:album:synthetic003",
             "spotify:album:synthetic007",
@@ -1288,7 +1301,6 @@ script:
               "spotify:playlist:synthetic027",
               "spotify:playlist:synthetic029",
               "spotify:user:example:playlist:synthetic069",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
               "spotify:user:example:playlist:synthetic071",
               "spotify:user:example:playlist:synthetic058",
               "spotify:user:example:playlist:synthetic059",
@@ -1421,7 +1433,6 @@ script:
               "spotify:user:example:playlist:synthetic068",
               "spotify:user:example:playlist:synthetic060",
               "spotify:user:example:playlist:synthetic057",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic067",
               "spotify:user:example:playlist:synthetic070",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
@@ -1433,34 +1444,16 @@ script:
               "spotify:playlist:synthetic031",
               "spotify:album:synthetic005",
               "spotify:user:example:playlist:synthetic054",
-              "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
-              "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
-              "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
               "spotify:playlist:synthetic025",
               "spotify:user:example:playlist:synthetic056",
               "spotify:user:example:playlist:synthetic053",
               "spotify:user:example:playlist:synthetic055",
               "spotify:user:example:playlist:synthetic051",
               "spotify:user:example:playlist:synthetic070",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic063",
-              "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
-              "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
-              "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
-              "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
-              "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
-              "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
               "spotify:playlist:synthetic035",
               "spotify:playlist:synthetic030",
               "spotify:playlist:synthetic020",
-              "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
-              "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
-              "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
-              "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
-              "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
-              "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
-              "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
               "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
               "spotify:playlist:synthetic037"
               ] -%}
@@ -1576,7 +1569,6 @@ script:
               "spotify:user:example:playlist:synthetic068",
               "spotify:user:example:playlist:synthetic060",
               "spotify:user:example:playlist:synthetic057",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic067",
               "spotify:user:example:playlist:synthetic070",
               "spotify:album:7Hk9WbjPbN1n2GXaK7aldw",
@@ -1588,34 +1580,16 @@ script:
               "spotify:playlist:synthetic031",
               "spotify:album:synthetic005",
               "spotify:user:example:playlist:synthetic054",
-              "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
-              "spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
-              "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
               "spotify:playlist:synthetic025",
               "spotify:user:example:playlist:synthetic056",
               "spotify:user:example:playlist:synthetic053",
               "spotify:user:example:playlist:synthetic055",
               "spotify:user:example:playlist:synthetic051",
               "spotify:user:example:playlist:synthetic070",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic063",
-              "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
-              "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
-              "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
-              "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
-              "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
-              "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
               "spotify:playlist:synthetic035",
               "spotify:playlist:synthetic030",
               "spotify:playlist:synthetic020",
-              "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
-              "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
-              "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
-              "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
-              "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
-              "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
-              "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
               "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
               "spotify:playlist:synthetic018",
               "spotify:playlist:synthetic017",
@@ -1623,7 +1597,6 @@ script:
               "spotify:playlist:synthetic011",
               "spotify:playlist:synthetic037",
               "spotify:playlist:synthetic045",
-              "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV",
               "spotify:playlist:synthetic012",
               "spotify:playlist:synthetic019",
               "https://ice1.somafm.com/example-002",
@@ -1833,7 +1806,7 @@ script:
             ## Synthetic music note
             ## Synthetic music note
             #}
-            {%- set plists = ["spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW",
+            {%- set plists = [
               "spotify:user:example:playlist:synthetic061",
               "spotify:user:example:playlist:synthetic062",
               "spotify:user:example:playlist:synthetic071",
@@ -1848,42 +1821,23 @@ script:
               "spotify:album:synthetic001",
               "spotify:user:example:playlist:synthetic066",
               "spotify:user:example:playlist:synthetic064",
-              "spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf",
-              "spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT",
               "spotify:playlist:synthetic025",
               "spotify:user:example:playlist:synthetic056",
               "spotify:user:example:playlist:synthetic053",
               "spotify:user:example:playlist:synthetic055",
               "spotify:user:example:playlist:synthetic051",
               "spotify:user:example:playlist:synthetic070",
-              "spotify:playlist:37i9dQZEVXcMDffrPenJPl",
               "spotify:user:example:playlist:synthetic063",
-              "spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT",
-              "spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1",
-              "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
-              "spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M",
-              "spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge",
-              "spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY",
-              "spotify:playlist:37i9dQZF1E8DMpUzqgcOJh",
               "spotify:playlist:synthetic035",
               "spotify:playlist:synthetic030",
               "spotify:playlist:synthetic020",
-              "spotify:playlist:37i9dQZF1EtiMc33WI4nNn",
-              "spotify:playlist:37i9dQZF1E354DBk6AJ16Y",
-              "spotify:playlist:37i9dQZF1E38mQjeIPb1EL",
-              "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
-              "spotify:playlist:37i9dQZF1E38XO0gwAEnvS",
-              "spotify:playlist:37i9dQZF1E37RF0IYL80qo",
-              "spotify:playlist:37i9dQZF1E38hC1b4cOQvA",
               "spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb",
               "spotify:playlist:synthetic037",
               "spotify:playlist:synthetic045",
               "spotify:playlist:synthetic050",
-              "spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV",
               "spotify:playlist:synthetic041",
               "spotify:playlist:synthetic028",
               "spotify:playlist:synthetic042",
-              "spotify:playlist:37i9dQZF1EIg42NGihn0NZ"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}

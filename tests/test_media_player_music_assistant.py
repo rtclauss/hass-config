@@ -279,7 +279,7 @@ def test_stuck_morning_audio_scripts_are_recovered() -> None:
     assert 'entity_id: script.music_assistant_prepare_bedroom_group' in block
     assert 'entity_id:\n          - script.spotify_wake_up\n          - script.music_assistant_radio_wake_up' in block
     assert 'minutes: 1' in block
-    assert 'minutes: 3' in block
+    assert 'minutes: 12' in block
     assert 'action: script.turn_off' in block
     assert 'script.music_assistant_prepare_bedroom_group' in block
     assert 'script.music_assistant_radio_wake_up' in block
