@@ -215,8 +215,8 @@ def test_wakeup_audio_uses_guest_aware_sync_groups() -> None:
 
     for token in (
         "input_boolean.guest_mode",
-        "media_player.guest_sonos",
-        "media_player.everywhere_sonos",
+        "media_player.ma_group_guest",
+        "media_player.ma_group_everywhere",
         'entity_id: "{{ playback_player }}"',
     ):
         assert token in spotify_block

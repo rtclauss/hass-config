@@ -171,8 +171,8 @@ def test_arrival_group_helper_is_stubbed_after_sync_group_migration() -> None:
 def test_arrival_music_targets_guest_aware_sync_group_without_regroup_retry() -> None:
     arrival_block = _script_block("spotify_arrival")
 
-    assert "media_player.guest_sonos" in arrival_block
-    assert "media_player.everywhere_sonos" in arrival_block
+    assert "media_player.ma_group_guest" in arrival_block
+    assert "media_player.ma_group_everywhere" in arrival_block
     assert "input_boolean.guest_mode" in arrival_block
     assert 'action: script.music_assistant_play_spotify_uri' in arrival_block
     assert 'action: script.music_assistant_prepare_arrival_group' not in arrival_block
@@ -183,12 +183,12 @@ def test_bedtime_targets_guest_aware_sync_group_before_playing() -> None:
     block = _script_block("spotify_bedtime")
 
     assert "bedtime_playback_entity" in block
-    assert "media_player.guest_sonos" in block
-    assert "media_player.everywhere_sonos" in block
+    assert "media_player.ma_group_guest" in block
+    assert "media_player.ma_group_everywhere" in block
     assert "input_boolean.guest_mode" in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
     assert 'action: script.music_assistant_play_item' in block
-    assert block.index("media_player.guest_sonos") < block.index(
+    assert block.index("media_player.ma_group_guest") < block.index(
         'action: script.music_assistant_play_item'
     )
 
@@ -212,8 +212,8 @@ def test_radio_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() ->
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
     assert 'playback_player' in block
-    assert 'media_player.guest_sonos' in block
-    assert 'media_player.everywhere_sonos' in block
+    assert 'media_player.ma_group_guest' in block
+    assert 'media_player.ma_group_everywhere' in block
     assert 'input_boolean.guest_mode' in block
     assert 'prepare_group_before_play:' not in block
     assert 'should_prepare_group_before_play' not in block
@@ -235,9 +235,10 @@ def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players(
     assert len(re.findall(r"^\s+- media_player\.bathroom_sonos$", block, re.MULTILINE)) == 0
     assert len(re.findall(r"^\s+- media_player\.bathroom_sonos_2$", block, re.MULTILINE)) == 0
     assert 'playback_player' in block
-    assert 'media_player.guest_sonos' in block
-    assert 'media_player.everywhere_sonos' in block
-    assert block.count('entity_id: "{{ playback_player }}"') >= 2
+    assert 'media_player.ma_group_guest' in block
+    assert 'media_player.ma_group_everywhere' in block
+    assert block.count('entity_id: "{{ playback_player }}"') >= 1
+    assert block.count('entity_id: "{{ group_members }}"') >= 2
     assert "volume_level: 0.01" in block
     assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
 
@@ -248,8 +249,8 @@ def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() 
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
     assert 'playback_player' in block
-    assert 'media_player.guest_sonos' in block
-    assert 'media_player.everywhere_sonos' in block
+    assert 'media_player.ma_group_guest' in block
+    assert 'media_player.ma_group_everywhere' in block
     assert 'input_boolean.guest_mode' in block
     assert 'prepare_group_before_play:' not in block
     assert 'should_prepare_group_before_play' not in block
@@ -264,7 +265,7 @@ def test_bathroom_wakeup_automation_uses_sync_group_playback() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
     assert 'action: script.spotify_wake_up' in block
-    assert block.count('playback_entity_id: media_player.everywhere_sonos') == 2
+    assert block.count('playback_entity_id: media_player.ma_group_everywhere') == 2
     assert block.count('playback_entity_id: media_player.bedroom_sonos_2') == 0
     assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 0
     assert 'regroup_after_play: true' not in block
