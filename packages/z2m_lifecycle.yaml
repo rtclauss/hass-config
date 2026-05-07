@@ -13,6 +13,8 @@ automation:
   - id: refresh_z2m_lifecycle_inventory
     alias: refresh_z2m_lifecycle_inventory
     mode: single
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: homeassistant
         event: start
@@ -37,6 +39,8 @@ automation:
   - id: sync_z2m_decommission_options
     alias: sync_z2m_decommission_options
     mode: restart
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: homeassistant
         event: start
@@ -67,6 +71,8 @@ automation:
   - id: notify_z2m_lifecycle_issues
     alias: notify_z2m_lifecycle_issues
     mode: restart
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         id: summary_change
@@ -127,6 +133,8 @@ automation:
     alias: handle_z2m_device_remove_response
     mode: queued
     max: 10
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: mqtt
         topic: zigbee2mqtt/bridge/response/device/remove
@@ -202,6 +210,8 @@ automation:
 
   - id: reset_z2m_reboot_counter
     alias: reset_z2m_reboot_counter
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: event
         event_type: mobile_app_notification_action
@@ -214,6 +224,8 @@ automation:
 
   - id: reset_z2m_reboot_counter_on_recovery
     alias: reset_z2m_reboot_counter_on_recovery
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: binary_sensor.zigbee2mqtt_running
@@ -255,6 +267,8 @@ automation:
     alias: shutdown_proxmox_z2m_unavailable
     mode: single
     max_exceeded: silent
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: binary_sensor.z2m_failing
@@ -531,6 +545,8 @@ script:
   z2m_decommission_selected_device:
     alias: Z2M - Decommission Selected Device
     mode: single
+    trace:
+      stored_traces: 100
     sequence:
       - variables:
           selected_option: "{{ states('input_select.z2m_decommission_device') }}"
@@ -569,6 +585,8 @@ script:
   z2m_force_decommission_selected_device:
     alias: Z2M - Force Decommission Selected Device
     mode: single
+    trace:
+      stored_traces: 100
     sequence:
       - variables:
           selected_option: "{{ states('input_select.z2m_decommission_device') }}"
