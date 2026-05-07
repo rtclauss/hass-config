@@ -209,8 +209,9 @@ In `morning`, `up_for_day`, and `midday`, alarm and meeting-alarm rows are not
 shown. Those modes use current `Weather`, next calendar event time/title,
 calendar event location, and `Status`. If no calendar event is available in the
 next 12 hours, the event rows fall back to an original rotating sci-fi/fantasy
-quote plus a source row. This keeps the post-wakeup screen focused on what is
-next instead of repeating wake-up setup state.
+quote. The renderer gives quote payloads a dedicated full-width quote layout
+instead of spending a row on source/metadata text. This keeps the post-wakeup
+screen focused on what is next instead of repeating wake-up setup state.
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal

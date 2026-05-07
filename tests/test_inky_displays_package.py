@@ -137,6 +137,7 @@ def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> No
 def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> None:
     block = _script_block("publish_owner_suite_inky_display")
     daytime_block = block[block.index("{% else %}\n              {% if next_calendar.has_event %}") : block.index("            {% endif %}\n            {{ {")]
+    quote_block = daytime_block[daytime_block.index("{% else %}") :]
 
     assert "action: calendar.get_events" in block
     assert "response_variable: owner_suite_calendar_window" in block
@@ -148,6 +149,8 @@ def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> 
     assert "'value': next_calendar.place" in daytime_block
     assert "'label': 'Quote'" in daytime_block
     assert "'value': quote_value" in daytime_block
+    assert "'label': 'Source'" not in quote_block
+    assert "Sci-fi/fantasy" not in quote_block
     assert "'label': 'Alarm'" not in daytime_block
     assert "'label': 'Meeting'" not in daytime_block
 

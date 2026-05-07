@@ -138,3 +138,16 @@ def test_black_accent_emphasis_rows_keep_visible_text() -> None:
     pixels = _png_rgb(render_payload(validate_payload(data)))
 
     assert b"\xff\xff\xff" in pixels
+
+
+def test_quote_payload_uses_full_width_quote_layout_without_source_row() -> None:
+    payload = validate_payload(_sample("owner_suite_morning.json"))
+    rows = payload.sections[0]["rows"]
+
+    assert [row["label"] for row in rows] == ["Weather", "Quote", "Status"]
+    assert "Source" not in {row["label"] for row in rows}
+
+    pixels = _png_rgb(render_payload(payload))
+
+    assert b"\xd7\x00\x00" in pixels
+    assert b"\x00\x00\x00" in pixels
