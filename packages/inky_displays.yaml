@@ -239,14 +239,16 @@ script:
                 {% set next_calendar.place = item_location if item_location != '' else 'No location' %}
               {% endif %}
             {% endfor %}
-            {% set quotes = [
-              'Airlocks favor optimism.',
-              'Dragons respect checklists.',
-              'The star map can wait.',
-              'Keep the spell simple.',
-              'Pack snacks for hyperspace.'
+            {% set quote_entries = [
+              {'quote': 'Never tell me the odds.', 'speaker': 'Han Solo'},
+              {'quote': 'I am no man.', 'speaker': 'Eowyn'},
+              {'quote': 'This is the way.', 'speaker': 'Din Djarin'},
+              {'quote': 'Tea. Earl Grey. Hot.', 'speaker': 'Jean-Luc Picard'},
+              {'quote': 'So say we all.', 'speaker': 'William Adama'}
             ] %}
-            {% set quote_value = quotes[(now().strftime('%j') | int) % (quotes | count)] %}
+            {% set quote_entry = quote_entries[(now().strftime('%j') | int) % (quote_entries | count)] %}
+            {% set quote_value = quote_entry.quote %}
+            {% set quote_speaker = quote_entry.speaker %}
             {% set garage_open = states('cover.garage_door') not in ['closed', 'closing'] %}
             {% set front_door_open = is_state('binary_sensor.main_foyer_front_door_contact', 'on') %}
             {% set weather_alert_state = states('sensor.nws_dakota_county_alerts_alerts_are_active') | lower %}
@@ -371,6 +373,7 @@ script:
                 {% set rows = [
                   {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
                   {'label': 'Quote', 'value': quote_value, 'level': 'normal'},
+                  {'label': 'Speaker', 'value': quote_speaker, 'level': 'normal'},
                   {'label': 'Status', 'value': status_value, 'level': status_level}
                 ] %}
               {% endif %}
