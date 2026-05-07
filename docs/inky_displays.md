@@ -166,9 +166,10 @@ Primary entities:
 
 The automation listens to wake alarm helpers, wake-up firing state, house mode,
 guest mode, Ryan's home state, bed/owner-suite activity, trip/vacation state,
-flight status, garage/front-door exceptions, weather alerts, active weather, and
-near-term precipitation/calendar weather, and a noon refresh. It does not listen
-to `sensor.time`, so it will not redraw on clock ticks.
+flight status, garage/front-door exceptions, weather alerts, active weather,
+near-term precipitation/calendar weather, upcoming personal calendar events, and
+a noon refresh. It does not listen to `sensor.time`, so it will not redraw on
+clock ticks.
 
 The publish script only allows updates when guest mode is active, or when Ryan
 is home and trip mode is off. While Ryan is away or trip mode is on with guest
@@ -190,20 +191,30 @@ Current owner-suite rows:
 | Row | Value source | Level behavior |
 | --- | --- | --- |
 | Weather | `sensor.outside_temperature` plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
-| Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | `emphasis` in `night_preview` when alarm is enabled |
-| Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | `emphasis` when special meeting is on |
+| Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | Night-only; `emphasis` in `night_preview` when alarm is enabled |
+| Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | Night-only; shown when no urgent status is active |
+| Next | Next `calendar.ryan_claussen` event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
+| Place | Location from the next `calendar.ryan_claussen` event | Day-only |
+| Quote | Original rotating sci-fi/fantasy fallback text | Day-only when no next event is available |
 | Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next `calendar.ryan_claussen` event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
 
 In `night_preview`, the owner-suite rows are current `Weather`, tomorrow's
-daily forecast from `weather.get_forecasts`, next `Alarm`, and `Status`.
-Meeting is omitted at night to keep the display focused on sleep planning and
-morning conditions. The publish script also requests hourly forecast data at
-publish time for event-weather checks, with the legacy `forecast_json` attribute
-kept only as a fallback.
+daily forecast from `weather.get_forecasts`, next `Alarm`, and either the
+meeting alarm or urgent `Status`. Meeting alarm details are night-only, and
+safety/exception status takes priority over the meeting row. The publish script
+also requests hourly forecast data at publish time for event-weather checks,
+with the legacy `forecast_json` attribute kept only as a fallback.
+
+In `morning`, `up_for_day`, and `midday`, alarm and meeting-alarm rows are not
+shown. Those modes use current `Weather`, next calendar event time/title,
+calendar event location, and `Status`. If no calendar event is available in the
+next 12 hours, the event rows fall back to an original rotating sci-fi/fantasy
+quote plus a source row. This keeps the post-wakeup screen focused on what is
+next instead of repeating wake-up setup state.
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
-alarm/meeting rows. Weather alerts, garage-door exceptions, and front-door
+calendar/quote rows. Weather alerts, garage-door exceptions, and front-door
 exceptions still take display priority and keep an urgent status row visible.
 
 Flight rows use these normalized entities from `packages/flight_status.yaml`:
