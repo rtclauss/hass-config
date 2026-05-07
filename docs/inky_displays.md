@@ -107,6 +107,13 @@ the `mdi:` prefix so payloads stay aligned with Home Assistant icon names. The
 Pi renderer should support a small weather-first fallback icon set and skip
 unknown icons instead of failing the render.
 
+Material Design Icons are the preferred icon vocabulary for e-ink payloads
+because Home Assistant already uses MDI names and the weather set maps cleanly
+to the display's current weather rows. The renderer currently includes a small
+weather-first bitmap fallback for the MDI names below. A later icon-quality
+upgrade should render selected MDI SVG paths or an MDI icon font into the
+black/red/white palette instead of inventing a separate icon namespace.
+
 Initial weather icon names:
 
 - `mdi:weather-sunny`
@@ -129,6 +136,13 @@ Unknown content should be skipped, not rendered as an error screen.
 - Red on `owner_suite` means urgent or exceptional.
 - Yellow on `office` means emphasis or hospitality, not urgency.
 - Do not render rapidly changing clocks.
+
+Font preference for the owner-suite panel is Trebuchet Bold first, Verdana Bold
+second, then DejaVu Sans Condensed Bold as the open fallback available on the
+Pi. The renderer searches `INKY_FONT_BOLD` / `INKY_FONT_REGULAR` first, then
+common system paths for Trebuchet, Verdana, and DejaVu. Do not commit
+proprietary Trebuchet or Verdana font files to the repo; install/provide them
+locally on the Pi if those exact faces are required.
 
 ## Owner-Suite Modes
 
