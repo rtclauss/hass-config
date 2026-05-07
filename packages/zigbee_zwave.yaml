@@ -515,6 +515,8 @@ automation:
             and to_state.state not in ['unavailable', 'unknown']
           }}
     action:
+      - delay:
+          seconds: 45
       - action: script.turn_on
         target:
           entity_id: script.replay_inovelli_led_policy_after_recovery
@@ -1960,7 +1962,7 @@ script:
         {{
           'owner_suite_fan_switch'
           if requested_scope == 'bedroom'
-          else '(owner_suite_bathroom_vanity|owner_suite_closet)'
+          else '(owner_suite_bathroom_|owner_suite_closet)'
         }}
       owner_suite_day_mode_script_entity: >-
         {{
@@ -2029,7 +2031,8 @@ script:
 
   apply_owner_suite_inovelli_led_policy:
     icon: mdi:light-switch
-    mode: restart
+    mode: queued
+    max: 10
     trace:
       stored_traces: 100
     fields:
@@ -2085,6 +2088,27 @@ script:
     icon: mdi:light-switch
     trace:
       stored_traces: 100
+    variables:
+      owner_suite_led_color_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenoff$') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_led_color_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenon$') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_led_intensity_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_led_intensity_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
       - *trip_led_updates_allowed
       - action: logbook.log
@@ -2094,36 +2118,24 @@ script:
           message: "Setting owner suite switch LED colors to nighttime red"
           domain: script
       - action: number.set_value
-        target:
-          entity_id:
-            - number.owner_suite_closet_ledcolorwhenoff
-            - number.owner_suite_fan_switch_ledcolorwhenoff
-            - number.owner_suite_bathroom_vanity_ledcolorwhenoff
         data:
+          entity_id: >
+            {{ owner_suite_led_color_off_switches }}
           value: "0"
       - action: number.set_value
-        target:
-          entity_id:
-            - number.owner_suite_closet_ledintensitywhenoff
-            - number.owner_suite_fan_switch_ledintensitywhenoff
-            - number.owner_suite_bathroom_vanity_ledintensitywhenoff
         data:
+          entity_id: >
+            {{ owner_suite_led_intensity_off_switches }}
           value: "1"
       - action: number.set_value
-        target:
-          entity_id:
-            - number.owner_suite_closet_ledintensitywhenon
-            - number.owner_suite_fan_switch_ledintensitywhenon
-            - number.owner_suite_bathroom_vanity_ledintensitywhenon
         data:
+          entity_id: >
+            {{ owner_suite_led_intensity_on_switches }}
           value: "50"
       - action: number.set_value
-        target:
-          entity_id:
-            - number.owner_suite_closet_ledcolorwhenon
-            - number.owner_suite_fan_switch_ledcolorwhenon
-            - number.owner_suite_bathroom_vanity_ledcolorwhenon
         data:
+          entity_id: >
+            {{ owner_suite_led_color_on_switches }}
           value: "0"
 
   day_mode_switches_office_guest_room:
@@ -2812,6 +2824,20 @@ script:
     icon: mdi:light-switch
     trace:
       stored_traces: 100
+    variables:
+      owner_suite_led_intensity_off_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_led_intensity_on_switches: >
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$') -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
+      owner_suite_led_intensity_off_with_office: >-
+        {{ [owner_suite_led_intensity_off_switches, 'number.office_fan_switch_ledintensitywhenoff']
+          | reject('equalto', '') | join(', ') }}
     sequence:
       - action: retry.actions
         data:
@@ -2820,16 +2846,12 @@ script:
               data:
                 value: 0
               target:
-                entity_id:
-                  - number.owner_suite_closet_ledintensitywhenoff
-                  - number.owner_suite_fan_switch_ledintensitywhenoff
-                  - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-                  - number.office_fan_switch_ledintensitywhenoff
+                entity_id: "{{ owner_suite_led_intensity_off_with_office }}"
             - action: number.set_value
               data:
                 value: 0
               target:
-                entity_id: number.owner_suite_fan_switch_ledintensitywhenon
+                entity_id: "{{ owner_suite_led_intensity_on_switches }}"
           initial_grace_period: 30
           expected_state: 0
       - repeat:
@@ -2838,12 +2860,9 @@ script:
             - delay:
                 seconds: 30
             - action: number.set_value
-              entity_id:
-                - number.owner_suite_closet_ledintensitywhenoff
-                - number.owner_suite_fan_switch_ledintensitywhenoff
-                - number.owner_suite_bathroom_vanity_ledintensitywhenoff
-                - number.office_fan_switch_ledintensitywhenoff
-                - number.owner_suite_fan_switch_ledintensitywhenon
+              entity_id: >-
+                {{ [owner_suite_led_intensity_off_with_office, owner_suite_led_intensity_on_switches]
+                  | reject('equalto', '') | join(', ') }}
               data:
                 value: 0
 
