@@ -321,10 +321,12 @@ def test_inovelli_led_recovery_automation_watches_all_led_number_entities() -> N
 
     for token in (
         "replay_inovelli_led_policy_on_recovery",
+        "mode: restart",
         "event_type: state_changed",
         "entity_id is match('^number\\\\..*_led(?:color|intensity)when(?:on|off)$')",
         "from_state.state == 'unavailable'",
         "to_state.state not in ['unavailable', 'unknown']",
+        "seconds: 45",
         "entity_id: script.replay_inovelli_led_policy_after_recovery",
     ):
         assert token in block
@@ -357,13 +359,13 @@ def test_inovelli_led_recovery_replays_trip_day_night_and_owner_suite_darkening(
 def test_owner_suite_led_darkening_excludes_unavailable_guest_room_switch() -> None:
     block = _script_block("turn_off_owner_suite_inovelli_switch_leds")
 
-    for entity_id in (
-        "number.owner_suite_closet_ledintensitywhenoff",
-        "number.owner_suite_fan_switch_ledintensitywhenoff",
-        "number.owner_suite_bathroom_vanity_ledintensitywhenoff",
+    for token in (
+        "^number\\\\.owner_suite_.*ledintensitywhenoff$",
+        "^number\\\\.owner_suite_.*ledintensitywhenon$",
+        "owner_suite_led_intensity_off_with_office",
         "number.office_fan_switch_ledintensitywhenoff",
     ):
-        assert entity_id in block
+        assert token in block
 
     assert "number.guest_room_fan_switch_ledintensitywhenoff" not in block
 
