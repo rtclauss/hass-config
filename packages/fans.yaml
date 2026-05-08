@@ -272,26 +272,33 @@ automation:
     trace:
       stored_traces: 100
     triggers:
-      - trigger: timer.finished
-        target:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
           entity_id: timer.owner_suite_fan_timer
-      - trigger: timer.finished
-        target:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
           entity_id: timer.owner_suite_bathroom_exhaust_timer
-      - trigger: timer.finished
-        target:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
           entity_id: timer.office_ceiling_fan_timer
-      - trigger: timer.finished
-        target:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
           entity_id: timer.basement_bathroom_exhaust_timer
-      - trigger: timer.finished
-        target:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
           entity_id: timer.den_ceiling_fan_timer
-      - trigger: timer.finished
-        target:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
           entity_id: timer.guest_room_fan_timer
-      - trigger: timer.finished
-        target:
+      - trigger: event
+        event_type: timer.finished
+        event_data:
           entity_id: timer.guest_bathroom_exhaust_timer
     actions:
       - variables:
@@ -305,7 +312,7 @@ automation:
             timer.guest_bathroom_exhaust_timer: fan.guest_bathroom_exhaust
       - action: fan.turn_off
         target:
-          entity_id: "{{ fan_map[trigger.entity_id] }}"
+          entity_id: "{{ fan_map[trigger.event.data.entity_id] }}"
 
   - alias: bedroom_fan_control
     id: bedroom_fan_control
