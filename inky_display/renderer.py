@@ -19,6 +19,9 @@ from .payload import DisplayPayload
 
 WIDTH = 400
 HEIGHT = 300
+FOOTER_HEIGHT = 36
+FOOTER_TEXT_SCALE = 2
+FOOTER_TEXT_TOP = HEIGHT - 28
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -50,8 +53,8 @@ def render_payload(payload: DisplayPayload) -> bytes:
         _render_default_layout(canvas, payload, rows, accent)
 
     if payload.footer:
-        canvas.rectangle(0, HEIGHT - 30, WIDTH, HEIGHT, BLACK)
-        canvas.text(18, HEIGHT - 22, payload.footer, scale=1, color=WHITE)
+        canvas.rectangle(0, HEIGHT - FOOTER_HEIGHT, WIDTH, HEIGHT, BLACK)
+        canvas.text(18, FOOTER_TEXT_TOP, payload.footer, scale=FOOTER_TEXT_SCALE, color=WHITE)
 
     return canvas.to_png()
 
@@ -116,7 +119,6 @@ def _render_quote_layout(
     if speaker:
         canvas.text_centered(200, attribution_top, f"- {speaker}", scale=1, color=BLACK)
         attribution_top += 16
-    canvas.rectangle(34, attribution_top + 4, 366, attribution_top + 8, accent)
 
     y = 196
     for row in (weather, status):
