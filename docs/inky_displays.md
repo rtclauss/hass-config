@@ -133,6 +133,10 @@ Unknown content should be skipped, not rendered as an error screen.
 - Text must be readable from roughly 4 feet away.
 - Prefer one large title, one subtitle, and at most four status rows.
 - Reject dense paragraphs, tiny legends, and dashboard-like tables.
+- Do not use decorative divider lines in quote/title layouts; they reduce
+  clearance around large text on the physical panel.
+- Footer text must remain distance-legible. Use the larger footer band and
+  scale-2 renderer text for update/status footer copy.
 - Red on `owner_suite` means urgent or exceptional.
 - Yellow on `office` means emphasis or hospitality, not urgency.
 - Do not render rapidly changing clocks.

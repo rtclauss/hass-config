@@ -155,6 +155,20 @@ def test_quote_payload_uses_full_width_quote_layout_without_source_row() -> None
     assert b"\x00\x00\x00" in pixels
 
 
+def test_quote_layout_omits_decorative_divider_below_attribution() -> None:
+    payload = validate_payload(_sample("owner_suite_morning.json"))
+    pixels = _png_rgb(render_payload(payload))
+    row_width = WIDTH * 3
+    divider_row = pixels[160 * row_width : 161 * row_width]
+
+    assert b"\xd7\x00\x00" not in divider_row
+
+
+def test_footer_uses_larger_distance_legible_text_band() -> None:
+    assert renderer.FOOTER_HEIGHT == 36
+    assert renderer.FOOTER_TEXT_SCALE == 2
+
+
 def test_renderer_prefers_trebuchet_then_verdana_font_stack() -> None:
     bold_stack = "\n".join(renderer.BOLD_FONT_CANDIDATES)
 
