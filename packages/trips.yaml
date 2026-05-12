@@ -173,6 +173,8 @@ automation:
   - id: trip_mode_startup_reconcile
     alias: trip_mode_startup_reconcile
     mode: restart
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: homeassistant
         event: start
@@ -302,6 +304,8 @@ automation:
   - id: trip_mode_manager
     alias: trip_mode_manager
     mode: single
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: event
         id: startup_reconcile_enable
@@ -593,6 +597,8 @@ automation:
   - id: sync_ecobee_calendar_vacation
     alias: sync_ecobee_calendar_vacation
     mode: restart
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         id: schedule_changed
@@ -646,6 +652,8 @@ automation:
   - id: log_calendar_vacation_plan_diagnostics
     alias: log_calendar_vacation_plan_diagnostics
     mode: restart
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: sensor.ecobee_calendar_vacation_schedule
@@ -672,6 +680,8 @@ automation:
 
   - id: trip_mode_watchdog_home_1h
     alias: trip_mode_watchdog_home_1h
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
@@ -694,6 +704,8 @@ automation:
   - id: garage_opened_on_a_trip
     alias: Garage Door Opened while on a Trip
     mode: restart
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: cover.garage_door
@@ -771,6 +783,8 @@ automation:
 
   - id: random_off_time
     alias: random_off_time
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: homeassistant
         id: random_off_time_startup
@@ -801,6 +815,8 @@ automation:
   # TODO is this still needed with Vacation Mode?
   - id: return_home_from_parents
     alias: return_home_from_parents
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
@@ -834,6 +850,8 @@ automation:
 
   - id: send_nest_airport_home_eta
     alias: send_nest_airport_home_eta
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: zone
         entity_id: device_tracker.bayesian_zeke_home
@@ -863,6 +881,8 @@ automation:
 
   - id: vacation_lights_on
     alias: vacation_lights_on
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: sun
         event: sunset
@@ -889,6 +909,8 @@ automation:
 
   - id: vacation_lights_off
     alias: vacation_lights_off
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: input_datetime.random_vacation_lights_off
@@ -931,6 +953,8 @@ automation:
     alias: vacuum_on_trip
     description: >-
       Run one full-floor pass on the main and upstairs levels during trips.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: "13:00:00"
@@ -960,6 +984,8 @@ automation:
     description: >-
       Run one full-floor pass on the main and upstairs levels before Ryan flies
       home.
+    trace:
+      stored_traces: 100
     trigger:
       - entity_id: binary_sensor.flying_home_today
         from: "off"
@@ -1174,6 +1200,8 @@ script:
     description: >-
       Resume the Ecobee program when a return-home travel signal fires.
     mode: queued
+    trace:
+      stored_traces: 100
     fields:
       reason:
         description: Return-home travel source requesting Ecobee resume.
@@ -1198,6 +1226,8 @@ script:
     description: >-
       Run trip-safe whole-floor vacuuming and send the travel notification.
     mode: queued
+    trace:
+      stored_traces: 100
     fields:
       notify_message:
         description: >-

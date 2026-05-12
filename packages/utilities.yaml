@@ -143,6 +143,8 @@ alarm_control_panel: []
 automation:
   - alias: restart_water_meter
     id: restart_water_meter
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time_pattern
         hours: "/1"
@@ -161,6 +163,8 @@ automation:
         # to get past.
   - alias: trigger_winter_watermeter_flow
     id: trigger_winter_watermeter_flow
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time_pattern
         minutes: "/23"
@@ -188,6 +192,8 @@ automation:
 
   - alias: check_non_responding_entities
     id: check_non_responding_entities
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time_pattern
         hours: "/12"
@@ -230,6 +236,8 @@ automation:
 
   - id: switch_electrical_tariff
     alias: switch_electrical_tariff
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: template
         value_template: >-
@@ -291,6 +299,8 @@ automation:
     description: >
       Keep the EV charging utility meters on Dakota Electric's time-of-use
       schedule. Weekends and holidays stay off-peak all day.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: homeassistant
         event: start
@@ -365,6 +375,8 @@ automation:
     description: >
       Alert when the current-hour whole-home energy meter crosses the expected
       baseload while the house is away or in a sleep-oriented mode.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: numeric_state
         entity_id: sensor.hourly_home_electricity_energy
@@ -411,6 +423,8 @@ automation:
     description: >
       Send a weekly energy summary that combines whole-home and EV tariff
       utility meters into readable cost context.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: "08:15:00"
@@ -466,6 +480,8 @@ automation:
 
   - id: switch_water_tariff
     alias: switch_water_tariff
+    trace:
+      stored_traces: 100
     trigger:
       []
       # - platform: time
@@ -491,6 +507,8 @@ automation:
   - alias: Restart AppDaemon on HA Startup or load cells unavailable
     description: When HA starts up, or bed load cells are unavailable restart AppDaemon
     id: restart_appdaemon_on_ha_startup
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: homeassistant
         event: start
@@ -502,6 +520,7 @@ automation:
       #         Restarting AppDaemon. Check the Automation Log
     action:
       - action: hassio.addon_restart
+        continue_on_error: true
         data:
           addon: a0d7b954_appdaemon
 
@@ -510,6 +529,8 @@ automation:
       Restart the Music Assistant app only when Ryan leaves home to refresh
       Sonos discovery while the house is empty.
     id: restart_music_assistant_every_12_17_hours
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: zone
         entity_id: person.ryan
@@ -517,6 +538,7 @@ automation:
         event: leave
     action:
       - action: hassio.addon_restart
+        continue_on_error: true
         data:
           addon: d5369777_music_assistant
 
@@ -525,6 +547,8 @@ automation:
     description: >
       Notify when trip mode activates and offer a cancel window.
       Shuts off the water main automatically after 4 hours if not cancelled.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: input_boolean.trip
@@ -578,6 +602,8 @@ automation:
     description: >
       Notify when trip mode ends and offer a cancel window.
       Restores the water main automatically after 5 minutes if not cancelled.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: input_boolean.trip
@@ -635,6 +661,8 @@ automation:
     description: >
       Notify when a guest arrives during a trip and offer a cancel window.
       Restores the water main automatically after 4 hours if not cancelled.
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id: input_boolean.guest_mode
@@ -692,6 +720,8 @@ automation:
 
   - alias: Turn Sump Back On
     id: turn_sump_back_on
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id:
@@ -711,6 +741,8 @@ automation:
 
   - alias: Turn Laundry Plugs Back On
     id: turn_laundry_plugs_back_on
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id:
@@ -733,6 +765,8 @@ automation:
 
   - alias: Notify Sump Pit Getting Full
     id: notify_sump_pit_getting_full
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: numeric_state
         entity_id: sensor.sump_fill
@@ -745,6 +779,8 @@ automation:
 
   - alias: Notify Sump Pit Full
     id: notify_sump_pit_full
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: numeric_state
         entity_id: sensor.sump_fill
@@ -758,6 +794,8 @@ automation:
   - alias: Notify Sump Runs
     id: notify_sump_runs
     description: Notify number of times the sump pump runs
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: "12:30:00"
@@ -794,6 +832,8 @@ automation:
   - alias: Notify Garbage
     id: notify_garbage_day
     description: Notify garbage day
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: "14:30:00"
@@ -831,6 +871,8 @@ automation:
   - alias: Restart CPAP
     id: restart_cpap
     description: Restart CPAP so Bluetooth keeps working
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: time
         at: "15:30:00"
@@ -852,6 +894,8 @@ automation:
 
   - alias: Turn CPAP Back On
     id: turn_CPAP_back_on
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: state
         entity_id:

@@ -34,6 +34,8 @@ automation:
     alias: publish_owner_suite_inky_display
     description: Publish owner-suite e-ink desired state after meaningful source changes.
     mode: restart
+    trace:
+      stored_traces: 100
     trigger:
       - trigger: homeassistant
         event: start
@@ -102,6 +104,8 @@ script:
     alias: Publish Owner Suite Inky Display
     description: Build and publish the compact owner-suite Inky display payload.
     mode: restart
+    trace:
+      stored_traces: 100
     fields:
       mode:
         description: "Display mode override: auto, night_preview, morning, up_for_day, or midday."
@@ -109,6 +113,9 @@ script:
     sequence:
       - variables:
           requested_mode: "{{ mode | default('auto', true) | string | trim }}"
+          owner_suite_daily_forecast: {}
+          owner_suite_hourly_forecast: {}
+          quote_entries: !include ../data/inky_owner_suite_quotes.yaml
           resolved_mode: >-
             {% set requested = requested_mode %}
             {% set house_mode = states('input_select.house_mode') %}
@@ -117,6 +124,8 @@ script:
             {% elif is_state('input_boolean.wakeup_alarm_firing', 'on') and now().hour < 12 %}
               morning
             {% elif house_mode in ['night', 'in_bed', 'asleep'] %}
+              night_preview
+            {% elif now().hour >= 20 %}
               night_preview
             {% elif now().hour >= 12 %}
               midday
@@ -131,13 +140,44 @@ script:
                is_state('binary_sensor.bayesian_zeke_home', 'on')
                and is_state('input_boolean.trip', 'off')
              ) }}
+      - choose:
+          - conditions:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: weather.tomorrow_io_the_brewery_daily
+                    state:
+                      - "unknown"
+                      - "unavailable"
+            sequence:
+              - action: weather.get_forecasts
+                target:
+                  entity_id: weather.tomorrow_io_the_brewery_daily
+                data:
+                  type: daily
+                response_variable: owner_suite_daily_forecast
+              - action: weather.get_forecasts
+                target:
+                  entity_id: weather.tomorrow_io_the_brewery_daily
+                data:
+                  type: hourly
+                response_variable: owner_suite_hourly_forecast
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.ryan_claussen
+        data:
+          start_date_time: "{{ (now() - timedelta(minutes=5)).isoformat() }}"
+          end_date_time: "{{ (now() + timedelta(hours=12)).isoformat() }}"
+        response_variable: owner_suite_calendar_window
       - action: mqtt.publish
         data:
           topic: home/inky/owner_suite/state
           qos: 1
           retain: true
           payload: >-
-            {% set weather_entity = states('sensor.active_weather_entity_id') %}
+            {% set preferred_weather_entity = 'weather.tomorrow_io_the_brewery_daily' %}
+            {% set active_weather_entity = states('sensor.active_weather_entity_id') %}
+            {% set weather_entity = active_weather_entity if active_weather_entity not in ['', 'unknown', 'unavailable'] else preferred_weather_entity %}
             {% set weather_state = states(weather_entity) %}
             {% set weather_icon_map = {
               'clear-night': 'mdi:weather-sunny',
@@ -158,6 +198,30 @@ script:
             {% set weather_icon = weather_icon_map.get(weather_state, 'mdi:weather-cloudy') %}
             {% set temperature = states('sensor.outside_temperature') %}
             {% set weather_value = (temperature ~ 'F ' ~ weather_state.replace('-', ' ')) if temperature not in ['unknown', 'unavailable'] else weather_state.replace('-', ' ') %}
+            {% set daily_response = owner_suite_daily_forecast if owner_suite_daily_forecast is mapping else {} %}
+            {% set hourly_response = owner_suite_hourly_forecast if owner_suite_hourly_forecast is mapping else {} %}
+            {% set daily_forecast_rows = daily_response.get(weather_entity, daily_response.get(preferred_weather_entity, {})).get('forecast', []) | sort(attribute='datetime') %}
+            {% set forecast_rows = hourly_response.get(weather_entity, hourly_response.get(preferred_weather_entity, {})).get('forecast', []) | sort(attribute='datetime') %}
+            {% if forecast_rows | count == 0 %}
+              {% set forecast_rows = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+            {% endif %}
+            {% set tomorrow_start_ts = as_timestamp(today_at('00:00') + timedelta(days=1)) %}
+            {% set tomorrow_end_ts = as_timestamp(today_at('00:00') + timedelta(days=2)) %}
+            {% set tomorrow = namespace(value='Unavailable') %}
+            {% for forecast in daily_forecast_rows %}
+              {% set forecast_ts = as_timestamp(forecast.datetime, default=none) %}
+              {% if forecast_ts is number and forecast_ts >= tomorrow_start_ts and forecast_ts < tomorrow_end_ts and tomorrow.value == 'Unavailable' %}
+                {% set forecast_temp = forecast.temperature | int(default=none) %}
+                {% set forecast_condition = forecast.condition | default('', true) | string | replace('-', ' ') %}
+                {% if forecast_temp is number and forecast_condition | trim != '' %}
+                  {% set tomorrow.value = forecast_temp ~ 'F ' ~ forecast_condition %}
+                {% elif forecast_condition | trim != '' %}
+                  {% set tomorrow.value = forecast_condition %}
+                {% elif forecast_temp is number %}
+                  {% set tomorrow.value = forecast_temp ~ 'F' %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
             {% set weekday_alarm = is_state('input_boolean.weekday_alarm_on', 'on') %}
             {% set weekend_alarm = is_state('input_boolean.weekend_alarm_on', 'on') %}
             {% set meeting_alarm = is_state('input_boolean.special_meeting', 'on') %}
@@ -169,6 +233,28 @@ script:
               {% set alarm_value = 'Off' %}
             {% endif %}
             {% set meeting_value = states('input_datetime.next_work_meeting')[0:5] if meeting_alarm else 'Off' %}
+            {% set calendar_entity = 'calendar.ryan_claussen' %}
+            {% set calendar_response = owner_suite_calendar_window if owner_suite_calendar_window is mapping else {} %}
+            {% set calendar_items = calendar_response.get('events', calendar_response.get(calendar_entity, {}).get('events', [])) %}
+            {% set next_calendar = namespace(has_event=false, time='No event', place='No location') %}
+            {% set now_ts = as_timestamp(now()) %}
+            {% for item in calendar_items | sort(attribute='start') %}
+              {% set item_start = item.start | default('', true) %}
+              {% set item_end = item.end | default('', true) %}
+              {% set item_start_ts = as_timestamp(item_start, default=none) %}
+              {% set item_end_ts = as_timestamp(item_end, default=none) %}
+              {% if not next_calendar.has_event and item_start_ts is number and item_end_ts is number and item_end_ts > now_ts and item_start_ts < now_ts + 43200 %}
+                {% set item_title = item.summary | default('Calendar', true) | string | trim %}
+                {% set item_location = item.location | default('', true) | string | trim %}
+                {% set item_time = (item_start | as_datetime | as_local).strftime('%H:%M') %}
+                {% set next_calendar.has_event = true %}
+                {% set next_calendar.time = (item_time ~ ' ' ~ item_title) | trim %}
+                {% set next_calendar.place = item_location if item_location != '' else 'No location' %}
+              {% endif %}
+            {% endfor %}
+            {% set quote_entry = quote_entries[(now().strftime('%j') | int) % (quote_entries | count)] %}
+            {% set quote_value = quote_entry.quote %}
+            {% set quote_speaker = quote_entry.speaker %}
             {% set garage_open = states('cover.garage_door') not in ['closed', 'closing'] %}
             {% set front_door_open = is_state('binary_sensor.main_foyer_front_door_contact', 'on') %}
             {% set weather_alert_state = states('sensor.nws_dakota_county_alerts_alerts_are_active') | lower %}
@@ -178,16 +264,17 @@ script:
             {% set event_start = state_attr('calendar.ryan_claussen', 'start_time') | default('', true) %}
             {% set event_end = state_attr('calendar.ryan_claussen', 'end_time') | default('', true) %}
             {% set event_title = state_attr('calendar.ryan_claussen', 'message') | default('Event', true) %}
-            {% set event_forecasts = (state_attr('sensor.active_weather_entity_id', 'forecast_json') | default('[]', true) | from_json) | sort(attribute='datetime') %}
+            {% set event_forecasts = forecast_rows %}
             {% set precip_conditions = ['hail', 'lightning-rainy', 'pouring', 'rainy', 'snowy', 'snowy-rainy'] %}
             {% set event = namespace(max_precip=-1, weather=false) %}
             {% if event_start not in ['', none, 'unknown', 'unavailable'] and event_end not in ['', none, 'unknown', 'unavailable'] %}
-              {% set event_start_dt = as_datetime(event_start) %}
-              {% set event_end_dt = as_datetime(event_end) %}
-              {% if event_start_dt is not none and event_end_dt is not none and event_start_dt < now() + timedelta(hours=12) and event_end_dt > now() %}
+              {% set event_start_ts = as_timestamp(event_start, default=none) %}
+              {% set event_end_ts = as_timestamp(event_end, default=none) %}
+              {% set now_ts = as_timestamp(now()) %}
+              {% if event_start_ts is number and event_end_ts is number and event_start_ts < now_ts + 43200 and event_end_ts > now_ts %}
                 {% for forecast in event_forecasts %}
-                  {% set forecast_dt = as_datetime(forecast.datetime) %}
-                  {% if forecast_dt is not none and forecast_dt >= event_start_dt and forecast_dt < event_end_dt %}
+                  {% set forecast_ts = as_timestamp(forecast.datetime, default=none) %}
+                  {% if forecast_ts is number and forecast_ts >= event_start_ts and forecast_ts < event_end_ts %}
                     {% set probability = forecast.precipitation_probability | int(default=-1) %}
                     {% if probability > event.max_precip %}
                       {% set event.max_precip = probability %}
@@ -262,8 +349,16 @@ script:
               'up_for_day': 'Morning activity confirmed',
               'midday': 'Low-frequency refresh'
             } %}
-            {% set exception_active = weather_alert or garage_open or front_door_open %}
-            {% if flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] and not exception_active %}
+            {% set exception_active = weather_alert or garage_open or front_door_open or rain_next_hour or event_weather %}
+            {% if resolved_mode == 'night_preview' %}
+              {% set night_detail_row = {'label': 'Status', 'value': status_value, 'level': status_level} if status_level != 'normal' else {'label': 'Meeting', 'value': meeting_value, 'level': 'emphasis' if meeting_alarm else 'normal'} %}
+              {% set rows = [
+                {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                {'icon': weather_icon, 'label': 'Tomorrow', 'value': tomorrow.value, 'level': 'normal'},
+                {'label': 'Alarm', 'value': alarm_value, 'level': 'emphasis' if alarm_value != 'Off' else 'normal'},
+                night_detail_row
+              ] %}
+            {% elif flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] and not exception_active %}
               {% set rows = travel_rows %}
             {% elif flight_active and resolved_mode in ['morning', 'up_for_day', 'midday'] %}
               {% set rows = [
@@ -273,12 +368,21 @@ script:
                 {'label': 'Status', 'value': status_value, 'level': status_level}
               ] %}
             {% else %}
-              {% set rows = [
-                {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
-                {'label': 'Alarm', 'value': alarm_value, 'level': 'emphasis' if resolved_mode == 'night_preview' and alarm_value != 'Off' else 'normal'},
-                {'label': 'Meeting', 'value': meeting_value, 'level': 'emphasis' if meeting_alarm else 'normal'},
-                {'label': 'Status', 'value': status_value, 'level': status_level}
-              ] %}
+              {% if next_calendar.has_event %}
+                {% set rows = [
+                  {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                  {'label': 'Next', 'value': next_calendar.time, 'level': 'emphasis'},
+                  {'label': 'Place', 'value': next_calendar.place, 'level': 'normal'},
+                  {'label': 'Status', 'value': status_value, 'level': status_level}
+                ] %}
+              {% else %}
+                {% set rows = [
+                  {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
+                  {'label': 'Quote', 'value': quote_value, 'level': 'normal'},
+                  {'label': 'Speaker', 'value': quote_speaker, 'level': 'normal'},
+                  {'label': 'Status', 'value': status_value, 'level': status_level}
+                ] %}
+              {% endif %}
             {% endif %}
             {{ {
               'schema_version': 1,

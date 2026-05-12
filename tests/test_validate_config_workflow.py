@@ -32,8 +32,7 @@ def test_home_assistant_config_check_does_not_depend_on_esphome_build() -> None:
 def test_home_assistant_config_check_pins_known_good_image() -> None:
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
-    assert "HOME_ASSISTANT_CHECK_CONFIG_IMAGE: ghcr.io/home-assistant/home-assistant:2026.3.4" in workflow_text
-    assert "home-assistant/core#167066" in workflow_text
+    assert "HOME_ASSISTANT_CHECK_CONFIG_IMAGE: ghcr.io/home-assistant/home-assistant:2026.5.0" in workflow_text
     assert '"$HOME_ASSISTANT_CHECK_CONFIG_IMAGE" \\' in workflow_text
 
 

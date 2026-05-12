@@ -8,6 +8,7 @@ import zlib
 import pytest
 
 from inky_display import HEIGHT, WIDTH, payload_hash, render_payload, validate_payload
+from inky_display import renderer
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -138,3 +139,39 @@ def test_black_accent_emphasis_rows_keep_visible_text() -> None:
     pixels = _png_rgb(render_payload(validate_payload(data)))
 
     assert b"\xff\xff\xff" in pixels
+
+
+def test_quote_payload_uses_full_width_quote_layout_without_source_row() -> None:
+    payload = validate_payload(_sample("owner_suite_morning.json"))
+    rows = payload.sections[0]["rows"]
+
+    assert [row["label"] for row in rows] == ["Weather", "Quote", "Speaker", "Status"]
+    assert next(row["value"] for row in rows if row["label"] == "Speaker") == "Han Solo"
+    assert "Source" not in {row["label"] for row in rows}
+
+    pixels = _png_rgb(render_payload(payload))
+
+    assert b"\xd7\x00\x00" in pixels
+    assert b"\x00\x00\x00" in pixels
+
+
+def test_quote_layout_omits_decorative_divider_below_attribution() -> None:
+    payload = validate_payload(_sample("owner_suite_morning.json"))
+    pixels = _png_rgb(render_payload(payload))
+    row_width = WIDTH * 3
+    divider_row = pixels[160 * row_width : 161 * row_width]
+
+    assert b"\xd7\x00\x00" not in divider_row
+
+
+def test_footer_uses_larger_distance_legible_text_band() -> None:
+    assert renderer.FOOTER_HEIGHT == 36
+    assert renderer.FOOTER_TEXT_SCALE == 2
+
+
+def test_renderer_prefers_trebuchet_then_verdana_font_stack() -> None:
+    bold_stack = "\n".join(renderer.BOLD_FONT_CANDIDATES)
+
+    assert "Trebuchet" in bold_stack
+    assert bold_stack.index("Trebuchet") < bold_stack.index("Verdana")
+    assert "DejaVuSansCondensed-Bold.ttf" in bold_stack

@@ -107,6 +107,13 @@ the `mdi:` prefix so payloads stay aligned with Home Assistant icon names. The
 Pi renderer should support a small weather-first fallback icon set and skip
 unknown icons instead of failing the render.
 
+Material Design Icons are the preferred icon vocabulary for e-ink payloads
+because Home Assistant already uses MDI names and the weather set maps cleanly
+to the display's current weather rows. The renderer currently includes a small
+weather-first bitmap fallback for the MDI names below. A later icon-quality
+upgrade should render selected MDI SVG paths or an MDI icon font into the
+black/red/white palette instead of inventing a separate icon namespace.
+
 Initial weather icon names:
 
 - `mdi:weather-sunny`
@@ -126,9 +133,20 @@ Unknown content should be skipped, not rendered as an error screen.
 - Text must be readable from roughly 4 feet away.
 - Prefer one large title, one subtitle, and at most four status rows.
 - Reject dense paragraphs, tiny legends, and dashboard-like tables.
+- Do not use decorative divider lines in quote/title layouts; they reduce
+  clearance around large text on the physical panel.
+- Footer text must remain distance-legible. Use the larger footer band and
+  scale-2 renderer text for update/status footer copy.
 - Red on `owner_suite` means urgent or exceptional.
 - Yellow on `office` means emphasis or hospitality, not urgency.
 - Do not render rapidly changing clocks.
+
+Font preference for the owner-suite panel is Trebuchet Bold first, Verdana Bold
+second, then DejaVu Sans Condensed Bold as the open fallback available on the
+Pi. The renderer searches `INKY_FONT_BOLD` / `INKY_FONT_REGULAR` first, then
+common system paths for Trebuchet, Verdana, and DejaVu. Do not commit
+proprietary Trebuchet or Verdana font files to the repo; install/provide them
+locally on the Pi if those exact faces are required.
 
 ## Owner-Suite Modes
 
@@ -166,9 +184,10 @@ Primary entities:
 
 The automation listens to wake alarm helpers, wake-up firing state, house mode,
 guest mode, Ryan's home state, bed/owner-suite activity, trip/vacation state,
-flight status, garage/front-door exceptions, weather alerts, active weather, and
-near-term precipitation/calendar weather, and a noon refresh. It does not listen
-to `sensor.time`, so it will not redraw on clock ticks.
+flight status, garage/front-door exceptions, weather alerts, active weather,
+near-term precipitation/calendar weather, upcoming personal calendar events, and
+a noon refresh. It does not listen to `sensor.time`, so it will not redraw on
+clock ticks.
 
 The publish script only allows updates when guest mode is active, or when Ryan
 is home and trip mode is off. While Ryan is away or trip mode is on with guest
@@ -180,7 +199,7 @@ Current owner-suite modes:
 
 | Mode | Selected when | Title | Subtitle |
 | --- | --- | --- | --- |
-| `night_preview` | Explicit mode or house mode is `night`, `in_bed`, or `asleep` | `Tonight` | `Next alarm and overnight status` |
+| `night_preview` | Explicit mode, house mode is `night`, `in_bed`, or `asleep`, or automatic after 20:00 | `Tonight` | `Next alarm and overnight status` |
 | `morning` | Explicit mode or `input_boolean.wakeup_alarm_firing` is on before noon | `Good Morning` | `Wake sequence active` |
 | `up_for_day` | Explicit mode or automatic pre-noon non-sleep state | `Up For Day` | `Morning activity confirmed` |
 | `midday` | Explicit mode, noon trigger, or automatic afternoon state | `Midday` | `Low-frequency refresh` |
@@ -190,13 +209,44 @@ Current owner-suite rows:
 | Row | Value source | Level behavior |
 | --- | --- | --- |
 | Weather | `sensor.outside_temperature` plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
-| Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | `emphasis` in `night_preview` when alarm is enabled |
-| Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | `emphasis` when special meeting is on |
+| Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | Night-only; `emphasis` in `night_preview` when alarm is enabled |
+| Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | Night-only; shown when no urgent status is active |
+| Next | Next `calendar.ryan_claussen` event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
+| Place | Location from the next `calendar.ryan_claussen` event | Day-only |
+| Quote | Rotating short sci-fi/fantasy quote | Day-only when no next event is available |
+| Speaker | Character attribution for the quote | Rendered under the centered quote, not as a standard row |
 | Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next `calendar.ryan_claussen` event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
+
+The quote source is the curated local file
+`data/inky_owner_suite_quotes.yaml`, included by
+`script.publish_owner_suite_inky_display` as `quote_entries`. There is no
+external quote API and no runtime scraping. Keep entries short enough for the
+`400x300` panel, use the in-universe speaker/character for attribution, and
+avoid adding long copyrighted excerpts. Tests enforce conservative quote and
+speaker length limits so entries cannot overrun the physical screen. Current
+quote families include Star Wars, The Lord of the Rings, Star Trek, Battlestar
+Galactica, The Culture, Dungeon Crawler Carl, The Hitchhiker's Guide to the
+Galaxy, and Discworld.
+
+In `night_preview`, the owner-suite rows are current `Weather`, tomorrow's
+daily forecast from `weather.get_forecasts`, next `Alarm`, and either the
+meeting alarm or urgent `Status`. Meeting alarm details are night-only, and
+safety/exception status takes priority over the meeting row. The publish script
+also requests hourly forecast data at publish time for event-weather checks,
+with the legacy `forecast_json` attribute kept only as a fallback.
+
+In `morning`, `up_for_day`, and `midday`, alarm and meeting-alarm rows are not
+shown. Those modes use current `Weather`, next calendar event time/title,
+calendar event location, and `Status`. If no calendar event is available in the
+next 12 hours, the event rows fall back to a rotating sci-fi/fantasy quote with
+the character who said it. The renderer gives quote payloads a dedicated
+full-width quote layout instead of spending a row on source/metadata text. This
+keeps the post-wakeup screen focused on what is next instead of repeating
+wake-up setup state.
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
-alarm/meeting rows. Weather alerts, garage-door exceptions, and front-door
+calendar/quote rows. Weather alerts, garage-door exceptions, and front-door
 exceptions still take display priority and keep an urgent status row visible.
 
 Flight rows use these normalized entities from `packages/flight_status.yaml`:
