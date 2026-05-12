@@ -116,6 +116,12 @@ def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> No
     block = _script_block("publish_owner_suite_inky_display")
 
     assert "action: weather.get_forecasts" in block
+    assert "owner_suite_daily_forecast: {}" in block
+    assert "owner_suite_hourly_forecast: {}" in block
+    assert "condition: not" in block
+    assert "entity_id: weather.tomorrow_io_the_brewery_daily" in block
+    assert '  - "unknown"' in block
+    assert '  - "unavailable"' in block
     assert "type: daily" in block
     assert "response_variable: owner_suite_daily_forecast" in block
     assert "type: hourly" in block

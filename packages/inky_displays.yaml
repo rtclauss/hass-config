@@ -113,6 +113,8 @@ script:
     sequence:
       - variables:
           requested_mode: "{{ mode | default('auto', true) | string | trim }}"
+          owner_suite_daily_forecast: {}
+          owner_suite_hourly_forecast: {}
           resolved_mode: >-
             {% set requested = requested_mode %}
             {% set house_mode = states('input_select.house_mode') %}
@@ -137,18 +139,28 @@ script:
                is_state('binary_sensor.bayesian_zeke_home', 'on')
                and is_state('input_boolean.trip', 'off')
              ) }}
-      - action: weather.get_forecasts
-        target:
-          entity_id: weather.tomorrow_io_the_brewery_daily
-        data:
-          type: daily
-        response_variable: owner_suite_daily_forecast
-      - action: weather.get_forecasts
-        target:
-          entity_id: weather.tomorrow_io_the_brewery_daily
-        data:
-          type: hourly
-        response_variable: owner_suite_hourly_forecast
+      - choose:
+          - conditions:
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: weather.tomorrow_io_the_brewery_daily
+                    state:
+                      - "unknown"
+                      - "unavailable"
+            sequence:
+              - action: weather.get_forecasts
+                target:
+                  entity_id: weather.tomorrow_io_the_brewery_daily
+                data:
+                  type: daily
+                response_variable: owner_suite_daily_forecast
+              - action: weather.get_forecasts
+                target:
+                  entity_id: weather.tomorrow_io_the_brewery_daily
+                data:
+                  type: hourly
+                response_variable: owner_suite_hourly_forecast
       - action: calendar.get_events
         target:
           entity_id: calendar.ryan_claussen
