@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "inky_displays.yaml"
 DOC_PATH = ROOT / "docs" / "inky_displays.md"
+QUOTE_PATH = ROOT / "data" / "inky_owner_suite_quotes.yaml"
 
 
 def _package_text() -> str:
@@ -159,10 +161,45 @@ def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> 
     assert "'value': quote_speaker" in quote_block
     assert "'label': 'Source'" not in quote_block
     assert "Sci-fi/fantasy" not in quote_block
-    assert "'speaker': 'Han Solo'" in block
-    assert "'speaker': 'Jean-Luc Picard'" in block
     assert "'label': 'Alarm'" not in daytime_block
     assert "'label': 'Meeting'" not in daytime_block
+
+
+def test_owner_suite_quote_entries_load_from_curated_file() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "quote_entries: !include ../data/inky_owner_suite_quotes.yaml" in block
+    assert "{% set quote_entries = [" not in block
+
+
+def test_owner_suite_quote_file_stays_screen_safe() -> None:
+    text = QUOTE_PATH.read_text(encoding="utf-8")
+    quotes = re.findall(r"^-\s+quote:\s+(.+)$", text, flags=re.MULTILINE)
+    speakers = re.findall(r"^\s+speaker:\s+(.+)$", text, flags=re.MULTILINE)
+
+    assert len(quotes) >= 10
+    assert len(quotes) == len(speakers)
+
+    for quote in quotes:
+        clean_quote = quote.strip("\"'")
+        assert len(clean_quote) <= 34
+
+    for speaker in speakers:
+        clean_speaker = speaker.strip("\"'")
+        assert len(clean_speaker) <= 24
+
+    for required_speaker in (
+        "Han Solo",
+        "Jean-Luc Picard",
+        "The Culture",
+        "Jernau Gurgeh",
+        "Carl",
+        "Princess Donut",
+        "The Guide",
+        "The Librarian",
+        "Brutha",
+    ):
+        assert f"speaker: {required_speaker}" in text
 
 
 def test_owner_suite_payload_maps_weather_icons_and_exceptions() -> None:

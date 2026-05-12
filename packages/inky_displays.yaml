@@ -115,6 +115,7 @@ script:
           requested_mode: "{{ mode | default('auto', true) | string | trim }}"
           owner_suite_daily_forecast: {}
           owner_suite_hourly_forecast: {}
+          quote_entries: !include ../data/inky_owner_suite_quotes.yaml
           resolved_mode: >-
             {% set requested = requested_mode %}
             {% set house_mode = states('input_select.house_mode') %}
@@ -251,13 +252,6 @@ script:
                 {% set next_calendar.place = item_location if item_location != '' else 'No location' %}
               {% endif %}
             {% endfor %}
-            {% set quote_entries = [
-              {'quote': 'Never tell me the odds.', 'speaker': 'Han Solo'},
-              {'quote': 'I am no man.', 'speaker': 'Eowyn'},
-              {'quote': 'This is the way.', 'speaker': 'Din Djarin'},
-              {'quote': 'Tea. Earl Grey. Hot.', 'speaker': 'Jean-Luc Picard'},
-              {'quote': 'So say we all.', 'speaker': 'William Adama'}
-            ] %}
             {% set quote_entry = quote_entries[(now().strftime('%j') | int) % (quote_entries | count)] %}
             {% set quote_value = quote_entry.quote %}
             {% set quote_speaker = quote_entry.speaker %}
