@@ -67,6 +67,35 @@ automation:
                 data:
                   value: "{{ trigger.from_state.state }}"
 
+  - alias: "FR24: Auto-track departure airport"
+    id: fr24_auto_track_departure_airport
+    mode: single
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: sensor.next_travel_flight
+        attribute: origin_code
+    action:
+      - variables:
+          origin: "{{ state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper | trim }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ origin not in ['', 'UNKNOWN', 'UNAVAILABLE'] }}"
+            sequence:
+              - action: text.set_value
+                target:
+                  entity_id: text.flightradar24_airport_track
+                data:
+                  value: "{{ origin }}"
+        default:
+          - action: text.set_value
+            target:
+              entity_id: text.flightradar24_airport_track
+            data:
+              value: "MSP"
+
 ################################################
 ## REST Commands
 ################################################
