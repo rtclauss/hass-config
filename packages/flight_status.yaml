@@ -32,6 +32,42 @@ homeassistant:
       icon: mdi:weather-partly-cloudy
 
 ################################################
+## Automations
+################################################
+
+automation:
+  - alias: "FR24: Track upcoming travel flight"
+    id: fr24_track_upcoming_travel_flight
+    mode: single
+    trigger:
+      - trigger: state
+        entity_id: sensor.next_travel_flight
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ trigger.to_state.state not in ['none', 'calendar', 'unknown', 'unavailable']
+                     and trigger.to_state.state != trigger.from_state.state }}
+            sequence:
+              - action: text.set_value
+                target:
+                  entity_id: text.flightradar24_add_to_track
+                data:
+                  value: "{{ trigger.to_state.state }}"
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ trigger.to_state.state in ['none', 'unknown', 'unavailable']
+                     and trigger.from_state.state not in ['none', 'calendar', 'unknown', 'unavailable'] }}
+            sequence:
+              - action: text.set_value
+                target:
+                  entity_id: text.flightradar24_remove_from_track
+                data:
+                  value: "{{ trigger.from_state.state }}"
+
+################################################
 ## REST Commands
 ################################################
 
@@ -396,7 +432,12 @@ template:
             {{ live.scheduled_in | default(state_attr('sensor.next_travel_flight', 'end_time'), true) }}
           estimated_arrival: >-
             {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
-            {{ live.estimated_in | default('', true) }}
+            {% set fa_est = live.estimated_in | default('', true) %}
+            {% if fa_est not in ['', none, 'unknown', 'unavailable'] %}
+              {{ fa_est }}
+            {% else %}
+              {{ state_attr('sensor.next_travel_flight_fr24_live', 'estimated_arrival') | default('', true) }}
+            {% endif %}
           actual_arrival: >-
             {% set live = flightaware_flight_json if flightaware_flight_json is mapping else flightaware_flight_json | from_json(default={}) %}
             {{ live.actual_in | default('', true) }}
@@ -444,25 +485,134 @@ template:
             {% endif %}
 
   - sensor:
+      - name: "Next Travel Flight FR24 Live"
+        unique_id: next_travel_flight_fr24_live
+        icon: mdi:airplane-marker
+        state: >-
+          {% set ident = states('sensor.next_travel_flight') | upper %}
+          {% if ident in ['NONE', 'CALENDAR', 'UNKNOWN', 'UNAVAILABLE'] %}
+            none
+          {% else %}
+            {% set tracked = state_attr('sensor.flightradar24_additional_tracked', 'flights') or [] %}
+            {% set ns = namespace(match=none) %}
+            {% for f in tracked if not ns.match %}
+              {% set f_fn = (f.flight_number | default('') | trim | upper | replace(' ', '')) %}
+              {% set f_cs = (f.callsign | default('') | trim | upper) %}
+              {% if f_fn == ident or f_cs == ident %}
+                {% set ns.match = f %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.match.status | default('pending') if ns.match else 'pending' }}
+          {% endif %}
+        attributes:
+          raw: >-
+            {% set ident = states('sensor.next_travel_flight') | upper %}
+            {% set tracked = state_attr('sensor.flightradar24_additional_tracked', 'flights') or [] %}
+            {% set ns = namespace(match=none) %}
+            {% for f in tracked if not ns.match %}
+              {% set f_fn = (f.flight_number | default('') | trim | upper | replace(' ', '')) %}
+              {% set f_cs = (f.callsign | default('') | trim | upper) %}
+              {% if f_fn == ident or f_cs == ident %}
+                {% set ns.match = f %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.match if ns.match else dict() }}
+          status_text: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.status_text | default('') if r and r is mapping else '' }}
+          estimated_arrival: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {% if r and r is mapping and r.time_estimated_arrival is defined and r.time_estimated_arrival %}
+              {{ r.time_estimated_arrival | timestamp_local }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          actual_departure: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {% if r and r is mapping and r.time_real_departure is defined and r.time_real_departure %}
+              {{ r.time_real_departure | timestamp_local }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          actual_arrival: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {% if r and r is mapping and r.time_real_arrival is defined and r.time_real_arrival %}
+              {{ r.time_real_arrival | timestamp_local }}
+            {% else %}
+              {{ none }}
+            {% endif %}
+          altitude: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.altitude | default(none) if r and r is mapping else none }}
+          ground_speed: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.ground_speed | default(none) if r and r is mapping else none }}
+          latitude: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.latitude | default(none) if r and r is mapping else none }}
+          longitude: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.longitude | default(none) if r and r is mapping else none }}
+          origin_iata: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airport_origin_code_iata | default('') if r and r is mapping else '' }}
+          destination_iata: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airport_destination_code_iata | default('') if r and r is mapping else '' }}
+          airline: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airline | default('') if r and r is mapping else '' }}
+          aircraft_model: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.aircraft_model | default('') if r and r is mapping else '' }}
+
+  - sensor:
 
       - name: Next Travel Flight Airport Delay
         unique_id: next_travel_flight_airport_delay
         default_entity_id: sensor.next_travel_flight_airport_delay
+        unit_of_measurement: "min"
         state: >-
-          {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
-          {% if origin in ['', none, 'unknown', 'unavailable'] %}
+          {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper %}
+          {% set tracked = states('text.flightradar24_airport_track') | upper %}
+          {% if origin in ['', 'UNKNOWN', 'UNAVAILABLE'] %}
             unknown
+          {% elif origin == tracked %}
+            {{ states('sensor.flightradar24_airport_departures_delay_average') }}
           {% else %}
             unavailable
           {% endif %}
         attributes:
           summary: >-
-            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') %}
-            {% if origin in ['', none, 'unknown', 'unavailable'] %}
+            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper %}
+            {% set tracked = states('text.flightradar24_airport_track') | upper %}
+            {% if origin in ['', 'UNKNOWN', 'UNAVAILABLE'] %}
               Airport delay unavailable
+            {% elif origin == tracked %}
+              {% set avg = states('sensor.flightradar24_airport_departures_delay_average') | int(0) %}
+              {% set delayed = states('sensor.flightradar24_airport_departures_delayed') | int(0) %}
+              {% set on_time = states('sensor.flightradar24_airport_departures_on_time') | int(0) %}
+              {% set total = delayed + on_time %}
+              {% if avg > 0 %}
+                {{ origin }}: {{ avg }} min avg delay ({{ delayed }}/{{ total }} flights delayed)
+              {% else %}
+                {{ origin }}: no significant delays ({{ on_time }}/{{ total }} on time)
+              {% endif %}
             {% else %}
-              Airport delay source not configured
+              Delay data unavailable for {{ origin }} (FR24 tracking {{ tracked }})
             {% endif %}
+          delay_average_minutes: >-
+            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper %}
+            {% set tracked = states('text.flightradar24_airport_track') | upper %}
+            {{ states('sensor.flightradar24_airport_departures_delay_average') | int(0) if origin == tracked else none }}
+          delayed_count: >-
+            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper %}
+            {% set tracked = states('text.flightradar24_airport_track') | upper %}
+            {{ states('sensor.flightradar24_airport_departures_delayed') | int(0) if origin == tracked else none }}
+          on_time_count: >-
+            {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper %}
+            {% set tracked = states('text.flightradar24_airport_track') | upper %}
+            {{ states('sensor.flightradar24_airport_departures_on_time') | int(0) if origin == tracked else none }}
 
       - name: Next Travel Flight Destination Weather
         unique_id: next_travel_flight_destination_weather

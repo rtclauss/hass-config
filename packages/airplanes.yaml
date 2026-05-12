@@ -322,9 +322,10 @@ template:
         unique_id: closest_aircraft_overhead
         icon: mdi:airplane
 
-        # State: callsign if present, else HEX, else "none"
+        # State: callsign/HEX from ADS-B; FR24 in-area as fallback when ADS-B receiver is unavailable
         state: >-
-          {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
+          {% set adsb_ok = states('sensor.adsb_aircraft_raw') not in ['unavailable', 'unknown'] %}
+          {% set planes = (state_attr('sensor.adsb_aircraft_raw', 'aircraft') or []) if adsb_ok else [] %}
           {% set home_lat = state_attr('zone.home', 'latitude') %}
           {% set home_lon = state_attr('zone.home', 'longitude') %}
           {% set max_km = 5 * 1.609344 %}
@@ -355,14 +356,36 @@ template:
             {% else %}
               {{ ns.best.hex | default('unknown') }}
             {% endif %}
+          {% elif not adsb_ok %}
+            {# FR24 fallback when ADS-B receiver is unavailable #}
+            {% set fr24_flights = state_attr('sensor.flightradar24_current_in_area', 'flights') or [] %}
+            {% set ns2 = namespace(best=None, best_d=999999) %}
+            {% if home_lat is not none and home_lon is not none %}
+            {% for f in fr24_flights %}
+              {% if not (f.on_ground | default(false)) and f.latitude is defined and f.longitude is defined %}
+                {% set d_km = distance(home_lat, home_lon, f.latitude, f.longitude) %}
+                {% if d_km is not none and d_km < ns2.best_d %}
+                  {% set ns2.best_d = d_km %}
+                  {% set ns2.best = f %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% endif %}
+            {% if ns2.best %}
+              {{ (ns2.best.flight_number | default(ns2.best.callsign | default('unknown'))) | trim }}
+            {% else %}
+              none
+            {% endif %}
           {% else %}
             none
           {% endif %}
 
         attributes:
-          # Compute the selected aircraft once as "raw" (hex-based), then all other attrs read from it.
+          # Compute the selected aircraft once as "raw"; all other attrs read from it.
+          # Source is ADS-B when receiver is available, FR24 in-area as fallback.
           raw: >-
-            {% set planes = state_attr('sensor.adsb_aircraft_raw', 'aircraft') or [] %}
+            {% set adsb_ok = states('sensor.adsb_aircraft_raw') not in ['unavailable', 'unknown'] %}
+            {% set planes = (state_attr('sensor.adsb_aircraft_raw', 'aircraft') or []) if adsb_ok else [] %}
             {% set home_lat = state_attr('zone.home', 'latitude') %}
             {% set home_lon = state_attr('zone.home', 'longitude') %}
             {% set max_km = 5 * 1.609344 %}
@@ -385,35 +408,80 @@ template:
               {% endif %}
             {% endfor %}
             {% endif %}
-            {{ ns.best if ns.best else dict() }}
+
+            {% if ns.best %}
+              {{ ns.best }}
+            {% elif not adsb_ok %}
+              {# FR24 fallback #}
+              {% set fr24_flights = state_attr('sensor.flightradar24_current_in_area', 'flights') or [] %}
+              {% set ns2 = namespace(best=None, best_d=999999) %}
+              {% if home_lat is not none and home_lon is not none %}
+              {% for f in fr24_flights %}
+                {% if not (f.on_ground | default(false)) and f.latitude is defined and f.longitude is defined %}
+                  {% set d_km = distance(home_lat, home_lon, f.latitude, f.longitude) %}
+                  {% if d_km is not none and d_km < ns2.best_d %}
+                    {% set ns2.best_d = d_km %}
+                    {% set ns2.best = f %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+              {% endif %}
+              {{ ns2.best if ns2.best else dict() }}
+            {% else %}
+              {{ dict() }}
+            {% endif %}
+
+          data_source: >-
+            {% set adsb_ok = states('sensor.adsb_aircraft_raw') not in ['unavailable', 'unknown'] %}
+            {{ 'fr24_fallback' if not adsb_ok else 'adsb' }}
 
           hex: >-
+            {% set src = this.attributes.get('data_source', 'adsb') %}
             {% set p = this.attributes.get('raw') %}
-            {{ p.hex if p and p.hex is defined else none }}
+            {% if src == 'fr24_fallback' %}
+              {{ p.aircraft_registration | default(none) if p and p is mapping else none }}
+            {% else %}
+              {{ p.hex if p and p is mapping and p.hex is defined else none }}
+            {% endif %}
 
           callsign: >-
+            {% set src = this.attributes.get('data_source', 'adsb') %}
             {% set p = this.attributes.get('raw') %}
-            {% set cs = (p.flight | default('')) | trim if p else '' %}
-            {{ cs if cs != '' else none }}
+            {% if src == 'fr24_fallback' %}
+              {% set cs = ((p.flight_number | default(p.callsign | default(''))) | trim) if p and p is mapping else '' %}
+              {{ cs if cs != '' else none }}
+            {% else %}
+              {% set cs = (p.flight | default('')) | trim if p and p is mapping else '' %}
+              {{ cs if cs != '' else none }}
+            {% endif %}
 
           altitude_ft: >-
+            {% set src = this.attributes.get('data_source', 'adsb') %}
             {% set p = this.attributes.get('raw') %}
-            {% if p %}
-              {{ p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) }}
+            {% if src == 'fr24_fallback' %}
+              {{ p.altitude | default(none) if p and p is mapping else none }}
             {% else %}
-              {{ none }}
+              {% if p and p is mapping %}
+                {{ p.alt_baro if p.alt_baro is defined else (p.alt_geom if p.alt_geom is defined else none) }}
+              {% else %}
+                {{ none }}
+              {% endif %}
             {% endif %}
 
           distance_km: >-
-            {# Use computed distance from selection pass, if present in feed; else recompute #}
+            {% set src = this.attributes.get('data_source', 'adsb') %}
             {% set p = this.attributes.get('raw') %}
-            {% set home_lat = state_attr('zone.home', 'latitude') %}
-            {% set home_lon = state_attr('zone.home', 'longitude') %}
-            {% if p and p.lat is defined and p.lon is defined and home_lat is not none and home_lon is not none %}
-              {% set d_km = distance(home_lat, home_lon, p.lat, p.lon) %}
-              {{ d_km | round(3) if d_km is not none else none }}
+            {% if src == 'fr24_fallback' %}
+              {{ (p.distance | float(none)) | round(3) if p and p is mapping and p.distance is defined else none }}
             {% else %}
-              {{ none }}
+              {% set home_lat = state_attr('zone.home', 'latitude') %}
+              {% set home_lon = state_attr('zone.home', 'longitude') %}
+              {% if p and p is mapping and p.lat is defined and p.lon is defined and home_lat is not none and home_lon is not none %}
+                {% set d_km = distance(home_lat, home_lon, p.lat, p.lon) %}
+                {{ d_km | round(3) if d_km is not none else none }}
+              {% else %}
+                {{ none }}
+              {% endif %}
             {% endif %}
 
           distance_mi: >-
@@ -424,53 +492,85 @@ template:
               {{ none }}
             {% endif %}
 
-          # Plane description + ICAO type code
+          # Plane description + ICAO type code (FR24: aircraft_model / aircraft_code)
           desc: >-
+            {% set src = this.attributes.get('data_source', 'adsb') %}
             {% set p = this.attributes.get('raw') %}
-            {{ p.desc if p and p.desc is defined else none }}
+            {% if src == 'fr24_fallback' %}
+              {{ p.aircraft_model | default(none) if p and p is mapping else none }}
+            {% else %}
+              {{ p.desc if p and p is mapping and p.desc is defined else none }}
+            {% endif %}
 
           type_code: >-
+            {% set src = this.attributes.get('data_source', 'adsb') %}
             {% set p = this.attributes.get('raw') %}
-            {{ p.t if p and p.t is defined else none }}
-
-          # Military flag comes directly from your feed (best)
-          is_military: >-
-            {% set p = this.attributes.get('raw') %}
-            {{ p.is_military | default(false) if p else false }}
-
-          # Route: best-effort from whatever your feed has
-          route: >-
-            {% set p = this.attributes.get('raw') %}
-            {% if not p %}
-              {{ none }}
-            {% elif p.route is defined and (p.route | string | trim) != '' %}
-              {{ p.route }}
-            {% elif p.from is defined and p.to is defined and (p.from | string | trim) != '' and (p.to | string | trim) != '' %}
-              {{ (p.from | string | trim) ~ " → " ~ (p.to | string | trim) }}
-            {% elif p.from_iata is defined and p.to_iata is defined and (p.from_iata | string | trim) != '' and (p.to_iata | string | trim) != '' %}
-              {{ (p.from_iata | string | trim) ~ " → " ~ (p.to_iata | string | trim) }}
-            {% elif p.from_icao is defined and p.to_icao is defined and (p.from_icao | string | trim) != '' and (p.to_icao | string | trim) != '' %}
-              {{ (p.from_icao | string | trim) ~ " → " ~ (p.to_icao | string | trim) }}
+            {% if src == 'fr24_fallback' %}
+              {{ p.aircraft_code | default(none) if p and p is mapping else none }}
             {% else %}
-              {{ none }}
+              {{ p.t if p and p is mapping and p.t is defined else none }}
+            {% endif %}
+
+          # Military flag: ADS-B only; FR24 does not expose this
+          is_military: >-
+            {% set src = this.attributes.get('data_source', 'adsb') %}
+            {% set p = this.attributes.get('raw') %}
+            {{ (p.is_military | default(false)) if p and p is mapping and src == 'adsb' else false }}
+
+          # Route: ADS-B feed fields; FR24 fallback uses airport_origin/destination codes
+          route: >-
+            {% set src = this.attributes.get('data_source', 'adsb') %}
+            {% set p = this.attributes.get('raw') %}
+            {% if src == 'fr24_fallback' %}
+              {% if p and p is mapping %}
+                {% set orig = p.airport_origin_code_iata | default('') %}
+                {% set dest = p.airport_destination_code_iata | default('') %}
+                {{ (orig ~ ' → ' ~ dest) if orig and dest else none }}
+              {% else %}
+                {{ none }}
+              {% endif %}
+            {% else %}
+              {% if not p or not (p is mapping) %}
+                {{ none }}
+              {% elif p.route is defined and (p.route | string | trim) != '' %}
+                {{ p.route }}
+              {% elif p.from is defined and p.to is defined and (p.from | string | trim) != '' and (p.to | string | trim) != '' %}
+                {{ (p.from | string | trim) ~ " → " ~ (p.to | string | trim) }}
+              {% elif p.from_iata is defined and p.to_iata is defined and (p.from_iata | string | trim) != '' and (p.to_iata | string | trim) != '' %}
+                {{ (p.from_iata | string | trim) ~ " → " ~ (p.to_iata | string | trim) }}
+              {% elif p.from_icao is defined and p.to_icao is defined and (p.from_icao | string | trim) != '' and (p.to_icao | string | trim) != '' %}
+                {{ (p.from_icao | string | trim) ~ " → " ~ (p.to_icao | string | trim) }}
+              {% else %}
+                {{ none }}
+              {% endif %}
             {% endif %}
 
   - sensor:
       - name: "Closest Aircraft Photo"
         unique_id: closest_aircraft_photo
         state: >-
-          {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
-          {{ 'ok' if (photos | length) > 0 else 'none' }}
+          {% set fr24_url = state_attr('sensor.closest_aircraft_fr24_enrichment', 'photo_url') | default('') %}
+          {% if fr24_url %}
+            ok
+          {% else %}
+            {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
+            {{ 'ok' if (photos | length) > 0 else 'none' }}
+          {% endif %}
         attributes:
           url: >-
-            {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
-            {% if (photos | length) > 0 %}
-              {% set p = photos[0] %}
-              {{ p.thumbnail_large.src
-                if p.thumbnail_large is defined and p.thumbnail_large.src is defined
-                else (p.thumbnail.src if p.thumbnail is defined and p.thumbnail.src is defined else none) }}
+            {% set fr24_url = state_attr('sensor.closest_aircraft_fr24_enrichment', 'photo_url') | default('') %}
+            {% if fr24_url %}
+              {{ fr24_url }}
             {% else %}
-              {{ none }}
+              {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
+              {% if (photos | length) > 0 %}
+                {% set p = photos[0] %}
+                {{ p.thumbnail_large.src
+                  if p.thumbnail_large is defined and p.thumbnail_large.src is defined
+                  else (p.thumbnail.src if p.thumbnail is defined and p.thumbnail.src is defined else none) }}
+              {% else %}
+                {{ none }}
+              {% endif %}
             {% endif %}
           link: >-
             {% set photos = state_attr('sensor.closest_aircraft_photo_raw','photos') or [] %}
@@ -486,56 +586,79 @@ template:
             {% else %}
               {{ none }}
             {% endif %}
+          source: >-
+            {% set fr24_url = state_attr('sensor.closest_aircraft_fr24_enrichment', 'photo_url') | default('') %}
+            {{ 'fr24' if fr24_url else 'planespotters' }}
 
   - sensor:
       - name: "Closest Aircraft Route"
         unique_id: closest_aircraft_route
         state: >-
-          {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-          {% if r and r.flightroute is defined %}
-            {% set fr = r.flightroute %}
-            {% set oi = fr.origin.iata_code if fr.origin is defined else none %}
-            {% set di = fr.destination.iata_code if fr.destination is defined else none %}
-            {% set oo = fr.origin.icao_code if fr.origin is defined else none %}
-            {% set dd = fr.destination.icao_code if fr.destination is defined else none %}
-
-            {% if oi and di %}
-              {{ oi ~ " → " ~ di }}
-            {% elif oo and dd %}
-              {{ oo ~ " → " ~ dd }}
+          {% set fr24_orig = state_attr('sensor.closest_aircraft_fr24_enrichment', 'origin_iata') | default('') %}
+          {% set fr24_dest = state_attr('sensor.closest_aircraft_fr24_enrichment', 'destination_iata') | default('') %}
+          {% if fr24_orig and fr24_dest %}
+            {{ fr24_orig ~ ' → ' ~ fr24_dest }}
+          {% else %}
+            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+            {% if r and r.flightroute is defined %}
+              {% set fr = r.flightroute %}
+              {% set oi = fr.origin.iata_code if fr.origin is defined else none %}
+              {% set di = fr.destination.iata_code if fr.destination is defined else none %}
+              {% set oo = fr.origin.icao_code if fr.origin is defined else none %}
+              {% set dd = fr.destination.icao_code if fr.destination is defined else none %}
+              {% if oi and di %}
+                {{ oi ~ " → " ~ di }}
+              {% elif oo and dd %}
+                {{ oo ~ " → " ~ dd }}
+              {% else %}
+                unknown
+              {% endif %}
             {% else %}
               unknown
             {% endif %}
-          {% else %}
-            unknown
           {% endif %}
         attributes:
           confident: >-
-            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}
-            {% if not cs %}false
+            {% set fr24_orig = state_attr('sensor.closest_aircraft_fr24_enrichment', 'origin_iata') | default('') %}
+            {% set fr24_dest = state_attr('sensor.closest_aircraft_fr24_enrichment', 'destination_iata') | default('') %}
+            {% if fr24_orig and fr24_dest %}
+              true
             {% else %}
-              {% set csu = cs | upper %}
-              {# hide if it looks like a registration #}
-              {% if csu.startswith('N') or csu.startswith('C') or csu.startswith('G') or csu.startswith('D') %}
-                false
-              {% elif r and r.flightroute is defined and r.flightroute.airline is defined and (r.flightroute.airline.name | default('') | trim) != '' %}
-                true
+              {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+              {% set cs = state_attr('sensor.closest_aircraft_overhead','callsign') %}
+              {% if not cs %}false
               {% else %}
-                false
+                {% set csu = cs | upper %}
+                {% if csu.startswith('N') or csu.startswith('C') or csu.startswith('G') or csu.startswith('D') %}
+                  false
+                {% elif r and r.flightroute is defined and r.flightroute.airline is defined and (r.flightroute.airline.name | default('') | trim) != '' %}
+                  true
+                {% else %}
+                  false
+                {% endif %}
               {% endif %}
             {% endif %}
 
           origin_iata: >-
-            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.origin.iata_code
-              if r and r.flightroute is defined and r.flightroute.origin is defined
-              else none }}
+            {% set fr24 = state_attr('sensor.closest_aircraft_fr24_enrichment', 'origin_iata') | default('') %}
+            {% if fr24 %}
+              {{ fr24 }}
+            {% else %}
+              {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+              {{ r.flightroute.origin.iata_code
+                if r and r.flightroute is defined and r.flightroute.origin is defined
+                else none }}
+            {% endif %}
           destination_iata: >-
-            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.destination.iata_code
-              if r and r.flightroute is defined and r.flightroute.destination is defined
-              else none }}
+            {% set fr24 = state_attr('sensor.closest_aircraft_fr24_enrichment', 'destination_iata') | default('') %}
+            {% if fr24 %}
+              {{ fr24 }}
+            {% else %}
+              {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+              {{ r.flightroute.destination.iata_code
+                if r and r.flightroute is defined and r.flightroute.destination is defined
+                else none }}
+            {% endif %}
           origin_icao: >-
             {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
             {{ r.flightroute.origin.icao_code
@@ -547,20 +670,98 @@ template:
               if r and r.flightroute is defined and r.flightroute.destination is defined
               else none }}
           origin_name: >-
-            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.origin.name
-              if r and r.flightroute is defined and r.flightroute.origin is defined
-              else none }}
+            {% set fr24 = state_attr('sensor.closest_aircraft_fr24_enrichment', 'origin_name') | default('') %}
+            {% if fr24 %}
+              {{ fr24 }}
+            {% else %}
+              {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+              {{ r.flightroute.origin.name
+                if r and r.flightroute is defined and r.flightroute.origin is defined
+                else none }}
+            {% endif %}
           destination_name: >-
-            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.destination.name
-              if r and r.flightroute is defined and r.flightroute.destination is defined
-              else none }}
+            {% set fr24 = state_attr('sensor.closest_aircraft_fr24_enrichment', 'destination_name') | default('') %}
+            {% if fr24 %}
+              {{ fr24 }}
+            {% else %}
+              {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+              {{ r.flightroute.destination.name
+                if r and r.flightroute is defined and r.flightroute.destination is defined
+                else none }}
+            {% endif %}
           airline: >-
-            {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
-            {{ r.flightroute.airline.name
-              if r and r.flightroute is defined and r.flightroute.airline is defined
-              else none }}
+            {% set fr24 = state_attr('sensor.closest_aircraft_fr24_enrichment', 'airline') | default('') %}
+            {% if fr24 %}
+              {{ fr24 }}
+            {% else %}
+              {% set r = state_attr('sensor.closest_aircraft_route_raw','response') %}
+              {{ r.flightroute.airline.name
+                if r and r.flightroute is defined and r.flightroute.airline is defined
+                else none }}
+            {% endif %}
+          source: >-
+            {% set fr24_orig = state_attr('sensor.closest_aircraft_fr24_enrichment', 'origin_iata') | default('') %}
+            {{ 'fr24' if fr24_orig else 'adsbdb' }}
+  - sensor:
+      - name: "Closest Aircraft FR24 Enrichment"
+        unique_id: closest_aircraft_fr24_enrichment
+        icon: mdi:airplane-search
+        state: >-
+          {% set cs = state_attr('sensor.closest_aircraft_overhead', 'callsign') | default('') | trim | upper %}
+          {% if not cs or cs in ['NONE', 'UNKNOWN', 'UNAVAILABLE'] %}
+            none
+          {% else %}
+            {% set fr24_flights = state_attr('sensor.flightradar24_current_in_area', 'flights') or [] %}
+            {% set ns = namespace(match=none) %}
+            {% for f in fr24_flights if not ns.match %}
+              {% set f_cs = (f.callsign | default('') | trim | upper) %}
+              {% set f_fn = (f.flight_number | default('') | trim | upper | replace(' ', '')) %}
+              {% if f_cs == cs or f_fn == cs %}
+                {% set ns.match = f %}
+              {% endif %}
+            {% endfor %}
+            {{ 'matched' if ns.match else 'no_match' }}
+          {% endif %}
+        attributes:
+          raw: >-
+            {% set cs = state_attr('sensor.closest_aircraft_overhead', 'callsign') | default('') | trim | upper %}
+            {% set fr24_flights = state_attr('sensor.flightradar24_current_in_area', 'flights') or [] %}
+            {% set ns = namespace(match=none) %}
+            {% for f in fr24_flights if not ns.match %}
+              {% set f_cs = (f.callsign | default('') | trim | upper) %}
+              {% set f_fn = (f.flight_number | default('') | trim | upper | replace(' ', '')) %}
+              {% if f_cs == cs or f_fn == cs %}
+                {% set ns.match = f %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.match if ns.match else dict() }}
+          origin_iata: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airport_origin_code_iata | default('') if r and r is mapping else '' }}
+          destination_iata: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airport_destination_code_iata | default('') if r and r is mapping else '' }}
+          origin_name: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airport_origin_name | default('') if r and r is mapping else '' }}
+          destination_name: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airport_destination_name | default('') if r and r is mapping else '' }}
+          route: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {% set orig = r.airport_origin_code_iata | default('') if r and r is mapping else '' %}
+            {% set dest = r.airport_destination_code_iata | default('') if r and r is mapping else '' %}
+            {{ (orig ~ ' → ' ~ dest) if orig and dest else '' }}
+          airline: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.airline | default('') if r and r is mapping else '' }}
+          aircraft_model: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.aircraft_model | default('') if r and r is mapping else '' }}
+          photo_url: >-
+            {% set r = this.attributes.get('raw', {}) %}
+            {{ r.aircraft_photo_large | default('') if r and r is mapping else '' }}
+
 rest:
   - resource: https://adsb.im/api/0/routeset
     method: POST
