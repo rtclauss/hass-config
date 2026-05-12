@@ -217,6 +217,17 @@ Current owner-suite rows:
 | Speaker | Character attribution for the quote | Rendered under the centered quote, not as a standard row |
 | Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next `calendar.ryan_claussen` event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
 
+The quote source is the curated local file
+`data/inky_owner_suite_quotes.yaml`, included by
+`script.publish_owner_suite_inky_display` as `quote_entries`. There is no
+external quote API and no runtime scraping. Keep entries short enough for the
+`400x300` panel, use the in-universe speaker/character for attribution, and
+avoid adding long copyrighted excerpts. Tests enforce conservative quote and
+speaker length limits so entries cannot overrun the physical screen. Current
+quote families include Star Wars, The Lord of the Rings, Star Trek, Battlestar
+Galactica, The Culture, Dungeon Crawler Carl, The Hitchhiker's Guide to the
+Galaxy, and Discworld.
+
 In `night_preview`, the owner-suite rows are current `Weather`, tomorrow's
 daily forecast from `weather.get_forecasts`, next `Alarm`, and either the
 meeting alarm or urgent `Status`. Meeting alarm details are night-only, and
