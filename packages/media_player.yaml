@@ -1143,14 +1143,14 @@ script:
           enqueue: replace
       - repeat:
           sequence:
-            - alias: "Ramp non-office members directly — individual sets bypass MA proportional group scaling"
+            - alias: "Ramp all wake-up group members — direct individual sets bypass MA proportional group scaling"
               continue_on_error: true
               action: media_player.volume_set
               target:
                 entity_id: "{{ group_members | reject('eq', 'media_player.office_sonos_2') | list }}"
               data:
                 volume_level: "{{ 0.01 * repeat.index }}"
-            - alias: "Ramp office — capped at 0.20"
+            - alias: "Office capped at 20% — bedroom wake-up should not disturb work-in-progress"
               continue_on_error: true
               action: media_player.volume_set
               target:
