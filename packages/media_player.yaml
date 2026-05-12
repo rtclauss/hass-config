@@ -1143,13 +1143,25 @@ script:
           enqueue: replace
       - repeat:
           sequence:
-            - alias: "Ramp all wake-up group members — direct individual sets bypass MA proportional group scaling"
-              continue_on_error: true
-              action: media_player.volume_set
-              target:
-                entity_id: "{{ group_members }}"
-              data:
-                volume_level: "{{ 0.01 * repeat.index }}"
+            - if:
+                - condition: template
+                  value_template: "{{ repeat.index <= 20 }}"
+              then:
+                - alias: "Ramp all wake-up group members up to the office cap"
+                  continue_on_error: true
+                  action: media_player.volume_set
+                  target:
+                    entity_id: "{{ group_members }}"
+                  data:
+                    volume_level: "{{ 0.01 * repeat.index }}"
+              else:
+                - alias: "Ramp non-office wake-up group members after the office cap"
+                  continue_on_error: true
+                  action: media_player.volume_set
+                  target:
+                    entity_id: "{{ group_members | reject('eq', 'media_player.office_sonos_2') | list }}"
+                  data:
+                    volume_level: "{{ 0.01 * repeat.index }}"
             - alias: "Office capped at 20% — bedroom wake-up should not disturb work-in-progress"
               continue_on_error: true
               action: media_player.volume_set
