@@ -255,7 +255,7 @@ Flight rows use these normalized entities from `packages/flight_status.yaml`:
 | --- | --- | --- |
 | Flight | `sensor.next_travel_flight` ident, destination code, and best departure time | `emphasis` |
 | Status | `sensor.next_travel_flight_live_status` plus FlightAware delay attributes | `urgent` for cancellation, diversion, or 30+ minute delay |
-| Airport | `sensor.next_travel_flight_airport_delay` numeric average delay for the active origin airport | Compact value like `MSP 14m avg`; `urgent` at 30+ minutes; `Airport n/a` only when origin airport delay data is unavailable |
+| Airport Delays | `sensor.next_travel_flight_airport_delay` numeric average delay for the active origin airport | Compact value like `MSP 14m avg`; `urgent` at 30+ minutes; `Airport n/a` only when origin airport delay data is unavailable |
 | Dest Wx | `sensor.next_travel_flight_destination_weather` | `normal` |
 
 Required travel integrations and secrets:
