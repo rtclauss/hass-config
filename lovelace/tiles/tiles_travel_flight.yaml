@@ -1,0 +1,44 @@
+# Travel flight live tile.
+# Shows FR24 live position map and key flight stats when a flight is tracked.
+# Sensors go 'none'/'unavailable' between trips — the tile is always present but harmlessly quiet.
+
+type: custom:vertical-stack-in-card
+title: Travel Flight
+cards:
+  - type: map
+    entities:
+      - entity: sensor.next_travel_flight_fr24_live
+    hours_to_show: 0
+    aspect_ratio: "16:9"
+
+  - type: glance
+    show_name: true
+    show_state: true
+    entities:
+      - entity: sensor.next_travel_flight
+        name: Flight
+      - entity: sensor.next_travel_flight_live_status
+        name: Status
+      - entity: sensor.next_travel_flight_fr24_live
+        name: FR24
+
+  - type: entities
+    entities:
+      - type: attribute
+        entity: sensor.next_travel_flight_fr24_live
+        attribute: altitude
+        name: Altitude
+        suffix: " ft"
+      - type: attribute
+        entity: sensor.next_travel_flight_fr24_live
+        attribute: ground_speed
+        name: Ground Speed
+        suffix: " kts"
+      - type: attribute
+        entity: sensor.next_travel_flight_live_status
+        attribute: estimated_arrival
+        name: Est. Arrival
+      - entity: sensor.next_travel_flight_airport_delay
+        name: Airport Delay
+      - entity: sensor.next_travel_flight_destination_weather
+        name: Dest. Weather
