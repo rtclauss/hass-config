@@ -138,13 +138,7 @@ def _render_row(canvas: Canvas, row: dict[str, str], accent: str, y: int) -> Non
     label = row.get("label", "")
     canvas.icon(26, y - 4, row.get("icon", ""), scale=2, color=row_color)
     canvas.text(56, y, label, scale=2, color=row_color)
-    canvas.text(_row_value_left(label), y, row.get("value", ""), scale=2, color=row_color)
-
-
-def _row_value_left(label: str) -> int:
-    if label == "Airport Delays":
-        return 224
-    return 170
+    canvas.text(170, y, row.get("value", ""), scale=2, color=row_color)
 
 
 def _wrap_text(text: str, scale: int, max_width: int, max_lines: int) -> list[str]:

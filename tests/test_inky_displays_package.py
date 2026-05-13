@@ -82,7 +82,7 @@ def test_owner_suite_payload_includes_modes_and_four_rows() -> None:
         "Meeting",
         "Status",
         "Flight",
-        "Airport Delays",
+        "ATC Delay",
         "Dest Wx",
         "Next",
         "Place",
@@ -171,7 +171,8 @@ def test_owner_suite_flight_rows_show_numeric_airport_delay() -> None:
     assert "airport_delay_minutes = airport_delay | int(default=none)" in block
     assert "airport_origin ~ ' ' ~ airport_delay_minutes ~ 'm avg'" in block
     assert "airport_level = 'urgent' if airport_delay_minutes is number and airport_delay_minutes >= 30 else 'normal'" in block
-    assert "'label': 'Airport Delays', 'value': airport_value, 'level': airport_level" in block
+    assert "'label': 'ATC Delay', 'value': airport_value, 'level': airport_level" in block
+    assert "'label': 'Airport Delays'," not in block
     assert "'label': 'Airport'," not in block
     assert "airport_delay == 'alert'" not in block
     assert "airport_summary" not in block
