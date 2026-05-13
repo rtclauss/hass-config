@@ -165,6 +165,17 @@ def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> 
     assert "'label': 'Meeting'" not in daytime_block
 
 
+def test_owner_suite_flight_rows_show_numeric_airport_delay() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "airport_delay_minutes = airport_delay | int(default=none)" in block
+    assert "airport_origin ~ ' ' ~ airport_delay_minutes ~ 'm avg'" in block
+    assert "airport_level = 'urgent' if airport_delay_minutes is number and airport_delay_minutes >= 30 else 'normal'" in block
+    assert "'label': 'Airport', 'value': airport_value, 'level': airport_level" in block
+    assert "airport_delay == 'alert'" not in block
+    assert "airport_summary" not in block
+
+
 def test_owner_suite_quote_entries_load_from_curated_file() -> None:
     block = _script_block("publish_owner_suite_inky_display")
 
