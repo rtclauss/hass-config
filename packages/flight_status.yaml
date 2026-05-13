@@ -78,11 +78,11 @@ automation:
         attribute: origin_code
     action:
       - variables:
-          origin: "{{ state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper | trim }}"
+          origin: "{{ state_attr('sensor.next_travel_flight', 'origin_code') | default('', true) | upper | trim }}"
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ origin not in ['', 'UNKNOWN', 'UNAVAILABLE'] }}"
+                value_template: "{{ origin not in ['', 'NONE', 'UNKNOWN', 'UNAVAILABLE'] }}"
             sequence:
               - action: text.set_value
                 target:
