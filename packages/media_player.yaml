@@ -131,16 +131,23 @@ automation:
           - "unknown"
           - "unavailable"
     action:
+      - variables:
+          active_group: >-
+            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.ma_group_everywhere' }}
+          group_members: >-
+            {{ state_attr(active_group, 'group_members') | default([active_group]) }}
+          # Read reference volume from the bedroom member, not the group entity.
+          # Fixed: float() carries a default of 0 so transient "unknown"/"unavailable"
+          # sensor states (e.g. cube waking up) do not raise a ValueError and abort.
+          new_volume: >-
+            {{ [[( state_attr('media_player.bedroom_sonos_2', 'volume_level')
+                 + (float(trigger.to_state.state, 0)/1000)) | round(2) | float(0), 0] | max, 1] | min }}
       - action: media_player.volume_set
+        target:
+          entity_id: "{{ group_members }}"
         data:
-          entity_id: media_player.bedroom_sonos
-          # volume_level: >-
-          # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
-          # Fixed: the inner float() call now carries its own default of 0 so that
-          # transient "unknown"/"unavailable" sensor states (e.g. cube waking up)
-          # do not raise a ValueError and abort the automation.
-          volume_level: >-
-            {{ (state_attr('media_player.bedroom_sonos', 'volume_level') + (float(trigger.to_state.state, 0)/1000)) | round(2) | float(default=0) }}
+          volume_level: "{{ new_volume }}"
 
   - id: bedroom_music_play_pause
     alias: bedroom_music_play_pause
@@ -156,9 +163,13 @@ automation:
         entity_id: sensor.owner_suite_cube_action
         to: "tap"
     action:
+      - variables:
+          active_group: >-
+            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.ma_group_everywhere' }}
       - action: media_player.media_play_pause
-        data:
-          entity_id: media_player.bedroom_sonos_2
+        target:
+          entity_id: "{{ active_group }}"
 
   - id: bed_without_prep
     alias: bed_without_prep
@@ -218,6 +229,10 @@ automation:
           - "unknown"
           - "unavailable"
     action:
+      - variables:
+          active_group: >-
+            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.ma_group_everywhere' }}
       - action: notify.all
         data:
           message: >-
@@ -226,6 +241,8 @@ automation:
         data:
           entity_id: >-
             {{ "script.bedroom_playlist_" + (trigger.to_state.state | string) }}
+          variables:
+            target_group: "{{ active_group }}"
 
   - id: bedroom_music_skip_track
     alias: bedroom_music_skip_track
@@ -241,9 +258,13 @@ automation:
         entity_id: sensor.owner_suite_cube_action
         to: "slide"
     action:
+      - variables:
+          active_group: >-
+            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.ma_group_everywhere' }}
       - action: media_player.media_next_track
-        data:
-          entity_id: media_player.bedroom_sonos_2
+        target:
+          entity_id: "{{ active_group }}"
 
   - id: bedroom_music_shuffle
     alias: bedroom_music_shuffle
@@ -259,11 +280,16 @@ automation:
         entity_id: sensor.owner_suite_cube_action
         to: "shake"
     action:
+      - variables:
+          active_group: >-
+            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+               else 'media_player.ma_group_everywhere' }}
       - action: media_player.shuffle_set
+        target:
+          entity_id: "{{ active_group }}"
         data:
-          entity_id: media_player.bedroom_sonos_2
           shuffle: >-
-            {{ not (state_attr('media_player.bedroom_sonos_2', 'shuffle')) }}
+            {{ not (state_attr(active_group, 'shuffle')) }}
 
   - id: den_sonos_control_actions
     alias: den_sonos_control_actions
@@ -873,17 +899,25 @@ script:
         description: "Spotify URI selected by a bedroom playlist script"
       playlist_name:
         description: "Human-readable playlist group name for logbook"
+      target_group:
+        description: "MA group entity to play on; defaults to guest or everywhere group based on guest mode"
+    variables:
+      playback_target: >-
+        {{ target_group | default(
+             'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
+             else 'media_player.ma_group_everywhere'
+           ) }}
     sequence:
       - action: logbook.log
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_target }}"
           domain: media_player
           name: Cube Playlist is
           message: " playing {{ playlist_name }} playlist: {{ playlist }}"
-      - alias: "Play playlist via Music Assistant"
+      - alias: "Play playlist via Music Assistant on active group"
         action: script.music_assistant_play_spotify_uri
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: "{{ playback_target }}"
           spotify_uri: "{{ playlist }}"
 
   music_assistant_search_music:
