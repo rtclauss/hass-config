@@ -1,0 +1,42 @@
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "mouse_trap"
+
+########################
+## Counter
+########################
+counter:
+  mice_caught:
+    name: "Mice Caught"
+    icon: mdi:rodent
+    minimum: 0
+    restore: true
+
+########################
+## Automation
+########################
+automation:
+  - alias: "Mouse Bucket — Notify and count on catch"
+    description: >
+      When the mouse bucket door sensor opens (closed→open), increment the
+      mice caught counter and send a notification with the running total.
+    trace:
+      stored_traces: 100
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.basement_mouse_bucket_contact
+        from: "off"
+        to: "on"
+    action:
+      - action: counter.increment
+        target:
+          entity_id: counter.mice_caught
+      - action: notify.notify
+        data:
+          title: "Mouse Caught!"
+          message: >
+            The basement mouse bucket door opened.
+            Total caught: {{ states('counter.mice_caught') }}.
+    mode: single

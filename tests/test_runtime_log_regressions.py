@@ -123,6 +123,16 @@ def test_large_z2m_lifecycle_helper_is_excluded_from_recorder() -> None:
     assert "large selection maps as attributes" in recorder_block
 
 
+def test_raw_fr24_airport_feeds_are_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.flightradar24_airport_arrivals" in recorder_block
+    assert "sensor.flightradar24_airport_departures" in recorder_block
+    assert "full flight lists in attributes" in recorder_block
+
+
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
     text = _read(UTILITIES_PATH)
 

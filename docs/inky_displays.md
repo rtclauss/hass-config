@@ -255,7 +255,7 @@ Flight rows use these normalized entities from `packages/flight_status.yaml`:
 | --- | --- | --- |
 | Flight | `sensor.next_travel_flight` ident, destination code, and best departure time | `emphasis` |
 | Status | `sensor.next_travel_flight_live_status` plus FlightAware delay attributes | `urgent` for cancellation, diversion, or 30+ minute delay |
-| Airport | `sensor.next_travel_flight_airport_delay` | `urgent` when airport delay alerts are present; otherwise shows `Airport n/a` until a free delay source is configured |
+| Airport Delays | `sensor.next_travel_flight_airport_delay` numeric average delay for the active origin airport | Compact value like `MSP 14m avg`; `urgent` at 30+ minutes; `Airport n/a` only when origin airport delay data is unavailable |
 | Dest Wx | `sensor.next_travel_flight_destination_weather` | `normal` |
 
 Required travel integrations and secrets:
@@ -268,10 +268,9 @@ Required travel integrations and secrets:
   FlightAware reports actual takeoff.
 - Open-Meteo destination weather does not require a key. It uses the destination
   airport coordinate map in `packages/flight_status.yaml`.
-- Add the built-in FAA Delays integration for `MSP` and `RST` from Settings >
-  Devices & services for richer airport-delay visibility elsewhere in Home
-  Assistant. The Inky flight row currently stays `Airport n/a` unless a free
-  airport-delay source is added later.
+- FlightRadar24 airport tracking must be pointed at the active origin airport
+  by `text.flightradar24_airport_track`. `sensor.next_travel_flight_airport_delay`
+  normalizes the tracked airport departure delay average for the Inky row.
 
 REST sensors require a Home Assistant restart after the package and secrets are
 deployed. Template-only changes can be reloaded, but the travel package includes

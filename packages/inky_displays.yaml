@@ -303,13 +303,15 @@ script:
             {% set delay_minutes = state_attr('sensor.next_travel_flight_live_status', 'departure_delay_minutes') %}
             {% set flight_delay_value = ('Delay ' ~ delay_minutes ~ 'm') if delay_minutes not in ['', none, 'unknown', 'unavailable'] and delay_minutes | int(0) > 0 else (flight_status | replace('_', ' ') | title) %}
             {% set airport_delay = states('sensor.next_travel_flight_airport_delay') %}
-            {% set airport_summary = state_attr('sensor.next_travel_flight_airport_delay', 'summary') | default('Airport n/a', true) %}
-            {% set airport_value = airport_summary if airport_delay == 'alert' else 'Airport n/a' %}
+            {% set airport_origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('', true) | string | upper %}
+            {% set airport_delay_minutes = airport_delay | int(default=none) %}
+            {% set airport_value = (airport_origin ~ ' ' ~ airport_delay_minutes ~ 'm avg') if airport_delay_minutes is number and airport_origin not in ['', 'UNKNOWN', 'UNAVAILABLE'] else 'Airport n/a' %}
+            {% set airport_level = 'urgent' if airport_delay_minutes is number and airport_delay_minutes >= 30 else 'normal' %}
             {% set destination_weather = states('sensor.next_travel_flight_destination_weather') %}
             {% set travel_rows = [
               {'label': 'Flight', 'value': (flight_label ~ ' ' ~ flight_destination ~ ' ' ~ flight_time) | trim, 'level': 'emphasis'},
               {'label': 'Status', 'value': flight_delay_value, 'level': 'urgent' if flight_status in ['cancelled', 'diverted'] or delay_minutes | int(0) >= 30 else 'normal'},
-              {'label': 'Airport', 'value': airport_value, 'level': 'urgent' if airport_delay == 'alert' else 'normal'},
+              {'label': 'Airport Delays', 'value': airport_value, 'level': airport_level},
               {'icon': weather_icon, 'label': 'Dest Wx', 'value': destination_weather if destination_weather not in ['unknown', 'unavailable', ''] else weather_value, 'level': 'normal'}
             ] %}
             {% if weather_alert %}
@@ -364,7 +366,7 @@ script:
               {% set rows = [
                 {'icon': weather_icon, 'label': 'Weather', 'value': weather_value, 'level': 'urgent' if weather_alert else 'normal'},
                 {'label': 'Flight', 'value': (flight_label ~ ' ' ~ flight_destination ~ ' ' ~ flight_time) | trim, 'level': 'emphasis'},
-                {'label': 'Airport', 'value': airport_value, 'level': 'urgent' if airport_delay == 'alert' else 'normal'},
+                {'label': 'Airport Delays', 'value': airport_value, 'level': airport_level},
                 {'label': 'Status', 'value': status_value, 'level': status_level}
               ] %}
             {% else %}

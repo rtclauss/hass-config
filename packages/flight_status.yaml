@@ -39,6 +39,8 @@ automation:
   - alias: "FR24: Track upcoming travel flight"
     id: fr24_track_upcoming_travel_flight
     mode: single
+    trace:
+      stored_traces: 10
     trigger:
       - trigger: state
         entity_id: sensor.next_travel_flight
@@ -66,6 +68,39 @@ automation:
                   entity_id: text.flightradar24_remove_from_track
                 data:
                   value: "{{ trigger.from_state.state }}"
+
+
+  - alias: "FR24: Auto-track departure airport"
+    id: fr24_auto_track_departure_airport
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: sensor.next_travel_flight
+        attribute: origin_code
+    action:
+      - variables:
+          origin: "{{ state_attr('sensor.next_travel_flight', 'origin_code') | default('', true) | upper | trim }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ origin not in ['', 'NONE', 'UNKNOWN', 'UNAVAILABLE'] }}"
+            sequence:
+              - action: text.set_value
+                target:
+                  entity_id: text.flightradar24_airport_track
+                data:
+                  value: "{{ origin }}"
+        default:
+          - action: text.set_value
+            target:
+              entity_id: text.flightradar24_airport_track
+            data:
+              value: "MSP"
+
 
 ################################################
 ## REST Commands
