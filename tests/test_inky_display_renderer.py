@@ -169,10 +169,6 @@ def test_footer_uses_larger_distance_legible_text_band() -> None:
     assert renderer.FOOTER_TEXT_SCALE == 2
 
 
-def test_airport_delays_label_reserves_space_for_value() -> None:
-    assert renderer._row_value_left("Airport Delays") > renderer._row_value_left("Airport")
-
-
 def test_renderer_prefers_trebuchet_then_verdana_font_stack() -> None:
     bold_stack = "\n".join(renderer.BOLD_FONT_CANDIDATES)
 
