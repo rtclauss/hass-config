@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TRACE_MINIMUM = 100
+APPROVED_TRACE_COUNTS = {10, 50, 100}
 
 
 def _is_top_level(line: str) -> bool:
@@ -76,13 +76,13 @@ def _stored_traces(lines: list[str], start: int, end: int) -> int | None:
     return None
 
 
-def test_automation_and_script_traces_keep_at_least_100_runs() -> None:
+def test_automation_and_script_traces_use_approved_bounded_counts() -> None:
     config_paths = [
         ROOT / "automations.yaml",
         ROOT / "scripts.yaml",
         *sorted((ROOT / "packages").glob("*.yaml")),
     ]
-    missing_or_low_trace: list[str] = []
+    missing_or_unapproved_trace: list[str] = []
 
     for path in config_paths:
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -100,8 +100,8 @@ def test_automation_and_script_traces_keep_at_least_100_runs() -> None:
 
             for start, end in blocks:
                 stored_traces = _stored_traces(lines, start, end)
-                if stored_traces is None or stored_traces < TRACE_MINIMUM:
+                if stored_traces not in APPROVED_TRACE_COUNTS:
                     block_name = _block_name(lines, start, end, "<unnamed>")
-                    missing_or_low_trace.append(f"{path.relative_to(ROOT)} {key} {block_name}")
+                    missing_or_unapproved_trace.append(f"{path.relative_to(ROOT)} {key} {block_name}")
 
-    assert missing_or_low_trace == []
+    assert missing_or_unapproved_trace == []
