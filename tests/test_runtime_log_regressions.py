@@ -137,9 +137,14 @@ def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:
     text = _read(CONFIGURATION_PATH)
 
     recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+    recorder_entities = {
+        line.strip().removeprefix("- ").strip()
+        for line in recorder_block.splitlines()
+        if line.strip().startswith("- ")
+    }
 
-    assert "sensor.top_50_bird_species" in recorder_block
-    assert "sensor.top_50_bird_species_2" in recorder_block
+    assert "sensor.top_50_bird_species" in recorder_entities
+    assert "sensor.top_50_bird_species_2" in recorder_entities
     assert "full species list in attributes" in recorder_block
 
 
