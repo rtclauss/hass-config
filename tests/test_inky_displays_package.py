@@ -253,7 +253,10 @@ def test_owner_suite_payload_warns_about_near_term_and_event_precipitation() -> 
     assert "event_start_dt" not in block
     assert "event.max_precip >= 40" in block
     assert "forecast.condition | default('', true) in precip_conditions" in block
-    assert "'Wx for ' ~ event_title" in block
+    assert "' Wx risk'" in block
+    assert "flight_active and flight_destination not in ['', none, 'unknown', 'unavailable']" in block
+    assert "else 'Event Wx risk'" in block
+    assert "'Wx for ' ~ event_title" not in block
 
 
 def test_owner_suite_payload_consumes_flight_status_sources() -> None:
