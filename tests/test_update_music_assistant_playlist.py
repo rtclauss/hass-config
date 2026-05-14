@@ -70,6 +70,39 @@ def test_append_item_to_playlist_config_rejects_unknown_targets(media_player_con
         )
 
 
+@pytest.mark.parametrize(
+    "item_uri",
+    [
+        "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
+        "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
+        "https://open.spotify.com/playlist/37i9dQZEVXcMDffrPenJPl",
+    ],
+)
+def test_append_item_to_playlist_config_rejects_personalized_spotify_ids(
+    media_player_config_text: str,
+    item_uri: str,
+) -> None:
+    with pytest.raises(ValueError, match="do not resolve through Music Assistant"):
+        append_item_to_playlist_config(
+            media_player_config_text,
+            "spotify_bedtime",
+            item_uri,
+        )
+
+
+def test_append_item_to_playlist_config_allows_editorial_spotify_ids(
+    media_player_config_text: str,
+) -> None:
+    updated, changed = append_item_to_playlist_config(
+        media_player_config_text,
+        "spotify_bedtime",
+        "spotify:playlist:37i9dQZF1DX4WYpdgoIcn6",
+    )
+
+    assert changed is True
+    assert '"spotify:playlist:37i9dQZF1DX4WYpdgoIcn6"' in _script_block(updated, "spotify_bedtime")
+
+
 def test_supported_playlist_scripts_cover_dashboard_targets() -> None:
     assert SUPPORTED_PLAYLIST_SCRIPTS == {
         "bedroom_playlist_0",

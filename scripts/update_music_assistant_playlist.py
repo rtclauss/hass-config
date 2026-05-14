@@ -22,6 +22,10 @@ SUPPORTED_PLAYLIST_SCRIPTS = {
 }
 
 SCRIPT_START_RE = re.compile(r"^  (?P<script>[A-Za-z0-9_]+):$")
+UNRESOLVABLE_PERSONALIZED_SPOTIFY_PLAYLIST_PATTERNS = (
+    "37i9dQZF1E",
+    "37i9dQZEVXc",
+)
 
 
 def append_item_to_playlist_config(content: str, script_id: str, item_uri: str) -> tuple[str, bool]:
@@ -30,6 +34,7 @@ def append_item_to_playlist_config(content: str, script_id: str, item_uri: str) 
         raise ValueError(f"Unsupported playlist target: {script_id}")
     if not item_uri or any(char in item_uri for char in ('"', "\n", "\r")):
         raise ValueError("Playlist items must be non-empty and single-line")
+    _reject_unresolvable_personalized_spotify_playlist(item_uri)
 
     lines = content.splitlines()
     start_index = _find_script_start(lines, script_id)
@@ -53,6 +58,16 @@ def append_item_to_playlist_config(content: str, script_id: str, item_uri: str) 
     if content.endswith("\n"):
         updated += "\n"
     return updated, True
+
+
+def _reject_unresolvable_personalized_spotify_playlist(item_uri: str) -> None:
+    if not any(pattern in item_uri for pattern in UNRESOLVABLE_PERSONALIZED_SPOTIFY_PLAYLIST_PATTERNS):
+        return
+
+    raise ValueError(
+        "Spotify personalized playlist IDs with 37i9dQZF1E* or 37i9dQZEVXc* "
+        "do not resolve through Music Assistant"
+    )
 
 
 def _find_script_start(lines: list[str], script_id: str) -> int:

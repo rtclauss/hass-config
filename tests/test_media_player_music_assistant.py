@@ -6,6 +6,7 @@ from pathlib import Path
 
 MEDIA_PLAYER_PATH = Path(__file__).resolve().parents[1] / "packages" / "media_player.yaml"
 DASHBOARD_PATH = Path(__file__).resolve().parents[1] / ".storage" / "lovelace.ryan_new_mushroom"
+PERSONALIZED_SPOTIFY_PLAYLIST_MARKERS = ("37i9dQZF1E", "37i9dQZEVXc")
 
 
 def _script_block(script_id: str) -> str:
@@ -52,6 +53,14 @@ def _automation_block(automation_id: str) -> str:
             break
 
     return "\n".join(lines[start:end])
+
+
+def _active_playlist_items(script_id: str) -> list[str]:
+    block = _script_block(script_id)
+    match = re.search(r"\{%- set plists = \[(?P<items>.*?)\]\s*-%\}", block, re.DOTALL)
+    if match is None:
+        raise AssertionError(f"Could not find active plists block for {script_id!r}")
+    return re.findall(r'"([^"\n]+)"', match.group("items"))
 
 
 def test_music_assistant_item_helper_normalizes_spotify_uris() -> None:
@@ -313,6 +322,27 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     assert 'media_item: "{{ playlist }}"' in block
     assert 'media_type: "{{ bedtime_media_type }}"' in block
     assert "'somafm.com' in playlist" in block
+
+
+def test_active_music_assistant_playlist_pools_exclude_personalized_spotify_ids() -> None:
+    for script_id in (
+        "bedroom_playlist_0",
+        "bedroom_playlist_1",
+        "bedroom_playlist_2",
+        "bedroom_playlist_3",
+        "bedroom_playlist_4",
+        "bedroom_playlist_5",
+        "spotify_arrival",
+        "spotify_bedtime",
+        "spotify_wake_up",
+    ):
+        active_items = _active_playlist_items(script_id)
+        blocked_items = [
+            item
+            for item in active_items
+            if any(marker in item for marker in PERSONALIZED_SPOTIFY_PLAYLIST_MARKERS)
+        ]
+        assert blocked_items == [], f"{script_id} has unresolvable Spotify items: {blocked_items}"
 
 
 def test_music_assistant_dashboard_exposes_player_card() -> None:
