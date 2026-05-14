@@ -246,8 +246,11 @@ wake-up setup state.
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
-calendar/quote rows. Weather alerts, garage-door exceptions, and front-door
-exceptions still take display priority and keep an urgent status row visible.
+calendar/quote rows. Weather alerts, garage-door exceptions, front-door
+exceptions, and event-weather exceptions still take display priority and keep
+an urgent status row visible. When event-weather risk overlaps an active flight,
+the urgent status text stays short and destination-specific, such as
+`SEA Wx risk`.
 
 Flight rows use these normalized entities from `packages/flight_status.yaml`:
 
