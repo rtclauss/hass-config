@@ -426,8 +426,14 @@ template:
           flightaware_flight_json: >-
             {% set raw_payload = flightaware_raw_json | default('{}', true) %}
             {% set payload = raw_payload if raw_payload is mapping else raw_payload | from_json(default={}) %}
-            {% set flights = payload.flights if payload is mapping and payload.flights is sequence else [] %}
-            {{ (flights[0] if flights | count > 0 else {}) | to_json }}
+            {% if payload is mapping and payload.flights is sequence %}
+              {% set flights = payload.flights %}
+              {{ (flights[0] if flights | count > 0 else {}) | to_json }}
+            {% elif payload is mapping %}
+              {{ payload | to_json }}
+            {% else %}
+              {{ {} | to_json }}
+            {% endif %}
           flightaware_polled: "{{ should_poll_flightaware and flightaware_response is defined and flightaware_response.status in [200, '200'] }}"
     sensor:
       - name: Next Travel Flight Live Status
@@ -494,7 +500,7 @@ template:
             {% else %}
               {{ '' }}
             {% endif %}
-          raw_json: "{{ flightaware_raw_json }}"
+          raw_json: "{{ flightaware_flight_json }}"
           last_polled: >-
             {% if flightaware_polled %}
               {{ now().isoformat() }}

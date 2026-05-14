@@ -61,6 +61,15 @@ def test_flight_status_keeps_calendar_fallback_when_live_api_is_unavailable() ->
     assert "active_window" in text
 
 
+def test_live_status_keeps_compact_raw_payload_for_recorder() -> None:
+    text = _package_text()
+
+    assert 'raw_json: "{{ flightaware_flight_json }}"' in text
+    assert 'raw_json: "{{ flightaware_raw_json }}"' not in text
+    assert "payload.flights is sequence" in text
+    assert "payload | to_json" in text
+
+
 def test_flightaware_polling_policy_avoids_unnecessary_calls() -> None:
     text = _package_text()
 
