@@ -456,9 +456,16 @@ automation:
                     - action: media_player.volume_set
                       continue_on_error: true
                       target:
-                        entity_id: "{{ group_members }}"
+                        entity_id: "{{ group_members | reject('eq', 'media_player.office_sonos_2') | list }}"
                       data:
                         volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.30] | min }}"
+                    - alias: "Office capped at 20% — bedroom wake-up should not disturb work-in-progress"
+                      continue_on_error: true
+                      action: media_player.volume_set
+                      target:
+                        entity_id: media_player.office_sonos_2
+                      data:
+                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.20] | min }}"
                     - delay:
                         seconds: "{{ (1/(tan((repeat.index + 5)/60))) | round(0, 'ceil', 5) }}"
                   until: "{{ repeat.index == 25 }}"
@@ -481,9 +488,16 @@ automation:
                   action: media_player.volume_set
                   continue_on_error: true
                   target:
-                    entity_id: "{{ group_members }}"
+                    entity_id: "{{ group_members | reject('eq', 'media_player.office_sonos_2') | list }}"
                   data:
                     volume_level: "{{ 0.01 * repeat.index }}"
+                - alias: "Office capped at 20% — bedroom wake-up should not disturb work-in-progress"
+                  continue_on_error: true
+                  action: media_player.volume_set
+                  target:
+                    entity_id: media_player.office_sonos_2
+                  data:
+                    volume_level: "{{ [0.01 * repeat.index, 0.20] | min }}"
                 - delay:
                     # As time passes, the delay gets smaller and smaller. 60, 30s, 20s, 15s, 12s,..., 2s
                     seconds: "{{ (1/(tan(repeat.index/60))) | round(0, 'ceil', 5)}}"
