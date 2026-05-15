@@ -148,6 +148,15 @@ def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:
     assert "full species list in attributes" in recorder_block
 
 
+def test_raw_f1_season_results_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.f1_season_results" in recorder_block
+    assert "full race result lists in attributes" in recorder_block
+
+
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
     text = _read(UTILITIES_PATH)
 
