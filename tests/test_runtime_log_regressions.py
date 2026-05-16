@@ -11,6 +11,7 @@ BIRDS_PATH = ROOT / "packages" / "birds.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
 CONFIGURATION_PATH = ROOT / "configuration.yaml"
+OCTOPRINT_PATH = ROOT / "packages" / "octoprint.yaml"
 
 
 def _read(path: Path) -> str:
@@ -146,6 +147,31 @@ def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:
     assert "sensor.top_50_bird_species" in recorder_entities
     assert "sensor.top_50_bird_species_2" in recorder_entities
     assert "full species list in attributes" in recorder_block
+
+
+def test_octoprint_duration_templates_handle_unknown_timestamps() -> None:
+    text = _read(OCTOPRINT_PATH)
+    elapsed_block = text.split('name: "OctoPrint Time Elapsed"', 1)[1].split(
+        'name: "OctoPrint Time Remaining"',
+        1,
+    )[0]
+    remaining_block = text.split('name: "OctoPrint Time Remaining"', 1)[1].split(
+        "\n########################\n# Weather",
+        1,
+    )[0]
+
+    assert "{{ has_value('sensor.octoprint_start_time') }}" in elapsed_block
+    assert "{% set start_value = states('sensor.octoprint_start_time') %}" in elapsed_block
+    assert "{% set start = as_timestamp(start_value, default=none) %}" in elapsed_block
+    assert "{% if start is not none %}" in elapsed_block
+    assert "{{ has_value('sensor.octoprint_estimated_finish_time') }}" in remaining_block
+    assert (
+        "{% set finish_entity = 'sensor.octoprint_estimated_finish_time' %}"
+        in remaining_block
+    )
+    assert "{% set finish_value = states(finish_entity) %}" in remaining_block
+    assert "{% set finish = as_timestamp(finish_value, default=none) %}" in remaining_block
+    assert "{% if finish is not none %}" in remaining_block
 
 
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:

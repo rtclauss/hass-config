@@ -281,10 +281,11 @@ template:
         unique_id: octoprint_time_elapsed
         unit_of_measurement: "s"
         availability: >
-          {{ not is_state('sensor.octoprint_start_time', 'unavailable') }}
+          {{ has_value('sensor.octoprint_start_time') }}
         state: >
-          {% set start = as_timestamp(states('sensor.octoprint_start_time')) %}
-          {% if is_number(start) %}
+          {% set start_value = states('sensor.octoprint_start_time') %}
+          {% set start = as_timestamp(start_value, default=none) %}
+          {% if start is not none %}
             {{ (as_timestamp(now()) - start) | int }}
           {% else %}
             unknown
@@ -295,10 +296,12 @@ template:
         unique_id: octoprint_time_remaining
         unit_of_measurement: "s"
         availability: >
-          {{ not is_state('sensor.octoprint_estimated_finish_time', 'unavailable') }}
+          {{ has_value('sensor.octoprint_estimated_finish_time') }}
         state: >
-          {% set finish = as_timestamp(states('sensor.octoprint_estimated_finish_time')) %}
-          {% if is_number(finish) %}
+          {% set finish_entity = 'sensor.octoprint_estimated_finish_time' %}
+          {% set finish_value = states(finish_entity) %}
+          {% set finish = as_timestamp(finish_value, default=none) %}
+          {% if finish is not none %}
             {{ (finish - as_timestamp(now())) | int }}
           {% else %}
             unknown
