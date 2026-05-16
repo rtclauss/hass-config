@@ -44,6 +44,45 @@ def _automation_block(path: Path, automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _top_level_mapping_block(path: Path, section_name: str, key_name: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    section_header = f"{section_name}:"
+    section_start = None
+
+    for index, line in enumerate(lines):
+        if line == section_header:
+            section_start = index
+            break
+
+    if section_start is None:
+        raise AssertionError(f"Could not find section {section_name!r} in {path.name}")
+
+    key_line = f"  {key_name}:"
+    start = None
+    for index in range(section_start + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith(" "):
+            break
+        if line == key_line:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find {section_name}.{key_name} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.startswith("  ") and not line.startswith("    ") and line.strip():
+            end = index
+            break
+        if line and not line.startswith(" "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def test_tesla_departure_planner_waits_for_helpers_on_startup() -> None:
     text = _read(CAR_PATH)
 
@@ -278,3 +317,37 @@ def test_light_package_uses_kelvin_color_temperature_keys() -> None:
     assert "\n        color_temp:" not in text
     assert "color_temp_kelvin: 2000" in text
     assert "color_temp_kelvin: 2591" in text
+
+
+def test_valetudo_startup_reconfigure_skips_unavailable_vacuums() -> None:
+    block = _automation_block(ZIGBEE_ZWAVE_PATH, "reconfigure_z2m_and_vacuums_on_startup")
+
+    assert "entity_id: vacuum.valetudo_den" in block
+    assert "entity_id: vacuum.valetudo_upstairs_vacuum" in block
+    assert "entity_id: vacuum.valetudo_mainlevel" not in block
+    assert block.count("condition: not") == 2
+    assert block.count("state: unavailable") == 2
+    assert "action: rest_command.reload_main_level_vacuum" not in block
+    assert "action: rest_command.reload_den_vacuum" in block
+    assert "action: rest_command.reload_upstairs_vacuum" in block
+    assert block.count("continue_on_error: true") == 2
+
+
+def test_valetudo_reload_commands_use_verified_runtime_endpoints() -> None:
+    den = _top_level_mapping_block(ZIGBEE_ZWAVE_PATH, "rest_command", "reload_den_vacuum")
+    upstairs = _top_level_mapping_block(
+        ZIGBEE_ZWAVE_PATH,
+        "rest_command",
+        "reload_upstairs_vacuum",
+    )
+
+    assert "http://192.168.1.245/api/v2/valetudo/config/interfaces/mqtt" in den
+    assert '"host":"192.168.1.11"' in den
+    assert '"identity":{"identifier":"den"}' in den
+    assert "valetudo-yummyhurtfulhornet.local" not in den
+    assert '"host":"10.254.254.11"' not in den
+
+    assert "http://192.168.1.163/api/v2/valetudo/config/interfaces/mqtt" in upstairs
+    assert '"host":"192.168.1.11"' in upstairs
+    assert '"identity":{"identifier":"upstairs-vacuum"}' in upstairs
+    assert "valetudo-zestycurvycaribou.local" not in upstairs
