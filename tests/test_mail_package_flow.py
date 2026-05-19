@@ -48,6 +48,7 @@ def test_mail_package_state_helper_distinguishes_delivery_outcomes() -> None:
         "source_unavailable",
     ):
         assert f"      - {option}" in text
+    assert "    initial: idle" not in text
 
 
 def test_mail_delivery_flow_uses_mail_and_packages_without_spamming() -> None:
@@ -70,6 +71,28 @@ def test_mail_delivery_flow_uses_mail_and_packages_without_spamming() -> None:
     assert "current_delivery_state not in" in block
     assert "next_delivery_state," in block
     assert "'retrieved'" in block
+
+
+def test_mail_delivery_uses_only_delivered_package_counters() -> None:
+    block = _automation_block("mail_delivered")
+    package_sources = block[
+        block.index("      package_source_entities:") : block.index("      source_entities:")
+    ]
+
+    for entity_id in (
+        "sensor.mail_amazon_packages_delivered",
+        "sensor.mail_fedex_delivered",
+        "sensor.mail_ups_delivered",
+    ):
+        assert entity_id in package_sources
+
+    for scheduled_entity_id in (
+        "sensor.mail_amazon_packages",
+        "sensor.mail_fedex_packages",
+        "sensor.mail_ups_packages",
+        "sensor.mail_usps_packages",
+    ):
+        assert f"        - {scheduled_entity_id}\n" not in package_sources
 
 
 def test_mailbox_open_marks_retrieval_when_delivery_is_pending() -> None:
