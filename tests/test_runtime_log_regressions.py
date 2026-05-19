@@ -11,6 +11,7 @@ BIRDS_PATH = ROOT / "packages" / "birds.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
 CONFIGURATION_PATH = ROOT / "configuration.yaml"
+OCTOPRINT_PATH = ROOT / "packages" / "octoprint.yaml"
 
 
 def _read(path: Path) -> str:
@@ -146,6 +147,17 @@ def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:
     assert "sensor.top_50_bird_species" in recorder_entities
     assert "sensor.top_50_bird_species_2" in recorder_entities
     assert "full species list in attributes" in recorder_block
+
+
+def test_octoprint_duration_templates_tolerate_unknown_timestamps() -> None:
+    text = _read(OCTOPRINT_PATH)
+
+    assert "as_timestamp(states('sensor.octoprint_start_time'), default=none)" in text
+    assert "as_timestamp(states('sensor.octoprint_estimated_finish_time'), default=none)" in text
+    assert "start is number" in text
+    assert "finish is number" in text
+    assert "start_time: \"{{ states('sensor.octoprint_start_time') }}\"" in text
+    assert "start_time: \"{{ states('sensor.octoprint_estimated_finish_time') }}\"" in text
 
 
 def test_raw_f1_season_results_feed_is_excluded_from_recorder() -> None:
