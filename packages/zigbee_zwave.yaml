@@ -950,6 +950,8 @@ automation:
 
   - id: mail_delivered
     alias: mail_delivered
+    mode: queued
+    max: 10
     trace:
       stored_traces: 10
     trigger:
@@ -957,25 +959,231 @@ automation:
         entity_id: binary_sensor.mailbox_contact
         from: "off"
         to: "on"
+        id: mailbox-open
+      - trigger: state
+        entity_id:
+          - binary_sensor.usps_mail_delivered
+          - binary_sensor.usps_image_updated
+          - binary_sensor.amazon_image_updated
+          - sensor.mail_amazon_packages_delivered
+          - sensor.mail_amazon_packages
+          - sensor.mail_fedex_delivered
+          - sensor.mail_fedex_packages
+          - sensor.mail_ups_delivered
+          - sensor.mail_ups_packages
+          - sensor.mail_usps_delivered
+          - sensor.mail_usps_mail
+          - sensor.mail_usps_packages
+        id: mail-and-packages-source
+    variables:
+      mail_source_entities:
+        - sensor.mail_usps_delivered
+        - sensor.mail_usps_mail
+      package_source_entities:
+        - sensor.mail_amazon_packages_delivered
+        - sensor.mail_amazon_packages
+        - sensor.mail_fedex_delivered
+        - sensor.mail_fedex_packages
+        - sensor.mail_ups_delivered
+        - sensor.mail_ups_packages
+        - sensor.mail_usps_packages
+      source_entities:
+        - binary_sensor.usps_mail_delivered
+        - binary_sensor.usps_image_updated
+        - binary_sensor.amazon_image_updated
+        - sensor.mail_amazon_packages_delivered
+        - sensor.mail_amazon_packages
+        - sensor.mail_fedex_delivered
+        - sensor.mail_fedex_packages
+        - sensor.mail_ups_delivered
+        - sensor.mail_ups_packages
+        - sensor.mail_usps_delivered
+        - sensor.mail_usps_mail
+        - sensor.mail_usps_packages
+      mail_count: >-
+        {% set count = namespace(value=0) %}
+        {% for entity_id in mail_source_entities %}
+          {% set count.value = count.value + states(entity_id) | int(0) %}
+        {% endfor %}
+        {{ count.value }}
+      package_count: >-
+        {% set count = namespace(value=0) %}
+        {% for entity_id in package_source_entities %}
+          {% set count.value = count.value + states(entity_id) | int(0) %}
+        {% endfor %}
+        {{ count.value }}
+      source_available: >-
+        {% set available = namespace(value=false) %}
+        {% for entity_id in source_entities %}
+          {% if states(entity_id) not in ['unavailable', 'unknown'] %}
+            {% set available.value = true %}
+          {% endif %}
+        {% endfor %}
+        {{ available.value }}
+      mail_detected: >-
+        {{ mail_count | int(0) > 0
+            or is_state('binary_sensor.usps_mail_delivered', 'on')
+            or is_state('binary_sensor.usps_image_updated', 'on') }}
+      package_detected: >-
+        {{ package_count | int(0) > 0
+            or is_state('binary_sensor.amazon_image_updated', 'on') }}
+      next_delivery_state: >-
+        {% if mail_detected and package_detected %}
+          mail_and_package_delivered
+        {% elif package_detected %}
+          package_delivered
+        {% elif mail_detected %}
+          mail_delivered
+        {% elif not source_available %}
+          source_unavailable
+        {% else %}
+          idle
+        {% endif %}
+      current_delivery_state: "{{ states('input_select.mail_package_state') }}"
+      delivery_title: >-
+        {% if next_delivery_state == 'mail_and_package_delivered' %}
+          Mail and package delivered
+        {% elif next_delivery_state == 'package_delivered' %}
+          Package delivered
+        {% else %}
+          Mail delivered
+        {% endif %}
+      delivery_message: >-
+        {% if next_delivery_state == 'mail_and_package_delivered' %}
+          Mail and packages are waiting outside or in the mailbox.
+        {% elif next_delivery_state == 'package_delivered' %}
+          A package is waiting outside.
+        {% elif next_delivery_state == 'mail_delivered' %}
+          Mail is waiting in the mailbox.
+        {% else %}
+          Mail delivery state changed.
+        {% endif %}
+      delivery_camera: >-
+        {% set preferred = [
+          'camera.mail_amazon_delivery_camera',
+          'camera.mail_ups_camera',
+          'camera.mail_fedex_delivery_camera',
+          'camera.mail_usps_camera',
+          'camera.mail_generic_delivery_camera'
+        ] %}
+        {% set camera = namespace(entity_id='') %}
+        {% for entity_id in preferred %}
+          {% if camera.entity_id == ''
+                and states(entity_id) not in ['unavailable', 'unknown'] %}
+            {% set camera.entity_id = entity_id %}
+          {% endif %}
+        {% endfor %}
+        {{ camera.entity_id }}
     condition:
-      - condition: and
-        conditions:
-          - alias: "Mailbox empty"
-            condition: state
-            entity_id: input_boolean.mail_delivered
-            state: "off"
-          - alias: "On a trip"
-            condition: state
-            entity_id: input_boolean.trip
-            state: "off"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
     action:
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.mail_delivered
-      - action: notify.all
-        data:
-          message: >-
-            Mail delivered.
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: mailbox-open
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: input_boolean.mail_delivered
+                    state: "on"
+                  - condition: state
+                    entity_id: input_select.mail_package_state
+                    state:
+                      - mail_delivered
+                      - package_delivered
+                      - mail_and_package_delivered
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_state
+                data:
+                  option: retrieved
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.mail_delivered
+              - action: notify.all
+                data:
+                  title: "Mail and packages retrieved"
+                  message: "Mailbox opened; pending mail/package state cleared."
+          - conditions:
+              - condition: trigger
+                id: mailbox-open
+              - condition: state
+                entity_id: input_boolean.mail_delivered
+                state: "off"
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_state
+                data:
+                  option: mail_delivered
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.mail_delivered
+              - action: notify.all
+                data:
+                  title: "Mail delivered"
+                  message: "Mailbox opened; mail may be waiting."
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ next_delivery_state in [
+                    'mail_delivered',
+                    'package_delivered',
+                    'mail_and_package_delivered'
+                  ] and current_delivery_state not in [
+                    next_delivery_state,
+                    'retrieved'
+                  ] }}
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_state
+                data:
+                  option: "{{ next_delivery_state }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.mail_delivered
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ delivery_camera | trim != '' }}"
+                    sequence:
+                      - action: notify.all
+                        data:
+                          title: "{{ delivery_title }}"
+                          message: "{{ delivery_message }}"
+                          data:
+                            entity_id: "{{ delivery_camera }}"
+                default:
+                  - action: notify.all
+                    data:
+                      title: "{{ delivery_title }}"
+                      message: "{{ delivery_message }}"
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ next_delivery_state == 'source_unavailable'
+                      and current_delivery_state == 'idle' }}
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_state
+                data:
+                  option: source_unavailable
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ next_delivery_state == 'idle'
+                      and current_delivery_state == 'source_unavailable' }}
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_state
+                data:
+                  option: idle
 
   - id: office_light_control_button
     alias: office_light_control_button
@@ -1110,6 +1318,11 @@ automation:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.mail_delivered
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.mail_package_state
+        data:
+          option: idle
 
   - alias: guest_room_switch_actions
     id: guest_room_switch_actions
@@ -1640,6 +1853,18 @@ counter: {}
 # Input Select
 ########################
 input_select:
+  mail_package_state:
+    name: Mail and package state
+    icon: mdi:package-variant-closed-check
+    options:
+      - idle
+      - mail_delivered
+      - package_delivered
+      - mail_and_package_delivered
+      - retrieved
+      - source_unavailable
+    initial: idle
+
   chatgpt_bed_override:
     name: Bed override
     options:
