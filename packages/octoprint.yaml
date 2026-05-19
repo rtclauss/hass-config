@@ -283,28 +283,28 @@ template:
         availability: >
           {{ not is_state('sensor.octoprint_start_time', 'unavailable') }}
         state: >
-          {% set start = as_timestamp(states('sensor.octoprint_start_time')) %}
-          {% if is_number(start) %}
+          {% set start = as_timestamp(states('sensor.octoprint_start_time'), default=none) %}
+          {% if start is number %}
             {{ (as_timestamp(now()) - start) | int }}
           {% else %}
             unknown
           {% endif %}
         attributes:
-          start_time: "states('sensor.octoprint_start_time')"
+          start_time: "{{ states('sensor.octoprint_start_time') }}"
       - name: "OctoPrint Time Remaining"
         unique_id: octoprint_time_remaining
         unit_of_measurement: "s"
         availability: >
           {{ not is_state('sensor.octoprint_estimated_finish_time', 'unavailable') }}
         state: >
-          {% set finish = as_timestamp(states('sensor.octoprint_estimated_finish_time')) %}
-          {% if is_number(finish) %}
+          {% set finish = as_timestamp(states('sensor.octoprint_estimated_finish_time'), default=none) %}
+          {% if finish is number %}
             {{ (finish - as_timestamp(now())) | int }}
           {% else %}
             unknown
           {% endif %}
         attributes:
-          start_time: "states('sensor.octoprint_estimated_finish_time')"
+          start_time: "{{ states('sensor.octoprint_estimated_finish_time') }}"
 
 ########################
 # Weather
