@@ -78,6 +78,10 @@ homeassistant:
       <<: *customize
       friendly_name: "Desk Manual Move Max"
 
+    script.uplift_desk_manual_move_min:
+      <<: *customize
+      friendly_name: "Desk Manual Move Min"
+
     script.uplift_desk_manual_move_preset_1:
       <<: *customize
       friendly_name: "Desk Manual Move Preset 1"
@@ -85,6 +89,10 @@ homeassistant:
     script.uplift_desk_manual_move_preset_2:
       <<: *customize
       friendly_name: "Desk Manual Move Preset 2"
+
+    script.uplift_desk_manual_stop:
+      <<: *customize
+      friendly_name: "Desk Manual Stop"
 
     ################################################
     ## Timer
@@ -360,6 +368,21 @@ script:
         target:
           entity_id: button.uplift_desk_75b205_move_to_max_height
 
+  uplift_desk_manual_move_min:
+    alias: uplift_desk_manual_move_min
+    description: >
+      Manual desk control for dashboards and UI buttons. This bypasses the
+      Home Assistant automation guard and sends the desk to the configured
+      minimum height immediately.
+    mode: single
+    icon: mdi:arrow-down-bold-box
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_move_to_min_height
+
   uplift_desk_manual_move_preset_1:
     alias: uplift_desk_manual_move_preset_1
     description: >
@@ -387,6 +410,20 @@ script:
       - action: button.press
         target:
           entity_id: button.uplift_desk_75b205_move_to_preset_2
+
+  uplift_desk_manual_stop:
+    alias: uplift_desk_manual_stop
+    description: >
+      Manual desk control for dashboards and UI buttons. This bypasses the
+      Home Assistant automation guard and stops desk motion immediately.
+    mode: single
+    icon: mdi:stop-circle
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: button.press
+        target:
+          entity_id: button.uplift_desk_75b205_stop
 
 ########################
 # Timer
