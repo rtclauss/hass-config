@@ -10,6 +10,7 @@ IOS_WAKEUP_PATH = ROOT / "packages" / "ios_wakeup.yaml"
 MEDIA_PLAYER_PATH = ROOT / "packages" / "media_player.yaml"
 TV_PATH = ROOT / "packages" / "tv.yaml"
 WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
+ALARM_SPEC_PATH = ROOT / "specs" / "alarm_wakeup.allium"
 
 
 def _script_block(path: Path, script_id: str) -> str:
@@ -93,9 +94,23 @@ def test_phone_alarm_sync_uses_holiday_calendar_to_compute_tomorrow_workday() ->
 
 
 def test_alarm_spec_documents_today_workday_as_holiday_aware() -> None:
-    text = (ROOT / "specs" / "alarm_wakeup.allium").read_text(encoding="utf-8")
+    text = ALARM_SPEC_PATH.read_text(encoding="utf-8")
 
     assert "Holiday-aware: true only on a weekday that is not a configured holiday." in text
+
+
+def test_wakeup_office_volume_caps_match_allium_peak() -> None:
+    spec_text = ALARM_SPEC_PATH.read_text(encoding="utf-8")
+    match = re.search(r"office_wakeup_peak_volume: Percentage = (\d+)%", spec_text)
+
+    assert match is not None
+    cap = f"0.{int(match.group(1)):02d}"
+    radio_wakeup = _script_block(MEDIA_PLAYER_PATH, "music_assistant_radio_wake_up")
+    bathroom_followup = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "config.office_wakeup_peak_volume" in spec_text
+    assert radio_wakeup.count(f", {cap}] | min") == 1
+    assert bathroom_followup.count(f", {cap}] | min") == 2
 
 
 def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> None:
