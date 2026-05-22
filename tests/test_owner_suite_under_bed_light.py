@@ -35,6 +35,7 @@ def test_under_bed_zone_motion_does_not_turn_strip_off_before_zone_update() -> N
 
     assert "action: light.turn_off" not in zone_section
     assert "entity_id: light.bed_lightstrip" in zone_section
+    assert zone_section.count("action: adaptive_lighting.apply") == 4
     assert zone_section.count("action: lifx.set_state") == 4
 
 
