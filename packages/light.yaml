@@ -2073,11 +2073,6 @@ automation:
     mode: restart
     trace:
       stored_traces: 50
-    variables:
-      under_bed_brightness_pct: >-
-        {{ state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct') | int(25) }}
-      under_bed_kelvin: >-
-        {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin') | int(2700) }}
     trigger:
       - trigger: state
         id: zone_1_on
@@ -2133,17 +2128,20 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: adaptive_lighting.apply
+                data:
+                  lights:
+                    - light.bed_lightstrip
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
               # Split the first 8 guaranteed LIFX Z zones into 4 logical bed quadrants.
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [0, 1]
           - conditions:
               - condition: trigger
@@ -2152,16 +2150,19 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: adaptive_lighting.apply
+                data:
+                  lights:
+                    - light.bed_lightstrip
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [2, 3]
           - conditions:
               - condition: trigger
@@ -2170,16 +2171,19 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: adaptive_lighting.apply
+                data:
+                  lights:
+                    - light.bed_lightstrip
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [4, 5]
           - conditions:
               - condition: trigger
@@ -2188,16 +2192,19 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: adaptive_lighting.apply
+                data:
+                  lights:
+                    - light.bed_lightstrip
+                  entity_id: switch.adaptive_lighting_owner_suite
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [6, 7]
           - conditions:
               - condition: trigger
