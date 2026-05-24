@@ -133,6 +133,20 @@ homeassistant:
     ################################################
 
 ########################
+# Command Line
+########################
+command_line:
+  - sensor:
+      name: AppDaemon HASS websocket reconnect error
+      unique_id: appdaemon_hass_websocket_reconnect_error
+      command: >-
+        python3 /config/scripts/appdaemon_log_probe.py
+        --log /config/logs/appdaemon_error.log
+        --max-age-seconds 600
+      command_timeout: 10
+      scan_interval: 60
+
+########################
 # Alarm Panel
 ########################
 alarm_control_panel: []
@@ -504,20 +518,43 @@ automation:
         data:
           option: "{{ tariff }}"
 
-  - alias: Restart AppDaemon on HA Startup or load cells unavailable
-    description: When HA starts up, or bed load cells are unavailable restart AppDaemon
+  - alias: Restart AppDaemon on HA startup or websocket reconnect failure
+    description: >
+      Restart AppDaemon when HA starts, or when the AppDaemon add-on log reports
+      a recent HASS websocket reconnect failure.
     id: restart_appdaemon_on_ha_startup
     trace:
       stored_traces: 10
     trigger:
       - trigger: homeassistant
         event: start
+        id: ha_start
+
+      - trigger: state
+        entity_id: sensor.appdaemon_hass_websocket_reconnect_error
+        id: appdaemon_hass_websocket_reconnect_error
 
       # action:
       #   - action: notify.mobile_app_wethop
       #     data:
       #       message: >-
       #         Restarting AppDaemon. Check the Automation Log
+    condition:
+      - condition: template
+        value_template: >-
+          {% if trigger.id == 'ha_start' %}
+            true
+          {% elif trigger.id == 'appdaemon_hass_websocket_reconnect_error' %}
+            {% set state = trigger.to_state.state if trigger.to_state is not none else 'unknown' %}
+            {% set last_triggered = this.attributes.last_triggered %}
+            {{ state not in ['clear', 'unknown', 'unavailable', 'none', '']
+               and (
+                 last_triggered is none
+                 or (now() - last_triggered).total_seconds() > 600
+               ) }}
+          {% else %}
+            false
+          {% endif %}
     action:
       - action: hassio.addon_restart
         continue_on_error: true
