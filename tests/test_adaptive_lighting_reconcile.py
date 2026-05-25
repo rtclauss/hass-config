@@ -38,6 +38,30 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _adaptive_lighting_settings_block(entity_id: str) -> str:
+    block = _automation_block("reconcile_owner_suite_adaptive_lighting")
+    lines = block.splitlines()
+    entity_line = f"          entity_id: {entity_id}"
+    try:
+        entity_index = lines.index(entity_line)
+    except ValueError as exc:
+        raise AssertionError(f"Could not find Adaptive Lighting settings for {entity_id}") from exc
+
+    start = entity_index
+    for candidate in range(entity_index, -1, -1):
+        if lines[candidate] == "      - action: adaptive_lighting.change_switch_settings":
+            start = candidate
+            break
+
+    end = len(lines)
+    for candidate in range(entity_index + 1, len(lines)):
+        if lines[candidate].startswith("      - "):
+            end = candidate
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings() -> None:
     block = _automation_block("reconcile_owner_suite_adaptive_lighting")
 
@@ -45,7 +69,7 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "event: start" in block
     assert 'delay: "00:00:30"' in block
     assert "action: adaptive_lighting.change_switch_settings" in block
-    assert "kitchen, den, basement, dining-room, and owner-suite tuning survive restarts" in block
+    assert "kitchen, den, basement, dining-room, owner-suite, and vanity tuning survive" in block
     assert "entity_id: switch.adaptive_lighting_owner_suite" in block
     assert "use_defaults: current" in block
     assert "include_config_in_attributes: true" in block
@@ -59,6 +83,25 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "sleep_color_temp: 1000" in block
     assert "detect_non_ha_changes: false" in block
     assert "event: adaptive_lighting_startup_reconciled" in block
+
+
+def test_owner_suite_vanity_adaptive_lighting_reconciles_scene_safe_baseline() -> None:
+    settings = _adaptive_lighting_settings_block("switch.adaptive_lighting_owner_suite_vanity")
+
+    for token in (
+        "use_defaults: current",
+        "include_config_in_attributes: true",
+        "take_over_control: true",
+        "adapt_only_on_bare_turn_on: true",
+        "only_once: true",
+        "initial_transition: 1",
+        "sleep_transition: 2",
+        "transition: 5",
+        "sleep_brightness: 1",
+        "sleep_color_temp: 1000",
+        "detect_non_ha_changes: false",
+    ):
+        assert token in settings
 
 
 def test_dining_room_adaptive_lighting_reconciles_current_switch_to_scene_safe_settings() -> None:
