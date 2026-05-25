@@ -50,9 +50,9 @@ homeassistant:
       friendly_name: "Home Alarm Triggered"
       icon: mdi:home-alert
 
-    automation.send_notification_when_alarm_triggered:
+    automation.alarm_triggered_response:
       <<: *customize
-      friendly_name: "Notify Home Alarm Triggered"
+      friendly_name: "Alarm Triggered Response"
       icon: mdi:home-alert
 
     ################################################
@@ -196,21 +196,13 @@ automation:
         data:
           message: >
             Activity detected at {{ trigger_label }} while you're away!
-      #    - action: tts.google_say
-      #      data:
-      #        message: "Intruder Alert! Intruder Alert! You are detected and recorded."
-      # - repeat:
-      #     count: 3
-      #     sequence:
-      #       - action: light.turn_on
-      #         continue_on_error: true
-      #         data:
-      #           entity_id: light.dining_room_lamps
-      #           flash: long
-      #       - delay: 00:00:02
-
-  - alias: send_notification_when_alarm_triggered
-    id: send_notification_when_alarm_triggered
+  - alias: alarm_triggered_response
+    id: alarm_triggered_response
+    description: >-
+      Responds when the alarm enters triggered state: always sends a push
+      notification; also flashes all lights for 3 minutes (90 × 2 s cycles)
+      when Zeke is away from home.
+    mode: single
     trace:
       stored_traces: 10
     trigger:
@@ -218,15 +210,20 @@ automation:
         entity_id: alarm_control_panel.home_alarm
         to: "triggered"
     action:
-      - action: notify.all
-        continue_on_error: true
-        data:
-          message: >
-            Alarm triggered while you're away
       - action: notify.mobile_app_wethop
         continue_on_error: true
         data:
           message: "Something triggered alarm panel at home!"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
+            sequence:
+              - repeat:
+                  count: 90  # 90 × 2 s/cycle = 3 minutes
+                  sequence:
+                    - action: script.flash_lights
 
   - alias: mirror_shared_notifications_to_lg_tv_when_on
     id: mirror_shared_notifications_to_lg_tv_when_on
@@ -431,24 +428,22 @@ scene: []
 ########################
 script:
   flash_lights:
+    description: >-
+      Single flash pulse: turn all lights on for 1 s then off for 1 s.
+      Callers should loop externally (e.g. repeat/count or repeat/while)
+      for a sustained effect — do not self-call to avoid infinite loops.
     trace:
       stored_traces: 10
     sequence:
       - alias: Lights On
         action: light.turn_on
-        data:
+        target:
           entity_id: all
       - delay:
-          # time for flash light on
           seconds: 1
       - alias: Lights Off
         action: light.turn_off
-        data:
+        target:
           entity_id: all
       - delay:
-          # time for flash light off
           seconds: 1
-      - alias: loop_lights
-        action: script.turn_on
-        data:
-          entity_id: script.flash_lights
