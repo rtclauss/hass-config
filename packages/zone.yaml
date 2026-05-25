@@ -735,6 +735,11 @@ binary_sensor:
         prob_given_false: 0.05
         platform: state
         to_state: "on"
+      - entity_id: input_boolean.trip
+        prob_given_true: 0.01   # almost never on a trip when home
+        prob_given_false: 0.15  # most non-home time is also not a trip (work, errands)
+        platform: state
+        to_state: "on"
 
 ########################
 # Device Trackers
@@ -781,6 +786,7 @@ group:
       - device_tracker.wethop
       - sensor.wethop_ssid
       - binary_sensor.arrival_sensor_presence
+      - input_boolean.trip
       - sensor.zeke_speed
       - sensor.wethop_battery_state
       - sensor.wethop_activity
