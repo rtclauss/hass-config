@@ -123,6 +123,7 @@ def test_reset_script_uses_static_replay_snapshot_instead_of_runtime_capture() -
     assert "inovelli_smart_bulb_mode_replay:" in block
     assert "inovelli_output_mode_replay:" in block
     assert "inovelli_switch_type_replay:" in block
+    assert "inovelli_fan_control_mode_replay:" in block
     assert "inovelli_group_membership_replay:" in block
     assert "inovelli_binding_replay:" in block
     assert "bridge/request/devices" not in block
@@ -141,6 +142,9 @@ def test_reset_script_replays_current_live_switch_modes_readably() -> None:
     assert 'option: "3-Way Aux Switch"' in block
     assert "select.garage_overhead_switch_switchtype" in block
     assert "select.hall_foyer_switch_switchtype" in block
+    assert 'option: "Toggle"' in block
+    assert "select.dining_room_table_switch_fancontrolmode" in block
+    assert "select.dining_room_wall_switch_fancontrolmode" in block
 
 
 def test_reset_script_does_not_restore_deck_flood_lights_smart_bulb_mode() -> None:
@@ -246,6 +250,20 @@ def test_reset_script_replays_current_live_group_memberships_and_bindings() -> N
             "Dining Room/Over Table",
             None,
             ("genLevelCtrl", "genOnOff", "genScenes"),
+        ),
+        (
+            "Dining Room/Table Switch",
+            3,
+            "Kitchen/All",
+            None,
+            ("genLevelCtrl", "genOnOff"),
+        ),
+        (
+            "Dining Room/Wall Switch",
+            3,
+            "Kitchen/All",
+            None,
+            ("genLevelCtrl", "genOnOff"),
         ),
         ("Hall/Foyer Switch", 2, "Hall/All", None, ("genLevelCtrl", "genOnOff")),
         (
