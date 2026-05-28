@@ -132,8 +132,9 @@ automation:
           - "unavailable"
     action:
       - action: media_player.volume_set
-        data:
+        target:
           entity_id: media_player.bedroom_sonos
+        data:
           # volume_level: >-
           # {{ (state_attr('media_player.bedroom', 'volume_level') + trigger.event.data.args.relative_degrees/1000) | round(2) | float(default=0) }}
           # Fixed: the inner float() call now carries its own default of 0 so that
@@ -157,7 +158,7 @@ automation:
         to: "tap"
     action:
       - action: media_player.media_play_pause
-        data:
+        target:
           entity_id: media_player.bedroom_sonos_2
 
   - id: bed_without_prep
@@ -189,13 +190,13 @@ automation:
             state: "playing"
     action:
       - action: script.turn_on
-        data:
+        target:
           entity_id: script.night_tv_mode_switches
       - action: script.apply_owner_suite_inovelli_led_policy
         data:
           policy: dark
       - action: script.turn_on
-        data:
+        target:
           entity_id: script.spotify_bedtime_volume
       # - delay: "00:10:00"
       # - action: switch.turn_on
@@ -223,7 +224,7 @@ automation:
           message: >-
             {{ "script.bedroom_playlist_" + (trigger.to_state.state | string) }}
       - action: script.turn_on
-        data:
+        target:
           entity_id: >-
             {{ "script.bedroom_playlist_" + (trigger.to_state.state | string) }}
 
@@ -242,7 +243,7 @@ automation:
         to: "slide"
     action:
       - action: media_player.media_next_track
-        data:
+        target:
           entity_id: media_player.bedroom_sonos_2
 
   - id: bedroom_music_shuffle
@@ -260,8 +261,9 @@ automation:
         to: "shake"
     action:
       - action: media_player.shuffle_set
-        data:
+        target:
           entity_id: media_player.bedroom_sonos_2
+        data:
           shuffle: >-
             {{ not (state_attr('media_player.bedroom_sonos_2', 'shuffle')) }}
 
@@ -1383,7 +1385,7 @@ script:
       stored_traces: 50
     sequence:
       - action: media_player.turn_on
-        data:
+        target:
           entity_id: media_player.basement
       - action: script.wait_for_basement_media_player_ready
       # - action: media_player.turn_on
@@ -1393,8 +1395,9 @@ script:
       - delay:
           seconds: 10
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.lg_webos_smart_tv
+        data:
           source: "HDMI 4"
       - delay:
           seconds: 2
@@ -1507,13 +1510,14 @@ script:
           seconds: 2
       - action: media_player.volume_set
         continue_on_error: true
-        data:
+        target:
           entity_id:
             - media_player.bedroom_sonos
             - media_player.bathroom_sonos_2
             - media_player.den_sonos
             - media_player.office_sonos
             - media_player.tiki_room_3
+        data:
           volume_level: 0.30
       - alias: "Play arrival music via Music Assistant"
         action: script.music_assistant_play_spotify_uri
@@ -1665,12 +1669,13 @@ script:
           seconds: 2
       - action: media_player.volume_set
         continue_on_error: true
-        data:
+        target:
           entity_id:
             - media_player.bedroom_sonos_2
             - media_player.bathroom_sonos_2
             - media_player.office_sonos_2
             - media_player.den_sonos_2
+        data:
           volume_level: 0.20
       - delay:
           seconds: 2
@@ -1755,13 +1760,15 @@ script:
                   sequence:
                     - action: media_player.volume_set
                       continue_on_error: true
-                      data:
+                      target:
                         entity_id: "{{ repeat.item.entity_id }}"
+                      data:
                         volume_level: "{{ repeat.item.volume_level }}"
               default:
                 - action: media_player.volume_set
-                  data:
+                  target:
                     entity_id: "{{ repeat.item.entity_id }}"
+                  data:
                     volume_level: "{{ repeat.item.volume_level }}"
 
   spotify_wake_up:
