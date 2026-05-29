@@ -81,6 +81,41 @@ homeassistant:
       icon: mdi:home-floor-b
 
 ################################################
+## Binary Sensors
+################################################
+
+binary_sensor:
+  - platform: threshold
+    name: bedroom_confident_occupancy_threshold
+    entity_id: sensor.bedroom_room_confidence
+    device_class: occupancy
+    upper: 49
+
+  - platform: threshold
+    name: office_confident_occupancy_threshold
+    entity_id: sensor.office_room_confidence
+    device_class: occupancy
+    upper: 49
+
+  - platform: threshold
+    name: den_confident_occupancy_threshold
+    entity_id: sensor.den_room_confidence
+    device_class: occupancy
+    upper: 49
+
+  - platform: threshold
+    name: dining_room_confident_occupancy_threshold
+    entity_id: sensor.dining_room_room_confidence
+    device_class: occupancy
+    upper: 49
+
+  - platform: threshold
+    name: basement_confident_occupancy_threshold
+    entity_id: sensor.basement_room_confidence
+    device_class: occupancy
+    upper: 49
+
+################################################
 ## Templates
 ################################################
 
@@ -418,24 +453,29 @@ template:
       - name: bedroom_confident_occupancy
         unique_id: bedroom_confident_occupancy
         device_class: occupancy
-        state: "{{ states('sensor.bedroom_room_confidence') | int(0) >= 50 }}"
+        availability: "{{ has_value('binary_sensor.bedroom_confident_occupancy_threshold') }}"
+        state: "{{ is_state('binary_sensor.bedroom_confident_occupancy_threshold', 'on') }}"
 
       - name: office_confident_occupancy
         unique_id: office_confident_occupancy
         device_class: occupancy
-        state: "{{ states('sensor.office_room_confidence') | int(0) >= 50 }}"
+        availability: "{{ has_value('binary_sensor.office_confident_occupancy_threshold') }}"
+        state: "{{ is_state('binary_sensor.office_confident_occupancy_threshold', 'on') }}"
 
       - name: den_confident_occupancy
         unique_id: den_confident_occupancy
         device_class: occupancy
-        state: "{{ states('sensor.den_room_confidence') | int(0) >= 50 }}"
+        availability: "{{ has_value('binary_sensor.den_confident_occupancy_threshold') }}"
+        state: "{{ is_state('binary_sensor.den_confident_occupancy_threshold', 'on') }}"
 
       - name: dining_room_confident_occupancy
         unique_id: dining_room_confident_occupancy
         device_class: occupancy
-        state: "{{ states('sensor.dining_room_room_confidence') | int(0) >= 50 }}"
+        availability: "{{ has_value('binary_sensor.dining_room_confident_occupancy_threshold') }}"
+        state: "{{ is_state('binary_sensor.dining_room_confident_occupancy_threshold', 'on') }}"
 
       - name: basement_confident_occupancy
         unique_id: basement_confident_occupancy
         device_class: occupancy
-        state: "{{ states('sensor.basement_room_confidence') | int(0) >= 50 }}"
+        availability: "{{ has_value('binary_sensor.basement_confident_occupancy_threshold') }}"
+        state: "{{ is_state('binary_sensor.basement_confident_occupancy_threshold', 'on') }}"

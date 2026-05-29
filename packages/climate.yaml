@@ -688,6 +688,21 @@ binary_sensor:
         sample_duration: 10800
         min_gradient: 0.000009
 
+  - platform: threshold
+    name: bathroom_humidity_high_threshold
+    entity_id: sensor.bathroom_humidity_delta
+    upper: 10
+
+  - platform: threshold
+    name: basement_bathroom_humidity_high_threshold
+    entity_id: sensor.basement_bathroom_humidity_delta
+    upper: 10
+
+  - platform: threshold
+    name: guest_bathroom_humidity_high_threshold
+    entity_id: sensor.guest_bathroom_humidity_delta
+    upper: 10
+
 ########################
 # Climate
 ########################
@@ -980,34 +995,71 @@ sensor:
 ## Templates
 ################################################
 template:
+  - sensor:
+      - name: bathroom_humidity_delta
+        unique_id: bathroom_humidity_delta
+        default_entity_id: sensor.bathroom_humidity_delta
+        unit_of_measurement: "%"
+        state_class: measurement
+        availability: >-
+          {{ has_value('sensor.owner_suite_bathroom_tph_humidity') and has_value('sensor.average_house_humidity') }}
+        state: >-
+          {{
+            (
+              states('sensor.owner_suite_bathroom_tph_humidity') | float(default=0)
+              - states('sensor.average_house_humidity') | float(default=0)
+            )
+          }}
+
+      - name: basement_bathroom_humidity_delta
+        unique_id: basement_bathroom_humidity_delta
+        default_entity_id: sensor.basement_bathroom_humidity_delta
+        unit_of_measurement: "%"
+        state_class: measurement
+        availability: >-
+          {{ has_value('sensor.basement_bathroom_tph_humidity') and has_value('sensor.average_house_humidity') }}
+        state: >-
+          {{
+            (
+              states('sensor.basement_bathroom_tph_humidity') | float(default=0)
+              - states('sensor.average_house_humidity') | float(default=0)
+            )
+          }}
+
+      - name: guest_bathroom_humidity_delta
+        unique_id: guest_bathroom_humidity_delta
+        default_entity_id: sensor.guest_bathroom_humidity_delta
+        unit_of_measurement: "%"
+        state_class: measurement
+        availability: >-
+          {{ has_value('sensor.guest_bathroom_tph_humidity') and has_value('sensor.average_house_humidity') }}
+        state: >-
+          {{
+            (
+              states('sensor.guest_bathroom_tph_humidity') | float(default=0)
+              - states('sensor.average_house_humidity') | float(default=0)
+            )
+          }}
+
   - binary_sensor:
       - default_entity_id: binary_sensor.bathroom_humidity_high
         unique_id: bathroom_humidity_high
-        state: >-
-          {% if (states('sensor.owner_suite_bathroom_tph_humidity')|float(default=0)) > (states('sensor.average_house_humidity')|float(default=0) + 10) %}
-            True
-          {% else %}
-            False
-          {% endif %}
+        availability: "{{ has_value('binary_sensor.bathroom_humidity_high_threshold') }}"
+        state: "{{ is_state('binary_sensor.bathroom_humidity_high_threshold', 'on') }}"
         name: bathroom_humidity_high
+
       - default_entity_id: binary_sensor.basement_bathroom_humidity_high
         unique_id: basement_bathroom_humidity_high
-        state: >-
-          {% if(states('sensor.basement_bathroom_tph_humidity')|float(default=0))> (states('sensor.average_house_humidity')|float(default=0) + 10) %}
-            True
-          {% else %}
-            False
-          {% endif %}
+        availability: "{{ has_value('binary_sensor.basement_bathroom_humidity_high_threshold') }}"
+        state: "{{ is_state('binary_sensor.basement_bathroom_humidity_high_threshold', 'on') }}"
         name: basement_bathroom_humidity_high
+
       - default_entity_id: binary_sensor.guest_bathroom_humidity_high
         unique_id: guest_bathroom_humidity_high
-        state: >-
-          {% if(states('sensor.guest_bathroom_tph_humidity')|float(default=0))> (states('sensor.average_house_humidity')|float(default=0) + 10) %}
-            True
-          {% else %}
-            False
-          {% endif %}
+        availability: "{{ has_value('binary_sensor.guest_bathroom_humidity_high_threshold') }}"
+        state: "{{ is_state('binary_sensor.guest_bathroom_humidity_high_threshold', 'on') }}"
         name: guest_bathroom_humidity_high
+
       - device_class: heat
         default_entity_id: binary_sensor.ecobee_aux
         unique_id: ecobee_aux

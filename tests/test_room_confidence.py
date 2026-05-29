@@ -19,6 +19,15 @@ def _sensor_block(text: str, sensor_name: str) -> str:
     return text[start:next_sensor]
 
 
+def _threshold_binary_sensor_block(text: str, sensor_name: str) -> str:
+    marker = f"  - platform: threshold\n    name: {sensor_name}\n"
+    start = text.index(marker)
+    next_sensor = text.find("\n  - platform:", start + len(marker))
+    if next_sensor == -1:
+        return text[start:]
+    return text[start:next_sensor]
+
+
 def test_dining_room_confidence_entities_are_registered() -> None:
     text = _room_confidence_text()
 
@@ -46,10 +55,15 @@ def test_dining_room_confidence_uses_bermuda_area_without_local_motion_weight() 
 
 def test_dining_room_confident_occupancy_threshold_matches_other_rooms() -> None:
     text = _room_confidence_text()
-    block = _sensor_block(text, "dining_room_confident_occupancy")
+    helper_block = _threshold_binary_sensor_block(text, "dining_room_confident_occupancy_threshold")
+    public_block = _sensor_block(text, "dining_room_confident_occupancy")
 
-    assert "device_class: occupancy" in block
-    assert 'state: "{{ states(\'sensor.dining_room_room_confidence\') | int(0) >= 50 }}"' in block
+    assert "device_class: occupancy" in helper_block
+    assert "entity_id: sensor.dining_room_room_confidence" in helper_block
+    assert "upper: 49" in helper_block
+    assert "unique_id: dining_room_confident_occupancy" in public_block
+    assert "binary_sensor.dining_room_confident_occupancy_threshold" in public_block
+    assert "state: \"{{ states('sensor.dining_room_room_confidence') | int(0) >= 50 }}\"" not in text
 
 
 def test_dining_room_confidence_recomputes_when_proxy_status_changes() -> None:

@@ -1567,6 +1567,12 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
+  - platform: threshold
+    name: any_egress_open_threshold
+    entity_id: sensor.open_egress_points
+    device_class: opening
+    upper: 0
+
   - platform: bayesian
     name: "Bayesian Bed Occupancy"
     unique_id: bayesian_bed_occupancy
@@ -2940,7 +2946,8 @@ template:
         unique_id: any_egress_open
         default_entity_id: binary_sensor.any_egress_open
         device_class: opening
-        state: "{{ states('sensor.open_egress_points') | int(0) > 0 }}"
+        availability: "{{ has_value('binary_sensor.any_egress_open_threshold') }}"
+        state: "{{ is_state('binary_sensor.any_egress_open_threshold', 'on') }}"
 
       - name: master_bed_occupancy
         unique_id: master_bed_occupancy
