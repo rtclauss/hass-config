@@ -138,8 +138,10 @@ def test_unified_holiday_registry_includes_legacy_holidays() -> None:
 def test_holiday_lighting_notification_only_sends_on_holiday_days() -> None:
     text = _text()
 
-    assert "- id: notify_holiday_lighting_day" in text
     assert "entity_id: sensor.active_holiday_lighting" not in text
+    assert "- id: outdoor_holiday_light_loop" in text
+    assert "condition: trigger" in text
+    assert "id: sunset" in text
     assert "states('sensor.active_outdoor_holiday') | trim not in ['none', 'unknown', 'unavailable', '']" in text
     assert "state_attr('sensor.active_outdoor_holiday', 'notification_message')" in text
     assert "action: notify.all" in text
