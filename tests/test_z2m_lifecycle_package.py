@@ -86,6 +86,17 @@ def test_z2m_lifecycle_watchdog_uses_plain_bridge_state_trigger() -> None:
     assert 'value_template: "{{ value_json.state }}"' not in block
 
 
+def test_z2m_router_stats_preserves_roster_on_malformed_devices_response() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    block = text.split("z2m_router_stats: >-", maxsplit=1)[1].split("  - binary_sensor:", maxsplit=1)[0]
+
+    assert "current_attrs.get('routers', [])" in block
+    assert "{% set has_device_snapshot = true %}" in block
+    assert "{% set has_device_snapshot = false %}" in block
+    assert "{% if has_device_snapshot %}" in block
+    assert "{% set routers = devices" in block
+
+
 def test_z2m_ota_template_tracks_progress_attributes_not_simple_availability() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
     template_block = text.split("z2m_ota_stats: >-", maxsplit=1)[1].split("  - trigger:", maxsplit=1)[0]
