@@ -1064,17 +1064,22 @@ template:
             {% set payload = trigger.payload_json %}
             {% if payload is mapping and payload.data is defined %}
               {% set devices = payload.data %}
+              {% set has_device_snapshot = true %}
             {% elif payload is sequence and payload is not string %}
               {% set devices = payload %}
+              {% set has_device_snapshot = true %}
             {% else %}
               {% set devices = [] %}
+              {% set has_device_snapshot = false %}
             {% endif %}
-            {% set routers = devices
-              | selectattr('type', 'eq', 'Router')
-              | rejectattr('friendly_name', 'equalto', 'Coordinator')
-              | rejectattr('disabled', 'eq', true)
-              | map(attribute='friendly_name')
-              | list %}
+            {% if has_device_snapshot %}
+              {% set routers = devices
+                | selectattr('type', 'eq', 'Router')
+                | rejectattr('friendly_name', 'equalto', 'Coordinator')
+                | rejectattr('disabled', 'eq', true)
+                | map(attribute='friendly_name')
+                | list %}
+            {% endif %}
           {% endif %}
 
           {% if is_availability_topic %}
