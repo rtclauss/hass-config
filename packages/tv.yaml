@@ -239,10 +239,11 @@ automation:
     action:
       - action: media_player.volume_set
         continue_on_error: true
-        data:
+        target:
           entity_id:
             - media_player.bedroom_sonos_2
             - media_player.bathroom_sonos_2
+        data:
           volume_level: 0.02
       - action: scene.turn_on
         continue_on_error: true
@@ -374,7 +375,7 @@ automation:
     action:
       - action: media_player.media_pause
         continue_on_error: true
-        data:
+        target:
           entity_id:
             - media_player.office_sonos_2
             - media_player.den_sonos_2
@@ -388,7 +389,7 @@ automation:
           entity_id: script.night_tv_mode_switches
       - action: media_player.media_pause
         continue_on_error: true
-        data:
+        target:
           entity_id:
             - media_player.den_sonos_2
       - action: script.music_assistant_pause_house_audio
@@ -490,14 +491,15 @@ script:
       stored_traces: 50
     sequence:
       - action: media_player.turn_on
-        data:
+        target:
           entity_id: media_player.basement
       - action: script.wait_for_basement_media_player_ready
       - delay:
           seconds: 10
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.lg_webos_smart_tv
+        data:
           source: "HDMI 3"
 
   # Shared Plex-show launcher. Runs startup, selects Plex source, scans
@@ -516,8 +518,9 @@ script:
     sequence:
       - action: script.watch_basement_tv_startup
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.basement
+        data:
           source: "Plex"
       - delay:
           seconds: 2
@@ -526,8 +529,9 @@ script:
           entity_id: button.fermentor_scan_clients
       - action: script.wait_for_basement_plex_client_ready
       - action: media_player.play_media
-        data:
+        target:
           entity_id: media_player.plex_basement_apple_tv
+        data:
           media_content_type: EPISODE
           media_content_id: >-
             { "library_name": "TV", "show_name": "{{ show_name }}", "shuffle": "1" }
@@ -543,8 +547,9 @@ script:
     sequence:
       - action: script.watch_basement_tv_startup
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.basement
+        data:
           source: "YouTube TV"
 
   watch_youtube:
@@ -554,8 +559,9 @@ script:
     sequence:
       - action: script.watch_basement_tv_startup
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.basement
+        data:
           source: "YouTube"
 
   watch_netflix:
@@ -565,8 +571,9 @@ script:
     sequence:
       - action: script.watch_basement_tv_startup
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.basement
+        data:
           source: "Netflix"
       - delay:
           seconds: 2
@@ -580,8 +587,9 @@ script:
     sequence:
       - action: script.watch_basement_tv_startup
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.basement
+        data:
           source: "Plex"
       - delay:
           seconds: 2
@@ -595,8 +603,9 @@ script:
     sequence:
       - action: script.watch_basement_tv_startup
       - action: media_player.select_source
-        data:
+        target:
           entity_id: media_player.basement
+        data:
           source: "F1 TV"
       - delay:
           seconds: 2
