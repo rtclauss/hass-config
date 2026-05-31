@@ -86,13 +86,14 @@ def test_z2m_lifecycle_watchdog_uses_plain_bridge_state_trigger() -> None:
     assert 'value_template: "{{ value_json.state }}"' not in block
 
 
-def test_z2m_router_stats_preserves_roster_on_malformed_devices_response() -> None:
+def test_z2m_router_stats_preserves_roster_on_malformed_or_empty_devices_response() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
     block = text.split("z2m_router_stats: >-", maxsplit=1)[1].split("  - binary_sensor:", maxsplit=1)[0]
 
     assert "current_attrs.get('routers', [])" in block
-    assert "{% set has_device_snapshot = true %}" in block
-    assert "{% set has_device_snapshot = false %}" in block
+    assert "payload.data is not mapping" in block
+    assert "payload is not mapping" in block
+    assert "{% set has_device_snapshot = devices | count > 0 %}" in block
     assert "{% if has_device_snapshot %}" in block
     assert "{% set routers = devices" in block
 
