@@ -55,7 +55,6 @@ def _scene_block(scene_name: str) -> str:
 def test_dynamic_action_scripts_use_explicit_native_actions() -> None:
     for path, script_name, action_name in (
         (CURLING_PATH, "toggle_curling_automation_on_curling_season", "automation.turn_on"),
-        (HOLIDAYS_PATH, "toggle_christmas_automation_during_christmas_season", "automation.turn_on"),
         (WEATHER_PATH, "nws_dakota_county_alerts_popup_on_wx_alert", "persistent_notification.create"),
     ):
         block = _script_block(path, script_name)
@@ -67,6 +66,11 @@ def test_dynamic_action_scripts_use_explicit_native_actions() -> None:
     assert "persistent_notification.dismiss" in weather_block
     assert "condition: not" in weather_block
     assert 'state: "0"' in weather_block
+
+    holidays_text = HOLIDAYS_PATH.read_text(encoding="utf-8")
+    assert "toggle_christmas_automation_during_christmas_season" not in holidays_text
+    assert "automation.turn_on" not in holidays_text
+    assert "automation.turn_off" not in holidays_text
 
 
 def test_camera_security_references_use_current_entities() -> None:
