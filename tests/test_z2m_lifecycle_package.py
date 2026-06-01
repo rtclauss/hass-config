@@ -88,9 +88,14 @@ def test_z2m_lifecycle_watchdog_uses_plain_bridge_state_trigger() -> None:
 
 def test_z2m_router_stats_preserves_roster_on_malformed_or_empty_devices_response() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
+    triggers = text.split("z2m_router_stats: >-", maxsplit=1)[0].rsplit("\n  - trigger:\n", maxsplit=1)[1]
     block = text.split("z2m_router_stats: >-", maxsplit=1)[1].split("  - binary_sensor:", maxsplit=1)[0]
 
     assert "current_attrs.get('routers', [])" in block
+    assert "topic: zigbee2mqtt/#" not in triggers
+    assert "topic: zigbee2mqtt/+/availability" in triggers
+    assert "topic: zigbee2mqtt/+/+/availability" in triggers
+    assert "topic: zigbee2mqtt/+/+/+/availability" in triggers
     assert "payload.data is not mapping" in block
     assert "payload is not mapping" in block
     assert "{% set has_device_snapshot = devices | count > 0 %}" in block
