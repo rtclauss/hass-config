@@ -29,3 +29,11 @@ def test_shared_notifications_mirror_to_lg_tv_only_when_on() -> None:
     assert "entity_id: media_player.lg_webos_smart_tv" in text
     assert 'state: "on"' in text
     assert "action: notify.lg_webos_tv_oled65c4aua_dusqljr" in text
+
+
+def test_shared_notifications_mirror_defaults_optional_payload_fields() -> None:
+    text = ALERTS_PATH.read_text(encoding="utf-8")
+    mirror = text.split("id: mirror_shared_notifications_to_lg_tv_when_on", maxsplit=1)[1]
+
+    assert "notify_title: \"{{ notify_payload.title | default('', true) }}\"" in mirror
+    assert "notify_data: \"{{ notify_payload.data | default({}, true) }}\"" in mirror
