@@ -121,14 +121,14 @@ rule NotifyLifecycleIssue {
 rule DelayTransientCoordinatorMissingRouters {
     when: CoordinatorMissingRoutersObserved()
     requires: bridge.coordinator_status = missing_routers
-    requires: DurationSinceCoordinatorMissingRoutersObserved() < coordinator_issue_hold_window
+    requires: DurationSinceCoordinatorMissingRoutersObserved() < config.coordinator_issue_hold_window
     ensures: notifications.push_notification_active = false
 }
 
 rule NotifyPersistentCoordinatorMissingRouters {
     when: CoordinatorMissingRoutersObserved()
     requires: bridge.coordinator_status = missing_routers
-    requires: DurationSinceCoordinatorMissingRoutersObserved() >= coordinator_issue_hold_window
+    requires: DurationSinceCoordinatorMissingRoutersObserved() >= config.coordinator_issue_hold_window
     ensures: notifications.lifecycle_issue_count = notifications.lifecycle_issue_count + 1
     ensures: notifications.persistent_notification_active = true
     ensures: notifications.push_notification_active = true
@@ -175,3 +175,9 @@ rule ConfirmForceDeviceDecommission {
         -- Force removal only removes the Zigbee2MQTT database entry; the
         -- device still needs a factory reset before it can be safely re-used.
 }
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+open question "stabilization_window (5 min) is declared in config but no rule references it. It was likely intended for debouncing availability_offline and network_address_flapping classification — the issue_reason values are declared on ZigbeeDeviceLifecycle but no rule raises them. Should a rule be added that sets issue_reason = availability_offline after a device remains offline beyond stabilization_window, or should the value be removed and this gap documented as intentional?"
