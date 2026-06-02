@@ -1,0 +1,316 @@
+# Home Assistant package for admin/runtime health.
+# It provides one aggregate dashboard surface and a daily digest for the
+# runtime signals that otherwise live across batteries, Z2M, updates, backups,
+# and stale/unavailable entity checks.
+
+################################################################
+## Packages / Admin Health
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "admin_health"
+
+    automation.send_admin_health_daily_digest:
+      <<: *customize
+      friendly_name: "Send Admin Health Daily Digest"
+      icon: mdi:heart-pulse
+
+    sensor.admin_health_issue_count:
+      <<: *customize
+      friendly_name: "Admin Health Issue Count"
+      icon: mdi:heart-pulse
+
+    sensor.admin_unavailable_entities:
+      <<: *customize
+      friendly_name: "Unavailable Entities"
+      icon: mdi:cloud-alert
+
+    sensor.admin_stale_entities:
+      <<: *customize
+      friendly_name: "Stale Entities"
+      icon: mdi:timer-alert
+
+    sensor.admin_updates_pending:
+      <<: *customize
+      friendly_name: "Updates Pending"
+      icon: mdi:update
+
+    sensor.admin_backup_status:
+      <<: *customize
+      friendly_name: "Backup Status"
+      icon: mdi:backup-restore
+
+################################################
+## Template
+################################################
+
+template:
+  - sensor:
+      - name: admin_unavailable_entities
+        unique_id: admin_unavailable_entities
+        default_entity_id: sensor.admin_unavailable_entities
+        icon: mdi:cloud-alert
+        state: >-
+          {% set ignored = [
+            'sensor.admin_health_issue_count',
+            'sensor.admin_unavailable_entities',
+            'sensor.admin_stale_entities',
+            'sensor.admin_updates_pending',
+            'sensor.admin_backup_status'
+          ] %}
+          {% set entities = expand(
+            states.binary_sensor,
+            states.climate,
+            states.cover,
+            states.fan,
+            states.light,
+            states.lock,
+            states.media_player,
+            states.sensor,
+            states.switch,
+            states.update,
+            states.vacuum,
+            states.water_heater
+          )
+            | rejectattr('entity_id', 'in', ignored)
+            | rejectattr('attributes.hidden', 'eq', true)
+            | selectattr('state', 'in', ['unavailable', 'unknown'])
+            | sort(attribute='entity_id')
+            | list %}
+          {{ entities | count }}
+        attributes:
+          summary: >-
+            {% set ignored = [
+              'sensor.admin_health_issue_count',
+              'sensor.admin_unavailable_entities',
+              'sensor.admin_stale_entities',
+              'sensor.admin_updates_pending',
+              'sensor.admin_backup_status'
+            ] %}
+            {% set entities = expand(
+              states.binary_sensor,
+              states.climate,
+              states.cover,
+              states.fan,
+              states.light,
+              states.lock,
+              states.media_player,
+              states.sensor,
+              states.switch,
+              states.update,
+              states.vacuum,
+              states.water_heater
+            )
+              | rejectattr('entity_id', 'in', ignored)
+              | rejectattr('attributes.hidden', 'eq', true)
+              | selectattr('state', 'in', ['unavailable', 'unknown'])
+              | sort(attribute='entity_id')
+              | list %}
+            {% set ns = namespace(lines=[]) %}
+            {% for item in entities[:30] %}
+              {% set ns.lines = ns.lines + ['- ' ~ item.entity_id ~ ': ' ~ item.state] %}
+            {% endfor %}
+            {% if entities | count > 30 %}
+              {% set ns.lines = ns.lines + ['- ... ' ~ ((entities | count) - 30) ~ ' more'] %}
+            {% endif %}
+            {{ ns.lines | join('\n') }}
+
+      - name: admin_stale_entities
+        unique_id: admin_stale_entities
+        default_entity_id: sensor.admin_stale_entities
+        icon: mdi:timer-alert
+        state: >-
+          {% set stale_threshold_hours = 12 %}
+          {% set entities = expand(
+            states.binary_sensor,
+            states.device_tracker,
+            states.fan,
+            states.light,
+            states.lock,
+            states.media_player,
+            states.sensor,
+            states.switch,
+            states.vacuum
+          ) %}
+          {% set ns = namespace(count=0) %}
+          {% for item in entities if (
+            not is_state_attr(item.entity_id, 'hidden', true)
+            and (now() - as_local(item.last_reported) > timedelta(hours=stale_threshold_hours))
+            and item.attributes.device_class != 'connectivity'
+            and 'update' not in (item.entity_id | lower)
+            and 'heading' not in (item.entity_id | lower)
+            and 'alert' not in (item.entity_id | lower)
+            and 'season' not in (item.entity_id | lower)
+            and not (item.entity_id | lower).endswith('microphone')
+            and not (item.entity_id | lower).endswith('hacs')
+            and 'sonos' not in (item.entity_id | lower)
+          ) %}
+            {% set ns.count = ns.count + 1 %}
+          {% endfor %}
+          {{ ns.count }}
+        attributes:
+          stale_threshold_hours: 12
+          summary: >-
+            {% set stale_threshold_hours = 12 %}
+            {% set entities = expand(
+              states.binary_sensor,
+              states.device_tracker,
+              states.fan,
+              states.light,
+              states.lock,
+              states.media_player,
+              states.sensor,
+              states.switch,
+              states.vacuum
+            ) %}
+            {% set ns = namespace(lines=[]) %}
+            {% for item in entities if (
+              not is_state_attr(item.entity_id, 'hidden', true)
+              and (now() - as_local(item.last_reported) > timedelta(hours=stale_threshold_hours))
+              and item.attributes.device_class != 'connectivity'
+              and 'update' not in (item.entity_id | lower)
+              and 'heading' not in (item.entity_id | lower)
+              and 'alert' not in (item.entity_id | lower)
+              and 'season' not in (item.entity_id | lower)
+              and not (item.entity_id | lower).endswith('microphone')
+              and not (item.entity_id | lower).endswith('hacs')
+              and 'sonos' not in (item.entity_id | lower)
+            ) %}
+              {% if ns.lines | count < 30 %}
+                {% set ns.lines = ns.lines + ['- ' ~ item.entity_id] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
+
+      - name: admin_updates_pending
+        unique_id: admin_updates_pending
+        default_entity_id: sensor.admin_updates_pending
+        icon: mdi:update
+        state: >-
+          {% set updates = states.update
+            | selectattr('state', 'eq', 'on')
+            | sort(attribute='entity_id')
+            | list %}
+          {{ updates | count }}
+        attributes:
+          summary: >-
+            {% set updates = states.update
+              | selectattr('state', 'eq', 'on')
+              | sort(attribute='entity_id')
+              | list %}
+            {% set ns = namespace(lines=[]) %}
+            {% for item in updates %}
+              {% set latest = state_attr(item.entity_id, 'latest_version') | default('', true) %}
+              {% set installed = state_attr(item.entity_id, 'installed_version') | default('', true) %}
+              {% set detail = ': ' ~ installed ~ ' -> ' ~ latest if latest or installed else '' %}
+              {% set ns.lines = ns.lines + ['- ' ~ item.entity_id ~ detail] %}
+            {% endfor %}
+            {{ ns.lines | join('\n') }}
+
+      - name: admin_backup_status
+        unique_id: admin_backup_status
+        default_entity_id: sensor.admin_backup_status
+        icon: mdi:backup-restore
+        state: >-
+          {% set automatic = state_attr('event.backup_automatic_backup', 'event_type') | default('', true) %}
+          {% set manager = states('sensor.backup_backup_manager_state') %}
+          {% if automatic %}
+            {{ automatic }}
+          {% elif manager not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ manager }}
+          {% else %}
+            unknown
+          {% endif %}
+        attributes:
+          manager_state: "{{ states('sensor.backup_backup_manager_state') }}"
+          failed_reason: "{{ state_attr('event.backup_automatic_backup', 'failed_reason') | default('', true) }}"
+          next_scheduled_automatic_backup: "{{ states('sensor.backup_next_scheduled_automatic_backup') }}"
+          last_attempted_automatic_backup: "{{ states('sensor.backup_last_attempted_automatic_backup') }}"
+          last_successful_automatic_backup: "{{ states('sensor.backup_last_successful_automatic_backup') }}"
+
+      - name: admin_health_issue_count
+        unique_id: admin_health_issue_count
+        default_entity_id: sensor.admin_health_issue_count
+        icon: mdi:heart-pulse
+        state: >-
+          {% set unavailable = states('sensor.admin_unavailable_entities') | int(0) %}
+          {% set stale = states('sensor.admin_stale_entities') | int(0) %}
+          {% set low_batteries = states('sensor.battery_low_20') | int(0) %}
+          {% set offline_batteries = states('sensor.battery_dead') | int(0) %}
+          {% set updates = states('sensor.admin_updates_pending') | int(0) %}
+          {% set z2m_lifecycle = states('sensor.z2m_lifecycle_issues') | int(0) %}
+          {% set backup_failed = 1 if states('sensor.admin_backup_status') == 'failed' else 0 %}
+          {{ unavailable + stale + low_batteries + offline_batteries + updates + z2m_lifecycle + backup_failed }}
+        attributes:
+          digest: >-
+            {% set ns = namespace(lines=[]) %}
+            {% set unavailable = states('sensor.admin_unavailable_entities') | int(0) %}
+            {% set stale = states('sensor.admin_stale_entities') | int(0) %}
+            {% set low_batteries = states('sensor.battery_low_20') | int(0) %}
+            {% set offline_batteries = states('sensor.battery_dead') | int(0) %}
+            {% set updates = states('sensor.admin_updates_pending') | int(0) %}
+            {% set z2m_lifecycle = states('sensor.z2m_lifecycle_issues') | int(0) %}
+            {% set backup_status = states('sensor.admin_backup_status') %}
+            {% if unavailable > 0 %}
+              {% set ns.lines = ns.lines + ['Unavailable entities: ' ~ unavailable] %}
+            {% endif %}
+            {% if stale > 0 %}
+              {% set ns.lines = ns.lines + ['Stale entities: ' ~ stale] %}
+            {% endif %}
+            {% if low_batteries > 0 %}
+              {% set ns.lines = ns.lines + ['Low batteries below 20%: ' ~ low_batteries] %}
+            {% endif %}
+            {% if offline_batteries > 0 %}
+              {% set ns.lines = ns.lines + ['Offline battery devices: ' ~ offline_batteries] %}
+            {% endif %}
+            {% if updates > 0 %}
+              {% set ns.lines = ns.lines + ['Updates pending: ' ~ updates] %}
+            {% endif %}
+            {% if z2m_lifecycle > 0 %}
+              {% set ns.lines = ns.lines + ['Z2M lifecycle issues: ' ~ z2m_lifecycle] %}
+            {% endif %}
+            {% if backup_status == 'failed' %}
+              {% set reason = state_attr('sensor.admin_backup_status', 'failed_reason') | default('', true) %}
+              {% set ns.lines = ns.lines + ['Backup failed' ~ (': ' ~ reason if reason else '')] %}
+            {% endif %}
+            {{ ns.lines | join('\n') if ns.lines | count > 0 else 'All monitored runtime checks are healthy.' }}
+
+################################################
+## Automation
+################################################
+
+automation:
+  - id: send_admin_health_daily_digest
+    alias: send_admin_health_daily_digest
+    description: Send one daily runtime-health digest covering unavailable entities, stale devices, low batteries, updates, backups, and Z2M lifecycle issues.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "07:30:00"
+    variables:
+      issue_count: "{{ states('sensor.admin_health_issue_count') | int(0) }}"
+      digest_summary: "{{ state_attr('sensor.admin_health_issue_count', 'digest') | default('Admin health digest unavailable.', true) }}"
+      digest_title: >-
+        {{ 'Admin health clear' if issue_count == 0 else 'Admin health needs attention' }}
+    action:
+      - action: persistent_notification.create
+        data:
+          notification_id: admin-health-digest
+          title: "{{ digest_title }}"
+          message: "{{ digest_summary }}"
+      - continue_on_error: true
+        action: notify.all
+        data:
+          title: "{{ digest_title }}"
+          message: "{{ digest_summary }}"
+          data:
+            tag: admin-health-digest
