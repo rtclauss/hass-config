@@ -2380,6 +2380,11 @@ script:
             - select.hall_garage_laundry_switch_switchtype
             - select.hall_upstairs_switch_switchtype
             - select.hall_stairway_switchtype
+      inovelli_fan_control_mode_replay:
+        - option: "Toggle"
+          entities:
+            - select.dining_room_table_switch_fancontrolmode
+            - select.dining_room_wall_switch_fancontrolmode
       # Recreate switch endpoint memberships in Zigbee groups after a reset.
       # For smart-bulb groups, endpoint 1 receives group state so the switch
       # load/LED stays in sync while endpoint 2 remains the bound controller.
@@ -2513,6 +2518,18 @@ script:
             - genLevelCtrl
             - genOnOff
             - genScenes
+        - from: "Dining Room/Table Switch"
+          from_endpoint: 3
+          to: "Kitchen/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Dining Room/Wall Switch"
+          from_endpoint: 3
+          to: "Kitchen/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
         - from: "Hall/Foyer Switch"
           from_endpoint: 2
           to: "Hall/All"
@@ -2630,35 +2647,11 @@ script:
           option: "Enabled"
       - delay: "{{ mqtt_bind_delay }}"
       - repeat:
-          for_each: "{{ inovelli_smart_bulb_mode_replay }}"
-          sequence:
-            - variables:
-                replay_option: "{{ repeat.item.option }}"
-                replay_entities: "{{ repeat.item.entities }}"
-            - repeat:
-                for_each: "{{ replay_entities }}"
-                sequence:
-                  - action: select.select_option
-                    data:
-                      entity_id: "{{ repeat.item }}"
-                      option: "{{ replay_option }}"
-                  - delay: "{{ ha_write_delay }}"
-      - repeat:
-          for_each: "{{ inovelli_output_mode_replay }}"
-          sequence:
-            - variables:
-                replay_option: "{{ repeat.item.option }}"
-                replay_entities: "{{ repeat.item.entities }}"
-            - repeat:
-                for_each: "{{ replay_entities }}"
-                sequence:
-                  - action: select.select_option
-                    data:
-                      entity_id: "{{ repeat.item }}"
-                      option: "{{ replay_option }}"
-                  - delay: "{{ ha_write_delay }}"
-      - repeat:
-          for_each: "{{ inovelli_switch_type_replay }}"
+          for_each: >
+            {{ inovelli_smart_bulb_mode_replay
+              + inovelli_output_mode_replay
+              + inovelli_switch_type_replay
+              + inovelli_fan_control_mode_replay }}
           sequence:
             - variables:
                 replay_option: "{{ repeat.item.option }}"
@@ -2722,7 +2715,7 @@ script:
           name: Zigbee2MQTT Reset
           message: >
             Replayed the saved Inovelli smart bulb modes, output modes, switch types,
-            group memberships, and bindings for switches and bulbs/groups.
+            fan control modes, group memberships, and bindings for switches and bulbs/groups.
 
   turn_off_all_inovelli_switch_leds:
     icon: mdi:light-switch-off
