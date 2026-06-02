@@ -118,7 +118,9 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
     assert classified_gaps == []
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",
+        "specs/arrival_lighting.allium",
         "specs/night_routines.allium",
+        "specs/tv_watching.allium",
         "specs/z2m_lifecycle.allium",
     }
     assert all(scope.implementation_paths for scope in scopes)

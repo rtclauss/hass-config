@@ -101,7 +101,7 @@ def test_alarm_spec_documents_today_workday_as_holiday_aware() -> None:
 
 def test_wakeup_office_volume_caps_match_allium_peak() -> None:
     spec_text = ALARM_SPEC_PATH.read_text(encoding="utf-8")
-    match = re.search(r"office_wakeup_peak_volume: Percentage = (\d+)%", spec_text)
+    match = re.search(r"office_wakeup_peak_volume_percent: Integer = (\d+)", spec_text)
 
     assert match is not None
     cap = f"0.{int(match.group(1)):02d}"
