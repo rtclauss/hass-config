@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.py"
 APP_CONFIG_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.yaml"
+CONFIGURATION_PATH = ROOT / "configuration.yaml"
 DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
 GITIGNORE_PATH = ROOT / ".gitignore"
 
@@ -222,3 +223,11 @@ def test_config_and_dashboard_wire_all_vacuums() -> None:
     assert "Upstairs Stall Evidence" in dashboard_text
     assert "!appdaemon/apps/vacuum_stall_monitor.py" in gitignore_text
     assert "!appdaemon/apps/vacuum_stall_monitor.yaml" in gitignore_text
+
+
+def test_home_assistant_allows_vacuum_stall_snapshot_directory() -> None:
+    config_text = CONFIGURATION_PATH.read_text(encoding="utf-8")
+
+    assert "allowlist_external_dirs:" in config_text
+    assert "- /config/media/vacuum_stalls" in config_text
+    assert (ROOT / "media" / "vacuum_stalls").is_dir()
