@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "z2m_lifecycle.yaml"
+AVAILABILITY_PACKAGE_PATH = ROOT / "packages" / "z2m_availability.yaml"
 Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.yaml"
 
 
@@ -88,9 +89,18 @@ def test_z2m_lifecycle_watchdog_uses_plain_bridge_state_trigger() -> None:
 
 def test_z2m_router_stats_preserves_roster_on_malformed_or_empty_devices_response() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
+    availability_text = AVAILABILITY_PACKAGE_PATH.read_text(encoding="utf-8")
+    triggers = text.split("z2m_router_stats: >-", maxsplit=1)[0].rsplit("\n  - trigger:\n", maxsplit=1)[1]
     block = text.split("z2m_router_stats: >-", maxsplit=1)[1].split("  - binary_sensor:", maxsplit=1)[0]
+    availability_depths = {
+        name.count("/") + 1
+        for name in re.findall(r'state_topic: "zigbee2mqtt/(.+)/availability"', availability_text)
+    }
 
     assert "current_attrs.get('routers', [])" in block
+    assert "topic: zigbee2mqtt/#" not in triggers
+    for depth in availability_depths:
+        assert f"topic: zigbee2mqtt/{'/'.join('+' for _ in range(depth))}/availability" in triggers
     assert "payload.data is not mapping" in block
     assert "payload is not mapping" in block
     assert "{% set has_device_snapshot = devices | count > 0 %}" in block
