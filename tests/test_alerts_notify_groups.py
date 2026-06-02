@@ -37,3 +37,21 @@ def test_shared_notifications_mirror_defaults_optional_payload_fields() -> None:
 
     assert "notify_title: \"{{ notify_payload.title | default('', true) }}\"" in mirror
     assert "notify_data: \"{{ notify_payload.data | default({}, true) }}\"" in mirror
+
+
+def test_laundry_leak_dry_trigger_uses_on_to_off_transition() -> None:
+    text = ALERTS_PATH.read_text(encoding="utf-8")
+    laundry_triggers = text.split(
+        "entity_id: binary_sensor.laundry_room_leak_water_leak", maxsplit=1
+    )[1]
+
+    assert 'from: "off"\n        to: "on"\n        id: wet' in laundry_triggers
+    assert 'from: "on"\n        to: "off"\n        id: dry' in laundry_triggers
+
+
+def test_flash_lights_keeps_distinct_on_and_off_hold_steps() -> None:
+    text = ALERTS_PATH.read_text(encoding="utf-8")
+    script = text.split("  flash_lights:", maxsplit=1)[1]
+
+    assert "alias: Hold lights on\n        delay:\n          seconds: 1" in script
+    assert "alias: Hold lights off\n        delay:\n          seconds: 1" in script
