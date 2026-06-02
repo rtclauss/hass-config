@@ -126,6 +126,11 @@ recorder:
       # F1 season results carries full race result payloads in attributes.
       # Keep smaller current/next-session F1 sensors recorded instead.
       - sensor.f1_season_results
+      # ADS-B raw feeds carry full aircraft/photo/route payloads in attributes.
+      # Keep derived closest-aircraft sensors recorded instead of these oversized feeds.
+      - sensor.adsb_aircraft_raw
+      - sensor.closest_aircraft_photo_raw
+      - sensor.closest_aircraft_route_raw
 
 influxdb:
   exclude:
@@ -148,6 +153,11 @@ influxdb:
       # The Garden Birds MQTT sensor carries an attribute named "time"; InfluxDB
       # rejects fields with that reserved name and drops the entire batch.
       - sensor.garden_birds
+      # ADS-B raw feeds carry full aircraft/photo/route payloads in attributes.
+      # Keep derived closest-aircraft sensors shipped to InfluxDB instead.
+      - sensor.adsb_aircraft_raw
+      - sensor.closest_aircraft_photo_raw
+      - sensor.closest_aircraft_route_raw
 
 cloud:
   alexa:
