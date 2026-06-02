@@ -247,20 +247,37 @@ automation:
                     data:
                       timestamp: "{{ as_timestamp(now()) }}"
               - if:
-                  - alias: "Reminder has been sent"
-                    condition: state
-                    entity_id: input_boolean.water_softener_refill_reminder_sent
-                    state: "on"
                   - alias: "Refill level has stayed stable for six hours"
                     condition: template
                     value_template: >-
                       {% set entered_at = states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) %}
                       {{ entered_at > 0 and as_timestamp(now()) - entered_at >= 6 * 60 * 60 }}
                 then:
-                  - alias: "Allow next refill-cycle reminder"
-                    action: input_boolean.turn_off
-                    target:
-                      entity_id: input_boolean.water_softener_refill_reminder_sent
+                  - if:
+                      - alias: "Reminder has been sent"
+                        condition: state
+                        entity_id: input_boolean.water_softener_refill_reminder_sent
+                        state: "on"
+                    then:
+                      - alias: "Allow next refill-cycle reminder"
+                        action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.water_softener_refill_reminder_sent
+                  - if:
+                      - alias: "Stable refill has not already been recorded"
+                        condition: template
+                        value_template: >-
+                          {% set entered_at = states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) %}
+                          {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
+                          {{ entered_at > last_refill_at }}
+                    then:
+                      - alias: "Record the stable refill"
+                        action: input_datetime.set_datetime
+                        target:
+                          entity_id: input_datetime.water_softener_last_refill_at
+                        data:
+                          timestamp: >-
+                            {{ states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) }}
           - alias: "Clear the refill timer only after a known reading leaves the window"
             conditions:
               - condition: template
@@ -418,6 +435,10 @@ input_datetime:
     name: Water Softener Refill Window Entered At
     has_date: true
     has_time: true
+  water_softener_last_refill_at:
+    name: Water Softener Last Refill At
+    has_date: true
+    has_time: true
 
 ########################
 # Input Numbers
@@ -457,6 +478,15 @@ input_number:
     step: 1
     unit_of_measurement: d
     initial: 14
+  water_softener_minimum_depletion_rate_mm_per_day:
+    name: Water Softener Minimum Depletion Rate
+    icon: mdi:speedometer-slow
+    min: 0.1
+    max: 25
+    mode: box
+    step: 0.1
+    unit_of_measurement: mm/d
+    initial: 0.5
 
 ########################
 # Input Select
@@ -536,11 +566,53 @@ sensor:
     unit_time: d
     time_window: "168:00:00" # we look at the change over the 7 days
 
+  - platform: statistics
+    entity_id: sensor.water_softener_forecast_rate
+    name: Water Softener Forecast Rate Median (24h)
+    unique_id: water_softener_forecast_rate_median_24h
+    state_characteristic: median
+    max_age:
+      hours: 24
+
 ########################
 # Template
 ########################
 template:
   - sensor:
+      - name: Water Softener Forecast Rate
+        unique_id: water_softener_forecast_rate
+        icon: mdi:chart-line
+        state_class: measurement
+        unit_of_measurement: mm/d
+        availability: >-
+          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.5) %}
+          {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
+          {% set include_7d = last_refill_at <= 0 or as_timestamp(now()) - last_refill_at >= 7 * 24 * 60 * 60 %}
+          {% set candidates = [
+            states('sensor.water_softener_level_dt_24hrs') | float(default=none),
+            states('sensor.water_softener_level_dt_48hrs') | float(default=none),
+            states('sensor.water_softener_level_dt_72hrs') | float(default=none),
+            states('sensor.water_softener_level_dt_7d') | float(default=none) if include_7d else none
+          ] %}
+          {% set valid_rates = candidates | select('number') | select('gt', minimum_rate) | list %}
+          {{ valid_rates | count >= 2 }}
+        state: >-
+          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.5) %}
+          {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
+          {% set include_7d = last_refill_at <= 0 or as_timestamp(now()) - last_refill_at >= 7 * 24 * 60 * 60 %}
+          {% set candidates = [
+            states('sensor.water_softener_level_dt_24hrs') | float(default=none),
+            states('sensor.water_softener_level_dt_48hrs') | float(default=none),
+            states('sensor.water_softener_level_dt_72hrs') | float(default=none),
+            states('sensor.water_softener_level_dt_7d') | float(default=none) if include_7d else none
+          ] %}
+          {% set rates = candidates | select('number') | select('gt', minimum_rate) | sort | list %}
+          {% set middle = rates | count // 2 %}
+          {% if rates | count % 2 %}
+            {{ rates[middle] | round(3) }}
+          {% else %}
+            {{ ((rates[middle - 1] + rates[middle]) / 2) | round(3) }}
+          {% endif %}
       - name: Water Softener Days Until Low Salt
         unique_id: water_softener_days_until_low_salt
         icon: mdi:calendar-clock
@@ -549,16 +621,12 @@ template:
         availability: >-
           {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
           {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
-          {% set rate_7d = states('sensor.water_softener_level_dt_7d') | float(default=none) %}
-          {% set rate_72h = states('sensor.water_softener_level_dt_72hrs') | float(default=none) %}
-          {% set rate = rate_7d if rate_7d is not none and rate_7d > 0 else rate_72h %}
+          {% set rate = states('sensor.water_softener_forecast_rate_median_24h') | float(default=none) %}
           {{ level is not none and (level >= threshold or (rate is not none and rate > 0)) }}
         state: >-
           {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
           {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
-          {% set rate_7d = states('sensor.water_softener_level_dt_7d') | float(default=none) %}
-          {% set rate_72h = states('sensor.water_softener_level_dt_72hrs') | float(default=none) %}
-          {% set rate = rate_7d if rate_7d is not none and rate_7d > 0 else rate_72h %}
+          {% set rate = states('sensor.water_softener_forecast_rate_median_24h') | float(default=none) %}
           {% if level is none %}
             {{ none }}
           {% elif level >= threshold %}
@@ -568,6 +636,15 @@ template:
           {% else %}
             {{ ((threshold - level) / rate) | round(1) }}
           {% endif %}
+      - name: Water Softener Forecast Low Salt At
+        unique_id: water_softener_forecast_low_salt_at
+        icon: mdi:calendar-alert
+        device_class: timestamp
+        availability: >-
+          {{ states('sensor.water_softener_days_until_low_salt') | float(default=none) is not none }}
+        state: >-
+          {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
+          {{ (now() + timedelta(days=days)).isoformat() }}
       - name: Water Softener Forecast Status
         unique_id: water_softener_forecast_status
         icon: mdi:shaker-outline
