@@ -50,28 +50,73 @@ def test_water_softener_forecast_sensor_uses_guarded_derivative_trend() -> None:
 def test_water_softener_forecast_reminder_is_one_shot_before_critical() -> None:
     block = _automation_block("water_softener_forecast_refill_reminder")
 
-    assert "trigger: numeric_state" in block
+    assert "trigger: state" in block
     assert "entity_id: sensor.water_softener_days_until_low_salt" in block
     assert "below: input_number.water_softener_refill_reminder_days" in block
-    assert "for:\n          hours: 6" in block
+    assert "trigger: time_pattern" in block
+    assert "event: start" in block
     assert "condition: state" in block
     assert "entity_id: input_boolean.water_softener_refill_reminder_sent" in block
     assert "state: \"off\"" in block
     assert "below: input_number.water_softener_low_salt_threshold_mm" in block
+    assert "input_datetime.water_softener_forecast_window_entered_at" in block
+    assert "as_timestamp(now()) - entered_at >= 6 * 60 * 60" in block
     assert "action: input_boolean.turn_on" in block
     assert "tag: water-softener-forecast-low" in block
     assert "states('input_number.bags_of_salt_at_home') | int(default=0)" in block
 
 
+def test_water_softener_forecast_monitor_persists_entry_time() -> None:
+    block = _automation_block("water_softener_forecast_refill_reminder")
+
+    assert "entity_id: sensor.water_softener_days_until_low_salt" in block
+    assert "event: start" in block
+    assert "below: input_number.water_softener_refill_reminder_days" in block
+    assert "input_datetime.water_softener_forecast_window_entered_at" in block
+    assert "              - if:" in block
+    assert 'timestamp: "{{ as_timestamp(now()) }}"' in block
+    assert "days is not none and reminder_days is not none" in block
+    assert "timestamp: 0" in block
+
+
 def test_water_softener_refill_resets_next_reminder_cycle() -> None:
     block = _automation_block("water_softener_refill_reminder_reset")
 
-    assert "trigger: numeric_state" in block
+    assert "trigger: state" in block
     assert "entity_id: sensor.water_softener_salt_level" in block
+    assert "trigger: time_pattern" in block
+    assert "event: start" in block
     assert "below: input_number.water_softener_refill_reset_threshold_mm" in block
-    assert "for:\n          hours: 6" in block
+    assert "input_datetime.water_softener_refill_window_entered_at" in block
+    assert "as_timestamp(now()) - entered_at >= 6 * 60 * 60" in block
     assert "state: \"on\"" in block
     assert "action: input_boolean.turn_off" in block
+
+
+def test_water_softener_refill_monitor_persists_entry_time() -> None:
+    block = _automation_block("water_softener_refill_reminder_reset")
+
+    assert "entity_id: sensor.water_softener_salt_level" in block
+    assert "event: start" in block
+    assert "below: input_number.water_softener_refill_reset_threshold_mm" in block
+    assert "input_datetime.water_softener_refill_window_entered_at" in block
+    assert "              - if:" in block
+    assert 'timestamp: "{{ as_timestamp(now()) }}"' in block
+    assert "level is not none and reset_threshold is not none" in block
+    assert "timestamp: 0" in block
+
+
+def test_water_softener_window_timestamps_restore_across_restarts() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+    input_datetimes = text.split("input_datetime:", maxsplit=1)[1].split(
+        "########################\n# Input Numbers", maxsplit=1
+    )[0]
+
+    assert "water_softener_forecast_window_entered_at:" in input_datetimes
+    assert "water_softener_refill_window_entered_at:" in input_datetimes
+    assert input_datetimes.count("has_date: true") == 2
+    assert input_datetimes.count("has_time: true") == 2
+    assert "initial:" not in input_datetimes
 
 
 def test_water_softener_forecast_status_is_visible_on_home_dashboard_tile() -> None:

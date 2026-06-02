@@ -137,72 +137,143 @@ automation:
 
   - id: water_softener_forecast_refill_reminder
     alias: Water Softener Forecast Refill Reminder
-    mode: single
+    mode: restart
+    trace:
+      stored_traces: 10
     trigger:
-      - trigger: numeric_state
-        id: forecast_window
+      - trigger: state
+        id: forecast_changed
         entity_id: sensor.water_softener_days_until_low_salt
-        above: 0
-        below: input_number.water_softener_refill_reminder_days
-        for:
-          hours: 6
-      - trigger: time
-        id: daily_recheck
-        at: "16:15:00"
+      - trigger: time_pattern
+        id: hourly_recheck
+        minutes: "15"
       - trigger: homeassistant
-        id: startup_recheck
+        id: forecast_startup_recheck
         event: start
-    condition:
-      - alias: "Reminder not already sent this refill cycle"
-        condition: state
-        entity_id: input_boolean.water_softener_refill_reminder_sent
-        state: "off"
-      - alias: "Forecast is inside the reminder window"
-        condition: numeric_state
-        entity_id: sensor.water_softener_days_until_low_salt
-        above: 0
-        below: input_number.water_softener_refill_reminder_days
-      - alias: "Salt level is not already critical"
-        condition: numeric_state
-        entity_id: sensor.water_softener_salt_level
-        below: input_number.water_softener_low_salt_threshold_mm
     action:
-      - alias: "Mark reminder sent"
-        action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.water_softener_refill_reminder_sent
-      - alias: "Notify before salt is critical"
-        action: notify.all
-        data:
-          title: Softener salt forecast low
-          data:
-            url: "/ryan-new-mushroom/cleaning"
-            tag: water-softener-forecast-low
-          message: >-
-            Water softener salt is forecast to reach the low threshold in
-            {{ states('sensor.water_softener_days_until_low_salt') }} days.
-            Current level is {{ states('sensor.water_softener_salt_level') }} mm
-            and there are {{ states('input_number.bags_of_salt_at_home') | int(default=0) }} bags at home.
+      - choose:
+          - alias: "Track stable forecasts and notify once per refill cycle"
+            conditions:
+              - condition: numeric_state
+                entity_id: sensor.water_softener_days_until_low_salt
+                above: 0
+                below: input_number.water_softener_refill_reminder_days
+              - condition: numeric_state
+                entity_id: sensor.water_softener_salt_level
+                below: input_number.water_softener_low_salt_threshold_mm
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ states('input_datetime.water_softener_forecast_window_entered_at') | as_timestamp(default=0) <= 0 }}
+                then:
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.water_softener_forecast_window_entered_at
+                    data:
+                      timestamp: "{{ as_timestamp(now()) }}"
+              - if:
+                  - alias: "Reminder not already sent this refill cycle"
+                    condition: state
+                    entity_id: input_boolean.water_softener_refill_reminder_sent
+                    state: "off"
+                  - alias: "Forecast has stayed inside the reminder window for six hours"
+                    condition: template
+                    value_template: >-
+                      {% set entered_at = states('input_datetime.water_softener_forecast_window_entered_at') | as_timestamp(default=0) %}
+                      {{ entered_at > 0 and as_timestamp(now()) - entered_at >= 6 * 60 * 60 }}
+                then:
+                  - alias: "Mark reminder sent"
+                    action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.water_softener_refill_reminder_sent
+                  - alias: "Notify before salt is critical"
+                    action: notify.all
+                    data:
+                      title: Softener salt forecast low
+                      data:
+                        url: "/ryan-new-mushroom/cleaning"
+                        tag: water-softener-forecast-low
+                      message: >-
+                        Water softener salt is forecast to reach the low threshold in
+                        {{ states('sensor.water_softener_days_until_low_salt') }} days.
+                        Current level is {{ states('sensor.water_softener_salt_level') }} mm
+                        and there are {{ states('input_number.bags_of_salt_at_home') | int(default=0) }} bags at home.
+          - alias: "Clear the forecast timer only after a known reading leaves the window"
+            conditions:
+              - condition: template
+                value_template: >-
+                  {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
+                  {% set reminder_days = states('input_number.water_softener_refill_reminder_days') | float(default=none) %}
+                  {{ days is not none and reminder_days is not none and not (0 < days < reminder_days) }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.water_softener_forecast_window_entered_at
+                data:
+                  timestamp: 0
 
   - id: water_softener_refill_reminder_reset
     alias: Water Softener Refill Reminder Reset
-    mode: single
+    mode: restart
+    trace:
+      stored_traces: 10
     trigger:
-      - trigger: numeric_state
+      - trigger: state
+        id: salt_level_changed
         entity_id: sensor.water_softener_salt_level
-        below: input_number.water_softener_refill_reset_threshold_mm
-        for:
-          hours: 6
-    condition:
-      - alias: "Reminder has been sent"
-        condition: state
-        entity_id: input_boolean.water_softener_refill_reminder_sent
-        state: "on"
+      - trigger: time_pattern
+        id: hourly_recheck
+        minutes: "45"
+      - trigger: homeassistant
+        id: refill_startup_recheck
+        event: start
     action:
-      - alias: "Allow next refill-cycle reminder"
-        action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.water_softener_refill_reminder_sent
+      - choose:
+          - alias: "Track a stable refill and allow the next reminder cycle"
+            conditions:
+              - condition: numeric_state
+                entity_id: sensor.water_softener_salt_level
+                below: input_number.water_softener_refill_reset_threshold_mm
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) <= 0 }}
+                then:
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.water_softener_refill_window_entered_at
+                    data:
+                      timestamp: "{{ as_timestamp(now()) }}"
+              - if:
+                  - alias: "Reminder has been sent"
+                    condition: state
+                    entity_id: input_boolean.water_softener_refill_reminder_sent
+                    state: "on"
+                  - alias: "Refill level has stayed stable for six hours"
+                    condition: template
+                    value_template: >-
+                      {% set entered_at = states('input_datetime.water_softener_refill_window_entered_at') | as_timestamp(default=0) %}
+                      {{ entered_at > 0 and as_timestamp(now()) - entered_at >= 6 * 60 * 60 }}
+                then:
+                  - alias: "Allow next refill-cycle reminder"
+                    action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.water_softener_refill_reminder_sent
+          - alias: "Clear the refill timer only after a known reading leaves the window"
+            conditions:
+              - condition: template
+                value_template: >-
+                  {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
+                  {% set reset_threshold = states('input_number.water_softener_refill_reset_threshold_mm') | float(default=none) %}
+                  {{ level is not none and reset_threshold is not none and level >= reset_threshold }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.water_softener_refill_window_entered_at
+                data:
+                  timestamp: 0
 
   - id: buy_more_salt
     alias: buy_more_salt
@@ -334,6 +405,19 @@ input_boolean:
   water_softener_refill_reminder_sent:
     name: Water Softener Refill Reminder Sent
     icon: mdi:bell-check
+
+########################
+# Input Datetimes
+########################
+input_datetime:
+  water_softener_forecast_window_entered_at:
+    name: Water Softener Forecast Window Entered At
+    has_date: true
+    has_time: true
+  water_softener_refill_window_entered_at:
+    name: Water Softener Refill Window Entered At
+    has_date: true
+    has_time: true
 
 ########################
 # Input Numbers
