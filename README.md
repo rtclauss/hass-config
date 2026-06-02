@@ -26,7 +26,15 @@
 python -m pip install --upgrade pip yamllint
 python scripts/check_ha_python_support.py --python-version-file .python-version
 uv run --with pytest pytest
+python scripts/allium_weed_check.py --changed-from origin/develop
 ```
+
+`scripts/allium_weed_check.py` runs `allium check` when the CLI is installed,
+falls back to lightweight structural checks when it is not, and fails protected
+behavior changes that touch implementation scopes without updating the
+governing `.allium` spec or adding a classified gap in
+`specs/allium_weed_config.json`. CI installs Allium CLI 3.2.3 and runs with
+`--require-allium` so full language validation cannot be skipped silently.
 
 ## Music Assistant Media Flow
 
