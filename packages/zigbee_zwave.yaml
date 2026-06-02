@@ -1546,9 +1546,8 @@ automation:
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
     # Reconfigures Zigbee2MQTT and all Valetudo vacuums after HA startup.
-    # Fixed: added continue_on_error: true to each rest_command so that a single
-    # unreachable vacuum (e.g. den vacuum offline at boot) does not abort the
-    # sequence and leave the remaining vacuums un-reconfigured.
+    # Main-level Valetudo reload is intentionally skipped until its current
+    # endpoint is verified; the old .local hostname does not resolve from HA.
     trace:
       stored_traces: 10
     trigger:
@@ -1556,12 +1555,24 @@ automation:
         event: start
     action:
       - delay: "00:01:00"
-      - action: rest_command.reload_den_vacuum
-        continue_on_error: true
-      - action: rest_command.reload_upstairs_vacuum
-        continue_on_error: true
-      - action: rest_command.reload_main_level_vacuum
-        continue_on_error: true
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: vacuum.valetudo_den
+                state: unavailable
+        then:
+          - action: rest_command.reload_den_vacuum
+            continue_on_error: true
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: vacuum.valetudo_upstairs_vacuum
+                state: unavailable
+        then:
+          - action: rest_command.reload_upstairs_vacuum
+            continue_on_error: true
 
 ########################
 # Binary Sensors
@@ -2914,17 +2925,17 @@ rest_command:
       authorization: !secret proxmoxve_api_token
     payload: "command=shutdown"
   reload_den_vacuum:
-    url: http://valetudo-yummyhurtfulhornet.local/api/v2/valetudo/config/interfaces/mqtt
+    url: http://192.168.1.245/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"10.254.254.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"den"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"den"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
   reload_upstairs_vacuum:
-    url: http://valetudo-zestycurvycaribou.local/api/v2/valetudo/config/interfaces/mqtt
+    url: http://192.168.1.163/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"10.24.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"upstairs-vacuum"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"upstairs-vacuum"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
   reload_main_level_vacuum:
     url: http://valetudo-activeexoticlion.local/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
