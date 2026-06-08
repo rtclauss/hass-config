@@ -990,11 +990,13 @@ template:
           {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
         attributes:
           entry: >-
+            {% from 'flight.jinja' import skip_charging_event %}
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, entry='None') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% if personal_start_raw not in [none, ''] %}
+            {% set personal_skip = skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) | trim | lower == 'true' %}
+            {% if personal_start_raw not in [none, ''] and not personal_skip %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
               {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
                 {% set ns.start = personal_start %}
@@ -1002,7 +1004,8 @@ template:
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% if work_start_raw not in [none, ''] %}
+            {% set work_skip = skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) | trim | lower == 'true' %}
+            {% if work_start_raw not in [none, ''] and not work_skip %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
               {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
@@ -1010,7 +1013,8 @@ template:
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% if curling_start_raw not in [none, ''] %}
+            {% set curling_skip = skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) | trim | lower == 'true' %}
+            {% if curling_start_raw not in [none, ''] and not curling_skip %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
               {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
@@ -1019,11 +1023,13 @@ template:
             {% endif %}
             {{ ns.entry }}
           start_time: >-
+            {% from 'flight.jinja' import skip_charging_event %}
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, value='None') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% if personal_start_raw not in [none, ''] %}
+            {% set personal_skip = skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) | trim | lower == 'true' %}
+            {% if personal_start_raw not in [none, ''] and not personal_skip %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
               {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
                 {% set ns.start = personal_start %}
@@ -1031,7 +1037,8 @@ template:
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% if work_start_raw not in [none, ''] %}
+            {% set work_skip = skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) | trim | lower == 'true' %}
+            {% if work_start_raw not in [none, ''] and not work_skip %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
               {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
@@ -1039,7 +1046,8 @@ template:
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% if curling_start_raw not in [none, ''] %}
+            {% set curling_skip = skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) | trim | lower == 'true' %}
+            {% if curling_start_raw not in [none, ''] and not curling_skip %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
               {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
@@ -1048,11 +1056,13 @@ template:
             {% endif %}
             {{ ns.value }}
           all_day: >-
+            {% from 'flight.jinja' import skip_charging_event %}
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, value='None') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% if personal_start_raw not in [none, ''] %}
+            {% set personal_skip = skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) | trim | lower == 'true' %}
+            {% if personal_start_raw not in [none, ''] and not personal_skip %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
               {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
                 {% set ns.start = personal_start %}
@@ -1060,7 +1070,8 @@ template:
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% if work_start_raw not in [none, ''] %}
+            {% set work_skip = skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) | trim | lower == 'true' %}
+            {% if work_start_raw not in [none, ''] and not work_skip %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
               {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
@@ -1068,7 +1079,8 @@ template:
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% if curling_start_raw not in [none, ''] %}
+            {% set curling_skip = skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) | trim | lower == 'true' %}
+            {% if curling_start_raw not in [none, ''] and not curling_skip %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
               {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
@@ -1077,12 +1089,13 @@ template:
             {% endif %}
             {{ ns.value }}
         state: >-
+          {% from 'flight.jinja' import skip_charging_event %}
           {% set now_local = now() %}
           {% set horizon = now_local + timedelta(hours=24) %}
           {% set ns = namespace(start=none, eligible=false) %}
           {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-          {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | lower %}
-          {% if personal_start_raw not in [none, ''] and 'nocharge' not in personal_description %}
+          {% set personal_skip = skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) | trim | lower == 'true' %}
+          {% if personal_start_raw not in [none, ''] and not personal_skip %}
             {% set personal_start = personal_start_raw | as_datetime | as_local %}
             {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
               {% set ns.start = personal_start %}
@@ -1090,8 +1103,8 @@ template:
             {% endif %}
           {% endif %}
           {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-          {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | lower %}
-          {% if work_start_raw not in [none, ''] and 'nocharge' not in work_description %}
+          {% set work_skip = skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) | trim | lower == 'true' %}
+          {% if work_start_raw not in [none, ''] and not work_skip %}
             {% set work_start = work_start_raw | as_datetime | as_local %}
             {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
               {% set ns.start = work_start %}
@@ -1099,8 +1112,8 @@ template:
             {% endif %}
           {% endif %}
           {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-          {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | lower %}
-          {% if curling_start_raw not in [none, ''] and 'nocharge' not in curling_description %}
+          {% set curling_skip = skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) | trim | lower == 'true' %}
+          {% if curling_start_raw not in [none, ''] and not curling_skip %}
             {% set curling_start = curling_start_raw | as_datetime | as_local %}
             {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
               {% set ns.start = curling_start %}

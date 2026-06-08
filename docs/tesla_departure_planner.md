@@ -29,6 +29,8 @@ The planner now normalizes Waze/Tesla duration inputs with Home Assistant's `as_
 
 The trip-selection template now only considers future departures inside the next 24 hours. Once a calendar departure is in the past, its `start_time` drops out of the planner inputs and the next planner recompute clears Tesla scheduled departure instead of leaving stale preconditioning or off-peak charging events behind.
 
+Flight events are excluded from charge planning entirely. `binary_sensor.upcoming_trip_charging` runs every candidate calendar event through the shared `skip_charging_event` macro in `custom_templates/flight.jinja`, which reuses the same flight-recognition rules as travel detection in `packages/trips.yaml` (route-arrow itineraries such as `✈ MSP→ATL`, `flight to …` / `flight: … to …` titles, and itinerary markers like "Synced by Flighty", "Created from an email you received in Gmail", booking codes, and flight-time lines). The macro is applied in all four template blocks (`state`, `entry`, `start_time`, `all_day`) so a flight never sets a trip distance, departure time, or preconditioning plan. This is intentionally origin-agnostic: unlike trip-mode detection, the charge planner ignores a flight regardless of whether it departs MSP, because the car never makes the long drive to the arrival city. Previously a far-destination flight (for example "Flight to Atlanta") fed the Waze drive distance to the arrival city, tripped the `>= 90 mi -> 100%` rule, and pinned the home Tesla to a 100% charge. The same macro still honors the manual `nocharge` description tag as an explicit opt-out.
+
 ### Alarm inputs
 
 - `input_boolean.weekday_alarm_on`
