@@ -1,0 +1,33 @@
+{#-
+  Shared flight-recognition macros.
+
+  These centralize the "does this calendar event look like a flight?" logic so
+  the Tesla charge planner (packages/car.yaml) can reuse the exact same rules
+  that travel/trip detection relies on. The boolean matches the inline flight
+  detection in packages/trips.yaml (route arrows, "flight to ...", "flight: ...
+  to ...", and itinerary markers such as Flighty/Gmail sync, booking codes, and
+  flight-time lines).
+
+  Output is exactly "True" or "False" so callers can compare with
+  `| trim | lower == 'true'`.
+-#}
+{%- macro looks_like_flight(summary, description='', location='') -%}
+  {%- set summary_text = summary | default('', true) | string -%}
+  {%- set summary_lower = summary_text | lower -%}
+  {%- set trip_text = [summary_text, description | default('', true) | string, location | default('', true) | string] | join(' ') | lower -%}
+  {%- set route_summary = '→' in summary_text -%}
+  {%- set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) -%}
+  {%- set itinerary_marker = 'synced by flighty' in trip_text or 'created from an email you received in gmail' in trip_text or 'booking code:' in trip_text or 'flight time ' in trip_text -%}
+  {{- route_summary or named_flight or itinerary_marker -}}
+{%- endmacro -%}
+{#-
+  skip_charging_event: True when the Tesla charge planner should ignore a
+  calendar event entirely. Flights are excluded regardless of origin airport
+  (the car never makes the long drive), and the existing manual `nocharge`
+  description tag is still honored as an explicit opt-out.
+-#}
+{%- macro skip_charging_event(summary, description='', location='') -%}
+  {%- set is_flight = looks_like_flight(summary, description, location) | trim | lower == 'true' -%}
+  {%- set is_nocharge = 'nocharge' in (description | default('', true) | string | lower) -%}
+  {{- is_flight or is_nocharge -}}
+{%- endmacro -%}
