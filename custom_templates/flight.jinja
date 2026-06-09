@@ -8,17 +8,17 @@
   to ...", and itinerary markers such as Flighty/Gmail sync, booking codes, and
   flight-time lines).
 
-  Output is exactly "True" or "False" so callers can compare with
-  `| trim | lower == 'true'`.
+  Use with Home Assistant's `as_function` filter so callers receive real
+  booleans instead of string output.
 -#}
-{%- macro looks_like_flight(summary, description='', location='') -%}
+{%- macro looks_like_flight(summary, description='', location='', returns=none) -%}
   {%- set summary_text = summary | default('', true) | string -%}
   {%- set summary_lower = summary_text | lower -%}
   {%- set trip_text = [summary_text, description | default('', true) | string, location | default('', true) | string] | join(' ') | lower -%}
   {%- set route_summary = '→' in summary_text -%}
   {%- set named_flight = summary_lower.startswith('flight to ') or (summary_lower.startswith('flight: ') and ' to ' in summary_lower) -%}
   {%- set itinerary_marker = 'synced by flighty' in trip_text or 'created from an email you received in gmail' in trip_text or 'booking code:' in trip_text or 'flight time ' in trip_text -%}
-  {{- route_summary or named_flight or itinerary_marker -}}
+  {%- do returns(route_summary or named_flight or itinerary_marker) -%}
 {%- endmacro -%}
 {#-
   skip_charging_event: True when the Tesla charge planner should ignore a
@@ -26,8 +26,9 @@
   (the car never makes the long drive), and the existing manual `nocharge`
   description tag is still honored as an explicit opt-out.
 -#}
-{%- macro skip_charging_event(summary, description='', location='') -%}
-  {%- set is_flight = looks_like_flight(summary, description, location) | trim | lower == 'true' -%}
+{%- macro skip_charging_event(summary, description='', location='', returns=none) -%}
+  {%- set flight_classifier = looks_like_flight | as_function -%}
+  {%- set is_flight = flight_classifier(summary, description, location) -%}
   {%- set is_nocharge = 'nocharge' in (description | default('', true) | string | lower) -%}
-  {{- is_flight or is_nocharge -}}
+  {%- do returns(is_flight or is_nocharge) -%}
 {%- endmacro -%}
