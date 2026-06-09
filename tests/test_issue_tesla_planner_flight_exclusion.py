@@ -61,8 +61,11 @@ def _skip_charging_event(summary: str, description: str = "", location: str = ""
 def test_flight_macro_file_defines_shared_recognition_macros() -> None:
     text = FLIGHT_MACRO_PATH.read_text(encoding="utf-8")
 
-    assert "macro looks_like_flight(summary, description='', location='')" in text
-    assert "macro skip_charging_event(summary, description='', location='')" in text
+    assert "macro looks_like_flight(summary, description='', location='', returns=none)" in text
+    assert "macro skip_charging_event(summary, description='', location='', returns=none)" in text
+    assert "{%- do returns(route_summary or named_flight or itinerary_marker) -%}" in text
+    assert "{%- set flight_classifier = looks_like_flight | as_function -%}" in text
+    assert "{%- do returns(is_flight or is_nocharge) -%}" in text
     # The detection rules must match the travel-detection logic in trips.yaml.
     assert "'→' in summary_text" in text
     assert "summary_lower.startswith('flight to ')" in text
@@ -81,9 +84,13 @@ def test_charge_planner_uses_shared_flight_macro_in_every_trip_block() -> None:
     # The macro is imported and applied in all four template blocks
     # (state + entry + start_time + all_day) of upcoming_trip_charging.
     assert text.count("{% from 'flight.jinja' import skip_charging_event %}") == 4
-    assert text.count("skip_charging_event(state_attr('calendar.ryan_claussen'") == 4
-    assert text.count("skip_charging_event(state_attr('binary_sensor.work_trip_today'") == 4
-    assert text.count("skip_charging_event(state_attr('calendar.curling'") == 4
+    assert text.count(
+        "{% set should_skip_charging_event = skip_charging_event | as_function %}"
+    ) == 4
+    assert text.count("should_skip_charging_event(state_attr('calendar.ryan_claussen'") == 4
+    assert text.count("should_skip_charging_event(state_attr('binary_sensor.work_trip_today'") == 4
+    assert text.count("should_skip_charging_event(state_attr('calendar.curling'") == 4
+    assert "| trim | lower == 'true'" not in text
 
     # The old bare per-calendar nocharge checks are gone; the macro now owns
     # both flight and nocharge exclusion so every block stays consistent.
