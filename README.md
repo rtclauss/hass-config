@@ -220,8 +220,7 @@ Software on the NUC:
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
   * [Matter Server](https://github.com/home-assistant/addons/tree/master/matter_server)
-* Running elsewhere
-  * [rtlamr](https://github.com/bemasher/rtlamr) - Runs on a Pi4 and collects ~~electrical~~ gas utility info.
+  * [rtlamr2mqtt](https://github.com/allangood/rtlamr2mqtt) - Local HA add-on (RTLAMR to MQTT bridge) that reads the gas utility meter via a USB RTL-SDR dongle and publishes to MQTT. Exposes `sensor.raw_house_gas_meter_reading` (and `..._last_seen`).
   * [Zigbee2MQTT](https://zigbee2mqtt.io/) - Zigbee control over MQTT
 
 ## Device Audit (2026-03-29)
