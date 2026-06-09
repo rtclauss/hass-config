@@ -137,6 +137,7 @@ automation:
         id: early_morning
       - trigger: homeassistant
         event: start
+        alias: Planner startup reconciliation
         id: startup
       - trigger: state
         entity_id: binary_sensor.upcoming_trip_charging
@@ -182,7 +183,8 @@ automation:
         entity_id: device_tracker.nigori_location_tracker
         state: "home"
     action:
-      - choose:
+      - alias: Delay planner startup reconciliation
+        choose:
           - conditions:
               - condition: trigger
                 id: startup
@@ -432,9 +434,11 @@ automation:
           {{ is_state('input_boolean.tesla_managed_departure_active', 'on') and stored_departure_ts > 0 and stored_departure_ts | timestamp_local | as_datetime <= now() }}
       - trigger: homeassistant
         event: start
+        alias: Cleanup startup reconciliation
         id: startup
     action:
-      - choose:
+      - alias: Delay cleanup startup reconciliation
+        choose:
           - conditions:
               - condition: trigger
                 id: startup
@@ -603,45 +607,35 @@ automation:
         data:
           message: Close the garage door.
 
-  - alias: Tesla set polling time short on startup if charger is connected
-    id: tesla_short_polling_charger_connected
-    description: When HA starts up. We adjust the Polling Interval down from the configured value if we are connected to a charger
+  - alias: Tesla set polling time short on startup
+    id: tesla_short_polling_startup
+    description: When HA starts up, adjust the polling interval down if the charger is connected or the car is driving
+    mode: single
     trace:
       stored_traces: 10
     trigger:
       - trigger: homeassistant
         event: start
+        id: startup
     condition:
-      - condition: state
-        entity_id: binary_sensor.nigori_charging
-        state: "on"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.nigori_charging
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.nigori_parking_brake
+            state: "off"
     action:
       - delay: "00:01:00"
       - action: tesla_custom.polling_interval
         data:
           scan_interval: 30
 
-  - alias: Tesla set polling time short on startup if car is driving
-    id: tesla_short_polling_driving
-    description: When HA starts up. We adjust the Polling Interval down from the configured value if we are driving
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: homeassistant
-        event: start
-    condition:
-      - condition: state
-        entity_id: binary_sensor.nigori_parking_brake
-        state: "off"
-    action:
-      - delay: "00:01:00"
-      - action: tesla_custom.polling_interval
-        data:
-          scan_interval: 30
-
-  - alias: Tesla set polling time long when charger is disconnected
-    description: We adjust the Polling Interval up to the configured value if we are disconnecting from the charger
-    id: tesla_long_polling_charger_disconnected
+  - alias: Tesla set polling time long when idle and unplugged
+    description: Adjust the polling interval up to the configured value when the car is parked and the charger is disconnected
+    id: tesla_long_polling_idle_unplugged
+    mode: restart
     trace:
       stored_traces: 10
     trigger:
@@ -650,30 +644,21 @@ automation:
         to: "off"
         for:
           minutes: 15
-    condition:
-      - condition: state
-        entity_id: binary_sensor.nigori_parking_brake
-        state: "on"
-    action:
-      - action: tesla_custom.polling_interval
-        data:
-          scan_interval: 660
-
-  - alias: Tesla set polling time long when car is parked
-    description: We adjust the Polling Interval up to the configured value when we are parked if the charger is not connected
-    id: tesla_long_polling_charger_diconnected_parked
-    trace:
-      stored_traces: 10
-    trigger:
+        id: charger_disconnected
       - trigger: state
         entity_id: binary_sensor.nigori_parking_brake
         to: "on"
         for:
           minutes: 15
+        id: parked
     condition:
       - condition: state
         entity_id: binary_sensor.nigori_charging
         state: "off"
+      - alias: Confirm Tesla is parked before long polling
+        condition: state
+        entity_id: binary_sensor.nigori_parking_brake
+        state: "on"
     action:
       - action: tesla_custom.polling_interval
         data:
