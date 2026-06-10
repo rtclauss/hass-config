@@ -131,3 +131,31 @@ def test_upcoming_trip_charging_state_still_gates_on_waze_distance() -> None:
         '{{ ns.eligible and (state_attr("sensor.waze_next_trip_distance", "distance") | int(0) > 45) }}'
         in state_block.group(1)
     )
+
+
+def test_upcoming_trip_charging_degrades_cleanly_when_waze_is_unavailable() -> None:
+    text = CAR_PATH.read_text(encoding="utf-8")
+    trip_sensor_block = re.search(
+        r"      - name: upcoming_trip_charging\n(.*?)\n      - default_entity_id: binary_sensor\.tesla_daily_plan_active",
+        text,
+        re.DOTALL,
+    )
+    assert trip_sensor_block is not None
+
+    # Missing Waze distance should make the long-trip state false via int(0),
+    # not make the whole calendar trip metadata sensor unavailable.
+    assert "availability:" not in trip_sensor_block.group(1)
+    assert 'state_attr("sensor.waze_next_trip_distance", "distance") | int(0) > 45' in trip_sensor_block.group(1)
+
+
+def test_tesla_departure_planner_recomputes_when_waze_refreshes() -> None:
+    text = CAR_PATH.read_text(encoding="utf-8")
+    planner_block = re.search(
+        r"  - id: tesla_departure_planner_apply\n(.*?)\n  - id: tesla_departure_schedule_cleanup",
+        text,
+        re.DOTALL,
+    )
+    assert planner_block is not None
+
+    assert "entity_id: sensor.waze_next_trip_distance" in planner_block.group(1)
+    assert "id: trip_details_change" in planner_block.group(1)
