@@ -151,6 +151,9 @@ automation:
         attribute: all_day
         id: trip_details_change
       - trigger: state
+        entity_id: sensor.waze_next_trip_distance
+        id: trip_details_change
+      - trigger: state
         entity_id:
           - input_boolean.weekday_alarm_on
           - input_boolean.weekend_alarm_on
@@ -971,8 +974,6 @@ template:
   - binary_sensor:
       - name: upcoming_trip_charging
         unique_id: upcoming_trip_charging
-        availability: >-
-          {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
         attributes:
           entry: >-
             {% from 'flight.jinja' import skip_charging_event %}
