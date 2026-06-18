@@ -775,6 +775,53 @@ sensor:
 template:
   sensor:
     # Legacy NWS Dakota County alert sensors
+    - name: nws_dakota_county_alerts
+      unique_id: nws_dakota_county_alerts_legacy_raw_source
+      unit_of_measurement: Alerts
+      icon: mdi:alert-rhombus
+      state: "{{ states('sensor.nws_alerts') | int(0) }}"
+      attributes:
+        source_entity_id: sensor.nws_alerts
+        alerts: >-
+          {% set source_alerts = state_attr('sensor.nws_alerts', 'Alerts') | default([], true) %}
+          {% set ns = namespace(alerts=[]) %}
+          {% for alert in source_alerts if alert is mapping %}
+            {% set event = alert.get('Event', alert.get('event', '')) %}
+            {% set headline = alert.get('Headline', alert.get('headline', alert.get('NWSheadline', ''))) %}
+            {% set description = alert.get('Description', alert.get('description', '')) %}
+            {% set instruction = alert.get('Instruction', alert.get('instruction', none)) %}
+            {% set sent = alert.get('Sent', alert.get('sent', none)) %}
+            {% set effective = alert.get('Effective', alert.get('effective', sent)) %}
+            {% set onset = alert.get('Onset', alert.get('onset', effective)) %}
+            {% set ends = alert.get('Ends', alert.get('ends', none)) %}
+            {% set expires = alert.get('Expires', alert.get('expires', ends)) %}
+            {% set ends_expires = alert.get('EndsExpires', alert.get('endsExpires', ends if ends is not none else expires)) %}
+            {% set ns.alerts = ns.alerts + [dict(
+              id=alert.get('ID', alert.get('Id', alert.get('id', event ~ '-' ~ sent))),
+              event=event,
+              area=alert.get('Area', alert.get('AreaDesc', alert.get('area', ''))),
+              NWSheadline=headline,
+              description=description,
+              messageType=alert.get('MessageType', alert.get('messageType', alert.get('message_type', ''))),
+              status=alert.get('Status', alert.get('status', '')),
+              category=alert.get('Category', alert.get('category', '')),
+              urgency=alert.get('Urgency', alert.get('urgency', '')),
+              severity=alert.get('Severity', alert.get('severity', '')),
+              certainty=alert.get('Certainty', alert.get('certainty', '')),
+              response=alert.get('Response', alert.get('response', '')),
+              instruction=instruction,
+              sent=sent,
+              effective=effective,
+              onset=onset,
+              ends=ends,
+              expires=expires,
+              endsExpires=ends_expires,
+              title=alert.get('Title', alert.get('title', event)),
+              zoneid=alert.get('ZoneID', alert.get('ZoneId', alert.get('zoneid', '')))
+            )] %}
+          {% endfor %}
+          {{ ns.alerts }}
+
     - name: nws_dakota_county_alerts_active_alerts
       unique_id: nws_dakota_county_alerts_active_alerts
       ## You can add your county or city name to friendly_name for personalization
