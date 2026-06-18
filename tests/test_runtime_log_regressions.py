@@ -357,6 +357,8 @@ def test_valetudo_startup_reconfigure_skips_unavailable_vacuums() -> None:
     assert "action: rest_command.reload_den_vacuum" in block
     assert "action: rest_command.reload_upstairs_vacuum" in block
     assert block.count("continue_on_error: true") == 2
+    assert block.count("mqtt_username: !secret mqtt_user") == 2
+    assert block.count("mqtt_password: !secret mqtt_password") == 2
 
 
 def test_valetudo_reload_commands_use_verified_runtime_endpoints() -> None:
@@ -377,3 +379,14 @@ def test_valetudo_reload_commands_use_verified_runtime_endpoints() -> None:
     assert '"host":"192.168.1.11"' in upstairs
     assert '"identity":{"identifier":"upstairs-vacuum"}' in upstairs
     assert "valetudo-zestycurvycaribou.local" not in upstairs
+
+
+def test_valetudo_reload_payloads_match_current_mqtt_schema() -> None:
+    text = _read(ZIGBEE_ZWAVE_PATH)
+
+    assert "addICBINVMapProperty" not in text
+    assert "ConsumableMonitoringCapability" not in text
+    assert "<redacted>" not in text
+    assert text.count('"username":"{{ mqtt_username }}"') == 3
+    assert text.count('"password":"{{ mqtt_password }}"') == 3
+    assert text.count("CarpetModeControlCapability") == 3

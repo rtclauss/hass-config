@@ -1563,6 +1563,9 @@ automation:
                 state: unavailable
         then:
           - action: rest_command.reload_den_vacuum
+            data:
+              mqtt_username: !secret mqtt_user
+              mqtt_password: !secret mqtt_password
             continue_on_error: true
       - if:
           - condition: not
@@ -1572,6 +1575,9 @@ automation:
                 state: unavailable
         then:
           - action: rest_command.reload_upstairs_vacuum
+            data:
+              mqtt_username: !secret mqtt_user
+              mqtt_password: !secret mqtt_password
             continue_on_error: true
 
 ########################
@@ -2922,19 +2928,19 @@ rest_command:
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"den"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"den"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
   reload_upstairs_vacuum:
     url: http://192.168.1.163/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"upstairs-vacuum"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"upstairs-vacuum"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
   reload_main_level_vacuum:
     url: http://valetudo-activeexoticlion.local/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"10.24.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"mainlevel"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"10.24.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"mainlevel"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
 
 ########################
 # Sensor
