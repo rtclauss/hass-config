@@ -349,10 +349,10 @@ def test_valetudo_startup_reconfigure_skips_unavailable_vacuums() -> None:
     block = _automation_block(ZIGBEE_ZWAVE_PATH, "reconfigure_z2m_and_vacuums_on_startup")
 
     assert "entity_id: vacuum.valetudo_den" in block
-    assert "entity_id: vacuum.valetudo_upstairs_vacuum" in block
+    assert "entity_id: vacuum.valetudo_upstairs_vacuum" not in block
     assert "entity_id: vacuum.valetudo_mainlevel" not in block
-    assert block.count("condition: not") == 2
-    assert block.count("state: unavailable") == 2
+    assert block.count("condition: not") == 1
+    assert block.count("state: unavailable") == 1
     assert "action: rest_command.reload_main_level_vacuum" not in block
     assert "action: rest_command.reload_den_vacuum" in block
     assert "action: rest_command.reload_upstairs_vacuum" in block
