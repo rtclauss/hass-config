@@ -261,8 +261,12 @@ def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
     ):
         assert token in block, token
 
-    # Three play_media attempts are available: primary, retry, fallback.
+    # Primary + retry + (MA-URI) fallback all go through music_assistant.play_media.
     assert block.count("action: music_assistant.play_media") == 3
+    # A raw http(s) fallback URL is played via the generic media_player service.
+    assert "action: media_player.play_media" in block
+    assert "startswith('http')" in block
+    assert "media_content_type: music" in block
 
     # Confirmation uses wait_template (re-evaluates live state and handles the
     # already-playing case), not wait_for_trigger (which only fires on a

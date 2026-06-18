@@ -1128,9 +1128,9 @@ script:
       regroup_after_play:
         description: "Kept for backwards compatibility; ignored — sync groups manage membership"
       fallback_uri:
-        description: "Provider-independent Music Assistant URI to play if the primary radio source cannot be resolved (e.g. a TuneIn/DNS outage). Default: a Spotify morning playlist that does not depend on the TuneIn resolver."
+        description: "Provider-independent source to play if the primary radio source cannot be resolved (e.g. a TuneIn/DNS outage). Accepts a raw http(s) stream URL (played via media_player.play_media) or a Music Assistant URI such as spotify:/library:/tunein-- (played via music_assistant.play_media). Default: a Spotify morning playlist that does not depend on the TuneIn resolver."
       fallback_media_type:
-        description: "media_type for fallback_uri (default: playlist)"
+        description: "media_type for a Music Assistant fallback_uri (default: playlist); ignored for raw http(s) stream URLs"
       verify_timeout:
         description: "Seconds to wait for playback to be confirmed at each attempt (default: 20)"
       retry_backoff:
@@ -1236,14 +1236,30 @@ script:
               message: >-
                 Primary wake-up source {{ radio_uri }} could not be started on
                 {{ playback_player }}; falling back to {{ effective_fallback_uri }}.
-          - action: music_assistant.play_media
-            continue_on_error: true
-            target:
-              entity_id: "{{ playback_player }}"
-            data:
-              media_id: "{{ effective_fallback_uri }}"
-              media_type: "{{ effective_fallback_media_type }}"
-              enqueue: replace
+          - if:
+              # A raw http(s) stream URL (e.g. a direct MPR Icecast MP3) is most
+              # reliably played as a generic media_player stream; a Music
+              # Assistant URI (spotify:..., library://..., tunein--...) goes
+              # through the MA provider.
+              - condition: template
+                value_template: "{{ effective_fallback_uri.startswith('http') }}"
+            then:
+              - action: media_player.play_media
+                continue_on_error: true
+                target:
+                  entity_id: "{{ playback_player }}"
+                data:
+                  media_content_id: "{{ effective_fallback_uri }}"
+                  media_content_type: music
+            else:
+              - action: music_assistant.play_media
+                continue_on_error: true
+                target:
+                  entity_id: "{{ playback_player }}"
+                data:
+                  media_id: "{{ effective_fallback_uri }}"
+                  media_type: "{{ effective_fallback_media_type }}"
+                  enqueue: replace
       - alias: "Confirm playback after the fallback"
         wait_template: >-
           {{ is_state(playback_player, 'playing') and [
