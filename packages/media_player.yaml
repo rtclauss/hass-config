@@ -1110,6 +1110,44 @@ script:
                   name: Music Assistant Playlist Builder
                   message: "Added {{ selected_uri }} to {{ target_script }}"
 
+  music_assistant_play_wakeup_source:
+    alias: "Play a wake-up source (raw stream URL or Music Assistant URI)"
+    description: >-
+      Plays source_uri on target_entity, choosing media_player.play_media for a
+      raw http(s) stream URL (most reliable for a Sonos Icecast stream) and
+      music_assistant.play_media for a Music Assistant URI (spotify:/library:/
+      tunein--).
+    trace:
+      stored_traces: 50
+    fields:
+      target_entity:
+        description: "Media player / MA sync group entity_id to play on"
+      source_uri:
+        description: "Raw http(s) stream URL or Music Assistant URI"
+      source_media_type:
+        description: "media_type for a Music Assistant URI (default: radio); ignored for raw URLs"
+    sequence:
+      - if:
+          - condition: template
+            value_template: "{{ source_uri.startswith('http') }}"
+        then:
+          - action: media_player.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_entity }}"
+            data:
+              media_content_id: "{{ source_uri }}"
+              media_content_type: music
+        else:
+          - action: music_assistant.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_entity }}"
+            data:
+              media_id: "{{ source_uri }}"
+              media_type: "{{ source_media_type | default('radio', true) }}"
+              enqueue: replace
+
   music_assistant_radio_wake_up:
     alias: "Radio wake-up via Music Assistant"
     trace:
@@ -1127,14 +1165,34 @@ script:
         description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
         description: "Kept for backwards compatibility; ignored — sync groups manage membership"
+      fallback_uri:
+        description: "Provider-independent source to play if the primary radio source cannot be resolved (e.g. a TuneIn/DNS outage). Accepts a raw http(s) stream URL (played via media_player.play_media) or a Music Assistant URI such as spotify:/library:/tunein-- (played via music_assistant.play_media). Default: a Spotify morning playlist that does not depend on the TuneIn resolver."
+      fallback_media_type:
+        description: "media_type for a Music Assistant fallback_uri (default: playlist); ignored for raw http(s) stream URLs"
+      verify_timeout:
+        description: "Seconds to wait for playback to be confirmed at each attempt (default: 20)"
+      retry_backoff:
+        description: "Seconds to wait before retrying the primary source once (default: 15)"
     variables:
       playback_player: >-
         {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
            else 'media_player.ma_group_everywhere' }}
       effective_ramp_steps: "{{ ramp_steps | default(30) | int(30) }}"
       effective_k_factor: "{{ ramp_k_factor | default(120) | int(120) }}"
+      effective_fallback_uri: >-
+        {{ fallback_uri | default('spotify:playlist:37i9dQZF1DX7KNKjOK0o75', true) }}
+      effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
+      effective_verify_timeout: "{{ verify_timeout | default(20) | int(20) }}"
+      effective_retry_backoff: "{{ retry_backoff | default(15) | int(15) }}"
       group_members: >-
         {{ state_attr(playback_player, 'group_members') | default([playback_player]) }}
+      pre_playback_fingerprint: >-
+        {{ [
+          state_attr(playback_player, 'media_content_id') | default('', true),
+          state_attr(playback_player, 'media_title') | default('', true),
+          state_attr(playback_player, 'media_artist') | default('', true),
+          state_attr(playback_player, 'media_album_name') | default('', true)
+        ] | join('|') }}
     sequence:
       - alias: "Set each member directly to 0.01 — individual sets are absolute, no MA proportional scaling"
         continue_on_error: true
@@ -1149,14 +1207,107 @@ script:
         then:
           - delay:
               seconds: "{{ initial_delay | default(0) | int(0) }}"
-      - action: music_assistant.play_media
+      - alias: "Request the primary wake-up source"
+        action: script.music_assistant_play_wakeup_source
         continue_on_error: true
-        target:
-          entity_id: "{{ playback_player }}"
         data:
-          media_id: "{{ radio_uri }}"
-          media_type: radio
-          enqueue: replace
+          target_entity: "{{ playback_player }}"
+          source_uri: "{{ radio_uri }}"
+          source_media_type: radio
+      # Verify the source actually started before fading anything up. The group
+      # may already hold overnight audio at alarm time, and a source-resolution
+      # failure (e.g. a DNS flap reaching opml.radiotime.com) leaves the group
+      # idle/silent — so "is it playing?" alone is not proof. Confirmation =
+      # `playing` AND the media changed from the pre-request fingerprint. All
+      # wait/decision steps stay at the top sequence level so `wait.completed`
+      # is read in the same scope it is set (HA copies variables into nested
+      # then/choose sub-scripts, so a value set inside `then:` is not visible
+      # to a later top-level step).
+      - alias: "Confirm primary playback started"
+        wait_template: >-
+          {{ is_state(playback_player, 'playing') and [
+              state_attr(playback_player, 'media_content_id') | default('', true),
+              state_attr(playback_player, 'media_title') | default('', true),
+              state_attr(playback_player, 'media_artist') | default('', true),
+              state_attr(playback_player, 'media_album_name') | default('', true)
+            ] | join('|') != pre_playback_fingerprint }}
+        timeout:
+          seconds: "{{ effective_verify_timeout }}"
+        continue_on_timeout: true
+      - alias: "Retry the primary source once after a short backoff (transient DNS)"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - delay:
+              seconds: "{{ effective_retry_backoff }}"
+          - action: script.music_assistant_play_wakeup_source
+            continue_on_error: true
+            data:
+              target_entity: "{{ playback_player }}"
+              source_uri: "{{ radio_uri }}"
+              source_media_type: radio
+      - alias: "Confirm playback after the retry"
+        wait_template: >-
+          {{ is_state(playback_player, 'playing') and [
+              state_attr(playback_player, 'media_content_id') | default('', true),
+              state_attr(playback_player, 'media_title') | default('', true),
+              state_attr(playback_player, 'media_artist') | default('', true),
+              state_attr(playback_player, 'media_album_name') | default('', true)
+            ] | join('|') != pre_playback_fingerprint }}
+        timeout:
+          seconds: "{{ effective_verify_timeout }}"
+        continue_on_timeout: true
+      - alias: "Fall back to a provider-independent source so the alarm still sounds"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed and (effective_fallback_uri | length) > 0 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: wakeup_radio_primary_failed
+              title: "Wake-up radio fell back"
+              message: >-
+                Primary wake-up source {{ radio_uri }} could not be started on
+                {{ playback_player }}; falling back to {{ effective_fallback_uri }}.
+          - action: script.music_assistant_play_wakeup_source
+            continue_on_error: true
+            data:
+              target_entity: "{{ playback_player }}"
+              source_uri: "{{ effective_fallback_uri }}"
+              source_media_type: "{{ effective_fallback_media_type }}"
+      - alias: "Confirm playback after the fallback"
+        wait_template: >-
+          {{ is_state(playback_player, 'playing') and [
+              state_attr(playback_player, 'media_content_id') | default('', true),
+              state_attr(playback_player, 'media_title') | default('', true),
+              state_attr(playback_player, 'media_artist') | default('', true),
+              state_attr(playback_player, 'media_album_name') | default('', true)
+            ] | join('|') != pre_playback_fingerprint }}
+        timeout:
+          seconds: "{{ effective_verify_timeout }}"
+        continue_on_timeout: true
+      - alias: "Give up loudly — never fade up a silent group (issue #772)"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: wakeup_radio_failed
+              title: "Wake-up audio failed"
+              message: >-
+                Neither the primary source ({{ radio_uri }}) nor the fallback
+                ({{ effective_fallback_uri }}) started on {{ playback_player }}.
+                Skipped the volume ramp.
+          - action: logbook.log
+            data:
+              entity_id: script.music_assistant_radio_wake_up
+              domain: script
+              name: Radio wake-up via Music Assistant
+              message: "Wake-up audio playback could not be established; skipped volume ramp."
+          - stop: "Wake-up audio playback could not be established; skipped volume ramp."
+            error: true
       - repeat:
           sequence:
             - if:
