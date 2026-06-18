@@ -251,16 +251,20 @@ def test_radio_wakeup_verifies_playback_before_volume_ramp() -> None:
         "Retry Music Assistant radio once after playback failed to start",
         "persistent_notification.create",
         "music_assistant_radio_wake_up_failed",
-        "not is_state(playback_player, 'playing')",
+        "pre_playback_fingerprint",
+        "wakeup_playback_confirmed",
+        "media_content_id",
+        "playback_fingerprint != pre_playback_fingerprint",
         "skipped volume ramp",
         "error: true",
     ):
         assert token in block
 
     assert block.count("action: music_assistant.play_media") == 2
-    assert block.count("wait_for_trigger:") == 2
+    assert block.count("wait_for_trigger:") == 4
     assert block.index("Verify wake-up radio playback started") < block.index("- repeat:")
     assert block.index("error: true") < block.index("- repeat:")
+    assert "entity_id:\n              - media_player.ma_group_everywhere\n              - media_player.ma_group_guest" not in block
 
 
 def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:

@@ -1135,6 +1135,13 @@ script:
       effective_k_factor: "{{ ramp_k_factor | default(120) | int(120) }}"
       group_members: >-
         {{ state_attr(playback_player, 'group_members') | default([playback_player]) }}
+      pre_playback_fingerprint: >-
+        {{ [
+          state_attr(playback_player, 'media_content_id') | default('', true),
+          state_attr(playback_player, 'media_title') | default('', true),
+          state_attr(playback_player, 'media_artist') | default('', true),
+          state_attr(playback_player, 'media_album_name') | default('', true)
+        ] | join('|') }}
     sequence:
       - alias: "Set each member directly to 0.01 — individual sets are absolute, no MA proportional scaling"
         continue_on_error: true
@@ -1158,33 +1165,62 @@ script:
           media_type: radio
           enqueue: replace
       - alias: "Verify wake-up radio playback started before ramping volume"
-        wait_for_trigger:
-          - trigger: state
-            entity_id:
-              - media_player.ma_group_everywhere
-              - media_player.ma_group_guest
-            to: "playing"
-          - trigger: state
-            entity_id:
-              - media_player.ma_group_everywhere
-              - media_player.ma_group_guest
-            to: "idle"
-          - trigger: state
-            entity_id:
-              - media_player.ma_group_everywhere
-              - media_player.ma_group_guest
-            to: "off"
-          - trigger: state
-            entity_id:
-              - media_player.ma_group_everywhere
-              - media_player.ma_group_guest
-            to: "unavailable"
-        timeout:
-          seconds: 20
-        continue_on_timeout: true
+        choose:
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.guest_mode
+                state: "on"
+            sequence:
+              - wait_for_trigger:
+                  - trigger: state
+                    entity_id: media_player.ma_group_guest
+                    to: "playing"
+                  - trigger: state
+                    entity_id: media_player.ma_group_guest
+                    to: "idle"
+                  - trigger: state
+                    entity_id: media_player.ma_group_guest
+                    to: "off"
+                  - trigger: state
+                    entity_id: media_player.ma_group_guest
+                    to: "unavailable"
+                timeout:
+                  seconds: 20
+                continue_on_timeout: true
+        default:
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: media_player.ma_group_everywhere
+                to: "playing"
+              - trigger: state
+                entity_id: media_player.ma_group_everywhere
+                to: "idle"
+              - trigger: state
+                entity_id: media_player.ma_group_everywhere
+                to: "off"
+              - trigger: state
+                entity_id: media_player.ma_group_everywhere
+                to: "unavailable"
+            timeout:
+              seconds: 20
+            continue_on_timeout: true
+      - variables:
+          playback_fingerprint: >-
+            {{ [
+              state_attr(playback_player, 'media_content_id') | default('', true),
+              state_attr(playback_player, 'media_title') | default('', true),
+              state_attr(playback_player, 'media_artist') | default('', true),
+              state_attr(playback_player, 'media_album_name') | default('', true)
+            ] | join('|') }}
+          wakeup_playback_confirmed: >-
+            {{ is_state(playback_player, 'playing')
+               and (
+                 (state_attr(playback_player, 'media_content_id') | string) == (radio_uri | string)
+                 or playback_fingerprint != pre_playback_fingerprint
+               ) }}
       - if:
           - condition: template
-            value_template: "{{ not is_state(playback_player, 'playing') }}"
+            value_template: "{{ not wakeup_playback_confirmed }}"
         then:
           - alias: "Retry Music Assistant radio once after playback failed to start"
             action: music_assistant.play_media
@@ -1195,33 +1231,62 @@ script:
               media_id: "{{ radio_uri }}"
               media_type: radio
               enqueue: replace
-          - wait_for_trigger:
-              - trigger: state
-                entity_id:
-                  - media_player.ma_group_everywhere
-                  - media_player.ma_group_guest
-                to: "playing"
-              - trigger: state
-                entity_id:
-                  - media_player.ma_group_everywhere
-                  - media_player.ma_group_guest
-                to: "idle"
-              - trigger: state
-                entity_id:
-                  - media_player.ma_group_everywhere
-                  - media_player.ma_group_guest
-                to: "off"
-              - trigger: state
-                entity_id:
-                  - media_player.ma_group_everywhere
-                  - media_player.ma_group_guest
-                to: "unavailable"
-            timeout:
-              seconds: 20
-            continue_on_timeout: true
+          - choose:
+              - conditions:
+                  - condition: state
+                    entity_id: input_boolean.guest_mode
+                    state: "on"
+                sequence:
+                  - wait_for_trigger:
+                      - trigger: state
+                        entity_id: media_player.ma_group_guest
+                        to: "playing"
+                      - trigger: state
+                        entity_id: media_player.ma_group_guest
+                        to: "idle"
+                      - trigger: state
+                        entity_id: media_player.ma_group_guest
+                        to: "off"
+                      - trigger: state
+                        entity_id: media_player.ma_group_guest
+                        to: "unavailable"
+                    timeout:
+                      seconds: 20
+                    continue_on_timeout: true
+            default:
+              - wait_for_trigger:
+                  - trigger: state
+                    entity_id: media_player.ma_group_everywhere
+                    to: "playing"
+                  - trigger: state
+                    entity_id: media_player.ma_group_everywhere
+                    to: "idle"
+                  - trigger: state
+                    entity_id: media_player.ma_group_everywhere
+                    to: "off"
+                  - trigger: state
+                    entity_id: media_player.ma_group_everywhere
+                    to: "unavailable"
+                timeout:
+                  seconds: 20
+                continue_on_timeout: true
+          - variables:
+              playback_fingerprint: >-
+                {{ [
+                  state_attr(playback_player, 'media_content_id') | default('', true),
+                  state_attr(playback_player, 'media_title') | default('', true),
+                  state_attr(playback_player, 'media_artist') | default('', true),
+                  state_attr(playback_player, 'media_album_name') | default('', true)
+                ] | join('|') }}
+              wakeup_playback_confirmed: >-
+                {{ is_state(playback_player, 'playing')
+                   and (
+                     (state_attr(playback_player, 'media_content_id') | string) == (radio_uri | string)
+                     or playback_fingerprint != pre_playback_fingerprint
+                   ) }}
       - if:
           - condition: template
-            value_template: "{{ not is_state(playback_player, 'playing') }}"
+            value_template: "{{ not wakeup_playback_confirmed }}"
         then:
           - action: persistent_notification.create
             data:
