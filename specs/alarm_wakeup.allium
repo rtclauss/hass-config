@@ -285,8 +285,12 @@ rule RequestWakeupAudioPlayback {
     ensures: WakeupAudioPlaybackRequested(group, primary_wakeup_source)
     @guidance
         -- Group members are first silenced (volume floor) so the fade-in starts
-        -- from zero, then the primary wake-up source (e.g. the configured
-        -- TuneIn/MPR station) is requested on the prepared group.
+        -- from zero, then the primary wake-up source is requested on the
+        -- prepared group. The primary should prefer the most reliable transport
+        -- for the desired station — e.g. a direct publicradio.org Icecast MP3
+        -- stream over the same station via the TuneIn (opml.radiotime.com)
+        -- resolver. A raw http(s) URL is played as a generic stream; a Music
+        -- Assistant URI (spotify:/library:/tunein--) goes through MA.
 }
 
 rule VerifyWakeupAudioPlaybackBeforeVolumeRamp {
@@ -325,10 +329,11 @@ rule FallBackWhenPrimaryWakeupSourceUnavailable {
     ensures: WakeupAudioPlaybackRequested(group, fallback_wakeup_source)
     ensures: WakeupPrimarySourceFailureNotified(primary_wakeup_source)
     @guidance
-        -- When the primary source still cannot be established, switch to a
-        -- provider-independent fallback (e.g. a Spotify morning playlist that
-        -- does not depend on the TuneIn resolver) so the alarm still makes
-        -- sound, and surface that the primary source failed.
+        -- When the primary source still cannot be established, switch to an
+        -- alternate source that reaches the station a different way (e.g. the
+        -- TuneIn station when the direct stream is down, or a Spotify morning
+        -- playlist as a last resort) so the alarm still makes sound, and surface
+        -- that the primary source failed.
 }
 
 rule RampWakeupVolumeByRoom {

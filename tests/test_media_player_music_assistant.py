@@ -220,7 +220,8 @@ def test_radio_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() ->
     assert 'should_regroup_after_play' not in block
     assert 'action: media_player.unjoin' not in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
-    assert 'entity_id: "{{ playback_player }}"' in block
+    # Playback is routed through the source helper, targeting the guest-aware group.
+    assert 'target_entity: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
 
 
@@ -237,7 +238,7 @@ def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players(
     assert 'playback_player' in block
     assert 'media_player.ma_group_guest' in block
     assert 'media_player.ma_group_everywhere' in block
-    assert block.count('entity_id: "{{ playback_player }}"') >= 1
+    assert block.count('target_entity: "{{ playback_player }}"') >= 1
     assert block.count('entity_id: "{{ group_members }}"') >= 2
     assert "volume_level: 0.01" in block
     assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
@@ -261,12 +262,10 @@ def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
     ):
         assert token in block, token
 
-    # Primary + retry + (MA-URI) fallback all go through music_assistant.play_media.
-    assert block.count("action: music_assistant.play_media") == 3
-    # A raw http(s) fallback URL is played via the generic media_player service.
-    assert "action: media_player.play_media" in block
-    assert "startswith('http')" in block
-    assert "media_content_type: music" in block
+    # Primary, retry, and fallback all play via the source helper (which itself
+    # picks media_player.play_media for raw URLs vs music_assistant.play_media
+    # for MA URIs — see test_play_wakeup_source_branches_url_vs_ma_uri).
+    assert block.count("action: script.music_assistant_play_wakeup_source") == 3
 
     # Confirmation uses wait_template (re-evaluates live state and handles the
     # already-playing case), not wait_for_trigger (which only fires on a
@@ -282,6 +281,18 @@ def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
     # Everything — including the hard error stop — happens before the ramp.
     assert block.index("wait_template") < block.index("- repeat:")
     assert block.index("error: true") < block.index("- repeat:")
+
+
+def test_play_wakeup_source_branches_url_vs_ma_uri() -> None:
+    block = _script_block("music_assistant_play_wakeup_source")
+
+    # Raw http(s) stream URL -> generic media_player stream (reliable on Sonos).
+    assert "startswith('http')" in block
+    assert "action: media_player.play_media" in block
+    assert "media_content_type: music" in block
+    # Music Assistant URI (spotify:/library:/tunein--) -> MA provider.
+    assert "action: music_assistant.play_media" in block
+    assert "enqueue: replace" in block
 
 
 def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:

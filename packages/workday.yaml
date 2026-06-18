@@ -713,14 +713,16 @@ script:
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
-          radio_uri: "tunein--S3NwgspV://radio/s34350"
+          # Primary: direct MPR News Icecast MP3, reached via publicradio.org —
+          # avoids the TuneIn (opml.radiotime.com) resolver that failed on
+          # 2026-06-18. Falls back to the TuneIn station if the direct stream
+          # cannot be reached.
+          radio_uri: "https://nis.stream.publicradio.org/nis.mp3"
           initial_delay: 5
           ramp_steps: 40
           ramp_k_factor: 140
-          # Direct MPR News Icecast MP3 — same content, reached via
-          # publicradio.org instead of the TuneIn (opml.radiotime.com) resolver
-          # that failed on 2026-06-18.
-          fallback_uri: "https://nis.stream.publicradio.org/nis.mp3"
+          fallback_uri: "tunein--S3NwgspV://radio/s34350"
+          fallback_media_type: radio
 
   sonos_the_current_wake_up:
     alias: Sonos The Current Wake Up
@@ -729,9 +731,10 @@ script:
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
-          radio_uri: "tunein--S3NwgspV://radio/s20620"
-          # Direct The Current Icecast MP3, bypassing the TuneIn resolver.
-          fallback_uri: "https://current.stream.publicradio.org/current.mp3"
+          # Primary: direct The Current Icecast MP3; falls back to TuneIn.
+          radio_uri: "https://current.stream.publicradio.org/current.mp3"
+          fallback_uri: "tunein--S3NwgspV://radio/s20620"
+          fallback_media_type: radio
 
   owner_suite_morning_transition:
     alias: Owner Suite Morning Transition

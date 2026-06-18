@@ -1110,6 +1110,44 @@ script:
                   name: Music Assistant Playlist Builder
                   message: "Added {{ selected_uri }} to {{ target_script }}"
 
+  music_assistant_play_wakeup_source:
+    alias: "Play a wake-up source (raw stream URL or Music Assistant URI)"
+    description: >-
+      Plays source_uri on target_entity, choosing media_player.play_media for a
+      raw http(s) stream URL (most reliable for a Sonos Icecast stream) and
+      music_assistant.play_media for a Music Assistant URI (spotify:/library:/
+      tunein--).
+    trace:
+      stored_traces: 50
+    fields:
+      target_entity:
+        description: "Media player / MA sync group entity_id to play on"
+      source_uri:
+        description: "Raw http(s) stream URL or Music Assistant URI"
+      source_media_type:
+        description: "media_type for a Music Assistant URI (default: radio); ignored for raw URLs"
+    sequence:
+      - if:
+          - condition: template
+            value_template: "{{ source_uri.startswith('http') }}"
+        then:
+          - action: media_player.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_entity }}"
+            data:
+              media_content_id: "{{ source_uri }}"
+              media_content_type: music
+        else:
+          - action: music_assistant.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ target_entity }}"
+            data:
+              media_id: "{{ source_uri }}"
+              media_type: "{{ source_media_type | default('radio', true) }}"
+              enqueue: replace
+
   music_assistant_radio_wake_up:
     alias: "Radio wake-up via Music Assistant"
     trace:
@@ -1169,15 +1207,13 @@ script:
         then:
           - delay:
               seconds: "{{ initial_delay | default(0) | int(0) }}"
-      - alias: "Request the primary wake-up radio source"
-        action: music_assistant.play_media
+      - alias: "Request the primary wake-up source"
+        action: script.music_assistant_play_wakeup_source
         continue_on_error: true
-        target:
-          entity_id: "{{ playback_player }}"
         data:
-          media_id: "{{ radio_uri }}"
-          media_type: radio
-          enqueue: replace
+          target_entity: "{{ playback_player }}"
+          source_uri: "{{ radio_uri }}"
+          source_media_type: radio
       # Verify the source actually started before fading anything up. The group
       # may already hold overnight audio at alarm time, and a source-resolution
       # failure (e.g. a DNS flap reaching opml.radiotime.com) leaves the group
@@ -1205,14 +1241,12 @@ script:
         then:
           - delay:
               seconds: "{{ effective_retry_backoff }}"
-          - action: music_assistant.play_media
+          - action: script.music_assistant_play_wakeup_source
             continue_on_error: true
-            target:
-              entity_id: "{{ playback_player }}"
             data:
-              media_id: "{{ radio_uri }}"
-              media_type: radio
-              enqueue: replace
+              target_entity: "{{ playback_player }}"
+              source_uri: "{{ radio_uri }}"
+              source_media_type: radio
       - alias: "Confirm playback after the retry"
         wait_template: >-
           {{ is_state(playback_player, 'playing') and [
@@ -1236,30 +1270,12 @@ script:
               message: >-
                 Primary wake-up source {{ radio_uri }} could not be started on
                 {{ playback_player }}; falling back to {{ effective_fallback_uri }}.
-          - if:
-              # A raw http(s) stream URL (e.g. a direct MPR Icecast MP3) is most
-              # reliably played as a generic media_player stream; a Music
-              # Assistant URI (spotify:..., library://..., tunein--...) goes
-              # through the MA provider.
-              - condition: template
-                value_template: "{{ effective_fallback_uri.startswith('http') }}"
-            then:
-              - action: media_player.play_media
-                continue_on_error: true
-                target:
-                  entity_id: "{{ playback_player }}"
-                data:
-                  media_content_id: "{{ effective_fallback_uri }}"
-                  media_content_type: music
-            else:
-              - action: music_assistant.play_media
-                continue_on_error: true
-                target:
-                  entity_id: "{{ playback_player }}"
-                data:
-                  media_id: "{{ effective_fallback_uri }}"
-                  media_type: "{{ effective_fallback_media_type }}"
-                  enqueue: replace
+          - action: script.music_assistant_play_wakeup_source
+            continue_on_error: true
+            data:
+              target_entity: "{{ playback_player }}"
+              source_uri: "{{ effective_fallback_uri }}"
+              source_media_type: "{{ effective_fallback_media_type }}"
       - alias: "Confirm playback after the fallback"
         wait_template: >-
           {{ is_state(playback_player, 'playing') and [
