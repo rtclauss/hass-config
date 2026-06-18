@@ -243,6 +243,43 @@ def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players(
     assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
 
 
+def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # Verification + recovery must precede the volume ramp so a silent group is
+    # never reported as a successful wake-up (issue #772).
+    for token in (
+        "pre_playback_fingerprint",
+        "effective_fallback_uri",
+        "fallback_media_type",
+        "effective_retry_backoff",
+        "persistent_notification.create",
+        "wakeup_radio_failed",
+        "logbook.log",
+        "error: true",
+        "skipped volume ramp",
+    ):
+        assert token in block, token
+
+    # Three play_media attempts are available: primary, retry, fallback.
+    assert block.count("action: music_assistant.play_media") == 3
+
+    # Confirmation uses wait_template (re-evaluates live state and handles the
+    # already-playing case), not wait_for_trigger (which only fires on a
+    # transition and misses a group that never left "playing").
+    assert "wait_for_trigger" not in block
+    assert block.count("wait_template") == 3
+
+    # Scope-safe: the decision is read from wait.completed at the top sequence
+    # level, never from a variable reassigned inside a nested then-block.
+    assert "not wait.completed" in block
+    assert "wakeup_playback_confirmed" not in block
+
+    # Everything — including the hard error stop — happens before the ramp.
+    assert block.index("wait_template") < block.index("- repeat:")
+    assert block.index("error: true") < block.index("- repeat:")
+
+
 def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:
     block = _script_block("spotify_wake_up")
 
