@@ -232,10 +232,14 @@ def test_wakeup_audio_uses_guest_aware_sync_groups() -> None:
         "input_boolean.guest_mode",
         "media_player.ma_group_guest",
         "media_player.ma_group_everywhere",
-        'entity_id: "{{ playback_player }}"',
     ):
         assert token in spotify_block
         assert token in radio_block
+
+    # Both target the guest-aware sync group: spotify_wake_up plays directly,
+    # the radio wake-up routes playback through the source helper.
+    assert 'entity_id: "{{ playback_player }}"' in spotify_block
+    assert 'target_entity: "{{ playback_player }}"' in radio_block
 
     assert "media_player.unjoin" not in spotify_block
     assert "media_player.unjoin" not in radio_block
