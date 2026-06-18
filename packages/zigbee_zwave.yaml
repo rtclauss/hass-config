@@ -1564,15 +1564,10 @@ automation:
         then:
           - action: rest_command.reload_den_vacuum
             continue_on_error: true
-      - if:
-          - condition: not
-            conditions:
-              - condition: state
-                entity_id: vacuum.valetudo_upstairs_vacuum
-                state: unavailable
-        then:
-          - action: rest_command.reload_upstairs_vacuum
-            continue_on_error: true
+      # The upstairs robot may be absent from HA discovery when its MQTT
+      # configuration needs repair, so retry without checking its entity state.
+      - action: rest_command.reload_upstairs_vacuum
+        continue_on_error: true
 
 ########################
 # Binary Sensors

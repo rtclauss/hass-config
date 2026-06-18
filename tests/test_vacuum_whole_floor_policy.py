@@ -73,8 +73,19 @@ def test_whole_floor_helper_starts_both_levels() -> None:
 
     assert "entity_id: vacuum.valetudo_mainlevel" in main_level_block
     assert "action: vacuum.start" in main_level_block
-    assert "entity_id: vacuum.valetudo_upstairs_vacuum" in upstairs_block
-    assert "action: vacuum.start" in upstairs_block
+    assert "valetudo/upstairs-vacuum/BasicControlCapability/operation/set" in upstairs_block
+    assert "payload: START" in upstairs_block
+
+
+def test_upstairs_vacuum_entity_is_not_required_for_ha_automation_control() -> None:
+    stale_entity_id = "vacuum.valetudo_upstairs_vacuum"
+
+    for path in (VACUUM_PATH, ZONE_PATH, ROOT / "packages" / "cleaning.yaml", ROOT / "packages" / "zigbee_zwave.yaml"):
+        assert stale_entity_id not in path.read_text(encoding="utf-8")
+
+    return_home_block = _automation_block(ZONE_PATH, "vacuum_return_home")
+    assert "valetudo/upstairs-vacuum/BasicControlCapability/operation/set" in return_home_block
+    assert "payload: HOME" in return_home_block
 
 
 def test_departure_transition_no_longer_embeds_weekday_room_rotation() -> None:
