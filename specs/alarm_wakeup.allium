@@ -272,11 +272,13 @@ rule VerifyWakeupAudioPlaybackBeforeVolumeRamp {
     ensures: WakeupAudioPlaybackVerificationRequested(group)
     @guidance
         -- After requesting playback, the implementation verifies that the
-        -- selected wake-up audio group remains or becomes playing before
+        -- selected wake-up audio group is playing the requested wake-up source
+        -- or has changed media state from its pre-request playback before
         -- starting the volume ramp. If playback drops to idle, off, or
-        -- unavailable, it retries once. If playback still cannot be
-        -- established, the failure is surfaced and the ramp is skipped so the
-        -- alarm path does not appear successful while silent.
+        -- unavailable, or the request cannot be distinguished from pre-existing
+        -- playback, it retries once. If playback still cannot be established,
+        -- the failure is surfaced and the ramp is skipped so the alarm path
+        -- does not appear successful while silent.
 }
 
 rule RampWakeupVolumeByRoom {
