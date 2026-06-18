@@ -267,8 +267,20 @@ rule PrepareMorningAudioGroup {
         -- bedroom wake-up audio zone.
 }
 
-rule RampWakeupVolumeByRoom {
+rule VerifyWakeupAudioPlaybackBeforeVolumeRamp {
     when: WakeupAudioGroupPrepared(group)
+    ensures: WakeupAudioPlaybackVerificationRequested(group)
+    @guidance
+        -- After requesting playback, the implementation verifies that the
+        -- selected wake-up audio group remains or becomes playing before
+        -- starting the volume ramp. If playback drops to idle, off, or
+        -- unavailable, it retries once. If playback still cannot be
+        -- established, the failure is surfaced and the ramp is skipped so the
+        -- alarm path does not appear successful while silent.
+}
+
+rule RampWakeupVolumeByRoom {
+    when: WakeupAudioPlaybackVerified(group)
     ensures: WakeupVolumeRampStarted(group)
     @guidance
         -- All group members fade in from silence using a tan-curve ramp.
@@ -276,6 +288,11 @@ rule RampWakeupVolumeByRoom {
         -- at config.office_wakeup_peak_volume_percent; all other rooms ramp to the
         -- full peak. This prevents the wake-up routine from disturbing
         -- work-in-progress in the office.
+}
+
+rule RecoverFailedWakeupAudioPlayback {
+    when: WakeupAudioPlaybackFailed(group)
+    ensures: MorningAudioRecoveryApplied(radio_playback)
 }
 
 rule ChooseWakeupPlaylistFromConfiguredPool {

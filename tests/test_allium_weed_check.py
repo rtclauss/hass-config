@@ -115,7 +115,18 @@ def test_classified_gap_allows_protected_implementation_change() -> None:
 def test_default_config_lists_existing_specs_and_scopes() -> None:
     scopes, classified_gaps = weed.load_config(weed.DEFAULT_CONFIG)
 
-    assert classified_gaps == []
+    assert classified_gaps == [
+        {
+            "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/media_player.yaml"],
+            "classification": "non-night-scope change",
+            "reason": (
+                "Issue #772 / PR #773 changes only Music Assistant wake-up radio "
+                "verification in script.music_assistant_radio_wake_up; bedtime and "
+                "goodnight behavior governed by night_routines.allium is unchanged."
+            ),
+        }
+    ]
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",
         "specs/arrival_lighting.allium",
