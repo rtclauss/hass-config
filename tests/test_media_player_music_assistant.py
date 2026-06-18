@@ -243,6 +243,26 @@ def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players(
     assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
 
 
+def test_radio_wakeup_verifies_playback_before_volume_ramp() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    for token in (
+        "Verify wake-up radio playback started before ramping volume",
+        "Retry Music Assistant radio once after playback failed to start",
+        "persistent_notification.create",
+        "music_assistant_radio_wake_up_failed",
+        "not is_state(playback_player, 'playing')",
+        "skipped volume ramp",
+        "error: true",
+    ):
+        assert token in block
+
+    assert block.count("action: music_assistant.play_media") == 2
+    assert block.count("wait_for_trigger:") == 2
+    assert block.index("Verify wake-up radio playback started") < block.index("- repeat:")
+    assert block.index("error: true") < block.index("- repeat:")
+
+
 def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:
     block = _script_block("spotify_wake_up")
 

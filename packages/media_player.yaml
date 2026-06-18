@@ -1157,6 +1157,86 @@ script:
           media_id: "{{ radio_uri }}"
           media_type: radio
           enqueue: replace
+      - alias: "Verify wake-up radio playback started before ramping volume"
+        wait_for_trigger:
+          - trigger: state
+            entity_id:
+              - media_player.ma_group_everywhere
+              - media_player.ma_group_guest
+            to: "playing"
+          - trigger: state
+            entity_id:
+              - media_player.ma_group_everywhere
+              - media_player.ma_group_guest
+            to: "idle"
+          - trigger: state
+            entity_id:
+              - media_player.ma_group_everywhere
+              - media_player.ma_group_guest
+            to: "off"
+          - trigger: state
+            entity_id:
+              - media_player.ma_group_everywhere
+              - media_player.ma_group_guest
+            to: "unavailable"
+        timeout:
+          seconds: 20
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not is_state(playback_player, 'playing') }}"
+        then:
+          - alias: "Retry Music Assistant radio once after playback failed to start"
+            action: music_assistant.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ playback_player }}"
+            data:
+              media_id: "{{ radio_uri }}"
+              media_type: radio
+              enqueue: replace
+          - wait_for_trigger:
+              - trigger: state
+                entity_id:
+                  - media_player.ma_group_everywhere
+                  - media_player.ma_group_guest
+                to: "playing"
+              - trigger: state
+                entity_id:
+                  - media_player.ma_group_everywhere
+                  - media_player.ma_group_guest
+                to: "idle"
+              - trigger: state
+                entity_id:
+                  - media_player.ma_group_everywhere
+                  - media_player.ma_group_guest
+                to: "off"
+              - trigger: state
+                entity_id:
+                  - media_player.ma_group_everywhere
+                  - media_player.ma_group_guest
+                to: "unavailable"
+            timeout:
+              seconds: 20
+            continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not is_state(playback_player, 'playing') }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: music_assistant_radio_wake_up_failed
+              title: "Wake-up radio failed"
+              message: >-
+                Music Assistant did not start wake-up radio playback on {{ playback_player }} after one retry.
+          - action: logbook.log
+            data:
+              entity_id: script.music_assistant_radio_wake_up
+              domain: script
+              name: Radio wake-up via Music Assistant
+              message: "Music Assistant wake-up radio playback failed; skipped volume ramp."
+          - stop: "Music Assistant wake-up radio playback failed; skipped volume ramp."
+            error: true
       - repeat:
           sequence:
             - if:
