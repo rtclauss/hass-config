@@ -848,7 +848,12 @@ inline void apply_wall_fire(AddressableLight &it, float speed, bool initial_run)
 
     float tongue = 0.0f;
     for (size_t t = 0; t < tongues.size(); t++) {
-      const float distance = std::fabs(static_cast<float>(cell) - tongues[t]);
+      // The strip is a loop and sample_coarse_cells wraps cell 55 -> 0, so the
+      // tongue distance must wrap too; otherwise tongues near the seam clip
+      // instead of continuing around (this is what wrapped_distance gave the
+      // old LED-space implementation).
+      float distance = std::fabs(static_cast<float>(cell) - tongues[t]);
+      distance = std::min(distance, static_cast<float>(WALL_FIRE_CELLS) - distance);
       tongue = std::max(tongue, clamp_unit(1.0f - (distance / tongue_widths[t])));
     }
 
