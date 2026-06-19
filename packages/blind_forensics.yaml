@@ -27,7 +27,13 @@ automation:
           - cover.owner_suite_blinds_ha
           - cover.owner_suite_north_blind
           - cover.owner_suite_south_blind
+        # These FYRTUR/Z2M covers report closed->open directly (no opening/
+        # closing state) and the first transition carries the commanding
+        # service-call context, so open/closed already captures it. opening/
+        # closing are listed defensively in case future firmware reports them.
         to:
+          - opening
+          - closing
           - open
           - closed
     actions:
