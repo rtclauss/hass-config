@@ -6,13 +6,18 @@ from pathlib import Path
 WORKFLOW_PATH = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "validate-config.yml"
 
 
-def test_esphome_build_only_runs_for_changed_esphome_yaml() -> None:
+def test_esphome_build_runs_for_changed_esphome_yaml_or_includes() -> None:
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "detect-esphome-changes:" in workflow_text
-    assert "grep -E '^esphome/.*\\.ya?ml$'" in workflow_text
-    assert 'if [[ "$config" =~ ^esphome/[^/]+\\.ya?ml$ ]]; then' in workflow_text
+    # The detector considers every file under esphome/, not just YAML, so that
+    # changes to `includes:` files (e.g. C++ headers) still trigger a build.
+    assert "grep -E '^esphome/'" in workflow_text
+    assert 'if [[ "$changed" =~ ^esphome/[^/]+\\.ya?ml$ ]]; then' in workflow_text
     assert 'grep -l "^packages:" esphome/*.yaml' in workflow_text
+    # Non-YAML includes map to every top-level config that references them.
+    assert 'include_basenames+=("$(basename "$changed")")' in workflow_text
+    assert 'grep -lF "$include_basename" esphome/*.yaml' in workflow_text
     assert "esphome_changed: ${{ steps.detect.outputs.esphome_changed }}" in workflow_text
     assert "esphome_configs: ${{ steps.detect.outputs.esphome_configs }}" in workflow_text
     assert "if: ${{ needs.detect-esphome-changes.outputs.esphome_changed == 'true' }}" in workflow_text
