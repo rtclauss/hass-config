@@ -128,7 +128,8 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert "message: \"Laundry has been sitting in the washer for an hour." in washer_reminder
     assert "input_boolean.guest_mode" in washer_reminder
     assert "action: tts.google_say" in washer_reminder
-    assert "entity_id: media_player.everywhere_sonos" in washer_reminder
+    assert "entity_id: media_player.ma_group_everywhere" in washer_reminder
+    assert "media_player.everywhere_sonos" not in washer_reminder
     assert "binary_sensor.front_load_washer_wash_completed" not in washer_reminder
 
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_cleared
