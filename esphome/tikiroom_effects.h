@@ -28,6 +28,8 @@ constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 148;
 constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 52;
 constexpr size_t LAVA_FIELD_CELLS = 48;
 constexpr size_t THUNDERSTORM_CELLS = 40;
+constexpr size_t WALL_FIRE_CELLS = 56;
+constexpr uint8_t WALL_FIRE_BLEND_AMOUNT = 150;
 constexpr float PI_F = 3.14159265f;
 
 struct RuntimeState {
@@ -54,6 +56,32 @@ inline RuntimeState &state() {
 }
 
 inline uint32_t now_ms() { return millis(); }
+
+// Animation phase clock, intentionally separate from now_ms().
+//
+// Effects derive their sin/cos phases from elapsed time. Feeding the raw,
+// ever-growing millis() value into std::sin has two failure modes that only
+// surface after the node has been running for hours -- exactly the "fire slows
+// down the longer it runs" symptom:
+//   1. A 32-bit float mantissa is 24 bits, so past ~4.6 h (2^24 ms) the
+//      seconds value can no longer resolve individual frames and the motion
+//      visibly stutters.
+//   2. sinf() range-reduces its argument; the larger the argument, the more
+//      expensive (and less accurate) that reduction becomes, so every frame
+//      gets slightly slower as uptime grows.
+// Wrapping the clock to a one-hour window keeps the phase small forever. One
+// hour is a whole number of cycles for any integer-BPM wave, so beatsin wraps
+// seamlessly. Scheduling logic keeps using now_ms() directly and is unaffected.
+inline float anim_seconds() {
+  constexpr uint32_t ANIM_WRAP_MS = 3600000UL;  // 1 hour
+  return (now_ms() % ANIM_WRAP_MS) / 1000.0f;
+}
+
+// sin() with the argument folded into [-2pi, 2pi] first, so the cost stays
+// constant no matter how large the requested phase is.
+inline float wrapped_sin(float radians) {
+  return std::sin(std::fmod(radians, 2.0f * PI_F));
+}
 
 inline uint8_t random_u8() { return static_cast<uint8_t>(random(256)); }
 
@@ -168,14 +196,14 @@ inline uint8_t sin8_from_phase(float phase) {
 }
 
 inline uint8_t beatsin8(uint8_t bpm, uint8_t low, uint8_t high, float offset = 0.0f) {
-  const float phase = ((now_ms() / 1000.0f) * bpm / 60.0f * 2.0f * PI_F) + offset;
-  const float wave = (std::sin(phase) + 1.0f) * 0.5f;
+  const float phase = (anim_seconds() * bpm / 60.0f * 2.0f * PI_F) + offset;
+  const float wave = (wrapped_sin(phase) + 1.0f) * 0.5f;
   return static_cast<uint8_t>(low + wave * (high - low));
 }
 
 inline uint16_t beatsin16(uint8_t bpm, uint16_t low, uint16_t high, float offset = 0.0f) {
-  const float phase = ((now_ms() / 1000.0f) * bpm / 60.0f * 2.0f * PI_F) + offset;
-  const float wave = (std::sin(phase) + 1.0f) * 0.5f;
+  const float phase = (anim_seconds() * bpm / 60.0f * 2.0f * PI_F) + offset;
+  const float wave = (wrapped_sin(phase) + 1.0f) * 0.5f;
   return static_cast<uint16_t>(low + wave * (high - low));
 }
 
@@ -477,12 +505,12 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
 
   drift_offset += 1 + static_cast<uint16_t>(speed / 92.0f);
   ember_offset += 1 + static_cast<uint16_t>(speed / 124.0f);
-  const float elapsed_s = now_ms() / 1000.0f;
+  const float elapsed_s = anim_seconds();
   const float coarse_limit = static_cast<float>(LAVA_FIELD_CELLS - 1);
 
   for (size_t cluster = 0; cluster < cluster_phases.size(); cluster++) {
     cluster_centers[cluster] =
-        ((std::sin((elapsed_s * cluster_rates[cluster] * 2.0f * PI_F) + cluster_phases[cluster]) + 1.0f) * 0.5f) *
+        ((wrapped_sin((elapsed_s * cluster_rates[cluster] * 2.0f * PI_F) + cluster_phases[cluster]) + 1.0f) * 0.5f) *
         coarse_limit;
     cluster_activity[cluster] = smoothstep(
         0.30f,
@@ -698,7 +726,7 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
   }
 
   for (uint8_t i = 0; i < 5; i++) {
-    const uint8_t brightness = static_cast<uint8_t>(((std::sin((elapsed_s * 2.3f) - (i * 0.45f)) + 1.0f) * 0.5f) * 170.0f);
+    const uint8_t brightness = static_cast<uint8_t>(((wrapped_sin((elapsed_s * 2.3f) - (i * 0.45f)) + 1.0f) * 0.5f) * 170.0f);
     rt.leds[wrap_led_index(16 + (i * 3))] = Color(brightness, 0, 0);
   }
 
@@ -718,7 +746,7 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     float progress = car_progress[i];
     if (!crash_active) {
       const float variation =
-          std::sin((elapsed_s * car.variation_rate * 2.0f * PI_F) + (car.start_offset * 2.0f * PI_F));
+          wrapped_sin((elapsed_s * car.variation_rate * 2.0f * PI_F) + (car.start_offset * 2.0f * PI_F));
       progress += variation * car.variation_amount;
       progress -= std::floor(progress);
     }
@@ -782,6 +810,7 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
 inline void apply_wall_fire(AddressableLight &it, float speed, bool initial_run) {
   static uint32_t last_update = 0;
   static uint16_t drift_offset = 0;
+  std::array<Color, WALL_FIRE_CELLS> fire_cells{};
   auto &rt = state();
 
   if (initial_run) {
@@ -796,23 +825,34 @@ inline void apply_wall_fire(AddressableLight &it, float speed, bool initial_run)
 
   drift_offset += 2 + static_cast<uint16_t>(speed / 26.0f);
 
-  const float elapsed_s = now_ms() / 1000.0f;
-  const uint16_t flame_a = beatsin16(7, 0, NUM_LEDS - 1);
-  const uint16_t flame_b = beatsin16(6, 0, NUM_LEDS - 1, 1.7f);
-  const uint16_t flame_c = beatsin16(5, 0, NUM_LEDS - 1, 3.4f);
-  const uint16_t flame_d = beatsin16(8, 0, NUM_LEDS - 1, 4.8f);
+  const float elapsed_s = anim_seconds();
 
-  for (uint16_t i = 0; i < NUM_LEDS; i++) {
-    const float ember_noise = pseudo_noise(i * 16, drift_offset + (i * 2));
+  // Roaming flame tongues, expressed in coarse-cell space (the LED-space widths
+  // 88/74/96/70 over 579 LEDs scale to ~8.5/7.2/9.3/6.8 over WALL_FIRE_CELLS).
+  const std::array<float, 4> tongues{{
+      static_cast<float>(beatsin16(7, 0, WALL_FIRE_CELLS - 1)),
+      static_cast<float>(beatsin16(6, 0, WALL_FIRE_CELLS - 1, 1.7f)),
+      static_cast<float>(beatsin16(5, 0, WALL_FIRE_CELLS - 1, 3.4f)),
+      static_cast<float>(beatsin16(8, 0, WALL_FIRE_CELLS - 1, 4.8f)),
+  }};
+  const std::array<float, 4> tongue_widths{{8.5f, 7.2f, 9.3f, 6.8f}};
+
+  // Heat is computed on a coarse grid and interpolated across the 579 LEDs,
+  // instead of running per-LED noise + trig. That keeps the sinf call count
+  // roughly an order of magnitude lower so the effect stays inside the per-frame
+  // budget the GPIO14 bit-bang leaves us.
+  for (size_t cell = 0; cell < WALL_FIRE_CELLS; cell++) {
+    const float ember_noise =
+        pseudo_noise(static_cast<uint16_t>(cell * 16), drift_offset + static_cast<uint16_t>(cell * 2));
     const float ember = 0.18f + (ember_noise * 0.22f);
 
     float tongue = 0.0f;
-    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_a)) / 88.0f)));
-    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_b)) / 74.0f)));
-    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_c)) / 96.0f)));
-    tongue = std::max(tongue, clamp_unit(1.0f - (static_cast<float>(wrapped_distance(i, flame_d)) / 70.0f)));
+    for (size_t t = 0; t < tongues.size(); t++) {
+      const float distance = std::fabs(static_cast<float>(cell) - tongues[t]);
+      tongue = std::max(tongue, clamp_unit(1.0f - (distance / tongue_widths[t])));
+    }
 
-    const float local_flicker = (std::sin((elapsed_s * 3.2f) + (i * 0.08f)) + 1.0f) * 0.5f;
+    const float local_flicker = (wrapped_sin((elapsed_s * 3.2f) + (cell * 0.6f)) + 1.0f) * 0.5f;
     float heat = clamp_unit(ember + (tongue * (0.35f + (local_flicker * 0.75f))));
     heat *= heat;
 
@@ -830,7 +870,12 @@ inline void apply_wall_fire(AddressableLight &it, float speed, bool initial_run)
       pixel = blend(pixel, flame_color, clamp_u8(static_cast<int>(flame * 255.0f)));
     }
 
-    rt.leds[i] = pixel;
+    fire_cells[cell] = pixel;
+  }
+
+  for (uint16_t i = 0; i < NUM_LEDS; i++) {
+    const Color target = sample_coarse_cells(fire_cells, i);
+    rt.leds[i] = blend(rt.leds[i], target, WALL_FIRE_BLEND_AMOUNT);
   }
 
   if (random_u8() < 28) {
@@ -996,14 +1041,14 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
 
   foliage_offset += 1 + static_cast<uint16_t>(speed / 118.0f);
   rain_offset += 2 + static_cast<uint16_t>(speed / 74.0f);
-  const float elapsed_s = now / 1000.0f;
+  const float elapsed_s = anim_seconds();
   const float coarse_limit = static_cast<float>(THUNDERSTORM_CELLS - 1);
 
   const uint8_t ambient_roll = beatsin8(5, 4, 16);
 
   for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
     foliage_centers[cluster] =
-        ((std::sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
+        ((wrapped_sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
         coarse_limit;
     foliage_activity[cluster] = smoothstep(
         0.16f,
@@ -1015,7 +1060,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
 
   for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
     rain_centers[cluster] =
-        ((std::sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
+        ((wrapped_sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
         coarse_limit;
     rain_pulses[cluster] = smoothstep(
         0.24f,
