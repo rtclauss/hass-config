@@ -164,24 +164,35 @@ jobs:
             exit 0
           fi
 
-          changed_esphome_files=$(printf '%s\n' "$diff_output" | grep -E '^esphome/.*\.ya?ml$' | sort -u || true)
+          changed_esphome_files=$(printf '%s\n' "$diff_output" | grep -E '^esphome/' | sort -u || true)
 
           config_files=()
           package_change=false
+          include_basenames=()
 
-          while IFS= read -r config; do
-            [[ -z "$config" ]] && continue
+          while IFS= read -r changed; do
+            [[ -z "$changed" ]] && continue
 
-            if [[ "$config" =~ ^esphome/[^/]+\.ya?ml$ ]]; then
-              if [[ -f "$config" ]]; then
-                config_files+=("$config")
+            # Top-level config (esphome/foo.yaml) -> build that config directly.
+            if [[ "$changed" =~ ^esphome/[^/]+\.ya?ml$ ]]; then
+              if [[ -f "$changed" ]]; then
+                config_files+=("$changed")
               else
-                echo "Skipping removed ESPHome config: $config"
+                echo "Skipping removed ESPHome config: $changed"
               fi
               continue
             fi
 
-            package_change=true
+            # Other YAML under esphome/ (shared packages in subdirs) -> rebuild package consumers.
+            if [[ "$changed" =~ \.ya?ml$ ]]; then
+              package_change=true
+              continue
+            fi
+
+            # Non-YAML file (C++ `includes:` such as .h/.cpp/.tcc) -> rebuild every
+            # top-level config whose `includes:` references it by basename. Without
+            # this, header-only changes were silently skipped and never compiled.
+            include_basenames+=("$(basename "$changed")")
           done <<< "$changed_esphome_files"
 
           if [[ "$package_change" == "true" ]]; then
@@ -189,6 +200,20 @@ jobs:
               [[ -z "$config" ]] && continue
               config_files+=("$config")
             done < <(grep -l "^packages:" esphome/*.yaml || true)
+          fi
+
+          if [[ ${#include_basenames[@]} -gt 0 ]]; then
+            for include_basename in "${include_basenames[@]}"; do
+              matched=false
+              while IFS= read -r config; do
+                [[ -z "$config" ]] && continue
+                config_files+=("$config")
+                matched=true
+              done < <(grep -lF "$include_basename" esphome/*.yaml || true)
+              if [[ "$matched" == "false" ]]; then
+                echo "Note: changed include '$include_basename' is not referenced by any top-level esphome/*.yaml; nothing to build for it."
+              fi
+            done
           fi
 
           if [[ ${#config_files[@]} -gt 0 ]]; then
