@@ -115,6 +115,18 @@ def test_slug_from_vacuum_entity_drops_duplicate_valetudo_prefix() -> None:
     assert module.slug_from_vacuum_entity("vacuum.valetudo_upstairs_vacuum") == "upstairs_vacuum"
 
 
+def test_snapshot_service_path_uses_home_assistant_allowlisted_config_media_path() -> None:
+    module = _load_module()
+
+    local_path = Path("/homeassistant/media/vacuum_stalls/mainlevel/latest.png")
+
+    assert module.DEFAULT_STORAGE_ROOT == Path("/homeassistant/media/vacuum_stalls")
+    assert module.home_assistant_snapshot_path_for(local_path) == "/config/media/vacuum_stalls/mainlevel/latest.png"
+    assert module.media_url_for(local_path) == (
+        "/media/local/vacuum_stalls/mainlevel/latest.png"
+    )
+
+
 def test_extract_valetudo_map_and_render_png(tmp_path: Path) -> None:
     module = _load_module()
     map_data = {
