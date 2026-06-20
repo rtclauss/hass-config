@@ -32,6 +32,14 @@ constexpr size_t WALL_FIRE_CELLS = 56;
 constexpr uint8_t WALL_FIRE_BLEND_AMOUNT = 150;
 constexpr float PI_F = 3.14159265f;
 
+// Global animation cadence shared by every effect, so the speed control behaves
+// identically no matter which effect is running. The strip's addressable_lambda
+// already runs at most once per tikiroom_effect_frame_interval (50 ms), so the
+// fast end is pinned just under that (speed 150 renders every frame), and the
+// slow end is a deliberately languid floor (speed 1 ~= 4 fps).
+constexpr uint32_t EFFECT_SLOW_INTERVAL_MS = 240;
+constexpr uint32_t EFFECT_FAST_INTERVAL_MS = 45;
+
 struct RuntimeState {
   std::array<Color, NUM_LEDS> leds{};
   std::array<uint8_t, NUM_LEDS> heat{};
@@ -119,6 +127,13 @@ inline uint32_t clamp_interval(float speed, uint32_t slow_ms = 120, uint32_t fas
   }
   const float ratio = (speed - 1.0f) / 149.0f;
   return static_cast<uint32_t>(slow_ms - ((slow_ms - fast_ms) * ratio));
+}
+
+// Shared frame cadence for the rendered effects. Every effect throttles on this
+// so speed 1..150 maps to the same interval everywhere, instead of each effect
+// picking its own slow/fast bounds.
+inline uint32_t effect_frame_interval(float speed) {
+  return clamp_interval(speed, EFFECT_SLOW_INTERVAL_MS, EFFECT_FAST_INTERVAL_MS);
 }
 
 inline bool due(uint32_t &last_update, uint32_t interval_ms) {
@@ -352,7 +367,7 @@ inline void apply_bpm(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     rt.g_hue = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 80, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -373,7 +388,7 @@ inline void apply_candy_cane(AddressableLight &it, float speed, const std::array
   if (initial_run) {
     start_index = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 100, 16))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -388,7 +403,7 @@ inline void apply_confetti(AddressableLight &it, const Color &current_color, flo
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 100, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -411,7 +426,7 @@ inline void apply_cyclon_rainbow(AddressableLight &it, float speed, bool initial
     hue = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 8))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -438,7 +453,7 @@ inline void apply_dots(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 70, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -459,7 +474,7 @@ inline void apply_fire(AddressableLight &it, float speed, bool initial_run) {
     rt.heat.fill(0);
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 90, 16))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -498,7 +513,7 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 110, 22))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -615,7 +630,7 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 90, 14))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -818,7 +833,7 @@ inline void apply_wall_fire(AddressableLight &it, float speed, bool initial_run)
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 95, 18))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -895,7 +910,7 @@ inline void apply_glitter(AddressableLight &it, const Color &current_color, floa
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -910,7 +925,7 @@ inline void apply_juggle(AddressableLight &it, const Color &current_color, float
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1014,7 +1029,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 95, 18))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1143,7 +1158,7 @@ inline void apply_noise(AddressableLight &it, float speed, bool initial_run) {
     clear_leds();
     last_palette_refresh = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 90, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1175,7 +1190,7 @@ inline void apply_police_all(AddressableLight &it, float speed, bool initial_run
     index = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1195,7 +1210,7 @@ inline void apply_police_one(AddressableLight &it, float speed, bool initial_run
     index = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1214,7 +1229,7 @@ inline void apply_rainbow(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     rt.rainbow_hue = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1228,7 +1243,7 @@ inline void apply_rainbow_with_glitter(AddressableLight &it, float speed, bool i
   if (initial_run) {
     rt.rainbow_hue = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1251,7 +1266,7 @@ inline void apply_ripple(AddressableLight &it, float speed, bool initial_run) {
     bgcol = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1288,7 +1303,7 @@ inline void apply_sinelon(AddressableLight &it, const Color &current_color, floa
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1305,7 +1320,7 @@ inline void apply_twinkle(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
