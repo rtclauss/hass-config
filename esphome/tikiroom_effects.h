@@ -1014,7 +1014,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
   std::array<float, 4> foliage_activity{};
   std::array<float, 3> rain_centers{};
   std::array<float, 3> rain_pulses{};
-  std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};
+  static std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};
   auto &rt = state();
   const auto now = now_ms();
 
@@ -1026,14 +1026,14 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     flashes_remaining = 0;
     next_event_ms = now + 1500;
     flash_level = 0;
+    last_update = 0;
+    ambient_cells.fill(Color(0, 0, 0));
     clear_leds();
   }
 
-  if (!due(last_update, effect_frame_interval(speed))) {
-    copy_to_output(it);
-    return;
-  }
-
+  // Lightning strike/burst timing runs every tick so flashes stay snappy and
+  // realistic even at the slowest (shared) speed. Only the rain/foliage backdrop
+  // further down is throttled by the speed control.
   if (!burst_active && now >= next_event_ms) {
     burst_active = true;
     flash_on = true;
@@ -1059,73 +1059,78 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     }
   }
 
-  foliage_offset += 1 + static_cast<uint16_t>(speed / 118.0f);
-  rain_offset += 2 + static_cast<uint16_t>(speed / 74.0f);
-  const float elapsed_s = anim_seconds();
-  const float coarse_limit = static_cast<float>(THUNDERSTORM_CELLS - 1);
+  // Rain/foliage backdrop: recomputed only on the shared (slow) cadence so the
+  // scene drifts calmly at low speed. The cached cells are reused every tick by
+  // the render loop below, which keeps flashing fast.
+  if (due(last_update, effect_frame_interval(speed))) {
+    foliage_offset += 1 + static_cast<uint16_t>(speed / 118.0f);
+    rain_offset += 2 + static_cast<uint16_t>(speed / 74.0f);
+    const float elapsed_s = anim_seconds();
+    const float coarse_limit = static_cast<float>(THUNDERSTORM_CELLS - 1);
 
-  const uint8_t ambient_roll = beatsin8(5, 4, 16);
-
-  for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
-    foliage_centers[cluster] =
-        ((wrapped_sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
-        coarse_limit;
-    foliage_activity[cluster] = smoothstep(
-        0.16f,
-        0.92f,
-        pseudo_noise(
-            static_cast<uint16_t>(cluster * 59 + 11),
-            foliage_offset + static_cast<uint16_t>(cluster * 47)));
-  }
-
-  for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
-    rain_centers[cluster] =
-        ((wrapped_sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
-        coarse_limit;
-    rain_pulses[cluster] = smoothstep(
-        0.24f,
-        0.94f,
-        pseudo_noise(
-            static_cast<uint16_t>(cluster * 83 + 31),
-            rain_offset + static_cast<uint16_t>(cluster * 41)));
-  }
-
-  for (size_t cell = 0; cell < THUNDERSTORM_CELLS; cell++) {
-    const float fog_noise =
-        pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
-
-    Color pixel(
-        clamp_u8(static_cast<int>(fog_noise * 2.0f)),
-        clamp_u8(static_cast<int>(14 + ambient_roll + (fog_noise * 18.0f))),
-        clamp_u8(static_cast<int>(3 + (fog_noise * 8.0f))));
+    const uint8_t ambient_roll = beatsin8(5, 4, 16);
 
     for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
-      const float distance = std::fabs(static_cast<float>(cell) - foliage_centers[cluster]);
-      const float canopy =
-          smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (foliage_activity[cluster] * 0.72f));
-      if (canopy > 0.0f) {
-        const Color foliage(
-            clamp_u8(static_cast<int>(1 + (cluster % 2 == 0 ? canopy * 8.0f : canopy * 5.0f))),
-            clamp_u8(static_cast<int>(24 + (cluster % 2 == 0 ? canopy * 96.0f : canopy * 76.0f))),
-            clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
-        pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
-      }
+      foliage_centers[cluster] =
+          ((wrapped_sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
+          coarse_limit;
+      foliage_activity[cluster] = smoothstep(
+          0.16f,
+          0.92f,
+          pseudo_noise(
+              static_cast<uint16_t>(cluster * 59 + 11),
+              foliage_offset + static_cast<uint16_t>(cluster * 47)));
     }
 
     for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
-      const float distance = std::fabs(static_cast<float>(cell) - rain_centers[cluster]);
-      const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * rain_pulses[cluster];
-      if (rain_group > 0.0f) {
-        add_inplace(
-            pixel,
-            Color(
-                clamp_u8(static_cast<int>(rain_group * 8.0f)),
-                clamp_u8(static_cast<int>(12 + (rain_group * 46.0f))),
-                clamp_u8(static_cast<int>(30 + (rain_group * 120.0f)))));
-      }
+      rain_centers[cluster] =
+          ((wrapped_sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
+          coarse_limit;
+      rain_pulses[cluster] = smoothstep(
+          0.24f,
+          0.94f,
+          pseudo_noise(
+              static_cast<uint16_t>(cluster * 83 + 31),
+              rain_offset + static_cast<uint16_t>(cluster * 41)));
     }
 
-    ambient_cells[cell] = pixel;
+    for (size_t cell = 0; cell < THUNDERSTORM_CELLS; cell++) {
+      const float fog_noise =
+          pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
+
+      Color pixel(
+          clamp_u8(static_cast<int>(fog_noise * 2.0f)),
+          clamp_u8(static_cast<int>(14 + ambient_roll + (fog_noise * 18.0f))),
+          clamp_u8(static_cast<int>(3 + (fog_noise * 8.0f))));
+
+      for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
+        const float distance = std::fabs(static_cast<float>(cell) - foliage_centers[cluster]);
+        const float canopy =
+            smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (foliage_activity[cluster] * 0.72f));
+        if (canopy > 0.0f) {
+          const Color foliage(
+              clamp_u8(static_cast<int>(1 + (cluster % 2 == 0 ? canopy * 8.0f : canopy * 5.0f))),
+              clamp_u8(static_cast<int>(24 + (cluster % 2 == 0 ? canopy * 96.0f : canopy * 76.0f))),
+              clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
+          pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
+        }
+      }
+
+      for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
+        const float distance = std::fabs(static_cast<float>(cell) - rain_centers[cluster]);
+        const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * rain_pulses[cluster];
+        if (rain_group > 0.0f) {
+          add_inplace(
+              pixel,
+              Color(
+                  clamp_u8(static_cast<int>(rain_group * 8.0f)),
+                  clamp_u8(static_cast<int>(12 + (rain_group * 46.0f))),
+                  clamp_u8(static_cast<int>(30 + (rain_group * 120.0f)))));
+        }
+      }
+
+      ambient_cells[cell] = pixel;
+    }
   }
 
   for (uint16_t i = 0; i < NUM_LEDS; i++) {
