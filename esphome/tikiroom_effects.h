@@ -32,6 +32,14 @@ constexpr size_t WALL_FIRE_CELLS = 56;
 constexpr uint8_t WALL_FIRE_BLEND_AMOUNT = 150;
 constexpr float PI_F = 3.14159265f;
 
+// Global animation cadence shared by every effect, so the speed control behaves
+// identically no matter which effect is running. The strip's addressable_lambda
+// already runs at most once per tikiroom_effect_frame_interval (50 ms), so the
+// fast end is pinned just under that (speed 150 renders every frame), and the
+// slow end is a deliberately languid floor (speed 1 ~= 4 fps).
+constexpr uint32_t EFFECT_SLOW_INTERVAL_MS = 240;
+constexpr uint32_t EFFECT_FAST_INTERVAL_MS = 45;
+
 struct RuntimeState {
   std::array<Color, NUM_LEDS> leds{};
   std::array<uint8_t, NUM_LEDS> heat{};
@@ -119,6 +127,13 @@ inline uint32_t clamp_interval(float speed, uint32_t slow_ms = 120, uint32_t fas
   }
   const float ratio = (speed - 1.0f) / 149.0f;
   return static_cast<uint32_t>(slow_ms - ((slow_ms - fast_ms) * ratio));
+}
+
+// Shared frame cadence for the rendered effects. Every effect throttles on this
+// so speed 1..150 maps to the same interval everywhere, instead of each effect
+// picking its own slow/fast bounds.
+inline uint32_t effect_frame_interval(float speed) {
+  return clamp_interval(speed, EFFECT_SLOW_INTERVAL_MS, EFFECT_FAST_INTERVAL_MS);
 }
 
 inline bool due(uint32_t &last_update, uint32_t interval_ms) {
@@ -352,7 +367,7 @@ inline void apply_bpm(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     rt.g_hue = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 80, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -373,7 +388,7 @@ inline void apply_candy_cane(AddressableLight &it, float speed, const std::array
   if (initial_run) {
     start_index = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 100, 16))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -388,7 +403,7 @@ inline void apply_confetti(AddressableLight &it, const Color &current_color, flo
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 100, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -411,7 +426,7 @@ inline void apply_cyclon_rainbow(AddressableLight &it, float speed, bool initial
     hue = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 8))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -438,7 +453,7 @@ inline void apply_dots(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 70, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -459,7 +474,7 @@ inline void apply_fire(AddressableLight &it, float speed, bool initial_run) {
     rt.heat.fill(0);
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 90, 16))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -498,7 +513,7 @@ inline void apply_lava_field(AddressableLight &it, float speed, bool initial_run
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 110, 22))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -615,7 +630,7 @@ inline void apply_f1_race(AddressableLight &it, float speed, bool initial_run) {
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 90, 14))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -818,7 +833,7 @@ inline void apply_wall_fire(AddressableLight &it, float speed, bool initial_run)
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 95, 18))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -895,7 +910,7 @@ inline void apply_glitter(AddressableLight &it, const Color &current_color, floa
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -910,7 +925,7 @@ inline void apply_juggle(AddressableLight &it, const Color &current_color, float
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -999,7 +1014,7 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
   std::array<float, 4> foliage_activity{};
   std::array<float, 3> rain_centers{};
   std::array<float, 3> rain_pulses{};
-  std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};
+  static std::array<Color, THUNDERSTORM_CELLS> ambient_cells{};
   auto &rt = state();
   const auto now = now_ms();
 
@@ -1011,14 +1026,14 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     flashes_remaining = 0;
     next_event_ms = now + 1500;
     flash_level = 0;
+    last_update = 0;
+    ambient_cells.fill(Color(0, 0, 0));
     clear_leds();
   }
 
-  if (!due(last_update, clamp_interval(speed, 95, 18))) {
-    copy_to_output(it);
-    return;
-  }
-
+  // Lightning strike/burst timing runs every tick so flashes stay snappy and
+  // realistic even at the slowest (shared) speed. Only the rain/foliage backdrop
+  // further down is throttled by the speed control.
   if (!burst_active && now >= next_event_ms) {
     burst_active = true;
     flash_on = true;
@@ -1044,73 +1059,78 @@ inline void apply_thunderstorm(AddressableLight &it, float speed, bool initial_r
     }
   }
 
-  foliage_offset += 1 + static_cast<uint16_t>(speed / 118.0f);
-  rain_offset += 2 + static_cast<uint16_t>(speed / 74.0f);
-  const float elapsed_s = anim_seconds();
-  const float coarse_limit = static_cast<float>(THUNDERSTORM_CELLS - 1);
+  // Rain/foliage backdrop: recomputed only on the shared (slow) cadence so the
+  // scene drifts calmly at low speed. The cached cells are reused every tick by
+  // the render loop below, which keeps flashing fast.
+  if (due(last_update, effect_frame_interval(speed))) {
+    foliage_offset += 1 + static_cast<uint16_t>(speed / 118.0f);
+    rain_offset += 2 + static_cast<uint16_t>(speed / 74.0f);
+    const float elapsed_s = anim_seconds();
+    const float coarse_limit = static_cast<float>(THUNDERSTORM_CELLS - 1);
 
-  const uint8_t ambient_roll = beatsin8(5, 4, 16);
-
-  for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
-    foliage_centers[cluster] =
-        ((wrapped_sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
-        coarse_limit;
-    foliage_activity[cluster] = smoothstep(
-        0.16f,
-        0.92f,
-        pseudo_noise(
-            static_cast<uint16_t>(cluster * 59 + 11),
-            foliage_offset + static_cast<uint16_t>(cluster * 47)));
-  }
-
-  for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
-    rain_centers[cluster] =
-        ((wrapped_sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
-        coarse_limit;
-    rain_pulses[cluster] = smoothstep(
-        0.24f,
-        0.94f,
-        pseudo_noise(
-            static_cast<uint16_t>(cluster * 83 + 31),
-            rain_offset + static_cast<uint16_t>(cluster * 41)));
-  }
-
-  for (size_t cell = 0; cell < THUNDERSTORM_CELLS; cell++) {
-    const float fog_noise =
-        pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
-
-    Color pixel(
-        clamp_u8(static_cast<int>(fog_noise * 2.0f)),
-        clamp_u8(static_cast<int>(14 + ambient_roll + (fog_noise * 18.0f))),
-        clamp_u8(static_cast<int>(3 + (fog_noise * 8.0f))));
+    const uint8_t ambient_roll = beatsin8(5, 4, 16);
 
     for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
-      const float distance = std::fabs(static_cast<float>(cell) - foliage_centers[cluster]);
-      const float canopy =
-          smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (foliage_activity[cluster] * 0.72f));
-      if (canopy > 0.0f) {
-        const Color foliage(
-            clamp_u8(static_cast<int>(1 + (cluster % 2 == 0 ? canopy * 8.0f : canopy * 5.0f))),
-            clamp_u8(static_cast<int>(24 + (cluster % 2 == 0 ? canopy * 96.0f : canopy * 76.0f))),
-            clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
-        pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
-      }
+      foliage_centers[cluster] =
+          ((wrapped_sin((elapsed_s * foliage_rates[cluster] * 2.0f * PI_F) + foliage_phases[cluster]) + 1.0f) * 0.5f) *
+          coarse_limit;
+      foliage_activity[cluster] = smoothstep(
+          0.16f,
+          0.92f,
+          pseudo_noise(
+              static_cast<uint16_t>(cluster * 59 + 11),
+              foliage_offset + static_cast<uint16_t>(cluster * 47)));
     }
 
     for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
-      const float distance = std::fabs(static_cast<float>(cell) - rain_centers[cluster]);
-      const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * rain_pulses[cluster];
-      if (rain_group > 0.0f) {
-        add_inplace(
-            pixel,
-            Color(
-                clamp_u8(static_cast<int>(rain_group * 8.0f)),
-                clamp_u8(static_cast<int>(12 + (rain_group * 46.0f))),
-                clamp_u8(static_cast<int>(30 + (rain_group * 120.0f)))));
-      }
+      rain_centers[cluster] =
+          ((wrapped_sin((elapsed_s * rain_rates[cluster] * 2.0f * PI_F) + rain_phases[cluster]) + 1.0f) * 0.5f) *
+          coarse_limit;
+      rain_pulses[cluster] = smoothstep(
+          0.24f,
+          0.94f,
+          pseudo_noise(
+              static_cast<uint16_t>(cluster * 83 + 31),
+              rain_offset + static_cast<uint16_t>(cluster * 41)));
     }
 
-    ambient_cells[cell] = pixel;
+    for (size_t cell = 0; cell < THUNDERSTORM_CELLS; cell++) {
+      const float fog_noise =
+          pseudo_noise(static_cast<uint16_t>(cell * 29), foliage_offset + static_cast<uint16_t>(cell * 5));
+
+      Color pixel(
+          clamp_u8(static_cast<int>(fog_noise * 2.0f)),
+          clamp_u8(static_cast<int>(14 + ambient_roll + (fog_noise * 18.0f))),
+          clamp_u8(static_cast<int>(3 + (fog_noise * 8.0f))));
+
+      for (size_t cluster = 0; cluster < foliage_phases.size(); cluster++) {
+        const float distance = std::fabs(static_cast<float>(cell) - foliage_centers[cluster]);
+        const float canopy =
+            smoothstep(1.0f, 0.0f, distance / foliage_radii[cluster]) * (0.28f + (foliage_activity[cluster] * 0.72f));
+        if (canopy > 0.0f) {
+          const Color foliage(
+              clamp_u8(static_cast<int>(1 + (cluster % 2 == 0 ? canopy * 8.0f : canopy * 5.0f))),
+              clamp_u8(static_cast<int>(24 + (cluster % 2 == 0 ? canopy * 96.0f : canopy * 76.0f))),
+              clamp_u8(static_cast<int>(4 + (cluster % 2 == 0 ? canopy * 22.0f : canopy * 14.0f))));
+          pixel = blend(pixel, foliage, clamp_u8(static_cast<int>(canopy * 220.0f)));
+        }
+      }
+
+      for (size_t cluster = 0; cluster < rain_phases.size(); cluster++) {
+        const float distance = std::fabs(static_cast<float>(cell) - rain_centers[cluster]);
+        const float rain_group = smoothstep(1.0f, 0.0f, distance / rain_radii[cluster]) * rain_pulses[cluster];
+        if (rain_group > 0.0f) {
+          add_inplace(
+              pixel,
+              Color(
+                  clamp_u8(static_cast<int>(rain_group * 8.0f)),
+                  clamp_u8(static_cast<int>(12 + (rain_group * 46.0f))),
+                  clamp_u8(static_cast<int>(30 + (rain_group * 120.0f)))));
+        }
+      }
+
+      ambient_cells[cell] = pixel;
+    }
   }
 
   for (uint16_t i = 0; i < NUM_LEDS; i++) {
@@ -1143,7 +1163,7 @@ inline void apply_noise(AddressableLight &it, float speed, bool initial_run) {
     clear_leds();
     last_palette_refresh = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 90, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1175,7 +1195,7 @@ inline void apply_police_all(AddressableLight &it, float speed, bool initial_run
     index = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1195,7 +1215,7 @@ inline void apply_police_one(AddressableLight &it, float speed, bool initial_run
     index = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1214,7 +1234,7 @@ inline void apply_rainbow(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     rt.rainbow_hue = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1228,7 +1248,7 @@ inline void apply_rainbow_with_glitter(AddressableLight &it, float speed, bool i
   if (initial_run) {
     rt.rainbow_hue = 0;
   }
-  if (!due(last_update, clamp_interval(speed, 90, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1251,7 +1271,7 @@ inline void apply_ripple(AddressableLight &it, float speed, bool initial_run) {
     bgcol = 0;
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1288,7 +1308,7 @@ inline void apply_sinelon(AddressableLight &it, const Color &current_color, floa
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 12))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
@@ -1305,7 +1325,7 @@ inline void apply_twinkle(AddressableLight &it, float speed, bool initial_run) {
   if (initial_run) {
     clear_leds();
   }
-  if (!due(last_update, clamp_interval(speed, 80, 10))) {
+  if (!due(last_update, effect_frame_interval(speed))) {
     copy_to_output(it);
     return;
   }
