@@ -4,12 +4,6 @@ from pathlib import Path
 
 
 PARASOLL_PATH = Path(__file__).resolve().parents[1] / "packages" / "parasoll_fix.yaml"
-CONVERTER_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "zigbee2mqtt"
-    / "external_converters"
-    / "parasoll.js"
-)
 
 
 def test_parasoll_configure_state_uses_csv_within_ha_input_text_limit() -> None:
@@ -109,10 +103,11 @@ def test_parasoll_needs_configure_checks_reporting_interval() -> None:
     assert "not _interval_ok" in text
 
 
-def test_parasoll_converter_binds_ssiaszone_on_endpoint_2() -> None:
-    # bindCluster without endpointNames lands on the wrong (non-IAS) endpoint and
-    # is a no-op; PARASOLL's ssIasZone cluster is on ep2.  Mirrors upstream E2013.
-    text = CONVERTER_PATH.read_text(encoding="utf-8")
+def test_parasoll_matches_stock_model_not_patched_converter() -> None:
+    # The external converter has been removed; devices report the stock model
+    # description "PARASOLL door/window sensor".  Matching the old "(patched)"
+    # string would silently match zero devices and the fix would stop applying.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
 
-    assert "deviceEndpoints" in text
-    assert 'endpointNames: ["2"]' in text
+    assert "(patched)" not in text
+    assert "'model') == 'PARASOLL door/window sensor'" in text
