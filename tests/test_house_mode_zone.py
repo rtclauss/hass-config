@@ -155,6 +155,7 @@ def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
     assert "input_datetime.contextual_arrival_last_empty_at:" in text
     assert "has_date: true" in text
     assert "has_time: true" in text
+    assert "from: \"on\"" in block
     assert "to: \"off\"" in block
     assert "action: input_boolean.turn_off" in block
     assert "action: input_datetime.set_datetime" in block
@@ -190,6 +191,27 @@ def test_contextual_arrival_script_tiers_lighting_and_climate_by_absence() -> No
     assert "tier_apply_climate: \"{{ arrival_tier in ['full_day', 'multi_day'] }}\"" in block
     assert "action: script.house_transition" in block
     assert "apply_climate: \"{{ tier_apply_climate }}\"" in block
+
+
+def test_contextual_arrival_treats_occupied_reentry_as_quick() -> None:
+    block = _zone_script_block("contextual_arrival_transition")
+
+    # An established-presence re-entry (Bayesian already "on") must not reuse the
+    # stale last_empty timestamp and escalate to full/multi day.
+    assert "occupied_reentry" in block
+    assert "seconds_since_presence" in block
+    assert "is_state('binary_sensor.bayesian_zeke_home', 'on')" in block
+    assert "{% if occupied_reentry %}" in block
+
+
+def test_contextual_arrival_explicit_light_scene_wins_over_tier() -> None:
+    block = _zone_script_block("contextual_arrival_transition")
+
+    tier_scene = block.split("tier_light_scene:", 1)[1].split("tier_light_transition:", 1)[0]
+    # The caller's explicit scene (e.g. the cloudy bright scene) must be the
+    # first branch so absence tiering never discards it.
+    first_branch = tier_scene.strip().splitlines()[1].strip()
+    assert first_branch == "{% if light_scene is defined and light_scene | string | trim %}"
 
 
 def test_contextual_arrival_scenes_avoid_guest_private_rooms() -> None:

@@ -302,8 +302,12 @@ automation:
     trace:
       stored_traces: 10
     trigger:
+      # from: "on" guards against unknown/unavailable -> off on HA restart,
+      # which would otherwise overwrite a restored multi-day absence start
+      # with the restart time and misclassify the next arrival as quick/half-day.
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
         to: "off"
     action:
       - action: input_boolean.turn_off
@@ -967,8 +971,22 @@ script:
         {{ parsed if parsed is not none else as_timestamp(now()) }}
       absence_seconds: >-
         {{ [as_timestamp(now()) - (last_empty_timestamp | float(as_timestamp(now()))), 0] | max | int }}
+      # An arrival automation can re-fire from its GPS zone trigger while the
+      # house is still occupied (e.g. a GPS jitter re-enter). In that case the
+      # house never emptied, so the persisted last_empty timestamp is stale and
+      # would misclassify the re-entry as full/multi day. Treat presence that
+      # has already been established (Bayesian "on" for more than the grace
+      # window) as an occupied re-entry and force the minimal quick tier.
+      seconds_since_presence: >-
+        {% set lc = states.binary_sensor.bayesian_zeke_home.last_changed %}
+        {{ (as_timestamp(now()) - as_timestamp(lc)) | int if lc is not none else 0 }}
+      occupied_reentry: >-
+        {{ is_state('binary_sensor.bayesian_zeke_home', 'on')
+           and (seconds_since_presence | int(0)) > 300 }}
       arrival_tier: >-
-        {% if absence_seconds < 3600 %}
+        {% if occupied_reentry %}
+          quick_errand
+        {% elif absence_seconds < 3600 %}
           quick_errand
         {% elif absence_seconds < 28800 %}
           half_day
@@ -977,16 +995,22 @@ script:
         {% else %}
           multi_day
         {% endif %}
+      # Reached only when the caller passed no explicit light_scene (the
+      # explicit case is handled first in tier_light_scene).
       base_light_scene: >-
-        {% if light_scene is defined and light_scene | string | trim %}
-          {{ light_scene }}
-        {% elif normalized_mode == 'night' %}
+        {% if normalized_mode == 'night' %}
           scene.night_arrive_home
         {% else %}
           scene.arrive_home
         {% endif %}
+      # A caller that passes an explicit light_scene (e.g. the cloudy arrival,
+      # whose whole purpose is a bright dark-house scene) wins over the absence
+      # tier default. Absence tiering only picks the scene when the caller did
+      # not specify one; climate gating below still varies by tier independently.
       tier_light_scene: >-
-        {% if normalized_mode == 'night' and arrival_tier == 'quick_errand' %}
+        {% if light_scene is defined and light_scene | string | trim %}
+          {{ light_scene }}
+        {% elif normalized_mode == 'night' and arrival_tier == 'quick_errand' %}
           scene.night_arrive_home_quick
         {% elif normalized_mode == 'home' and arrival_tier == 'quick_errand' %}
           scene.arrive_home_quick
