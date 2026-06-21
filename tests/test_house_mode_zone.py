@@ -31,6 +31,51 @@ def _script_block(script_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _zone_script_block(script_id: str) -> str:
+    lines = ZONE_PATH.read_text(encoding="utf-8").splitlines()
+    start = None
+    needle = f"  {script_id}:"
+
+    for index, line in enumerate(lines):
+        if line == needle:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find script id {script_id!r}")
+
+    end = len(lines)
+    next_script = re.compile(r"^  [A-Za-z0-9_]+:$")
+    for index in range(start + 1, len(lines)):
+        if next_script.match(lines[index]):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _scene_block(scene_name: str) -> str:
+    lines = ZONE_PATH.read_text(encoding="utf-8").splitlines()
+    start = None
+    needle = f"  - name: {scene_name}"
+
+    for index, line in enumerate(lines):
+        if line == needle:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find scene {scene_name!r}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("  - name: "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def _automation_block(path: Path, automation_id: str) -> str:
     lines = path.read_text(encoding="utf-8").splitlines()
     start = None
@@ -101,6 +146,63 @@ def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
     assert "Primary tracker confirms departure" in block
     assert "device_tracker.bayesian_zeke_home" in block
     assert "not is_state('device_tracker.bayesian_zeke_home', 'home')" in block
+
+
+def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
+    text = ZONE_PATH.read_text(encoding="utf-8")
+    block = _automation_block(ZONE_PATH, "input_boolean_tracker_off")
+
+    assert "input_datetime.contextual_arrival_last_empty_at:" in text
+    assert "has_date: true" in text
+    assert "has_time: true" in text
+    assert "to: \"off\"" in block
+    assert "action: input_boolean.turn_off" in block
+    assert "action: input_datetime.set_datetime" in block
+    assert "entity_id: input_datetime.contextual_arrival_last_empty_at" in block
+    assert "now().strftime('%Y-%m-%d %H:%M:%S')" in block
+
+
+def test_arrival_automations_use_contextual_arrival_transition() -> None:
+    for automation_id in (
+        "cloudy_home_arrival",
+        "default_arrive_home",
+        "turn_on_lights_at_night_when_i_get_home",
+        "turn_on_bedroom_lights_at_night_when_i_get_home",
+    ):
+        block = _automation_block(ZONE_PATH, automation_id)
+        assert "action: script.contextual_arrival_transition" in block
+        assert "action: script.house_transition" not in block
+
+
+def test_contextual_arrival_script_tiers_lighting_and_climate_by_absence() -> None:
+    block = _zone_script_block("contextual_arrival_transition")
+
+    for threshold in ("3600", "28800", "86400"):
+        assert threshold in block
+
+    for tier in ("quick_errand", "half_day", "full_day", "multi_day"):
+        assert tier in block
+
+    assert "scene.arrive_home_quick" in block
+    assert "scene.night_arrive_home_quick" in block
+    assert "scene.arrive_home_full_day" in block
+    assert "scene.arrive_home_multi_day" in block
+    assert "tier_apply_climate: \"{{ arrival_tier in ['full_day', 'multi_day'] }}\"" in block
+    assert "action: script.house_transition" in block
+    assert "apply_climate: \"{{ tier_apply_climate }}\"" in block
+
+
+def test_contextual_arrival_scenes_avoid_guest_private_rooms() -> None:
+    for scene_name in (
+        "arrive_home_quick",
+        "arrive_home_full_day",
+        "arrive_home_multi_day",
+        "night_arrive_home_quick",
+    ):
+        block = _scene_block(scene_name)
+        assert "light.office" not in block
+        assert "light.guest_room" not in block
+        assert "media_player." not in block
 
 
 def test_house_transition_guest_mode_grouping_never_unjoins_den() -> None:
