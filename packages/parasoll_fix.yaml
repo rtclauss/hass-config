@@ -8,20 +8,22 @@
 #      blueprint) clamps max to 14400 s (4 h); this package does the same via
 #      script.parasoll_enforce_intervals.
 #   2. Stuck state: a regression removed the ssIasZone binding and zoneStatus
-#      min reporting was not 0, so rapid open/close pairs were dropped.  The
-#      converter now binds ssIasZone on ep2 and sets zoneStatus min = 0.
+#      min reporting was not 0, so rapid open/close pairs were dropped.  Current
+#      stock zigbee-herdsman-converters binds ssIasZone on ep2 and sets
+#      zoneStatus min = 0 (zoneStatusReporting), so no external converter is
+#      needed — this package relies on the built-in E2013 definition.
 #   3. Battery drain: largely a downstream symptom of (1) — drop-offs trigger
-#      rejoin loops that burn the battery.  genPollCtrl is left unbound as a
-#      precaution.
+#      rejoin loops that burn the battery.  genPollCtrl is not bound by stock,
+#      and the reconfigure flow unbinds it defensively if a stale binding remains.
 #
-# This package pairs with zigbee2mqtt/external_converters/parasoll.js.
-# Z2M 2.x auto-scans the external_converters/ subdirectory — no configuration.yaml
-# entry is needed.
+# This package is self-contained — no external converter.  Devices report as the
+# stock model "PARASOLL door/window sensor".
 # Deployment order:
-#   1. Ensure zigbee2mqtt/external_converters/parasoll.js is present.
-#   2. Restart Zigbee2MQTT.  Devices should show "PARASOLL door/window sensor (patched)".
-#   3. Run script.parasoll_reconfigure_all from Developer Tools or the UI.  This
+#   1. Ensure no parasoll external converter is loaded and restart Zigbee2MQTT.
+#      Devices should show "PARASOLL door/window sensor" (stock definition).
+#   2. Run script.parasoll_reconfigure_all from Developer Tools or the UI.  This
 #      reconfigures every joined sensor AND enforces the 14400 s max intervals.
+#   3. Wake each sleepy sensor (open/close) so the queued commands flush.
 #   4. For sensors that are fully unresponsive: pull the battery, reinsert, then
 #      the automation below handles them automatically as they re-join.
 
@@ -114,9 +116,10 @@ script:
     alias: "PARASOLL - Reconfigure All"
     description: >
       For every joined PARASOLL sensor: presses the identify button to nudge the
-      device awake, then sends a Z2M reconfigure command so the patched converter
-      settings (ssIasZone binding, no genPollCtrl) are applied.  Both commands are
-      queued by Z2M for sleepy devices and processed together on the next check-in.
+      device awake, then sends a Z2M reconfigure command so the stock converter
+      settings (ssIasZone binding, no genPollCtrl) are applied, and clamps the
+      reporting intervals to 14400 s.  Commands are queued by Z2M for sleepy
+      devices and processed on the next check-in.
       Sensors that are completely dead still need a battery pull first.
     mode: single
     trace:
@@ -126,7 +129,7 @@ script:
           parasoll_devices: >
             {% set ns = namespace(devices=[]) %}
             {% for entity in states.binary_sensor %}
-              {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)' %}
+              {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor' %}
                 {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
                 {% for id_tuple in ids %}
                   {% if id_tuple[0] == 'mqtt' %}
@@ -260,7 +263,7 @@ automation:
             {% elif type == 'device_announce' %}
               {% set ns = namespace(found=false) %}
               {% for entity in states.binary_sensor %}
-                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)' %}
+                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor' %}
                   {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
                   {% for id_tuple in ids %}
                     {% if id_tuple[0] == 'mqtt' and id_tuple[1] == 'zigbee2mqtt_' ~ ieee %}
