@@ -4,6 +4,12 @@ from pathlib import Path
 
 
 PARASOLL_PATH = Path(__file__).resolve().parents[1] / "packages" / "parasoll_fix.yaml"
+CONVERTER_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "zigbee2mqtt"
+    / "external_converters"
+    / "parasoll.js"
+)
 
 
 def test_parasoll_configure_state_uses_csv_within_ha_input_text_limit() -> None:
@@ -62,3 +68,51 @@ def test_parasoll_ias_ok_checks_ep2_not_ep1() -> None:
     assert "'ssIasZone' in _ep2_bindings" in text
     # Ensure we are NOT using ep1 for the IAS check
     assert "'ssIasZone' in _ep1_bindings" not in text
+
+
+def test_parasoll_enforce_intervals_clamps_max_to_14400() -> None:
+    # The actual drop-off fix (Koenkk/zigbee2mqtt#22579): the factory max report
+    # interval of 65000 s lets sleepy sensors be marked offline.  The enforce
+    # script must clamp it to 14400 s via Z2M's reporting/configure request.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert "parasoll_enforce_intervals:" in text
+    assert "zigbee2mqtt/bridge/request/device/reporting/configure" in text
+    assert '"maximum_report_interval": 14400' in text
+
+
+def test_parasoll_enforce_intervals_covers_all_three_attributes() -> None:
+    # zoneStatus on ep2 (min 0) plus both battery attrs on ep1 must be clamped.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert "attribute: zoneStatus" in text
+    assert "attribute: batteryPercentageRemaining" in text
+    assert "attribute: batteryVoltage" in text
+    assert "cluster: ssIasZone" in text
+    assert "cluster: genPowerCfg" in text
+
+
+def test_parasoll_enforce_intervals_invoked_by_script_and_automation() -> None:
+    # Both the bulk reconfigure script and the join/announce automation must call
+    # the shared enforce script so already-joined and newly-joined sensors converge.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert text.count("script.parasoll_enforce_intervals") >= 2
+
+
+def test_parasoll_needs_configure_checks_reporting_interval() -> None:
+    # The interval must be a configuration invariant, otherwise already-joined
+    # devices at the factory 65000 s default would never be reconfigured.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert "_interval_ok" in text
+    assert "not _interval_ok" in text
+
+
+def test_parasoll_converter_binds_ssiaszone_on_endpoint_2() -> None:
+    # bindCluster without endpointNames lands on the wrong (non-IAS) endpoint and
+    # is a no-op; PARASOLL's ssIasZone cluster is on ep2.  Mirrors upstream E2013.
+    text = CONVERTER_PATH.read_text(encoding="utf-8")
+
+    assert "deviceEndpoints" in text
+    assert 'endpointNames: ["2"]' in text
