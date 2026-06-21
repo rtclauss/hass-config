@@ -311,6 +311,13 @@ def test_reset_script_replays_current_live_group_memberships_and_bindings() -> N
             None,
             ("genLevelCtrl", "genOnOff"),
         ),
+        (
+            "Tiki Room/Deck Switch",
+            2,
+            "Deck/Tiki Room Door",
+            11,
+            ("genLevelCtrl", "genOnOff"),
+        ),
     }
 
     assert _parse_group_memberships(block) == expected_memberships
