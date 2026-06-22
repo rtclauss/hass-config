@@ -103,6 +103,30 @@ def test_parasoll_needs_configure_checks_reporting_interval() -> None:
     assert "not _interval_ok" in text
 
 
+def test_parasoll_auto_reconfigure_has_per_device_rate_limit() -> None:
+    # A rejoin-looping sensor previously fired the automation on every announce,
+    # flooding the coordinator with timing-out binds and overflowing the queue.
+    # The first action must throttle each device to ~1 configure/hour.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    assert "_rl_hours_since" in text
+    assert '"{{ _rl_hours_since | int >= 1 }}"' in text
+
+
+def test_parasoll_rate_limit_runs_before_any_configure() -> None:
+    # The gate is only a circuit breaker if it exits BEFORE the delay, the
+    # bridge/devices wait, and the bind/configure MQTT requests.
+    text = PARASOLL_PATH.read_text(encoding="utf-8")
+
+    gate = text.index("_rl_hours_since")
+    # rindex: the automation's own unbind/configure (the script's appear earlier
+    # in the file, before the automation block and thus before the gate).
+    assert gate < text.rindex("zigbee2mqtt/bridge/request/device/unbind")
+    assert gate < text.rindex("zigbee2mqtt/bridge/request/device/configure")
+    # And before the action-block delay that waits on sleepy devices.
+    assert gate < text.index("5000 if trigger.id == 'bridge_event'")
+
+
 def test_parasoll_matches_stock_model_not_patched_converter() -> None:
     # The external converter has been removed; devices report the stock model
     # description "PARASOLL door/window sensor".  Matching the old "(patched)"
