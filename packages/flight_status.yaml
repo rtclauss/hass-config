@@ -613,15 +613,19 @@ template:
         unique_id: next_travel_flight_airport_delay
         default_entity_id: sensor.next_travel_flight_airport_delay
         unit_of_measurement: "min"
+        availability: >-
+          {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('', true) | upper %}
+          {% set tracked = states('text.flightradar24_airport_track') | upper %}
+          {{ origin not in ['', 'UNKNOWN', 'UNAVAILABLE']
+             and origin == tracked
+             and has_value('sensor.flightradar24_airport_departures_delay_average') }}
         state: >-
           {% set origin = state_attr('sensor.next_travel_flight', 'origin_code') | default('') | upper %}
           {% set tracked = states('text.flightradar24_airport_track') | upper %}
-          {% if origin in ['', 'UNKNOWN', 'UNAVAILABLE'] %}
-            unknown
-          {% elif origin == tracked %}
+          {% if origin == tracked %}
             {{ states('sensor.flightradar24_airport_departures_delay_average') }}
           {% else %}
-            unavailable
+            {{ none }}
           {% endif %}
         attributes:
           summary: >-

@@ -48,6 +48,22 @@ def test_flight_status_package_exposes_normalized_display_sensors() -> None:
         assert attribute in text
 
 
+def test_airport_delay_sensor_never_emits_non_numeric_fallback_state() -> None:
+    text = _package_text()
+
+    sensor_start = text.index("unique_id: next_travel_flight_airport_delay")
+    sensor_start = text.rindex("      - name:", 0, sensor_start)
+    sensor_end = text.index("      - name: Next Travel Flight Destination Weather", sensor_start)
+    sensor_block = text[sensor_start:sensor_end]
+
+    assert "availability: >-" in sensor_block
+    assert "has_value('sensor.flightradar24_airport_departures_delay_average')" in sensor_block
+    assert "origin not in ['', 'UNKNOWN', 'UNAVAILABLE']" in sensor_block
+    assert "{{ states('sensor.flightradar24_airport_departures_delay_average') }}" in sensor_block
+    assert "unknown" not in sensor_block[sensor_block.index("state: >-") : sensor_block.index("attributes:")]
+    assert "unavailable" not in sensor_block[sensor_block.index("state: >-") : sensor_block.index("attributes:")]
+
+
 def test_flight_status_keeps_calendar_fallback_when_live_api_is_unavailable() -> None:
     text = _package_text()
 
