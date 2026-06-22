@@ -208,6 +208,10 @@ automation:
         • contact_change   — PARASOLL state change (reconfigures only if bridge shows
                              genPollCtrl bound or power reporting absent; active contact
                              report already proves IAS zone is enrolled)
+      Rate limit: the first action stops the run if this device had a configure
+      attempt within the last hour, so a rejoin-looping or repeatedly-failing
+      sensor can trigger at most one configure/hour instead of flooding the
+      coordinator with binds (the failure mode that took the network down).
       Notifications gated by 1 h since last successful configure per device;
       contact_change is always silent.
     mode: queued
@@ -278,6 +282,56 @@ automation:
             {% endif %}
           {% endif %}
     action:
+      # ── Rate limit / circuit breaker (per device, ~1 configure per hour) ──────
+      # FIRST action, before any delay/MQTT wait/bind: if this device already had
+      # a configure attempt within the current hour bucket, stop immediately.
+      # input_text.parasoll_configure_state is stamped on every configure attempt
+      # (success, failure, or timeout), so a device that is rejoin-looping or
+      # repeatedly failing to bind is throttled to at most one configure per hour
+      # instead of firing on every announce — which is what previously let a
+      # single looping sensor flood the coordinator with timing-out binds and
+      # overflow this queue. Skipped runs exit in milliseconds, so the queue
+      # drains instead of piling up. A genuinely drifted device still self-heals;
+      # it just retries at most hourly. Fresh joins (no prior stamp) are never
+      # throttled. This reuses the same store + hour granularity as the
+      # notification cooldown below.
+      - variables:
+          _rl_ieee: >
+            {% if trigger.id == 'bridge_event' %}
+              {{ trigger.payload_json.data.ieee_address }}
+            {% else %}
+              {% set ns = namespace(value='') %}
+              {% for id_tuple in device_attr(trigger.entity_id, 'identifiers') | list %}
+                {% if id_tuple[0] == 'mqtt' %}
+                  {% set ns.value = id_tuple[1] | replace('zigbee2mqtt_', '') %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.value }}
+            {% endif %}
+          _rl_prev_h: >
+            {% set raw = states('input_text.parasoll_configure_state') | trim %}
+            {% set key = _rl_ieee[-4:] %}
+            {% set ns = namespace(h=none) %}
+            {% if raw.startswith('{') %}
+              {% set ns.h = (raw | from_json).get(key) %}
+            {% else %}
+              {% for item in raw.split(',') if ':' in item %}
+                {% set parts = item.split(':') %}
+                {% if parts[0] | trim == key %}
+                  {% set ns.h = parts[1] | int(default=none) %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.h }}
+          _rl_hours_since: >
+            {% if _rl_prev_h is none %}
+              9999
+            {% else %}
+              {{ ((now().timestamp() / 3600) | int % 10000 - _rl_prev_h | int) % 10000 }}
+            {% endif %}
+      - condition: template
+        value_template: "{{ _rl_hours_since | int >= 1 }}"
+
       # Join/announce: wait for Z2M to finish interview setup.
       # Contact-change: no delay — device is awake right now; every ms counts
       # before it goes back to sleep and Z2M loses the unbind command.
