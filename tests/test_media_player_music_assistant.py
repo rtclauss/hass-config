@@ -60,8 +60,11 @@ def test_music_assistant_item_helper_normalizes_spotify_uris() -> None:
     assert "Music Assistant URI, open.spotify.com URL, or plain item name" in block
     assert "raw_media_type" in block
     assert "music_assistant.play_media" in block
-    assert "spotify--Tviw9k66://" in block
-    assert "s.startswith('spotify:')" in block
+    # Must NOT pin a Spotify provider-instance id: it changes on every MA
+    # re-onboard and goes stale (see docs/music_assistant.md). Use bare spotify: URIs.
+    assert "spotify--" not in block
+    # Still normalizes spotify:user:<u>:playlist:<id> -> bare spotify:playlist:<id>
+    assert "raw_item.startswith('spotify:user:')" in block
     assert "raw_item.startswith('https://open.spotify.com/')" not in block
 
 
