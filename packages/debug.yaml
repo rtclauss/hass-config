@@ -47,3 +47,29 @@ rest_command:
     headers:
       authorization: !secret ma_api_authorization
     payload: '{"message_id": "ha-debug-sync", "command": "music/sync", "args": {}}'
+
+  # ---------------------------------------------------------------------------
+  # DEBUG ONLY — Music Assistant per-item refresh
+  # ---------------------------------------------------------------------------
+  # The API behind the MA UI's "(...) -> Refresh item" action: re-fetches a
+  # SINGLE media item (e.g. one playlist) from its provider. Lighter and more
+  # targeted than ma_sync_library_debug (which syncs the whole library).
+  # Command verified against MA server source: @api_command("music/refresh_item")
+  # with `media_item: str | MediaItemType` (a URI string).
+  #
+  # Same undocumented-API / debug-only caveats as above apply.
+  #
+  # Pass the item's URI when calling:
+  #   Developer Tools -> Actions -> rest_command.ma_refresh_item_debug
+  #     data:
+  #       item_uri: "library://playlist/525"
+  # Find a playlist's URI in MA: open it -> Provider details -> the
+  # "Music Assistant Library" entry shows library://playlist/<n>. A
+  # spotify:playlist:<id> URI also works.
+  ma_refresh_item_debug:
+    url: !secret ma_api_url
+    method: POST
+    content_type: "application/json"
+    headers:
+      authorization: !secret ma_api_authorization
+    payload: '{"message_id": "ha-debug-refresh", "command": "music/refresh_item", "args": {"media_item": "{{ item_uri }}"}}'
