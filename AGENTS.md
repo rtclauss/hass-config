@@ -37,6 +37,11 @@
 - Preserve color semantics: red means urgent/exception on the owner-suite board; yellow means emphasis/hospitality on the future office board.
 - Test renderer changes with `python3 -m pytest tests/test_inky_display_renderer.py tests/test_inky_display_service.py tests/test_inky_displays_package.py`. For physical changes, verify on the Pi Zero W and confirm the panel visibly changes, not just that `show()` returns.
 
+## Media / Music Assistant
+- Use `docs/music_assistant.md` as the source of truth before changing Music Assistant / Sonos playback, sync groups, bedtime/wake audio wiring, or Spotify URIs.
+- Never hardcode a `spotify--<instance>` provider-instance id; use bare `spotify:playlist:<id>` URIs and let MA route to the live instance (it changes on every MA re-onboard).
+- Always target the MA `*_sonos_2` entities (not bare `*_sonos`); set group volume on individual member entities, never the group entity.
+
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.
 - Do not commit `AGENTS.local.md` unless explicitly asked.
