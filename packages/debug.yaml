@@ -1,0 +1,49 @@
+# =============================================================================
+# Debug helpers — NOT for production automations.
+# Everything here is a manual debugging convenience. Do not wire any of it into
+# load-bearing automations; it may use undocumented APIs that break on upgrades.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# DEBUG ONLY — Music Assistant manual library-sync trigger
+# -----------------------------------------------------------------------------
+# Forces an MA library re-sync immediately, instead of waiting for the scheduled
+# interval (MA -> Settings -> System -> Background Tasks). Handy after an MA
+# re-onboard, or when a new/edited Spotify playlist has not loaded yet.
+#
+# !! USES MUSIC ASSISTANT'S UNDOCUMENTED HTTP COMMAND API !!
+#    The maintainers state it "is not designed for users and may break in the
+#    future" — it can stop working on ANY MA update with no warning. Treat this
+#    strictly as a manual debug button; never depend on it. If it returns
+#    401/404, re-verify the route + auth against your own server's auto-generated
+#    docs at  http://<MA_IP>:8095/api-docs  (MA 2.7+).
+#    Refs: https://www.music-assistant.io/api/
+#          https://github.com/orgs/music-assistant/discussions/4054
+#
+# Do NOT hardcode a `providers` instance id (e.g. spotify--xxxxxxxx) — it changes
+# on every MA re-onboard (the same trap fixed in PR #807). Sync everything, or
+# scope by media_type only.
+#
+# --- One-time setup ----------------------------------------------------------
+# 1. Create a Home Assistant Long-Lived Access Token. MA runs as the HA add-on,
+#    so it accepts HA tokens:
+#       HA -> click your username/profile (bottom-left) -> "Security" tab ->
+#       scroll to "Long-Lived Access Tokens" -> "Create Token" -> name it
+#       (e.g. "ma-debug-sync") -> copy it now (it is shown only once).
+# 2. Add to secrets.yaml (NEVER commit these — keep them out of git):
+#       ma_api_url: "http://<MA_IP>:8095/api"
+#       ma_api_authorization: "Bearer eyJhbGciOi...your-long-lived-token..."
+#    Note the literal "Bearer " prefix in front of the token.
+#
+# --- Use ---------------------------------------------------------------------
+#   Developer Tools -> Actions -> rest_command.ma_sync_library_debug -> Perform.
+#   Faster playlist-only refresh: set args to {"media_types": ["playlist"]}.
+# =============================================================================
+rest_command:
+  ma_sync_library_debug:
+    url: !secret ma_api_url
+    method: POST
+    content_type: "application/json"
+    headers:
+      authorization: !secret ma_api_authorization
+    payload: '{"message_id": "ha-debug-sync", "command": "music/sync", "args": {}}'
