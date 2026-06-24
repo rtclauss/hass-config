@@ -30,6 +30,7 @@ NWS_ALERT_PAYLOAD_FIXTURES = (
             "event": "Flood Advisory",
             "headline": "Second headline",
             "description": "Second description",
+            "endsExpires": "null",
             "expires": "2026-06-18T23:00:00+00:00",
         },
     ],
@@ -54,7 +55,8 @@ def test_weather_package_restores_legacy_nws_raw_source_from_ui_managed_payload(
     assert "name: nws_dakota_county_alerts" in text
     assert "unique_id: nws_dakota_county_alerts_legacy_raw_source" in text
     assert "source_entity_id: sensor.nws_alerts" in text
-    assert "source_alerts = state_attr('sensor.nws_alerts', 'Alerts')" in text
+    assert "source_alerts = state_attr('sensor.nws_alerts', 'alerts')" in text
+    assert "default(state_attr('sensor.nws_alerts', 'Alerts'), true)" in text
     assert "state: \"{{ states('sensor.nws_alerts') | int(0) }}\"" in text
 
     for legacy_field in (
@@ -75,11 +77,13 @@ def test_weather_package_restores_legacy_nws_raw_source_from_ui_managed_payload(
         assert legacy_field in text
 
     assert len(NWS_ALERT_PAYLOAD_FIXTURES) == 3
-    assert "state_attr('sensor.nws_alerts', 'Alerts') | default([], true)" in text
+    assert "state_attr('sensor.nws_alerts', 'alerts')" in text
     assert "for alert in source_alerts if alert is mapping" in text
     assert "ns.alerts = ns.alerts + [dict(" in text
     assert "alert.get('ID', alert.get('Id', alert.get('id'" in text
     assert "alert.get('Event', alert.get('event'" in text
     assert "alert.get('Headline', alert.get('headline'" in text
     assert "alert.get('Description', alert.get('description'" in text
-    assert "alert.get('EndsExpires', alert.get('endsExpires', ends if ends is not none else expires))" in text
+    assert "raw_ends_expires = alert.get('EndsExpires', alert.get('endsExpires', none))" in text
+    assert "raw_ends_expires not in [none, '', 'null', 'None', 'NULL']" in text
+    assert "else (ends if ends is not none else expires)" in text

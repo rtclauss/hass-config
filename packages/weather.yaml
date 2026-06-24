@@ -783,7 +783,7 @@ template:
       attributes:
         source_entity_id: sensor.nws_alerts
         alerts: >-
-          {% set source_alerts = state_attr('sensor.nws_alerts', 'Alerts') | default([], true) %}
+          {% set source_alerts = state_attr('sensor.nws_alerts', 'alerts') | default(state_attr('sensor.nws_alerts', 'Alerts'), true) | default([], true) %}
           {% set ns = namespace(alerts=[]) %}
           {% for alert in source_alerts if alert is mapping %}
             {% set event = alert.get('Event', alert.get('event', '')) %}
@@ -793,9 +793,12 @@ template:
             {% set sent = alert.get('Sent', alert.get('sent', none)) %}
             {% set effective = alert.get('Effective', alert.get('effective', sent)) %}
             {% set onset = alert.get('Onset', alert.get('onset', effective)) %}
-            {% set ends = alert.get('Ends', alert.get('ends', none)) %}
-            {% set expires = alert.get('Expires', alert.get('expires', ends)) %}
-            {% set ends_expires = alert.get('EndsExpires', alert.get('endsExpires', ends if ends is not none else expires)) %}
+            {% set raw_ends = alert.get('Ends', alert.get('ends', none)) %}
+            {% set raw_expires = alert.get('Expires', alert.get('expires', none)) %}
+            {% set ends = raw_ends if raw_ends not in [none, '', 'null', 'None', 'NULL'] else none %}
+            {% set expires = raw_expires if raw_expires not in [none, '', 'null', 'None', 'NULL'] else ends %}
+            {% set raw_ends_expires = alert.get('EndsExpires', alert.get('endsExpires', none)) %}
+            {% set ends_expires = raw_ends_expires if raw_ends_expires not in [none, '', 'null', 'None', 'NULL'] else (ends if ends is not none else expires) %}
             {% set ns.alerts = ns.alerts + [dict(
               id=alert.get('ID', alert.get('Id', alert.get('id', event ~ '-' ~ sent))),
               event=event,
