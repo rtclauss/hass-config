@@ -891,6 +891,49 @@ script:
           entity_id: media_player.bedroom_sonos_2
           spotify_uri: "{{ playlist }}"
 
+  music_assistant_play_random_lofi_playlist:
+    alias: "Play random LoFi playlist via Music Assistant"
+    trace:
+      stored_traces: 50
+    fields:
+      entity_id:
+        description: "Music Assistant media_player entity"
+      playlist_name:
+        description: "Human-readable playlist group name for logbook"
+      log_name:
+        description: "Logbook entry name"
+    variables:
+      playback_entity: "{{ entity_id | default('media_player.bedroom_sonos_2') }}"
+      effective_playlist_name: "{{ playlist_name | default('Lowfi') }}"
+      effective_log_name: "{{ log_name | default('LoFi Playlist is') }}"
+    sequence:
+      - variables:
+          playlist: >-
+            {#
+            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
+            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
+            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
+            ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
+            #}
+            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
+              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
+              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
+              "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
+              ] -%}
+            {% set pindex = (range(0, (plists | length))|random) -%}
+            {{ plists[pindex] }}
+      - action: logbook.log
+        data:
+          entity_id: "{{ playback_entity }}"
+          domain: media_player
+          name: "{{ effective_log_name }}"
+          message: " playing {{ effective_playlist_name }} playlist: {{ playlist }}"
+      - alias: "Play LoFi playlist via Music Assistant"
+        action: script.music_assistant_play_spotify_uri
+        data:
+          entity_id: "{{ playback_entity }}"
+          spotify_uri: "{{ playlist }}"
+
   music_assistant_search_music:
     alias: "Search Music Assistant"
     trace:
@@ -1340,33 +1383,11 @@ script:
     trace:
       stored_traces: 50
     sequence:
-      - variables:
-          playlist: >-
-            {#
-            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
-            ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
-            ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
-            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
-            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
-            ##  Deep Sleep: spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY
-            ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
-            ##  Lowfi covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
-            #}
-            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
-              "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
-              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
-              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
-              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
-              "spotify:playlist:37i9dQZF1DWYcDQ1hSjOpY",
-              "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
-              "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
-                ] -%}
-              {% set pindex =  (range(0, (plists | length) )|random) -%}
-              {{ plists[pindex] }}
-      - action: script.music_assistant_play_bedroom_playlist_choice
+      - action: script.music_assistant_play_random_lofi_playlist
         data:
+          entity_id: media_player.bedroom_sonos_2
           playlist_name: Lowfi
-          playlist: "{{ playlist }}"
+          log_name: Cube Playlist is
 
   bedroom_playlist_1:
     alias: "Play Guster"
@@ -1495,35 +1516,11 @@ script:
           playlist: "{{ playlist }}"
 
   bedroom_playlist_5:
-    alias: "Play LoFi"
+    alias: "Play LoFi Legacy Delegate"
     trace:
       stored_traces: 50
     sequence:
-      - variables:
-          playlist: >-
-            {#
-            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
-            ##  Simpsons Wave: spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg
-            ##  SIMPSONSWAVE: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
-            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
-            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
-            ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
-            ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
-            #}
-            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
-              "spotify:playlist:6SGXcOlYBwvOdWBwnKnZdg",
-              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
-              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
-              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
-              "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
-              "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
-              ] -%}
-              {% set pindex =  (range(0, (plists | length))|random) -%}
-              {{ plists[pindex] }}
-      - action: script.music_assistant_play_bedroom_playlist_choice
-        data:
-          playlist_name: Lowfi
-          playlist: "{{ playlist }}"
+      - action: script.bedroom_playlist_0
 
   play_video_games:
     alias: "Play Video Games"
@@ -1545,7 +1542,8 @@ script:
           entity_id: media_player.lg_webos_smart_tv
         data:
           source: "HDMI 4"
-      - delay:
+      - alias: "Let the TV settle after HDMI source selection"
+        delay:
           seconds: 2
       - action: script.music_assistant_pause_house_audio
 
@@ -1652,7 +1650,8 @@ script:
             {%- set shuffle = [true, false] -%}
             {% set sindex =  (range(0, (shuffle | length))|random) -%}
             {{ shuffle[sindex] }}
-      - delay:
+      - alias: "Let shuffle settle before arrival volume changes"
+        delay:
           seconds: 2
       - action: media_player.volume_set
         continue_on_error: true
@@ -1811,7 +1810,8 @@ script:
           repeat: all
         target:
           entity_id: "{{ bedtime_playback_entity }}"
-      - delay:
+      - alias: "Let bedtime repeat mode settle before volume changes"
+        delay:
           seconds: 2
       - action: media_player.volume_set
         continue_on_error: true
@@ -1823,7 +1823,8 @@ script:
             - media_player.den_sonos_2
         data:
           volume_level: 0.20
-      - delay:
+      - alias: "Let bedtime volume settle before playback starts"
+        delay:
           seconds: 2
       - action: logbook.log
         data:
@@ -1837,6 +1838,29 @@ script:
           entity_id: "{{ bedtime_playback_entity }}"
           media_item: "{{ playlist }}"
           media_type: "{{ bedtime_media_type }}"
+      - wait_template: "{{ is_state(bedtime_playback_entity, 'playing') }}"
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              domain: media_player
+              name: Spotify Bedtime fallback is
+              message: " primary bedtime playback failed to start; playing LoFi fallback"
+          - action: script.music_assistant_play_random_lofi_playlist
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              playlist_name: Bedtime LoFi fallback
+              log_name: Spotify Bedtime fallback is
+          - wait_template: "{{ is_state(bedtime_playback_entity, 'playing') }}"
+            timeout:
+              seconds: 15
+            continue_on_timeout: true
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy

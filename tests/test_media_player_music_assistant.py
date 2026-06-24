@@ -137,6 +137,23 @@ def test_bedroom_playlist_helper_logs_and_plays_selected_playlist() -> None:
         assert token in block
 
 
+def test_random_lofi_helper_centralizes_sleep_safe_playlist_pool() -> None:
+    block = _script_block("music_assistant_play_random_lofi_playlist")
+
+    for token in (
+        "media_player.bedroom_sonos_2",
+        "spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
+        "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
+        "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
+        "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2",
+        "range(0, (plists | length))",
+        "action: script.music_assistant_play_spotify_uri",
+        'entity_id: "{{ playback_entity }}"',
+        'spotify_uri: "{{ playlist }}"',
+    ):
+        assert token in block
+
+
 def test_house_party_helper_is_stubbed_after_sync_group_migration() -> None:
     block = _script_block("music_assistant_prepare_house_party_group")
     common_block = _script_block("music_assistant_sync_group_migration_stub")
@@ -370,6 +387,33 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     assert "'somafm.com' in playlist" in block
 
 
+def test_bedtime_verifies_primary_playback_and_falls_back_to_lofi() -> None:
+    block = _script_block("spotify_bedtime")
+
+    for token in (
+        "Play bedtime music on sync group",
+        'wait_template: "{{ is_state(bedtime_playback_entity, \'playing\') }}"',
+        "seconds: 15",
+        'value_template: "{{ not wait.completed }}"',
+        "primary bedtime playback failed to start; playing LoFi fallback",
+        "action: script.music_assistant_play_random_lofi_playlist",
+        'entity_id: "{{ bedtime_playback_entity }}"',
+        "playlist_name: Bedtime LoFi fallback",
+        "log_name: Spotify Bedtime fallback is",
+    ):
+        assert token in block
+
+    assert block.index("Play bedtime music on sync group") < block.index(
+        "action: script.music_assistant_play_random_lofi_playlist"
+    )
+    assert block.index("action: script.music_assistant_play_random_lofi_playlist") < block.index(
+        "entity_id: binary_sensor.owner_suite_bathroom_room_occupancy"
+    )
+    assert block.index("action: script.music_assistant_play_random_lofi_playlist") < block.index(
+        "entity_id: script.spotify_bedtime_volume"
+    )
+
+
 def test_music_assistant_dashboard_exposes_player_card() -> None:
     # The dashboard uses a dedicated Music Assistant tab with mass-player-card
     # instead of the old inline search panel.
@@ -406,12 +450,10 @@ def test_bedroom_playlist_scripts_use_sequence_level_random_selection() -> None:
     # `random` is evaluated fresh on every run rather than being cached when
     # the script definition is loaded.
     for script_id in (
-        "bedroom_playlist_0",
         "bedroom_playlist_1",
         "bedroom_playlist_2",
         "bedroom_playlist_3",
         "bedroom_playlist_4",
-        "bedroom_playlist_5",
     ):
         block = _script_block(script_id)
         # Script-level `variables:` must not contain playlist
@@ -436,6 +478,22 @@ def test_bedroom_playlist_scripts_use_sequence_level_random_selection() -> None:
         assert (
             "action: script.music_assistant_play_spotify_uri" not in block
         ), f"{script_id}: should delegate Music Assistant playback"
+
+
+def test_lofi_bedroom_playlist_scripts_delegate_to_shared_pool() -> None:
+    primary_block = _script_block("bedroom_playlist_0")
+    legacy_block = _script_block("bedroom_playlist_5")
+
+    assert 'alias: "Play LoFi"' in primary_block
+    assert "action: script.music_assistant_play_random_lofi_playlist" in primary_block
+    assert "entity_id: media_player.bedroom_sonos_2" in primary_block
+    assert "playlist_name: Lowfi" in primary_block
+    assert "log_name: Cube Playlist is" in primary_block
+    assert "playlist: >-" not in primary_block
+
+    assert 'alias: "Play LoFi Legacy Delegate"' in legacy_block
+    assert "action: script.bedroom_playlist_0" in legacy_block
+    assert "playlist: >-" not in legacy_block
 
 
 def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions() -> None:
