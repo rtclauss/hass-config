@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -107,3 +108,25 @@ def test_june_calendar_formats_are_supported() -> None:
     assert "destination_alias_map" not in text
     assert "'PIT': {'name': 'Pittsburgh'" in text
     assert "route_destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper" in text
+
+
+def test_airport_delay_numeric_sensor_uses_availability_guard() -> None:
+    text = _package_text()
+    sensor_match = re.search(
+        r"name: Next Travel Flight Airport Delay(?P<body>.*?)\n\s+- name: Next Travel Flight Destination Weather",
+        text,
+        flags=re.DOTALL,
+    )
+    assert sensor_match is not None
+    sensor_body = sensor_match.group("body")
+    state_match = re.search(r"\n\s+state: >-\n(?P<state>.*?)(?:\n\s+attributes:)", sensor_body, flags=re.DOTALL)
+    assert state_match is not None
+    state_template = state_match.group("state")
+
+    assert "availability: >-" in sensor_body
+    assert "has_value('sensor.flightradar24_airport_departures_delay_average')" in sensor_body
+    assert "origin not in ['', 'NONE', 'UNKNOWN', 'UNAVAILABLE']" in sensor_body
+    assert "origin == tracked" in sensor_body
+    assert "states('sensor.flightradar24_airport_departures_delay_average') | int(0)" in state_template
+    assert "unknown" not in state_template.lower()
+    assert "unavailable" not in state_template.lower()
