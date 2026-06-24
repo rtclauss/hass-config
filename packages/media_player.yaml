@@ -1795,6 +1795,13 @@ script:
             {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
                else 'media_player.ma_group_everywhere' }}
           bedtime_media_type: "{{ 'radio' if 'somafm.com' in playlist else '' }}"
+          bedtime_pre_playback_fingerprint: >-
+            {{ [
+              state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_title') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') }}
       - action: media_player.shuffle_set
         continue_on_error: true
         target:
@@ -1838,7 +1845,14 @@ script:
           entity_id: "{{ bedtime_playback_entity }}"
           media_item: "{{ playlist }}"
           media_type: "{{ bedtime_media_type }}"
-      - wait_template: "{{ is_state(bedtime_playback_entity, 'playing') }}"
+      - alias: "Confirm primary bedtime playback changed the group media"
+        wait_template: >-
+          {{ is_state(bedtime_playback_entity, 'playing') and [
+              state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_title') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != bedtime_pre_playback_fingerprint }}
         timeout:
           seconds: 15
         continue_on_timeout: true
@@ -1857,7 +1871,14 @@ script:
               entity_id: "{{ bedtime_playback_entity }}"
               playlist_name: Bedtime LoFi fallback
               log_name: Spotify Bedtime fallback is
-          - wait_template: "{{ is_state(bedtime_playback_entity, 'playing') }}"
+          - alias: "Confirm LoFi fallback changed the group media"
+            wait_template: >-
+              {{ is_state(bedtime_playback_entity, 'playing') and [
+                  state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
+                  state_attr(bedtime_playback_entity, 'media_title') | default('', true),
+                  state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
+                  state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
+                ] | join('|') != bedtime_pre_playback_fingerprint }}
             timeout:
               seconds: 15
             continue_on_timeout: true

@@ -392,7 +392,12 @@ def test_bedtime_verifies_primary_playback_and_falls_back_to_lofi() -> None:
 
     for token in (
         "Play bedtime music on sync group",
-        'wait_template: "{{ is_state(bedtime_playback_entity, \'playing\') }}"',
+        "bedtime_pre_playback_fingerprint",
+        "Confirm primary bedtime playback changed the group media",
+        "Confirm LoFi fallback changed the group media",
+        "state_attr(bedtime_playback_entity, 'media_content_id')",
+        "state_attr(bedtime_playback_entity, 'media_title')",
+        "!= bedtime_pre_playback_fingerprint",
         "seconds: 15",
         'value_template: "{{ not wait.completed }}"',
         "primary bedtime playback failed to start; playing LoFi fallback",
@@ -412,6 +417,7 @@ def test_bedtime_verifies_primary_playback_and_falls_back_to_lofi() -> None:
     assert block.index("action: script.music_assistant_play_random_lofi_playlist") < block.index(
         "entity_id: script.spotify_bedtime_volume"
     )
+    assert 'wait_template: "{{ is_state(bedtime_playback_entity, \'playing\') }}"' not in block
 
 
 def test_music_assistant_dashboard_exposes_player_card() -> None:
