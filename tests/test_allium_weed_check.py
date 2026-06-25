@@ -186,6 +186,17 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
             ),
         },
         {
+            "spec": "specs/alarm_wakeup.allium",
+            "implementation_paths": ["packages/media_player.yaml"],
+            "classification": "non-wakeup-scope change",
+            "reason": (
+                "Issue #801 hardens bedtime playback fallback in script.spotify_bedtime "
+                "and centralizes LoFi playlist selection; wake-up scheduling, playback "
+                "verification, retry, fallback, and volume-ramp behavior governed by "
+                "alarm_wakeup.allium are unchanged."
+            ),
+        },
+        {
             "spec": "specs/night_routines.allium",
             "implementation_paths": ["packages/media_player.yaml"],
             "classification": "non-night-scope change",
