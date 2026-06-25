@@ -112,6 +112,62 @@ def test_classified_gap_allows_protected_implementation_change() -> None:
     assert findings[0].classification == "intentional gap"
 
 
+def test_classified_gap_can_be_limited_to_changed_line_patterns() -> None:
+    scope = weed.ProtectedScope(
+        spec="specs/alarm_wakeup.allium",
+        description="wake-up behavior",
+        implementation_paths=("packages/media_player.yaml",),
+    )
+    classified_gaps = [
+        {
+            "spec": "specs/alarm_wakeup.allium",
+            "implementation_paths": ["packages/media_player.yaml"],
+            "allowed_changed_line_patterns": ['-"spotify:*', '+"spotify:*'],
+            "classification": "media-uri-pool change",
+            "reason": "Exact media URIs are outside the spec.",
+        }
+    ]
+
+    findings = weed.detect_drift_risks(
+        ["packages/media_player.yaml"],
+        [scope],
+        classified_gaps,
+        {"packages/media_player.yaml": ['-"spotify:album:abc",']},
+    )
+
+    assert len(findings) == 1
+    assert not findings[0].is_failure
+    assert findings[0].classification == "media-uri-pool change"
+
+
+def test_classified_gap_rejects_non_matching_changed_lines() -> None:
+    scope = weed.ProtectedScope(
+        spec="specs/alarm_wakeup.allium",
+        description="wake-up behavior",
+        implementation_paths=("packages/media_player.yaml",),
+    )
+    classified_gaps = [
+        {
+            "spec": "specs/alarm_wakeup.allium",
+            "implementation_paths": ["packages/media_player.yaml"],
+            "allowed_changed_line_patterns": ['-"spotify:*', '+"spotify:*'],
+            "classification": "media-uri-pool change",
+            "reason": "Exact media URIs are outside the spec.",
+        }
+    ]
+
+    findings = weed.detect_drift_risks(
+        ["packages/media_player.yaml"],
+        [scope],
+        classified_gaps,
+        {"packages/media_player.yaml": ["-delay:", "+delay:"]},
+    )
+
+    assert len(findings) == 1
+    assert findings[0].is_failure
+    assert findings[0].classification is None
+
+
 def test_default_config_lists_existing_specs_and_scopes() -> None:
     scopes, classified_gaps = weed.load_config(weed.DEFAULT_CONFIG)
 
@@ -119,6 +175,7 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         {
             "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/media_player.yaml"],
+            "allowed_changed_line_patterns": ['-"spotify:*', '+"spotify:*'],
             "classification": "media-uri-pool change",
             "reason": (
                 "Exact media URIs and playlist composition are explicitly excluded by "
