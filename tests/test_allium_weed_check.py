@@ -122,7 +122,7 @@ def test_classified_gap_can_be_limited_to_changed_line_patterns() -> None:
         {
             "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/media_player.yaml"],
-            "allowed_changed_line_patterns": ['-"spotify:*', '+"spotify:*'],
+            "allowed_changed_line_patterns": ['-*"spotify:*', '+*"spotify:*'],
             "classification": "media-uri-pool change",
             "reason": "Exact media URIs are outside the spec.",
         }
@@ -150,7 +150,7 @@ def test_classified_gap_rejects_non_matching_changed_lines() -> None:
         {
             "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/media_player.yaml"],
-            "allowed_changed_line_patterns": ['-"spotify:*', '+"spotify:*'],
+            "allowed_changed_line_patterns": ['-*"spotify:*', '+*"spotify:*'],
             "classification": "media-uri-pool change",
             "reason": "Exact media URIs are outside the spec.",
         }
@@ -175,7 +175,7 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         {
             "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/media_player.yaml"],
-            "allowed_changed_line_patterns": ['-"spotify:*', '+"spotify:*'],
+            "allowed_changed_line_patterns": ['-*"spotify:*', '+*"spotify:*'],
             "classification": "media-uri-pool change",
             "reason": (
                 "Exact media URIs and playlist composition are explicitly excluded by "
