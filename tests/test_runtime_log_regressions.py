@@ -84,6 +84,55 @@ def _top_level_mapping_block(path: Path, section_name: str, key_name: str) -> st
     return "\n".join(lines[start:end])
 
 
+def _template_sensor_block(path: Path, unique_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    marker = f"        unique_id: {unique_id}"
+    start = None
+
+    for index, line in enumerate(lines):
+        if line != marker:
+            continue
+        for candidate in range(index, -1, -1):
+            if lines[candidate].startswith("      - name: "):
+                start = candidate
+                break
+        if start is not None:
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find template sensor {unique_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("      - name: "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _template_state_body(sensor_block: str) -> str:
+    lines = sensor_block.splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line == "        state: >":
+            start = index + 1
+            break
+
+    if start is None:
+        raise AssertionError("Template sensor block has no state template")
+
+    end = len(lines)
+    for index in range(start, len(lines)):
+        line = lines[index]
+        if line.startswith("        ") and not line.startswith("          ") and line.strip():
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def test_tesla_departure_planner_waits_for_helpers_on_startup() -> None:
     text = _read(CAR_PATH)
 
@@ -190,11 +239,22 @@ def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:
 
 def test_octoprint_duration_templates_tolerate_unknown_timestamps() -> None:
     text = _read(OCTOPRINT_PATH)
+    elapsed_block = _template_sensor_block(OCTOPRINT_PATH, "octoprint_time_elapsed")
+    remaining_block = _template_sensor_block(OCTOPRINT_PATH, "octoprint_time_remaining")
+    elapsed_state = _template_state_body(elapsed_block).lower()
+    remaining_state = _template_state_body(remaining_block).lower()
 
-    assert "as_timestamp(states('sensor.octoprint_start_time'), default=none)" in text
-    assert "as_timestamp(states('sensor.octoprint_estimated_finish_time'), default=none)" in text
+    assert "start_raw = states('sensor.octoprint_start_time')" in text
+    assert "finish_entity = 'sensor.octoprint_estimated_finish_time'" in text
+    assert "finish_raw = states(finish_entity)" in text
+    assert "as_timestamp(start_raw, default=none)" in text
+    assert "as_timestamp(finish_raw, default=none)" in text
+    assert "{{ has_value('sensor.octoprint_start_time') }}" in elapsed_block
+    assert "{{ has_value('sensor.octoprint_estimated_finish_time') }}" in remaining_block
     assert "start is number" in text
     assert "finish is number" in text
+    assert "unknown" not in elapsed_state
+    assert "unknown" not in remaining_state
     assert "start_time: \"{{ states('sensor.octoprint_start_time') }}\"" in text
     assert "start_time: \"{{ states('sensor.octoprint_estimated_finish_time') }}\"" in text
 
