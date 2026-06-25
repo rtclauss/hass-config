@@ -280,16 +280,75 @@ def git_changed_files(changed_from: str) -> list[str]:
     raise RuntimeError(f"Could not compute changed files from {changed_from!r}: {last_error}")
 
 
+def git_changed_line_map(changed_from: str) -> dict[str, list[str]]:
+    candidates = [
+        ["git", "diff", "--unified=0", f"{changed_from}...HEAD"],
+        ["git", "diff", "--unified=0", changed_from, "HEAD"],
+    ]
+    last_error = ""
+
+    for command in candidates:
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        if result.returncode != 0:
+            last_error = result.stderr.strip()
+            continue
+
+        changed_lines: dict[str, list[str]] = {}
+        current_file: str | None = None
+        for line in result.stdout.splitlines():
+            if line.startswith("diff --git "):
+                current_file = None
+                parts = line.split()
+                if len(parts) >= 4 and parts[3].startswith("b/"):
+                    current_file = parts[3][2:]
+                    changed_lines.setdefault(current_file, [])
+                continue
+            if current_file is None:
+                continue
+            if line.startswith(("+++", "---", "@@")):
+                continue
+            if line.startswith(("+", "-")):
+                changed_lines.setdefault(current_file, []).append(line.strip())
+
+        return changed_lines
+
+    raise RuntimeError(f"Could not compute changed lines from {changed_from!r}: {last_error}")
+
+
 def _matches(path: str, patterns: Iterable[str]) -> bool:
     return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
 
 
-def _classification_for(scope: ProtectedScope, changed_file: str, classified_gaps: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _line_classification_applies(gap: dict[str, Any], changed_lines: list[str]) -> bool:
+    patterns = [str(pattern) for pattern in gap.get("allowed_changed_line_patterns", [])]
+    if not patterns:
+        return True
+    if not changed_lines:
+        return False
+    return all(_matches(line, patterns) for line in changed_lines)
+
+
+def _classification_for(
+    scope: ProtectedScope,
+    changed_file: str,
+    classified_gaps: list[dict[str, Any]],
+    changed_line_map: dict[str, list[str]] | None = None,
+) -> dict[str, Any] | None:
     for gap in classified_gaps:
         if gap.get("spec") != scope.spec:
             continue
         files = [str(file) for file in gap.get("implementation_paths", [])]
-        if _matches(changed_file, files):
+        if _matches(changed_file, files) and _line_classification_applies(
+            gap,
+            (changed_line_map or {}).get(changed_file, []),
+        ):
             return gap
     return None
 
@@ -298,6 +357,7 @@ def detect_drift_risks(
     changed_files: Iterable[str],
     scopes: list[ProtectedScope],
     classified_gaps: list[dict[str, Any]],
+    changed_line_map: dict[str, list[str]] | None = None,
 ) -> list[DriftFinding]:
     changed = set(changed_files)
     findings: list[DriftFinding] = []
@@ -310,14 +370,14 @@ def detect_drift_risks(
         changed_spec = scope.spec in changed
         unclassified = [
             path for path in changed_impl
-            if _classification_for(scope, path, classified_gaps) is None
+            if _classification_for(scope, path, classified_gaps, changed_line_map) is None
         ]
         if changed_spec:
             findings.append(DriftFinding(scope, tuple(changed_impl), changed_spec=True))
         elif unclassified:
             findings.append(DriftFinding(scope, tuple(unclassified), changed_spec=False))
         else:
-            first_gap = _classification_for(scope, changed_impl[0], classified_gaps)
+            first_gap = _classification_for(scope, changed_impl[0], classified_gaps, changed_line_map)
             findings.append(
                 DriftFinding(
                     scope,
@@ -582,6 +642,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.changed_from:
         try:
             changed_files = git_changed_files(args.changed_from)
+            changed_line_map = git_changed_line_map(args.changed_from)
         except RuntimeError as exc:
             diagnostics.append(
                 Diagnostic(
@@ -592,7 +653,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         else:
-            drift_findings = detect_drift_risks(changed_files, scopes, classified_gaps)
+            drift_findings = detect_drift_risks(
+                changed_files,
+                scopes,
+                classified_gaps,
+                changed_line_map,
+            )
 
     if args.format == "markdown":
         report = render_markdown(specs, diagnostics, drift_findings, notes)
