@@ -281,13 +281,14 @@ template:
         unique_id: octoprint_time_elapsed
         unit_of_measurement: "s"
         availability: >
-          {{ not is_state('sensor.octoprint_start_time', 'unavailable') }}
+          {{ has_value('sensor.octoprint_start_time') }}
         state: >
-          {% set start = as_timestamp(states('sensor.octoprint_start_time'), default=none) %}
+          {% set start_raw = states('sensor.octoprint_start_time') %}
+          {% set start = as_timestamp(start_raw, default=none) %}
           {% if start is number %}
             {{ (as_timestamp(now()) - start) | int }}
           {% else %}
-            unknown
+            0
           {% endif %}
         attributes:
           start_time: "{{ states('sensor.octoprint_start_time') }}"
@@ -295,13 +296,15 @@ template:
         unique_id: octoprint_time_remaining
         unit_of_measurement: "s"
         availability: >
-          {{ not is_state('sensor.octoprint_estimated_finish_time', 'unavailable') }}
+          {{ has_value('sensor.octoprint_estimated_finish_time') }}
         state: >
-          {% set finish = as_timestamp(states('sensor.octoprint_estimated_finish_time'), default=none) %}
+          {% set finish_entity = 'sensor.octoprint_estimated_finish_time' %}
+          {% set finish_raw = states(finish_entity) %}
+          {% set finish = as_timestamp(finish_raw, default=none) %}
           {% if finish is number %}
             {{ (finish - as_timestamp(now())) | int }}
           {% else %}
-            unknown
+            0
           {% endif %}
         attributes:
           start_time: "{{ states('sensor.octoprint_estimated_finish_time') }}"
