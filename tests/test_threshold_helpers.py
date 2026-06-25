@@ -51,7 +51,9 @@ def test_bathroom_humidity_high_uses_delta_threshold_helpers() -> None:
     for binary_sensor, delta_sensor in cases.items():
         block = _threshold_binary_sensor_block(text, binary_sensor)
         assert f"entity_id: {delta_sensor}" in block
-        assert "upper: 10" in block
+        assert "upper: 8" in block
+        assert "hysteresis: 2" in block
+        assert "lower:" not in block
 
     public_block = _template_unique_id_block(text, "bathroom_humidity_high")
     assert "unique_id: bathroom_humidity_high" in public_block
