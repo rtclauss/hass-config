@@ -395,6 +395,43 @@ def test_owner_suite_led_darkening_excludes_unavailable_guest_room_switch() -> N
     assert "number.guest_room_fan_switch_ledintensitywhenoff" not in block
 
 
+def test_dynamic_inovelli_target_lists_skip_inactive_restore_state_entities() -> None:
+    script_ids = (
+        "night_tv_mode_switches",
+        "day_mode_switches_general",
+        "day_mode_switches_owner_suite_scope",
+        "night_mode_switches_owner_suite",
+        "day_mode_switches_office_guest_room",
+        "reset_inovelli_switches",
+        "turn_off_all_inovelli_switch_leds",
+        "turn_off_owner_suite_inovelli_switch_leds",
+    )
+
+    for script_id in script_ids:
+        block = _script_block(script_id)
+        assert "rejectattr('state', 'in', ['unknown', 'unavailable'])" in block, script_id
+        assert "rejectattr('attributes.restored', 'eq', true)" in block, script_id
+
+
+def test_day_mode_default_switch_lists_filter_stale_entities_before_service_calls() -> None:
+    block = _script_block("day_mode_switches_general")
+
+    for variable_name in (
+        "all_day_mode_singletapbehavior_switches",
+        "all_day_mode_defaultlevellocal_switches",
+        "all_day_mode_defaultlevelremote_switches",
+    ):
+        match = re.search(
+            rf"      {variable_name}: >\n(?P<section>.*?)(?=\n      [A-Za-z0-9_]+:|\n    sequence:)",
+            block,
+            re.S,
+        )
+        assert match is not None
+        section = match.group("section")
+        assert "rejectattr('state', 'in', ['unknown', 'unavailable'])" in section
+        assert "rejectattr('attributes.restored', 'eq', true)" in section
+
+
 def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
     block = _script_block("reset_inovelli_switches")
     notification_text = INOVELLI_LED_NOTIFICATIONS_PATH.read_text(encoding="utf-8")
