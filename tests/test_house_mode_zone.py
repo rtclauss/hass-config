@@ -155,12 +155,65 @@ def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
     assert "input_datetime.contextual_arrival_last_empty_at:" in text
     assert "has_date: true" in text
     assert "has_time: true" in text
-    assert "from: \"on\"" in block
-    assert "to: \"off\"" in block
+    assert "event_type: zeke_departure" in block
+    assert "source_trigger == 'bayesian_presence_off'" in block
     assert "action: input_boolean.turn_off" in block
     assert "action: input_datetime.set_datetime" in block
     assert "entity_id: input_datetime.contextual_arrival_last_empty_at" in block
     assert "now().strftime('%Y-%m-%d %H:%M:%S')" in block
+
+
+def test_presence_event_emitters_own_shared_arrival_and_departure_triggers() -> None:
+    arrival_emitter = _automation_block(ZONE_PATH, "zeke_arrival_emitter")
+    departure_emitter = _automation_block(ZONE_PATH, "zeke_departure_emitter")
+
+    assert "event: enter" in arrival_emitter
+    assert "id: tracker_entered_home" in arrival_emitter
+    assert "id: bayesian_presence_on" in arrival_emitter
+    assert "event: zeke_arrival" in arrival_emitter
+    assert "source_trigger: \"{{ trigger.id }}\"" in arrival_emitter
+
+    assert "event: leave" in departure_emitter
+    assert "id: tracker_left_home" in departure_emitter
+    assert "id: bayesian_presence_off" in departure_emitter
+    assert "event: zeke_departure" in departure_emitter
+    assert "source_trigger: \"{{ trigger.id }}\"" in departure_emitter
+
+
+def test_presence_event_consumers_keep_independent_traces_and_modes() -> None:
+    arrival_consumers = (
+        "cloudy_home_arrival",
+        "default_arrive_home",
+        "play_spotify_when_i_get_home",
+        "turn_on_lights_at_night_when_i_get_home",
+        "turn_on_bedroom_lights_at_night_when_i_get_home",
+        "vacuum_return_home",
+    )
+    departure_consumers = (
+        "doors_open_when_leaving_home",
+        "garage_door_open_when_leaving_home",
+        "input_boolean_tracker_off",
+        "turn_off_lights_when_i_leave",
+        "vacuum_leave_home",
+    )
+
+    for automation_id in arrival_consumers:
+        block = _automation_block(ZONE_PATH, automation_id)
+        trigger_block = block.split("condition:", 1)[0].split("action:", 1)[0]
+        assert "trace:" in block
+        assert "event_type: zeke_arrival" in trigger_block
+        assert "person: zeke" in trigger_block
+        assert "event: enter" not in trigger_block
+        assert "binary_sensor.bayesian_zeke_home" not in trigger_block
+
+    for automation_id in departure_consumers:
+        block = _automation_block(ZONE_PATH, automation_id)
+        trigger_block = block.split("condition:", 1)[0].split("action:", 1)[0]
+        assert "trace:" in block
+        assert "event_type: zeke_departure" in trigger_block
+        assert "person: zeke" in trigger_block
+        assert "event: leave" not in trigger_block
+        assert "binary_sensor.bayesian_zeke_home" not in trigger_block
 
 
 def test_arrival_automations_use_contextual_arrival_transition() -> None:
