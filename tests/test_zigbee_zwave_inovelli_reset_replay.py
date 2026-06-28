@@ -357,6 +357,20 @@ def test_inovelli_led_recovery_automation_watches_all_led_number_entities() -> N
         assert token in block
 
 
+def test_dynamic_inovelli_target_lists_exclude_inactive_restored_entities() -> None:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+    loops = re.findall(
+        r"{%- for device in states\.(?:number|select)\n(?P<body>.*?){%- endfor %}",
+        text,
+        flags=re.DOTALL,
+    )
+
+    assert loops
+    for loop in loops:
+        assert "rejectattr('state', 'in', ['unknown', 'unavailable'])" in loop
+        assert "rejectattr('attributes.restored', 'eq', true)" in loop
+
+
 def test_inovelli_led_recovery_replays_trip_day_night_and_owner_suite_darkening() -> None:
     text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
 
