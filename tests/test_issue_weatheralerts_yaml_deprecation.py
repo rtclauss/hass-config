@@ -87,3 +87,14 @@ def test_weather_package_restores_legacy_nws_raw_source_from_ui_managed_payload(
     assert "raw_ends_expires = alert.get('EndsExpires', alert.get('endsExpires', none))" in text
     assert "raw_ends_expires not in [none, '', 'null', 'None', 'NULL']" in text
     assert "else (ends if ends is not none else expires)" in text
+
+
+def test_legacy_nws_alert_slots_do_not_index_empty_alert_lists() -> None:
+    text = WEATHER_PATH.read_text(encoding="utf-8")
+
+    assert "is_state('sensor.nws_dakota_county_alerts_alert_1', 'on') or" not in text
+    assert "state_attr('sensor.nws_dakota_county_alerts', 'alerts')[0] != null" not in text
+    assert "{% if states('sensor.nws_dakota_county_alerts') | int(default=0) > 0 %}" in text
+    assert "{% if states('sensor.nws_dakota_county_alerts') | int(default=0) > 4 %}" in text
+    assert "{% if alerts | count > 0 and (as_timestamp(alerts[0].endsExpires)" in text
+    assert "{% if alerts | count > 4 and (as_timestamp(alerts[4].endsExpires)" in text
