@@ -121,6 +121,19 @@ def test_z2m_ota_template_tracks_progress_attributes_not_simple_availability() -
     assert "states(entity_id) in ['on'" not in template_block
 
 
+def test_z2m_recovery_candidates_uses_active_roster_not_global_state_scan() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    sensor_block = text.split("unique_id: z2m_recovery_candidates", maxsplit=1)[1]
+
+    assert "state_attr('sensor.z2m_lifecycle_issues', 'selection_map')" in sensor_block
+    assert "integration_entities('mqtt')" in sensor_block
+    assert "active_ids.values" in sensor_block
+    assert "device_attr(ha_device_id, 'identifiers')" in sensor_block
+    assert "active_id in identifiers_text" in sensor_block
+    assert "is_state(eid, 'unavailable')" in sensor_block
+    assert "for s in states" not in sensor_block
+
+
 def test_zigbee2mqtt_configuration_enables_health_feed_and_does_not_disable_removal() -> None:
     text = Z2M_CONFIG_PATH.read_text(encoding="utf-8")
 

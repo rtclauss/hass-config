@@ -18,9 +18,12 @@ def test_z2m_lifecycle_spec_covers_repo_contract() -> None:
         "rule DelayTransientCoordinatorMissingRouters",
         "rule NotifyPersistentCoordinatorMissingRouters",
         "rule RecordDeviceInterviewFailure",
+        "rule DeriveSystemicRecoveryFromActiveRosterCandidates",
         "rule RequestDeviceDecommission",
         "rule ConfirmNormalDeviceDecommission",
         "rule ConfirmForceDeviceDecommission",
+        "recovery_candidate_threshold: Integer = 20",
+        "present-in-roster Zigbee2MQTT",
         "single_device_churn_never_triggers_host_restart",
         "InventoryMarkdownUpdateRequired(device, configured_to_spare_stock)",
     ):
