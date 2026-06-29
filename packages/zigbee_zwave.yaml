@@ -1776,13 +1776,33 @@ script:
       stored_traces: 10
     variables:
       all_switches_led_color_off: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_color_on: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_on: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_off: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
       - &trip_led_updates_allowed
         condition: state
@@ -1842,6 +1862,8 @@ script:
       all_off_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1852,6 +1874,8 @@ script:
       all_on_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1862,6 +1886,8 @@ script:
       all_switches_led_intensity_on: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1872,6 +1898,8 @@ script:
       all_switches_led_intensity_off: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1882,6 +1910,8 @@ script:
       all_day_mode_singletapbehavior_switches: >
         {%- for device in states.select
           | selectattr('entity_id', 'search', 'singletapbehavior')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -1890,6 +1920,8 @@ script:
       all_day_mode_defaultlevellocal_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'defaultlevellocal')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -1898,6 +1930,8 @@ script:
       all_day_mode_defaultlevelremote_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'defaultlevelremote')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -2007,24 +2041,32 @@ script:
       owner_suite_day_mode_off_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_day_mode_on_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_day_mode_led_intensity_on_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_day_mode_led_intensity_off_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
@@ -2123,22 +2165,30 @@ script:
     variables:
       owner_suite_led_color_off_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenoff$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenoff$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_color_on_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenon$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenon$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_off_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_on_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
     sequence:
@@ -2182,24 +2232,32 @@ script:
       office_guest_room_off_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       office_guest_room_on_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       office_guest_room_led_intensity_on_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       office_guest_room_led_intensity_off_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
@@ -2244,20 +2302,52 @@ script:
       ha_write_delay: "00:00:01"
       mqtt_bind_delay: "00:00:03"
       all_inovelli_switches_energy_report_rate: >
-        {%- for device in states.number | select('match', '.*periodicpowerandenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'periodicpowerandenergyreports')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_active_energy_report_rate: >
-        {%- for device in states.number | select('match', '.*activeenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'activeenergyreports')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_active_power_report_rate: >
-        {%- for device in states.number | select('match', '.*activepowerreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'activepowerreports')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_double_tap_up_mode: >
-        {%- for device in states.select | select('match', '.*_doubletapuptoparam55.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', '_doubletapuptoparam55')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_double_tap_up_brightness: >
-        {%- for device in states.number | select('match', '.*brightnesslevelfordoubletapup.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'brightnesslevelfordoubletapup')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_bindingofftoonsynclevel_mode: >
-        {%- for device in states.select | select('match', '.*bindingofftoonsynclevel.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', 'bindingofftoonsynclevel')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_singletapbehavior_mode: >
         {%- for device in states.select
           | selectattr('entity_id', 'search', 'singletapbehavior')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -2735,12 +2825,16 @@ script:
     variables:
       all_switches_led_intensity_on: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', 'ledintensitywhenon') -%}
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       all_switches_led_intensity_off: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', 'ledintensitywhenoff') -%}
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
     sequence:
@@ -2876,12 +2970,16 @@ script:
     variables:
       owner_suite_led_intensity_off_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_on_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_off_with_office: >-
