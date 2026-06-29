@@ -432,6 +432,20 @@ def test_day_mode_default_switch_lists_filter_stale_entities_before_service_call
         assert "rejectattr('attributes.restored', 'eq', true)" in section
 
 
+def test_dynamic_inovelli_target_lists_exclude_inactive_restored_entities() -> None:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+    loops = re.findall(
+        r"{%- for device in states\.(?:number|select)\n(?P<body>.*?){%- endfor %}",
+        text,
+        flags=re.DOTALL,
+    )
+
+    assert loops
+    for loop in loops:
+        assert "rejectattr('state', 'in', ['unknown', 'unavailable'])" in loop
+        assert "rejectattr('attributes.restored', 'eq', true)" in loop
+
+
 def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
     block = _script_block("reset_inovelli_switches")
     notification_text = INOVELLI_LED_NOTIFICATIONS_PATH.read_text(encoding="utf-8")
