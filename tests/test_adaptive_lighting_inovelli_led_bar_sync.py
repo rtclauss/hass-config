@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 
@@ -36,46 +35,14 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def _script_block(script_id: str) -> str:
-    lines = ADAPTIVE_LIGHTING_PATH.read_text(encoding="utf-8").splitlines()
-    start = None
-    needle = f"  {script_id}:"
+def test_adaptive_lighting_no_longer_syncs_inovelli_led_bars() -> None:
+    contents = ADAPTIVE_LIGHTING_PATH.read_text(encoding="utf-8")
 
-    for index, line in enumerate(lines):
-        if line == needle:
-            start = index
-            break
-
-    if start is None:
-        raise AssertionError(f"Could not find script id {script_id!r}")
-
-    end = len(lines)
-    next_script = re.compile(r"^  [A-Za-z0-9_]+:$")
-    for index in range(start + 1, len(lines)):
-        if next_script.match(lines[index]):
-            end = index
-            break
-
-    return "\n".join(lines[start:end])
-
-
-def test_default_led_bar_sync_automation_updates_owner_suite_and_office_after_reconcile() -> None:
-    block = _automation_block("sync_selected_inovelli_led_bars_to_adaptive_lighting")
-
-    assert "owner suite and office Inovelli LED bars" in block
-    assert "trigger: event" in block
-    assert "event_type: adaptive_lighting_startup_reconciled" in block
-    assert 'minutes: "/2"' in block
-    assert "switch.sleep_mode" in block
-    assert "input_boolean.guest_mode" in block
-    assert "switch.adaptive_lighting_owner_suite" in block
-    assert "switch.adaptive_lighting_sleep_mode_owner_suite" in block
-    assert "action: script.turn_on" in block
-    assert "entity_id: script.sync_inovelli_led_bars_to_adaptive_lighting" in block
-    assert "variables:" in block
-    assert "action: script.sync_inovelli_led_bars_to_adaptive_lighting" not in block
-    assert "- owner suite" in block
-    assert "- office" in block
+    assert "sync_selected_inovelli_led_bars_to_adaptive_lighting" not in contents
+    assert "sync_inovelli_led_bars_to_adaptive_lighting" not in contents
+    assert "owner suite and office Inovelli LED bars" not in contents
+    assert "number.owner_suite_fan_switch_ledcolorwhenon" not in contents
+    assert "number.office_fan_switch_ledcolorwhenon" not in contents
 
 
 def test_nightly_adaptive_lighting_cycle_filters_missing_candidate_switches() -> None:
@@ -88,37 +55,10 @@ def test_nightly_adaptive_lighting_cycle_filters_missing_candidate_switches() ->
     assert block.count('entity_id: "{{ main_adaptive_switches }}"') == 2
 
 
-def test_led_bar_sync_script_accepts_room_inputs_and_maps_owner_suite_and_office() -> None:
-    block = _script_block("sync_inovelli_led_bars_to_adaptive_lighting")
+def test_arrival_spec_no_longer_requires_inovelli_led_bar_sync() -> None:
+    spec_path = ADAPTIVE_LIGHTING_PATH.parents[1] / "specs" / "arrival_lighting.allium"
+    contents = spec_path.read_text(encoding="utf-8")
 
-    assert "fields:" in block
-    assert "room:" in block
-    assert "rooms:" in block
-    assert 'example: "owner suite, office"' in block
-    assert "owner_suite:" in block
-    assert "office:" in block
-    assert "switch.adaptive_lighting_owner_suite" in block
-    assert "switch.adaptive_lighting_office" in block
-    assert "number.owner_suite_fan_switch_ledcolorwhenon" in block
-    assert "number.owner_suite_fan_switch_ledintensitywhenoff" in block
-    assert "number.office_fan_switch_ledcolorwhenon" in block
-    assert "number.office_fan_switch_ledintensitywhenoff" in block
-    assert "owner_suite_bedroom" in block
-
-
-def test_led_bar_sync_script_uses_privacy_and_sleep_guards_with_office_fallback() -> None:
-    block = _script_block("sync_inovelli_led_bars_to_adaptive_lighting")
-
-    assert "entity_id: input_boolean.trip" in block
-    assert 'state: "off"' in block
-    assert "entity_id: switch.sleep_mode" in block
-    assert "guest_mode_blocks_sync: true" in block
-    assert "fallback_adaptive_switch: switch.adaptive_lighting_owner_suite" in block
-    assert "light.owner_suite_lamps" in block
-    assert "repeat.item == 'owner_suite'" in block
-    assert "now().hour >= 22 or now().hour < 6" in block
-    assert "room_specific_sync_blocked" in block
-    assert "min_color_temp" in block
-    assert "max_color_temp" in block
-    assert "* 170" in block
-    assert "value: 1" in block
+    assert "SyncSelectedInovelliLedBarsToAdaptiveLighting" not in contents
+    assert "AdaptiveLightingTargetChanged" not in contents
+    assert "SelectedInovelliLedBarsMirrorAdaptiveLighting" not in contents

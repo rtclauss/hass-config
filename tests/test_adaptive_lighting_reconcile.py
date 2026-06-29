@@ -235,6 +235,5 @@ def test_arrival_lighting_spec_documents_empty_house_and_manual_control_gates() 
         "requires: not arrival.home_was_empty_before_arrival",
         "ManualControlledArrivalLightsPreserved",
         "configured lights minus the current manual_control list",
-        "rule SyncSelectedInovelliLedBarsToAdaptiveLighting",
     ):
         assert token in text
