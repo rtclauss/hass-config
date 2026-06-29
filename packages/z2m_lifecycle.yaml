@@ -218,9 +218,9 @@ automation:
         event_data:
           action: REBOOT_Z2M_COUNTER
     action:
-      - action: counter.reset
+      - action: script.turn_on
         target:
-          entity_id: counter.reboot_counter
+          entity_id: script.z2m_reset_reboot_counter
 
   - id: reset_z2m_reboot_counter_on_recovery
     alias: reset_z2m_reboot_counter_on_recovery
@@ -256,9 +256,7 @@ automation:
         entity_id: counter.reboot_counter
         above: 0
     action:
-      - action: counter.reset
-        target:
-          entity_id: counter.reboot_counter
+      - action: script.z2m_reset_reboot_counter
 
   # This automation depends on a HA host restart path configured elsewhere.
   # It should only react to bridge-wide problems, not a single end device that
@@ -542,6 +540,16 @@ input_select:
 ################################################################
 
 script:
+  z2m_reset_reboot_counter:
+    alias: Z2M - Reset Reboot Counter
+    mode: single
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: counter.reset
+        target:
+          entity_id: counter.reboot_counter
+
   z2m_decommission_selected_device:
     alias: Z2M - Decommission Selected Device
     mode: single
@@ -1154,27 +1162,65 @@ template:
         unique_id: z2m_recovery_candidates
         icon: mdi:lan-disconnect
         state: >-
-          {% set ns = namespace(count=0) %}
-          {% for s in states if s.state == 'unavailable' %}
-            {% set eid = s.entity_id %}
-            {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
-              {% set did = device_id(eid) %}
-              {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
-              {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
-                {% set ns.count = ns.count + 1 %}
+          {% set selection_map = state_attr('sensor.z2m_lifecycle_issues', 'selection_map') | default({}, true) %}
+          {% set domains = ['light', 'switch', 'fan', 'cover'] %}
+          {% set active_ids = namespace(values=[]) %}
+          {% if selection_map is mapping %}
+            {% for _, device in selection_map.items() %}
+              {% set device_id = device.get('id', '') | string | lower %}
+              {% if device_id != '' %}
+                {% set active_ids.values = active_ids.values + [device_id] %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {% set ns = namespace(items=[]) %}
+          {% for eid in integration_entities('mqtt') | default([], true) %}
+            {% set parts = eid.split('.', 1) %}
+            {% set domain = parts[0] %}
+            {% if domain in domains and is_state(eid, 'unavailable') %}
+              {% set ha_device_id = device_id(eid) %}
+              {% set identifiers = device_attr(ha_device_id, 'identifiers') if ha_device_id else [] %}
+              {% set identifiers_text = identifiers | string | lower %}
+              {% set matched = namespace(value=false) %}
+              {% for active_id in active_ids.values %}
+                {% if active_id in identifiers_text %}
+                  {% set matched.value = true %}
+                {% endif %}
+              {% endfor %}
+              {% if 'zigbee2mqtt' in identifiers_text and matched.value %}
+                {% set ns.items = ns.items + [eid] %}
               {% endif %}
             {% endif %}
           {% endfor %}
-          {{ ns.count }}
+          {{ ns.items | count }}
         attributes:
           entities: >-
+            {% set selection_map = state_attr('sensor.z2m_lifecycle_issues', 'selection_map') | default({}, true) %}
+            {% set domains = ['light', 'switch', 'fan', 'cover'] %}
+            {% set active_ids = namespace(values=[]) %}
+            {% if selection_map is mapping %}
+              {% for _, device in selection_map.items() %}
+                {% set device_id = device.get('id', '') | string | lower %}
+                {% if device_id != '' %}
+                  {% set active_ids.values = active_ids.values + [device_id] %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
             {% set ns = namespace(items=[]) %}
-            {% for s in states if s.state == 'unavailable' %}
-              {% set eid = s.entity_id %}
-              {% if eid.startswith('light.') or eid.startswith('switch.') or eid.startswith('fan.') or eid.startswith('cover.') %}
-                {% set did = device_id(eid) %}
-                {% set identifiers = device_attr(did, 'identifiers') if did else [] %}
-                {% if 'zigbee2mqtt' in (identifiers | string | lower) %}
+            {% for eid in integration_entities('mqtt') | default([], true) %}
+              {% set parts = eid.split('.', 1) %}
+              {% set domain = parts[0] %}
+              {% if domain in domains and is_state(eid, 'unavailable') %}
+                {% set ha_device_id = device_id(eid) %}
+                {% set identifiers = device_attr(ha_device_id, 'identifiers') if ha_device_id else [] %}
+                {% set identifiers_text = identifiers | string | lower %}
+                {% set matched = namespace(value=false) %}
+                {% for active_id in active_ids.values %}
+                  {% if active_id in identifiers_text %}
+                    {% set matched.value = true %}
+                  {% endif %}
+                {% endfor %}
+                {% if 'zigbee2mqtt' in identifiers_text and matched.value %}
                   {% set ns.items = ns.items + [eid] %}
                 {% endif %}
               {% endif %}
