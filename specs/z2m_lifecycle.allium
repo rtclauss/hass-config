@@ -32,6 +32,7 @@ given {
 entity ZigbeeBridgeHealth {
     bridge_status: online | offline | degraded
     coordinator_status: healthy | missing_routers
+    recovery_candidate_count: Integer
     systemic_recovery_needed: Boolean
 }
 
@@ -65,6 +66,7 @@ entity InventoryReconciliationState {
 config {
     stabilization_window: Duration = 5.minutes
     coordinator_issue_hold_window: Duration = 2.minutes
+    recovery_candidate_threshold: Integer = 20
 }
 
 ------------------------------------------------------------
@@ -139,6 +141,15 @@ rule ClearLifecycleNotificationOnRecovery {
     requires: device.lifecycle in {join_then_drop, left_network, transiently_unavailable}
     ensures: device.lifecycle = healthy
     ensures: device.issue_reason = none
+}
+
+rule DeriveSystemicRecoveryFromActiveRosterCandidates {
+    when: RecoveryCandidateInventoryUpdated()
+    ensures: bridge.systemic_recovery_needed = bridge.recovery_candidate_count > config.recovery_candidate_threshold
+    @guidance
+        -- Recovery candidates are active, present-in-roster Zigbee2MQTT
+        -- controllable entities. Restored entities and devices missing from
+        -- the bridge roster do not contribute to systemic recovery.
 }
 
 rule EscalateOnlyForSystemicBridgeFailures {
