@@ -66,6 +66,10 @@ homeassistant:
       <<: *customize
       friendly_name: "Desk Auto Move Max"
 
+    script.uplift_desk_auto_move:
+      <<: *customize
+      friendly_name: "Desk Auto Move"
+
     script.uplift_desk_auto_move_preset_1:
       <<: *customize
       friendly_name: "Desk Auto Move Preset 1"
@@ -296,6 +300,32 @@ automation:
 # Script
 ########################
 script:
+  uplift_desk_auto_move:
+    alias: uplift_desk_auto_move
+    description: >
+      Shared automation-only guard that sends the desk to a requested native
+      Uplift button target when no other automated desk motion is in progress.
+    mode: single
+    trace:
+      stored_traces: 10
+    fields:
+      target_button:
+        name: Target button
+        required: true
+        selector:
+          entity:
+            domain: button
+    sequence:
+      - condition: state
+        entity_id: timer.uplift_desk_motion_window
+        state: "idle"
+      - action: button.press
+        target:
+          entity_id: "{{ target_button }}"
+      - action: timer.start
+        target:
+          entity_id: timer.uplift_desk_motion_window
+
   uplift_desk_auto_move_max:
     alias: uplift_desk_auto_move_max
     description: >
@@ -305,15 +335,9 @@ script:
     trace:
       stored_traces: 10
     sequence:
-      - condition: state
-        entity_id: timer.uplift_desk_motion_window
-        state: "idle"
-      - action: button.press
-        target:
-          entity_id: button.uplift_desk_75b205_move_to_max_height
-      - action: timer.start
-        target:
-          entity_id: timer.uplift_desk_motion_window
+      - action: script.uplift_desk_auto_move
+        data:
+          target_button: button.uplift_desk_75b205_move_to_max_height
 
   uplift_desk_auto_move_preset_1:
     alias: uplift_desk_auto_move_preset_1
@@ -324,15 +348,9 @@ script:
     trace:
       stored_traces: 10
     sequence:
-      - condition: state
-        entity_id: timer.uplift_desk_motion_window
-        state: "idle"
-      - action: button.press
-        target:
-          entity_id: button.uplift_desk_75b205_move_to_preset_1
-      - action: timer.start
-        target:
-          entity_id: timer.uplift_desk_motion_window
+      - action: script.uplift_desk_auto_move
+        data:
+          target_button: button.uplift_desk_75b205_move_to_preset_1
 
   uplift_desk_auto_move_preset_2:
     alias: uplift_desk_auto_move_preset_2
@@ -343,15 +361,9 @@ script:
     trace:
       stored_traces: 10
     sequence:
-      - condition: state
-        entity_id: timer.uplift_desk_motion_window
-        state: "idle"
-      - action: button.press
-        target:
-          entity_id: button.uplift_desk_75b205_move_to_preset_2
-      - action: timer.start
-        target:
-          entity_id: timer.uplift_desk_motion_window
+      - action: script.uplift_desk_auto_move
+        data:
+          target_button: button.uplift_desk_75b205_move_to_preset_2
 
   uplift_desk_manual_move_max:
     alias: uplift_desk_manual_move_max
