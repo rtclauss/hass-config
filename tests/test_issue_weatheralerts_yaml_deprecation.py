@@ -87,3 +87,27 @@ def test_weather_package_restores_legacy_nws_raw_source_from_ui_managed_payload(
     assert "raw_ends_expires = alert.get('EndsExpires', alert.get('endsExpires', none))" in text
     assert "raw_ends_expires not in [none, '', 'null', 'None', 'NULL']" in text
     assert "else (ends if ends is not none else expires)" in text
+
+
+def test_legacy_nws_alert_slots_guard_empty_source_lists_before_indexing() -> None:
+    text = WEATHER_PATH.read_text(encoding="utf-8")
+
+    assert "state_attr('sensor.nws_dakota_county_alerts', 'alerts')[0]" not in text
+    assert "state_attr('sensor.nws_dakota_county_alerts', 'alerts')[1]" not in text
+    assert "state_attr('sensor.nws_dakota_county_alerts', 'alerts')[2]" not in text
+    assert "state_attr('sensor.nws_dakota_county_alerts', 'alerts')[3]" not in text
+    assert "state_attr('sensor.nws_dakota_county_alerts', 'alerts')[4]" not in text
+
+    for slot, minimum_count in enumerate(range(1, 6), start=1):
+        assert (
+            f"set alert = alerts[{slot - 1}] if alerts is sequence and "
+            f"(alerts | count) > {slot - 1} else none"
+        ) in text
+        assert (
+            "is_state('sensor.nws_dakota_county_alerts_alert_"
+            f"{slot}', 'on') or (is_number(states('sensor.nws_dakota_county_alerts'))"
+        ) not in text
+        assert (
+            "state_attr('sensor.nws_dakota_county_alerts', 'alerts') "
+            f"| default([], true) | count) > {minimum_count - 1}"
+        ) in text
