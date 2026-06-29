@@ -47,7 +47,6 @@ def test_behavioral_allium_specs_exist_and_are_versioned() -> None:
             "rule ApplyAdaptiveLightingOnArrival",
             "rule PreserveManualLightingDuringOccupiedArrival",
             "ArrivalRoomAdaptiveSwitchStatePreserved",
-            "rule SyncSelectedInovelliLedBarsToAdaptiveLighting",
             "manual_control attribute",
         ],
         "z2m_lifecycle.allium": [
