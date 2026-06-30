@@ -26,6 +26,7 @@
 - Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
 - Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
 - Before changing related Home Assistant automations, scripts, helpers, dashboards, or tests, read the relevant Allium spec first and keep implementation changes aligned with it.
+- Always compare behavior changes against the relevant Allium spec, but do not update `.allium` definitions unless the owner explicitly approves that spec change.
 
 ## E-Ink Displays
 - Use `docs/inky_displays.md` as the source of truth before changing e-ink payloads, renderer behavior, MQTT topics, Pi service deployment, display layouts, or display-triggering automations.
