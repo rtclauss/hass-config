@@ -544,9 +544,19 @@ automation:
 
   - id: restart_sonos_unavailable
     alias: restart_sonos_unavailable
+    description: >-
+      Bedroom-suite Sonos players occasionally drop to "unavailable" — either an
+      integration-level flap (recoverable by reloading the player's config entry)
+      or a hardware fault such as a red status LED, which only a physical
+      power-cycle can clear. After 30 min unavailable, try a cheap config-entry
+      reload first; if the player is still unavailable a minute later, notify so a
+      human can power-cycle it. The previous blanket homeassistant.restart was
+      removed: it disrupts the whole house and, for a hardware fault, cannot
+      recover the speaker (see #839).
     trace:
       stored_traces: 50
-    mode: single
+    mode: parallel
+    max: 4
     trigger:
       - trigger: state
         entity_id:
@@ -558,7 +568,28 @@ automation:
         for:
           minutes: 30
     action:
-      - action: homeassistant.restart
+      - alias: "Cheap first attempt — reload the player's config entry"
+        continue_on_error: true
+        action: homeassistant.reload_config_entry
+        target:
+          entity_id: "{{ trigger.entity_id }}"
+      - alias: "Give the reload time to bring the player back"
+        delay:
+          minutes: 1
+      - alias: "Still unavailable after reload — a human power-cycle is required"
+        if:
+          - condition: template
+            value_template: "{{ is_state(trigger.entity_id, 'unavailable') }}"
+        then:
+          - action: notify.all
+            continue_on_error: true
+            data:
+              title: "Sonos needs attention"
+              message: >-
+                {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }}
+                has been unavailable for 30+ minutes and a config-entry reload did not
+                recover it. Check the speaker for a red status LED — it likely needs a
+                physical power-cycle (unplug ~10s, plug back in).
 
   - id: bedtime_music_homekit_trigger
     alias: "Bedtime Music — HomeKit trigger"
@@ -1905,7 +1936,6 @@ script:
       - variables:
           bedtime_rampdown_steps:
             - delay_minutes: 0
-              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.office_sonos_2
@@ -1913,21 +1943,18 @@ script:
                 - media_player.den_sonos_2
               volume_level: 0.1
             - delay_minutes: 2
-              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
                 - media_player.office_sonos_2
               volume_level: 0.07
             - delay_minutes: 2
-              continue_on_error: false
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
                 - media_player.office_sonos_2
               volume_level: 0.05
             - delay_minutes: 2
-              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
@@ -1942,23 +1969,14 @@ script:
               then:
                 - delay:
                     minutes: "{{ repeat.item.delay_minutes }}"
-            - choose:
-                - conditions:
-                    - condition: template
-                      value_template: "{{ repeat.item.continue_on_error }}"
-                  sequence:
-                    - action: media_player.volume_set
-                      continue_on_error: true
-                      target:
-                        entity_id: "{{ repeat.item.entity_id }}"
-                      data:
-                        volume_level: "{{ repeat.item.volume_level }}"
-              default:
-                - action: media_player.volume_set
-                  target:
-                    entity_id: "{{ repeat.item.entity_id }}"
-                  data:
-                    volume_level: "{{ repeat.item.volume_level }}"
+            # Every step tolerates an unavailable member (e.g. a faulted bathroom
+            # Sonos, #839) so one dropped speaker never aborts the rampdown.
+            - action: media_player.volume_set
+              continue_on_error: true
+              target:
+                entity_id: "{{ repeat.item.entity_id }}"
+              data:
+                volume_level: "{{ repeat.item.volume_level }}"
 
   spotify_wake_up:
     alias: "Spotify Wake Up"
