@@ -1936,7 +1936,6 @@ script:
       - variables:
           bedtime_rampdown_steps:
             - delay_minutes: 0
-              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.office_sonos_2
@@ -1944,24 +1943,18 @@ script:
                 - media_player.den_sonos_2
               volume_level: 0.1
             - delay_minutes: 2
-              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
                 - media_player.office_sonos_2
               volume_level: 0.07
             - delay_minutes: 2
-              # Was continue_on_error: false — an unavailable member (e.g. a
-              # faulted bathroom Sonos, #839) aborted the whole rampdown. Let it
-              # degrade gracefully like every other step.
-              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
                 - media_player.office_sonos_2
               volume_level: 0.05
             - delay_minutes: 2
-              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
@@ -1976,23 +1969,14 @@ script:
               then:
                 - delay:
                     minutes: "{{ repeat.item.delay_minutes }}"
-            - choose:
-                - conditions:
-                    - condition: template
-                      value_template: "{{ repeat.item.continue_on_error }}"
-                  sequence:
-                    - action: media_player.volume_set
-                      continue_on_error: true
-                      target:
-                        entity_id: "{{ repeat.item.entity_id }}"
-                      data:
-                        volume_level: "{{ repeat.item.volume_level }}"
-              default:
-                - action: media_player.volume_set
-                  target:
-                    entity_id: "{{ repeat.item.entity_id }}"
-                  data:
-                    volume_level: "{{ repeat.item.volume_level }}"
+            # Every step tolerates an unavailable member (e.g. a faulted bathroom
+            # Sonos, #839) so one dropped speaker never aborts the rampdown.
+            - action: media_player.volume_set
+              continue_on_error: true
+              target:
+                entity_id: "{{ repeat.item.entity_id }}"
+              data:
+                volume_level: "{{ repeat.item.volume_level }}"
 
   spotify_wake_up:
     alias: "Spotify Wake Up"
