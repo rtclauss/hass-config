@@ -8,7 +8,7 @@
 --   - join_then_drop and left_network classification for unstable devices such
 --     as PARASOLL contact sensors
 --   - bridge/coordinator health boundaries that separate single-device churn
---     from systemic recovery
+--     and HA entity republish gaps from systemic recovery
 --   - decommission request, force remove fallback, and inventory.md
 --     reconciliation requirements
 -- Excludes:
@@ -66,7 +66,6 @@ entity InventoryReconciliationState {
 config {
     stabilization_window: Duration = 5.minutes
     coordinator_issue_hold_window: Duration = 2.minutes
-    recovery_candidate_threshold: Integer = 20
 }
 
 ------------------------------------------------------------
@@ -143,22 +142,26 @@ rule ClearLifecycleNotificationOnRecovery {
     ensures: device.issue_reason = none
 }
 
-rule DeriveSystemicRecoveryFromActiveRosterCandidates {
+rule TrackHaRepublishRecoveryCandidatesAsDiagnosticOnly {
     when: RecoveryCandidateInventoryUpdated()
-    ensures: bridge.systemic_recovery_needed = bridge.recovery_candidate_count > config.recovery_candidate_threshold
+    ensures: bridge.systemic_recovery_needed = false
     @guidance
-        -- Recovery candidates are active, present-in-roster Zigbee2MQTT
-        -- controllable entities. Restored entities and devices missing from
-        -- the bridge roster do not contribute to systemic recovery.
+        -- Recovery candidates are HA-side unavailable MQTT entities that are
+        -- still active, present-in-roster Zigbee2MQTT controllable entities.
+        -- After Zigbee2MQTT 2.12.1 / Koenkk#32258, the HA online republish
+        -- path is owned by Zigbee2MQTT and this count is diagnostic only.
+        -- It must not trigger Zigbee2MQTT app restart, EMQX restart, or host
+        -- shutdown.
 }
 
 rule EscalateOnlyForSystemicBridgeFailures {
     when: BridgeHealthCheckFailed()
-    requires: bridge.systemic_recovery_needed
     requires: bridge.bridge_status in {offline, degraded} or bridge.coordinator_status = missing_routers
+    ensures: bridge.systemic_recovery_needed = true
     ensures: SystemicRecoveryRequested()
     @guidance
         -- single_device_churn_never_triggers_host_restart
+        -- ha_republish_candidates_never_trigger_z2m_restart
 }
 
 rule RequestDeviceDecommission {
