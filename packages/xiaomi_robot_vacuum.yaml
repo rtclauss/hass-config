@@ -138,9 +138,11 @@ automation:
     description: >-
       Run a daily main-level maintenance clean at 13:00 once the house has stayed
       occupied for four days, so floors still get cleaned even without an away
-      trigger. Does NOT force a mop: the policy vacuums every run and mops only
-      when due (mop pending, or last successful mop >= 3 days old), so this fires
-      daily but mops roughly every three days instead of every day.
+      trigger. Main level only (the X40) — it does NOT start the upstairs robot,
+      to avoid running bedroom/guest-area vacuums at 13:00 while someone is home.
+      Does NOT force a mop: the policy vacuums every run and mops only when due
+      (mop pending, or last successful mop >= 3 days old), so this fires daily
+      but mops roughly every three days instead of every day.
     mode: single
     trace:
       stored_traces: 10
@@ -170,7 +172,7 @@ automation:
              - as_timestamp(states('input_datetime.x40_ultra_last_away_at'), default=0)
              >= 4 * 24 * 60 * 60 }}
     action:
-      - action: script.vacuum_main_and_upstairs_levels
+      - action: script.vacuum_main_level_full_floor
 
   - id: x40_ultra_record_last_away
     alias: x40_ultra_record_last_away
@@ -519,10 +521,12 @@ script:
   x40_ultra_main_level_policy_clean:
     alias: "X40 Ultra Main Level Policy Clean"
     description: >-
-      Vacuum the main level every run, and add a mop pass when a mop is pending
-      or the last successful mop is at least three days old. Forced mops do NOT
-      go through here — the launcher runs the mop script directly — so there is
-      no shared force latch to race.
+      Single serialized entry for every X40 main-level run (mode: queued, so
+      concurrent launches queue rather than overlap on the device). Vacuums the
+      main level every run and adds a mop when a mop is pending (which is how a
+      forced mop is requested) or the last successful mop is at least three days
+      old. The mop and vacuum-only child scripts are only ever invoked from here,
+      never fire-and-forget, so exactly one run manipulates the robot at a time.
     mode: queued
     trace:
       stored_traces: 10
@@ -562,17 +566,22 @@ script:
         description: "Force a mop pass on this run regardless of the schedule."
         example: true
     sequence:
+      # A forced mop is expressed by marking a mop pending — a "mop owed" latch
+      # that only a successful mop clears, so it cannot be lost to a concurrent
+      # non-forced call. Everything then funnels through the SINGLE serialized
+      # entry (x40_ultra_main_level_policy_clean, mode: queued) so X40 runs never
+      # overlap: per-script queueing alone would not serialize different child
+      # scripts (vacuum-only vs mop) against the same robot.
       - if:
           - condition: template
             value_template: "{{ force_mop | default(false) | bool }}"
         then:
-          - action: script.turn_on
+          - action: input_boolean.turn_on
             target:
-              entity_id: script.x40_ultra_main_level_mop_after_vacuum
-        else:
-          - action: script.turn_on
-            target:
-              entity_id: script.x40_ultra_main_level_policy_clean
+              entity_id: input_boolean.x40_ultra_mop_pass_pending
+      - action: script.turn_on
+        target:
+          entity_id: script.x40_ultra_main_level_policy_clean
 
   vacuum_upstairs_full_floor:
     alias: "Vacuum Upstairs Full Floor"

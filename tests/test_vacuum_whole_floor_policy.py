@@ -76,12 +76,14 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert '"iterations": 4' not in helper_block
 
     # Main-level launcher is fire-and-forget (script.turn_on) so callers do not
-    # block for the whole run. A forced mop routes straight to the mop script;
-    # otherwise the policy decides. No shared force latch (would race across
-    # queued runs).
+    # block for the whole run. Everything funnels through the SINGLE serialized
+    # entry (policy_clean) so different X40 child scripts never overlap on the
+    # device; a forced mop is expressed by marking a mop pending (a latch a
+    # concurrent non-forced call cannot clear), not a separate direct route.
     assert "action: script.turn_on" in main_level_block
     assert "entity_id: script.x40_ultra_main_level_policy_clean" in main_level_block
-    assert "entity_id: script.x40_ultra_main_level_mop_after_vacuum" in main_level_block
+    assert "input_boolean.x40_ultra_mop_pass_pending" in main_level_block
+    assert "script.turn_on\n        target:\n          entity_id: script.x40_ultra_main_level_mop_after_vacuum" not in main_level_block
     assert "x40_ultra_force_mop_next" not in main_level_block
     assert "x40_ultra_force_mop_next" not in policy_block
 
@@ -167,7 +169,11 @@ def test_x40_mop_schedule_helpers_and_home_streak_automation_exist() -> None:
     assert "input_datetime.x40_ultra_last_mopped_at" in config
     assert "entity_id: input_boolean.guest_mode" in block
     assert "entity_id: binary_sensor.bayesian_bed_occupancy" in block
-    assert "action: script.vacuum_main_and_upstairs_levels" in block
+    # Main level only: it must call the X40 main-level launcher, NOT the
+    # main+upstairs helper (which would run bedroom robots at 13:00 while home).
+    assert "action: script.vacuum_main_level_full_floor" in block
+    assert "vacuum_main_and_upstairs_levels" not in block
+    assert "vacuum_upstairs_full_floor" not in block
     # Must NOT force a mop: forcing on the daily 13:00 trigger would mop every
     # day after day four; the policy's 3-day timestamp decides instead.
     assert "force_mop: true" not in block
