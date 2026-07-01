@@ -156,13 +156,39 @@ automation:
       - condition: state
         entity_id: binary_sensor.bayesian_zeke_home
         state: "on"
-        for:
-          days: 4
       - condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
+      # Four continuous home days, measured from a persistent timestamp rather
+      # than the entity's live state duration, so an HA restart mid-stretch does
+      # not reset the streak. A never-set value (epoch 0) means "away not seen
+      # since setup" -> treated as long occupied, so the clean can run.
+      - condition: template
+        value_template: >-
+          {{ as_timestamp(now())
+             - as_timestamp(states('input_datetime.x40_ultra_last_away_at'), default=0)
+             >= 4 * 24 * 60 * 60 }}
     action:
       - action: script.vacuum_main_and_upstairs_levels
+
+  - id: x40_ultra_record_last_away
+    alias: x40_ultra_record_last_away
+    description: >-
+      Persist the timestamp the house last became away so the four-home-days
+      maintenance clean can measure the streak across HA restarts.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "off"
+    action:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.x40_ultra_last_away_at
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
 ########################
 # Binary Sensors
@@ -209,6 +235,13 @@ input_boolean:
 input_datetime:
   x40_ultra_last_mopped_at:
     name: X40 Ultra Last Mopped At
+    has_date: true
+    has_time: true
+  # Persistent "house last became away" timestamp. Used instead of a state
+  # `for: days: 4` duration (which resets on every HA restart/reload) so the
+  # four-continuous-home-days maintenance clean survives restarts.
+  x40_ultra_last_away_at:
+    name: X40 Ultra Last Away At
     has_date: true
     has_time: true
 
@@ -365,12 +398,12 @@ script:
             continue_on_error: true
             target:
               entity_id: vacuum.x40_ultra
-          # Only wait for a finish if the robot actually left the dock; otherwise
-          # the docked-wait would hang for its full timeout on a no-op start.
-          - wait_for_trigger:
-              - trigger: state
-                entity_id: vacuum.x40_ultra
-                to: "cleaning"
+          # Confirm a real start. wait_template (not wait_for_trigger) so it
+          # passes immediately if vacuum.start already flipped the entity to
+          # `cleaning` before this step registered; a genuine no-op start times
+          # out with wait.completed false. Only then wait for the finish,
+          # otherwise the docked-wait would hang on an already-docked robot.
+          - wait_template: "{{ is_state('vacuum.x40_ultra', 'cleaning') }}"
             timeout:
               minutes: 10
             continue_on_timeout: true
@@ -428,10 +461,11 @@ script:
               entity_id: vacuum.x40_ultra
           # Confirm a real start (guards against a resting dock with a stale
           # `completed` task status being counted as a finished mop).
-          - wait_for_trigger:
-              - trigger: state
-                entity_id: vacuum.x40_ultra
-                to: "cleaning"
+          # wait_template (not wait_for_trigger) so it passes immediately if
+          # vacuum.start already flipped the entity to `cleaning` before this
+          # step registered; a genuine no-op start times out with
+          # wait.completed false and keeps the pending flag set for retry.
+          - wait_template: "{{ is_state('vacuum.x40_ultra', 'cleaning') }}"
             timeout:
               minutes: 10
             continue_on_timeout: true
