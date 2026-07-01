@@ -76,11 +76,14 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert '"iterations": 4' not in helper_block
 
     # Main-level launcher is fire-and-forget (script.turn_on) so callers do not
-    # block for the whole run; the force request is carried via an input_boolean.
+    # block for the whole run. A forced mop routes straight to the mop script;
+    # otherwise the policy decides. No shared force latch (would race across
+    # queued runs).
     assert "action: script.turn_on" in main_level_block
     assert "entity_id: script.x40_ultra_main_level_policy_clean" in main_level_block
-    assert "input_boolean.x40_ultra_force_mop_next" in main_level_block
-    assert "input_boolean.x40_ultra_force_mop_next" in policy_block
+    assert "entity_id: script.x40_ultra_main_level_mop_after_vacuum" in main_level_block
+    assert "x40_ultra_force_mop_next" not in main_level_block
+    assert "x40_ultra_force_mop_next" not in policy_block
 
     # Vacuum-only pass: CleanGenius is disabled so the cleaning-mode select can
     # be forced to sweeping, then restored. The broken custom-cleaning service
