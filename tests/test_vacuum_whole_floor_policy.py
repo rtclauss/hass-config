@@ -85,6 +85,7 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert "action: script.x40_ultra_prepare_deterministic_cleaning" in vacuum_only_block
     assert 'option: "sweeping"' in vacuum_only_block
     assert "action: vacuum.start" in vacuum_only_block
+    assert "action: script.x40_ultra_wait_until_docked" in vacuum_only_block
     assert "action: script.x40_ultra_restore_cleangenius" in vacuum_only_block
     assert "dreame_vacuum.vacuum_set_custom_cleaning" not in vacuum_only_block
     assert "sensor.x40_ultra_task_status" not in vacuum_only_block
@@ -104,6 +105,11 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert "entity_id: sensor.x40_ultra_task_status" in mop_after_vacuum_block
     assert 'state: "completed"' in mop_after_vacuum_block
     assert 'to: "failed"' not in mop_after_vacuum_block
+    # Robustness guards (codex P1/P2): only record a mop when the mode actually
+    # applied, the robot really started, and the run reached a real finish.
+    assert 'state: "mopping_after_sweeping"' in mop_after_vacuum_block
+    assert 'to: "cleaning"' in mop_after_vacuum_block
+    assert "action: script.x40_ultra_wait_until_docked" in mop_after_vacuum_block
 
     # CleanGenius is toggled off then restored via dedicated helper scripts.
     prepare_block = _script_block(VACUUM_PATH, "x40_ultra_prepare_deterministic_cleaning")
