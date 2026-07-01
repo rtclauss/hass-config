@@ -40,3 +40,10 @@ def test_notify_weather_alert_uses_current_nws_alert_payload_shape() -> None:
     assert "primary_alert.Headline" in text
     assert "action: notify.notify_all" in text
     assert "message: >-\n            {{ state_attr('sensor.nws_alerts', 'Description') }}" not in text
+
+
+def test_pressure_drop_window_alert_names_open_windows() -> None:
+    text = WEATHER_PATH.read_text(encoding="utf-8")
+
+    assert "state_attr('binary_sensor.any_window_open', 'open_windows')" in text
+    assert "these windows are open: {{ open_windows }}" in text
