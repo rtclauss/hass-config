@@ -162,36 +162,64 @@ automation:
       - condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy
         state: "off"
-      # Four continuous home days, measured from a persistent timestamp rather
-      # than the entity's live state duration, so an HA restart mid-stretch does
-      # not reset the streak. A never-set value (epoch 0) means "away not seen
-      # since setup" -> treated as long occupied, so the clean can run.
+      # Four continuous home days, measured from when the house last BECAME home
+      # (the start of the current streak) via a persistent timestamp, so it
+      # counts real occupancy and survives HA restarts. Returning from a long
+      # trip does NOT immediately satisfy this: the streak restarts at the
+      # return. An unset value (epoch 0) reads as "streak unknown" -> does not
+      # fire (conservative), until the first return or startup seed records it.
       - condition: template
         value_template: >-
-          {{ as_timestamp(now())
-             - as_timestamp(states('input_datetime.x40_ultra_last_away_at'), default=0)
-             >= 4 * 24 * 60 * 60 }}
+          {% set hs = as_timestamp(states('input_datetime.x40_ultra_home_since_at'), default=0) %}
+          {{ hs > 0 and (as_timestamp(now()) - hs) >= 4 * 24 * 60 * 60 }}
     action:
       - action: script.vacuum_main_level_full_floor
 
-  - id: x40_ultra_record_last_away
-    alias: x40_ultra_record_last_away
+  - id: x40_ultra_record_home_since
+    alias: x40_ultra_record_home_since
     description: >-
-      Persist the timestamp the house last became away so the four-home-days
-      maintenance clean can measure the streak across HA restarts.
+      Persist the timestamp the house last became home (start of the current
+      home streak) so the four-home-days maintenance clean measures real
+      occupancy and survives HA restarts. Set on the away->home edge; seeded once
+      on startup if never recorded. A restart mid-streak keeps the existing value
+      (the from:"off" trigger ignores the unknown->on transition at startup, and
+      the startup seed only fires when the value is unset), so the streak is not
+      reset.
     mode: single
     trace:
       stored_traces: 10
     trigger:
       - trigger: state
         entity_id: binary_sensor.bayesian_zeke_home
-        to: "off"
+        from: "off"
+        to: "on"
+        id: returned
+      - trigger: homeassistant
+        event: start
+        id: boot
     action:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.x40_ultra_last_away_at
-        data:
-          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: returned
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.x40_ultra_home_since_at
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - conditions:
+              - condition: trigger
+                id: boot
+              - condition: template
+                value_template: >-
+                  {{ as_timestamp(states('input_datetime.x40_ultra_home_since_at'), default=0) <= 0 }}
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.x40_ultra_home_since_at
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
 ########################
 # Binary Sensors
@@ -234,11 +262,12 @@ input_datetime:
     name: X40 Ultra Last Mopped At
     has_date: true
     has_time: true
-  # Persistent "house last became away" timestamp. Used instead of a state
-  # `for: days: 4` duration (which resets on every HA restart/reload) so the
-  # four-continuous-home-days maintenance clean survives restarts.
-  x40_ultra_last_away_at:
-    name: X40 Ultra Last Away At
+  # Persistent "house last became home" timestamp (start of the current home
+  # streak). Used instead of a state `for: days: 4` duration (which resets on
+  # every HA restart/reload) so the four-continuous-home-days maintenance clean
+  # measures real occupancy and survives restarts.
+  x40_ultra_home_since_at:
+    name: X40 Ultra Home Since At
     has_date: true
     has_time: true
 

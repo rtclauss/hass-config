@@ -164,7 +164,7 @@ def test_x40_mop_schedule_helpers_and_home_streak_automation_exist() -> None:
 
     assert "x40_ultra_mop_pass_pending:" in config
     assert "x40_ultra_last_mopped_at:" in config
-    assert "x40_ultra_last_away_at:" in config
+    assert "x40_ultra_home_since_at:" in config
     assert "input_boolean.x40_ultra_mop_pass_pending" in config
     assert "input_datetime.x40_ultra_last_mopped_at" in config
     assert "entity_id: input_boolean.guest_mode" in block
@@ -177,17 +177,20 @@ def test_x40_mop_schedule_helpers_and_home_streak_automation_exist() -> None:
     # Must NOT force a mop: forcing on the daily 13:00 trigger would mop every
     # day after day four; the policy's 3-day timestamp decides instead.
     assert "force_mop: true" not in block
-    # The four-day streak is measured from a persistent timestamp, not a live
-    # state `for:` duration, so it survives HA restarts.
+    # The four-day streak is measured from a persistent "home since" timestamp
+    # (start of the current streak), not a live state `for:` duration, so it
+    # counts real occupancy and survives HA restarts.
     assert "for:\n          days: 4" not in block
-    assert "input_datetime.x40_ultra_last_away_at" in block
+    assert "input_datetime.x40_ultra_home_since_at" in block
     assert "4 * 24 * 60 * 60" in block
 
-    # The away timestamp is recorded by its own automation on the home->away edge.
-    away_block = _automation_block(VACUUM_PATH, "x40_ultra_record_last_away")
-    assert "entity_id: binary_sensor.bayesian_zeke_home" in away_block
-    assert 'to: "off"' in away_block
-    assert "input_datetime.x40_ultra_last_away_at" in away_block
+    # home_since is recorded by its own automation on the away->home edge (with a
+    # startup seed), NOT the away edge, so a return does not pre-satisfy 4 days.
+    home_block = _automation_block(VACUUM_PATH, "x40_ultra_record_home_since")
+    assert "entity_id: binary_sensor.bayesian_zeke_home" in home_block
+    assert 'from: "off"' in home_block
+    assert 'to: "on"' in home_block
+    assert "input_datetime.x40_ultra_home_since_at" in home_block
 
 
 def test_away_automations_use_shared_whole_floor_helper() -> None:
