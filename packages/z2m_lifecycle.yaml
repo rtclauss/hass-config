@@ -17,6 +17,7 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: homeassistant
+        id: startup_inventory_refresh
         event: start
       - trigger: time_pattern
         minutes: "/30"
@@ -43,6 +44,7 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: homeassistant
+        id: startup_option_sync
         event: start
       - trigger: state
         entity_id: sensor.z2m_lifecycle_issues
@@ -237,11 +239,6 @@ automation:
         to: "off"
         for:
           minutes: 10
-      - trigger: numeric_state
-        entity_id: sensor.z2m_recovery_candidates
-        below: 21
-        for:
-          minutes: 10
     condition:
       - condition: state
         entity_id: binary_sensor.zigbee2mqtt_running
@@ -249,9 +246,6 @@ automation:
       - condition: state
         entity_id: binary_sensor.z2m_failing
         state: "off"
-      - condition: numeric_state
-        entity_id: sensor.z2m_recovery_candidates
-        below: 21
       - condition: numeric_state
         entity_id: counter.reboot_counter
         above: 0
@@ -284,35 +278,40 @@ automation:
         topic: zigbee2mqtt/bridge/state
         payload: "offline"
         id: bridge_offline
+      - trigger: state
+        entity_id: binary_sensor.z2m_bridge
+        to: "off"
+        for:
+          minutes: 5
+        id: bridge_offline_sustained
       - trigger: time_pattern
         minutes: "/10"
         id: watchdog_tick
-      - trigger: numeric_state
-        entity_id: sensor.z2m_recovery_candidates
-        above: 20
-        for:
-          minutes: 5
-        id: recovery_candidates_high
     variables:
       max_restart_attempts: 3
-      recovery_candidates_high: >-
+      # The bridge can publish zigbee2mqtt/bridge/state = offline while the
+      # Supervisor add-on process is still "running" and router availability has
+      # not yet changed. Treat a sustained bridge outage (>= 5 min) as a real
+      # bridge failure so recovery/escalation still runs. Debounced to avoid
+      # reacting to the brief offline blip emitted during normal Z2M restarts.
+      bridge_offline_sustained: >-
         {{
-          states('sensor.z2m_recovery_candidates') | int(0) > 20
-          and (as_timestamp(now()) - as_timestamp(states.sensor.z2m_recovery_candidates.last_changed, 0)) >= 300
+          is_state('binary_sensor.z2m_bridge', 'off')
+          and (as_timestamp(now()) - as_timestamp(states.binary_sensor.z2m_bridge.last_changed, 0)) >= 300
         }}
       issue_active: >-
         {{
           is_state('binary_sensor.zigbee2mqtt_running', 'off')
           or is_state('binary_sensor.z2m_failing', 'on')
-          or recovery_candidates_high
+          or bridge_offline_sustained
         }}
       issue_reason: >-
         {% if is_state('binary_sensor.zigbee2mqtt_running', 'off') %}
           Zigbee2MQTT add-on is not running
+        {% elif bridge_offline_sustained %}
+          Zigbee2MQTT bridge is offline
         {% elif is_state('binary_sensor.z2m_failing', 'on') %}
           Router offline threshold exceeded
-        {% elif recovery_candidates_high %}
-          Z2M recovery candidates exceeded threshold (20) for at least 5 minutes
         {% else %}
           Unknown
         {% endif %}
@@ -388,7 +387,7 @@ automation:
                   {{
                     not is_state('binary_sensor.zigbee2mqtt_running', 'off')
                     and not is_state('binary_sensor.z2m_failing', 'on')
-                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
+                    and not is_state('binary_sensor.z2m_bridge', 'off')
                   }}
             then:
               - action: notify.mobile_app_wethop
@@ -405,7 +404,7 @@ automation:
               {{
                 is_state('binary_sensor.zigbee2mqtt_running', 'off')
                 or is_state('binary_sensor.z2m_failing', 'on')
-                or (states('sensor.z2m_recovery_candidates') | int(0) > 20)
+                or is_state('binary_sensor.z2m_bridge', 'off')
               }}
           - condition: numeric_state
             entity_id: counter.reboot_counter
@@ -450,7 +449,7 @@ automation:
                   {{
                     not is_state('binary_sensor.zigbee2mqtt_running', 'off')
                     and not is_state('binary_sensor.z2m_failing', 'on')
-                    and (states('sensor.z2m_recovery_candidates') | int(0) <= 20)
+                    and not is_state('binary_sensor.z2m_bridge', 'off')
                   }}
             then:
               - action: notify.mobile_app_wethop
@@ -556,39 +555,9 @@ script:
     trace:
       stored_traces: 10
     sequence:
-      - variables:
-          selected_option: "{{ states('input_select.z2m_decommission_device') }}"
-          selection_map: "{{ state_attr('sensor.z2m_lifecycle_issues', 'selection_map') | default({}, true) }}"
-          selected_device: >-
-            {% if selection_map is mapping %}
-              {{ selection_map.get(selected_option, {}) }}
-            {% else %}
-              {{ dict() }}
-            {% endif %}
-          device_id: "{{ selected_device.get('id', '') }}"
-          device_name: "{{ selected_device.get('friendly_name', selected_option) }}"
-          device_model: "{{ selected_device.get('model', 'Unknown model') }}"
-      - if:
-          - condition: template
-            value_template: "{{ selected_option == 'Select a device' or device_id == '' }}"
-        then:
-          - action: persistent_notification.create
-            data:
-              title: Z2M decommission
-              message: Select a device in input_select.z2m_decommission_device before running this script.
-              notification_id: z2m-decommission
-          - stop: No selected device
-      - action: mqtt.publish
+      - action: script.z2m_decommission_device
         data:
-          topic: zigbee2mqtt/bridge/request/device/remove
-          payload: >-
-            {"id":"{{ device_id }}","force":false,"block":false}
-      - action: persistent_notification.create
-        data:
-          title: Z2M decommission requested
-          message: >-
-            Requested normal removal for {{ device_name }} ({{ device_model }}, {{ device_id }}). Wait for the remove response and `device_leave` confirmation before updating inventory.md. Once removal is confirmed, decrement the configured row for this model and increment the spare Inventory row in inventory.md.
-          notification_id: z2m-decommission
+          force_remove: false
 
   z2m_force_decommission_selected_device:
     alias: Z2M - Force Decommission Selected Device
@@ -596,7 +565,23 @@ script:
     trace:
       stored_traces: 10
     sequence:
+      - action: script.z2m_decommission_device
+        data:
+          force_remove: true
+
+  z2m_decommission_device:
+    alias: Z2M - Decommission Device
+    mode: single
+    trace:
+      stored_traces: 10
+    fields:
+      force_remove:
+        name: Force remove
+        selector:
+          boolean:
+    sequence:
       - variables:
+          force_remove_bool: "{{ force_remove | default(false) | bool }}"
           selected_option: "{{ states('input_select.z2m_decommission_device') }}"
           selection_map: "{{ state_attr('sensor.z2m_lifecycle_issues', 'selection_map') | default({}, true) }}"
           selected_device: >-
@@ -614,7 +599,7 @@ script:
         then:
           - action: persistent_notification.create
             data:
-              title: Z2M force decommission
+              title: "{{ 'Z2M force decommission' if force_remove_bool else 'Z2M decommission' }}"
               message: Select a device in input_select.z2m_decommission_device before running this script.
               notification_id: z2m-decommission
           - stop: No selected device
@@ -622,12 +607,16 @@ script:
         data:
           topic: zigbee2mqtt/bridge/request/device/remove
           payload: >-
-            {"id":"{{ device_id }}","force":true,"block":false}
+            {"id":"{{ device_id }}","force":{{ 'true' if force_remove_bool else 'false' }},"block":false}
       - action: persistent_notification.create
         data:
-          title: Z2M force decommission requested
+          title: "{{ 'Z2M force decommission requested' if force_remove_bool else 'Z2M decommission requested' }}"
           message: >-
-            Requested force removal for {{ device_name }} ({{ device_model }}, {{ device_id }}). This only removes the device from the Zigbee2MQTT database; update inventory.md only if the device is intentionally retired from the configured fleet and should return to spare stock.
+            {% if force_remove_bool %}
+              Requested force removal for {{ device_name }} ({{ device_model }}, {{ device_id }}). This only removes the device from the Zigbee2MQTT database; update inventory.md only if the device is intentionally retired from the configured fleet and should return to spare stock.
+            {% else %}
+              Requested normal removal for {{ device_name }} ({{ device_model }}, {{ device_id }}). Wait for the remove response and `device_leave` confirmation before updating inventory.md. Once removal is confirmed, decrement the configured row for this model and increment the spare Inventory row in inventory.md.
+            {% endif %}
           notification_id: z2m-decommission
 
 ################################################################
@@ -1226,4 +1215,4 @@ template:
               {% endif %}
             {% endfor %}
             {{ ns.items | join(', ') }}
-          recovery_hint: "Restart Zigbee2MQTT first when this count stays above threshold."
+          recovery_hint: "Diagnostic only. Zigbee2MQTT 2.12.1 republishes bridge/state when Home Assistant comes online; restart Z2M only for bridge or router health failures."

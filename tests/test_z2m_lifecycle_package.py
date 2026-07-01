@@ -72,9 +72,11 @@ def test_z2m_lifecycle_package_exposes_decommission_controls_and_inventory_guida
     assert "input_select:\n  z2m_decommission_device:" in text
     assert "z2m_decommission_selected_device:" in text
     assert "z2m_force_decommission_selected_device:" in text
+    assert "z2m_decommission_device:" in text
     assert 'topic: zigbee2mqtt/bridge/request/device/remove' in text
-    assert '{"id":"{{ device_id }}","force":false,"block":false}' in text
-    assert '{"id":"{{ device_id }}","force":true,"block":false}' in text
+    assert "force_remove: false" in text
+    assert "force_remove: true" in text
+    assert '{"id":"{{ device_id }}","force":{{ \'true\' if force_remove_bool else \'false\' }},"block":false}' in text
     assert "inventory.md" in text
     assert "Update inventory.md in the repo" in text
 
@@ -85,6 +87,37 @@ def test_z2m_lifecycle_watchdog_uses_plain_bridge_state_trigger() -> None:
     assert 'topic: zigbee2mqtt/bridge/state' in block
     assert 'payload: "offline"' in block
     assert 'value_template: "{{ value_json.state }}"' not in block
+
+
+def test_z2m_lifecycle_watchdog_treats_sustained_bridge_offline_as_issue() -> None:
+    block = _automation_block("shutdown_proxmox_z2m_unavailable")
+
+    # A debounced bridge-offline signal so a sustained bridge outage still
+    # triggers recovery even when the add-on process is "running" and routers
+    # have not dropped.
+    assert "entity_id: binary_sensor.z2m_bridge" in block
+    assert "id: bridge_offline_sustained" in block
+    assert "bridge_offline_sustained: >-" in block
+    assert "is_state('binary_sensor.z2m_bridge', 'off')" in block
+    assert ">= 300" in block
+    # issue_active and the escalation predicate must include the bridge signal.
+    assert "or bridge_offline_sustained" in block
+    assert "or is_state('binary_sensor.z2m_bridge', 'off')" in block
+    # Recovery is only declared once the bridge is back.
+    assert "and not is_state('binary_sensor.z2m_bridge', 'off')" in block
+
+
+def test_z2m_lifecycle_watchdog_does_not_restart_for_ha_republish_candidates() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    watchdog = _automation_block("shutdown_proxmox_z2m_unavailable")
+    reset = _automation_block("reset_z2m_reboot_counter_on_recovery")
+    recovery_sensor = text.split("unique_id: z2m_recovery_candidates", maxsplit=1)[1]
+
+    assert "sensor.z2m_recovery_candidates" not in watchdog
+    assert "recovery_candidates_high" not in watchdog
+    assert "Z2M recovery candidates exceeded threshold" not in watchdog
+    assert "sensor.z2m_recovery_candidates" not in reset
+    assert "Diagnostic only. Zigbee2MQTT 2.12.1 republishes bridge/state" in recovery_sensor
 
 
 def test_z2m_router_stats_preserves_roster_on_malformed_or_empty_devices_response() -> None:
