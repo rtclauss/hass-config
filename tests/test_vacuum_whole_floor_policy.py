@@ -76,16 +76,41 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert '"iterations": 4' not in helper_block
 
     assert "action: script.x40_ultra_main_level_policy_clean" in main_level_block
+
+    # Vacuum-only pass: CleanGenius is disabled so the cleaning-mode select can
+    # be forced to sweeping, then restored. The broken custom-cleaning service
+    # (which 500s while CleanGenius is active) must be gone, and completion is
+    # gated on the vacuum entity, never the task_status sensor.
     assert "entity_id: vacuum.x40_ultra" in vacuum_only_block
-    assert "action: dreame_vacuum.vacuum_set_custom_cleaning" in vacuum_only_block
-    assert "action: dreame_vacuum.vacuum_clean_segment" in vacuum_only_block
-    assert "segments: [4, 3, 1, 2, 6, 5]" in vacuum_only_block
-    assert "cleaning_mode: [0, 0, 0, 0, 0, 0]" in vacuum_only_block
+    assert "action: script.x40_ultra_prepare_deterministic_cleaning" in vacuum_only_block
+    assert 'option: "sweeping"' in vacuum_only_block
+    assert "action: vacuum.start" in vacuum_only_block
+    assert "action: script.x40_ultra_restore_cleangenius" in vacuum_only_block
+    assert "dreame_vacuum.vacuum_set_custom_cleaning" not in vacuum_only_block
+    assert "sensor.x40_ultra_task_status" not in vacuum_only_block
+
     assert "action: script.x40_ultra_main_level_mop_after_vacuum" in policy_block
     assert "action: script.x40_ultra_main_level_vacuum_only" in policy_block
-    assert "cleaning_mode: [1, 1, 1, 1, 1, 1]" in mop_after_vacuum_block
+
+    # Mop pass: vacuum-then-mop in one run via mopping_after_sweeping, persistent
+    # schedule updated only on a clean docked/idle finish, CleanGenius restored,
+    # and no task_status-based completion (it never reports "failed").
+    assert 'option: "mopping_after_sweeping"' in mop_after_vacuum_block
+    assert "action: script.x40_ultra_restore_cleangenius" in mop_after_vacuum_block
     assert "input_boolean.x40_ultra_mop_pass_pending" in mop_after_vacuum_block
     assert "input_datetime.x40_ultra_last_mopped_at" in mop_after_vacuum_block
+    assert "dreame_vacuum.vacuum_set_custom_cleaning" not in mop_after_vacuum_block
+    assert "sensor.x40_ultra_task_status" not in mop_after_vacuum_block
+
+    # CleanGenius is toggled off then restored via dedicated helper scripts.
+    prepare_block = _script_block(VACUUM_PATH, "x40_ultra_prepare_deterministic_cleaning")
+    restore_block = _script_block(VACUUM_PATH, "x40_ultra_restore_cleangenius")
+    assert "entity_id: select.x40_ultra_cleangenius" in prepare_block
+    assert 'option: "off"' in prepare_block
+    assert "select.x40_ultra_cleaning_mode" in prepare_block
+    assert "entity_id: select.x40_ultra_cleangenius" in restore_block
+    assert 'option: "deep_cleaning"' in restore_block
+
     assert "valetudo/upstairs-vacuum/BasicControlCapability/operation/set" in upstairs_block
     assert "payload: START" in upstairs_block
 

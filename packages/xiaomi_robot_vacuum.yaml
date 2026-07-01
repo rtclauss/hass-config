@@ -256,57 +256,71 @@ scene: []
 # Scripts
 ########################
 script:
-  x40_ultra_main_level_vacuum_only:
-    alias: "X40 Ultra Main Level Vacuum Only"
+  x40_ultra_prepare_deterministic_cleaning:
+    alias: "X40 Ultra Prepare Deterministic Cleaning"
     description: >-
-      Run a sweeping-only pass across all mapped main-level X40 Ultra rooms.
+      Turn CleanGenius off so the cleaning-mode select becomes controllable.
+      CleanGenius and manual cleaning-mode/customized-cleaning control are
+      mutually exclusive on this device: while CleanGenius is active the
+      cleaning-mode select and customized-cleaning switch are `unavailable`.
+      Callers restore CleanGenius with x40_ultra_restore_cleangenius.
     mode: queued
     trace:
       stored_traces: 10
     sequence:
-      - action: dreame_vacuum.vacuum_set_custom_cleaning
+      - action: select.select_option
+        continue_on_error: true
         target:
-          entity_id: vacuum.x40_ultra
+          entity_id: select.x40_ultra_cleangenius
         data:
-          segment_id: [4, 3, 1, 2, 6, 5]
-          suction_level: [1, 1, 1, 1, 1, 1]
-          water_volume: [1, 1, 1, 1, 1, 1]
-          wetness_level: [16, 16, 16, 16, 16, 16]
-          cleaning_mode: [0, 0, 0, 0, 0, 0]
-          repeats: [1, 1, 1, 1, 1, 1]
-          mop_temperature: [0, 0, 0, 0, 0, 0]
-          mop_pressure: [0, 0, 0, 0, 0, 0]
-      - action: dreame_vacuum.vacuum_clean_segment
-        target:
-          entity_id: vacuum.x40_ultra
-        data:
-          segments: [4, 3, 1, 2, 6, 5]
-          repeats: 1
-          suction_level: 1
+          option: "off"
+      # Wait for the cleaning-mode select to leave `unavailable`. wait_template
+      # is used deliberately: it passes immediately if CleanGenius was already
+      # off, whereas wait_for_trigger would block for the full timeout.
+      - wait_template: >-
+          {{ states('select.x40_ultra_cleaning_mode') not in
+             ['unavailable', 'unknown'] }}
+        timeout:
+          seconds: 30
+        continue_on_timeout: true
 
-  x40_ultra_main_level_mop_after_vacuum:
-    alias: "X40 Ultra Main Level Mop After Vacuum"
+  x40_ultra_restore_cleangenius:
+    alias: "X40 Ultra Restore CleanGenius"
     description: >-
-      Vacuum the full main level first, then run a mop-only pass and update the
-      persistent mop schedule only after the mop pass finishes successfully.
+      Restore CleanGenius to Deep cleaning after a deterministic policy run so
+      manual/app-initiated cleans keep the user's default behavior.
     mode: queued
     trace:
       stored_traces: 10
     sequence:
-      - action: input_boolean.turn_on
+      - action: select.select_option
+        continue_on_error: true
         target:
-          entity_id: input_boolean.x40_ultra_mop_pass_pending
-      - action: script.x40_ultra_main_level_vacuum_only
+          entity_id: select.x40_ultra_cleangenius
+        data:
+          option: "deep_cleaning"
+
+  x40_ultra_wait_until_run_finished:
+    alias: "X40 Ultra Wait Until Run Finished"
+    description: >-
+      Block until the X40 has started and then fully finished a run. Completion
+      is judged on the vacuum entity only: mid-task mop washes read as
+      `cleaning`, low-battery recharges read as `paused`, and rewash returns
+      read as `returning`, so the entity reaches `docked`/`idle` only when the
+      whole run (including any CleanGenius-free rewash/recharge) is truly done.
+    mode: queued
+    trace:
+      stored_traces: 10
+    sequence:
+      # Wait until the robot has actually left the dock and started cleaning.
       - wait_for_trigger:
           - trigger: state
             entity_id: vacuum.x40_ultra
             to: "cleaning"
-          - trigger: state
-            entity_id: sensor.x40_ultra_task_status
-            to: "cleaning"
         timeout:
           minutes: 10
         continue_on_timeout: true
+      # Wait until the run truly ends (docked/idle) or errors.
       - wait_for_trigger:
           - trigger: state
             entity_id: vacuum.x40_ultra
@@ -317,107 +331,89 @@ script:
           - trigger: state
             entity_id: vacuum.x40_ultra
             to: "error"
-          - trigger: state
-            entity_id: sensor.x40_ultra_task_status
-            to: "completed"
-          - trigger: state
-            entity_id: sensor.x40_ultra_task_status
-            to: "failed"
         timeout:
           hours: 6
         continue_on_timeout: true
+
+  x40_ultra_main_level_vacuum_only:
+    alias: "X40 Ultra Main Level Vacuum Only"
+    description: >-
+      Sweep-only pass across the main level. Disables CleanGenius, forces the
+      cleaning mode to sweeping, cleans the mapped main floor, then restores
+      CleanGenius. Completion is detected on the vacuum entity state only
+      (docked/idle/error) — the task_status sensor is not used because on this
+      integration it never reports `failed`, reports `room_cleaning` for
+      segment cleans, and flips to `completed` after each CleanGenius sub-pass.
+    mode: queued
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: script.x40_ultra_prepare_deterministic_cleaning
+      - action: select.select_option
+        continue_on_error: true
+        target:
+          entity_id: select.x40_ultra_cleaning_mode
+        data:
+          option: "sweeping"
+      - action: vacuum.start
+        target:
+          entity_id: vacuum.x40_ultra
+      - action: script.x40_ultra_wait_until_run_finished
+      - action: script.x40_ultra_restore_cleangenius
+
+  x40_ultra_main_level_mop_after_vacuum:
+    alias: "X40 Ultra Main Level Mop After Vacuum"
+    description: >-
+      Vacuum then mop the main level in a single pass (cleaning mode
+      "mopping_after_sweeping"). Disables CleanGenius for deterministic control,
+      updates the persistent mop schedule only on a clean finish (vacuum entity
+      reaches docked/idle without error), then restores CleanGenius. The mop
+      pending flag stays set on any non-clean finish so the next run retries.
+    mode: queued
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.x40_ultra_mop_pass_pending
+      - action: script.x40_ultra_prepare_deterministic_cleaning
+      - action: select.select_option
+        continue_on_error: true
+        target:
+          entity_id: select.x40_ultra_cleaning_mode
+        data:
+          option: "mopping_after_sweeping"
+      - action: vacuum.start
+        target:
+          entity_id: vacuum.x40_ultra
+      - action: script.x40_ultra_wait_until_run_finished
+      # Success = the run reached a finished dock state. A timeout (still
+      # cleaning/paused) or an error leaves the pending flag set so the next
+      # scheduled run retries the mop.
       - if:
-          - condition: not
-            conditions:
-              - condition: state
-                entity_id: vacuum.x40_ultra
-                state: "error"
-          - condition: not
-            conditions:
-              - condition: state
-                entity_id: sensor.x40_ultra_task_status
-                state: "failed"
+          - condition: state
+            entity_id: vacuum.x40_ultra
+            state:
+              - "docked"
+              - "idle"
         then:
-          - action: dreame_vacuum.vacuum_set_custom_cleaning
+          - action: input_datetime.set_datetime
             target:
-              entity_id: vacuum.x40_ultra
+              entity_id: input_datetime.x40_ultra_last_mopped_at
             data:
-              segment_id: [4, 3, 1, 2, 6, 5]
-              suction_level: [0, 0, 0, 0, 0, 0]
-              water_volume: [2, 2, 2, 2, 2, 2]
-              wetness_level: [16, 16, 16, 16, 16, 16]
-              cleaning_mode: [1, 1, 1, 1, 1, 1]
-              repeats: [1, 1, 1, 1, 1, 1]
-              mop_temperature: [1, 1, 1, 1, 1, 1]
-              mop_pressure: [2, 2, 2, 2, 2, 2]
-          - action: dreame_vacuum.vacuum_clean_segment
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - action: input_boolean.turn_off
             target:
-              entity_id: vacuum.x40_ultra
-            data:
-              segments: [4, 3, 1, 2, 6, 5]
-              repeats: 1
-              water_volume: 2
-          - wait_for_trigger:
-              - trigger: state
-                entity_id: vacuum.x40_ultra
-                to: "cleaning"
-              - trigger: state
-                entity_id: sensor.x40_ultra_task_status
-                to: "cleaning"
-            timeout:
-              minutes: 10
-            continue_on_timeout: true
-          - wait_for_trigger:
-              - trigger: state
-                entity_id: vacuum.x40_ultra
-                to: "docked"
-              - trigger: state
-                entity_id: vacuum.x40_ultra
-                to: "idle"
-              - trigger: state
-                entity_id: vacuum.x40_ultra
-                to: "error"
-              - trigger: state
-                entity_id: sensor.x40_ultra_task_status
-                to: "completed"
-              - trigger: state
-                entity_id: sensor.x40_ultra_task_status
-                to: "failed"
-            timeout:
-              hours: 6
-            continue_on_timeout: true
-          - choose:
-              - conditions:
-                  - condition: template
-                    value_template: >-
-                      {{ wait.completed
-                         and not is_state('vacuum.x40_ultra', 'error')
-                         and not is_state('sensor.x40_ultra_task_status', 'failed') }}
-                sequence:
-                  - action: input_datetime.set_datetime
-                    target:
-                      entity_id: input_datetime.x40_ultra_last_mopped_at
-                    data:
-                      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: input_boolean.x40_ultra_mop_pass_pending
-            default:
-              - action: notify.all
-                data:
-                  data:
-                    url: "/ryan-new-mushroom/cleaning"
-                  message: >-
-                    X40 Ultra mop pass did not complete; it will retry on the
-                    next scheduled cleaning run.
+              entity_id: input_boolean.x40_ultra_mop_pass_pending
         else:
           - action: notify.all
             data:
               data:
                 url: "/ryan-new-mushroom/cleaning"
               message: >-
-                X40 Ultra vacuum pass did not complete, so the mop pass was
-                deferred until the next scheduled cleaning run.
+                X40 Ultra mop pass did not finish cleanly; it will retry on the
+                next scheduled cleaning run.
+      - action: script.x40_ultra_restore_cleangenius
 
   x40_ultra_main_level_policy_clean:
     alias: "X40 Ultra Main Level Policy Clean"
