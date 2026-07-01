@@ -1006,6 +1006,7 @@ automation:
     action:
       - action: script.trip_vacuum_main_and_upstairs_levels
         data:
+          force_mop: true
           notify_message: >-
             Vacuuming the main and upstairs levels while you fly home 💺
 
@@ -1229,12 +1230,17 @@ script:
     trace:
       stored_traces: 10
     fields:
+      force_mop:
+        description: "Force a main-level mop pass after the X40 vacuum pass."
+        example: true
       notify_message:
         description: >-
           Notification text describing why the trip vacuum pass started.
         example: "Vacuuming the main and upstairs levels while you're away."
     sequence:
       - action: script.vacuum_main_and_upstairs_levels
+        data:
+          force_mop: "{{ force_mop | default(false) | bool }}"
       - action: notify.all
         data:
           data:
