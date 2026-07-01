@@ -90,3 +90,15 @@ def test_alarm_wakeup_spec_uses_checker_supported_context_events() -> None:
     assert "context.resident_in_bed becomes" not in text
     assert "context.bathroom_occupied becomes" not in text
     assert "target_room == bathroom" not in text
+
+
+def test_allium_guidance_requires_owner_approval_before_spec_edits() -> None:
+    specs_readme = (SPECS_DIR / "README.md").read_text(encoding="utf-8")
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    project_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "compare the implementation to the relevant `.allium` file" in specs_readme
+    assert "Do not update `.allium` definitions automatically" in specs_readme
+    assert "request owner approval for any spec change" in specs_readme
+    assert "do not update `.allium` definitions unless the owner explicitly approves" in agents
+    assert "do not edit `.allium` definitions automatically" in project_readme
