@@ -222,7 +222,13 @@ automation:
       - action: notify.mobile_app_wethop
         data:
           title: "Open Window"
-          message: "Pressure is dropping quickly and a window is open. Close the windows."
+          message: >-
+            {% set open_windows = state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true) %}
+            {% if open_windows %}
+              Pressure is dropping quickly and these windows are open: {{ open_windows }}. Close them.
+            {% else %}
+              Pressure is dropping quickly and a window is open. Close the windows.
+            {% endif %}
           data:
             tag: window-pressure-drop
             persistent: true
