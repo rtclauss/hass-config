@@ -278,19 +278,38 @@ automation:
         topic: zigbee2mqtt/bridge/state
         payload: "offline"
         id: bridge_offline
+      - trigger: state
+        entity_id: binary_sensor.z2m_bridge
+        to: "off"
+        for:
+          minutes: 5
+        id: bridge_offline_sustained
       - trigger: time_pattern
         minutes: "/10"
         id: watchdog_tick
     variables:
       max_restart_attempts: 3
+      # The bridge can publish zigbee2mqtt/bridge/state = offline while the
+      # Supervisor add-on process is still "running" and router availability has
+      # not yet changed. Treat a sustained bridge outage (>= 5 min) as a real
+      # bridge failure so recovery/escalation still runs. Debounced to avoid
+      # reacting to the brief offline blip emitted during normal Z2M restarts.
+      bridge_offline_sustained: >-
+        {{
+          is_state('binary_sensor.z2m_bridge', 'off')
+          and (as_timestamp(now()) - as_timestamp(states.binary_sensor.z2m_bridge.last_changed, 0)) >= 300
+        }}
       issue_active: >-
         {{
           is_state('binary_sensor.zigbee2mqtt_running', 'off')
           or is_state('binary_sensor.z2m_failing', 'on')
+          or bridge_offline_sustained
         }}
       issue_reason: >-
         {% if is_state('binary_sensor.zigbee2mqtt_running', 'off') %}
           Zigbee2MQTT add-on is not running
+        {% elif bridge_offline_sustained %}
+          Zigbee2MQTT bridge is offline
         {% elif is_state('binary_sensor.z2m_failing', 'on') %}
           Router offline threshold exceeded
         {% else %}
@@ -368,6 +387,7 @@ automation:
                   {{
                     not is_state('binary_sensor.zigbee2mqtt_running', 'off')
                     and not is_state('binary_sensor.z2m_failing', 'on')
+                    and not is_state('binary_sensor.z2m_bridge', 'off')
                   }}
             then:
               - action: notify.mobile_app_wethop
@@ -384,6 +404,7 @@ automation:
               {{
                 is_state('binary_sensor.zigbee2mqtt_running', 'off')
                 or is_state('binary_sensor.z2m_failing', 'on')
+                or is_state('binary_sensor.z2m_bridge', 'off')
               }}
           - condition: numeric_state
             entity_id: counter.reboot_counter
@@ -428,6 +449,7 @@ automation:
                   {{
                     not is_state('binary_sensor.zigbee2mqtt_running', 'off')
                     and not is_state('binary_sensor.z2m_failing', 'on')
+                    and not is_state('binary_sensor.z2m_bridge', 'off')
                   }}
             then:
               - action: notify.mobile_app_wethop
