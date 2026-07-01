@@ -522,8 +522,12 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
         assert token in block
 
     assert block.count("- delay:") == 1
-    assert block.count("action: media_player.volume_set") == 2
-    assert "continue_on_error: false" in block
+    # Single data-driven volume_set that every step reuses.
+    assert block.count("action: media_player.volume_set") == 1
+    # Graceful degradation (#839): an unavailable member must never abort the
+    # rampdown, so the volume_set tolerates errors and no step opts out.
+    assert "continue_on_error: true" in block
+    assert "continue_on_error: false" not in block
 
 
 def test_arrival_and_wakeup_scripts_use_sequence_level_playlist_selection() -> None:
