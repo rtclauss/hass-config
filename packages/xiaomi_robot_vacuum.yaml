@@ -133,11 +133,14 @@ automation:
         target:
           entity_id: vacuum.valetudo_den
 
-  - id: x40_ultra_force_clean_after_four_home_days
-    alias: x40_ultra_force_clean_after_four_home_days
+  - id: x40_ultra_maintenance_clean_after_four_home_days
+    alias: x40_ultra_maintenance_clean_after_four_home_days
     description: >-
-      Run a forced main-level mop cycle when the house has stayed occupied for
-      four days, so floors still get mopped even without an away trigger.
+      Run a daily main-level maintenance clean at 13:00 once the house has stayed
+      occupied for four days, so floors still get cleaned even without an away
+      trigger. Does NOT force a mop: the policy vacuums every run and mops only
+      when due (mop pending, or last successful mop >= 3 days old), so this fires
+      daily but mops roughly every three days instead of every day.
     mode: single
     trace:
       stored_traces: 10
@@ -160,8 +163,6 @@ automation:
         state: "off"
     action:
       - action: script.vacuum_main_and_upstairs_levels
-        data:
-          force_mop: true
 
 ########################
 # Binary Sensors
@@ -194,6 +195,12 @@ group: {}
 input_boolean:
   x40_ultra_mop_pass_pending:
     name: X40 Ultra Mop Pass Pending
+    icon: mdi:robot-vacuum-alert
+  # Carries the force-mop request across the fire-and-forget boundary from
+  # vacuum_main_level_full_floor to the detached policy-clean run, so callers
+  # (upstairs, trip notifications) are not blocked for the whole main-level run.
+  x40_ultra_force_mop_next:
+    name: X40 Ultra Force Mop Next Run
     icon: mdi:robot-vacuum-alert
 
 ########################
@@ -346,24 +353,40 @@ script:
           entity_id: select.x40_ultra_cleaning_mode
         data:
           option: "sweeping"
-      - action: vacuum.start
-        continue_on_error: true
-        target:
-          entity_id: vacuum.x40_ultra
-      # Only wait for a finish if the robot actually left the dock; otherwise the
-      # docked-wait would hang for its full timeout on a no-op start.
-      - wait_for_trigger:
-          - trigger: state
-            entity_id: vacuum.x40_ultra
-            to: "cleaning"
-        timeout:
-          minutes: 10
-        continue_on_timeout: true
+      # Guard: only start once the mode actually became `sweeping`. If the mode
+      # select was unavailable or rejected the option, starting now would run in
+      # a leftover mode (e.g. mopping_after_sweeping) and mop on a not-due run.
       - if:
-          - condition: template
-            value_template: "{{ wait.completed }}"
+          - condition: state
+            entity_id: select.x40_ultra_cleaning_mode
+            state: "sweeping"
         then:
-          - action: script.x40_ultra_wait_until_docked
+          - action: vacuum.start
+            continue_on_error: true
+            target:
+              entity_id: vacuum.x40_ultra
+          # Only wait for a finish if the robot actually left the dock; otherwise
+          # the docked-wait would hang for its full timeout on a no-op start.
+          - wait_for_trigger:
+              - trigger: state
+                entity_id: vacuum.x40_ultra
+                to: "cleaning"
+            timeout:
+              minutes: 10
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            then:
+              - action: script.x40_ultra_wait_until_docked
+        else:
+          - action: notify.all
+            data:
+              data:
+                url: "/ryan-new-mushroom/cleaning"
+              message: >-
+                X40 Ultra could not switch to sweeping mode (CleanGenius or the
+                mode select was unavailable); vacuum-only run skipped this time.
       # Always restore CleanGenius, even if the mode change or start failed.
       - action: script.x40_ultra_restore_cleangenius
 
@@ -468,16 +491,14 @@ script:
     alias: "X40 Ultra Main Level Policy Clean"
     description: >-
       Vacuum the main level every run, and add a mop pass when forced, pending,
-      or the last successful mop is at least three days old.
+      or the last successful mop is at least three days old. The force request
+      is read from input_boolean.x40_ultra_force_mop_next (set by the fire-and-
+      forget launcher) and consumed immediately so it does not carry over.
     mode: queued
     trace:
       stored_traces: 10
-    fields:
-      force_mop:
-        description: "Force a mop pass regardless of the last successful mop timestamp."
-        example: true
     variables:
-      force_mop_requested: "{{ force_mop | default(false) | bool }}"
+      force_mop_requested: "{{ is_state('input_boolean.x40_ultra_force_mop_next', 'on') }}"
       last_mopped_timestamp: >-
         {% set raw = states('input_datetime.x40_ultra_last_mopped_at') %}
         {{ as_timestamp(raw, default=0) }}
@@ -487,6 +508,11 @@ script:
            or (last_mopped_timestamp | float(0)) <= 0
            or as_timestamp(now()) - (last_mopped_timestamp | float(0)) >= 3 * 24 * 60 * 60 }}
     sequence:
+      # Consume the force request up front so a later run is not accidentally
+      # forced by a stale flag.
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_force_mop_next
       - choose:
           - conditions:
               - condition: template
@@ -499,7 +525,11 @@ script:
   vacuum_main_level_full_floor:
     alias: "Vacuum Main Level Full Floor"
     description: >-
-      Run the X40 Ultra main-level cleaning policy.
+      Launch the X40 Ultra main-level cleaning policy. Fire-and-forget: it starts
+      the (long-running, self-observing) policy clean via script.turn_on and
+      returns immediately, so callers such as vacuum_main_and_upstairs_levels
+      start the upstairs robot and send trip notifications without waiting for
+      the whole main-level run to finish.
     mode: queued
     trace:
       stored_traces: 10
@@ -508,9 +538,20 @@ script:
         description: "Force a mop pass after the vacuum pass."
         example: true
     sequence:
-      - action: script.x40_ultra_main_level_policy_clean
-        data:
-          force_mop: "{{ force_mop | default(false) | bool }}"
+      - if:
+          - condition: template
+            value_template: "{{ force_mop | default(false) | bool }}"
+        then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.x40_ultra_force_mop_next
+        else:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.x40_ultra_force_mop_next
+      - action: script.turn_on
+        target:
+          entity_id: script.x40_ultra_main_level_policy_clean
 
   vacuum_upstairs_full_floor:
     alias: "Vacuum Upstairs Full Floor"

@@ -75,15 +75,22 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert "MapSegmentationCapability/clean/set" not in helper_block
     assert '"iterations": 4' not in helper_block
 
-    assert "action: script.x40_ultra_main_level_policy_clean" in main_level_block
+    # Main-level launcher is fire-and-forget (script.turn_on) so callers do not
+    # block for the whole run; the force request is carried via an input_boolean.
+    assert "action: script.turn_on" in main_level_block
+    assert "entity_id: script.x40_ultra_main_level_policy_clean" in main_level_block
+    assert "input_boolean.x40_ultra_force_mop_next" in main_level_block
+    assert "input_boolean.x40_ultra_force_mop_next" in policy_block
 
     # Vacuum-only pass: CleanGenius is disabled so the cleaning-mode select can
     # be forced to sweeping, then restored. The broken custom-cleaning service
-    # (which 500s while CleanGenius is active) must be gone, and completion is
-    # gated on the vacuum entity, never the task_status sensor.
+    # (which 500s while CleanGenius is active) must be gone, completion is gated
+    # on the vacuum entity (never task_status), and the start is gated on the
+    # mode actually becoming sweeping so a not-due run cannot mop.
     assert "entity_id: vacuum.x40_ultra" in vacuum_only_block
     assert "action: script.x40_ultra_prepare_deterministic_cleaning" in vacuum_only_block
     assert 'option: "sweeping"' in vacuum_only_block
+    assert 'state: "sweeping"' in vacuum_only_block
     assert "action: vacuum.start" in vacuum_only_block
     assert "action: script.x40_ultra_wait_until_docked" in vacuum_only_block
     assert "action: script.x40_ultra_restore_cleangenius" in vacuum_only_block
@@ -146,7 +153,7 @@ def test_departure_transition_no_longer_embeds_weekday_room_rotation() -> None:
 
 def test_x40_mop_schedule_helpers_and_home_streak_automation_exist() -> None:
     config = VACUUM_PATH.read_text(encoding="utf-8")
-    block = _automation_block(VACUUM_PATH, "x40_ultra_force_clean_after_four_home_days")
+    block = _automation_block(VACUUM_PATH, "x40_ultra_maintenance_clean_after_four_home_days")
 
     assert "x40_ultra_mop_pass_pending:" in config
     assert "x40_ultra_last_mopped_at:" in config
@@ -156,7 +163,9 @@ def test_x40_mop_schedule_helpers_and_home_streak_automation_exist() -> None:
     assert "entity_id: input_boolean.guest_mode" in block
     assert "entity_id: binary_sensor.bayesian_bed_occupancy" in block
     assert "action: script.vacuum_main_and_upstairs_levels" in block
-    assert "force_mop: true" in block
+    # Must NOT force a mop: forcing on the daily 13:00 trigger would mop every
+    # day after day four; the policy's 3-day timestamp decides instead.
+    assert "force_mop: true" not in block
 
 
 def test_away_automations_use_shared_whole_floor_helper() -> None:
