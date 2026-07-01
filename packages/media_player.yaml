@@ -544,9 +544,19 @@ automation:
 
   - id: restart_sonos_unavailable
     alias: restart_sonos_unavailable
+    description: >-
+      Bedroom-suite Sonos players occasionally drop to "unavailable" — either an
+      integration-level flap (recoverable by reloading the player's config entry)
+      or a hardware fault such as a red status LED, which only a physical
+      power-cycle can clear. After 30 min unavailable, try a cheap config-entry
+      reload first; if the player is still unavailable a minute later, notify so a
+      human can power-cycle it. The previous blanket homeassistant.restart was
+      removed: it disrupts the whole house and, for a hardware fault, cannot
+      recover the speaker (see #839).
     trace:
       stored_traces: 50
-    mode: single
+    mode: parallel
+    max: 4
     trigger:
       - trigger: state
         entity_id:
@@ -558,7 +568,28 @@ automation:
         for:
           minutes: 30
     action:
-      - action: homeassistant.restart
+      - alias: "Cheap first attempt — reload the player's config entry"
+        continue_on_error: true
+        action: homeassistant.reload_config_entry
+        target:
+          entity_id: "{{ trigger.entity_id }}"
+      - alias: "Give the reload time to bring the player back"
+        delay:
+          minutes: 1
+      - alias: "Still unavailable after reload — a human power-cycle is required"
+        if:
+          - condition: template
+            value_template: "{{ is_state(trigger.entity_id, 'unavailable') }}"
+        then:
+          - action: notify.all
+            continue_on_error: true
+            data:
+              title: "Sonos needs attention"
+              message: >-
+                {{ state_attr(trigger.entity_id, 'friendly_name') or trigger.entity_id }}
+                has been unavailable for 30+ minutes and a config-entry reload did not
+                recover it. Check the speaker for a red status LED — it likely needs a
+                physical power-cycle (unplug ~10s, plug back in).
 
   - id: bedtime_music_homekit_trigger
     alias: "Bedtime Music — HomeKit trigger"
@@ -1920,7 +1951,10 @@ script:
                 - media_player.office_sonos_2
               volume_level: 0.07
             - delay_minutes: 2
-              continue_on_error: false
+              # Was continue_on_error: false — an unavailable member (e.g. a
+              # faulted bathroom Sonos, #839) aborted the whole rampdown. Let it
+              # degrade gracefully like every other step.
+              continue_on_error: true
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
