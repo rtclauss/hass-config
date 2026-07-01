@@ -1810,6 +1810,18 @@ mqtt:
       payload_available: "online"
       payload_not_available: "offline"
 
+    - name: "Z2M Tiki Room/Deck Switch Availability"
+      unique_id: z2m_tiki_room_deck_switch_availability
+      state_topic: "zigbee2mqtt/Tiki Room/Deck Switch/availability"
+      value_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
     - name: "Z2M Tiki Room/Floor Lamp Availability"
       unique_id: z2m_tiki_room_floor_lamp_availability
       state_topic: "zigbee2mqtt/Tiki Room/Floor Lamp/availability"
@@ -2040,6 +2052,7 @@ group:
       - binary_sensor.z2m_powder_room_window_availability
       - binary_sensor.z2m_tiki_room_camera_availability
       - binary_sensor.z2m_tiki_room_deck_availability
+      - binary_sensor.z2m_tiki_room_deck_switch_availability
       - binary_sensor.z2m_tiki_room_floor_lamp_availability
       - binary_sensor.z2m_tiki_room_heater_availability
       - binary_sensor.z2m_tiki_room_sonos_control_availability
