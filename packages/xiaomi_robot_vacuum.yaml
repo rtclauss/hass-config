@@ -387,15 +387,18 @@ script:
         target:
           entity_id: vacuum.x40_ultra
       - action: script.x40_ultra_wait_until_run_finished
-      # Success = the run reached a finished dock state. A timeout (still
-      # cleaning/paused) or an error leaves the pending flag set so the next
-      # scheduled run retries the mop.
+      # Success requires a real `completed` task status, not just a dock state.
+      # An arrival mid-run fires vacuum_return_home -> vacuum.return_to_base,
+      # which also parks the robot at docked/idle but does NOT produce a
+      # `completed` task status, so an interrupted mop keeps the pending flag
+      # set and retries next run instead of clearing the 3-day debt. Reliable
+      # here because this script runs with CleanGenius OFF: a single pass emits
+      # `completed` once at true end (not per sub-pass as under CleanGenius),
+      # and `completed` precedes the dock transition.
       - if:
           - condition: state
-            entity_id: vacuum.x40_ultra
-            state:
-              - "docked"
-              - "idle"
+            entity_id: sensor.x40_ultra_task_status
+            state: "completed"
         then:
           - action: input_datetime.set_datetime
             target:

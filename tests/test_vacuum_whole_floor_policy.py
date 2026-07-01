@@ -92,15 +92,18 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert "action: script.x40_ultra_main_level_mop_after_vacuum" in policy_block
     assert "action: script.x40_ultra_main_level_vacuum_only" in policy_block
 
-    # Mop pass: vacuum-then-mop in one run via mopping_after_sweeping, persistent
-    # schedule updated only on a clean docked/idle finish, CleanGenius restored,
-    # and no task_status-based completion (it never reports "failed").
+    # Mop pass: vacuum-then-mop in one run via mopping_after_sweeping, CleanGenius
+    # restored, and the schedule updated only on a real `completed` task status so
+    # an arrival-triggered return-to-base (docked/idle without completion) can't
+    # clear the mop debt. The broken multi-value task_status triggers stay gone.
     assert 'option: "mopping_after_sweeping"' in mop_after_vacuum_block
     assert "action: script.x40_ultra_restore_cleangenius" in mop_after_vacuum_block
     assert "input_boolean.x40_ultra_mop_pass_pending" in mop_after_vacuum_block
     assert "input_datetime.x40_ultra_last_mopped_at" in mop_after_vacuum_block
     assert "dreame_vacuum.vacuum_set_custom_cleaning" not in mop_after_vacuum_block
-    assert "sensor.x40_ultra_task_status" not in mop_after_vacuum_block
+    assert "entity_id: sensor.x40_ultra_task_status" in mop_after_vacuum_block
+    assert 'state: "completed"' in mop_after_vacuum_block
+    assert 'to: "failed"' not in mop_after_vacuum_block
 
     # CleanGenius is toggled off then restored via dedicated helper scripts.
     prepare_block = _script_block(VACUUM_PATH, "x40_ultra_prepare_deterministic_cleaning")
