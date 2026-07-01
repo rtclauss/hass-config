@@ -409,6 +409,12 @@ def _paint(text: str, color: str, enabled: bool) -> str:
     return f"{COLOR[color]}{text}{COLOR['reset']}"
 
 
+UNCLASSIFIED_DRIFT_NEXT_STEP = (
+    "compare behavior to the governing Allium spec; only update the spec with owner approval, "
+    "otherwise add a classified gap with a reason and exact links"
+)
+
+
 def render_terminal(
     specs: list[Path],
     diagnostics: list[Diagnostic],
@@ -453,7 +459,7 @@ def render_terminal(
                 detail = finding.reason or "classified gap"
             else:
                 status = _paint("unclassified", "red", use_color)
-                detail = "update the spec or add a classified gap with a reason"
+                detail = UNCLASSIFIED_DRIFT_NEXT_STEP
             lines.append(f"- {status} {finding.scope.spec}: {', '.join(finding.changed_implementation)} ({detail})")
 
     if not diagnostics and not drift_findings:
@@ -507,7 +513,7 @@ def render_markdown(
                 next_step = finding.reason or "Review classified gap."
             else:
                 classification = "unclassified"
-                next_step = "Update the governing `.allium` spec or add a classified gap with a reason and exact links."
+                next_step = f"{UNCLASSIFIED_DRIFT_NEXT_STEP}."
             lines.append(f"| `{finding.scope.spec}` | {files} | {classification} | {next_step} |")
     else:
         lines.append("No protected implementation scopes changed.")

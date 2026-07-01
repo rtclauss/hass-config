@@ -239,6 +239,52 @@ def test_markdown_report_includes_line_links(monkeypatch: pytest.MonkeyPatch) ->
     assert "`allium.syntax.doubleEquals`" in report
 
 
+def test_markdown_report_requires_owner_approval_before_spec_update() -> None:
+    finding = weed.DriftFinding(
+        scope=weed.ProtectedScope(
+            spec="specs/night_routines.allium",
+            description="night behavior",
+            implementation_paths=("packages/tv.yaml",),
+        ),
+        changed_implementation=("packages/tv.yaml",),
+        changed_spec=False,
+    )
+
+    report = weed.render_markdown(
+        [Path("specs/night_routines.allium")],
+        [],
+        [finding],
+        [],
+    )
+
+    assert "compare behavior to the governing Allium spec" in report
+    assert "only update the spec with owner approval" in report
+    assert "otherwise add a classified gap" in report
+
+
+def test_terminal_report_requires_owner_approval_before_spec_update() -> None:
+    finding = weed.DriftFinding(
+        scope=weed.ProtectedScope(
+            spec="specs/night_routines.allium",
+            description="night behavior",
+            implementation_paths=("packages/tv.yaml",),
+        ),
+        changed_implementation=("packages/tv.yaml",),
+        changed_spec=False,
+    )
+
+    report = weed.render_terminal(
+        [Path("specs/night_routines.allium")],
+        [],
+        [finding],
+        [],
+    )
+
+    assert "compare behavior to the governing Allium spec" in report
+    assert "only update the spec with owner approval" in report
+    assert "otherwise add a classified gap" in report
+
+
 def test_config_json_is_valid() -> None:
     data = json.loads(weed.DEFAULT_CONFIG.read_text(encoding="utf-8"))
 
