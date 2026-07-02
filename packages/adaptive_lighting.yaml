@@ -513,20 +513,39 @@ script:
       - delay:
           seconds: "{{ wait_seconds | float(0) }}"
       # Only clear lights that are still on and still at the adaptive
-      # brightness target: a light the user turned off or re-dimmed during
-      # the ramp keeps its manual-control mark so the override survives
-      # (Adaptive Lighting drops the mark itself on the next off). The
-      # force-adapt that clearing triggers is a visual no-op for the lights
-      # that pass this guard because they already sit at the target.
+      # brightness and color-temperature targets: a light the user turned
+      # off, re-dimmed, or re-colored during the ramp keeps its
+      # manual-control mark so the override survives (Adaptive Lighting
+      # drops the mark itself on the next off). The color comparison uses
+      # the same per-light clamp as the bootstrap, so sleep-mode targets
+      # below a bulb's minimum still match; a CT-capable light sitting in an
+      # hs/rgb color mode reports no color_temp_kelvin and is treated as
+      # overridden. The force-adapt that clearing triggers is a visual no-op
+      # for the lights that pass this guard because they already sit at the
+      # target.
       - variables:
           lights_to_clear: >-
             {% set target_brightness = (state_attr(adaptive_switch, 'brightness_pct') | float(-1)) * 2.55 %}
+            {% set target_kelvin = state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) %}
             {% set ns = namespace(items=[]) %}
             {% for light_id in clear_lights %}
               {% if is_state(light_id, 'on') %}
                 {% set brightness = state_attr(light_id, 'brightness') %}
-                {% if brightness is none or target_brightness < 0
+                {% set brightness_ok = brightness is none or target_brightness < 0
                       or (brightness | float - target_brightness) | abs <= 26 %}
+                {% set modes = state_attr(light_id, 'supported_color_modes') or [] %}
+                {% if 'color_temp' not in modes or target_kelvin <= 0 %}
+                  {% set color_ok = true %}
+                {% else %}
+                  {% set light_kelvin = state_attr(light_id, 'color_temp_kelvin') %}
+                  {% set min_kelvin = state_attr(light_id, 'min_color_temp_kelvin') | int(0) %}
+                  {% set max_kelvin = state_attr(light_id, 'max_color_temp_kelvin') | int(0) %}
+                  {% set floored = [target_kelvin, min_kelvin] | max %}
+                  {% set expected_kelvin = [floored, max_kelvin] | min if max_kelvin > 0 else floored %}
+                  {% set color_ok = light_kelvin is not none
+                        and (light_kelvin | int - expected_kelvin) | abs <= 150 %}
+                {% endif %}
+                {% if brightness_ok and color_ok %}
                   {% set ns.items = ns.items + [light_id] %}
                 {% endif %}
               {% endif %}
