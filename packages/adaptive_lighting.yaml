@@ -339,6 +339,11 @@ script:
       member_lights: "{{ expand(target_lights) | map(attribute='entity_id') | unique | list }}"
       off_lights: "{{ member_lights | select('is_state', 'off') | list }}"
       on_lights: "{{ member_lights | select('is_state', 'on') | list }}"
+      # Targets that classify as neither off nor on (and group entities whose
+      # members all dropped out of expand()): flapping Zigbee2MQTT devices,
+      # entities still unknown after a restart. They get a best-effort plain
+      # turn-on below so a recovering device still receives the command.
+      unreachable_lights: "{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}"
       apply_transition: "{{ transition | default(1, true) }}"
       should_reset_manual_control: "{{ reset_manual_control | default(false, true) }}"
       initial_brightness_pct: "{{ bootstrap_brightness_pct | default(1, true) }}"
@@ -369,17 +374,6 @@ script:
                   adapt_color: true
                   turn_on_lights: true
                   transition: "{{ apply_transition }}"
-          # Every target is unavailable/unknown: best-effort plain turn-on
-          # (Zigbee2MQTT still publishes the command to flapping devices).
-          - conditions:
-              - condition: template
-                value_template: "{{ off_lights | count == 0 and on_lights | count == 0 }}"
-            sequence:
-              - action: light.turn_on
-                target:
-                  entity_id: "{{ target_lights }}"
-                data:
-                  transition: "{{ apply_transition }}"
           # Off lights present with a known adaptive color temperature: correct
           # color at the bootstrap brightness instantly, then ramp brightness.
           - conditions:
@@ -397,13 +391,29 @@ script:
                   entity_id: "{{ adaptive_switch }}"
                   lights: "{{ off_lights }}"
                   manual_control: true
-              - action: light.turn_on
-                target:
-                  entity_id: "{{ off_lights }}"
-                data:
-                  brightness_pct: "{{ initial_brightness_pct }}"
-                  color_temp_kelvin: "{{ target_color_temp_kelvin }}"
-                  transition: 0
+              # Per-light so the color temperature can be clamped to each
+              # bulb's supported range: sleep mode targets 1000 K, below the
+              # minimum of most CT bulbs, and an out-of-range value can be
+              # rejected by the integration and abort the run before the ramp.
+              # adaptive_lighting.apply does the same clamp internally.
+              - repeat:
+                  for_each: "{{ off_lights }}"
+                  sequence:
+                    # continue_on_error: one failing bulb must not abort the
+                    # run — the remaining lights still ramp and the delayed
+                    # manual-control clear below still executes.
+                    - action: light.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        brightness_pct: "{{ initial_brightness_pct }}"
+                        color_temp_kelvin: >-
+                          {% set min_kelvin = state_attr(repeat.item, 'min_color_temp_kelvin') | int(0) %}
+                          {% set max_kelvin = state_attr(repeat.item, 'max_color_temp_kelvin') | int(0) %}
+                          {% set floored = [target_color_temp_kelvin, min_kelvin] | max %}
+                          {{ [floored, max_kelvin] | min if max_kelvin > 0 else floored }}
+                        transition: 0
               # Explicit adapt flags make apply bypass the manual-control mark
               # (it only consults the mark when the flags are omitted), so the
               # brightness ramp runs while the mark shields the lights from
@@ -428,16 +438,37 @@ script:
                       adapt_color: true
                       turn_on_lights: true
                       transition: "{{ apply_transition }}"
-        default:
           # Already-on lights only, or no usable color temperature attribute:
-          # plain adaptive apply, same as the pre-script call sites.
-          - action: adaptive_lighting.apply
+          # plain adaptive apply, same as the pre-script call sites. An empty
+          # lights list must never reach apply — Adaptive Lighting treats it
+          # as "all configured lights" — hence the explicit count guard;
+          # unreachable-only targets are handled by the fallback step below.
+          - conditions:
+              - condition: template
+                value_template: "{{ off_lights | count > 0 or on_lights | count > 0 }}"
+            sequence:
+              - action: adaptive_lighting.apply
+                data:
+                  entity_id: "{{ adaptive_switch }}"
+                  lights: "{{ off_lights + on_lights }}"
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
+                  transition: "{{ apply_transition }}"
+      # Best-effort plain turn-on for unavailable/unknown targets, even when
+      # other targets classified normally: Zigbee2MQTT still publishes the
+      # command, so a flapping device that recovers picks it up. Skipped when
+      # the adaptive switch is down because the first branch above already
+      # sent every target a plain turn-on.
+      - if:
+          - condition: template
+            value_template: "{{ adaptive_switch_ready and unreachable_lights | count > 0 }}"
+        then:
+          - action: light.turn_on
+            continue_on_error: true
+            target:
+              entity_id: "{{ unreachable_lights }}"
             data:
-              entity_id: "{{ adaptive_switch }}"
-              lights: "{{ member_lights }}"
-              adapt_brightness: true
-              adapt_color: true
-              turn_on_lights: true
               transition: "{{ apply_transition }}"
       # Clear the manual-control marks the bootstrap set (plus already-on
       # lights when the caller opts in) once the ramp has finished. Clearing
