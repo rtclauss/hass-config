@@ -89,13 +89,13 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
         "apply_transition: \"{{ transition | default(1, true) }}\"",
         "should_reset_manual_control: \"{{ reset_manual_control | default(false, true) }}\"",
         "initial_brightness_pct: \"{{ bootstrap_brightness_pct | default(1, true) }}\"",
-        "adaptive_switch_ready: \"{{ states(adaptive_switch) not in ['unknown', 'unavailable'] }}\"",
+        "adaptive_switch_active: \"{{ is_state(adaptive_switch, 'on') }}\"",
         "target_color_temp_kelvin: \"{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}\"",
-        "value_template: \"{{ not adaptive_switch_ready and target_lights | count > 0 }}\"",
-        "value_template: \"{{ target_lights | count == 0 }}\"",
+        "value_template: \"{{ not adaptive_switch_active and target_lights | count > 0 }}\"",
+        "value_template: \"{{ adaptive_switch_active and target_lights | count == 0 }}\"",
         "value_template: \"{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
         "value_template: \"{{ off_lights | count > 0 or on_lights | count > 0 }}\"",
-        "value_template: \"{{ adaptive_switch_ready and unreachable_lights | count > 0 }}\"",
+        "value_template: \"{{ adaptive_switch_active and unreachable_lights | count > 0 }}\"",
         "action: light.turn_on",
         "continue_on_error: true",
         'for_each: "{{ off_lights }}"',
@@ -118,11 +118,9 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
         'transition: "{{ apply_transition }}"',
         "manual_control: true",
         'value_template: "{{ clear_candidates | count > 0 }}"',
-        'seconds: "{{ apply_transition | float(0) }}"',
-        'value_template: "{{ lights_to_clear | count > 0 }}"',
-        'lights: "{{ lights_to_clear }}"',
-        "action: adaptive_lighting.set_manual_control",
-        "manual_control: false",
+        "entity_id: script.adaptive_light_clear_manual_control",
+        'clear_lights: "{{ clear_candidates }}"',
+        'wait_seconds: "{{ apply_transition | float(0) }}"',
     ):
         assert token in block
 
@@ -133,20 +131,37 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
     bootstrap_index = block.index('brightness_pct: "{{ initial_brightness_pct }}"')
     assert mark_index < bootstrap_index
 
-    # The marks are cleared only after the ramp completes: the delay comes
-    # after all apply calls and before the single guarded clear.
-    delay_index = block.index('seconds: "{{ apply_transition | float(0) }}"')
+    # Immediate (pre-ramp) clears must not exist in the turn-on script:
+    # clearing manual control force-adapts at the switch's initial_transition
+    # and would stomp the ramp. The clear is deferred to the fire-and-forget
+    # helper so callers are not blocked for the ramp duration either.
+    assert "manual_control: false" not in block
+    assert block.rindex("action: adaptive_lighting.apply") < block.index(
+        "entity_id: script.adaptive_light_clear_manual_control"
+    )
+
+
+def test_adaptive_light_clear_manual_control_waits_and_guards() -> None:
+    block = _script_block("adaptive_light_clear_manual_control")
+
+    for token in (
+        "alias: Adaptive Light Clear Manual Control",
+        "mode: parallel",
+        'seconds: "{{ wait_seconds | float(0) }}"',
+        "is_state(light_id, 'on')",
+        "state_attr(light_id, 'brightness')",
+        'value_template: "{{ lights_to_clear | count > 0 }}"',
+        'lights: "{{ lights_to_clear }}"',
+        "action: adaptive_lighting.set_manual_control",
+        "manual_control: false",
+    ):
+        assert token in block
+
+    # The ramp wait comes before the guard evaluation and the single clear.
+    delay_index = block.index('seconds: "{{ wait_seconds | float(0) }}"')
+    guard_index = block.index("is_state(light_id, 'on')")
     clear_index = block.index("manual_control: false")
-    assert block.rindex("action: adaptive_lighting.apply") < delay_index < clear_index
-
-    # The clear is guarded per light: lights the user overrode mid-ramp keep
-    # their manual-control mark.
-    guard_section = block[delay_index:clear_index]
-    assert "is_state(light_id, 'on')" in guard_section
-    assert "state_attr(light_id, 'brightness')" in guard_section
-
-    # Immediate (pre-ramp) clears must not exist: clearing manual control
-    # force-adapts at the switch's initial_transition and would stomp the ramp.
+    assert delay_index < guard_index < clear_index
     assert block.count("manual_control: false") == 1
 
 

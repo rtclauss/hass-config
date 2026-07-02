@@ -347,15 +347,17 @@ script:
       apply_transition: "{{ transition | default(1, true) }}"
       should_reset_manual_control: "{{ reset_manual_control | default(false, true) }}"
       initial_brightness_pct: "{{ bootstrap_brightness_pct | default(1, true) }}"
-      adaptive_switch_ready: "{{ states(adaptive_switch) not in ['unknown', 'unavailable'] }}"
+      adaptive_switch_active: "{{ is_state(adaptive_switch, 'on') }}"
       target_color_temp_kelvin: "{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}"
     sequence:
       - choose:
-          # Adaptive Lighting switch missing or not loaded: keep light
-          # controls working with a plain turn-on instead of failing the run.
+          # Adaptive Lighting switch missing, not loaded, or intentionally
+          # turned off: plain turn-on. Disabling a room's adaptive switch must
+          # keep opting its paddles and motion paths out of adaptive
+          # color/brightness, and a broken switch must not fail the run.
           - conditions:
               - condition: template
-                value_template: "{{ not adaptive_switch_ready and target_lights | count > 0 }}"
+                value_template: "{{ not adaptive_switch_active and target_lights | count > 0 }}"
             sequence:
               - action: light.turn_on
                 target:
@@ -365,7 +367,7 @@ script:
           # No explicit lights: apply across the switch's configured lights.
           - conditions:
               - condition: template
-                value_template: "{{ target_lights | count == 0 }}"
+                value_template: "{{ adaptive_switch_active and target_lights | count == 0 }}"
             sequence:
               - action: adaptive_lighting.apply
                 data:
@@ -458,11 +460,11 @@ script:
       # Best-effort plain turn-on for unavailable/unknown targets, even when
       # other targets classified normally: Zigbee2MQTT still publishes the
       # command, so a flapping device that recovers picks it up. Skipped when
-      # the adaptive switch is down because the first branch above already
+      # the adaptive switch is inactive because the first branch above already
       # sent every target a plain turn-on.
       - if:
           - condition: template
-            value_template: "{{ adaptive_switch_ready and unreachable_lights | count > 0 }}"
+            value_template: "{{ adaptive_switch_active and unreachable_lights | count > 0 }}"
         then:
           - action: light.turn_on
             continue_on_error: true
@@ -473,47 +475,72 @@ script:
       # Clear the manual-control marks the bootstrap set (plus already-on
       # lights when the caller opts in) once the ramp has finished. Clearing
       # earlier would let set_manual_control's built-in force-adapt at the
-      # switch's initial_transition stomp the requested ramp.
+      # switch's initial_transition stomp the requested ramp. The wait and
+      # clear run in a fire-and-forget helper so callers of this script are
+      # not blocked for the ramp duration (the owner-suite wake ramp is 45 s
+      # and its automation sets the auto-on flag right after this call).
       - variables:
           clear_candidates: >-
             {{ (member_lights if should_reset_manual_control
                 else (off_lights if target_color_temp_kelvin > 0 else []))
-               if adaptive_switch_ready else [] }}
+               if adaptive_switch_active else [] }}
       - if:
           - condition: template
             value_template: "{{ clear_candidates | count > 0 }}"
         then:
-          - delay:
-              seconds: "{{ apply_transition | float(0) }}"
-          # Only clear lights that are still on and still at the adaptive
-          # brightness target: a light the user turned off or re-dimmed during
-          # the ramp keeps its manual-control mark so the override survives
-          # (Adaptive Lighting drops the mark itself on the next off). The
-          # force-adapt that clearing triggers is a visual no-op for the lights
-          # that pass this guard because they already sit at the target.
-          - variables:
-              lights_to_clear: >-
-                {% set target_brightness = (state_attr(adaptive_switch, 'brightness_pct') | float(-1)) * 2.55 %}
-                {% set ns = namespace(items=[]) %}
-                {% for light_id in clear_candidates %}
-                  {% if is_state(light_id, 'on') %}
-                    {% set brightness = state_attr(light_id, 'brightness') %}
-                    {% if brightness is none or target_brightness < 0
-                          or (brightness | float - target_brightness) | abs <= 26 %}
-                      {% set ns.items = ns.items + [light_id] %}
-                    {% endif %}
-                  {% endif %}
-                {% endfor %}
-                {{ ns.items }}
-          - if:
-              - condition: template
-                value_template: "{{ lights_to_clear | count > 0 }}"
-            then:
-              - action: adaptive_lighting.set_manual_control
-                data:
-                  entity_id: "{{ adaptive_switch }}"
-                  lights: "{{ lights_to_clear }}"
-                  manual_control: false
+          - action: script.turn_on
+            target:
+              entity_id: script.adaptive_light_clear_manual_control
+            data:
+              variables:
+                adaptive_switch: "{{ adaptive_switch }}"
+                clear_lights: "{{ clear_candidates }}"
+                wait_seconds: "{{ apply_transition | float(0) }}"
+
+  adaptive_light_clear_manual_control:
+    alias: Adaptive Light Clear Manual Control
+    description: >
+      Deferred, guarded manual-control clear for script.adaptive_light_turn_on.
+      Waits out the brightness ramp, then clears the Adaptive Lighting
+      manual-control marks only for lights the user did not override mid-ramp.
+      Invoked non-blocking via script.turn_on with the variables
+      adaptive_switch, clear_lights, and wait_seconds.
+    mode: parallel
+    max: 20
+    trace:
+      stored_traces: 10
+    sequence:
+      - delay:
+          seconds: "{{ wait_seconds | float(0) }}"
+      # Only clear lights that are still on and still at the adaptive
+      # brightness target: a light the user turned off or re-dimmed during
+      # the ramp keeps its manual-control mark so the override survives
+      # (Adaptive Lighting drops the mark itself on the next off). The
+      # force-adapt that clearing triggers is a visual no-op for the lights
+      # that pass this guard because they already sit at the target.
+      - variables:
+          lights_to_clear: >-
+            {% set target_brightness = (state_attr(adaptive_switch, 'brightness_pct') | float(-1)) * 2.55 %}
+            {% set ns = namespace(items=[]) %}
+            {% for light_id in clear_lights %}
+              {% if is_state(light_id, 'on') %}
+                {% set brightness = state_attr(light_id, 'brightness') %}
+                {% if brightness is none or target_brightness < 0
+                      or (brightness | float - target_brightness) | abs <= 26 %}
+                  {% set ns.items = ns.items + [light_id] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items }}
+      - if:
+          - condition: template
+            value_template: "{{ lights_to_clear | count > 0 }}"
+        then:
+          - action: adaptive_lighting.set_manual_control
+            data:
+              entity_id: "{{ adaptive_switch }}"
+              lights: "{{ lights_to_clear }}"
+              manual_control: false
 
 switch:
   - platform: group
