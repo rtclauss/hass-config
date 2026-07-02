@@ -270,7 +270,7 @@ replacement below.
 | <a id="live-aqara"></a>Aqara | Motion, temperature/humidity, leak, contact, vibration, button, and cube devices on Zigbee2MQTT, plus an Aqara Motion and Light Sensor P2 on Matter. |
 | <a id="live-ikea"></a>IKEA | FYRTUR blinds, PARASOLL contact sensors, TRADFRI outlets and remotes, SOMRIG shortcut buttons, SYMFONISK sound remotes, and a RODRET dimmer. |
 | <a id="live-inovelli"></a>Inovelli | Multiple Zigbee 2-in-1 switches and dimmers used for room lighting and smart-bulb mode control. |
-| <a id="live-philips-hue"></a>Philips Hue | Hue downlights, filament bulbs, outdoor fixtures, and other bulbs on Zigbee2MQTT. |
+| <a id="live-philips-hue"></a>Philips Hue | Hue downlights, filament bulbs, outdoor fixtures, and other bulbs on Zigbee2MQTT with native Hue control enabled for devices. |
 | <a id="live-eaton-halo"></a>Eaton / Halo | Halo Zigbee downlights in hallway and bathroom areas. |
 | <a id="live-sengled"></a>Sengled | Energy-monitoring smart plugs used for the CPAP and sump pump. |
 | <a id="live-peanut"></a>Securifi / Peanut Smart Plug | A live Peanut Smart Plug remains paired and in service. |

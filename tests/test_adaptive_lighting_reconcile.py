@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -38,6 +39,18 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _script_block(script_id: str) -> str:
+    text = ADAPTIVE_LIGHTING_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"^  {re.escape(script_id)}:\n(.*?)(?=^  [a-zA-Z0-9_]+:\n|^switch:\n|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if match is None:
+        raise AssertionError(f"Could not find script block {script_id!r}")
+    return match.group(0)
+
+
 def _adaptive_lighting_settings_block(entity_id: str) -> str:
     block = _automation_block("reconcile_owner_suite_adaptive_lighting")
     lines = block.splitlines()
@@ -60,6 +73,59 @@ def _adaptive_lighting_settings_block(entity_id: str) -> str:
             break
 
     return "\n".join(lines[start:end])
+
+
+def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
+    block = _script_block("adaptive_light_turn_on")
+
+    for token in (
+        "alias: Adaptive Light Turn On",
+        "mode: parallel",
+        "target_lights: \"{{ lights | default([], true) }}\"",
+        "off_lights: \"{{ target_lights | select('is_state', 'off') | list }}\"",
+        "on_lights: \"{{ target_lights | select('is_state', 'on') | list }}\"",
+        "apply_transition: \"{{ transition | default(1, true) }}\"",
+        "should_reset_manual_control: \"{{ reset_manual_control | default(false, true) }}\"",
+        "initial_brightness_pct: \"{{ bootstrap_brightness_pct | default(1, true) }}\"",
+        "target_color_temp_kelvin: \"{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}\"",
+        "value_template: \"{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
+        "action: light.turn_on",
+        'entity_id: "{{ off_lights }}"',
+        'brightness_pct: "{{ initial_brightness_pct }}"',
+        'color_temp_kelvin: "{{ target_color_temp_kelvin }}"',
+        "transition: 0",
+        "action: adaptive_lighting.apply",
+        'entity_id: "{{ adaptive_switch }}"',
+        'lights: "{{ off_lights }}"',
+        'value_template: "{{ on_lights | count > 0 }}"',
+        'lights: "{{ on_lights }}"',
+        "adapt_brightness: true",
+        "adapt_color: false",
+        "adapt_color: true",
+        "turn_on_lights: true",
+        'transition: "{{ apply_transition }}"',
+        "value_template: \"{{ should_reset_manual_control }}\"",
+        'lights: "{{ target_lights }}"',
+        "value_template: \"{{ off_lights | count > 0 }}\"",
+        'seconds: "{{ apply_transition | float(0) }}"',
+        "action: adaptive_lighting.set_manual_control",
+        "manual_control: false",
+    ):
+        assert token in block
+
+    bootstrap_section, reset_section = block.split(
+        "value_template: \"{{ should_reset_manual_control }}\"",
+        maxsplit=1,
+    )
+    assert "action: adaptive_lighting.set_manual_control" not in bootstrap_section
+    immediate_reset_section, delayed_reset_section = reset_section.split(
+        "value_template: \"{{ off_lights | count > 0 }}\"",
+        maxsplit=1,
+    )
+    assert 'lights: "{{ target_lights }}"' in immediate_reset_section
+    assert 'seconds: "{{ apply_transition | float(0) }}"' not in immediate_reset_section
+    assert 'seconds: "{{ apply_transition | float(0) }}"' in delayed_reset_section
+    assert 'lights: "{{ off_lights }}"' in delayed_reset_section
 
 
 def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings() -> None:

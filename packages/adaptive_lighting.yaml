@@ -271,6 +271,141 @@ automation:
             target:
               entity_id: "{{ main_adaptive_switches }}"
 
+script:
+  adaptive_light_turn_on:
+    alias: Adaptive Light Turn On
+    description: >
+      Turn on Adaptive Lighting-managed lights with color temperature corrected
+      immediately, then ramp brightness over the requested transition.
+    mode: parallel
+    max: 20
+    trace:
+      stored_traces: 10
+    fields:
+      adaptive_switch:
+        description: Adaptive Lighting switch that owns the target light(s).
+        required: true
+        selector:
+          entity:
+            domain: switch
+      lights:
+        description: Optional list of lights to turn on. If omitted, the Adaptive Lighting switch applies to all configured lights.
+        required: false
+        selector:
+          entity:
+            domain: light
+            multiple: true
+      transition:
+        description: Transition duration in seconds.
+        required: false
+        default: 1
+        selector:
+          number:
+            min: 0
+            max: 300
+            step: 0.5
+            unit_of_measurement: seconds
+      reset_manual_control:
+        description: Clear Adaptive Lighting manual-control state for the same lights after applying.
+        required: false
+        default: false
+        selector:
+          boolean:
+      bootstrap_brightness_pct:
+        description: Initial brightness used only for the zero-transition color-correction turn-on.
+        required: false
+        default: 1
+        selector:
+          number:
+            min: 1
+            max: 10
+            step: 1
+            unit_of_measurement: "%"
+    variables:
+      target_lights: "{{ lights | default([], true) }}"
+      off_lights: "{{ target_lights | select('is_state', 'off') | list }}"
+      on_lights: "{{ target_lights | select('is_state', 'on') | list }}"
+      apply_transition: "{{ transition | default(1, true) }}"
+      should_reset_manual_control: "{{ reset_manual_control | default(false, true) }}"
+      initial_brightness_pct: "{{ bootstrap_brightness_pct | default(1, true) }}"
+      target_color_temp_kelvin: "{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}"
+    sequence:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ target_lights | count > 0 }}"
+            sequence:
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}"
+                    sequence:
+                      - action: light.turn_on
+                        target:
+                          entity_id: "{{ off_lights }}"
+                        data:
+                          brightness_pct: "{{ initial_brightness_pct }}"
+                          color_temp_kelvin: "{{ target_color_temp_kelvin }}"
+                          transition: 0
+                      - action: adaptive_lighting.apply
+                        data:
+                          entity_id: "{{ adaptive_switch }}"
+                          lights: "{{ off_lights }}"
+                          adapt_brightness: true
+                          adapt_color: false
+                          turn_on_lights: true
+                          transition: "{{ apply_transition }}"
+                      - if:
+                          - condition: template
+                            value_template: "{{ on_lights | count > 0 }}"
+                        then:
+                          - action: adaptive_lighting.apply
+                            data:
+                              entity_id: "{{ adaptive_switch }}"
+                              lights: "{{ on_lights }}"
+                              adapt_brightness: true
+                              adapt_color: true
+                              turn_on_lights: true
+                              transition: "{{ apply_transition }}"
+                default:
+                  - action: adaptive_lighting.apply
+                    data:
+                      entity_id: "{{ adaptive_switch }}"
+                      lights: "{{ target_lights }}"
+                      adapt_brightness: true
+                      adapt_color: true
+                      turn_on_lights: true
+                      transition: "{{ apply_transition }}"
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ should_reset_manual_control }}"
+                    sequence:
+                      - action: adaptive_lighting.set_manual_control
+                        data:
+                          entity_id: "{{ adaptive_switch }}"
+                          lights: "{{ target_lights }}"
+                          manual_control: false
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ off_lights | count > 0 }}"
+                    sequence:
+                      - delay:
+                          seconds: "{{ apply_transition | float(0) }}"
+                      - action: adaptive_lighting.set_manual_control
+                        data:
+                          entity_id: "{{ adaptive_switch }}"
+                          lights: "{{ off_lights }}"
+                          manual_control: false
+        default:
+          - action: adaptive_lighting.apply
+            data:
+              entity_id: "{{ adaptive_switch }}"
+              adapt_brightness: true
+              adapt_color: true
+              turn_on_lights: true
+              transition: "{{ apply_transition }}"
+
 switch:
   - platform: group
     name: Adaptive Control
