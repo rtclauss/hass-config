@@ -1176,9 +1176,13 @@ automation:
                 after: "17:00:00"
                 before: "20:00:00"
             sequence:
+              # The main kitchen switch, not switch.adaptive_lighting_adapt_brightness_kitchen:
+              # Adaptive Lighting resolves either entity to the same config entry, but only
+              # the main switch exposes the color_temp_kelvin attribute the script's
+              # bootstrap reads.
               - action: script.adaptive_light_turn_on
                 data:
-                  adaptive_switch: switch.adaptive_lighting_adapt_brightness_kitchen
+                  adaptive_switch: switch.adaptive_lighting_kitchen
                   lights:
                     - light.kitchen_all
                     - light.kitchen_sink_overhead

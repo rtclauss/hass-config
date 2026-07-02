@@ -276,7 +276,14 @@ script:
     alias: Adaptive Light Turn On
     description: >
       Turn on Adaptive Lighting-managed lights with color temperature corrected
-      immediately, then ramp brightness over the requested transition.
+      immediately at a dim bootstrap brightness, then ramp brightness to the
+      adaptive target over the requested transition. Off lights are pre-marked
+      as manually controlled so Adaptive Lighting's turn_on interceptor passes
+      the bootstrap through unmodified on every switch configuration (including
+      take_over_control: false switches such as the basement); the marks are
+      cleared after the ramp finishes, except for lights the user overrode
+      mid-ramp. Falls back to a plain light.turn_on when the Adaptive Lighting
+      switch is unavailable so wall switches and motion paths keep working.
     mode: parallel
     max: 20
     trace:
@@ -306,7 +313,7 @@ script:
             step: 0.5
             unit_of_measurement: seconds
       reset_manual_control:
-        description: Clear Adaptive Lighting manual-control state for the same lights after applying.
+        description: Clear Adaptive Lighting manual-control state for the same lights after the transition completes.
         required: false
         default: false
         selector:
@@ -323,88 +330,159 @@ script:
             unit_of_measurement: "%"
     variables:
       target_lights: "{{ lights | default([], true) }}"
-      off_lights: "{{ target_lights | select('is_state', 'off') | list }}"
-      on_lights: "{{ target_lights | select('is_state', 'on') | list }}"
+      # expand() resolves Home Assistant light groups to their members so a
+      # partially-on group still gets the bootstrap for its off members; Z2M
+      # groups expose no members and stay atomic, matching how Adaptive
+      # Lighting treats them. unique dedupes overlapping group + member call
+      # sites. Unavailable/unknown lights drop out of both lists and are
+      # handled by the best-effort fallback branch below.
+      member_lights: "{{ expand(target_lights) | map(attribute='entity_id') | unique | list }}"
+      off_lights: "{{ member_lights | select('is_state', 'off') | list }}"
+      on_lights: "{{ member_lights | select('is_state', 'on') | list }}"
       apply_transition: "{{ transition | default(1, true) }}"
       should_reset_manual_control: "{{ reset_manual_control | default(false, true) }}"
       initial_brightness_pct: "{{ bootstrap_brightness_pct | default(1, true) }}"
+      adaptive_switch_ready: "{{ states(adaptive_switch) not in ['unknown', 'unavailable'] }}"
       target_color_temp_kelvin: "{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}"
     sequence:
       - choose:
+          # Adaptive Lighting switch missing or not loaded: keep light
+          # controls working with a plain turn-on instead of failing the run.
           - conditions:
               - condition: template
-                value_template: "{{ target_lights | count > 0 }}"
+                value_template: "{{ not adaptive_switch_ready and target_lights | count > 0 }}"
             sequence:
-              - choose:
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}"
-                    sequence:
-                      - action: light.turn_on
-                        target:
-                          entity_id: "{{ off_lights }}"
-                        data:
-                          brightness_pct: "{{ initial_brightness_pct }}"
-                          color_temp_kelvin: "{{ target_color_temp_kelvin }}"
-                          transition: 0
-                      - action: adaptive_lighting.apply
-                        data:
-                          entity_id: "{{ adaptive_switch }}"
-                          lights: "{{ off_lights }}"
-                          adapt_brightness: true
-                          adapt_color: false
-                          turn_on_lights: true
-                          transition: "{{ apply_transition }}"
-                      - if:
-                          - condition: template
-                            value_template: "{{ on_lights | count > 0 }}"
-                        then:
-                          - action: adaptive_lighting.apply
-                            data:
-                              entity_id: "{{ adaptive_switch }}"
-                              lights: "{{ on_lights }}"
-                              adapt_brightness: true
-                              adapt_color: true
-                              turn_on_lights: true
-                              transition: "{{ apply_transition }}"
-                default:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ target_lights }}"
+                data:
+                  transition: "{{ apply_transition }}"
+          # No explicit lights: apply across the switch's configured lights.
+          - conditions:
+              - condition: template
+                value_template: "{{ target_lights | count == 0 }}"
+            sequence:
+              - action: adaptive_lighting.apply
+                data:
+                  entity_id: "{{ adaptive_switch }}"
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
+                  transition: "{{ apply_transition }}"
+          # Every target is unavailable/unknown: best-effort plain turn-on
+          # (Zigbee2MQTT still publishes the command to flapping devices).
+          - conditions:
+              - condition: template
+                value_template: "{{ off_lights | count == 0 and on_lights | count == 0 }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ target_lights }}"
+                data:
+                  transition: "{{ apply_transition }}"
+          # Off lights present with a known adaptive color temperature: correct
+          # color at the bootstrap brightness instantly, then ramp brightness.
+          - conditions:
+              - condition: template
+                value_template: "{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}"
+            sequence:
+              # Pre-mark the off lights as manually controlled so the
+              # interceptor passes the bootstrap call through untouched: it
+              # would otherwise adapt it on take_over_control: false switches
+              # (basement) and mark it manual as a side effect on
+              # adapt_only_on_bare_turn_on switches. The mark is cleared after
+              # the ramp below.
+              - action: adaptive_lighting.set_manual_control
+                data:
+                  entity_id: "{{ adaptive_switch }}"
+                  lights: "{{ off_lights }}"
+                  manual_control: true
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ off_lights }}"
+                data:
+                  brightness_pct: "{{ initial_brightness_pct }}"
+                  color_temp_kelvin: "{{ target_color_temp_kelvin }}"
+                  transition: 0
+              # Explicit adapt flags make apply bypass the manual-control mark
+              # (it only consults the mark when the flags are omitted), so the
+              # brightness ramp runs while the mark shields the lights from
+              # interval adaptation.
+              - action: adaptive_lighting.apply
+                data:
+                  entity_id: "{{ adaptive_switch }}"
+                  lights: "{{ off_lights }}"
+                  adapt_brightness: true
+                  adapt_color: false
+                  turn_on_lights: true
+                  transition: "{{ apply_transition }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ on_lights | count > 0 }}"
+                then:
                   - action: adaptive_lighting.apply
                     data:
                       entity_id: "{{ adaptive_switch }}"
-                      lights: "{{ target_lights }}"
+                      lights: "{{ on_lights }}"
                       adapt_brightness: true
                       adapt_color: true
                       turn_on_lights: true
                       transition: "{{ apply_transition }}"
-              - choose:
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ should_reset_manual_control }}"
-                    sequence:
-                      - action: adaptive_lighting.set_manual_control
-                        data:
-                          entity_id: "{{ adaptive_switch }}"
-                          lights: "{{ target_lights }}"
-                          manual_control: false
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ off_lights | count > 0 }}"
-                    sequence:
-                      - delay:
-                          seconds: "{{ apply_transition | float(0) }}"
-                      - action: adaptive_lighting.set_manual_control
-                        data:
-                          entity_id: "{{ adaptive_switch }}"
-                          lights: "{{ off_lights }}"
-                          manual_control: false
         default:
+          # Already-on lights only, or no usable color temperature attribute:
+          # plain adaptive apply, same as the pre-script call sites.
           - action: adaptive_lighting.apply
             data:
               entity_id: "{{ adaptive_switch }}"
+              lights: "{{ member_lights }}"
               adapt_brightness: true
               adapt_color: true
               turn_on_lights: true
               transition: "{{ apply_transition }}"
+      # Clear the manual-control marks the bootstrap set (plus already-on
+      # lights when the caller opts in) once the ramp has finished. Clearing
+      # earlier would let set_manual_control's built-in force-adapt at the
+      # switch's initial_transition stomp the requested ramp.
+      - variables:
+          clear_candidates: >-
+            {{ (member_lights if should_reset_manual_control
+                else (off_lights if target_color_temp_kelvin > 0 else []))
+               if adaptive_switch_ready else [] }}
+      - if:
+          - condition: template
+            value_template: "{{ clear_candidates | count > 0 }}"
+        then:
+          - delay:
+              seconds: "{{ apply_transition | float(0) }}"
+          # Only clear lights that are still on and still at the adaptive
+          # brightness target: a light the user turned off or re-dimmed during
+          # the ramp keeps its manual-control mark so the override survives
+          # (Adaptive Lighting drops the mark itself on the next off). The
+          # force-adapt that clearing triggers is a visual no-op for the lights
+          # that pass this guard because they already sit at the target.
+          - variables:
+              lights_to_clear: >-
+                {% set target_brightness = (state_attr(adaptive_switch, 'brightness_pct') | float(-1)) * 2.55 %}
+                {% set ns = namespace(items=[]) %}
+                {% for light_id in clear_candidates %}
+                  {% if is_state(light_id, 'on') %}
+                    {% set brightness = state_attr(light_id, 'brightness') %}
+                    {% if brightness is none or target_brightness < 0
+                          or (brightness | float - target_brightness) | abs <= 26 %}
+                      {% set ns.items = ns.items + [light_id] %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.items }}
+          - if:
+              - condition: template
+                value_template: "{{ lights_to_clear | count > 0 }}"
+            then:
+              - action: adaptive_lighting.set_manual_control
+                data:
+                  entity_id: "{{ adaptive_switch }}"
+                  lights: "{{ lights_to_clear }}"
+                  manual_control: false
 
 switch:
   - platform: group
