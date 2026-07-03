@@ -205,6 +205,17 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "and fallback in script.music_assistant_radio_wake_up; bedtime and "
                 "goodnight behavior governed by night_routines.allium is unchanged."
             ),
+        },
+        {
+            "spec": "specs/arrival_lighting.allium",
+            "implementation_paths": ["packages/adaptive_lighting.yaml"],
+            "classification": "arrival-lighting implementation detail",
+            "reason": (
+                "PR #843 preserves the arrival_lighting.allium empty-house and "
+                "manual-control gates while moving Adaptive Lighting turn-on execution "
+                "into script.adaptive_light_turn_on so color temperature is corrected "
+                "immediately and brightness ramps over the requested transition."
+            ),
         }
     ]
     assert {scope.spec for scope in scopes} == {
