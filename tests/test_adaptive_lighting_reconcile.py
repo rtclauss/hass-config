@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -38,6 +39,18 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _script_block(script_id: str) -> str:
+    text = ADAPTIVE_LIGHTING_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"^  {re.escape(script_id)}:\n(.*?)(?=^  [a-zA-Z0-9_]+:\n|^switch:\n|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if match is None:
+        raise AssertionError(f"Could not find script block {script_id!r}")
+    return match.group(0)
+
+
 def _adaptive_lighting_settings_block(entity_id: str) -> str:
     block = _automation_block("reconcile_owner_suite_adaptive_lighting")
     lines = block.splitlines()
@@ -60,6 +73,101 @@ def _adaptive_lighting_settings_block(entity_id: str) -> str:
             break
 
     return "\n".join(lines[start:end])
+
+
+def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
+    block = _script_block("adaptive_light_turn_on")
+
+    for token in (
+        "alias: Adaptive Light Turn On",
+        "mode: parallel",
+        "target_lights: \"{{ lights | default([], true) }}\"",
+        "member_lights: \"{{ expand(target_lights) | map(attribute='entity_id') | unique | list }}\"",
+        "off_lights: \"{{ member_lights | select('is_state', 'off') | list }}\"",
+        "on_lights: \"{{ member_lights | select('is_state', 'on') | list }}\"",
+        "unreachable_lights: \"{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}\"",
+        "apply_transition: \"{{ transition | default(1, true) }}\"",
+        "should_reset_manual_control: \"{{ reset_manual_control | default(false, true) }}\"",
+        "initial_brightness_pct: \"{{ bootstrap_brightness_pct | default(1, true) }}\"",
+        "adaptive_switch_active: \"{{ is_state(adaptive_switch, 'on') }}\"",
+        "target_color_temp_kelvin: \"{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}\"",
+        "value_template: \"{{ not adaptive_switch_active and target_lights | count > 0 }}\"",
+        "value_template: \"{{ adaptive_switch_active and target_lights | count == 0 }}\"",
+        "value_template: \"{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
+        "value_template: \"{{ off_lights | count > 0 or on_lights | count > 0 }}\"",
+        "value_template: \"{{ adaptive_switch_active and unreachable_lights | count > 0 }}\"",
+        "action: light.turn_on",
+        "continue_on_error: true",
+        'for_each: "{{ off_lights }}"',
+        'entity_id: "{{ repeat.item }}"',
+        'entity_id: "{{ unreachable_lights }}"',
+        'brightness_pct: "{{ initial_brightness_pct }}"',
+        "state_attr(repeat.item, 'min_color_temp_kelvin')",
+        "state_attr(repeat.item, 'max_color_temp_kelvin')",
+        "transition: 0",
+        "action: adaptive_lighting.apply",
+        'entity_id: "{{ adaptive_switch }}"',
+        'lights: "{{ off_lights }}"',
+        'value_template: "{{ on_lights | count > 0 }}"',
+        'lights: "{{ on_lights }}"',
+        'lights: "{{ off_lights + on_lights }}"',
+        "adapt_brightness: true",
+        "adapt_color: false",
+        "adapt_color: true",
+        "turn_on_lights: true",
+        'transition: "{{ apply_transition }}"',
+        "manual_control: true",
+        'value_template: "{{ clear_candidates | count > 0 }}"',
+        "entity_id: script.adaptive_light_clear_manual_control",
+        'clear_lights: "{{ clear_candidates }}"',
+        'wait_seconds: "{{ apply_transition | float(0) }}"',
+    ):
+        assert token in block
+
+    # The off lights are pre-marked as manually controlled before the
+    # bootstrap turn-on so the Adaptive Lighting interceptor passes it
+    # through unmodified for every switch configuration.
+    mark_index = block.index("manual_control: true")
+    bootstrap_index = block.index('brightness_pct: "{{ initial_brightness_pct }}"')
+    assert mark_index < bootstrap_index
+
+    # Immediate (pre-ramp) clears must not exist in the turn-on script:
+    # clearing manual control force-adapts at the switch's initial_transition
+    # and would stomp the ramp. The clear is deferred to the fire-and-forget
+    # helper so callers are not blocked for the ramp duration either.
+    assert "manual_control: false" not in block
+    assert block.rindex("action: adaptive_lighting.apply") < block.index(
+        "entity_id: script.adaptive_light_clear_manual_control"
+    )
+
+
+def test_adaptive_light_clear_manual_control_waits_and_guards() -> None:
+    block = _script_block("adaptive_light_clear_manual_control")
+
+    for token in (
+        "alias: Adaptive Light Clear Manual Control",
+        "mode: parallel",
+        'seconds: "{{ wait_seconds | float(0) }}"',
+        "is_state(light_id, 'on')",
+        "state_attr(light_id, 'brightness')",
+        "state_attr(light_id, 'supported_color_modes')",
+        "state_attr(light_id, 'color_temp_kelvin')",
+        "state_attr(light_id, 'min_color_temp_kelvin')",
+        "state_attr(light_id, 'max_color_temp_kelvin')",
+        "brightness_ok and color_ok",
+        'value_template: "{{ lights_to_clear | count > 0 }}"',
+        'lights: "{{ lights_to_clear }}"',
+        "action: adaptive_lighting.set_manual_control",
+        "manual_control: false",
+    ):
+        assert token in block
+
+    # The ramp wait comes before the guard evaluation and the single clear.
+    delay_index = block.index('seconds: "{{ wait_seconds | float(0) }}"')
+    guard_index = block.index("is_state(light_id, 'on')")
+    clear_index = block.index("manual_control: false")
+    assert delay_index < guard_index < clear_index
+    assert block.count("manual_control: false") == 1
 
 
 def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings() -> None:

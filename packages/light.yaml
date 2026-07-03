@@ -611,15 +611,13 @@ automation:
                           brightness_pct: 20
                           transition: 2
                 default:
-                  - action: adaptive_lighting.apply
+                  - action: script.adaptive_light_turn_on
                     data:
+                      adaptive_switch: switch.adaptive_lighting_hallway
                       lights:
                         - light.hall_foyer_switch
                         - light.hall_transition_switch
-                      entity_id: switch.adaptive_lighting_hallway
-                      adapt_brightness: true
-                      adapt_color: true
-                      turn_on_lights: true
+                      transition: 1
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.front_door_auto_on
@@ -905,14 +903,12 @@ automation:
                       - input_boolean.guest_mode
                     state: "on"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -997,14 +993,12 @@ automation:
                       - input_boolean.guest_mode
                     state: "on"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -1161,15 +1155,13 @@ automation:
                 after: "11:00:00"
                 before: "14:00:00"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_kitchen
                   lights:
                     - light.kitchen_all
                     - light.kitchen_sink_overhead
-                  entity_id: switch.adaptive_lighting_kitchen
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   target:
               #     entity_id:
@@ -1184,15 +1176,17 @@ automation:
                 after: "17:00:00"
                 before: "20:00:00"
             sequence:
-              - action: adaptive_lighting.apply
+              # The main kitchen switch, not switch.adaptive_lighting_adapt_brightness_kitchen:
+              # Adaptive Lighting resolves either entity to the same config entry, but only
+              # the main switch exposes the color_temp_kelvin attribute the script's
+              # bootstrap reads.
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_kitchen
                   lights:
                     - light.kitchen_all
                     - light.kitchen_sink_overhead
-                  entity_id: switch.adaptive_lighting_adapt_brightness_kitchen
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: kitchen_unoccupied
@@ -1204,15 +1198,13 @@ automation:
                     - light.kitchen_sink_overhead_switch
                     - light.kitchen_all
         default:
-          - action: adaptive_lighting.apply
+          - action: script.adaptive_light_turn_on
             data:
+              adaptive_switch: switch.adaptive_lighting_kitchen
               lights:
                 - light.kitchen_sink_overhead
                 - light.kitchen_sink_overhead_switch
-              entity_id: switch.adaptive_lighting_kitchen
-              adapt_brightness: true
-              adapt_color: true
-              turn_on_lights: true
+              transition: 1
           # - action: light.turn_on
           #   target:
           #     entity_id:
@@ -1307,22 +1299,13 @@ automation:
               - condition: trigger
                 id: motion_detected
             sequence:
-              # - action: adaptive_lighting.apply
-              #   data:
-              #     lights:
-              #       - light.owner_suite_bathroom_tub_switch
-              #       - light.owner_suite_bathroom_shower_switch
-              #     entity_id: switch.adaptive_lighting_owner_suite
-              #     adapt_brightness: true
-              #     adapt_color: true
-              #     turn_on_lights: true
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id:
-                    # - light.owner_suite_bathroom_tub_switch
-                    # - light.owner_suite_bathroom_shower_switch
+                  adaptive_switch: switch.adaptive_lighting_owner_suite_vanity
+                  lights:
                     - light.owner_suite_bathroom_lights
                     - light.owner_suite_bathroom_vanity
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: motion_cleared
@@ -1437,23 +1420,14 @@ automation:
             - switch.adaptive_lighting_owner_suite
             - switch.adaptive_lighting_adapt_brightness_owner_suite
             - switch.adaptive_lighting_adapt_color_owner_suite
-      - action: adaptive_lighting.apply
+      - action: script.adaptive_light_turn_on
         data:
-          entity_id: switch.adaptive_lighting_owner_suite
+          adaptive_switch: switch.adaptive_lighting_owner_suite
           lights:
             - light.owner_suite_lamps
             - light.bed_lightstrip
-          adapt_brightness: true
-          adapt_color: true
-          turn_on_lights: true
           transition: 45
-      - action: adaptive_lighting.set_manual_control
-        data:
-          entity_id: switch.adaptive_lighting_owner_suite
-          lights:
-            - light.owner_suite_lamps
-            - light.bed_lightstrip
-          manual_control: false
+          reset_manual_control: true
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.owner_suite_bedroom_auto_on
@@ -1693,14 +1667,12 @@ automation:
               - condition: trigger
                 id: main-motion-sensed
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -1735,16 +1707,14 @@ automation:
               - condition: trigger
                 id: upstairs-motion-sensed
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_upstairs_switch
                     - light.hall_stairway
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -2051,14 +2021,12 @@ automation:
           entity_id: sensor.owner_suite_cpap_plug_power
           below: 1.3
     action:
-      - action: adaptive_lighting.apply
+      - action: script.adaptive_light_turn_on
         data:
+          adaptive_switch: switch.adaptive_lighting_owner_suite
           lights:
             - light.bed_lightstrip
-          entity_id: switch.adaptive_lighting_owner_suite
-          adapt_brightness: true
-          adapt_color: true
-          turn_on_lights: true
+          transition: 1
       # - action: light.turn_on
       #   data:
       #     entity_id: light.owner_suite_lamps
@@ -2128,14 +2096,12 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.bed_lightstrip
-                  entity_id: switch.adaptive_lighting_owner_suite
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # Split the first 8 guaranteed LIFX Z zones into 4 logical bed quadrants.
               - action: lifx.set_state
                 target:
@@ -2150,14 +2116,12 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.bed_lightstrip
-                  entity_id: switch.adaptive_lighting_owner_suite
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
@@ -2171,14 +2135,12 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.bed_lightstrip
-                  entity_id: switch.adaptive_lighting_owner_suite
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
@@ -2192,14 +2154,12 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.bed_lightstrip
-                  entity_id: switch.adaptive_lighting_owner_suite
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
@@ -2220,14 +2180,12 @@ automation:
                   - binary_sensor.everything_presence_lite_2fbc58_zone_3_occupancy
                   - binary_sensor.everything_presence_lite_2fbc58_zone_4_occupancy
                 state: "off"
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.bed_lightstrip
-                  entity_id: switch.adaptive_lighting_owner_suite
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: motion_off
@@ -2584,14 +2542,12 @@ script:
             - light.basement_great_room_east_and_middle_switch
             - light.basement_great_room_west_switch
           sequence:
-            - action: adaptive_lighting.apply
+            - action: script.adaptive_light_turn_on
               data:
-                entity_id: switch.adaptive_lighting_basement
+                adaptive_switch: switch.adaptive_lighting_basement
                 lights:
                   - "{{ repeat.item }}"
-                adapt_brightness: true
-                adapt_color: true
-                turn_on_lights: true
+                transition: 1
             - delay:
                 seconds: 1
       - action: light.turn_on
