@@ -49,7 +49,7 @@ def test_nightly_adaptive_lighting_cycle_filters_missing_candidate_switches() ->
     block = _automation_block("nightly_adaptive_lighting_cycle_reset")
 
     assert "candidate_main_adaptive_switches:" in block
-    assert "switch.adaptive_lighting_office" in block
+    assert "switch.adaptive_lighting_office" not in block
     assert "states(entity_id) not in ['unknown', 'unavailable']" in block
     assert "main_adaptive_switches | count > 0" in block
     assert block.count('entity_id: "{{ main_adaptive_switches }}"') == 2
