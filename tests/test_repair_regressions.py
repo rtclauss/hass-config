@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+ADAPTIVE_LIGHTING_PATH = ROOT / "packages" / "adaptive_lighting.yaml"
 CAMERA_PATH = ROOT / "packages" / "camera.yaml"
 CURLING_PATH = ROOT / "packages" / "curling.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
@@ -26,6 +27,33 @@ def _script_block(path: Path, script_name: str) -> str:
     if match is None:
         raise AssertionError(f"Could not find script block {script_name!r} in {path.name}")
     return match.group(0)
+
+
+def _automation_block(path: Path, automation_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line not in (f"    id: {automation_id}", f"  - id: {automation_id}"):
+            continue
+
+        for candidate in range(index, -1, -1):
+            if lines[candidate].startswith("  - "):
+                start = candidate
+                break
+        if start is not None:
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find automation block {automation_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("  - "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
 
 
 def _group_block(path: Path, group_name: str) -> str:
@@ -133,6 +161,17 @@ def test_stale_hallway_motion_entity_is_fully_replaced() -> None:
     assert "binary_sensor.hallway_motion" not in light_text + zigbee_zwave_text
     assert "binary_sensor.hall_upstairs_motion_occupancy" in light_text
     assert "binary_sensor.hall_upstairs_motion_occupancy" in zigbee_zwave_text
+
+
+def test_office_switch_actions_do_not_target_missing_adaptive_lighting_switch() -> None:
+    block = _automation_block(ZIGBEE_ZWAVE_PATH, "office_switch_actions")
+    adaptive_lighting_text = ADAPTIVE_LIGHTING_PATH.read_text(encoding="utf-8")
+
+    assert "switch.adaptive_lighting_office" not in block
+    assert "switch.adaptive_lighting_office" not in adaptive_lighting_text
+    assert "action: script.adaptive_light_turn_on" not in block
+    assert "action: light.turn_on" in block
+    assert "entity_id: light.office_ceiling" in block
 
 
 def test_ios_alarm_sync_preserves_manual_workday_alarm_overrides() -> None:
