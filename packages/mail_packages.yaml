@@ -1,0 +1,475 @@
+# Home Assistant package for mail and package delivery state.
+# It combines the physical mailbox contact with Mail and Packages delivery
+# sensors so notifications reflect expected, delivered, still-outside, and
+# retrieved states instead of a single delivered flag.
+
+################################################################
+## Packages / Mail Packages
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "mail_packages"
+
+    ################################################
+    ## Automations
+    ################################################
+    automation.mail_package_delivery_state:
+      <<: *customize
+      friendly_name: "Mail Package Delivery State"
+      icon: mdi:package-variant-closed-check
+
+    automation.mail_package_still_outside_reminder:
+      <<: *customize
+      friendly_name: "Mail Package Still Outside Reminder"
+      icon: mdi:package-variant-closed-alert
+
+    ################################################
+    ## Helpers
+    ################################################
+    input_boolean.mail_delivered:
+      <<: *customize
+      friendly_name: "Mail Delivered"
+      icon: mdi:mailbox
+
+    input_select.mail_package_delivery_state:
+      <<: *customize
+      friendly_name: "Mail Package Delivery State"
+      icon: mdi:package-variant-closed
+
+    input_button.mail_package_mark_retrieved:
+      <<: *customize
+      friendly_name: "Mark Mail and Packages Retrieved"
+      icon: mdi:package-check
+
+########################
+# Automations
+########################
+automation:
+  - id: mail_package_delivery_state
+    alias: mail_package_delivery_state
+    description: >-
+      Reconciles mailbox contact activity and Mail and Packages sensors into a
+      durable delivery state while keeping input_boolean.mail_delivered for
+      existing dashboard consumers.
+    mode: queued
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+        id: startup_sync
+      - trigger: time
+        at: "01:00:00"
+        id: daily_reset
+      - trigger: state
+        entity_id: binary_sensor.mailbox_contact
+        from: "off"
+        to: "on"
+        id: mailbox_opened
+      - trigger: state
+        entity_id: input_button.mail_package_mark_retrieved
+        id: mark_retrieved
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: MAIL_PACKAGE_RETRIEVED
+        id: mark_retrieved
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: MAIL_PACKAGE_STILL_OUTSIDE
+        id: mark_still_outside
+      - trigger: state
+        entity_id:
+          - sensor.mail_usps_mail
+          - sensor.mail_usps_packages
+          - sensor.mail_ups_packages
+          - sensor.mail_fedex_packages
+          - sensor.mail_amazon_packages
+        id: expected_update
+      - trigger: state
+        entity_id:
+          - sensor.mail_usps_delivered
+          - sensor.mail_ups_delivered
+          - sensor.mail_fedex_delivered
+          - sensor.mail_amazon_packages_delivered
+        id: delivered_update
+    variables:
+      expected_entities:
+        - sensor.mail_usps_mail
+        - sensor.mail_usps_packages
+        - sensor.mail_ups_packages
+        - sensor.mail_fedex_packages
+        - sensor.mail_amazon_packages
+      delivered_entities:
+        - sensor.mail_usps_delivered
+        - sensor.mail_ups_delivered
+        - sensor.mail_fedex_delivered
+        - sensor.mail_amazon_packages_delivered
+      expected_count: >-
+        {% set ns = namespace(total=0) %}
+        {% for entity_id in expected_entities %}
+          {% set value = states(entity_id) %}
+          {% if value not in ['unknown', 'unavailable', 'none', ''] %}
+            {% set ns.total = ns.total + (value | int(0)) %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.total }}
+      delivered_count: >-
+        {% set ns = namespace(total=0) %}
+        {% for entity_id in delivered_entities %}
+          {% set value = states(entity_id) %}
+          {% if value not in ['unknown', 'unavailable', 'none', ''] %}
+            {% set ns.total = ns.total + (value | int(0)) %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.total }}
+      current_delivery_state: >-
+        {{ states('input_select.mail_package_delivery_state') }}
+      camera_candidates:
+        - camera.mail_generic_delivery_camera
+        - camera.mail_amazon_delivery_camera
+        - camera.mail_usps_camera
+      camera_entity: >-
+        {{ expand(camera_candidates)
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | map(attribute='entity_id')
+          | list
+          | first
+          | default('', true) }}
+      delivery_summary: >-
+        {% set expected = expected_count | int(0) %}
+        {% set delivered = delivered_count | int(0) %}
+        {% if delivered > 0 %}
+          {{ delivered }} delivered package{{ '' if delivered == 1 else 's' }}
+        {% elif expected > 0 %}
+          {{ expected }} expected mail/package item{{ ''
+            if expected == 1 else 's' }}
+        {% else %}
+          mail or package activity
+        {% endif %}
+    action:
+      - choose:
+          - alias: "Mark delivery retrieved"
+            conditions:
+              - condition: or
+                conditions:
+                  - condition: trigger
+                    id: mark_retrieved
+                  - condition: and
+                    conditions:
+                      - condition: trigger
+                        id: mailbox_opened
+                      - condition: state
+                        entity_id: input_boolean.mail_delivered
+                        state: "on"
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: retrieved
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.mail_delivered
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.mail_package_last_retrieved
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - action: persistent_notification.dismiss
+                continue_on_error: true
+                data:
+                  notification_id: mail-package-delivery
+              - action: notify.all
+                continue_on_error: true
+                data:
+                  message: clear_notification
+                  data:
+                    tag: mail-package-delivery
+
+          - alias: "Notification action confirms delivery is still outside"
+            conditions:
+              - condition: trigger
+                id: mark_still_outside
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: still_outside
+
+          - alias: "Startup preserves an outstanding legacy delivery flag"
+            conditions:
+              - condition: trigger
+                id: startup_sync
+              - condition: state
+                entity_id: input_boolean.mail_delivered
+                state: "on"
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: still_outside
+
+          - alias: "Mailbox opened before known delivery marks mail delivered"
+            conditions:
+              - condition: trigger
+                id: mailbox_opened
+              - condition: state
+                entity_id: input_boolean.mail_delivered
+                state: "off"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "off"
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: delivered
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.mail_delivered
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.mail_package_last_delivery
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - action: notify.all
+                continue_on_error: true
+                data:
+                  title: "Mail Delivered"
+                  message: "Mailbox activity was detected. Check the mailbox."
+                  data:
+                    tag: mail-package-delivery
+                    group: mail-packages
+                    actions:
+                      - action: MAIL_PACKAGE_RETRIEVED
+                        title: "Retrieved"
+
+          - alias: "Carrier sensors report delivery"
+            conditions:
+              - condition: template
+                value_template: "{{ delivered_count | int(0) > 0 }}"
+              - condition: state
+                entity_id: input_boolean.mail_delivered
+                state: "off"
+            sequence:
+              - action: mail_and_packages.update_image
+                continue_on_error: true
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: delivered
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.mail_delivered
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.mail_package_last_delivery
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - action: persistent_notification.create
+                data:
+                  title: "Mail and Packages Delivered"
+                  message: >-
+                    {{ delivery_summary }} reported delivered. Mark it retrieved
+                    after bringing it in.
+                  notification_id: mail-package-delivery
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ camera_entity | length > 0 }}"
+                    sequence:
+                      - action: notify.all
+                        continue_on_error: true
+                        data:
+                          title: "Mail and Packages Delivered"
+                          message: >-
+                            {{ delivery_summary }} reported delivered. Tap
+                            Retrieved after bringing it in.
+                          data:
+                            tag: mail-package-delivery
+                            group: mail-packages
+                            image: "{{ '/api/camera_proxy/' ~ camera_entity }}"
+                            actions:
+                              - action: MAIL_PACKAGE_RETRIEVED
+                                title: "Retrieved"
+                              - action: MAIL_PACKAGE_STILL_OUTSIDE
+                                title: "Still outside"
+                default:
+                  - action: notify.all
+                    continue_on_error: true
+                    data:
+                      title: "Mail and Packages Delivered"
+                      message: >-
+                        {{ delivery_summary }} reported delivered. Tap
+                        Retrieved after bringing it in.
+                      data:
+                        tag: mail-package-delivery
+                        group: mail-packages
+                        actions:
+                          - action: MAIL_PACKAGE_RETRIEVED
+                            title: "Retrieved"
+                          - action: MAIL_PACKAGE_STILL_OUTSIDE
+                            title: "Still outside"
+
+          - alias: "Carrier sensors report expected mail or packages"
+            conditions:
+              - condition: template
+                value_template: "{{ expected_count | int(0) > 0 }}"
+              - condition: state
+                entity_id: input_boolean.mail_delivered
+                state: "off"
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: expected
+
+          - alias: "Startup clears stale state when no delivery data remains"
+            conditions:
+              - condition: trigger
+                id: startup_sync
+              - condition: template
+                value_template: >-
+                  {{ expected_count | int(0) == 0
+                    and delivered_count | int(0) == 0 }}
+              - condition: state
+                entity_id: input_boolean.mail_delivered
+                state: "off"
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: clear
+
+          - alias: "Daily reset clears stale delivery state"
+            conditions:
+              - condition: trigger
+                id: daily_reset
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.mail_package_delivery_state
+                data:
+                  option: clear
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.mail_delivered
+              - action: persistent_notification.dismiss
+                continue_on_error: true
+                data:
+                  notification_id: mail-package-delivery
+              - action: notify.all
+                continue_on_error: true
+                data:
+                  message: clear_notification
+                  data:
+                    tag: mail-package-delivery
+
+  - id: mail_package_still_outside_reminder
+    alias: mail_package_still_outside_reminder
+    description: >-
+      Escalates a delivered mail/package state to still_outside once it has
+      not been acknowledged for 30 minutes.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: input_select.mail_package_delivery_state
+        to: delivered
+        for:
+          minutes: 30
+    condition:
+      - condition: state
+        entity_id: input_boolean.mail_delivered
+        state: "on"
+    action:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.mail_package_delivery_state
+        data:
+          option: still_outside
+      - action: persistent_notification.create
+        data:
+          title: "Mail or Packages Still Outside"
+          message: >-
+            Delivery was reported 30 minutes ago and has not been marked
+            retrieved.
+          notification_id: mail-package-delivery
+      - action: notify.all
+        continue_on_error: true
+        data:
+          title: "Mail or Packages Still Outside"
+          message: >-
+            Delivery was reported 30 minutes ago. Mark it retrieved after
+            bringing it in.
+          data:
+            tag: mail-package-delivery
+            group: mail-packages
+            actions:
+              - action: MAIL_PACKAGE_RETRIEVED
+                title: "Retrieved"
+
+########################
+# Input Booleans
+########################
+input_boolean:
+  mail_delivered:
+    name: Mail Delivered
+    icon: mdi:mailbox
+
+########################
+# Input Select
+########################
+input_select:
+  mail_package_delivery_state:
+    name: Mail Package Delivery State
+    options:
+      - clear
+      - expected
+      - delivered
+      - still_outside
+      - retrieved
+      - unavailable
+    initial: clear
+    icon: mdi:package-variant-closed
+
+########################
+# Input Buttons
+########################
+input_button:
+  mail_package_mark_retrieved:
+    name: Mark Mail and Packages Retrieved
+    icon: mdi:package-check
+
+########################
+# Input Datetimes
+########################
+input_datetime:
+  mail_package_last_delivery:
+    name: Mail Package Last Delivery
+    has_date: true
+    has_time: true
+  mail_package_last_retrieved:
+    name: Mail Package Last Retrieved
+    has_date: true
+    has_time: true
