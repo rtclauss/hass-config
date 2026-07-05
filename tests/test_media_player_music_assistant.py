@@ -199,6 +199,56 @@ def test_arrival_music_targets_guest_aware_sync_group_without_regroup_retry() ->
     assert 'entity_id: script.music_assistant_try_join_arrival_group_after_play' not in arrival_block
 
 
+def test_arrival_music_sets_volume_on_selected_music_assistant_group_members() -> None:
+    arrival_block = _script_block("spotify_arrival")
+
+    assert "arrival_volume_entities" in arrival_block
+    assert "'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')" in arrival_block
+    assert "if is_state('input_boolean.guest_mode', 'on')" in arrival_block
+    assert "entity_id: \"{{ arrival_volume_entities }}\"" in arrival_block
+
+    guest_volume_start = arrival_block.index("arrival_volume_entities")
+    everywhere_volume_start = arrival_block.index("else [", guest_volume_start)
+
+    guest_volume_block = arrival_block[guest_volume_start:everywhere_volume_start]
+    everywhere_volume_block = arrival_block[everywhere_volume_start:arrival_block.index("sequence:")]
+
+    for entity_id in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+    ):
+        assert entity_id in guest_volume_block
+        assert entity_id in everywhere_volume_block
+
+    for guest_private_entity_id in (
+        "media_player.den_sonos_2",
+        "media_player.office_sonos_2",
+        "media_player.tiki_room_2",
+    ):
+        assert guest_private_entity_id not in guest_volume_block
+        assert guest_private_entity_id in everywhere_volume_block
+
+    for entity_id in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.den_sonos_2",
+        "media_player.office_sonos_2",
+        "media_player.tiki_room_2",
+    ):
+        assert entity_id in arrival_block
+
+    for stale_entity_id in (
+        "media_player.bedroom_sonos",
+        "media_player.den_sonos",
+        "media_player.office_sonos",
+        "media_player.tiki_room_3",
+    ):
+        assert (
+            re.search(rf"^\s*-\s+{re.escape(stale_entity_id)}\s*$", arrival_block, re.MULTILINE)
+            is None
+        )
+
+
 def test_bedtime_targets_guest_aware_sync_group_before_playing() -> None:
     block = _script_block("spotify_bedtime")
 
