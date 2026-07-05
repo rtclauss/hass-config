@@ -1586,6 +1586,12 @@ script:
       playback_entity: >-
         {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
            else 'media_player.ma_group_everywhere' }}
+      arrival_volume_entities: >-
+        {{ ['media_player.bedroom_sonos_2', 'media_player.bathroom_sonos_2']
+           if is_state('input_boolean.guest_mode', 'on')
+           else ['media_player.bedroom_sonos_2', 'media_player.bathroom_sonos_2',
+                 'media_player.den_sonos_2', 'media_player.office_sonos_2',
+                 'media_player.tiki_room_2'] }}
     sequence:
       - variables:
           playlist: >-
@@ -1686,12 +1692,7 @@ script:
       - action: media_player.volume_set
         continue_on_error: true
         target:
-          entity_id:
-            - media_player.bedroom_sonos
-            - media_player.bathroom_sonos_2
-            - media_player.den_sonos
-            - media_player.office_sonos
-            - media_player.tiki_room_3
+          entity_id: "{{ arrival_volume_entities }}"
         data:
           volume_level: 0.30
       - alias: "Play arrival music via Music Assistant"
