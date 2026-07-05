@@ -965,35 +965,6 @@ automation:
                     - input_boolean.master_bed_occupancy
               #       # - input_boolean.chatgpt_bed_occupied
 
-  - id: mail_delivered
-    alias: mail_delivered
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id: binary_sensor.mailbox_contact
-        from: "off"
-        to: "on"
-    condition:
-      - condition: and
-        conditions:
-          - alias: "Mailbox empty"
-            condition: state
-            entity_id: input_boolean.mail_delivered
-            state: "off"
-          - alias: "On a trip"
-            condition: state
-            entity_id: input_boolean.trip
-            state: "off"
-    action:
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.mail_delivered
-      - action: notify.all
-        data:
-          message: >-
-            Mail delivered.
-
   - id: office_light_control_button
     alias: office_light_control_button
     trace:
@@ -1115,18 +1086,6 @@ automation:
           entity_id: cover.owner_suite_blinds_ha
         data:
           position: 50
-
-  - id: reset_mail_delivery
-    alias: reset_mail_delivery
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: time
-        at: "01:00:00"
-    action:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.mail_delivered
 
   - alias: guest_room_switch_actions
     id: guest_room_switch_actions
@@ -1664,7 +1623,6 @@ device_tracker: []
 ########################
 input_boolean:
   master_bed_occupancy:
-  mail_delivered:
   front_door_lock:
 
 ########################
