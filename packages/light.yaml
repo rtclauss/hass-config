@@ -1399,6 +1399,11 @@ automation:
         entity_id: binary_sensor.presense
         to: "on"
         from: "off"
+      - trigger: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        to: "off"
+        for:
+          seconds: 30
     condition:
       condition: and
       conditions:
@@ -1412,7 +1417,17 @@ automation:
           entity_id: binary_sensor.bayesian_bed_occupancy
           # entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
+          for:
+            seconds: 30
           # enabled: false
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.bedroom_occupancy
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.presense
+              state: "on"
     action:
       - action: switch.turn_on
         target:

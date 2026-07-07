@@ -52,6 +52,18 @@ def test_owner_suite_light_auto_on_uses_home_presence_sensor() -> None:
     assert "\n          color_temp_kelvin:" not in block
 
 
+def test_owner_suite_light_auto_on_debounces_bed_occupancy_clear() -> None:
+    block = _automation_block("owner_suite_light_auto_on")
+
+    assert "entity_id: binary_sensor.bayesian_bed_occupancy" in block
+    assert 'to: "off"' in block
+    assert "for:\n          seconds: 30" in block
+    assert "for:\n            seconds: 30" in block
+    assert "condition: or" in block
+    assert "entity_id: binary_sensor.bedroom_occupancy" in block
+    assert "entity_id: binary_sensor.presense" in block
+
+
 def test_owner_suite_light_auto_off_combines_latch_and_morning_paths() -> None:
     package = LIGHT_PATH.read_text(encoding="utf-8")
     block = _automation_block("owner_suite_light_auto_off")
