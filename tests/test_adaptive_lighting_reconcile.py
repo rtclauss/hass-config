@@ -160,6 +160,7 @@ def test_adaptive_light_bootstrap_only_enabled_for_allowed_rooms() -> None:
         "switch.adaptive_lighting_basement",
         "switch.dining_room_adaptive_lighting_dining_room",
     }
+    switch_pattern = re.compile(r"adaptive_switch:\s*(\S+)")
     for path in (
         ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "light.yaml",
         ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "zigbee_zwave.yaml",
@@ -169,13 +170,30 @@ def test_adaptive_light_bootstrap_only_enabled_for_allowed_rooms() -> None:
             if line.strip() != "bootstrap: true":
                 continue
 
-            preceding = "\n".join(lines[max(0, index - 8) : index + 1])
-            matching_switches = {
-                switch for switch in allowed_switches if f"adaptive_switch: {switch}" in preceding
-            }
-            assert matching_switches, (
+            # Walk back to the action call that owns this bootstrap field and
+            # read that block's own adaptive_switch. A fixed-size line window
+            # can capture an allowed switch from an adjacent call and mask a
+            # violation (e.g. a short kitchen bootstrap immediately above a
+            # hallway one), so resolve the enclosing block explicitly.
+            switch_name = None
+            owning_action = None
+            for candidate in range(index - 1, -1, -1):
+                stripped = lines[candidate].strip()
+                if switch_name is None:
+                    match = switch_pattern.match(stripped)
+                    if match:
+                        switch_name = match.group(1)
+                if stripped.startswith("- action:"):
+                    owning_action = stripped
+                    break
+
+            assert owning_action == "- action: script.adaptive_light_turn_on", (
+                f"{path.name}:{index + 1} bootstrap: true is not owned by an "
+                "adaptive_light_turn_on call"
+            )
+            assert switch_name in allowed_switches, (
                 f"{path.name}:{index + 1} enables adaptive_light_turn_on bootstrap "
-                "outside the kitchen/basement/dining-room allow-list"
+                f"for {switch_name!r}, outside the kitchen/basement/dining-room allow-list"
             )
 
 
