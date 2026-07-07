@@ -64,6 +64,7 @@ def test_owner_suite_light_auto_on_debounces_bed_clear_before_turning_on() -> No
         "condition:",
         maxsplit=1,
     )[0]
+    assert 'from: "on"' in bed_clear_trigger
     assert 'to: "off"' in bed_clear_trigger
     assert "for:\n          seconds: 15" in bed_clear_trigger
 
