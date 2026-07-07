@@ -88,12 +88,16 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
         "unreachable_lights: \"{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}\"",
         "apply_transition: \"{{ transition | default(1, true) }}\"",
         "should_reset_manual_control: \"{{ reset_manual_control | default(false, true) }}\"",
+        "should_bootstrap: \"{{ bootstrap | default(false, true) }}\"",
         "initial_brightness_pct: \"{{ bootstrap_brightness_pct | default(1, true) }}\"",
         "adaptive_switch_active: \"{{ is_state(adaptive_switch, 'on') }}\"",
         "target_color_temp_kelvin: \"{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}\"",
+        'value_template: "{{ should_reset_manual_control and adaptive_switch_active and member_lights | count > 0 }}"',
+        'lights: "{{ member_lights }}"',
         "value_template: \"{{ not adaptive_switch_active and target_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and target_lights | count == 0 }}\"",
-        "value_template: \"{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
+        "value_template: \"{{ should_bootstrap and target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
+        'value_template: "{{ not should_reset_manual_control }}"',
         "value_template: \"{{ off_lights | count > 0 or on_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and unreachable_lights | count > 0 }}\"",
         "action: light.turn_on",
@@ -131,6 +135,15 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
     bootstrap_index = block.index('brightness_pct: "{{ initial_brightness_pct }}"')
     assert mark_index < bootstrap_index
 
+    # Reset/ramp callers such as the owner-suite wake sequence still lock
+    # manual control even when the visible bootstrap pulse is disabled.
+    reset_lock_index = block.index(
+        'value_template: "{{ should_reset_manual_control and adaptive_switch_active '
+        'and member_lights | count > 0 }}"'
+    )
+    first_apply_index = block.index("action: adaptive_lighting.apply")
+    assert reset_lock_index < first_apply_index
+
     # Immediate (pre-ramp) clears must not exist in the turn-on script:
     # clearing manual control force-adapts at the switch's initial_transition
     # and would stomp the ramp. The clear is deferred to the fire-and-forget
@@ -139,6 +152,49 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
     assert block.rindex("action: adaptive_lighting.apply") < block.index(
         "entity_id: script.adaptive_light_clear_manual_control"
     )
+
+
+def test_adaptive_light_bootstrap_only_enabled_for_allowed_rooms() -> None:
+    allowed_switches = {
+        "switch.adaptive_lighting_kitchen",
+        "switch.adaptive_lighting_basement",
+        "switch.dining_room_adaptive_lighting_dining_room",
+    }
+    switch_pattern = re.compile(r"adaptive_switch:\s*(\S+)")
+    for path in (
+        ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "light.yaml",
+        ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "zigbee_zwave.yaml",
+    ):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if line.strip() != "bootstrap: true":
+                continue
+
+            # Walk back to the action call that owns this bootstrap field and
+            # read that block's own adaptive_switch. A fixed-size line window
+            # can capture an allowed switch from an adjacent call and mask a
+            # violation (e.g. a short kitchen bootstrap immediately above a
+            # hallway one), so resolve the enclosing block explicitly.
+            switch_name = None
+            owning_action = None
+            for candidate in range(index - 1, -1, -1):
+                stripped = lines[candidate].strip()
+                if switch_name is None:
+                    match = switch_pattern.match(stripped)
+                    if match:
+                        switch_name = match.group(1)
+                if stripped.startswith("- action:"):
+                    owning_action = stripped
+                    break
+
+            assert owning_action == "- action: script.adaptive_light_turn_on", (
+                f"{path.name}:{index + 1} bootstrap: true is not owned by an "
+                "adaptive_light_turn_on call"
+            )
+            assert switch_name in allowed_switches, (
+                f"{path.name}:{index + 1} enables adaptive_light_turn_on bootstrap "
+                f"for {switch_name!r}, outside the kitchen/basement/dining-room allow-list"
+            )
 
 
 def test_adaptive_light_clear_manual_control_waits_and_guards() -> None:
