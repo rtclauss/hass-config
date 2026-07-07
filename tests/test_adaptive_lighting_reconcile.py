@@ -88,12 +88,13 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
         "unreachable_lights: \"{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}\"",
         "apply_transition: \"{{ transition | default(1, true) }}\"",
         "should_reset_manual_control: \"{{ reset_manual_control | default(false, true) }}\"",
+        "should_bootstrap: \"{{ bootstrap | default(false, true) }}\"",
         "initial_brightness_pct: \"{{ bootstrap_brightness_pct | default(1, true) }}\"",
         "adaptive_switch_active: \"{{ is_state(adaptive_switch, 'on') }}\"",
         "target_color_temp_kelvin: \"{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}\"",
         "value_template: \"{{ not adaptive_switch_active and target_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and target_lights | count == 0 }}\"",
-        "value_template: \"{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
+        "value_template: \"{{ should_bootstrap and target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
         "value_template: \"{{ off_lights | count > 0 or on_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and unreachable_lights | count > 0 }}\"",
         "action: light.turn_on",
@@ -139,6 +140,30 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
     assert block.rindex("action: adaptive_lighting.apply") < block.index(
         "entity_id: script.adaptive_light_clear_manual_control"
     )
+
+
+def test_adaptive_light_bootstrap_only_enabled_for_kitchen_and_basement() -> None:
+    allowed_switches = {
+        "switch.adaptive_lighting_kitchen",
+        "switch.adaptive_lighting_basement",
+    }
+    for path in (
+        ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "light.yaml",
+        ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "zigbee_zwave.yaml",
+    ):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if line.strip() != "bootstrap: true":
+                continue
+
+            preceding = "\n".join(lines[max(0, index - 8) : index + 1])
+            matching_switches = {
+                switch for switch in allowed_switches if f"adaptive_switch: {switch}" in preceding
+            }
+            assert matching_switches, (
+                f"{path.name}:{index + 1} enables adaptive_light_turn_on bootstrap "
+                "outside the kitchen/basement allow-list"
+            )
 
 
 def test_adaptive_light_clear_manual_control_waits_and_guards() -> None:

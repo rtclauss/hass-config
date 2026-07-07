@@ -274,15 +274,15 @@ script:
   adaptive_light_turn_on:
     alias: Adaptive Light Turn On
     description: >
-      Turn on Adaptive Lighting-managed lights with color temperature corrected
-      immediately at a dim bootstrap brightness, then ramp brightness to the
-      adaptive target over the requested transition. Off lights are pre-marked
-      as manually controlled so Adaptive Lighting's turn_on interceptor passes
-      the bootstrap through unmodified on every switch configuration (including
-      take_over_control: false switches such as the basement); the marks are
-      cleared after the ramp finishes, except for lights the user overrode
-      mid-ramp. Falls back to a plain light.turn_on when the Adaptive Lighting
-      switch is unavailable so wall switches and motion paths keep working.
+      Turn on Adaptive Lighting-managed lights. By default this applies the
+      adaptive target directly; callers may opt into a dim bootstrap turn-on for
+      rooms that need immediate color correction before the brightness ramp. Off
+      lights are pre-marked as manually controlled only for bootstrap runs so
+      Adaptive Lighting's turn_on interceptor passes the bootstrap through
+      unmodified; the marks are cleared after the ramp finishes, except for
+      lights the user overrode mid-ramp. Falls back to a plain light.turn_on
+      when the Adaptive Lighting switch is unavailable so wall switches and
+      motion paths keep working.
     mode: parallel
     max: 20
     trace:
@@ -317,6 +317,12 @@ script:
         default: false
         selector:
           boolean:
+      bootstrap:
+        description: Start off lights at the bootstrap brightness/color temperature before applying the adaptive brightness ramp.
+        required: false
+        default: false
+        selector:
+          boolean:
       bootstrap_brightness_pct:
         description: Initial brightness used only for the zero-transition color-correction turn-on.
         required: false
@@ -345,6 +351,7 @@ script:
       unreachable_lights: "{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}"
       apply_transition: "{{ transition | default(1, true) }}"
       should_reset_manual_control: "{{ reset_manual_control | default(false, true) }}"
+      should_bootstrap: "{{ bootstrap | default(false, true) }}"
       initial_brightness_pct: "{{ bootstrap_brightness_pct | default(1, true) }}"
       adaptive_switch_active: "{{ is_state(adaptive_switch, 'on') }}"
       target_color_temp_kelvin: "{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}"
@@ -379,7 +386,7 @@ script:
           # color at the bootstrap brightness instantly, then ramp brightness.
           - conditions:
               - condition: template
-                value_template: "{{ target_color_temp_kelvin > 0 and off_lights | count > 0 }}"
+                value_template: "{{ should_bootstrap and target_color_temp_kelvin > 0 and off_lights | count > 0 }}"
             sequence:
               # Pre-mark the off lights as manually controlled so the
               # interceptor passes the bootstrap call through untouched: it
@@ -481,7 +488,7 @@ script:
       - variables:
           clear_candidates: >-
             {{ (member_lights if should_reset_manual_control
-                else (off_lights if target_color_temp_kelvin > 0 else []))
+                else (off_lights if should_bootstrap and target_color_temp_kelvin > 0 else []))
                if adaptive_switch_active else [] }}
       - if:
           - condition: template
