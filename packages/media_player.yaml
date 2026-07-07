@@ -1912,6 +1912,13 @@ script:
             timeout:
               seconds: 15
             continue_on_timeout: true
+      - alias: "Ensure bedtime queue repeats after playback starts"
+        action: media_player.repeat_set
+        continue_on_error: true
+        data:
+          repeat: all
+        target:
+          entity_id: "{{ bedtime_playback_entity }}"
       - wait_for_trigger:
           - trigger: state
             entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
