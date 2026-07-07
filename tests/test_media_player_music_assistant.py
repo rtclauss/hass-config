@@ -580,6 +580,36 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     assert "continue_on_error: false" not in block
 
 
+def test_spotify_bedtime_reapplies_repeat_to_started_queue_before_rampdown() -> None:
+    block = _script_block("spotify_bedtime")
+
+    tokens_in_order = (
+        "action: script.music_assistant_play_item",
+        "action: script.music_assistant_play_random_lofi_playlist",
+        "Ensure bedtime queue repeats after playback starts",
+        "action: media_player.repeat_set",
+        "entity_id: binary_sensor.owner_suite_bathroom_room_occupancy",
+        "entity_id: script.spotify_bedtime_volume",
+    )
+
+    cursor = -1
+    for token in tokens_in_order:
+        next_cursor = block.index(token, cursor + 1)
+        assert next_cursor > cursor, token
+        cursor = next_cursor
+
+    assert block.count("action: media_player.repeat_set") == 2
+    assert block.count("repeat: all") == 2
+
+    repeat_after_start = block.split("Ensure bedtime queue repeats after playback starts", 1)[1]
+    for token in (
+        "continue_on_error: true",
+        "repeat: all",
+        'entity_id: "{{ bedtime_playback_entity }}"',
+    ):
+        assert token in repeat_after_start
+
+
 def test_arrival_and_wakeup_scripts_use_sequence_level_playlist_selection() -> None:
     # Same caching concern as bedroom_playlist scripts.
     for script_id in ("spotify_arrival", "spotify_wake_up"):
