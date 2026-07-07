@@ -52,6 +52,37 @@ def test_owner_suite_light_auto_on_uses_home_presence_sensor() -> None:
     assert "\n          color_temp_kelvin:" not in block
 
 
+def test_owner_suite_light_auto_on_debounces_bed_clear_before_turning_on() -> None:
+    block = _automation_block("owner_suite_light_auto_on")
+
+    assert "entity_id: binary_sensor.bayesian_bed_occupancy" in block
+    assert block.count("seconds: 15") == 2
+    assert "Bed clear long enough to ignore roll-over/CPAP-removal blips (#852)" in block
+    assert "Someone is actually in the room" in block
+
+    bed_clear_trigger = block.split("entity_id: binary_sensor.bayesian_bed_occupancy", maxsplit=1)[1].split(
+        "condition:",
+        maxsplit=1,
+    )[0]
+    assert 'to: "off"' in bed_clear_trigger
+    assert "for:\n          seconds: 15" in bed_clear_trigger
+
+    bed_clear_condition = block.split("Bed clear long enough", maxsplit=1)[1].split(
+        "Someone is actually in the room",
+        maxsplit=1,
+    )[0]
+    assert 'state: "off"' in bed_clear_condition
+    assert "for:\n            seconds: 15" in bed_clear_condition
+
+    room_presence_condition = block.split("Someone is actually in the room", maxsplit=1)[1].split(
+        "action:",
+        maxsplit=1,
+    )[0]
+    assert "condition: or" in room_presence_condition
+    assert "entity_id: binary_sensor.presense" in room_presence_condition
+    assert "entity_id: binary_sensor.bedroom_occupancy" in room_presence_condition
+
+
 def test_owner_suite_light_auto_off_combines_latch_and_morning_paths() -> None:
     package = LIGHT_PATH.read_text(encoding="utf-8")
     block = _automation_block("owner_suite_light_auto_off")
