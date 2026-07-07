@@ -1399,6 +1399,13 @@ automation:
         entity_id: binary_sensor.presense
         to: "on"
         from: "off"
+      # Real wake-ups fire motion before the bed has been clear for the
+      # debounce window below, so re-check once the bed-clear has held.
+      - trigger: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        to: "off"
+        for:
+          seconds: 10
     condition:
       condition: and
       conditions:
@@ -1408,11 +1415,23 @@ automation:
         - condition: state
           entity_id: light.owner_suite_lamps
           state: "off"
-        - condition: state
+        - alias: "Bed clear long enough to ignore roll-over/CPAP-removal blips (#852)"
+          condition: state
           entity_id: binary_sensor.bayesian_bed_occupancy
           # entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
+          for:
+            seconds: 10
           # enabled: false
+        - alias: "Someone is actually in the room"
+          condition: or
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.presense
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.bedroom_occupancy
+              state: "on"
     action:
       - action: switch.turn_on
         target:
