@@ -158,7 +158,6 @@ def test_adaptive_light_bootstrap_only_enabled_for_kitchen_and_basement() -> Non
     allowed_switches = {
         "switch.adaptive_lighting_kitchen",
         "switch.adaptive_lighting_basement",
-        "switch.dining_room_adaptive_lighting_dining_room",
     }
     for path in (
         ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "light.yaml",
@@ -175,7 +174,7 @@ def test_adaptive_light_bootstrap_only_enabled_for_kitchen_and_basement() -> Non
             }
             assert matching_switches, (
                 f"{path.name}:{index + 1} enables adaptive_light_turn_on bootstrap "
-                "outside the kitchen/basement/dining-room allow-list"
+                "outside the kitchen/basement allow-list"
             )
 
 
