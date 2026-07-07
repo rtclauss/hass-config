@@ -356,6 +356,18 @@ script:
       adaptive_switch_active: "{{ is_state(adaptive_switch, 'on') }}"
       target_color_temp_kelvin: "{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}"
     sequence:
+      # Reset/ramp callers need the manual-control lock even when they do not
+      # use the visible bootstrap pulse. Owner-suite wake ramps rely on this to
+      # keep interval adaptation from interrupting the long transition.
+      - if:
+          - condition: template
+            value_template: "{{ should_reset_manual_control and adaptive_switch_active and member_lights | count > 0 }}"
+        then:
+          - action: adaptive_lighting.set_manual_control
+            data:
+              entity_id: "{{ adaptive_switch }}"
+              lights: "{{ member_lights }}"
+              manual_control: true
       - choose:
           # Adaptive Lighting switch missing, not loaded, or intentionally
           # turned off: plain turn-on. Disabling a room's adaptive switch must
@@ -392,13 +404,17 @@ script:
               # interceptor passes the bootstrap call through untouched: it
               # would otherwise adapt it on take_over_control: false switches
               # (basement) and mark it manual as a side effect on
-              # adapt_only_on_bare_turn_on switches. The mark is cleared after
-              # the ramp below.
-              - action: adaptive_lighting.set_manual_control
-                data:
-                  entity_id: "{{ adaptive_switch }}"
-                  lights: "{{ off_lights }}"
-                  manual_control: true
+              # adapt_only_on_bare_turn_on switches. Reset/ramp callers were
+              # locked above; this branch covers bootstrap-only callers.
+              - if:
+                  - condition: template
+                    value_template: "{{ not should_reset_manual_control }}"
+                then:
+                  - action: adaptive_lighting.set_manual_control
+                    data:
+                      entity_id: "{{ adaptive_switch }}"
+                      lights: "{{ off_lights }}"
+                      manual_control: true
               # Per-light so the color temperature can be clamped to each
               # bulb's supported range: sleep mode targets 1000 K, below the
               # minimum of most CT bulbs, and an out-of-range value can be
@@ -478,11 +494,10 @@ script:
               entity_id: "{{ unreachable_lights }}"
             data:
               transition: "{{ apply_transition }}"
-      # Clear the manual-control marks the bootstrap set (plus already-on
-      # lights when the caller opts in) once the ramp has finished. Clearing
-      # earlier would let set_manual_control's built-in force-adapt at the
-      # switch's initial_transition stomp the requested ramp. The wait and
-      # clear run in a fire-and-forget helper so callers of this script are
+      # Clear the manual-control marks the script set once the ramp has
+      # finished. Clearing earlier would let set_manual_control force-adapt at
+      # the switch's initial_transition and stomp the requested ramp. The wait
+      # and clear run in a fire-and-forget helper so callers of this script are
       # not blocked for the ramp duration (the owner-suite wake ramp is 45 s
       # and its automation sets the auto-on flag right after this call).
       - variables:

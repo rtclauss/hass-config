@@ -92,9 +92,12 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
         "initial_brightness_pct: \"{{ bootstrap_brightness_pct | default(1, true) }}\"",
         "adaptive_switch_active: \"{{ is_state(adaptive_switch, 'on') }}\"",
         "target_color_temp_kelvin: \"{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}\"",
+        'value_template: "{{ should_reset_manual_control and adaptive_switch_active and member_lights | count > 0 }}"',
+        'lights: "{{ member_lights }}"',
         "value_template: \"{{ not adaptive_switch_active and target_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and target_lights | count == 0 }}\"",
         "value_template: \"{{ should_bootstrap and target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
+        'value_template: "{{ not should_reset_manual_control }}"',
         "value_template: \"{{ off_lights | count > 0 or on_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and unreachable_lights | count > 0 }}\"",
         "action: light.turn_on",
@@ -131,6 +134,15 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
     mark_index = block.index("manual_control: true")
     bootstrap_index = block.index('brightness_pct: "{{ initial_brightness_pct }}"')
     assert mark_index < bootstrap_index
+
+    # Reset/ramp callers such as the owner-suite wake sequence still lock
+    # manual control even when the visible bootstrap pulse is disabled.
+    reset_lock_index = block.index(
+        'value_template: "{{ should_reset_manual_control and adaptive_switch_active '
+        'and member_lights | count > 0 }}"'
+    )
+    first_apply_index = block.index("action: adaptive_lighting.apply")
+    assert reset_lock_index < first_apply_index
 
     # Immediate (pre-ramp) clears must not exist in the turn-on script:
     # clearing manual control force-adapts at the switch's initial_transition
