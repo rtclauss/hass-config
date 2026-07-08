@@ -1825,6 +1825,10 @@ script:
             {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
                else 'media_player.ma_group_everywhere' }}
           bedtime_media_type: "{{ 'radio' if 'somafm.com' in playlist else '' }}"
+          bedtime_apple_music_fallback_uri: "apple_music://track/1492333325"
+          bedtime_apple_music_fallback_media_type: ""
+          bedtime_local_library_fallback_uri: "library://radio/17"
+          bedtime_local_library_fallback_media_type: radio
           bedtime_pre_playback_fingerprint: >-
             {{ [
               state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
@@ -1912,6 +1916,91 @@ script:
             timeout:
               seconds: 15
             continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              domain: media_player
+              name: Apple Music bedtime fallback is
+              message: >-
+                Spotify bedtime and LoFi fallback failed; playing Apple Music
+                fallback: {{ bedtime_apple_music_fallback_uri }}
+          - action: script.music_assistant_play_item
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              media_item: "{{ bedtime_apple_music_fallback_uri }}"
+              media_type: "{{ bedtime_apple_music_fallback_media_type }}"
+          - alias: "Confirm Apple Music fallback changed the group media"
+            wait_template: >-
+              {% set ns = namespace(parts=[]) %}
+              {% for attr in [
+                'media_content_id',
+                'media_title',
+                'media_artist',
+                'media_album_name'
+              ] %}
+                {% set value =
+                  state_attr(bedtime_playback_entity, attr)
+                  | default('', true)
+                %}
+                {% set ns.parts = ns.parts + [value] %}
+              {% endfor %}
+              {{ is_state(bedtime_playback_entity, 'playing')
+                 and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
+            timeout:
+              seconds: 15
+            continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              domain: media_player
+              name: Local bedtime fallback is
+              message: >-
+                Apple Music bedtime fallback failed; playing local library
+                fallback: {{ bedtime_local_library_fallback_uri }}
+          - action: script.music_assistant_play_item
+            data:
+              entity_id: "{{ bedtime_playback_entity }}"
+              media_item: "{{ bedtime_local_library_fallback_uri }}"
+              media_type: "{{ bedtime_local_library_fallback_media_type }}"
+          - alias: "Confirm local library fallback changed the group media"
+            wait_template: >-
+              {% set ns = namespace(parts=[]) %}
+              {% for attr in [
+                'media_content_id',
+                'media_title',
+                'media_artist',
+                'media_album_name'
+              ] %}
+                {% set value =
+                  state_attr(bedtime_playback_entity, attr)
+                  | default('', true)
+                %}
+                {% set ns.parts = ns.parts + [value] %}
+              {% endfor %}
+              {{ is_state(bedtime_playback_entity, 'playing')
+                 and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
+            timeout:
+              seconds: 15
+            continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: bedtime_audio_failed
+              title: "Bedtime audio failed"
+              message: >-
+                Spotify bedtime, LoFi, Apple Music, and local library fallbacks
+                all failed to start on {{ bedtime_playback_entity }}.
       - alias: "Ensure bedtime queue repeats after playback starts"
         action: media_player.repeat_set
         continue_on_error: true

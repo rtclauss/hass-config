@@ -437,7 +437,7 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     assert "'somafm.com' in playlist" in block
 
 
-def test_bedtime_verifies_primary_playback_and_falls_back_to_lofi() -> None:
+def test_bedtime_verifies_primary_playback_and_falls_back_through_non_spotify_sources() -> None:
     block = _script_block("spotify_bedtime")
 
     for token in (
@@ -445,6 +445,13 @@ def test_bedtime_verifies_primary_playback_and_falls_back_to_lofi() -> None:
         "bedtime_pre_playback_fingerprint",
         "Confirm primary bedtime playback changed the group media",
         "Confirm LoFi fallback changed the group media",
+        "bedtime_apple_music_fallback_uri: \"apple_music://track/1492333325\"",
+        "bedtime_local_library_fallback_uri: \"library://radio/17\"",
+        "Apple Music bedtime fallback is",
+        "Confirm Apple Music fallback changed the group media",
+        "Local bedtime fallback is",
+        "Confirm local library fallback changed the group media",
+        "Bedtime audio failed",
         "state_attr(bedtime_playback_entity, 'media_content_id')",
         "state_attr(bedtime_playback_entity, 'media_title')",
         "!= bedtime_pre_playback_fingerprint",
@@ -462,6 +469,15 @@ def test_bedtime_verifies_primary_playback_and_falls_back_to_lofi() -> None:
         "action: script.music_assistant_play_random_lofi_playlist"
     )
     assert block.index("action: script.music_assistant_play_random_lofi_playlist") < block.index(
+        "entity_id: binary_sensor.owner_suite_bathroom_room_occupancy"
+    )
+    assert block.index("Confirm LoFi fallback changed the group media") < block.index(
+        "Apple Music bedtime fallback is"
+    )
+    assert block.index("Confirm Apple Music fallback changed the group media") < block.index(
+        "Local bedtime fallback is"
+    )
+    assert block.index("Confirm local library fallback changed the group media") < block.index(
         "entity_id: binary_sensor.owner_suite_bathroom_room_occupancy"
     )
     assert block.index("action: script.music_assistant_play_random_lofi_playlist") < block.index(
