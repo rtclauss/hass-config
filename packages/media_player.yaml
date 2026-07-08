@@ -1905,17 +1905,17 @@ script:
               entity_id: "{{ bedtime_playback_entity }}"
               playlist_name: Bedtime LoFi fallback
               log_name: Spotify Bedtime fallback is
-          - alias: "Confirm LoFi fallback changed the group media"
-            wait_template: >-
-              {{ is_state(bedtime_playback_entity, 'playing') and [
-                  state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
-                  state_attr(bedtime_playback_entity, 'media_title') | default('', true),
-                  state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
-                  state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
-                ] | join('|') != bedtime_pre_playback_fingerprint }}
-            timeout:
-              seconds: 15
-            continue_on_timeout: true
+      - alias: "Confirm LoFi fallback changed the group media"
+        wait_template: >-
+          {{ is_state(bedtime_playback_entity, 'playing') and [
+              state_attr(bedtime_playback_entity, 'media_content_id') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_title') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_artist') | default('', true),
+              state_attr(bedtime_playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != bedtime_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
       - if:
           - condition: template
             value_template: "{{ not wait.completed }}"
@@ -1933,26 +1933,26 @@ script:
               entity_id: "{{ bedtime_playback_entity }}"
               media_item: "{{ bedtime_apple_music_fallback_uri }}"
               media_type: "{{ bedtime_apple_music_fallback_media_type }}"
-          - alias: "Confirm Apple Music fallback changed the group media"
-            wait_template: >-
-              {% set ns = namespace(parts=[]) %}
-              {% for attr in [
-                'media_content_id',
-                'media_title',
-                'media_artist',
-                'media_album_name'
-              ] %}
-                {% set value =
-                  state_attr(bedtime_playback_entity, attr)
-                  | default('', true)
-                %}
-                {% set ns.parts = ns.parts + [value] %}
-              {% endfor %}
-              {{ is_state(bedtime_playback_entity, 'playing')
-                 and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
-            timeout:
-              seconds: 15
-            continue_on_timeout: true
+      - alias: "Confirm Apple Music fallback changed the group media"
+        wait_template: >-
+          {% set ns = namespace(parts=[]) %}
+          {% for attr in [
+            'media_content_id',
+            'media_title',
+            'media_artist',
+            'media_album_name'
+          ] %}
+            {% set value =
+              state_attr(bedtime_playback_entity, attr)
+              | default('', true)
+            %}
+            {% set ns.parts = ns.parts + [value] %}
+          {% endfor %}
+          {{ is_state(bedtime_playback_entity, 'playing')
+             and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
       - if:
           - condition: template
             value_template: "{{ not wait.completed }}"
@@ -1970,26 +1970,26 @@ script:
               entity_id: "{{ bedtime_playback_entity }}"
               media_item: "{{ bedtime_local_library_fallback_uri }}"
               media_type: "{{ bedtime_local_library_fallback_media_type }}"
-          - alias: "Confirm local library fallback changed the group media"
-            wait_template: >-
-              {% set ns = namespace(parts=[]) %}
-              {% for attr in [
-                'media_content_id',
-                'media_title',
-                'media_artist',
-                'media_album_name'
-              ] %}
-                {% set value =
-                  state_attr(bedtime_playback_entity, attr)
-                  | default('', true)
-                %}
-                {% set ns.parts = ns.parts + [value] %}
-              {% endfor %}
-              {{ is_state(bedtime_playback_entity, 'playing')
-                 and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
-            timeout:
-              seconds: 15
-            continue_on_timeout: true
+      - alias: "Confirm local library fallback changed the group media"
+        wait_template: >-
+          {% set ns = namespace(parts=[]) %}
+          {% for attr in [
+            'media_content_id',
+            'media_title',
+            'media_artist',
+            'media_album_name'
+          ] %}
+            {% set value =
+              state_attr(bedtime_playback_entity, attr)
+              | default('', true)
+            %}
+            {% set ns.parts = ns.parts + [value] %}
+          {% endfor %}
+          {{ is_state(bedtime_playback_entity, 'playing')
+             and ns.parts | join('|') != bedtime_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
       - if:
           - condition: template
             value_template: "{{ not wait.completed }}"
