@@ -45,6 +45,11 @@ class ThermostatChanges(Base):
     house_average_humidity = Column(Float)
     house_average_temp = Column(Float)
 
+    owner_suite_temp = Column(Float)
+    office_temp = Column(Float)
+    bedroom_room_confidence = Column(Float)
+    office_room_confidence = Column(Float)
+
     outside_temp = Column(Float)
     outside_temp_feels_like = Column(Float)
     outside_humidity = Column(Float)
@@ -146,6 +151,10 @@ class ThermostatStats(hass.Hass):
         self.wind_bearing_sensor = self.args.get("wind_bearing") or self.args.get("wind_bearing_sensor")
         self.humidifier_sensor = self.args.get("humidifier") or self.args.get("humidifier_sensor")
         self.humidifier_target_sensor = self.args.get("humidifier_target") or self.args.get("humidifier_target_sensor")
+        self.owner_suite_temp_sensor = self.args.get("owner_suite_temp")
+        self.office_temp_sensor = self.args.get("office_temp")
+        self.bedroom_room_confidence_sensor = self.args.get("bedroom_room_confidence")
+        self.office_room_confidence_sensor = self.args.get("office_room_confidence")
 
         self.listen_state(self.state_changed, self.thermostat, attribute="all")
         self.listen_state(self.state_changed, self.house_average_temp_sensor, attribute="all")
@@ -157,6 +166,10 @@ class ThermostatStats(hass.Hass):
             self.wind_bearing_sensor,
             self.humidifier_sensor,
             self.humidifier_target_sensor,
+            self.owner_suite_temp_sensor,
+            self.office_temp_sensor,
+            self.bedroom_room_confidence_sensor,
+            self.office_room_confidence_sensor,
         ]
         for entity_id in optional_entities:
             if entity_id:
@@ -213,6 +226,10 @@ class ThermostatStats(hass.Hass):
             "ALTER TABLE thermostat ADD COLUMN IF NOT EXISTS context_user_id VARCHAR",
             "ALTER TABLE thermostat ADD COLUMN IF NOT EXISTS context_parent_id VARCHAR",
             "ALTER TABLE thermostat ADD COLUMN IF NOT EXISTS thermostat_attrs_json TEXT",
+            "ALTER TABLE thermostat ADD COLUMN IF NOT EXISTS owner_suite_temp DOUBLE PRECISION",
+            "ALTER TABLE thermostat ADD COLUMN IF NOT EXISTS office_temp DOUBLE PRECISION",
+            "ALTER TABLE thermostat ADD COLUMN IF NOT EXISTS bedroom_room_confidence DOUBLE PRECISION",
+            "ALTER TABLE thermostat ADD COLUMN IF NOT EXISTS office_room_confidence DOUBLE PRECISION",
         ]
         with engine.begin() as conn:
             for statement in ddl:
@@ -373,6 +390,11 @@ class ThermostatStats(hass.Hass):
         )
         outside_humidity = self._safe_sensor_float(self.outside_humidity_sensor)
 
+        owner_suite_temp = self._safe_sensor_float(self.owner_suite_temp_sensor)
+        office_temp = self._safe_sensor_float(self.office_temp_sensor)
+        bedroom_room_confidence = self._safe_sensor_float(self.bedroom_room_confidence_sensor)
+        office_room_confidence = self._safe_sensor_float(self.office_room_confidence_sensor)
+
         sun_azimuth = self._safe_float(self.get_state(self.sun, attribute="azimuth"))
         sun_elevation = self._safe_float(self.get_state(self.sun, attribute="elevation"))
         sun_state = self.get_state(self.sun)
@@ -415,6 +437,10 @@ class ThermostatStats(hass.Hass):
             humidifier_attrs_json=humidifier_attrs_json,
             house_average_humidity=avg_house_humidity,
             house_average_temp=avg_house_temp,
+            owner_suite_temp=owner_suite_temp,
+            office_temp=office_temp,
+            bedroom_room_confidence=bedroom_room_confidence,
+            office_room_confidence=office_room_confidence,
             outside_temp=outside_temp,
             outside_temp_feels_like=outside_temp_feels_like,
             outside_humidity=outside_humidity,
