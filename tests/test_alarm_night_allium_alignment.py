@@ -224,20 +224,30 @@ def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:
     assert "number.owner_suite_bathroom_vanity_ledintensitywhenoff" not in block
 
 
-def test_wakeup_audio_uses_guest_aware_sync_groups() -> None:
+def test_wakeup_audio_uses_exact_guest_aware_wake_group() -> None:
     spotify_block = _script_block(MEDIA_PLAYER_PATH, "spotify_wake_up")
     radio_block = _script_block(MEDIA_PLAYER_PATH, "music_assistant_radio_wake_up")
+    prime_group_block = _script_block(MEDIA_PLAYER_PATH, "music_assistant_prime_wake_group")
 
-    for token in (
-        "input_boolean.guest_mode",
-        "media_player.ma_group_guest",
-        "media_player.ma_group_everywhere",
-    ):
-        assert token in spotify_block
-        assert token in radio_block
+    assert "input_boolean.guest_mode" in spotify_block
+    assert "input_boolean.guest_mode" in radio_block
+    for block in (spotify_block, radio_block):
+        assert "media_player.bedroom_sonos_2" in block
+        assert "media_player.bathroom_sonos_2" in block
+        assert "media_player.office_sonos_2" in block
+        assert "media_player.den_sonos_2" in block
+        assert "media_player.ma_group_guest" not in block
+        assert "media_player.ma_group_everywhere" not in block
+        assert "media_player.tiki_room_2" not in block
+        assert "script.music_assistant_prime_wake_group" in block
 
-    # Both target the guest-aware sync group: spotify_wake_up plays directly,
-    # the radio wake-up routes playback through the source helper.
+    for token in ("media_player.volume_set", "media_player.join"):
+        assert token in prime_group_block
+    assert "media_player.bedroom_sonos_2" in prime_group_block
+    assert "media_player.tiki_room_2" not in prime_group_block
+
+    # Both play through the bedroom MA player after preparing the exact
+    # policy wake group; the radio wake-up routes playback through the source helper.
     assert 'entity_id: "{{ playback_player }}"' in spotify_block
     assert 'target_entity: "{{ playback_player }}"' in radio_block
 
