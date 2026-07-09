@@ -18,20 +18,49 @@ SLOT_MIN = 5
 HORIZON_SLOTS = {h: h // SLOT_MIN for h in HORIZONS}
 PURGE_SLOTS = 48  # 4-hour autocorrelation purge at fold boundaries
 
-ROOMS = {
-    "owner_suite": {
+# Default room config, used only when apps.yaml provides no `rooms:` list.
+# The TPH sensors are the clean, purpose-built room-air sensors and carry
+# years of history — kept as the model target/actual. `temp_fallback` is the
+# area-level auto_areas aggregate, used only if the primary drops out at
+# inference (it runs ~1-2.6°F warm because it blends self-heating device
+# sensors, so it is a fallback, not the target).
+DEFAULT_ROOMS = [
+    {
+        "name": "owner_suite",
         "temp_sensor": "sensor.owner_suite_tph_temperature",
+        "temp_fallback": "sensor.bedroom_temperature_2",
+        "humidity_sensor": "sensor.owner_suite_tph_humidity",
         "confidence_sensor": "sensor.bedroom_room_confidence",
     },
-    "office": {
+    {
+        "name": "office",
         "temp_sensor": "sensor.office_tph_temperature",
+        "temp_fallback": "sensor.office_temperature_2",
+        "humidity_sensor": "sensor.office_tph_humidity",
         "confidence_sensor": "sensor.office_room_confidence",
     },
-    "guest_room": {
+    {
+        "name": "guest_room",
         "temp_sensor": "sensor.guest_room_tph_temperature",
+        "temp_fallback": "sensor.guest_room_temperature_2",
+        "humidity_sensor": "sensor.guest_room_tph_humidity",
         "confidence_sensor": None,
     },
-}
+]
+
+
+def _rooms_from_args(rooms_arg):
+    """Build an ordered {name: cfg} map from the apps.yaml `rooms:` list."""
+    rooms = {}
+    for entry in (rooms_arg or DEFAULT_ROOMS):
+        name = entry["name"]
+        rooms[name] = {
+            "temp_sensor": entry["temp_sensor"],
+            "temp_fallback": entry.get("temp_fallback"),
+            "humidity_sensor": entry.get("humidity_sensor"),
+            "confidence_sensor": entry.get("confidence_sensor"),
+        }
+    return rooms
 
 
 class RoomTempPredictor(hass.Hass):
@@ -41,9 +70,10 @@ class RoomTempPredictor(hass.Hass):
         self.influxdb_host = self.args.get("influxdb_host", "localhost")
         self.influxdb_port = int(self.args.get("influxdb_port", 8086))
         self.influxdb_db = self.args.get("influxdb_database", "home_assistant")
+        self.rooms = _rooms_from_args(self.args.get("rooms"))
 
-        self.models = {room: {} for room in ROOMS}
-        self.train_meta = {room: {} for room in ROOMS}
+        self.models = {room: {} for room in self.rooms}
+        self.train_meta = {room: {} for room in self.rooms}
 
         os.makedirs(self.model_dir, exist_ok=True)
         self._load_models_from_disk()
@@ -67,7 +97,7 @@ class RoomTempPredictor(hass.Hass):
         except ImportError:
             self.log("joblib not available; starting with linear fallback", level="WARNING")
             return
-        for room in ROOMS:
+        for room in self.rooms:
             loaded = {}
             for h in HORIZONS:
                 path = self._model_path(room, h)
@@ -272,9 +302,17 @@ class RoomTempPredictor(hass.Hass):
         else:
             confidence = pd.Series(dtype=float)
 
+        # Per-room indoor humidity (from the room's TPH sensor) — a proxy for
+        # latent load / occupancy (showers, people) and mild thermal signal.
+        hum_sensor = cfg.get("humidity_sensor")
+        room_humidity = (self._query_generic(client, hum_sensor) if hum_sensor else None)
+        if room_humidity is None:
+            room_humidity = pd.Series(dtype=float)
+
         # ---- align to room_temp index ----
         idx = room_temp.index
         df = pd.DataFrame({"room_temp": room_temp}, index=idx)
+        df["room_humidity"] = room_humidity.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
         df["outside_temp"] = outside_temp.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
         df["outside_humidity"] = outside_humidity.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
         df["cloud_cover"] = cloud_cover.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
@@ -558,7 +596,12 @@ class RoomTempPredictor(hass.Hass):
             return default
 
         now = datetime.now(timezone.utc)
-        room_temp = safe_float(self.get_state(cfg["temp_sensor"]))
+        # Primary is the clean room-air sensor (also the training target); the
+        # area aggregate is a robustness fallback only if the primary drops out.
+        room_temp = first_float([cfg["temp_sensor"], cfg.get("temp_fallback")])
+        room_humidity = safe_float(
+            self.get_state(cfg["humidity_sensor"]) if cfg.get("humidity_sensor") else None
+        )
         # Prefer the canonical two-source averages (clean, junk-0 free); fall
         # back to the legacy shared sensors if canonical is unavailable.
         outside_temp = first_float(
@@ -592,6 +635,7 @@ class RoomTempPredictor(hass.Hass):
         # (e.g. wind/uv/precip before they have training history) are ignored.
         row = {
             "room_temp": room_temp,
+            "room_humidity": room_humidity,
             "outside_temp": outside_temp,
             "outside_humidity": outside_humidity,
             "cloud_cover": cloud_cover,
@@ -639,7 +683,7 @@ class RoomTempPredictor(hass.Hass):
 
         forecasts = self._get_weather_forecasts()
 
-        for room, cfg in ROOMS.items():
+        for room, cfg in self.rooms.items():
             try:
                 room_models = self.models.get(room, {})
                 meta = self.train_meta.get(room, {})
@@ -705,7 +749,7 @@ class RoomTempPredictor(hass.Hass):
         self._retrain_all()
 
     def _retrain_all(self):
-        for room, cfg in ROOMS.items():
+        for room, cfg in self.rooms.items():
             try:
                 new_models, meta = self._train_for_room(room, cfg)
                 if new_models:
