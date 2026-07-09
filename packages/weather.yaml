@@ -3509,6 +3509,65 @@ template:
       unit_of_measurement: "°F"
       state: "{{ state_attr('sensor.active_weather_entity_id', 'temperature') | int(default=0) }}"
 
+    # ------------------------------------------------------------------
+    # Canonical two-source outdoor readings.
+    # Average every source that currently reports a numeric value; if only
+    # one is available use it; if none are available the sensor becomes
+    # `unavailable` (never a junk 0). Consumed by the predictive room-temp
+    # control (room_temp_predictor / thermal_preemptor) at inference time.
+    #   temperature: Open-Meteo + NWS
+    #   humidity:    NWS + ecobee   (Open-Meteo exposes no humidity)
+    #   wind_speed:  Open-Meteo + NWS
+    # Cloud cover intentionally omitted — no reliable second source; see #866.
+    # ------------------------------------------------------------------
+    - name: canonical_outside_temperature
+      unique_id: canonical_outside_temperature
+      device_class: temperature
+      unit_of_measurement: "°F"
+      availability: >-
+        {{ ['weather.the_brewery', 'weather.kmsp']
+           | map('state_attr', 'temperature') | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = ['weather.the_brewery', 'weather.kmsp']
+           | map('state_attr', 'temperature') | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+      attributes:
+        source_count: >-
+          {{ ['weather.the_brewery', 'weather.kmsp']
+             | map('state_attr', 'temperature') | select('is_number') | list | count }}
+
+    - name: canonical_outside_humidity
+      unique_id: canonical_outside_humidity
+      device_class: humidity
+      unit_of_measurement: "%"
+      availability: >-
+        {{ ['weather.kmsp', 'weather.my_ecobee']
+           | map('state_attr', 'humidity') | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = ['weather.kmsp', 'weather.my_ecobee']
+           | map('state_attr', 'humidity') | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+      attributes:
+        source_count: >-
+          {{ ['weather.kmsp', 'weather.my_ecobee']
+             | map('state_attr', 'humidity') | select('is_number') | list | count }}
+
+    - name: canonical_wind_speed
+      unique_id: canonical_wind_speed
+      device_class: wind_speed
+      unit_of_measurement: "mph"
+      availability: >-
+        {{ ['weather.the_brewery', 'weather.kmsp']
+           | map('state_attr', 'wind_speed') | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = ['weather.the_brewery', 'weather.kmsp']
+           | map('state_attr', 'wind_speed') | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+      attributes:
+        source_count: >-
+          {{ ['weather.the_brewery', 'weather.kmsp']
+             | map('state_attr', 'wind_speed') | select('is_number') | list | count }}
+
     - name: precip_next_15m
       unique_id: precip_next_15m
       unit_of_measurement: "%"

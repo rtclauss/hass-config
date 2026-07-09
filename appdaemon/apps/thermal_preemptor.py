@@ -1,69 +1,59 @@
 """Deterministic MPC-lite thermostat preemptor.
 
-Reads T+60 predictions from room_temp_predictor, and if any room is predicted
-to overshoot the cooling setpoint by more than the configured margin, it
-preemptively lowers the Ecobee cooling setpoint. A timer reverts the hold
-after the estimated HVAC lead time elapses.
+Reads T+60 room-temperature predictions from room_temp_predictor and, if any
+monitored room is predicted to breach the Ecobee's active comfort setpoint by
+more than the configured margin, preemptively nudges the setpoint so the HVAC
+starts working ahead of the drift. A timer reverts to the Ecobee's own comfort
+schedule (via ecobee.resume_program) after the estimated HVAC lead time.
 
-All rooms share one Ecobee, so the worst-case gap across all monitored rooms
-drives a single set_temperature call.
+The controller is mode-aware and works with the Ecobee's native comfort
+settings rather than hard-coded temperatures:
+
+  * cool       -> single `temperature` target; precool when rooms overshoot
+  * heat       -> single `temperature` target; preheat when rooms undershoot
+  * heat_cool  -> range; adjust `target_temp_high` (cool) or `target_temp_low`
+                  (heat), whichever bound is predicted to be breached
+  * off        -> do nothing
+
+Preemption is skipped entirely while a window is open (configurable gate), so
+the system never fights fresh air. All rooms share one Ecobee, so the
+worst-case room drives a single set_temperature call.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import hassapi as hass
 
 MONITORED_ROOMS = ["owner_suite", "office", "guest_room"]
-MAX_SETPOINT_DROP_F = 3.0
+MAX_SETPOINT_SHIFT_F = 3.0  # never move the setpoint more than this from schedule
 
 
 class ThermalPreemptor(hass.Hass):
     def initialize(self):
-        self.active_hold = None  # {'revert_handle': ..., 'started': datetime, 'reason': str}
+        self.active_hold = None  # {'revert_handle', 'started', 'reason', ...}
 
-        start = datetime.now(timezone.utc)
-        import datetime as _dt
-        start = start + _dt.timedelta(seconds=60)
+        self.climate_entity = self.args.get("climate_entity", "climate.my_ecobee")
+        self.enable_switch = self.args.get(
+            "enable_switch", "input_boolean.thermal_preemptor_enabled"
+        )
+        self.margin_number = self.args.get(
+            "comfort_margin", "input_number.thermal_preemptor_comfort_margin"
+        )
+        # Open-window gate — preemption is skipped while this is `on`.
+        self.window_gate = self.args.get("window_gate", "binary_sensor.any_window_open")
+        self.rate_sensor = self.args.get(
+            "rate_sensor", "sensor.ecobee_modeled_rate_deg_per_min"
+        )
+        self.outside_temp_sensor = self.args.get(
+            "outside_temp_sensor", "sensor.canonical_outside_temperature"
+        )
+
+        start = datetime.now(timezone.utc) + timedelta(seconds=60)
         self.run_every(self._control_loop, start, 300)
 
     # ------------------------------------------------------------------
-    # HVAC rate
+    # Small helpers
     # ------------------------------------------------------------------
-
-    def _hvac_rate_estimate(self):
-        """Return |°F/min| cooling rate. Falls back to parametric formula when idle."""
-        rate_state = self.get_state("sensor.ecobee_modeled_rate_deg_per_min")
-        if rate_state not in (None, "unknown", "unavailable", ""):
-            try:
-                return abs(float(rate_state))
-            except (TypeError, ValueError):
-                pass
-        # Parametric fallback replicating climate.yaml formula for cooling
-        t_out_str = self.get_state("sensor.outside_temperature")
-        try:
-            t_out = float(t_out_str)
-        except (TypeError, ValueError):
-            t_out = 75.0
-        return max(0.008, min(0.016, 0.028 - 0.00023 * t_out))
-
-    # ------------------------------------------------------------------
-    # Setpoint helpers
-    # ------------------------------------------------------------------
-
-    def _get_cooling_setpoint(self):
-        t_high = self.get_state("climate.my_ecobee", attribute="target_temp_high")
-        if t_high not in (None, "unknown", "unavailable"):
-            try:
-                return float(t_high)
-            except (TypeError, ValueError):
-                pass
-        t_single = self.get_state("climate.my_ecobee", attribute="temperature")
-        if t_single not in (None, "unknown", "unavailable"):
-            try:
-                return float(t_single)
-            except (TypeError, ValueError):
-                pass
-        return 74.0
 
     @staticmethod
     def _safe_attr_float(value):
@@ -74,70 +64,129 @@ class ThermalPreemptor(hass.Hass):
         except (TypeError, ValueError):
             return None
 
-    # ------------------------------------------------------------------
-    # Control loop
-    # ------------------------------------------------------------------
+    def _attr(self, name):
+        return self._safe_attr_float(self.get_state(self.climate_entity, attribute=name))
 
-    def _control_loop(self, kwargs):
-        if self.get_state("input_boolean.thermal_preemptor_enabled") != "on":
-            return
+    def _margin(self):
+        m = self._safe_attr_float(self.get_state(self.margin_number))
+        return m if m is not None else 0.5
 
-        margin_str = self.get_state("input_number.thermal_preemptor_comfort_margin")
-        try:
-            margin = float(margin_str)
-        except (TypeError, ValueError):
-            margin = 0.5
+    def _hvac_rate_estimate(self):
+        """Return |°F/min| HVAC rate. Falls back to a parametric formula."""
+        rate_state = self._safe_attr_float(self.get_state(self.rate_sensor))
+        if rate_state is not None:
+            return abs(rate_state)
+        # Parametric fallback replicating the climate.yaml cooling formula.
+        t_out = self._safe_attr_float(self.get_state(self.outside_temp_sensor))
+        if t_out is None:
+            t_out = 75.0
+        return max(0.008, min(0.016, 0.028 - 0.00023 * t_out))
 
-        rate = self._hvac_rate_estimate()
-        setpoint = self._get_cooling_setpoint()
+    def _worst_breach(self, setpoint, cooling):
+        """Largest predicted breach of `setpoint` across monitored rooms.
 
-        # Find worst-case predicted overshoot across all rooms
+        cooling=True  -> breach is t60 above setpoint (overshoot).
+        cooling=False -> breach is t60 below setpoint (undershoot).
+        Returns (gap_degrees, room) with gap >= 0.
+        """
         worst_gap = 0.0
         worst_room = None
-
         for room in MONITORED_ROOMS:
             t60 = self._safe_attr_float(
                 self.get_state(f"sensor.room_temp_prediction_{room}", attribute="t60")
             )
             if t60 is None:
                 continue
-            gap = t60 - setpoint
+            gap = (t60 - setpoint) if cooling else (setpoint - t60)
             if gap > worst_gap:
                 worst_gap = gap
                 worst_room = room
+        return worst_gap, worst_room
 
-        if worst_gap < margin or worst_room is None:
+    # ------------------------------------------------------------------
+    # Control loop
+    # ------------------------------------------------------------------
+
+    def _control_loop(self, kwargs):
+        if self.get_state(self.enable_switch) != "on":
             return
-
         if self.active_hold is not None:
-            # Already preempting — don't stack another hold
+            # Already preempting — let the revert timer clear it.
+            return
+        if self.get_state(self.window_gate) == "on":
             return
 
-        # How many minutes does HVAC need to cool by worst_gap °F?
-        lead_min = int(worst_gap / rate) + 5  # 5-min buffer
+        mode = self.get_state(self.climate_entity)
+        if mode in (None, "off", "unavailable", "unknown"):
+            return
 
-        new_setpoint = setpoint - worst_gap
-        # Cap: never drop more than MAX_SETPOINT_DROP_F below scheduled
-        new_setpoint = max(new_setpoint, setpoint - MAX_SETPOINT_DROP_F)
+        margin = self._margin()
 
-        self.call_service(
-            "climate/set_temperature",
-            entity_id="climate.my_ecobee",
-            target_temp_high=round(new_setpoint, 1),
-        )
+        # Resolve which bound(s) to defend based on the active mode, and pick
+        # the single most-breached candidate (all rooms share one Ecobee).
+        candidates = []  # (gap, room, cooling, setpoint, temp_field)
+        if mode == "cool":
+            sp = self._attr("temperature")
+            if sp is not None:
+                gap, room = self._worst_breach(sp, cooling=True)
+                candidates.append((gap, room, True, sp, "temperature"))
+        elif mode == "heat":
+            sp = self._attr("temperature")
+            if sp is not None:
+                gap, room = self._worst_breach(sp, cooling=False)
+                candidates.append((gap, room, False, sp, "temperature"))
+        elif mode == "heat_cool":
+            cool_sp = self._attr("target_temp_high")
+            heat_sp = self._attr("target_temp_low")
+            if cool_sp is not None:
+                gap, room = self._worst_breach(cool_sp, cooling=True)
+                candidates.append((gap, room, True, cool_sp, "target_temp_high"))
+            if heat_sp is not None:
+                gap, room = self._worst_breach(heat_sp, cooling=False)
+                candidates.append((gap, room, False, heat_sp, "target_temp_low"))
 
-        handle = self.run_in(self._revert, lead_min * 60, room=worst_room)
+        candidates = [c for c in candidates if c[1] is not None]
+        if not candidates:
+            return
+        gap, room, cooling, setpoint, temp_field = max(candidates, key=lambda c: c[0])
+        if gap < margin:
+            return
+
+        rate = self._hvac_rate_estimate()
+        lead_min = int(gap / rate) + 5 if rate > 0 else 15  # +5min buffer
+
+        # Nudge toward the breach, capped at MAX_SETPOINT_SHIFT_F from schedule.
+        shift = min(gap, MAX_SETPOINT_SHIFT_F)
+        new_setpoint = round(setpoint - shift if cooling else setpoint + shift, 1)
+
+        data = {"entity_id": self.climate_entity}
+        if temp_field == "temperature":
+            data["temperature"] = new_setpoint
+        else:
+            # heat_cool range mode requires BOTH bounds on every call; move the
+            # breached bound and keep the other at its scheduled value.
+            cool_sp = self._attr("target_temp_high")
+            heat_sp = self._attr("target_temp_low")
+            data["target_temp_high"] = new_setpoint if temp_field == "target_temp_high" else cool_sp
+            data["target_temp_low"] = new_setpoint if temp_field == "target_temp_low" else heat_sp
+
+        self.call_service("climate/set_temperature", **data)
+
+        handle = self.run_in(self._revert, lead_min * 60, room=room)
         self.active_hold = {
             "revert_handle": handle,
             "started": datetime.now(timezone.utc).isoformat(),
-            "reason": worst_room,
-            "gap": round(worst_gap, 2),
+            "reason": room,
+            "mode": mode,
+            "direction": "cool" if cooling else "heat",
+            "gap": round(gap, 2),
             "lead_min": lead_min,
-            "new_setpoint": round(new_setpoint, 1),
+            "new_setpoint": new_setpoint,
         }
         self.log(
-            f"Preempting for {worst_room}: predicted +{worst_gap:.1f}°F overshoot; "
-            f"set T_high={new_setpoint:.1f}°F, revert in {lead_min}min"
+            f"Preempting {'cool' if cooling else 'heat'} for {room} ({mode}): "
+            f"predicted {gap:.1f}°F breach; set {temp_field}={new_setpoint}°F, "
+            f"revert in {lead_min}min"
         )
 
     # ------------------------------------------------------------------
@@ -148,8 +197,8 @@ class ThermalPreemptor(hass.Hass):
         room = kwargs.get("room", "unknown")
         self.call_service(
             "ecobee/resume_program",
-            entity_id="climate.my_ecobee",
+            entity_id=self.climate_entity,
             resume_all=True,
         )
         self.active_hold = None
-        self.log(f"Reverted preempt hold (triggered by {room} prediction)")
+        self.log(f"Reverted preempt hold to comfort schedule (was driven by {room})")
