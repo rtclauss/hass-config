@@ -518,6 +518,20 @@ thermal_preemptor:
   rate_sensor: sensor.ecobee_modeled_rate_deg_per_min
   outside_temp_sensor: sensor.canonical_outside_temperature
 
+prediction_scorer:
+  module: prediction_scorer
+  class: PredictionScorer
+  model_dir: /config/appdaemon/models
+  window_days: 7
+  influxdb_host: localhost
+  influxdb_port: 8086
+  influxdb_database: home_assistant
+  influx_measurement: room_temp_prediction_error
+  retrain_ratio_helper: input_number.prediction_retrain_rmse_ratio
+  nudge_switch: input_boolean.prediction_scorer_nudge_enabled
+  # Optional: also route the retrain nudge to a mobile notifier, e.g.
+  # notify_service: notify/mobile_app_ryan
+
 # groups:
 #   module: group_all
 #   class: GroupAll
