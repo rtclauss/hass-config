@@ -24,15 +24,25 @@ import hassapi as hass
 
 HORIZONS = [15, 30, 60]
 
-ROOM_TEMP = {
-    "owner_suite": "sensor.owner_suite_tph_temperature",
-    "office": "sensor.office_tph_temperature",
-    "guest_room": "sensor.guest_room_tph_temperature",
-}
+# Fallback when apps.yaml provides no `rooms:` list. Kept in sync with
+# room_temp_predictor so the scored "actual" is the model's exact target.
+DEFAULT_ROOMS = [
+    {"name": "owner_suite", "temp_sensor": "sensor.owner_suite_tph_temperature",
+     "temp_fallback": "sensor.bedroom_temperature_2"},
+    {"name": "office", "temp_sensor": "sensor.office_tph_temperature",
+     "temp_fallback": "sensor.office_temperature_2"},
+    {"name": "guest_room", "temp_sensor": "sensor.guest_room_tph_temperature",
+     "temp_fallback": "sensor.guest_room_temperature_2"},
+]
 
 
 class PredictionScorer(hass.Hass):
     def initialize(self):
+        self.rooms = {}
+        for entry in (self.args.get("rooms") or DEFAULT_ROOMS):
+            self.rooms[entry["name"]] = [
+                s for s in [entry["temp_sensor"], entry.get("temp_fallback")] if s
+            ]
         self.model_dir = self.args.get("model_dir", "/config/appdaemon/models")
         self.window_days = int(self.args.get("window_days", 7))
         self.tol_min = float(self.args.get("match_tolerance_min", 2.5))
@@ -116,6 +126,14 @@ class PredictionScorer(hass.Hass):
             self.get_state(f"sensor.room_temp_prediction_{room}", attribute=attr)
         )
 
+    def _actual(self, room):
+        """Actual room temp: first configured sensor that reads numeric."""
+        for ent in self.rooms.get(room, []):
+            v = self._safe_float(self.get_state(ent))
+            if v is not None:
+                return v
+        return None
+
     # ------------------------------------------------------------------
     # Scoring loop
     # ------------------------------------------------------------------
@@ -124,7 +142,7 @@ class PredictionScorer(hass.Hass):
         now = datetime.now(timezone.utc)
 
         # 1. Stamp the current predictions for each room.
-        for room in ROOM_TEMP:
+        for room in self.rooms:
             preds = {str(h): self._pred_attr(room, f"t{h}") for h in HORIZONS}
             if all(v is None for v in preds.values()):
                 continue
@@ -148,7 +166,7 @@ class PredictionScorer(hass.Hass):
                 if h in done_h:
                     continue
                 if abs(age_min - h) <= self.tol_min:
-                    actual = self._safe_float(self.get_state(ROOM_TEMP[rec["room"]]))
+                    actual = self._actual(rec["room"])
                     pred = self._safe_float(rec["preds"].get(str(h)))
                     if actual is not None and pred is not None:
                         sp = {
@@ -204,7 +222,7 @@ class PredictionScorer(hass.Hass):
     def _publish_metrics(self):
         worst_rmse = None
         worst_where = None
-        for room in ROOM_TEMP:
+        for room in self.rooms:
             m = self._room_metrics(room)
             rmse60 = m[60]["rmse"]
             attrs = {"window_days": self.window_days,
@@ -282,7 +300,7 @@ class PredictionScorer(hass.Hass):
         ratio = self._safe_float(self.get_state(self.ratio_helper), self.rmse_ratio_default)
 
         offenders = []
-        for room in ROOM_TEMP:
+        for room in self.rooms:
             m = self._room_metrics(room)
             live = m[60]["rmse"]
             n = m[60]["n"]

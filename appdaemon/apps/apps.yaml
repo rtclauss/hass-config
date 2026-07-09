@@ -506,6 +506,26 @@ room_temp_predictor:
   influxdb_host: localhost
   influxdb_port: 8086
   influxdb_database: home_assistant
+  # Room-based config (anchored, shared with prediction_scorer below).
+  # temp_sensor = clean room-air sensor + model target/actual (has history).
+  # temp_fallback = auto_areas area aggregate, used only if the primary drops
+  #   out (runs ~1-2.6 F warm; not the target).
+  rooms: &room_temp_rooms
+    - name: owner_suite
+      temp_sensor: sensor.owner_suite_tph_temperature
+      temp_fallback: sensor.bedroom_temperature_2
+      humidity_sensor: sensor.owner_suite_tph_humidity
+      confidence_sensor: sensor.bedroom_room_confidence
+    - name: office
+      temp_sensor: sensor.office_tph_temperature
+      temp_fallback: sensor.office_temperature_2
+      humidity_sensor: sensor.office_tph_humidity
+      confidence_sensor: sensor.office_room_confidence
+    - name: guest_room
+      temp_sensor: sensor.guest_room_tph_temperature
+      temp_fallback: sensor.guest_room_temperature_2
+      humidity_sensor: sensor.guest_room_tph_humidity
+      confidence_sensor: null
 
 thermal_preemptor:
   module: thermal_preemptor
@@ -529,6 +549,8 @@ prediction_scorer:
   influx_measurement: room_temp_prediction_error
   retrain_ratio_helper: input_number.prediction_retrain_rmse_ratio
   nudge_switch: input_boolean.prediction_scorer_nudge_enabled
+  # Same room map as the predictor so the scored "actual" is the exact target.
+  rooms: *room_temp_rooms
   # Optional: also route the retrain nudge to a mobile notifier, e.g.
   # notify_service: notify/mobile_app_ryan
 
