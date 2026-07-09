@@ -256,6 +256,13 @@ class RoomTempPredictor(hass.Hass):
         outside_temp = self._query_generic(client, "sensor.outside_temperature") or pd.Series(dtype=float)
         outside_humidity = self._query_generic(client, "sensor.outside_humidity") or pd.Series(dtype=float)
         cloud_cover = self._query_generic(client, "sensor.tomorrow_io_the_brewery_cloud_cover") or pd.Series(dtype=float)
+        # Local Ambient Weather PWS + OpenWeatherMap sensors (wind/rain/UV).
+        # These were added recently, so they may have little/no history yet —
+        # the coverage filter below drops any feature without enough history,
+        # and a future retrain picks them up automatically once it accrues.
+        wind_speed = self._query_generic(client, "sensor.pinehotties_wind_speed") or pd.Series(dtype=float)
+        precipitation = self._query_generic(client, "sensor.pinehotties_hourly_rain") or pd.Series(dtype=float)
+        uv_index = self._query_generic(client, "sensor.pinehotties_uv_index") or pd.Series(dtype=float)
         # sensor.hvac_activity is a categorical string (heating/cooling/idle) —
         # query it without a float cast, or every sample silently becomes 0.
         hvac_series = self._query_categorical(client, "sensor.hvac_activity")
@@ -271,6 +278,9 @@ class RoomTempPredictor(hass.Hass):
         df["outside_temp"] = outside_temp.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
         df["outside_humidity"] = outside_humidity.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
         df["cloud_cover"] = cloud_cover.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
+        df["wind_speed"] = wind_speed.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
+        df["precipitation"] = precipitation.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
+        df["uv_index"] = uv_index.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
         df["occupancy"] = confidence.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min")).fillna(0)
 
         # Drop junk 0s: sensor.outside_temperature/_humidity emit a literal 0
@@ -321,15 +331,17 @@ class RoomTempPredictor(hass.Hass):
         df["sun_azimuth_cos"] = np.cos(np.radians([v[1] for v in sun_vals]))
 
         # ---- oracle forecast features (actual t+N observations as training proxy) ----
-        # At inference these come from a real hourly forecast (NWS/Open-Meteo).
-        # Wind/precipitation are intentionally excluded — no recorded sensor
-        # exists to train them (they live only in weather-entity attributes),
-        # and including all-NaN columns here collapsed the whole training set
-        # through the final dropna().
+        # At inference these come from a real hourly forecast (OpenWeatherMap,
+        # then NWS/Open-Meteo). Any candidate without enough recorded history is
+        # pruned by the coverage filter below (and so is its oracle shift), so
+        # new sensors never collapse the training set.
         for h, slots in HORIZON_SLOTS.items():
             df[f"cloud_cover_{h}m"] = df["cloud_cover"].shift(-slots)
             df[f"outside_temp_{h}m"] = df["outside_temp"].shift(-slots)
             df[f"outside_humidity_{h}m"] = df["outside_humidity"].shift(-slots)
+            df[f"wind_speed_{h}m"] = df["wind_speed"].shift(-slots)
+            df[f"precipitation_{h}m"] = df["precipitation"].shift(-slots)
+            df[f"uv_index_{h}m"] = df["uv_index"].shift(-slots)
             sun_future = []
             for ts in df.index:
                 dt_f = (ts + timedelta(minutes=h)).to_pydatetime().replace(tzinfo=timezone.utc)
@@ -344,6 +356,19 @@ class RoomTempPredictor(hass.Hass):
         for h, slots in HORIZON_SLOTS.items():
             future_temp = df["room_temp"].shift(-slots)
             y_dict[f"delta_{h}"] = future_temp - df["room_temp"]
+
+        # ---- coverage filter ----
+        # Drop candidate feature columns without enough recorded history (e.g.
+        # sensors added recently) BEFORE the row-wise dropna, so a sparse column
+        # can't collapse the whole training set. Surviving columns define the
+        # model's feature set; inference self-syncs via meta['feature_cols'].
+        # Time/sun features are always fully covered and always survive.
+        min_coverage = 0.5
+        feature_like = [c for c in df.columns if not c.startswith("delta_")]
+        dropped = [c for c in feature_like if df[c].notna().mean() < min_coverage]
+        if dropped:
+            df = df.drop(columns=dropped)
+            self.log(f"{room}: skipping low-history features {sorted(dropped)}")
 
         # ---- interleaved week CV fold assignment ----
         df["fold"] = df.index.isocalendar().week % 5
@@ -434,17 +459,18 @@ class RoomTempPredictor(hass.Hass):
     # Inference helpers
     # ------------------------------------------------------------------
 
-    # Hourly-forecast entities in priority order. NWS carries both temperature
-    # and humidity per entry; Open-Meteo carries temperature; both are far
-    # better than the daily Tomorrow.io entity for 15/30/60-minute horizons.
+    # Hourly-forecast entities in priority order. OpenWeatherMap is richest —
+    # every entry carries cloud_coverage, temperature, humidity, wind_speed,
+    # uv_index and precipitation. NWS/Open-Meteo/met.no are fallbacks.
     FORECAST_ENTITIES = [
+        "weather.openweathermap",
         "weather.kmsp",
         "weather.the_brewery",
         "weather.forecast_home",
     ]
 
     def _get_weather_forecasts(self):
-        """Return dict: horizon_minutes -> {temperature, humidity, cloud_cover}."""
+        """Return dict: horizon_minutes -> forecast field dict (missing keys None)."""
         forecasts = []
         for entity_id in self.FORECAST_ENTITIES:
             try:
@@ -473,9 +499,10 @@ class RoomTempPredictor(hass.Hass):
                 result[minutes_ahead] = {
                     "temperature": entry.get("temperature"),
                     "humidity": entry.get("humidity"),
-                    # No provider exposes forecast cloud %; carried forward at
-                    # the call site until a numeric cloud source lands (#866).
                     "cloud_cover": entry.get("cloud_coverage"),
+                    "wind_speed": entry.get("wind_speed"),
+                    "uv_index": entry.get("uv_index"),
+                    "precipitation": entry.get("precipitation"),
                 }
             except Exception:
                 continue
@@ -540,7 +567,13 @@ class RoomTempPredictor(hass.Hass):
         outside_humidity = first_float(
             ["sensor.canonical_outside_humidity", "sensor.outside_humidity"]
         )
-        cloud_cover = safe_float(self.get_state("sensor.tomorrow_io_the_brewery_cloud_cover"))
+        # Canonical multi-source values (fall back to legacy where relevant).
+        cloud_cover = first_float(
+            ["sensor.canonical_cloud_cover", "sensor.tomorrow_io_the_brewery_cloud_cover"]
+        )
+        wind_speed = safe_float(self.get_state("sensor.canonical_wind_speed"))
+        uv_index = safe_float(self.get_state("sensor.canonical_uv_index"))
+        precipitation = safe_float(self.get_state("sensor.canonical_precipitation"))
         occupancy = safe_float(self.get_state(cfg["confidence_sensor"]) if cfg["confidence_sensor"] else None, 0)
 
         hvac_action = self.get_state("climate.my_ecobee", attribute="hvac_action") or ""
@@ -554,11 +587,17 @@ class RoomTempPredictor(hass.Hass):
         hours = now.hour + now.minute / 60.0
         doy = now.timetuple().tm_yday
 
+        # Full candidate feature superset. Whichever features the trained model
+        # actually uses is selected downstream via meta['feature_cols']; extras
+        # (e.g. wind/uv/precip before they have training history) are ignored.
         row = {
             "room_temp": room_temp,
             "outside_temp": outside_temp,
             "outside_humidity": outside_humidity,
             "cloud_cover": cloud_cover,
+            "wind_speed": wind_speed,
+            "precipitation": precipitation,
+            "uv_index": uv_index,
             "occupancy": occupancy,
             "hvac_heating": hvac_heating,
             "hvac_cooling": hvac_cooling,
@@ -576,9 +615,10 @@ class RoomTempPredictor(hass.Hass):
         for h in HORIZONS:
             fc = self._nearest_forecast(forecasts, h)
             elev_f, azim_f = self._sun_position(lat, lon, now + timedelta(minutes=h))
-            # cloud forecast is unavailable from every provider — carry the
-            # current value forward until a numeric cloud source lands (#866).
             row[f"cloud_cover_{h}m"] = safe_float(fc.get("cloud_cover"), cloud_cover)
+            row[f"wind_speed_{h}m"] = safe_float(fc.get("wind_speed"), wind_speed)
+            row[f"uv_index_{h}m"] = safe_float(fc.get("uv_index"), uv_index)
+            row[f"precipitation_{h}m"] = safe_float(fc.get("precipitation"), precipitation)
             row[f"outside_temp_{h}m"] = safe_float(fc.get("temperature"), outside_temp)
             row[f"outside_humidity_{h}m"] = safe_float(fc.get("humidity"), outside_humidity)
             row[f"sun_elevation_{h}m"] = elev_f
