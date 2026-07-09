@@ -19,30 +19,28 @@ HORIZON_SLOTS = {h: h // SLOT_MIN for h in HORIZONS}
 PURGE_SLOTS = 48  # 4-hour autocorrelation purge at fold boundaries
 
 # Default room config, used only when apps.yaml provides no `rooms:` list.
-# The TPH sensors are the clean, purpose-built room-air sensors and carry
-# years of history — kept as the model target/actual. `temp_fallback` is the
-# area-level auto_areas aggregate, used only if the primary drops out at
-# inference (it runs ~1-2.6°F warm because it blends self-heating device
-# sensors, so it is a fallback, not the target).
+# `temp_sensors` is the ordered list of clean room-air sensors averaged into
+# the room temperature (TPH + ecobee remote): if both report, they are
+# averaged; if only one is available, that one is used. The motion-sensor and
+# auto_areas aggregate are intentionally excluded — they self-heat ~1-3°F.
+# The first entry is treated as primary for rate/history slope (it carries the
+# longest recorded history).
 DEFAULT_ROOMS = [
     {
         "name": "owner_suite",
-        "temp_sensor": "sensor.owner_suite_tph_temperature",
-        "temp_fallback": "sensor.bedroom_temperature_2",
+        "temp_sensors": ["sensor.owner_suite_tph_temperature", "sensor.bedroom_temperature"],
         "humidity_sensor": "sensor.owner_suite_tph_humidity",
         "confidence_sensor": "sensor.bedroom_room_confidence",
     },
     {
         "name": "office",
-        "temp_sensor": "sensor.office_tph_temperature",
-        "temp_fallback": "sensor.office_temperature_2",
+        "temp_sensors": ["sensor.office_tph_temperature", "sensor.office_temperature"],
         "humidity_sensor": "sensor.office_tph_humidity",
         "confidence_sensor": "sensor.office_room_confidence",
     },
     {
         "name": "guest_room",
-        "temp_sensor": "sensor.guest_room_tph_temperature",
-        "temp_fallback": "sensor.guest_room_temperature_2",
+        "temp_sensors": ["sensor.guest_room_tph_temperature", "sensor.guest_room_temperature"],
         "humidity_sensor": "sensor.guest_room_tph_humidity",
         "confidence_sensor": None,
     },
@@ -54,9 +52,13 @@ def _rooms_from_args(rooms_arg):
     rooms = {}
     for entry in (rooms_arg or DEFAULT_ROOMS):
         name = entry["name"]
+        # Accept a `temp_sensors` list, or a legacy singular `temp_sensor`
+        # (+ optional `temp_fallback`) for backward compatibility.
+        sensors = entry.get("temp_sensors")
+        if not sensors:
+            sensors = [s for s in [entry.get("temp_sensor"), entry.get("temp_fallback")] if s]
         rooms[name] = {
-            "temp_sensor": entry["temp_sensor"],
-            "temp_fallback": entry.get("temp_fallback"),
+            "temp_sensors": sensors,
             "humidity_sensor": entry.get("humidity_sensor"),
             "confidence_sensor": entry.get("confidence_sensor"),
         }
@@ -278,8 +280,16 @@ class RoomTempPredictor(hass.Hass):
         lat, lon = self._latlon()
 
         # ---- pull raw series ----
-        room_temp = self._query_generic(client, cfg["temp_sensor"])
-        if room_temp is None or len(room_temp) < self.min_samples:
+        # Room temperature = mean of the configured room-air sensors, aligned
+        # on a common 5-min grid (NaN-skipping so a sensor with shorter history
+        # just contributes where it has data). Same rule as inference/scoring.
+        members = [self._query_generic(client, s) for s in cfg["temp_sensors"]]
+        members = [m for m in members if m is not None and not m.empty]
+        if not members:
+            self.log(f"{room}: insufficient room_temp data", level="WARNING")
+            return None, None
+        room_temp = pd.concat(members, axis=1).mean(axis=1).dropna()
+        if len(room_temp) < self.min_samples:
             self.log(f"{room}: insufficient room_temp data", level="WARNING")
             return None, None
 
@@ -595,10 +605,16 @@ class RoomTempPredictor(hass.Hass):
                     return v
             return default
 
+        def avg_float(entities, default=None):
+            """Mean of the entities that report a numeric state (else default)."""
+            vals = [safe_float(self.get_state(e)) for e in entities]
+            vals = [v for v in vals if v is not None]
+            return sum(vals) / len(vals) if vals else default
+
         now = datetime.now(timezone.utc)
-        # Primary is the clean room-air sensor (also the training target); the
-        # area aggregate is a robustness fallback only if the primary drops out.
-        room_temp = first_float([cfg["temp_sensor"], cfg.get("temp_fallback")])
+        # Room temp = mean of the configured room-air sensors (TPH + ecobee);
+        # if only one reports, that one is used. Matches training/scoring.
+        room_temp = avg_float(cfg["temp_sensors"])
         room_humidity = safe_float(
             self.get_state(cfg["humidity_sensor"]) if cfg.get("humidity_sensor") else None
         )
@@ -623,7 +639,7 @@ class RoomTempPredictor(hass.Hass):
         hvac_heating = 1.0 if "heat" in hvac_action.lower() else 0.0
         hvac_cooling = 1.0 if "cool" in hvac_action.lower() else 0.0
 
-        slope = self._get_history_slope(cfg["temp_sensor"], 15)
+        slope = self._get_history_slope(cfg["temp_sensors"][0], 15)
         outside_delta_3h = self._get_history_slope("sensor.canonical_outside_temperature", 180) * 180
 
         elev, azim = self._sun_position(lat, lon, now)
@@ -689,11 +705,18 @@ class RoomTempPredictor(hass.Hass):
                 meta = self.train_meta.get(room, {})
 
                 if not room_models:
-                    rate = self._linear_rate_fallback(cfg["temp_sensor"])
-                    current_temp_raw = self.get_state(cfg["temp_sensor"])
-                    if current_temp_raw in (None, "unknown", "unavailable"):
+                    rate = self._linear_rate_fallback(cfg["temp_sensors"][0])
+                    vals = []
+                    for ent in cfg["temp_sensors"]:
+                        raw = self.get_state(ent)
+                        if raw not in (None, "unknown", "unavailable", ""):
+                            try:
+                                vals.append(float(raw))
+                            except (TypeError, ValueError):
+                                pass
+                    if not vals:
                         continue
-                    current_temp = float(current_temp_raw)
+                    current_temp = sum(vals) / len(vals)
                     t15 = current_temp + rate * 15
                     t30 = current_temp + rate * 30
                     t60 = current_temp + rate * 60
