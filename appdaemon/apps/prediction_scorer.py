@@ -25,14 +25,15 @@ import hassapi as hass
 HORIZONS = [15, 30, 60]
 
 # Fallback when apps.yaml provides no `rooms:` list. Kept in sync with
-# room_temp_predictor so the scored "actual" is the model's exact target.
+# room_temp_predictor so the scored "actual" is the model's exact target:
+# the mean of the configured room-air sensors (TPH + ecobee remote).
 DEFAULT_ROOMS = [
-    {"name": "owner_suite", "temp_sensor": "sensor.owner_suite_tph_temperature",
-     "temp_fallback": "sensor.bedroom_temperature_2"},
-    {"name": "office", "temp_sensor": "sensor.office_tph_temperature",
-     "temp_fallback": "sensor.office_temperature_2"},
-    {"name": "guest_room", "temp_sensor": "sensor.guest_room_tph_temperature",
-     "temp_fallback": "sensor.guest_room_temperature_2"},
+    {"name": "owner_suite",
+     "temp_sensors": ["sensor.owner_suite_tph_temperature", "sensor.bedroom_temperature"]},
+    {"name": "office",
+     "temp_sensors": ["sensor.office_tph_temperature", "sensor.office_temperature"]},
+    {"name": "guest_room",
+     "temp_sensors": ["sensor.guest_room_tph_temperature", "sensor.guest_room_temperature"]},
 ]
 
 
@@ -40,9 +41,10 @@ class PredictionScorer(hass.Hass):
     def initialize(self):
         self.rooms = {}
         for entry in (self.args.get("rooms") or DEFAULT_ROOMS):
-            self.rooms[entry["name"]] = [
-                s for s in [entry["temp_sensor"], entry.get("temp_fallback")] if s
-            ]
+            sensors = entry.get("temp_sensors")
+            if not sensors:
+                sensors = [s for s in [entry.get("temp_sensor"), entry.get("temp_fallback")] if s]
+            self.rooms[entry["name"]] = sensors
         self.model_dir = self.args.get("model_dir", "/config/appdaemon/models")
         self.window_days = int(self.args.get("window_days", 7))
         self.tol_min = float(self.args.get("match_tolerance_min", 2.5))
@@ -127,12 +129,14 @@ class PredictionScorer(hass.Hass):
         )
 
     def _actual(self, room):
-        """Actual room temp: first configured sensor that reads numeric."""
-        for ent in self.rooms.get(room, []):
-            v = self._safe_float(self.get_state(ent))
-            if v is not None:
-                return v
-        return None
+        """Actual room temp: mean of the configured sensors that read numeric.
+
+        Matches room_temp_predictor's target (mean of TPH + ecobee remote), so
+        the scored error is against the exact quantity the model predicts.
+        """
+        vals = [self._safe_float(self.get_state(e)) for e in self.rooms.get(room, [])]
+        vals = [v for v in vals if v is not None]
+        return sum(vals) / len(vals) if vals else None
 
     # ------------------------------------------------------------------
     # Scoring loop

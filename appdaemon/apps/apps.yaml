@@ -507,23 +507,27 @@ room_temp_predictor:
   influxdb_port: 8086
   influxdb_database: home_assistant
   # Room-based config (anchored, shared with prediction_scorer below).
-  # temp_sensor = clean room-air sensor + model target/actual (has history).
-  # temp_fallback = auto_areas area aggregate, used only if the primary drops
-  #   out (runs ~1-2.6 F warm; not the target).
+  # temp_sensors = clean room-air sensors averaged into the room temperature
+  #   (TPH + ecobee remote): both -> mean; one available -> that one. This is
+  #   the model target and the scored actual. Motion sensors and the auto_areas
+  #   aggregate are excluded (they self-heat ~1-3 F).
   rooms: &room_temp_rooms
     - name: owner_suite
-      temp_sensor: sensor.owner_suite_tph_temperature
-      temp_fallback: sensor.bedroom_temperature_2
+      temp_sensors:
+        - sensor.owner_suite_tph_temperature
+        - sensor.bedroom_temperature
       humidity_sensor: sensor.owner_suite_tph_humidity
       confidence_sensor: sensor.bedroom_room_confidence
     - name: office
-      temp_sensor: sensor.office_tph_temperature
-      temp_fallback: sensor.office_temperature_2
+      temp_sensors:
+        - sensor.office_tph_temperature
+        - sensor.office_temperature
       humidity_sensor: sensor.office_tph_humidity
       confidence_sensor: sensor.office_room_confidence
     - name: guest_room
-      temp_sensor: sensor.guest_room_tph_temperature
-      temp_fallback: sensor.guest_room_temperature_2
+      temp_sensors:
+        - sensor.guest_room_tph_temperature
+        - sensor.guest_room_temperature
       humidity_sensor: sensor.guest_room_tph_humidity
       confidence_sensor: null
 
