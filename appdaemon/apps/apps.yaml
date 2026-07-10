@@ -501,11 +501,12 @@ thermostat_stats:
 room_temp_predictor:
   module: room_temp_predictor
   class: RoomTempPredictor
-  model_dir: /config/appdaemon/models
-  min_training_samples: 500
-  influxdb_host: localhost
-  influxdb_port: 8086
-  influxdb_database: home_assistant
+  # Thin shim only — training + inference live in the external
+  # room_temp_model_service container. This publishes live features to MQTT
+  # and relays the retrain button; the service publishes the prediction
+  # sensors back via MQTT discovery.
+  mqtt_base_topic: room_temp_model
+  climate_entity: climate.my_ecobee
   # Room-based config (anchored, shared with prediction_scorer below).
   # temp_sensors = clean room-air sensors averaged into the room temperature
   #   (TPH + ecobee remote): both -> mean; one available -> that one. This is

@@ -1,0 +1,22 @@
+services:
+  room-temp-model:
+    build: .
+    # or: image: room-temp-model:latest
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: 10.24.1.11          # broker reachable from this host
+      MQTT_PORT: "1883"
+      MQTT_USERNAME: room_temp_model
+      MQTT_PASSWORD: change-me
+      MQTT_BASE_TOPIC: room_temp_model
+      MQTT_DISCOVERY_PREFIX: homeassistant
+      INFLUXDB_HOST: 10.24.1.11
+      INFLUXDB_PORT: "8086"
+      INFLUXDB_DATABASE: home_assistant
+      LATITUDE: "44.761712"
+      LONGITUDE: "-93.203609"
+      MIN_TRAINING_SAMPLES: "500"
+      ROOMS_FILE: /config/rooms.json
+    volumes:
+      - ./models:/models
+      - ./rooms.json:/config/rooms.json:ro
