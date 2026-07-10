@@ -37,7 +37,10 @@ jobs:
         run: python -m pip install --upgrade pip uv
 
       - name: Run pytest
-        run: uv run --with pytest pytest
+        # pandas/numpy back the room-temp model tests (training-data build,
+        # junk-0 filter, coverage filter, train/infer feature parity); without
+        # them those tests skip instead of running.
+        run: uv run --with pytest --with pandas --with numpy pytest
 
   allium-weed:
     name: Allium Weed Check
