@@ -181,9 +181,13 @@ class RoomTempModel:
         uv_index = self._query_generic(client, "sensor.pinehotties_uv_index") or pd.Series(dtype=float)
         hvac_series = self._query_categorical(client, "sensor.hvac_activity")
 
-        hum_sensor = cfg.get("humidity_sensor")
-        room_humidity = self._query_generic(client, hum_sensor) if hum_sensor else None
-        room_humidity = room_humidity if room_humidity is not None else pd.Series(dtype=float)
+        hum_sensors = cfg.get("humidity_sensors")
+        if not hum_sensors:
+            hum_sensors = [cfg["humidity_sensor"]] if cfg.get("humidity_sensor") else []
+        hum_members = [self._query_generic(client, s) for s in hum_sensors]
+        hum_members = [m for m in hum_members if m is not None and not m.empty]
+        room_humidity = (pd.concat(hum_members, axis=1).mean(axis=1)
+                         if hum_members else pd.Series(dtype=float))
 
         conf = cfg.get("confidence_sensor")
         confidence = (self._query_generic(client, conf) if conf else None) or pd.Series(dtype=float)
