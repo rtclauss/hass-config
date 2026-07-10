@@ -274,8 +274,21 @@ class RoomTempModel:
         df["doy_sin"] = np.sin(2 * np.pi * doy / 365.25)
         df["doy_cos"] = np.cos(2 * np.pi * doy / 365.25)
 
-        sun_vals = [sun_position(self.lat, self.lon, ts.to_pydatetime().replace(tzinfo=timezone.utc))
-                    for ts in df.index]
+        # Sun position is the expensive per-row computation. The horizon-shifted
+        # times (t+15/30/60) land on the same 5-min grid as the base times, so a
+        # local memo turns ~4 astral calls per row into ~1 (most horizon lookups
+        # hit a base-time entry). Keyed by the UTC datetime.
+        _sun_cache = {}
+
+        def _sun(dt):
+            v = _sun_cache.get(dt)
+            if v is None:
+                v = sun_position(self.lat, self.lon, dt)
+                _sun_cache[dt] = v
+            return v
+
+        base_dts = [ts.to_pydatetime().replace(tzinfo=timezone.utc) for ts in df.index]
+        sun_vals = [_sun(dt) for dt in base_dts]
         df["sun_elevation"] = [v[0] for v in sun_vals]
         df["sun_azimuth_sin"] = np.sin(np.radians([v[1] for v in sun_vals]))
         df["sun_azimuth_cos"] = np.cos(np.radians([v[1] for v in sun_vals]))
@@ -287,9 +300,8 @@ class RoomTempModel:
             df[f"wind_speed_{h}m"] = df["wind_speed"].shift(-slots)
             df[f"precipitation_{h}m"] = df["precipitation"].shift(-slots)
             df[f"uv_index_{h}m"] = df["uv_index"].shift(-slots)
-            sun_future = [sun_position(self.lat, self.lon,
-                                       (ts + timedelta(minutes=h)).to_pydatetime().replace(tzinfo=timezone.utc))
-                          for ts in df.index]
+            delta = timedelta(minutes=h)
+            sun_future = [_sun(dt + delta) for dt in base_dts]
             df[f"sun_elevation_{h}m"] = [v[0] for v in sun_future]
             df[f"sun_azimuth_sin_{h}m"] = np.sin(np.radians([v[1] for v in sun_future]))
             df[f"sun_azimuth_cos_{h}m"] = np.cos(np.radians([v[1] for v in sun_future]))
@@ -328,36 +340,49 @@ class RoomTempModel:
                 report[room] = {"status": "insufficient_data"}
                 continue
             feature_cols = [c for c in df.columns if c != "fold" and not c.startswith("delta_")]
+            X_all = df[feature_cols].to_numpy()
+
+            # Purged interleaved-week folds. The fold split does not depend on
+            # the horizon, so compute the (train, test) index masks once. The
+            # purge zone is built with vectorized numpy slice-fills — O(n) — not
+            # the old membership test against a numpy array, which was O(n^2)
+            # and would not finish on multi-year data.
+            n = len(df)
+            fold_arr = df["fold"].to_numpy()
+            fold_masks = []
+            for fold_k in range(5):
+                test = fold_arr == fold_k
+                if test.sum() < 10:
+                    fold_masks.append(None)
+                    continue
+                purged = np.zeros(n, dtype=bool)
+                for i in np.flatnonzero(test):
+                    purged[max(0, i - PURGE_SLOTS):min(n, i + PURGE_SLOTS + 1)] = True
+                train = (~purged) & (fold_arr != fold_k)
+                fold_masks.append((train, test) if train.sum() >= 100 else None)
+
             room_models, metrics = {}, {}
             for h in HORIZONS:
-                y = y_dict[f"delta_{h}"].reindex(df.index)
+                y = y_dict[f"delta_{h}"].reindex(df.index).to_numpy()
                 cv_rmses = []
-                for fold_k in range(5):
-                    test_mask = df["fold"] == fold_k
-                    if test_mask.sum() < 10:
+                for masks in fold_masks:
+                    if masks is None:
                         continue
-                    purge = set()
-                    positions = np.where(test_mask.values)[0]
-                    for i in positions:
-                        for j in range(max(0, i - PURGE_SLOTS), min(len(df), i + PURGE_SLOTS + 1)):
-                            if j not in positions:
-                                purge.add(df.index[j])
-                    keep = ~df.index.isin(purge)
-                    train_mask = keep & (df["fold"] != fold_k)
-                    if train_mask.sum() < 100:
-                        continue
+                    train, test = masks
                     m = GradientBoostingRegressor(n_estimators=100, max_depth=4,
                                                   min_samples_leaf=20, random_state=42)
-                    m.fit(df.loc[train_mask, feature_cols], y[train_mask])
-                    preds = m.predict(df.loc[test_mask, feature_cols])
-                    cv_rmses.append(math.sqrt(mean_squared_error(y[test_mask], preds)))
+                    m.fit(X_all[train], y[train])
+                    preds = m.predict(X_all[test])
+                    cv_rmses.append(math.sqrt(mean_squared_error(y[test], preds)))
                 cv_mean = round(float(np.mean(cv_rmses)), 3) if cv_rmses else None
+                cv_std = round(float(np.std(cv_rmses)), 3) if cv_rmses else None
                 final = GradientBoostingRegressor(n_estimators=100, max_depth=4,
                                                   min_samples_leaf=20, random_state=42)
-                final.fit(df[feature_cols], y)
+                final.fit(X_all, y)
                 joblib.dump(final, self._model_path(room, h))
                 room_models[h] = final
                 metrics[f"rmse_{h}m_cv_mean"] = cv_mean
+                metrics[f"rmse_{h}m_cv_std"] = cv_std
             metrics["trained_at"] = datetime.now(timezone.utc).isoformat()
             metrics["n_samples"] = len(df)
             metrics["feature_cols"] = feature_cols
