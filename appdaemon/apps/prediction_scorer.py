@@ -66,6 +66,14 @@ class PredictionScorer(hass.Hass):
             "influx_measurement", "room_temp_prediction_error"
         )
 
+        # Daily rollup: how did yesterday's predictions do, and what did the
+        # weather and the HVAC actually do?
+        self.daily_report_time = self.args.get("daily_report_time", "00:05:00")
+        self.hvac_sensor = self.args.get("hvac_sensor", "sensor.hvac_activity")
+        self.outside_temp_sensors = self.args.get("outside_temp_sensors", [
+            "sensor.canonical_outside_temperature", "sensor.outside_temperature",
+        ])
+
         self.pending = []      # [{ts, room, preds:{'15','30','60'}, source, scored:[h,...]}]
         self.scored = []       # [{scored_ts, pred_ts, room, horizon, predicted, actual, error, source}]
         self.last_nudge = None
@@ -74,6 +82,7 @@ class PredictionScorer(hass.Hass):
 
         start = datetime.now(timezone.utc) + timedelta(seconds=90)
         self.run_every(self._score, start, 300)
+        self.run_daily(self._daily_report, self.parse_time(self.daily_report_time))
 
     # ------------------------------------------------------------------
     # Persistence
@@ -206,11 +215,13 @@ class PredictionScorer(hass.Hass):
     # Metrics
     # ------------------------------------------------------------------
 
-    def _room_metrics(self, room):
-        """Return {horizon: {mae, rmse, bias, n}} for a room over the window."""
+    def _room_metrics(self, room, records=None):
+        """Return {horizon: {mae, rmse, bias, n}} for a room over `records`
+        (defaults to the whole rolling window)."""
+        records = self.scored if records is None else records
         out = {}
         for h in HORIZONS:
-            errs = [s["error"] for s in self.scored if s["room"] == room and s["horizon"] == h]
+            errs = [s["error"] for s in records if s["room"] == room and s["horizon"] == h]
             if not errs:
                 out[h] = {"mae": None, "rmse": None, "bias": None, "n": 0}
                 continue
@@ -293,6 +304,134 @@ class PredictionScorer(hass.Hass):
             ])
         except Exception as e:
             self.log(f"InfluxDB write failed: {e}", level="WARNING")
+
+    # ------------------------------------------------------------------
+    # Daily rollup
+    # ------------------------------------------------------------------
+
+    def _day_outside_temp(self, start, end):
+        """(min, max, mean) outside temp over the window, junk 0s discarded."""
+        for ent in self.outside_temp_sensors:
+            try:
+                hist = self.get_history(entity_id=ent, start_time=start, end_time=end)
+            except Exception:
+                continue
+            if not hist or not hist[0]:
+                continue
+            vals = []
+            for s in hist[0]:
+                v = self._safe_float(s.get("state"))
+                # A literal 0 is the template's fallback when the weather source
+                # drops out; a genuine 0°F reading is indistinguishable, so this
+                # discards it too. Acceptable for a summary statistic.
+                if v is not None and v != 0:
+                    vals.append(v)
+            if vals:
+                return round(min(vals), 1), round(max(vals), 1), round(sum(vals) / len(vals), 1)
+        return None, None, None
+
+    def _day_hvac_runtime(self, start, end):
+        """Fraction of the window spent cooling / heating (time-weighted)."""
+        try:
+            hist = self.get_history(entity_id=self.hvac_sensor, start_time=start, end_time=end)
+        except Exception:
+            return None, None
+        if not hist or not hist[0]:
+            return None, None
+        rows = []
+        for s in hist[0]:
+            try:
+                rows.append((self._parse(s["last_changed"]), s.get("state")))
+            except Exception:
+                continue
+        if not rows:
+            return None, None
+        rows.sort(key=lambda r: r[0])
+        total = (end - start).total_seconds()
+        if total <= 0:
+            return None, None
+        secs = {"cooling": 0.0, "heating": 0.0}
+        for i, (ts, state) in enumerate(rows):
+            nxt = rows[i + 1][0] if i + 1 < len(rows) else end
+            span = (min(nxt, end) - max(ts, start)).total_seconds()
+            if span > 0 and state in secs:
+                secs[state] += span
+        return round(secs["cooling"] / total, 3), round(secs["heating"] / total, 3)
+
+    def _daily_report(self, kwargs):
+        """At the configured time, summarise the previous local day."""
+        now_local = self.datetime(aware=True)
+        end = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        start = end - timedelta(days=1)
+
+        day = [s for s in self.scored
+               if start <= self._parse(s["scored_ts"]).astimezone(end.tzinfo) < end]
+
+        per_room = {}
+        worst_rmse, worst_where = None, None
+        for room in self.rooms:
+            m = self._room_metrics(room, records=day)
+            per_room[room] = m
+            for h in HORIZONS:
+                r = m[h]["rmse"]
+                if r is not None and (worst_rmse is None or r > worst_rmse):
+                    worst_rmse, worst_where = r, f"{room}/t{h}"
+
+        t_min, t_max, t_mean = self._day_outside_temp(start, end)
+        cool_frac, heat_frac = self._day_hvac_runtime(start, end)
+
+        attrs = {
+            "date": start.date().isoformat(),
+            "outside_temp_min": t_min,
+            "outside_temp_max": t_max,
+            "outside_temp_mean": t_mean,
+            "hvac_cooling_fraction": cool_frac,
+            "hvac_heating_fraction": heat_frac,
+            "worst": worst_where,
+            "friendly_name": "Room Temp Daily Prediction Report",
+            "unit_of_measurement": "°F",
+        }
+        for room, m in per_room.items():
+            for h in HORIZONS:
+                attrs[f"{room}_rmse_{h}m"] = m[h]["rmse"]
+                attrs[f"{room}_bias_{h}m"] = m[h]["bias"]
+                attrs[f"{room}_n_{h}m"] = m[h]["n"]
+
+        self.set_state(
+            "sensor.room_temp_daily_report",
+            state=worst_rmse if worst_rmse is not None else "no_data",
+            attributes=attrs,
+        )
+
+        lines = [f"Room-temp predictions for {start.date().isoformat()}:"]
+        for room, m in per_room.items():
+            r60, b60, n60 = m[60]["rmse"], m[60]["bias"], m[60]["n"]
+            if n60:
+                lines.append(f"• {room}: T+60 RMSE {r60}°F, bias {b60:+}°F (n={n60})")
+            else:
+                lines.append(f"• {room}: no scored predictions")
+        if t_min is not None:
+            lines.append(f"Outside: {t_min}–{t_max}°F (mean {t_mean}°F)")
+        if cool_frac is not None:
+            lines.append(f"HVAC: cooling {cool_frac * 100:.0f}% / heating {heat_frac * 100:.0f}% of the day")
+
+        message = "\n".join(lines)
+        self.fire_event("room_temp_daily_report", date=start.date().isoformat(),
+                        per_room=per_room, outside_temp_min=t_min, outside_temp_max=t_max,
+                        hvac_cooling_fraction=cool_frac)
+        self.call_service(
+            "persistent_notification/create",
+            title="Room-temp daily prediction report",
+            message=message,
+            notification_id=f"room_temp_daily_report_{start.date().isoformat()}",
+        )
+        if self.notify_service:
+            try:
+                domain, service = self.notify_service.split("/", 1)
+                self.call_service(f"{domain}/{service}", message=message)
+            except Exception as e:
+                self.log(f"notify_service call failed: {e}", level="WARNING")
+        self.log(message)
 
     # ------------------------------------------------------------------
     # Retrain nudge
