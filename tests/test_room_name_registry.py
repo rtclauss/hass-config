@@ -131,7 +131,7 @@ def test_room_name_registry_is_documented_in_readme() -> None:
 def test_validate_config_workflow_runs_pytest_for_room_name_enforcement() -> None:
     text = VALIDATE_WORKFLOW_PATH.read_text(encoding="utf-8")
     assert "name: Pytest" in text
-    assert "uv run --with pytest pytest" in text
+    assert "uv run --with pytest --with pandas --with numpy pytest" in text
 
 
 def test_room_name_registry_keys_are_unique() -> None:
