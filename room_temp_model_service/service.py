@@ -96,6 +96,10 @@ class Service:
                 "json_attributes_topic": f"{self.base}/prediction/{room}",
                 "unit_of_measurement": "°F",
                 "device_class": "temperature",
+                # Mark unavailable after 2 missed publish cycles (5-min interval × 2).
+                # ThermalPreemptor's _safe_attr_float returns None for unavailable,
+                # so stale predictions never trigger a hold.
+                "expire_after": 660,
             }
             self.client.publish(f"{self.disc_prefix}/sensor/{uid}/config",
                                 json.dumps(cfg), retain=True)
