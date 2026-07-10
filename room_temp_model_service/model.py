@@ -113,10 +113,25 @@ class RoomTempModel:
         from influxdb import InfluxDBClient
         return InfluxDBClient(host=self.influx_host, port=self.influx_port, database=self.influx_db)
 
+    @staticmethod
+    def _influx_where(entity_id):
+        """Build the WHERE clause for a fully-qualified Home Assistant entity_id.
+
+        HA's InfluxDB integration does NOT store the fully-qualified entity_id:
+        it tags each point with the bare object_id plus a separate `domain` tag.
+        Querying entity_id='sensor.outside_temperature' matches nothing. The
+        domain filter matters because the same object_id can exist in more than
+        one domain (this database has both `sensor` and `number`).
+        """
+        if "." in entity_id:
+            domain, object_id = entity_id.split(".", 1)
+            return f"entity_id='{object_id}' AND domain='{domain}'"
+        return f"entity_id='{entity_id}'"
+
     def _query_generic(self, client, entity_id, start_days=730):
         import pandas as pd
-        start = (datetime.utcnow() - timedelta(days=start_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        q = (f"SELECT value FROM /.*/ WHERE entity_id='{entity_id}' "
+        start = (datetime.now(timezone.utc) - timedelta(days=start_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        q = (f"SELECT value FROM /.*/ WHERE {self._influx_where(entity_id)} "
              f"AND time>='{start}' ORDER BY time ASC")
         try:
             result = client.query(q)
@@ -135,25 +150,39 @@ class RoomTempModel:
             return None
 
     def _query_categorical(self, client, entity_id, start_days=730):
+        """Read a string-valued sensor (e.g. sensor.hvac_activity).
+
+        Home Assistant writes non-numeric states differently from numeric ones:
+        the field is `state` (not `value`) and the measurement is the
+        fully-qualified entity_id rather than the unit. Selecting `value` here
+        returns nothing, which silently turns the HVAC one-hots into constant
+        zeros — and because they are 0.0 rather than NaN, the coverage filter
+        keeps them. `value` is kept as a fallback for odd writers.
+        """
         import pandas as pd
-        start = (datetime.utcnow() - timedelta(days=start_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        q = (f"SELECT value FROM /.*/ WHERE entity_id='{entity_id}' "
-             f"AND time>='{start}' ORDER BY time ASC")
-        try:
-            result = client.query(q)
-            pts = []
-            for _k, points in result.items():
-                pts.extend(list(points))
-            if not pts:
-                return pd.Series(dtype=object)
-            df = pd.DataFrame(pts)
-            df["time"] = pd.to_datetime(df["time"])
-            df = df.set_index("time").sort_index()
-            if "value" not in df.columns:
-                return pd.Series(dtype=object)
-            return df["value"].astype(str).resample("5min").ffill()
-        except Exception:
-            return pd.Series(dtype=object)
+        start = (datetime.now(timezone.utc) - timedelta(days=start_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for field in ("state", "value"):
+            q = (f"SELECT {field} FROM /.*/ WHERE {self._influx_where(entity_id)} "
+                 f"AND time>='{start}' ORDER BY time ASC")
+            try:
+                result = client.query(q)
+                pts = []
+                for _k, points in result.items():
+                    pts.extend(list(points))
+                if not pts:
+                    continue
+                df = pd.DataFrame(pts)
+                if field not in df.columns:
+                    continue
+                df["time"] = pd.to_datetime(df["time"])
+                df = df.set_index("time").sort_index()
+                series = df[field].dropna()
+                if series.empty:
+                    continue
+                return series.astype(str).resample("5min").ffill()
+            except Exception:
+                continue
+        return pd.Series(dtype=object)
 
     # ------------------------------------------------------------------
     # Training
@@ -329,7 +358,7 @@ class RoomTempModel:
                 joblib.dump(final, self._model_path(room, h))
                 room_models[h] = final
                 metrics[f"rmse_{h}m_cv_mean"] = cv_mean
-            metrics["trained_at"] = datetime.utcnow().isoformat()
+            metrics["trained_at"] = datetime.now(timezone.utc).isoformat()
             metrics["n_samples"] = len(df)
             metrics["feature_cols"] = feature_cols
             with open(self._meta_path(room), "w") as f:
