@@ -238,6 +238,93 @@ def test_predict_selects_only_trained_feature_cols(rtm):
     assert out["t60"] == pytest.approx(73.0)
 
 
+# ------------------------------------------------------------- InfluxDB queries
+
+
+def test_influx_where_uses_bare_object_id_and_domain_tag():
+    """HA's InfluxDB integration tags points with the object_id + a `domain`
+    tag, never the fully-qualified entity_id. Querying the qualified id matches
+    nothing, which silently yields 'insufficient data' for every room."""
+    where = model.RoomTempModel._influx_where("sensor.outside_temperature")
+    assert "entity_id='outside_temperature'" in where
+    assert "domain='sensor'" in where
+    assert "sensor.outside_temperature" not in where
+
+
+def test_influx_where_disambiguates_domains():
+    """The same object_id can exist under several domains (e.g. sensor + number)."""
+    assert "domain='number'" in model.RoomTempModel._influx_where("number.foo")
+    assert "domain='sensor'" in model.RoomTempModel._influx_where("sensor.foo")
+
+
+def test_influx_where_passes_through_unqualified_id():
+    assert model.RoomTempModel._influx_where("outside_temperature") == "entity_id='outside_temperature'"
+
+
+def test_categorical_query_reads_the_state_field_not_value(rtm):
+    """HA stores non-numeric states in a `state` field; selecting `value`
+    returns nothing and silently zeroes the HVAC one-hots."""
+    pytest.importorskip("pandas")
+    import pandas as pd
+    asked = []
+
+    class _Client:
+        def query(self, q):
+            asked.append(q)
+            class _R:
+                def items(self_inner):
+                    if "SELECT state" not in q:
+                        return []          # `value` field does not exist
+                    return [(("sensor.hvac_activity", None), [
+                        {"time": "2026-07-01T00:00:00Z", "state": "cooling"},
+                        {"time": "2026-07-01T00:05:00Z", "state": "idle"},
+                    ])]
+            return _R()
+
+    out = rtm._query_categorical(_Client(), "sensor.hvac_activity")
+
+    assert asked[0].startswith("SELECT state"), "must try the `state` field first"
+    assert not out.empty
+    assert out.iloc[0] == "cooling"
+
+
+def test_categorical_query_falls_back_to_value_field(rtm):
+    pytest.importorskip("pandas")
+
+    class _Client:
+        def query(self, q):
+            class _R:
+                def items(self_inner):
+                    if "SELECT value" not in q:
+                        return []
+                    return [(("m", None), [{"time": "2026-07-01T00:00:00Z", "value": "heating"}])]
+            return _R()
+
+    out = rtm._query_categorical(_Client(), "sensor.hvac_activity")
+    assert not out.empty and out.iloc[0] == "heating"
+
+
+def test_queries_are_built_with_the_object_id(rtm):
+    """Capture the InfluxQL actually sent to the client."""
+    pytest.importorskip("pandas")
+    seen = []
+
+    class _Client:
+        def query(self, q):
+            seen.append(q)
+            class _R:
+                def items(self_inner):
+                    return []
+            return _R()
+
+    rtm._query_generic(_Client(), "sensor.owner_suite_tph_temperature")
+    rtm._query_categorical(_Client(), "sensor.hvac_activity")
+
+    assert any("entity_id='owner_suite_tph_temperature'" in q and "domain='sensor'" in q for q in seen)
+    assert any("entity_id='hvac_activity'" in q and "domain='sensor'" in q for q in seen)
+    assert not any("sensor.owner_suite_tph_temperature" in q for q in seen)
+
+
 # -------------------------------------------------- _build_training_data (pandas)
 
 
