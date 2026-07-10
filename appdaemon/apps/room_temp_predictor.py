@@ -96,6 +96,12 @@ class RoomTempPredictor(hass.Hass):
                 return v
         return default
 
+    def _avg_history_slope(self, entities, minutes=30):
+        """Average slope across all available sensors — matches the averaged room_temp feature."""
+        slopes = [self._history_slope(e, minutes) for e in entities]
+        slopes = [s for s in slopes if s is not None]
+        return sum(slopes) / len(slopes) if slopes else 0.0
+
     def _history_slope(self, entity_id, minutes=30):
         """°F/min slope from recent history (no numpy — plain least squares)."""
         try:
@@ -198,7 +204,7 @@ class RoomTempPredictor(hass.Hass):
                 "occupancy": self._safe_float(self.get_state(conf), 0) if conf else 0,
                 "hvac_heating": hvac_heating,
                 "hvac_cooling": hvac_cooling,
-                "room_temp_rate_15m": self._history_slope(cfg["temp_sensors"][0], 15),
+                "room_temp_rate_15m": self._avg_history_slope(cfg["temp_sensors"], 15),
                 "outside_delta_3h": outside_delta_3h,
                 "forecast": forecast,
             }
