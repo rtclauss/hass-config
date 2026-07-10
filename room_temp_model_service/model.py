@@ -173,12 +173,19 @@ class RoomTempModel:
         if len(room_temp) < self.min_samples:
             return None, None
 
-        outside_temp = self._query_generic(client, "sensor.outside_temperature") or pd.Series(dtype=float)
-        outside_humidity = self._query_generic(client, "sensor.outside_humidity") or pd.Series(dtype=float)
-        cloud_cover = self._query_generic(client, "sensor.tomorrow_io_the_brewery_cloud_cover") or pd.Series(dtype=float)
-        wind_speed = self._query_generic(client, "sensor.pinehotties_wind_speed") or pd.Series(dtype=float)
-        precipitation = self._query_generic(client, "sensor.pinehotties_hourly_rain") or pd.Series(dtype=float)
-        uv_index = self._query_generic(client, "sensor.pinehotties_uv_index") or pd.Series(dtype=float)
+        # NB: never write `query(...) or pd.Series(...)` — bool() on a non-empty
+        # Series raises "truth value is ambiguous", which the caller's except
+        # would swallow into a silent training failure.
+        def q(entity_id):
+            s = self._query_generic(client, entity_id) if entity_id else None
+            return s if s is not None else pd.Series(dtype=float)
+
+        outside_temp = q("sensor.outside_temperature")
+        outside_humidity = q("sensor.outside_humidity")
+        cloud_cover = q("sensor.tomorrow_io_the_brewery_cloud_cover")
+        wind_speed = q("sensor.pinehotties_wind_speed")
+        precipitation = q("sensor.pinehotties_hourly_rain")
+        uv_index = q("sensor.pinehotties_uv_index")
         hvac_series = self._query_categorical(client, "sensor.hvac_activity")
 
         hum_sensors = cfg.get("humidity_sensors")
@@ -189,12 +196,17 @@ class RoomTempModel:
         room_humidity = (pd.concat(hum_members, axis=1).mean(axis=1)
                          if hum_members else pd.Series(dtype=float))
 
-        conf = cfg.get("confidence_sensor")
-        confidence = (self._query_generic(client, conf) if conf else None) or pd.Series(dtype=float)
+        confidence = q(cfg.get("confidence_sensor"))
 
         idx = room_temp.index
 
         def align(s):
+            # An empty series carries a RangeIndex; reindexing that onto a
+            # DatetimeIndex with method="nearest" raises. A sensor with no
+            # history must become an all-NaN column so the coverage filter
+            # below can drop it.
+            if s is None or len(s) == 0:
+                return pd.Series(float("nan"), index=idx)
             return s.reindex(idx, method="nearest", tolerance=pd.Timedelta("10min"))
 
         df = pd.DataFrame({"room_temp": room_temp}, index=idx)
