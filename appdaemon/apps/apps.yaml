@@ -512,24 +512,31 @@ room_temp_predictor:
   #   (TPH + ecobee remote): both -> mean; one available -> that one. This is
   #   the model target and the scored actual. Motion sensors and the auto_areas
   #   aggregate are excluded (they self-heat ~1-3 F).
+  # humidity_sensors is averaged the same way as temp_sensors (mean of the
+  # available members). Only the TPH sensor measures per-room humidity today
+  # (ecobee SmartSensors report temp+occupancy only); the list keeps it
+  # symmetric with temperature and ready for a second sensor later.
   rooms: &room_temp_rooms
     - name: owner_suite
       temp_sensors:
         - sensor.owner_suite_tph_temperature
         - sensor.bedroom_temperature
-      humidity_sensor: sensor.owner_suite_tph_humidity
+      humidity_sensors:
+        - sensor.owner_suite_tph_humidity
       confidence_sensor: sensor.bedroom_room_confidence
     - name: office
       temp_sensors:
         - sensor.office_tph_temperature
         - sensor.office_temperature
-      humidity_sensor: sensor.office_tph_humidity
+      humidity_sensors:
+        - sensor.office_tph_humidity
       confidence_sensor: sensor.office_room_confidence
     - name: guest_room
       temp_sensors:
         - sensor.guest_room_tph_temperature
         - sensor.guest_room_temperature
-      humidity_sensor: sensor.guest_room_tph_humidity
+      humidity_sensors:
+        - sensor.guest_room_tph_humidity
       confidence_sensor: null
 
 thermal_preemptor:

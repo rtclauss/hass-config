@@ -34,15 +34,15 @@ FORECAST_ENTITIES = [
 DEFAULT_ROOMS = [
     {"name": "owner_suite",
      "temp_sensors": ["sensor.owner_suite_tph_temperature", "sensor.bedroom_temperature"],
-     "humidity_sensor": "sensor.owner_suite_tph_humidity",
+     "humidity_sensors": ["sensor.owner_suite_tph_humidity"],
      "confidence_sensor": "sensor.bedroom_room_confidence"},
     {"name": "office",
      "temp_sensors": ["sensor.office_tph_temperature", "sensor.office_temperature"],
-     "humidity_sensor": "sensor.office_tph_humidity",
+     "humidity_sensors": ["sensor.office_tph_humidity"],
      "confidence_sensor": "sensor.office_room_confidence"},
     {"name": "guest_room",
      "temp_sensors": ["sensor.guest_room_tph_temperature", "sensor.guest_room_temperature"],
-     "humidity_sensor": "sensor.guest_room_tph_humidity",
+     "humidity_sensors": ["sensor.guest_room_tph_humidity"],
      "confidence_sensor": None},
 ]
 
@@ -56,10 +56,13 @@ class RoomTempPredictor(hass.Hass):
             sensors = entry.get("temp_sensors")
             if not sensors:
                 sensors = [s for s in [entry.get("temp_sensor"), entry.get("temp_fallback")] if s]
+            hum = entry.get("humidity_sensors")
+            if not hum:
+                hum = [s for s in [entry.get("humidity_sensor")] if s]
             self.rooms.append({
                 "name": entry["name"],
                 "temp_sensors": sensors,
-                "humidity_sensor": entry.get("humidity_sensor"),
+                "humidity_sensors": hum,
                 "confidence_sensor": entry.get("confidence_sensor"),
             })
 
@@ -185,7 +188,7 @@ class RoomTempPredictor(hass.Hass):
             conf = cfg["confidence_sensor"]
             rooms[cfg["name"]] = {
                 "room_temp": temp,
-                "room_humidity": self._safe_float(self.get_state(cfg["humidity_sensor"])) if cfg["humidity_sensor"] else None,
+                "room_humidity": self._avg(cfg["humidity_sensors"]) if cfg["humidity_sensors"] else None,
                 "outside_temp": outside_temp,
                 "outside_humidity": outside_humidity,
                 "cloud_cover": cloud_cover,
