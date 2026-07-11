@@ -1,5 +1,5 @@
 # The Brewery Home Assistant Configuration 🍺
-[![Build Status](https://api.travis-ci.com/rtclauss/hass-config.svg?branch=main)](https://app.travis-ci.com/github/rtclauss/hass-config)
+[![Validate Home Assistant Config](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml/badge.svg?branch=main)](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml?query=branch%3Amain)
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
