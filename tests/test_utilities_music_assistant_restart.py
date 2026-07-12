@@ -57,3 +57,19 @@ def test_music_assistant_restart_only_runs_when_ryan_leaves_home() -> None:
         "self-rescheduling loop",
     ):
         assert token not in block
+
+
+def test_music_assistant_restart_ignores_false_source_tracker_zone_leave() -> None:
+    block = _automation_block("restart_music_assistant_every_12_17_hours")
+
+    guard = """    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: person.ryan
+            state:
+              - home
+              - unknown
+              - unavailable"""
+
+    assert guard in block
