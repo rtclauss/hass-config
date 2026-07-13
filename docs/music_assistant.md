@@ -15,6 +15,11 @@ Behavior (what plays when) is owned by `specs/alarm_wakeup.allium` and
   - `media_player.ma_group_everywhere` — bedroom, bathroom, office, den, tiki
     (default whole-house target)
   - `media_player.ma_group_guest` — bedroom, bathroom (used when guest mode is on)
+- Wake-up scripts intentionally do not inherit `ma_group_everywhere` membership.
+  They dynamically prepare the exact wake group from MA `_sonos_2` players:
+  bedroom + bathroom in guest mode, and bedroom + bathroom + office + den when
+  guest mode is off. This keeps Tiki Room out of owner-suite wake-up audio even
+  when the whole-house sync group includes it.
 
 ## NEVER hardcode a Spotify provider-instance id
 

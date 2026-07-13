@@ -276,41 +276,46 @@ def test_bedtime_join_retry_helper_is_stubbed_after_sync_group_migration() -> No
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in bedtime_block
 
 
-def test_radio_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:
+def test_radio_wakeup_prepares_exact_guest_aware_wake_group() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
-    assert 'playback_player' in block
-    assert 'media_player.ma_group_guest' in block
-    assert 'media_player.ma_group_everywhere' in block
+    assert 'playback_player: media_player.bedroom_sonos_2' in block
     assert 'input_boolean.guest_mode' in block
     assert 'prepare_group_before_play:' not in block
     assert 'should_prepare_group_before_play' not in block
     assert 'should_regroup_after_play' not in block
     assert 'action: media_player.unjoin' not in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
-    # Playback is routed through the source helper, targeting the guest-aware group.
+    assert 'action: media_player.join' not in block
+    assert 'action: script.music_assistant_prime_wake_group' in block
+    assert 'starting_volume: 0.01' in block
+    # Playback is routed through the source helper after preparing the exact group.
     assert 'target_entity: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
+    assert 'media_player.tiki_room_2' not in block
 
 
-def test_radio_wakeup_ramps_legacy_and_music_assistant_bedroom_bathroom_players() -> None:
+def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
-    # Volume operations must target the MA sync group via playback_player,
-    # not individual native Sonos players. The group volume is what governs
-    # audible output when MA is playing.
+    # Volume operations target exact MA Sonos members, not the mutable
+    # whole-house MA sync group whose membership can include unrelated rooms.
     assert len(re.findall(r"^\s+- media_player\.bedroom_sonos$", block, re.MULTILINE)) == 0
-    assert len(re.findall(r"^\s+- media_player\.bedroom_sonos_2$", block, re.MULTILINE)) == 0
     assert len(re.findall(r"^\s+- media_player\.bathroom_sonos$", block, re.MULTILINE)) == 0
-    assert len(re.findall(r"^\s+- media_player\.bathroom_sonos_2$", block, re.MULTILINE)) == 0
-    assert 'playback_player' in block
-    assert 'media_player.ma_group_guest' in block
-    assert 'media_player.ma_group_everywhere' in block
+    for entity_id in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.office_sonos_2",
+        "media_player.den_sonos_2",
+    ):
+        assert entity_id in block
+    assert "media_player.ma_group_everywhere" not in block
+    assert "media_player.ma_group_guest" not in block
+    assert "media_player.tiki_room_2" not in block
     assert block.count('target_entity: "{{ playback_player }}"') >= 1
-    assert block.count('entity_id: "{{ group_members }}"') >= 2
-    assert "volume_level: 0.01" in block
+    assert 'group_members: "{{ group_members }}"' in block
     assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
 
 
@@ -365,31 +370,53 @@ def test_play_wakeup_source_branches_url_vs_ma_uri() -> None:
     assert "enqueue: replace" in block
 
 
-def test_spotify_wakeup_uses_guest_aware_sync_group_without_manual_regrouping() -> None:
+def test_prime_wake_group_sets_exact_member_volume_and_joins_to_bedroom() -> None:
+    block = _script_block("music_assistant_prime_wake_group")
+
+    assert 'action: media_player.volume_set' in block
+    assert 'entity_id: "{{ group_members }}"' in block
+    assert 'volume_level: "{{ starting_volume | float(0.01) }}"' in block
+    assert 'action: media_player.join' in block
+    assert 'entity_id: media_player.bedroom_sonos_2' in block
+    assert "group_members | reject('eq', 'media_player.bedroom_sonos_2') | list" in block
+    assert 'media_player.tiki_room_2' not in block
+
+
+def test_spotify_wakeup_prepares_exact_guest_aware_wake_group() -> None:
     block = _script_block("spotify_wake_up")
 
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
-    assert 'playback_player' in block
-    assert 'media_player.ma_group_guest' in block
-    assert 'media_player.ma_group_everywhere' in block
+    assert 'playback_player: media_player.bedroom_sonos_2' in block
     assert 'input_boolean.guest_mode' in block
     assert 'prepare_group_before_play:' not in block
     assert 'should_prepare_group_before_play' not in block
     assert 'should_regroup_after_play' not in block
     assert 'action: media_player.unjoin' not in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
+    assert 'action: media_player.join' not in block
+    assert 'action: script.music_assistant_prime_wake_group' in block
+    assert 'starting_volume: 0.05' in block
     assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
+    assert 'media_player.tiki_room_2' not in block
 
 
-def test_bathroom_wakeup_automation_uses_sync_group_playback() -> None:
+def test_bathroom_wakeup_automation_uses_policy_wake_group_members() -> None:
     block = _automation_block("play_music_in_bathroom_when_up")
 
     assert 'action: script.spotify_wake_up' in block
     assert block.count('playback_entity_id: media_player.ma_group_everywhere') == 2
     assert block.count('playback_entity_id: media_player.bedroom_sonos_2') == 0
     assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 0
+    for entity_id in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+        "media_player.office_sonos_2",
+        "media_player.den_sonos_2",
+    ):
+        assert entity_id in block
+    assert "media_player.tiki_room_2" not in block
     assert 'regroup_after_play: true' not in block
     assert 'number.guest_room_fan_switch_ledintensitywhenoff' not in block
     assert 'media_player.media_stop' not in block
