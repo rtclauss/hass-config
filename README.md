@@ -1,5 +1,5 @@
 # Example Zone 02 Home Assistant Configuration 🍺
-[![Build Status](https://api.travis-ci.com/example_owner/hass-config.svg?branch=main)](https://app.travis-ci.com/github/example_owner/hass-config)
+[![Validate Home Assistant Config](https://github.com/example_owner/hass-config/actions/workflows/validate-config.yml/badge.svg?branch=main)](https://github.com/example_owner/hass-config/actions/workflows/validate-config.yml?query=branch%3Amain)
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
