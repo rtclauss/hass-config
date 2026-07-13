@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ACTIVE_CONFIG = ROOT / "esphome" / "watersoftener.yaml"
 LEGACY_CONFIG = (
-    ROOT / "esphome" / "archive" / "watersoftener-esp8266-vl53l0x.yaml"
+    ROOT / "docs" / "esphome_archive" / "watersoftener-esp8266-vl53l0x.yaml"
 )
 HA_PACKAGE = ROOT / "packages" / "water_softener.yaml"
 
