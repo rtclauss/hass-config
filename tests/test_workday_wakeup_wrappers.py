@@ -30,6 +30,12 @@ def _script_block(script_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def test_ksdj_wrapper_uses_current_music_assistant_library_item() -> None:
+    block = _script_block("sonos_ksdj_wake_up")
+
+    assert 'radio_uri: "library://radio/21"' in block
+
+
 def test_mpr_news_wrapper_prefers_direct_stream_then_tunein() -> None:
     block = _script_block("sonos_mpr_news_wake_up")
 
