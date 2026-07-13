@@ -149,7 +149,9 @@ def test_owner_suite_travel_weather_includes_fahrenheit_and_celsius() -> None:
     block = _script_block("publish_owner_suite_inky_display")
 
     assert "destination_weather | replace('F', '') | float(default=none)" in block
-    assert "destination_weather ~ ' / ' ~ destination_temp_c ~ 'C'" in block
+    assert "destination_temp_f | round(0) | int if destination_temp_f is number else none" in block
+    assert "destination_temp_f_rounded ~ 'F / ' ~ destination_temp_c ~ 'C'" in block
+    assert "destination_weather ~ ' / '" not in block
     assert "'label': 'Dest Wx', 'value': destination_weather_value" in block
 
 

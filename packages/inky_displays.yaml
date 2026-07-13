@@ -313,8 +313,9 @@ script:
             {% set airport_level = 'urgent' if airport_delay_minutes is number and airport_delay_minutes >= 30 else 'normal' %}
             {% set destination_weather = states('sensor.next_travel_flight_destination_weather') %}
             {% set destination_temp_f = destination_weather | replace('F', '') | float(default=none) %}
+            {% set destination_temp_f_rounded = destination_temp_f | round(0) | int if destination_temp_f is number else none %}
             {% set destination_temp_c = ((destination_temp_f - 32) * 5 / 9) | round(0) | int if destination_temp_f is number else none %}
-            {% set destination_weather_value = (destination_weather ~ ' / ' ~ destination_temp_c ~ 'C') if destination_temp_c is number else weather_value %}
+            {% set destination_weather_value = (destination_temp_f_rounded ~ 'F / ' ~ destination_temp_c ~ 'C') if destination_temp_c is number else weather_value %}
             {% set travel_rows = [
               {'label': 'Flight', 'value': (flight_label ~ ' ' ~ flight_destination ~ ' ' ~ flight_time) | trim, 'level': 'emphasis'},
               {'label': 'Status', 'value': flight_delay_value, 'level': 'urgent' if flight_status in ['cancelled', 'diverted'] or delay_minutes | int(0) >= 30 else 'normal'},
