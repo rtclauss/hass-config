@@ -249,13 +249,13 @@ def test_arrival_music_sets_volume_on_selected_music_assistant_group_members() -
         )
 
 
-def test_bedtime_targets_guest_aware_sync_group_before_playing() -> None:
+def test_bedtime_targets_owner_suite_sync_group_before_playing() -> None:
     block = _script_block("spotify_bedtime")
 
     assert "bedtime_playback_entity" in block
     assert "media_player.ma_group_guest" in block
-    assert "media_player.ma_group_everywhere" in block
-    assert "input_boolean.guest_mode" in block
+    assert "media_player.ma_group_everywhere" not in block
+    assert "input_boolean.guest_mode" not in block
     assert 'action: script.music_assistant_prepare_bedroom_group' not in block
     assert 'action: script.music_assistant_play_item' in block
     assert block.index("media_player.ma_group_guest") < block.index(
@@ -578,6 +578,11 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     # rampdown, so the volume_set tolerates errors and no step opts out.
     assert "continue_on_error: true" in block
     assert "continue_on_error: false" not in block
+    assert block.count("- media_player.bedroom_sonos_2") == 4
+    assert block.count("- media_player.bathroom_sonos_2") == 4
+    assert "media_player.office_sonos_2" not in block
+    assert "media_player.den_sonos_2" not in block
+    assert "media_player.tiki_room_2" not in block
 
 
 def test_spotify_bedtime_reapplies_repeat_to_started_queue_before_rampdown() -> None:
