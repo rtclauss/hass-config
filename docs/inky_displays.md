@@ -81,7 +81,7 @@ Payloads are compact JSON. Required fields:
     {
       "type": "rows",
       "rows": [
-        {"icon": "mdi:weather-snowy", "label": "Weather", "value": "24F Snow", "level": "normal"},
+        {"icon": "mdi:weather-snowy", "label": "Weather", "value": "24F / -4C Snow", "level": "normal"},
         {"icon": "mdi:door-closed", "label": "Doors", "value": "Closed", "level": "normal"}
       ]
     }
@@ -208,7 +208,7 @@ Current owner-suite rows:
 
 | Row | Value source | Level behavior |
 | --- | --- | --- |
-| Weather | `sensor.outside_temperature` plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
+| Weather | `sensor.outside_temperature` converted and shown as Fahrenheit/Celsius, plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | Night-only; `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | Night-only; shown when no urgent status is active |
 | Next | Next `calendar.ryan_claussen` event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
@@ -234,6 +234,11 @@ meeting alarm or urgent `Status`. Meeting alarm details are night-only, and
 safety/exception status takes priority over the meeting row. The publish script
 also requests hourly forecast data at publish time for event-weather checks,
 with the legacy `forecast_json` attribute kept only as a fallback.
+
+All temperatures rendered in the owner-suite weather rows use the compact
+`73F / 23C` format. This includes current weather, tomorrow's forecast, and
+destination weather while a flight is active. Both units are rounded to whole
+numbers; the Inky never displays fractional temperature values.
 
 In `morning`, `up_for_day`, and `midday`, alarm and meeting-alarm rows are not
 shown. Those modes use current `Weather`, next calendar event time/title,
