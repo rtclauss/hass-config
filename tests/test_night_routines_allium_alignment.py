@@ -129,6 +129,31 @@ def test_spotify_bedtime_uses_bathroom_visit_or_timeout_before_rampdown() -> Non
         assert token in block
 
 
+def test_bedtime_audio_stays_within_allium_owner_suite_scope() -> None:
+    spec = (ROOT / "specs" / "night_routines.allium").read_text(encoding="utf-8")
+    bedtime_block = _script_block(MEDIA_PLAYER_PATH, "spotify_bedtime")
+    rampdown_block = _script_block(MEDIA_PLAYER_PATH, "spotify_bedtime_volume")
+
+    assert "ensures: BedtimeAudioRequested(bedroom_suite)" in spec
+    assert "bedtime_playback_entity: media_player.ma_group_guest" in bedtime_block
+
+    for unrelated_player in (
+        "media_player.ma_group_everywhere",
+        "media_player.office_sonos_2",
+        "media_player.den_sonos_2",
+        "media_player.tiki_room_2",
+    ):
+        assert unrelated_player not in bedtime_block
+        assert unrelated_player not in rampdown_block
+
+    for owner_suite_player in (
+        "media_player.bedroom_sonos_2",
+        "media_player.bathroom_sonos_2",
+    ):
+        assert owner_suite_player in bedtime_block
+        assert owner_suite_player in rampdown_block
+
+
 def test_goodnight_integrity_preserves_bedroom_audio_and_pauses_unrelated_rooms() -> None:
     block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
 
