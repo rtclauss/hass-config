@@ -187,6 +187,21 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         },
         {
             "spec": "specs/alarm_wakeup.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "allowed_changed_line_patterns": [
+                '-*radio_uri: "library://radio/12"',
+                '+*radio_uri: "library://radio/21"',
+            ],
+            "classification": "media-library-record repair",
+            "reason": (
+                "Exact media URIs are explicitly excluded by specs/alarm_wakeup.allium; "
+                "issue #875 and PR #876 replace KSDJ's stale Music Assistant library "
+                "record without changing wake-up scheduling, playback verification, "
+                "retry, fallback, grouping, or volume-ramp behavior."
+            ),
+        },
+        {
+            "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/media_player.yaml"],
             "classification": "non-wakeup-scope change",
             "reason": (

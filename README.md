@@ -121,7 +121,7 @@ Radio wake-up scripts now use Music Assistant item URIs instead of Sonos favorit
 
 Current examples:
 
-- `library://radio/12`
+- `library://radio/21`
 - `tunein--S3NwgspV://radio/s34350`
 - `tunein--S3NwgspV://radio/s20620`
 
