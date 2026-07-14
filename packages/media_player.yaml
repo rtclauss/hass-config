@@ -1848,9 +1848,7 @@ script:
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
       - variables:
-          bedtime_playback_entity: >-
-            {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
-               else 'media_player.ma_group_everywhere' }}
+          bedtime_playback_entity: media_player.ma_group_guest
           bedtime_media_type: "{{ 'radio' if 'somafm.com' in playlist else '' }}"
           bedtime_apple_music_fallback_uri: "apple_music://track/1492333325"
           bedtime_apple_music_fallback_media_type: ""
@@ -1887,8 +1885,6 @@ script:
           entity_id:
             - media_player.bedroom_sonos_2
             - media_player.bathroom_sonos_2
-            - media_player.office_sonos_2
-            - media_player.den_sonos_2
         data:
           volume_level: 0.20
       - alias: "Let bedtime volume settle before playback starts"
@@ -2062,27 +2058,22 @@ script:
             - delay_minutes: 0
               entity_id:
                 - media_player.bedroom_sonos_2
-                - media_player.office_sonos_2
                 - media_player.bathroom_sonos_2
-                - media_player.den_sonos_2
               volume_level: 0.1
             - delay_minutes: 2
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
-                - media_player.office_sonos_2
               volume_level: 0.07
             - delay_minutes: 2
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
-                - media_player.office_sonos_2
               volume_level: 0.05
             - delay_minutes: 2
               entity_id:
                 - media_player.bedroom_sonos_2
                 - media_player.bathroom_sonos_2
-                - media_player.office_sonos_2
               volume_level: 0.01
       - repeat:
           for_each: "{{ bedtime_rampdown_steps }}"
