@@ -12,6 +12,7 @@ from homeassistant.components.sensor import SensorEntity, SensorEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_RESOURCES
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.network import NoURLAvailableError, get_url
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import MailAndPackagesConfigEntry
@@ -39,6 +40,8 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+DELIVERED_SUFFIXES = {"delivered"}
 
 
 async def async_setup_entry(
@@ -85,7 +88,11 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
         self.data = self.coordinator.data
         parts = self.type.split("_")
         if len(parts) > 1:
-            self._tracking_key = f"{'_'.join(parts[:-1])}_tracking"
+            prefix = "_".join(parts[:-1])
+            if parts[-1] in DELIVERED_SUFFIXES:
+                self._tracking_key = f"{prefix}_delivered_tracking"
+            else:
+                self._tracking_key = f"{prefix}_tracking"
         else:
             self._tracking_key = f"{self.type}_tracking"
 
@@ -112,6 +119,8 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         value = self.coordinator.data.get(self.type)
 
         if self.type == "mail_updated":
@@ -140,6 +149,8 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
         """Return device specific state attributes."""
         attr = {}
         data = self.coordinator.data
+        if data is None:
+            return attr
 
         if any(
             sensor in self.type
@@ -147,10 +158,6 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
         ):
             if tracking := data.get(self._tracking_key):
                 attr[ATTR_TRACKING_NUM] = tracking
-
-        # Catch no data entries
-        if self.data is None:
-            return attr
 
         if "Amazon" in self._name:
             self._add_amazon_attributes(attr, data)
@@ -219,6 +226,9 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
+
         image = ""
         the_path = None
 
@@ -233,10 +243,10 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
 
         if self.type == "usps_mail_image_system_path" and image:
             _LOGGER.debug("Updating system image path to: %s", path)
-            the_path = f"{self.hass.config.path()}/{path}{image}"
+            the_path = self.hass.config.path(path, image)
         elif self.type == "usps_mail_grid_image_path" and grid_image:
             _LOGGER.debug("Updating grid image path to: %s", path)
-            the_path = f"{self.hass.config.path()}/{path}{grid_image}"
+            the_path = self.hass.config.path(path, grid_image)
         elif self.type == "usps_mail_image_url" and image:
             url = self._get_base_url()
             if url:
@@ -244,33 +254,12 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
         return the_path
 
     def _get_base_url(self) -> str | None:
-        """Return the best available base URL for building image links.
-
-        Priority: explicit external URL → HA Cloud remote URL → internal URL.
-        """
-        if self.hass.config.external_url:
-            return self.hass.config.external_url
-
-        # Try Home Assistant Cloud (Nabu Casa) — its remote URL is not exposed via
-        # hass.config.external_url when "Use Home Assistant Cloud" is selected.
+        """Return the best available base URL for building image links."""
         try:
-            from homeassistant.components.cloud import (  # noqa: PLC0415
-                CloudNotAvailable,
-                async_remote_ui_url,
-            )
-        except ImportError:
-            pass
-        else:
-            try:
-                return async_remote_ui_url(self.hass)
-            except (CloudNotAvailable, KeyError):
-                _LOGGER.debug("HA Cloud remote URL not available.")
-
-        if self.hass.config.internal_url:
-            _LOGGER.debug("Falling back to internal URL for image link.")
-            return self.hass.config.internal_url
-
-        return None
+            return get_url(self.hass, prefer_external=True)
+        except NoURLAvailableError:
+            _LOGGER.debug("No URL available for image link.")
+            return None
 
     @property
     def should_poll(self) -> bool:
