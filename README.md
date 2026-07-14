@@ -165,6 +165,7 @@ docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.5.0
 - [Home Assistant Label Model](docs/ha_labels.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
+- [Built-In Security Dashboard](docs/security_dashboard.md)
 - [Inky E-Ink Displays](docs/inky_displays.md)
 - [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
