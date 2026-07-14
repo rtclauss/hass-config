@@ -12,7 +12,7 @@ from .entity import MailandPackagesBinarySensorEntityDescription
 
 DOMAIN = "mail_and_packages"
 DOMAIN_DATA = f"{DOMAIN}_data"
-VERSION = "0.5.7"
+VERSION = "0.5.14"
 ISSUE_URL = "http://github.com/moralmunky/Home-Assistant-Mail-And-Packages"
 PLATFORM = "sensor"
 PLATFORMS = ["binary_sensor", "camera", "sensor"]
@@ -249,11 +249,9 @@ AMAZON_TIME_PATTERN_REGEX = [
     "Arrivée (\\w+ \\d+)",
     "Arrivée (\\w+ \\d*)",
     "Chega ((\\w+(-\\w+)?))",
-    "Arriving (tomorrow)",
-    "Arriving (today)",
     "Wordt bezorgd op (\\w+ \\d+ \\w+)",
     "Wordt bezorgd op (\\w+ \\d+)",
-    "Wordt (vandaag) bezorgd",
+    "Wordt (\\w+) bezorgd",
 ]
 AMAZON_EXCEPTION_SUBJECT = "Delivery update:"
 AMAZON_EXCEPTION_BODY = "running late"
@@ -437,6 +435,7 @@ SENSOR_DATA = {
             "donotreply_odd@dhl.com",
             "NoReply.ODD@dhl.com",
             "noreply@dhl.de",
+            "no-reply@dhl.de",
             "pl.no.reply@dhl.com",
             "support@dhl.com",
             "noreply@dhlecommerce.nl",
@@ -450,6 +449,7 @@ SENSOR_DATA = {
             "liegt am gewünschten Ablageort",
             "Ihre Sendung liegt im Briefkasten",
             "Zustellung an Ablageort",
+            "Ablageort",
             "Sendung zugestellt",
             "Paket wurde zugestellt",
             "Ihre AliExpress Sendung liegt im Briefkasten",
@@ -476,6 +476,7 @@ SENSOR_DATA = {
             "donotreply_odd@dhl.com",
             "NoReply.ODD@dhl.com",
             "noreply@dhl.de",
+            "no-reply@dhl.de",
             "pl.no.reply@dhl.com",
             "support@dhl.com",
             "noreply@dhlecommerce.nl",
@@ -502,6 +503,7 @@ SENSOR_DATA = {
             "scheduled for delivery TODAY",
             "zostanie dziś do Państwa doręczona",
             "wird Ihnen heute",
+            "wird Ihnen voraussichtlich",
             "heute zwischen",
             " - Shipment is out with courier for delivery - ",
             "Shipment is scheduled for delivery",
@@ -521,8 +523,15 @@ SENSOR_DATA = {
     },
     # Hermes.co.uk
     "hermes_delivered": {
-        "email": ["donotreply@myhermes.co.uk"],
-        "subject": ["Hermes has successfully delivered your"],
+        "email": [
+            "donotreply@myhermes.co.uk",
+            "noreply@paketankuendigung.myhermes.de",
+        ],
+        "subject": [
+            "Hermes has successfully delivered your",
+            "wurde an deinen WunschAblageort zugestellt",
+            "wurde zugestellt",
+        ],
     },
     "hermes_delivering": {
         "email": [
@@ -533,9 +542,11 @@ SENSOR_DATA = {
             "parcel is now with your local Hermes courier",
             "Ihre Hermes Sendung",
             "Deine Hermes Sendung",
+            "Deine Sendung kommt heute",
         ],
         "body": [
             "Voraussichtliche Zustellung",
+            "ist unterwegs",
         ],
     },
     "hermes_packages": {},
