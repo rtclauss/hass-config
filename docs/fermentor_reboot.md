@@ -49,6 +49,7 @@ Create `/config/.ssh/config` in the Home Assistant Core filesystem:
 ```sshconfig
 Host fermentor
   HostName <fermentor-address>
+  HostKeyAlias <fermentor-address>
   User <restricted-user>
   IdentityFile /config/.ssh/fermentor_reboot_ed25519
   IdentitiesOnly yes

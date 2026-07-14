@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "fermentor.yaml"
 DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+DOCUMENTATION_PATH = ROOT / "docs" / "fermentor_reboot.md"
 
 
 def test_fermentor_reboot_uses_restricted_noninteractive_ssh() -> None:
@@ -19,6 +20,15 @@ def test_fermentor_reboot_uses_restricted_noninteractive_ssh() -> None:
     assert "-F /config/.ssh/config" in text
     assert '"sudo -n /usr/bin/systemctl reboot"' in text
     assert "StrictHostKeyChecking=no" not in text
+
+
+def test_fermentor_ssh_alias_matches_documented_known_hosts_entry() -> None:
+    text = DOCUMENTATION_PATH.read_text(encoding="utf-8")
+
+    assert "Host fermentor" in text
+    assert "HostName <fermentor-address>" in text
+    assert "HostKeyAlias <fermentor-address>" in text
+    assert "ssh-keyscan -H <fermentor-address>" in text
 
 
 def test_testing_dashboard_has_confirmed_fermentor_reboot_button() -> None:
