@@ -32,6 +32,18 @@ def _script_block(script_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _automation_block(automation_id: str) -> str:
+    text = ZIGBEE_ZWAVE_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"^  - id: {re.escape(automation_id)}\n(.*?)(?=^  - (?:id|alias): |^script:\n|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    match = pattern.search(text)
+    if match is None:
+        raise AssertionError(f"Could not find automation {automation_id!r}")
+    return match.group(0)
+
+
 def _section(block: str, start_marker: str, end_marker: str) -> str:
     start = block.index(start_marker)
     end = block.index(end_marker, start)
@@ -124,11 +136,34 @@ def test_reset_script_uses_static_replay_snapshot_instead_of_runtime_capture() -
     assert "inovelli_output_mode_replay:" in block
     assert "inovelli_switch_type_replay:" in block
     assert "inovelli_fan_control_mode_replay:" in block
+    assert "inovelli_mmwave_wired_control_replay:" in block
     assert "inovelli_group_membership_replay:" in block
     assert "inovelli_binding_replay:" in block
     assert "bridge/request/devices" not in block
     assert "bridge/response/devices" not in block
     assert "captured_inovelli_" not in block
+
+
+def test_hall_transition_mmwave_firmware_control_stays_disabled() -> None:
+    block = _automation_block("enforce_hall_transition_mmwave_ha_control")
+
+    assert "trigger: state" in block
+    assert block.count("select.hall_transition_switch_mmwavecontrolwireddevice") >= 5
+    assert "action: select.select_option" in block
+    assert 'option: "Disabled"' in block
+
+
+def test_reset_script_restores_hall_transition_mmwave_control_to_disabled() -> None:
+    block = _script_block("reset_inovelli_switches")
+    section = _section(
+        block,
+        "inovelli_mmwave_wired_control_replay:",
+        "inovelli_output_mode_replay:",
+    )
+
+    assert 'option: "Disabled"' in section
+    assert "select.hall_transition_switch_mmwavecontrolwireddevice" in section
+    assert "+ inovelli_mmwave_wired_control_replay" in block
 
 
 def test_reset_script_replays_current_live_switch_modes_readably() -> None:
