@@ -157,7 +157,6 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
 def test_adaptive_light_bootstrap_only_enabled_for_allowed_rooms() -> None:
     allowed_switches = {
         "switch.adaptive_lighting_kitchen",
-        "switch.adaptive_lighting_basement",
         "switch.dining_room_adaptive_lighting_dining_room",
     }
     switch_pattern = re.compile(r"adaptive_switch:\s*(\S+)")
@@ -193,7 +192,7 @@ def test_adaptive_light_bootstrap_only_enabled_for_allowed_rooms() -> None:
             )
             assert switch_name in allowed_switches, (
                 f"{path.name}:{index + 1} enables adaptive_light_turn_on bootstrap "
-                f"for {switch_name!r}, outside the kitchen/basement/dining-room allow-list"
+                f"for {switch_name!r}, outside the kitchen/dining-room allow-list"
             )
 
 

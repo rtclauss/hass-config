@@ -2573,7 +2573,11 @@ script:
                 lights:
                   - "{{ repeat.item }}"
                 transition: 1
-                bootstrap: true
+                # These path targets are brightness-only Inovelli dimmers. A
+                # color-correction bootstrap adds a second Zigbee brightness
+                # command without correcting color, so delayed reports can
+                # replay the 1% level after the adaptive target and visibly
+                # flash the basement path. Apply the adaptive target once.
             - delay:
                 seconds: 1
       - action: light.turn_on

@@ -173,6 +173,10 @@ def test_turn_on_basement_lights_sequentially_stages_path_lights_before_tv_bias(
     assert "switch.adaptive_lighting_basement" in block
     assert "for_each:" in block
     assert "{{ repeat.item }}" in block
+    # The five path targets are brightness-only Inovelli dimmers. Bootstrapping
+    # them emits a redundant 1% command before the adaptive brightness command,
+    # and delayed Zigbee reports can visibly replay that low level out of order.
+    assert "bootstrap: true" not in block
 
     ordered_entities = (
         "light.basement_landing_switch",
