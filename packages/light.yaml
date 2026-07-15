@@ -891,17 +891,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: main-motion-sensed
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity_id:
-                      - binary_sensor.bayesian_bed_occupancy
-                      # - input_boolean.chatgpt_bed_occupied
-                    state: "off"
-                  - condition: state
-                    entity_id:
-                      - input_boolean.guest_mode
-                    state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
               - action: script.adaptive_light_turn_on
                 data:
@@ -981,17 +973,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: upstairs-motion-sensed
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity_id:
-                      - binary_sensor.bayesian_bed_occupancy
-                      # - input_boolean.chatgpt_bed_occupied
-                    state: "off"
-                  - condition: state
-                    entity_id:
-                      - input_boolean.guest_mode
-                    state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
               - action: script.adaptive_light_turn_on
                 data:
@@ -1119,7 +1103,7 @@ automation:
 
   - id: kitchen_lights_toggle
     alias: kitchen_lights_toggle
-    description: Kitchen motion lighting; enabled when guest mode is off.
+    description: Kitchen motion lighting; enabled when guest mode is off and the owner bed is unoccupied.
     mode: restart
     trace:
       stored_traces: 10
@@ -1151,6 +1135,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: kitchen-occupied
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
               - condition: time
                 after: "11:00:00"
                 before: "14:00:00"
@@ -1173,6 +1160,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: kitchen-occupied
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
               - condition: time
                 after: "17:00:00"
                 before: "20:00:00"
@@ -1200,6 +1190,9 @@ automation:
                     - light.kitchen_sink_overhead_switch
                     - light.kitchen_all
         default:
+          - condition: state
+            entity_id: binary_sensor.bayesian_bed_occupancy
+            state: "off"
           - action: script.adaptive_light_turn_on
             data:
               adaptive_switch: switch.adaptive_lighting_kitchen
@@ -1691,6 +1684,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: main-motion-sensed
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
               - action: script.adaptive_light_turn_on
                 data:
@@ -1731,6 +1727,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: upstairs-motion-sensed
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
               - action: script.adaptive_light_turn_on
                 data:
