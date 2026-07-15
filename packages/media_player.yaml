@@ -1702,6 +1702,13 @@ script:
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
+          arrival_pre_playback_fingerprint: >-
+            {{ [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') }}
       - delay:
           seconds: 90
       - action: media_player.shuffle_set
@@ -1727,12 +1734,61 @@ script:
         data:
           entity_id: "{{ playback_entity }}"
           spotify_uri: "{{ playlist }}"
-      - action: logbook.log
-        data:
-          entity_id: "{{ playback_entity }}"
-          domain: media_player
-          name: Arrival music is
-          message: " playing Arrival playlist: {{ playlist }}"
+      - alias: "Confirm arrival playback changed the group media"
+        wait_template: >-
+          {{ is_state(playback_entity, 'playing') and [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != arrival_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ playback_entity }}"
+              domain: media_player
+              name: Arrival music retry
+              message: " primary playback failed to start; retrying {{ playlist }}"
+          - alias: "Retry arrival music via Music Assistant"
+            action: script.music_assistant_play_spotify_uri
+            data:
+              entity_id: "{{ playback_entity }}"
+              spotify_uri: "{{ playlist }}"
+          - alias: "Confirm arrival retry changed the group media"
+            wait_template: >-
+              {{ is_state(playback_entity, 'playing') and [
+                  state_attr(playback_entity, 'media_content_id') | default('', true),
+                  state_attr(playback_entity, 'media_title') | default('', true),
+                  state_attr(playback_entity, 'media_artist') | default('', true),
+                  state_attr(playback_entity, 'media_album_name') | default('', true)
+                ] | join('|') != arrival_pre_playback_fingerprint }}
+            timeout:
+              seconds: 15
+            continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ playback_entity }}"
+              domain: media_player
+              name: Arrival music is
+              message: " playing Arrival playlist: {{ playlist }}"
+        else:
+          - action: persistent_notification.create
+            data:
+              notification_id: arrival_audio_failed
+              title: "Arrival audio failed"
+              message: >-
+                Arrival music failed twice to start on {{ playback_entity }}
+                using {{ playlist }}.
 
   spotify_bedtime:
     alias: "Spotify Bedtime"

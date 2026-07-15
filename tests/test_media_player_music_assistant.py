@@ -671,3 +671,30 @@ def test_arrival_and_wakeup_scripts_use_sequence_level_playlist_selection() -> N
                 raise AssertionError(
                     f"{script_id}: playlist found in script-level variables (must be sequence-level)"
                 )
+
+
+def test_arrival_verifies_retries_and_only_logs_success_after_playback() -> None:
+    block = _script_block("spotify_arrival")
+
+    for token in (
+        "arrival_pre_playback_fingerprint",
+        "Confirm arrival playback changed the group media",
+        "Confirm arrival retry changed the group media",
+        "state_attr(playback_entity, 'media_content_id')",
+        "!= arrival_pre_playback_fingerprint",
+        "seconds: 15",
+        'value_template: "{{ not wait.completed }}"',
+        'value_template: "{{ wait.completed }}"',
+        "Arrival music retry",
+        "arrival_audio_failed",
+        "Arrival audio failed",
+    ):
+        assert token in block, token
+
+    assert block.count("action: script.music_assistant_play_spotify_uri") == 2
+    assert block.index("Confirm arrival playback changed the group media") < block.index(
+        "Arrival music retry"
+    )
+    assert block.index("Confirm arrival retry changed the group media") < block.index(
+        "name: Arrival music is"
+    )
