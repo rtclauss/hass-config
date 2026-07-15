@@ -1489,6 +1489,40 @@ automation:
     action:
       - action: script.reset_inovelli_switches
 
+  - id: enforce_hall_transition_mmwave_ha_control
+    alias: enforce_hall_transition_mmwave_ha_control
+    description: >
+      Keep the Hall/Transition Switch's firmware occupancy-to-load control
+      disabled so Home Assistant can enforce bed-occupancy lighting policy.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+            state: "Disabled"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+            state: "unknown"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+            state: "unavailable"
+    action:
+      - action: select.select_option
+        target:
+          entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+        data:
+          option: "Disabled"
+
   - id: sync_trip_mode_inovelli_leds
     alias: sync_trip_mode_inovelli_leds
     description: Keep all Inovelli LED bars dark during trips and restore the normal LED profile when trip mode clears.
@@ -2377,6 +2411,10 @@ script:
             - select.owner_suite_bathroom_vanity_smartbulbmode
             - select.hall_stairway_smartbulbmode
             - select.kitchen_under_cabinet_smartbulbmode
+      inovelli_mmwave_wired_control_replay:
+        - option: "Disabled"
+          entities:
+            - select.hall_transition_switch_mmwavecontrolwireddevice
       inovelli_output_mode_replay:
         - option: "Dimmer"
           entities:
@@ -2734,6 +2772,7 @@ script:
       - repeat:
           for_each: >
             {{ inovelli_smart_bulb_mode_replay
+              + inovelli_mmwave_wired_control_replay
               + inovelli_output_mode_replay
               + inovelli_switch_type_replay
               + inovelli_fan_control_mode_replay }}
