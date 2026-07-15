@@ -53,3 +53,13 @@ def test_hallway_night_turn_off_requires_full_quiet_window_from_both_sensors() -
     assert durations[("binary_sensor.hall_main_foyer_motion_occupancy", "15")] == 2
     assert durations[("binary_sensor.hall_upstairs_motion_occupancy", "3")] == 2
     assert durations[("binary_sensor.hall_upstairs_motion_occupancy", "15")] == 2
+
+
+def test_hallway_motion_turn_on_paths_require_bed_to_be_unoccupied() -> None:
+    for automation_name in ("toggle_hallway_day", "hallway_light_toggle_at_night"):
+        block = _automation_block(LIGHT_PATH, automation_name)
+
+        for trigger_id in ("main-motion-sensed", "upstairs-motion-sensed"):
+            branch = block.split(f"id: {trigger_id}", 2)[2].split("sequence:", 1)[0]
+            assert "entity_id: binary_sensor.bayesian_bed_occupancy" in branch
+            assert 'state: "off"' in branch
