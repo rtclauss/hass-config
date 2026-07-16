@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 import sys
 from pathlib import Path
 
@@ -18,7 +19,11 @@ from scripts.ha_label_assignments import (  # noqa: E402
     rule_matches,
     validate_assignment_manifest,
 )
-from scripts.ha_label_taxonomy import load_label_specs, normalize_live_export  # noqa: E402
+from scripts.ha_label_taxonomy import (  # noqa: E402
+    load_label_specs,
+    main as taxonomy_main,
+    normalize_live_export,
+)
 
 ASSIGNMENTS_PATH = ROOT / "docs" / "ha_label_assignments.json"
 TAXONOMY_PATH = ROOT / "docs" / "ha_label_taxonomy.yaml"
@@ -31,6 +36,23 @@ def _manifest() -> dict:
 
 def _live_fixture() -> dict:
     return normalize_live_export(json.loads(LIVE_FIXTURE_PATH.read_text(encoding="utf-8")))
+
+
+def _complete_live_fixture(manifest: dict) -> dict:
+    live = deepcopy(_live_fixture())
+    areas_by_id = {area["area_id"]: area for area in live["areas"]}
+    for area_id in manifest["area_assignments"]:
+        areas_by_id.setdefault(area_id, {"area_id": area_id, "labels": []})
+    live["areas"] = list(areas_by_id.values())
+
+    entities_by_id = {entity["entity_id"]: entity for entity in live["entities"]}
+    for item in manifest["behaviors"] + manifest["helpers"]:
+        entities_by_id.setdefault(
+            item["entity_id"],
+            {"entity_id": item["entity_id"], "labels": []},
+        )
+    live["entities"] = list(entities_by_id.values())
+    return live
 
 
 def test_taxonomy_has_33_active_labels_and_only_documented_retirements() -> None:
@@ -141,6 +163,59 @@ def test_extension_labels_resolve_to_at_least_six_fixture_objects() -> None:
         audit["extension_counts"][label] >= manifest["minimum_items_for_extension"]
         for label in manifest["extension_labels"]
     )
+
+
+def test_audit_reports_missing_desired_registry_objects() -> None:
+    manifest = deepcopy(_manifest())
+    live = _complete_live_fixture(manifest)
+    manifest["area_assignments"]["missing_area"] = ["privacy_sensitive"]
+    live["entities"] = [
+        entity
+        for entity in live["entities"]
+        if entity["entity_id"] != "scene.arrive_home"
+    ]
+    mqtt_entity = next(
+        entity
+        for entity in live["entities"]
+        if entity["entity_id"] == "sensor.mqtt_0"
+    )
+    mqtt_entity["device_id"] = "missing_device"
+
+    audit = audit_assignments(manifest, live)
+
+    assert audit["missing_registry_objects"] == {
+        "area": ["missing_area"],
+        "device": ["missing_device"],
+        "entity": ["scene.arrive_home"],
+    }
+
+
+def test_apply_refuses_to_skip_missing_registry_objects(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    manifest = deepcopy(_manifest())
+    live = _complete_live_fixture(manifest)
+    manifest["area_assignments"]["missing_area"] = ["privacy_sensitive"]
+    manifest_path = tmp_path / "assignments.json"
+    live_path = tmp_path / "live.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    live_path.write_text(json.dumps(live), encoding="utf-8")
+
+    result = taxonomy_main(
+        [
+            "--assignments",
+            str(manifest_path),
+            "apply-assignments",
+            "--live-json",
+            str(live_path),
+        ]
+    )
+    output = json.loads(capsys.readouterr().out)
+
+    assert result == 1
+    assert output["status"] == "missing_registry_objects"
+    assert output["missing_registry_objects"] == {"area": ["missing_area"]}
 
 
 def test_retired_label_deletion_is_blocked_until_assignments_reach_zero() -> None:

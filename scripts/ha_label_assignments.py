@@ -421,6 +421,22 @@ def _registry_id(row: dict[str, Any], registry: str) -> str:
     return str(row[{"area": "area_id", "device": "id", "entity": "entity_id"}[registry]])
 
 
+def find_missing_registry_objects(
+    desired: dict[str, dict[str, set[str]]],
+    live: dict[str, Any],
+) -> dict[str, list[str]]:
+    missing: dict[str, list[str]] = {}
+    for registry in ("area", "device", "entity"):
+        live_ids = {
+            _registry_id(row, registry)
+            for row in _registry_rows(live, registry)
+        }
+        registry_missing = sorted(set(desired[registry]) - live_ids)
+        if registry_missing:
+            missing[registry] = registry_missing
+    return missing
+
+
 def plan_assignment_operations(
     manifest: dict[str, Any],
     live: dict[str, Any],
@@ -471,6 +487,7 @@ def audit_assignments(
         }
         for registry in ("area", "device", "entity")
     }
+    missing_registry_objects = find_missing_registry_objects(desired, live)
     required_entities = _labels_by_entity(
         list(manifest.get("behaviors", [])) + list(manifest.get("helpers", []))
     )
@@ -552,6 +569,7 @@ def audit_assignments(
     return {
         "coverage_by_domain": coverage_by_domain,
         "missing_entities": missing_entities,
+        "missing_registry_objects": missing_registry_objects,
         "runtime_only_behaviors": sorted(
             item["entity_id"]
             for item in manifest.get("behaviors", [])

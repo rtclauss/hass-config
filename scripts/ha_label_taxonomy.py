@@ -694,6 +694,7 @@ def command_audit_assignments(args: argparse.Namespace) -> int:
         audit["extension_threshold_failures"]
         or audit["scope_errors"]
         or audit["missing_entities"]
+        or audit["missing_registry_objects"]
         or audit["retired_assignments"]
         or audit["planned_operation_count"]
     )
@@ -706,6 +707,16 @@ def command_apply_assignments(args: argparse.Namespace) -> int:
         print_json({"status": "invalid_configuration", "errors": errors})
         return 1
     live = load_live_export(args.live_json) if args.live_json else fetch_live_from_ha()
+    audit = audit_assignments(manifest, live)
+    if audit["missing_registry_objects"]:
+        print_json(
+            {
+                "status": "missing_registry_objects",
+                "dry_run": not args.execute,
+                "missing_registry_objects": audit["missing_registry_objects"],
+            }
+        )
+        return 1
     operations = plan_assignment_operations(manifest, live)
     if not args.execute:
         print_json({"dry_run": True, "operation_count": len(operations), "operations": operations})
