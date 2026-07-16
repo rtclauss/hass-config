@@ -40,18 +40,27 @@ def test_storage_dashboard_uses_inverse_sensor_for_daily_plan_tile() -> None:
         '                    "service": "input_boolean.turn_off"'
     ) not in dashboard_text
 
-def test_home_default_charge_plan_skips_extra_tesla_schedule_override() -> None:
+def test_home_calendar_preconditioning_is_independent_of_charge_target() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "{% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}" in package_text
-    assert "tesla_plan.manage_tesla_schedule" in package_text
+    assert "{% set resident_home = is_state('person.ryan', 'home') %}" in package_text
+    assert (
+        "{% set precondition = has_calendar_departure and departure_window_open and resident_home and location_name == 'home' %}"
+        in package_text
+    )
+    assert 'value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != \'\' }}"' in package_text
+    assert "tesla_plan.manage_tesla_schedule" not in package_text
     assert "No extra home charging override is needed." in package_text
 
 
 def test_alarm_only_planner_skips_preconditioning_without_real_departure() -> None:
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
-    assert "{% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}" in package_text
+    assert (
+        "{% set precondition = has_calendar_departure and departure_window_open and resident_home and location_name == 'home' %}"
+        in package_text
+    )
     assert (
         "{% set precondition = (has_calendar_departure or alarm_enabled) and departure_window_open %}"
         not in package_text
@@ -59,13 +68,14 @@ def test_alarm_only_planner_skips_preconditioning_without_real_departure() -> No
     assert "skip cabin preconditioning until a real next-day departure is scheduled" in package_text
 
 
-def test_dashboard_copy_explains_alarm_only_days_and_home_schedule_override_logic() -> None:
+def test_dashboard_copy_explains_alarm_only_days_and_home_preconditioning_logic() -> None:
     tile_text = TESLA_TILE_PATH.read_text(encoding="utf-8")
     dashboard_text = DASHBOARD_PATH.read_text(encoding="utf-8")
 
     for text in (
         "Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs",
         "Cabin preconditioning only runs when a real next-day departure is scheduled",
+        "Cabin preconditioning is scheduled separately when Ryan and Nigori are home",
         "Planner is following tomorrow's alarm for charge-limit planning only",
         "Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed",
         "Planner is keeping the Tesla app home schedule because no extra home charging is needed",
@@ -73,6 +83,16 @@ def test_dashboard_copy_explains_alarm_only_days_and_home_schedule_override_logi
     ):
         assert text in tile_text
         assert text in dashboard_text
+
+
+def test_managed_departure_is_cancelled_when_resident_or_vehicle_leaves_home() -> None:
+    package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
+
+    assert "id: tesla_departure_cancel_when_home_context_ends" in package_text
+    assert "- person.ryan\n          - device_tracker.nigori_location_tracker\n        from: \"home\"" in package_text
+    assert "force_disable: true" in package_text
+    assert 'force_disable: "{{ not tesla_plan.resident_home or tesla_plan.location != \'home\' }}"' in package_text
+    assert "Cancel the Home Assistant-managed Tesla departure because Ryan or Nigori left home." in package_text
 
 
 def test_preconditioning_plan_includes_low_tpms_air_reminder() -> None:

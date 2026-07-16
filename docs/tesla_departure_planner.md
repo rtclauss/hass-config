@@ -92,7 +92,9 @@ The schedule helper preserves the Tesla app's own charging schedule when the car
 - `OCC`
 - `SPCC`
 
-At `home`, Home Assistant always sets the charge limit, but it only pushes a Tesla scheduled-departure override when the planner needs a non-default home charge target. Default-`80%` alarm or calendar plans keep the Tesla app's own home charging schedule authoritative and do not create extra Tesla schedule entries.
+At `home`, Home Assistant always sets the charge limit. For a real calendar departure, it also schedules cabin preconditioning whenever both Ryan and Nigori are home, regardless of the selected charge target. The scheduled-departure command preserves the Tesla app's charging defaults by omitting off-peak charging fields at protected locations. Alarm-only plans still do not schedule cabin preconditioning.
+
+`person.ryan` and `device_tracker.nigori_location_tracker` are both safety inputs. The planner will not create a preconditioning schedule unless both are `home`. If either leaves after Home Assistant creates a managed departure, `automation.tesla_departure_cancel_when_home_context_ends` immediately disables that managed departure and clears its tracking helpers.
 
 At `parents`, `OCC`, and `SPCC`, the planner is currently hands-off. Those locations are protected so Tesla-app charging defaults remain authoritative there, and Home Assistant does not actively create departure plans there.
 
@@ -129,15 +131,15 @@ Script:
 
 Behavior:
 
-- enables Tesla scheduled departure only for real calendar departures that still have a valid future departure time and need a Home Assistant-managed override
+- enables Tesla scheduled departure for real calendar departures with a valid future departure time whenever both Ryan and Nigori are home, regardless of charge target
 - does not enable Tesla scheduled departure for alarm-only plans; those only influence charge-limit planning and planner messaging
 - disables Tesla scheduled departure when the planner no longer has a Home Assistant-managed preconditioning plan to keep
 - refuses to schedule preconditioning when the computed departure window is already in the past
 - stores the last Home Assistant-managed Tesla departure as a Unix timestamp in `input_number.tesla_managed_departure_ts` and tracks whether that schedule is active with `input_boolean.tesla_managed_departure_active`
 - clears that Home Assistant-managed Tesla schedule as soon as the stored departure time passes, even if the car is no longer at home
 - skips scheduled departure for all-day calendar events
-- preserves Tesla-app charging schedules at `home` unless the planner needs a non-default home charge target
-- skips Tesla scheduled-departure writes for protected-location default-`80%` plans so preconditioning-only home plans do not create extra Tesla schedule entries
+- preserves Tesla-app charging schedules at `home` while scheduling cabin preconditioning separately
+- cancels a Home Assistant-managed departure immediately if either Ryan or Nigori leaves home
 - preserves Tesla-app charging schedules at protected locations during cleanup by only clearing Tesla when the live scheduled-departure state still matches the stored HA-managed departure and Tesla is not advertising scheduled charging or off-peak charging
 
 ### Notifications
@@ -196,9 +198,9 @@ Manual regression cases worth checking in Template Developer Tools or against li
 - Tesla `sensor.nigori_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
 - A just-finished calendar departure disappears from `binary_sensor.upcoming_trip_charging` and clears Tesla scheduled departure on the next planner recompute.
 - A calendar event that is still upcoming but already inside the departure buffer skips scheduled preconditioning instead of creating a stale past-due Tesla schedule.
-- At `home`, default-`80%` alarm or calendar departures do not create extra Tesla schedule entries, while non-default charge targets can still create a temporary Home Assistant-managed override.
+- At `home`, a real calendar departure schedules cabin preconditioning at `80%`, `90%`, or `100%` without changing Tesla-app charging defaults.
 - Alarm-only plans adjust charge limit and planner messaging but do not create Tesla scheduled departure or cabin-preconditioning overrides.
-- At `home`, a real calendar departure can still create or update Tesla scheduled departure/preconditioning when the planner needs a non-default charge target, while default-`80%` home plans leave the Tesla app schedule in place.
+- When either `person.ryan` or `device_tracker.nigori_location_tracker` leaves `home`, any active Home Assistant-managed departure is disabled and its tracking helpers are cleared.
 - At `parents`, `OCC`, and `SPCC`, Tesla dashboard text reflects that Home Assistant is preserving Tesla-app defaults and not actively planning departures there.
 - When there is no active stored `input_number.tesla_managed_departure_ts`, the planner does not send a redundant Tesla disable call.
 - At protected locations, cleanup/no-plan disables only call the Tesla API when the live Tesla scheduled-departure state still matches the stored HA-managed departure and Tesla is not advertising scheduled charging or off-peak charging.
