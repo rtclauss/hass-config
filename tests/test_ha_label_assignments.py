@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.ha_label_assignments import (  # noqa: E402
+    _references_from_block,
     audit_assignments,
     build_reference_graph,
     discover_repository_inventory,
@@ -119,6 +120,57 @@ def test_reference_graph_covers_all_repository_behaviors() -> None:
     assert "ns.offset" not in garbage_references
     assert "repeat.item" not in garbage_references
     assert "trigger.event" not in garbage_references
+
+
+def test_reference_graph_excludes_service_calls() -> None:
+    # A service call is shaped exactly like an entity_id, so `action: light.turn_on`
+    # put `light.turn_on` in the graph — the same pseudo-node problem as the Jinja
+    # attributes above.
+    graph = build_reference_graph()
+    edges = {reference for references in graph["graph"].values() for reference in references}
+
+    for service in (
+        "light.turn_on",
+        "light.turn_off",
+        "light.toggle",
+        "script.turn_on",
+        "scene.turn_on",
+        "automation.turn_on",
+        "input_boolean.turn_on",
+        "button.press",
+        "weather.get_forecasts",
+    ):
+        assert service not in edges, f"{service} is a service call, not an entity"
+
+
+def test_reference_graph_keeps_behavior_entities_invoked_as_actions() -> None:
+    # `action: script.turn_on` is the service, but `action: script.adaptive_light_turn_on`
+    # invokes a script entity — a real edge. Same domain, opposite meaning.
+    graph = build_reference_graph()
+    edges = {reference for references in graph["graph"].values() for reference in references}
+
+    assert "script.adaptive_light_turn_on" in edges
+    assert "script.wake_up_script" in graph["graph"]["automation.alarm_wake_up"]
+
+
+def test_service_call_filtering_keeps_entities_sharing_the_line() -> None:
+    block = [
+        "  - action: light.turn_on",
+        "    target:",
+        "      entity_id: light.office_ceiling",
+        "  - {action: light.toggle, entity_id: light.den}",
+        "  - action: script.adaptive_light_turn_on",
+        # Prose in a description is not a reference either.
+        "    description: Invoked non-blocking via script.turn_on with variables",
+    ]
+    references = _references_from_block(block)
+
+    assert "light.office_ceiling" in references
+    assert "light.den" in references, "entity sharing a line with a service call was dropped"
+    assert "script.adaptive_light_turn_on" in references
+    assert "light.turn_on" not in references
+    assert "light.toggle" not in references
+    assert "script.turn_on" not in references
 
 
 def test_rules_support_integration_domain_and_manufacturer_matching() -> None:
