@@ -402,6 +402,11 @@ automation:
                 target:
                   entity_id: input_boolean.tesla_managed_departure_active
         default:
+          # Keep tracking an HA-managed departure until the Tesla schedule is
+          # actually cleared. The disable path refuses to send enable:false at a
+          # protected location while the Tesla app's scheduled/off-peak charging
+          # is active; dropping the helpers anyway left the preconditioning
+          # schedule armed on the car with nothing on the HA side to retry it.
           - choose:
               - conditions:
                   - condition: template
@@ -412,14 +417,27 @@ automation:
                       enabled: false
                       force_disable: "{{ not tesla_plan.resident_home or tesla_plan.location != 'home' }}"
                       reason: "{{ tesla_plan.summary }}"
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.tesla_managed_departure_active
-          - action: input_number.set_value
-            target:
-              entity_id: input_number.tesla_managed_departure_ts
-            data:
-              value: 0
+                    response_variable: tesla_schedule_result
+                  - if:
+                      - condition: template
+                        value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+                    then:
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.tesla_managed_departure_active
+                      - action: input_number.set_value
+                        target:
+                          entity_id: input_number.tesla_managed_departure_ts
+                        data:
+                          value: 0
+                    else:
+                      - action: logbook.log
+                        data:
+                          entity_id: script.tesla_set_precondition_schedule_time
+                          domain: script
+                          name: Tesla scheduled departure planner
+                          message: >-
+                            Kept the HA-managed departure tracked: the Tesla schedule could not be cleared yet.
       - choose:
           - conditions:
               - condition: or
@@ -458,14 +476,21 @@ automation:
           force_disable: true
           reason: >-
             Cancel the Home Assistant-managed Tesla departure because Ryan or Nigori left home.
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.tesla_managed_departure_active
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.tesla_managed_departure_ts
-        data:
-          value: 0
+        response_variable: tesla_schedule_result
+      # Only stop tracking once the Tesla schedule is actually gone; otherwise a
+      # later planner run still has the helpers set and can retry the clear.
+      - if:
+          - condition: template
+            value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tesla_managed_departure_active
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.tesla_managed_departure_ts
+            data:
+              value: 0
 
   - id: tesla_departure_schedule_cleanup
     alias: tesla_departure_schedule_cleanup
@@ -505,14 +530,22 @@ automation:
         data:
           enabled: false
           reason: "{{ cleanup_reason }}"
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.tesla_managed_departure_active
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.tesla_managed_departure_ts
-        data:
-          value: 0
+        response_variable: tesla_schedule_result
+      # A passed departure that could not be cleared (Tesla-app scheduled or
+      # off-peak charging active at a protected location) stays tracked, so the
+      # next planner run retries instead of leaving the car armed forever.
+      - if:
+          - condition: template
+            value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tesla_managed_departure_active
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.tesla_managed_departure_ts
+            data:
+              value: 0
 
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
@@ -995,6 +1028,18 @@ script:
                     off_peak_charging_weekdays_only: true
                     end_off_peak_time: 360
                     wake_if_asleep: true
+      # Report whether the Tesla schedule was actually cleared so callers only
+      # drop the HA tracking helpers when there is nothing left to retry. Both
+      # values are read at the top sequence level, where they are set — a value
+      # set inside a choose/then sub-script is not visible here.
+      - variables:
+          tesla_schedule_result:
+            cleared: >-
+              {{ (not schedule_enabled) and safe_to_clear_tesla_schedule in [true, 'true', 'True'] }}
+            skipped_disable: >-
+              {{ (not schedule_enabled) and safe_to_clear_tesla_schedule not in [true, 'true', 'True'] }}
+      - stop: "Tesla departure planner finished"
+        response_variable: tesla_schedule_result
 
   # tesla_set_charge_limit_soc:
   #   alias: Tesla Set Charge Limit SOC
