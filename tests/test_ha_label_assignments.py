@@ -115,6 +115,10 @@ def test_reference_graph_covers_all_repository_behaviors() -> None:
     assert graph["edge_count"] > 300
     assert "automation.alarm_wake_up" in graph["graph"]
     assert "script.wake_up_script" in graph["graph"]["automation.alarm_wake_up"]
+    garbage_references = graph["graph"]["automation.garbage_holiday_update"]
+    assert "ns.offset" not in garbage_references
+    assert "repeat.item" not in garbage_references
+    assert "trigger.event" not in garbage_references
 
 
 def test_rules_support_integration_domain_and_manufacturer_matching() -> None:
@@ -216,6 +220,47 @@ def test_apply_refuses_to_skip_missing_registry_objects(
     assert result == 1
     assert output["status"] == "missing_registry_objects"
     assert output["missing_registry_objects"] == {"area": ["missing_area"]}
+
+
+def test_apply_refuses_invalid_label_scopes(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    manifest = deepcopy(_manifest())
+    live = _complete_live_fixture(manifest)
+    alarm = next(
+        item
+        for item in manifest["behaviors"]
+        if item["entity_id"] == "automation.alarm_wake_up"
+    )
+    alarm["labels"].append("hallway")
+    manifest_path = tmp_path / "assignments.json"
+    live_path = tmp_path / "live.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    live_path.write_text(json.dumps(live), encoding="utf-8")
+
+    result = taxonomy_main(
+        [
+            "--assignments",
+            str(manifest_path),
+            "apply-assignments",
+            "--live-json",
+            str(live_path),
+            "--execute",
+        ]
+    )
+    output = json.loads(capsys.readouterr().out)
+
+    assert result == 1
+    assert output["status"] == "scope_errors"
+    assert output["dry_run"] is False
+    assert output["scope_errors"] == [
+        {
+            "registry": "entity",
+            "object_id": "automation.alarm_wake_up",
+            "label_id": "hallway",
+        }
+    ]
 
 
 def test_retired_label_deletion_is_blocked_until_assignments_reach_zero() -> None:
