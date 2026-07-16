@@ -61,3 +61,12 @@ def test_music_assistant_docs_define_siri_friendly_registry_names() -> None:
 
     for entity_id, registry_name in MUSIC_ASSISTANT_PLAYERS.items():
         assert f"`{entity_id}` | `{registry_name}`" in docs
+
+
+def test_agent_guidance_uses_explicit_music_assistant_room_entity_ids() -> None:
+    guidance = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert "Always target the explicit MA room entities" in guidance
+    for entity_id in MUSIC_ASSISTANT_PLAYERS:
+        assert f"`{entity_id}`" in guidance
+    assert "Always target the MA `*_sonos_2` entities" not in guidance
