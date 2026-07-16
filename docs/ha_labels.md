@@ -77,6 +77,10 @@ Set `HA_URL` and `HA_TOKEN` in the shell. Do not store credentials or live expor
    python3 scripts/ha_label_taxonomy.py audit-assignments
    ```
 
+   The audit fails when any desired area, device, or entity ID is absent from
+   its live registry. `apply-assignments` uses the same guard and refuses to
+   silently skip missing objects.
+
 5. Preview and apply area, device, entity, automation, script, scene, and helper assignments:
 
    ```bash
