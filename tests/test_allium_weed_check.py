@@ -231,7 +231,41 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "into script.adaptive_light_turn_on so color temperature is corrected "
                 "immediately and brightness ramps over the requested transition."
             ),
-        }
+        },
+        {
+            "spec": "specs/alarm_wakeup.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "classification": "Music Assistant entity-id migration",
+            "reason": (
+                "Issue #899 and PR #900 replace ambiguous generated and disabled "
+                "native Sonos entity IDs with explicit media_player.ma_<room> Music "
+                "Assistant IDs; wake-up scheduling, playback selection, verification, "
+                "retry, fallback, grouping, and volume-ramp behavior governed by "
+                "alarm_wakeup.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/house_mode.yaml", "packages/tv.yaml"],
+            "classification": "Music Assistant entity-id migration",
+            "reason": (
+                "Issue #899 and PR #900 replace ambiguous generated Music Assistant "
+                "entity IDs with explicit media_player.ma_<room> IDs; bedtime "
+                "preparation, overnight goodnight integrity, guest-aware shutdown, and "
+                "owner-suite LED behavior governed by night_routines.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/tv_watching.allium",
+            "implementation_paths": ["packages/tv.yaml"],
+            "classification": "Music Assistant entity-id migration",
+            "reason": (
+                "Issue #899 and PR #900 replace ambiguous generated Music Assistant "
+                "entity IDs with explicit media_player.ma_<room> IDs; basement TV "
+                "session lifecycle and guest-aware whole-house lighting behavior governed "
+                "by tv_watching.allium are unchanged."
+            ),
+        },
     ]
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",

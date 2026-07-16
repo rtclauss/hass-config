@@ -134,9 +134,7 @@ def test_alarm_wake_up_has_distinct_weekday_weekend_and_meeting_branches() -> No
     assert re.search(
         r"action: media_player\.volume_set\s+"
         r"target:\s+"
-        r"entity_id:\s+"
-        r"- media_player\.bedroom_sonos\s+"
-        r"- media_player\.bedroom_sonos_2\s+"
+        r"entity_id: media_player\.ma_bedroom\s+"
         r"data:\s+"
         r"volume_level: 0\.2",
         block,
@@ -177,7 +175,7 @@ def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
     for token in (
         "light.owner_suite_lamps",
         "light.bed_lightstrip",
-        "media_player.bedroom_sonos_2",
+        "media_player.ma_bedroom",
         "minutes: 8",
         "entity_id: script.wake_up_script",
         "action: media_player.media_play",
@@ -185,7 +183,7 @@ def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
         assert token in snooze_script
 
     assert "media_player.media_stop" in cancel_automation
-    assert "entity_id: media_player.bedroom_sonos_2" in cancel_automation
+    assert "entity_id: media_player.ma_bedroom" in cancel_automation
     assert 'at: "00:00:01"' in rollover_automation
     assert "entity_id: input_boolean.morning_routine" in rollover_automation
 
@@ -232,19 +230,19 @@ def test_wakeup_audio_uses_exact_guest_aware_wake_group() -> None:
     assert "input_boolean.guest_mode" in spotify_block
     assert "input_boolean.guest_mode" in radio_block
     for block in (spotify_block, radio_block):
-        assert "media_player.bedroom_sonos_2" in block
-        assert "media_player.bathroom_sonos_2" in block
-        assert "media_player.office_sonos_2" in block
-        assert "media_player.den_sonos_2" in block
+        assert "media_player.ma_bedroom" in block
+        assert "media_player.ma_bathroom" in block
+        assert "media_player.ma_office" in block
+        assert "media_player.ma_den" in block
         assert "media_player.ma_group_guest" not in block
         assert "media_player.ma_group_everywhere" not in block
-        assert "media_player.tiki_room_2" not in block
+        assert "media_player.ma_tiki_room" not in block
         assert "script.music_assistant_prime_wake_group" in block
 
     for token in ("media_player.volume_set", "media_player.join"):
         assert token in prime_group_block
-    assert "media_player.bedroom_sonos_2" in prime_group_block
-    assert "media_player.tiki_room_2" not in prime_group_block
+    assert "media_player.ma_bedroom" in prime_group_block
+    assert "media_player.ma_tiki_room" not in prime_group_block
 
     # Both play through the bedroom MA player after preparing the exact
     # policy wake group; the radio wake-up routes playback through the source helper.
@@ -296,11 +294,11 @@ def test_goodnight_integrity_preserves_bedroom_audio_and_pauses_unrelated_rooms(
         "mode: asleep",
         "value_template: \"{{ not guest_context_enabled }}\"",
         "bedroom_audio_pause_targets",
-        "'media_player.bedroom_sonos_2'",
-        "'media_player.bathroom_sonos_2'",
-        "'media_player.office_sonos_2'",
-        "'media_player.den_sonos_2'",
-        "'media_player.tiki_room_2'",
+        "'media_player.ma_bedroom'",
+        "'media_player.ma_bathroom'",
+        "'media_player.ma_office'",
+        "'media_player.ma_den'",
+        "'media_player.ma_tiki_room'",
         "action: media_player.media_pause",
     ):
         assert token in block
