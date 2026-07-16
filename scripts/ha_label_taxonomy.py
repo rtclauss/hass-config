@@ -702,18 +702,28 @@ def command_audit_assignments(args: argparse.Namespace) -> int:
 
 
 def command_apply_assignments(args: argparse.Namespace) -> int:
-    _specs, manifest, errors = _validated_assignment_inputs(args)
+    specs, manifest, errors = _validated_assignment_inputs(args)
     if errors:
         print_json({"status": "invalid_configuration", "errors": errors})
         return 1
     live = load_live_export(args.live_json) if args.live_json else fetch_live_from_ha()
-    audit = audit_assignments(manifest, live)
+    scopes = {spec.label_id: set(spec.scopes) for spec in specs if spec.lifecycle == "active"}
+    audit = audit_assignments(manifest, live, active_label_scopes=scopes)
     if audit["missing_registry_objects"]:
         print_json(
             {
                 "status": "missing_registry_objects",
                 "dry_run": not args.execute,
                 "missing_registry_objects": audit["missing_registry_objects"],
+            }
+        )
+        return 1
+    if audit["scope_errors"]:
+        print_json(
+            {
+                "status": "scope_errors",
+                "dry_run": not args.execute,
+                "scope_errors": audit["scope_errors"],
             }
         )
         return 1

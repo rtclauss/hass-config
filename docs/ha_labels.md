@@ -79,7 +79,8 @@ Set `HA_URL` and `HA_TOKEN` in the shell. Do not store credentials or live expor
 
    The audit fails when any desired area, device, or entity ID is absent from
    its live registry. `apply-assignments` uses the same guard and refuses to
-   silently skip missing objects.
+   silently skip missing objects. Apply also refuses assignments whose label
+   taxonomy scope does not include the target registry.
 
 5. Preview and apply area, device, entity, automation, script, scene, and helper assignments:
 

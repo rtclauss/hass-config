@@ -22,6 +22,61 @@ HELPER_DOMAINS = {
     "timer",
 }
 BEHAVIOR_DOMAINS = {"automation", "scene", "script"}
+ENTITY_REFERENCE_DOMAINS = {
+    "air_quality",
+    "alarm_control_panel",
+    "alert",
+    "assist_satellite",
+    "automation",
+    "binary_sensor",
+    "button",
+    "calendar",
+    "camera",
+    "climate",
+    "conversation",
+    "counter",
+    "cover",
+    "date",
+    "datetime",
+    "device_tracker",
+    "event",
+    "fan",
+    "group",
+    "humidifier",
+    "image",
+    "input_boolean",
+    "input_button",
+    "input_datetime",
+    "input_number",
+    "input_select",
+    "input_text",
+    "lawn_mower",
+    "light",
+    "lock",
+    "media_player",
+    "number",
+    "person",
+    "plant",
+    "remote",
+    "scene",
+    "schedule",
+    "script",
+    "select",
+    "sensor",
+    "siren",
+    "sun",
+    "switch",
+    "text",
+    "time",
+    "timer",
+    "todo",
+    "update",
+    "vacuum",
+    "valve",
+    "water_heater",
+    "weather",
+    "zone",
+}
 ENTITY_ID_PATTERN = re.compile(r"\b[a-z_][a-z0-9_]*\.[a-z0-9_]+\b")
 TOP_LEVEL_PATTERN = re.compile(r"^([a-z_][a-z0-9_ ]*):(?:\s|$)")
 DICT_ITEM_PATTERN = re.compile(r"^  ([a-zA-Z0-9_]+):(?:\s|$)")
@@ -98,7 +153,11 @@ def _references_from_block(block: list[str]) -> list[str]:
     references: set[str] = set()
     for line in block:
         content = line.split("#", 1)[0]
-        references.update(ENTITY_ID_PATTERN.findall(content))
+        references.update(
+            reference
+            for reference in ENTITY_ID_PATTERN.findall(content)
+            if reference.split(".", 1)[0] in ENTITY_REFERENCE_DOMAINS
+        )
     return sorted(references)
 
 
