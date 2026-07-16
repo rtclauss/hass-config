@@ -1722,17 +1722,81 @@ script:
           entity_id: "{{ arrival_volume_entities }}"
         data:
           volume_level: 0.30
+      # Fingerprint the group immediately before the play request, not before the
+      # 90s arrival delay: an already-playing group advances tracks on its own, so
+      # a fingerprint taken earlier would differ by playback time alone and let a
+      # failed request read as success. As with the wake-up script above, the
+      # wait/decision steps stay at the top sequence level so `wait.completed` is
+      # read in the same scope it is set.
+      - variables:
+          arrival_pre_playback_fingerprint: >-
+            {{ [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') }}
       - alias: "Play arrival music via Music Assistant"
         action: script.music_assistant_play_spotify_uri
         data:
           entity_id: "{{ playback_entity }}"
           spotify_uri: "{{ playlist }}"
-      - action: logbook.log
-        data:
-          entity_id: "{{ playback_entity }}"
-          domain: media_player
-          name: Arrival music is
-          message: " playing Arrival playlist: {{ playlist }}"
+      - alias: "Confirm arrival playback changed the group media"
+        wait_template: >-
+          {{ is_state(playback_entity, 'playing') and [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != arrival_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - alias: "Retry arrival music once when the primary request did not start"
+        if:
+          - condition: template
+            value_template: "{{ not wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ playback_entity }}"
+              domain: media_player
+              name: Arrival music retry
+              message: " primary playback failed to start; retrying {{ playlist }}"
+          - alias: "Retry arrival music via Music Assistant"
+            action: script.music_assistant_play_spotify_uri
+            data:
+              entity_id: "{{ playback_entity }}"
+              spotify_uri: "{{ playlist }}"
+      - alias: "Confirm arrival playback after the retry"
+        wait_template: >-
+          {{ is_state(playback_entity, 'playing') and [
+              state_attr(playback_entity, 'media_content_id') | default('', true),
+              state_attr(playback_entity, 'media_title') | default('', true),
+              state_attr(playback_entity, 'media_artist') | default('', true),
+              state_attr(playback_entity, 'media_album_name') | default('', true)
+            ] | join('|') != arrival_pre_playback_fingerprint }}
+        timeout:
+          seconds: 15
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.completed }}"
+        then:
+          - action: logbook.log
+            data:
+              entity_id: "{{ playback_entity }}"
+              domain: media_player
+              name: Arrival music is
+              message: " playing Arrival playlist: {{ playlist }}"
+        else:
+          - action: persistent_notification.create
+            data:
+              notification_id: arrival_audio_failed
+              title: "Arrival audio failed"
+              message: >-
+                Arrival music failed twice to start on {{ playback_entity }}
+                using {{ playlist }}.
 
   spotify_bedtime:
     alias: "Spotify Bedtime"
