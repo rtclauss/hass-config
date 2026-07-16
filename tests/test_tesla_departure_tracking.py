@@ -112,3 +112,14 @@ def test_cleared_result_defaults_to_false_when_the_script_returns_nothing() -> N
         assert "tesla_schedule_result.cleared | default(false)" in block, (
             f"{automation_id}: an empty script response would raise or misread"
         )
+
+
+def test_away_cancel_retries_when_tesla_schedule_timestamp_catches_up() -> None:
+    block = _automation_block("tesla_departure_cancel_when_home_context_ends")
+
+    assert "entity_id: binary_sensor.nigori_scheduled_departure" in block
+    assert "attribute: Departure timestamp" in block
+    assert "id: tesla_schedule_synced" in block
+    assert "not is_state('person.ryan', 'home')" in block
+    assert "not is_state('device_tracker.nigori_location_tracker', 'home')" in block
+    assert "force_disable: true" in block

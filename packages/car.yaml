@@ -465,10 +465,28 @@ automation:
           - person.ryan
           - device_tracker.nigori_location_tracker
         from: "home"
+        id: home_context_left
+      # The Tesla API command can return before the integration publishes the
+      # new departure timestamp. If the owner leaves during that window, the
+      # first protected-location clear safely declines because it cannot prove
+      # the live schedule is HA-managed. Retry as soon as Tesla reports the
+      # timestamp, but only while the owner or vehicle is still away.
+      - trigger: state
+        entity_id: binary_sensor.nigori_scheduled_departure
+        attribute: Departure timestamp
+        id: tesla_schedule_synced
     condition:
       - condition: state
         entity_id: input_boolean.tesla_managed_departure_active
         state: "on"
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: home_context_left
+          - condition: template
+            value_template: >-
+              {{ not is_state('person.ryan', 'home') or
+                 not is_state('device_tracker.nigori_location_tracker', 'home') }}
     action:
       - action: script.tesla_set_precondition_schedule_time
         data:

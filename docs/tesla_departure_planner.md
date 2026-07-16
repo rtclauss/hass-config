@@ -94,7 +94,7 @@ The schedule helper preserves the Tesla app's own charging schedule when the car
 
 At `home`, Home Assistant always sets the charge limit. For a real calendar departure, it also schedules cabin preconditioning whenever both Ryan and Nigori are home, regardless of the selected charge target. The scheduled-departure command preserves the Tesla app's charging defaults by omitting off-peak charging fields at protected locations. Alarm-only plans still do not schedule cabin preconditioning.
 
-`person.ryan` and `device_tracker.nigori_location_tracker` are both safety inputs. The planner will not create a preconditioning schedule unless both are `home`. If either leaves after Home Assistant creates a managed departure, `automation.tesla_departure_cancel_when_home_context_ends` immediately disables that managed departure and clears its tracking helpers.
+`person.ryan` and `device_tracker.nigori_location_tracker` are both safety inputs. The planner will not create a preconditioning schedule unless both are `home`. If either leaves after Home Assistant creates a managed departure, `automation.tesla_departure_cancel_when_home_context_ends` disables that managed departure and clears its tracking helpers after Tesla confirms the matching schedule. If the integration has not published the new departure timestamp yet, the automation keeps the departure tracked and retries when `binary_sensor.nigori_scheduled_departure` catches up.
 
 At `parents`, `OCC`, and `SPCC`, the planner is currently hands-off. Those locations are protected so Tesla-app charging defaults remain authoritative there, and Home Assistant does not actively create departure plans there.
 
@@ -139,7 +139,8 @@ Behavior:
 - clears that Home Assistant-managed Tesla schedule as soon as the stored departure time passes, even if the car is no longer at home
 - skips scheduled departure for all-day calendar events
 - preserves Tesla-app charging schedules at `home` while scheduling cabin preconditioning separately
-- cancels a Home Assistant-managed departure immediately if either Ryan or Nigori leaves home
+- requests cancellation of a Home Assistant-managed departure immediately if either Ryan or Nigori leaves home
+- retries that away-state cancellation when Tesla publishes a delayed scheduled-departure timestamp, while retaining the live-schedule match guard that protects Tesla-app schedules
 - preserves Tesla-app charging schedules at protected locations during cleanup by only clearing Tesla when the live scheduled-departure state still matches the stored HA-managed departure and Tesla is not advertising scheduled charging or off-peak charging
 
 ### Notifications
