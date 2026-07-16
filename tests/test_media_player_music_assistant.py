@@ -679,7 +679,7 @@ def test_arrival_verifies_retries_and_only_logs_success_after_playback() -> None
     for token in (
         "arrival_pre_playback_fingerprint",
         "Confirm arrival playback changed the group media",
-        "Confirm arrival retry changed the group media",
+        "Confirm arrival playback after the retry",
         "state_attr(playback_entity, 'media_content_id')",
         "!= arrival_pre_playback_fingerprint",
         "seconds: 15",
@@ -695,6 +695,56 @@ def test_arrival_verifies_retries_and_only_logs_success_after_playback() -> None
     assert block.index("Confirm arrival playback changed the group media") < block.index(
         "Arrival music retry"
     )
-    assert block.index("Confirm arrival retry changed the group media") < block.index(
+    assert block.index("Confirm arrival playback after the retry") < block.index(
         "name: Arrival music is"
+    )
+
+
+def test_arrival_wait_steps_stay_at_top_sequence_level() -> None:
+    # HA copies variables into nested then/choose sub-scripts, so a `wait` set
+    # inside `then:` is not visible to a later top-level step. If the retry
+    # confirmation were nested, the final `{{ wait.completed }}` check would read
+    # the first (timed-out) wait and report failure even when the retry worked.
+    block = _script_block("spotify_arrival")
+    top_level_step = "      - "
+
+    for line in block.splitlines():
+        if "wait_template:" in line:
+            assert line.startswith("        wait_template:"), (
+                f"arrival wait_template is nested below the top sequence level: {line!r}"
+            )
+
+    retry_confirm = "      - alias: \"Confirm arrival playback after the retry\""
+    assert retry_confirm in block.splitlines(), (
+        "retry confirmation must be a top-level sequence step"
+    )
+
+    # The retry `then:` block may only issue actions, never confirm.
+    retry_start = block.index('alias: "Retry arrival music once when the primary request did not start"')
+    retry_end = block.index(retry_confirm.strip(), retry_start)
+    assert "wait_template" not in block[retry_start:retry_end], (
+        "retry then: block must not contain the confirmation wait"
+    )
+    assert top_level_step in block
+
+
+def test_arrival_fingerprint_is_captured_after_the_arrival_delay() -> None:
+    # An already-playing group advances tracks on its own during the 90s arrival
+    # delay, so a fingerprint taken before it would differ by playback time alone
+    # and let a failed play request read as success.
+    block = _script_block("spotify_arrival")
+
+    delay_index = block.index("seconds: 90")
+    fingerprint_index = block.index("arrival_pre_playback_fingerprint: >-")
+    play_index = block.index('alias: "Play arrival music via Music Assistant"')
+    volume_index = block.index("volume_level: 0.30")
+
+    assert delay_index < fingerprint_index, (
+        "fingerprint must be captured after the 90s arrival delay"
+    )
+    assert volume_index < fingerprint_index, (
+        "fingerprint must be captured after shuffle/volume setup"
+    )
+    assert fingerprint_index < play_index, (
+        "fingerprint must be captured before the play request"
     )
