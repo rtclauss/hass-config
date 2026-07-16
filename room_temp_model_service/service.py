@@ -91,6 +91,7 @@ class Service:
             cfg = {
                 "name": f"Predicted Temp {room.replace('_', ' ').title()} T+30",
                 "unique_id": uid,
+                "object_id": uid,
                 "state_topic": f"{self.base}/prediction/{room}",
                 "value_template": "{{ value_json.t30 }}",
                 "json_attributes_topic": f"{self.base}/prediction/{room}",

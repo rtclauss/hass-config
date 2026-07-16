@@ -322,6 +322,15 @@ class RoomTempModel:
 
         df["fold"] = df.index.isocalendar().week % 5
         df = df.dropna()
+
+        # Drop tail rows where any target horizon has no future data.
+        # y_dict series are NOT in df, so df.dropna() never removed them.
+        import pandas as _pd
+        target_valid = _pd.concat(
+            [ser.reindex(df.index) for ser in y_dict.values()], axis=1
+        ).notna().all(axis=1)
+        df = df[target_valid]
+
         if len(df) < self.min_samples:
             return None, None
         return df, y_dict

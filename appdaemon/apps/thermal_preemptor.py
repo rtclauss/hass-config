@@ -165,10 +165,17 @@ class ThermalPreemptor(hass.Hass):
         else:
             # heat_cool range mode requires BOTH bounds on every call; move the
             # breached bound and keep the other at its scheduled value.
+            # Clamp to maintain minimum 2°F separation between bounds.
             cool_sp = self._attr("target_temp_high")
             heat_sp = self._attr("target_temp_low")
-            data["target_temp_high"] = new_setpoint if temp_field == "target_temp_high" else cool_sp
-            data["target_temp_low"] = new_setpoint if temp_field == "target_temp_low" else heat_sp
+            if temp_field == "target_temp_high":
+                new_setpoint = max(new_setpoint, (heat_sp or new_setpoint) + 2.0)
+                data["target_temp_high"] = new_setpoint
+                data["target_temp_low"] = heat_sp
+            else:
+                new_setpoint = min(new_setpoint, (cool_sp or new_setpoint) - 2.0)
+                data["target_temp_high"] = cool_sp
+                data["target_temp_low"] = new_setpoint
 
         self.call_service("climate/set_temperature", **data)
 
