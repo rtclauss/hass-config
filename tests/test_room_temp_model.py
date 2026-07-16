@@ -379,6 +379,36 @@ def test_room_temp_is_mean_of_member_sensors(rtm, monkeypatch):
     assert df["room_temp"].round(3).eq(73.0).all()
 
 
+def test_room_temp_rate_is_per_minute_to_match_the_live_feature(rtm, monkeypatch):
+    # The live predictor publishes room_temp_rate_15m in °F/min and the linear
+    # fallback assumes it (room_temp + rate * horizon_minutes). polyfit returns
+    # slope per sample step, and the series is resampled at SLOT_MIN, so training
+    # must divide by SLOT_MIN or the GBM trains on a feature 5x the live value.
+    pytest.importorskip("pandas")
+    import pandas as pd
+
+    idx = _index()
+    rate_per_min = 0.10
+    ramp = pd.Series(
+        [70.0 + rate_per_min * i * model.SLOT_MIN for i in range(len(idx))],
+        index=idx,
+        dtype=float,
+    )
+    numeric = _base_numeric(idx)
+    # Both member sensors ramp identically, so the averaged room_temp ramps too.
+    numeric["sensor.owner_suite_tph_temperature"] = ramp
+    numeric["sensor.bedroom_temperature"] = ramp
+
+    _install_fake_influx(rtm, monkeypatch, numeric)
+    df, _ = rtm._build_training_data("owner_suite", rtm.rooms["owner_suite"])
+
+    assert df is not None
+    observed = df["room_temp_rate_15m"].dropna()
+    assert not observed.empty
+    # Once the rolling window is full every sample sees the same constant ramp.
+    assert observed.iloc[-1] == pytest.approx(rate_per_min, abs=1e-6)
+
+
 def test_room_temp_uses_single_member_when_other_has_no_history(rtm, monkeypatch):
     pytest.importorskip("pandas")
     idx = _index()

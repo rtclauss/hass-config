@@ -145,7 +145,7 @@ class RoomTempModel:
             df = df.set_index("time").sort_index()
             if "value" not in df.columns:
                 return None
-            return df["value"].astype(float).resample("5min").mean().ffill(limit=12)
+            return df["value"].astype(float).resample(f"{SLOT_MIN}min").mean().ffill(limit=12)
         except Exception:
             return None
 
@@ -179,7 +179,7 @@ class RoomTempModel:
                 series = df[field].dropna()
                 if series.empty:
                     continue
-                return series.astype(str).resample("5min").ffill()
+                return series.astype(str).resample(f"{SLOT_MIN}min").ffill()
             except Exception:
                 continue
         return pd.Series(dtype=object)
@@ -261,10 +261,13 @@ class RoomTempModel:
         df["hvac_heating"] = (hvac_str == "heating").astype(float)
         df["hvac_cooling"] = (hvac_str == "cooling").astype(float)
 
+        # polyfit returns slope per sample step and the series is resampled at
+        # SLOT_MIN, so divide to get °F/min — the unit the live predictor
+        # publishes and the linear fallback assumes (room_temp + rate * horizon).
         df["room_temp_rate_15m"] = (
             df["room_temp"].rolling(3, min_periods=2)
             .apply(lambda x: np.polyfit(range(len(x)), x, 1)[0] if len(x) >= 2 else 0, raw=True)
-        )
+        ) / SLOT_MIN
         df["outside_delta_3h"] = df["outside_temp"].diff(36)
 
         hours = df.index.hour + df.index.minute / 60.0
