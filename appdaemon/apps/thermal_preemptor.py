@@ -26,6 +26,10 @@ import hassapi as hass
 
 MONITORED_ROOMS = ["owner_suite", "office", "guest_room"]
 MAX_SETPOINT_SHIFT_F = 3.0  # never move the setpoint more than this from schedule
+# Ecobee enforces a minimum spread between the heat and cool bounds (its
+# "Heat/Cool Minimum Delta", 5°F out of the box) and rejects an inverted range
+# outright. Overridable via the min_heat_cool_delta app arg.
+MIN_HEAT_COOL_DELTA_F = 5.0
 
 
 class ThermalPreemptor(hass.Hass):
@@ -46,6 +50,9 @@ class ThermalPreemptor(hass.Hass):
         )
         self.outside_temp_sensor = self.args.get(
             "outside_temp_sensor", "sensor.canonical_outside_temperature"
+        )
+        self.min_heat_cool_delta = float(
+            self.args.get("min_heat_cool_delta", MIN_HEAT_COOL_DELTA_F)
         )
 
         start = datetime.now(timezone.utc) + timedelta(seconds=60)
@@ -164,18 +171,26 @@ class ThermalPreemptor(hass.Hass):
             data["temperature"] = new_setpoint
         else:
             # heat_cool range mode requires BOTH bounds on every call; move the
-            # breached bound and keep the other at its scheduled value.
-            # Clamp to maintain minimum 2°F separation between bounds.
+            # breached bound and keep the other at its scheduled value. The moved
+            # bound must not cross or crowd the opposite one: nudging a 68-70
+            # range by the full 3°F shift would ask for high=67 against low=68,
+            # an inverted range the thermostat rejects. Clamp to the minimum
+            # delta, and skip the call entirely when that leaves no headroom —
+            # there is no way to preempt without fighting the other bound.
             cool_sp = self._attr("target_temp_high")
             heat_sp = self._attr("target_temp_low")
+            if cool_sp is None or heat_sp is None:
+                return
             if temp_field == "target_temp_high":
-                new_setpoint = max(new_setpoint, (heat_sp or new_setpoint) + 2.0)
-                data["target_temp_high"] = new_setpoint
-                data["target_temp_low"] = heat_sp
+                new_setpoint = round(max(new_setpoint, heat_sp + self.min_heat_cool_delta), 1)
+                if new_setpoint >= cool_sp:
+                    return
             else:
-                new_setpoint = min(new_setpoint, (cool_sp or new_setpoint) - 2.0)
-                data["target_temp_high"] = cool_sp
-                data["target_temp_low"] = new_setpoint
+                new_setpoint = round(min(new_setpoint, cool_sp - self.min_heat_cool_delta), 1)
+                if new_setpoint <= heat_sp:
+                    return
+            data["target_temp_high"] = new_setpoint if temp_field == "target_temp_high" else cool_sp
+            data["target_temp_low"] = new_setpoint if temp_field == "target_temp_low" else heat_sp
 
         self.call_service("climate/set_temperature", **data)
 

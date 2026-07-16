@@ -91,6 +91,11 @@ class Service:
             cfg = {
                 "name": f"Predicted Temp {room.replace('_', ' ').title()} T+30",
                 "unique_id": uid,
+                # Seed the entity_id explicitly. Without object_id HA slugifies
+                # `name` (-> sensor.predicted_temp_owner_suite_t_30), while every
+                # consumer (ThermalPreemptor, PredictionScorer) hard-codes
+                # sensor.room_temp_prediction_<room>. unique_id only makes the
+                # entity registry-manageable; it does not name it.
                 "object_id": uid,
                 "state_topic": f"{self.base}/prediction/{room}",
                 "value_template": "{{ value_json.t30 }}",
