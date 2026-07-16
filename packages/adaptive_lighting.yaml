@@ -274,15 +274,12 @@ script:
   adaptive_light_turn_on:
     alias: Adaptive Light Turn On
     description: >
-      Turn on Adaptive Lighting-managed lights. By default this applies the
-      adaptive target directly; callers may opt into a dim bootstrap turn-on for
-      rooms that need immediate color correction before the brightness ramp. Off
-      lights are pre-marked as manually controlled only for bootstrap runs so
-      Adaptive Lighting's turn_on interceptor passes the bootstrap through
-      unmodified; the marks are cleared after the ramp finishes, except for
-      lights the user overrode mid-ramp. Falls back to a plain light.turn_on
-      when the Adaptive Lighting switch is unavailable so wall switches and
-      motion paths keep working.
+      Turn on Adaptive Lighting-managed lights with one atomic adaptive apply so
+      brightness and color cannot arrive as competing Zigbee commands. Optional
+      reset/ramp callers may lock manual control until their transition finishes;
+      lights the user overrides mid-ramp retain that lock. Falls back to a plain
+      light.turn_on when the Adaptive Lighting switch is unavailable so wall
+      switches and motion paths keep working.
     mode: parallel
     max: 20
     trace:
@@ -317,30 +314,13 @@ script:
         default: false
         selector:
           boolean:
-      bootstrap:
-        description: Start off lights at the bootstrap brightness/color temperature before applying the adaptive brightness ramp.
-        required: false
-        default: false
-        selector:
-          boolean:
-      bootstrap_brightness_pct:
-        description: Initial brightness used only for the zero-transition color-correction turn-on.
-        required: false
-        default: 1
-        selector:
-          number:
-            min: 1
-            max: 10
-            step: 1
-            unit_of_measurement: "%"
     variables:
       target_lights: "{{ lights | default([], true) }}"
       # expand() resolves Home Assistant light groups to their members so a
-      # partially-on group still gets the bootstrap for its off members; Z2M
-      # groups expose no members and stay atomic, matching how Adaptive
-      # Lighting treats them. unique dedupes overlapping group + member call
-      # sites. Unavailable/unknown lights drop out of both lists and are
-      # handled by the best-effort fallback branch below.
+      # partially-on group still adapts its individual members; Z2M groups
+      # expose no members and stay atomic, matching how Adaptive Lighting
+      # treats them. unique dedupes overlapping group + member call sites.
+      # Unavailable/unknown lights are handled by the fallback branch below.
       member_lights: "{{ expand(target_lights) | map(attribute='entity_id') | unique | list }}"
       off_lights: "{{ member_lights | select('is_state', 'off') | list }}"
       on_lights: "{{ member_lights | select('is_state', 'on') | list }}"
@@ -351,14 +331,11 @@ script:
       unreachable_lights: "{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}"
       apply_transition: "{{ transition | default(1, true) }}"
       should_reset_manual_control: "{{ reset_manual_control | default(false, true) }}"
-      should_bootstrap: "{{ bootstrap | default(false, true) }}"
-      initial_brightness_pct: "{{ bootstrap_brightness_pct | default(1, true) }}"
       adaptive_switch_active: "{{ is_state(adaptive_switch, 'on') }}"
-      target_color_temp_kelvin: "{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}"
     sequence:
-      # Reset/ramp callers need the manual-control lock even when they do not
-      # use the visible bootstrap pulse. Owner-suite wake ramps rely on this to
-      # keep interval adaptation from interrupting the long transition.
+      # Reset/ramp callers need the manual-control lock. Owner-suite wake ramps
+      # rely on this to keep interval adaptation from interrupting the long
+      # transition.
       - if:
           - condition: template
             value_template: "{{ should_reset_manual_control and adaptive_switch_active and member_lights | count > 0 }}"
@@ -394,78 +371,9 @@ script:
                   adapt_color: true
                   turn_on_lights: true
                   transition: "{{ apply_transition }}"
-          # Off lights present with a known adaptive color temperature: correct
-          # color at the bootstrap brightness instantly, then ramp brightness.
-          - conditions:
-              - condition: template
-                value_template: "{{ should_bootstrap and target_color_temp_kelvin > 0 and off_lights | count > 0 }}"
-            sequence:
-              # Pre-mark the off lights as manually controlled so the
-              # interceptor passes the bootstrap call through untouched: it
-              # would otherwise adapt it on take_over_control: false switches
-              # (basement) and mark it manual as a side effect on
-              # adapt_only_on_bare_turn_on switches. Reset/ramp callers were
-              # locked above; this branch covers bootstrap-only callers.
-              - if:
-                  - condition: template
-                    value_template: "{{ not should_reset_manual_control }}"
-                then:
-                  - action: adaptive_lighting.set_manual_control
-                    data:
-                      entity_id: "{{ adaptive_switch }}"
-                      lights: "{{ off_lights }}"
-                      manual_control: true
-              # Per-light so the color temperature can be clamped to each
-              # bulb's supported range: sleep mode targets 1000 K, below the
-              # minimum of most CT bulbs, and an out-of-range value can be
-              # rejected by the integration and abort the run before the ramp.
-              # adaptive_lighting.apply does the same clamp internally.
-              - repeat:
-                  for_each: "{{ off_lights }}"
-                  sequence:
-                    # continue_on_error: one failing bulb must not abort the
-                    # run — the remaining lights still ramp and the delayed
-                    # manual-control clear below still executes.
-                    - action: light.turn_on
-                      continue_on_error: true
-                      target:
-                        entity_id: "{{ repeat.item }}"
-                      data:
-                        brightness_pct: "{{ initial_brightness_pct }}"
-                        color_temp_kelvin: >-
-                          {% set min_kelvin = state_attr(repeat.item, 'min_color_temp_kelvin') | int(0) %}
-                          {% set max_kelvin = state_attr(repeat.item, 'max_color_temp_kelvin') | int(0) %}
-                          {% set floored = [target_color_temp_kelvin, min_kelvin] | max %}
-                          {{ [floored, max_kelvin] | min if max_kelvin > 0 else floored }}
-                        transition: 0
-              # Explicit adapt flags make apply bypass the manual-control mark
-              # (it only consults the mark when the flags are omitted), so the
-              # brightness ramp runs while the mark shields the lights from
-              # interval adaptation.
-              - action: adaptive_lighting.apply
-                data:
-                  entity_id: "{{ adaptive_switch }}"
-                  lights: "{{ off_lights }}"
-                  adapt_brightness: true
-                  adapt_color: false
-                  turn_on_lights: true
-                  transition: "{{ apply_transition }}"
-              - if:
-                  - condition: template
-                    value_template: "{{ on_lights | count > 0 }}"
-                then:
-                  - action: adaptive_lighting.apply
-                    data:
-                      entity_id: "{{ adaptive_switch }}"
-                      lights: "{{ on_lights }}"
-                      adapt_brightness: true
-                      adapt_color: true
-                      turn_on_lights: true
-                      transition: "{{ apply_transition }}"
-          # Already-on lights only, or no usable color temperature attribute:
-          # plain adaptive apply, same as the pre-script call sites. An empty
-          # lights list must never reach apply — Adaptive Lighting treats it
-          # as "all configured lights" — hence the explicit count guard;
+          # Apply brightness and color together in one service call. An empty
+          # lights list must never reach apply — Adaptive Lighting treats it as
+          # "all configured lights" — hence the explicit count guard;
           # unreachable-only targets are handled by the fallback step below.
           - conditions:
               - condition: template
@@ -502,9 +410,8 @@ script:
       # and its automation sets the auto-on flag right after this call).
       - variables:
           clear_candidates: >-
-            {{ (member_lights if should_reset_manual_control
-                else (off_lights if should_bootstrap and target_color_temp_kelvin > 0 else []))
-               if adaptive_switch_active else [] }}
+            {{ member_lights
+               if should_reset_manual_control and adaptive_switch_active else [] }}
       - if:
           - condition: template
             value_template: "{{ clear_candidates | count > 0 }}"
@@ -537,13 +444,12 @@ script:
       # brightness and color-temperature targets: a light the user turned
       # off, re-dimmed, or re-colored during the ramp keeps its
       # manual-control mark so the override survives (Adaptive Lighting
-      # drops the mark itself on the next off). The color comparison uses
-      # the same per-light clamp as the bootstrap, so sleep-mode targets
-      # below a bulb's minimum still match; a CT-capable light sitting in an
-      # hs/rgb color mode reports no color_temp_kelvin and is treated as
+      # drops the mark itself on the next off). The color comparison clamps
+      # the adaptive target to each bulb's supported range, so sleep-mode
+      # targets below a bulb's minimum still match; a CT-capable light sitting
+      # in an hs/rgb color mode reports no color_temp_kelvin and is treated as
       # overridden. The force-adapt that clearing triggers is a visual no-op
-      # for the lights that pass this guard because they already sit at the
-      # target.
+      # for lights that pass this guard because they already sit at the target.
       - variables:
           lights_to_clear: >-
             {% set target_brightness = (state_attr(adaptive_switch, 'brightness_pct') | float(-1)) * 2.55 %}
