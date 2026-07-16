@@ -409,6 +409,40 @@ def test_room_temp_rate_is_per_minute_to_match_the_live_feature(rtm, monkeypatch
     assert observed.iloc[-1] == pytest.approx(rate_per_min, abs=1e-6)
 
 
+def test_training_targets_never_reach_fit_as_nan(rtm, monkeypatch):
+    # Each shift(-slots) leaves the tail without a future temperature. Those rows
+    # are normally dropped because the shifted weather columns are NaN there too
+    # — but when the coverage filter removes those columns (a fresh install with
+    # no outside history), nothing drops them and sklearn raises on NaN targets.
+    pytest.importorskip("pandas")
+
+    idx = _index()
+    numeric = _base_numeric(idx)
+    # No outside/weather history at all -> those columns fail the coverage filter.
+    for weather in (
+        "sensor.outside_temperature",
+        "sensor.outside_humidity",
+        "sensor.tomorrow_io_the_brewery_cloud_cover",
+        "sensor.pinehotties_wind_speed",
+        "sensor.pinehotties_hourly_rain",
+        "sensor.pinehotties_uv_index",
+    ):
+        numeric[weather] = None
+
+    _install_fake_influx(rtm, monkeypatch, numeric)
+    rtm.min_samples = 10
+    df, y_dict = rtm._build_training_data("owner_suite", rtm.rooms["owner_suite"])
+
+    assert df is not None
+    for h in model.HORIZONS:
+        y = y_dict[f"delta_{h}"].reindex(df.index)
+        assert not y.isna().any(), f"delta_{h} still carries NaN targets"
+
+    # Targets must not leak into the feature matrix.
+    feature_cols = [c for c in df.columns if c != "fold" and not c.startswith("delta_")]
+    assert not any(c.startswith("delta_") for c in feature_cols)
+
+
 def test_room_temp_uses_single_member_when_other_has_no_history(rtm, monkeypatch):
     pytest.importorskip("pandas")
     idx = _index()

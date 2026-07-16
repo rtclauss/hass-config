@@ -309,9 +309,15 @@ class RoomTempModel:
             df[f"sun_azimuth_sin_{h}m"] = np.sin(np.radians([v[1] for v in sun_future]))
             df[f"sun_azimuth_cos_{h}m"] = np.cos(np.radians([v[1] for v in sun_future]))
 
-        y_dict = {}
+        # Targets live in df so the dropna() below removes rows that have no
+        # future temperature — the tail of every shift(-slots) is NaN. Kept
+        # outside df they survived the drop and reached fit() as NaN targets
+        # whenever the coverage filter removed the shifted weather columns that
+        # would otherwise have dropped those same rows. feature_like and
+        # feature_cols both exclude the delta_ prefix, so targets never leak
+        # into X or the coverage filter.
         for h, slots in HORIZON_SLOTS.items():
-            y_dict[f"delta_{h}"] = df["room_temp"].shift(-slots) - df["room_temp"]
+            df[f"delta_{h}"] = df["room_temp"].shift(-slots) - df["room_temp"]
 
         # Coverage filter — drop candidate features without enough history so a
         # sparse new sensor can't collapse the set; survivors define feature_cols.
@@ -322,17 +328,9 @@ class RoomTempModel:
 
         df["fold"] = df.index.isocalendar().week % 5
         df = df.dropna()
-
-        # Drop tail rows where any target horizon has no future data.
-        # y_dict series are NOT in df, so df.dropna() never removed them.
-        import pandas as _pd
-        target_valid = _pd.concat(
-            [ser.reindex(df.index) for ser in y_dict.values()], axis=1
-        ).notna().all(axis=1)
-        df = df[target_valid]
-
         if len(df) < self.min_samples:
             return None, None
+        y_dict = {f"delta_{h}": df[f"delta_{h}"] for h in HORIZONS}
         return df, y_dict
 
     def train(self, rooms=None):
