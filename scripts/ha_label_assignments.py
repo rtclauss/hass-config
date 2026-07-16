@@ -78,6 +78,31 @@ ENTITY_REFERENCE_DOMAINS = {
     "zone",
 }
 ENTITY_ID_PATTERN = re.compile(r"\b[a-z_][a-z0-9_]*\.[a-z0-9_]+\b")
+# A service call is shaped exactly like an entity_id, so `action: light.turn_on`
+# was collected as an entity and put `light.turn_on` in the reference graph — the
+# same pseudo-node problem as the Jinja attributes filtered above.
+SERVICE_CALL_PATTERN = re.compile(
+    r"(?:^|[\s,{])(?:-\s*)?(?:action|service):\s*[\"']?([a-z_][a-z0-9_]*\.[a-z0-9_]+)"
+)
+# On the behavior domains the same token can be either. `action: script.turn_on`
+# is the service; `action: script.adaptive_light_turn_on` is a script entity
+# being invoked, which is a real edge worth keeping. Only these reserved verbs
+# are services — no script/scene/automation in this repo is named after one.
+BEHAVIOR_SERVICE_VERBS = {
+    "apply",
+    "create",
+    "reload",
+    "toggle",
+    "trigger",
+    "turn_off",
+    "turn_on",
+}
+# These read as services wherever they appear, including prose — a `description:`
+# explaining "invoked non-blocking via script.turn_on" is not a reference. Kept
+# narrow on purpose: no entity in the live registry (7024 of them) uses one of
+# these as its object_id, whereas a verb like `trigger` or `create` plausibly
+# could, so those stay confined to the `action:` position above.
+UNAMBIGUOUS_SERVICE_VERBS = {"reload", "toggle", "turn_off", "turn_on"}
 TOP_LEVEL_PATTERN = re.compile(r"^([a-z_][a-z0-9_ ]*):(?:\s|$)")
 DICT_ITEM_PATTERN = re.compile(r"^  ([a-zA-Z0-9_]+):(?:\s|$)")
 LIST_ITEM_PATTERN = re.compile(r"^  -\s+")
@@ -149,14 +174,51 @@ def _field_from_block(block: list[str], field: str) -> str | None:
     return None
 
 
+def _is_service_call(token: str) -> bool:
+    """True for `light.turn_on`-style service names, false for entity ids.
+
+    Only meaningful for a token that appeared as the value of `action:`/`service:`.
+    """
+    domain, _, object_id = token.partition(".")
+    if domain in BEHAVIOR_DOMAINS:
+        # `action: script.foo` invokes the script entity; `action: script.turn_on`
+        # calls the service.
+        return object_id in BEHAVIOR_SERVICE_VERBS
+    return True
+
+
+def _strip_service_calls(content: str) -> str:
+    """Blank out service names so they are not mistaken for entity references.
+
+    Only the service token itself is removed, so an entity_id sharing the line
+    (`{action: light.turn_on, entity_id: light.office}`) still gets collected.
+    """
+    spans = [
+        match.span(1)
+        for match in SERVICE_CALL_PATTERN.finditer(content)
+        if _is_service_call(match.group(1))
+    ]
+    if not spans:
+        return content
+    parts: list[str] = []
+    previous = 0
+    for start, end in spans:
+        parts.append(content[previous:start])
+        parts.append(" ")
+        previous = end
+    parts.append(content[previous:])
+    return "".join(parts)
+
+
 def _references_from_block(block: list[str]) -> list[str]:
     references: set[str] = set()
     for line in block:
-        content = line.split("#", 1)[0]
+        content = _strip_service_calls(line.split("#", 1)[0])
         references.update(
             reference
             for reference in ENTITY_ID_PATTERN.findall(content)
             if reference.split(".", 1)[0] in ENTITY_REFERENCE_DOMAINS
+            and reference.split(".", 1)[1] not in UNAMBIGUOUS_SERVICE_VERBS
         )
     return sorted(references)
 
