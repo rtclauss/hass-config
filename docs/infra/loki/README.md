@@ -21,10 +21,19 @@ Files in this directory are deployed to `~/loki/` on the infra server.
 
 ```bash
 cd ~/loki
+cp .env.example .env      # then set LOKI_BIND_ADDR to the server's LAN address
 docker compose up -d
 ```
 
+`.env` is required and is not committed. Loki runs with `auth_enabled: false`, so
+the API is unauthenticated and must be published on one interface rather than all
+of them; compose refuses to start if `LOKI_BIND_ADDR` is unset rather than
+falling back to an all-interfaces bind.
+
 Data is stored at `~/loki/data/` (Docker bind mount, runs as root for write access).
+That bind mount is the only persisted path, so the ingester WAL is pointed at
+`/loki/wal` inside it — Loki's default WAL location lives in the container's
+writable layer and would lose unflushed entries on every recreate.
 
 ## Promtail Configuration (HA App)
 
@@ -51,6 +60,15 @@ additional_scrape_configs: |
     pipeline_stages:
       - regex:
           expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+) (?P<level>\w+) \(\w+\) \[(?P<logger>[^\]]+)\] (?P<message>.+)$'
+      # Promote the parsed HA timestamp. Without this stage Promtail stamps each
+      # entry at scrape time, so a first tail or a backfill lands the whole file
+      # at "now" — time-range queries and alerts then read the wrong times.
+      # HA writes local time with millisecond precision and no offset, so the
+      # location must be given explicitly.
+      - timestamp:
+          source: timestamp
+          format: '2006-01-02 15:04:05.000'
+          location: America/Chicago
       - labels:
           level:
           logger:

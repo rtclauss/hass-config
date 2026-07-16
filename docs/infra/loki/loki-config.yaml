@@ -5,6 +5,13 @@ server:
   log_level: info
 
 ingester:
+  # The WAL must live under /loki — the only path the compose file persists.
+  # Loki's default (/wal) sits in the container's writable layer, so entries
+  # that had not yet flushed to chunks were lost on every image/config
+  # recreate.
+  wal:
+    enabled: true
+    dir: /loki/wal
   lifecycler:
     ring:
       kvstore:
