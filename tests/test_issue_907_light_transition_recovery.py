@@ -53,11 +53,27 @@ def _binary_state_triggers(block: str) -> list[str]:
     ]
 
 
+# Automations that must still act on a recovery into the target state, because
+# the action is protective rather than intrusive. #907 explicitly carves out
+# "recovery-sensitive automations where current-state reconciliation may be
+# intentional". These accept the real edge plus unavailable/unknown -> target.
+RECOVERY_SENSITIVE = {
+    # Darkens the office and pauses house audio because a camera is live. A
+    # reload mid-meeting recovers unavailable -> on; dropping that would leave
+    # the ceiling on and audio playing through the call.
+    "turn_off_office_lamp_when_work_tp_camera_active",
+}
+
+RECOVERY_STATES = ("unavailable", "unknown")
+
+
 def test_binary_light_triggers_require_real_state_transitions() -> None:
     for relative_path, automations in SCOPED_AUTOMATIONS.items():
         path = ROOT / relative_path
 
         for automation_id, expected_trigger_count in automations.items():
+            if automation_id in RECOVERY_SENSITIVE:
+                continue
             triggers = _binary_state_triggers(_automation_block(path, automation_id))
             assert len(triggers) == expected_trigger_count, automation_id
 
@@ -66,3 +82,34 @@ def test_binary_light_triggers_require_real_state_transitions() -> None:
                 assert target_state is not None
                 expected_from = "off" if target_state.group(1) == "on" else "on"
                 assert f'from: "{expected_from}"' in trigger, (automation_id, trigger)
+
+
+def test_recovery_sensitive_automations_still_act_on_entity_recovery() -> None:
+    # The camera-active automation must fire when a reload reveals an already
+    # active camera, not only on a clean off->on edge.
+    block = _automation_block(ROOT / "packages/workday.yaml", "turn_off_office_lamp_when_work_tp_camera_active")
+    triggers = _binary_state_triggers(block)
+
+    assert len(triggers) == SCOPED_AUTOMATIONS["packages/workday.yaml"][
+        "turn_off_office_lamp_when_work_tp_camera_active"
+    ]
+    for trigger in triggers:
+        assert re.search(r'^\s+to: "on"$', trigger, re.MULTILINE), trigger
+        # The real edge is still accepted...
+        assert '- "off"' in trigger, trigger
+        # ...and so is a recovery that reveals the camera already in use.
+        for state in RECOVERY_STATES:
+            assert f'- "{state}"' in trigger, (state, trigger)
+
+
+def test_camera_inactive_automation_keeps_the_strict_edge() -> None:
+    # The counterpart turns the ceiling back ON, so a recovery into `off` must
+    # not trigger it — that would light the room unbidden after a restart.
+    block = _automation_block(ROOT / "packages/workday.yaml", "turn_on_office_lamp_when_work_tp_camera_inactive")
+    triggers = _binary_state_triggers(block)
+
+    assert triggers
+    for trigger in triggers:
+        assert 'from: "on"' in trigger, trigger
+        for state in RECOVERY_STATES:
+            assert state not in trigger, (state, trigger)

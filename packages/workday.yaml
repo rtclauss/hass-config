@@ -450,14 +450,28 @@ automation:
     description: Turn off office ceiling when work laptop camera turns on.
     trace:
       stored_traces: 50
+    # Unlike the rest of the #907 hardening, a recovery into `on` must still act
+    # here. This automation is protective — it darkens the office and pauses the
+    # house audio *because* a camera is live — so reacting to a reload that
+    # reveals an already-active camera is the desired outcome, not a spurious
+    # one. Requiring a clean off->on edge would leave the ceiling on and audio
+    # playing through a meeting that was already underway when HA restarted.
+    # The inactive counterpart below keeps the strict `from: "on"`: acting on a
+    # recovery there would turn lights on unbidden.
     trigger:
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        from: "off"
+        from:
+          - "off"
+          - "unavailable"
+          - "unknown"
         to: "on"
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        from: "off"
+        from:
+          - "off"
+          - "unavailable"
+          - "unknown"
         to: "on"
         for:
           seconds: 15
