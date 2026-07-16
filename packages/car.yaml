@@ -460,11 +460,18 @@ automation:
     trace:
       stored_traces: 10
     trigger:
+      # "home -> anything" would include home -> unavailable/unknown, which a
+      # Tesla API hiccup or an integration reload produces while the car has not
+      # moved. That read as "left home" and force-cleared a live schedule, so
+      # only a known non-home state counts as leaving (see #904/#907).
       - trigger: state
         entity_id:
           - person.ryan
           - device_tracker.nigori_location_tracker
         from: "home"
+        not_to:
+          - "unknown"
+          - "unavailable"
         id: home_context_left
       # The Tesla API command can return before the integration publishes the
       # new departure timestamp. If the owner leaves during that window, the
@@ -483,10 +490,16 @@ automation:
         conditions:
           - condition: trigger
             id: home_context_left
+          # Only a *known* non-home state means away. `not is_state(x, 'home')`
+          # is also true for unknown/unavailable, so the Tesla integration
+          # publishing the departure timestamp at startup — while the trackers
+          # were still restoring — passed this check and force-cleared the
+          # schedule the planner had just armed. The planner could not re-arm it
+          # either: its own condition needs the tracker to read `home`.
           - condition: template
             value_template: >-
-              {{ not is_state('person.ryan', 'home') or
-                 not is_state('device_tracker.nigori_location_tracker', 'home') }}
+              {{ states('person.ryan') not in ['home', 'unknown', 'unavailable'] or
+                 states('device_tracker.nigori_location_tracker') not in ['home', 'unknown', 'unavailable'] }}
     action:
       - action: script.tesla_set_precondition_schedule_time
         data:

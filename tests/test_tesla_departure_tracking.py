@@ -120,6 +120,35 @@ def test_away_cancel_retries_when_tesla_schedule_timestamp_catches_up() -> None:
     assert "entity_id: binary_sensor.nigori_scheduled_departure" in block
     assert "attribute: Departure timestamp" in block
     assert "id: tesla_schedule_synced" in block
-    assert "not is_state('person.ryan', 'home')" in block
-    assert "not is_state('device_tracker.nigori_location_tracker', 'home')" in block
     assert "force_disable: true" in block
+
+
+def test_away_check_does_not_treat_recovery_states_as_leaving_home() -> None:
+    # `not is_state(x, 'home')` is also true for unknown/unavailable. The Tesla
+    # integration publishing the departure timestamp at startup fires the retry
+    # trigger, and if the trackers were still restoring, the away check passed
+    # and force-cleared the schedule the planner had just armed — the planner
+    # could not re-arm it either, since its condition needs the tracker at home.
+    block = _automation_block("tesla_departure_cancel_when_home_context_ends")
+
+    assert "not is_state('person.ryan', 'home')" not in block, (
+        "away check treats unknown/unavailable as away"
+    )
+    assert "not is_state('device_tracker.nigori_location_tracker', 'home')" not in block, (
+        "away check treats unknown/unavailable as away"
+    )
+    for entity in ("person.ryan", "device_tracker.nigori_location_tracker"):
+        assert f"states('{entity}') not in ['home', 'unknown', 'unavailable']" in block, entity
+
+
+def test_leaving_home_trigger_ignores_recovery_transitions() -> None:
+    # A bare `from: "home"` also matches home -> unavailable/unknown, which a
+    # Tesla API hiccup or integration reload produces while the car has not
+    # moved; that read as "left home" and force-cleared a live schedule.
+    block = _automation_block("tesla_departure_cancel_when_home_context_ends")
+    trigger_section = block.split("    trigger:\n", 1)[1].split("    condition:", 1)[0]
+
+    assert 'from: "home"' in trigger_section
+    assert "not_to:" in trigger_section, "leaving-home trigger accepts recovery states"
+    for state in ("unknown", "unavailable"):
+        assert f'- "{state}"' in trigger_section, state
