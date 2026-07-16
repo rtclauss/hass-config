@@ -26,9 +26,10 @@ docker compose up -d
 ```
 
 `.env` is required and is not committed. Loki runs with `auth_enabled: false`, so
-the API is unauthenticated and must be published on one interface rather than all
-of them; compose refuses to start if `LOKI_BIND_ADDR` is unset rather than
-falling back to an all-interfaces bind.
+the API is unauthenticated and is published only on the interfaces that need it —
+loopback for the local Grafana datasource, and `LOKI_BIND_ADDR` for Promtail
+pushing from the Home Assistant host. Compose refuses to start if
+`LOKI_BIND_ADDR` is unset rather than falling back to an all-interfaces bind.
 
 Data is stored at `~/loki/data/` (Docker bind mount, runs as root for write access).
 That bind mount is the only persisted path, so the ingester WAL is pointed at
