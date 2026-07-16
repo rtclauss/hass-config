@@ -76,7 +76,7 @@ def test_music_assistant_search_helpers_populate_dashboard_results() -> None:
         "input_select.music_assistant_provider_filter",
         "input_select.music_assistant_search_media_type",
         "input_select.music_assistant_search_results",
-        "config_entry_id('media_player.bedroom_sonos_2')",
+        "config_entry_id('media_player.ma_bedroom')",
         "music_assistant.search",
         "Direct URI ||",
         "provider_tokens",
@@ -107,7 +107,7 @@ def test_music_assistant_selected_result_can_be_queued_or_played() -> None:
         "input_select.music_assistant_search_results",
         "selected_option.split(' || ', 1)[1]",
         "script.music_assistant_play_item",
-        "media_player.bedroom_sonos_2",
+        "media_player.ma_bedroom",
     ):
         assert token in block
 
@@ -130,7 +130,7 @@ def test_bedroom_playlist_helper_logs_and_plays_selected_playlist() -> None:
         "playlist:",
         "playlist_name:",
         "Cube Playlist is",
-        "media_player.bedroom_sonos_2",
+        "media_player.ma_bedroom",
         "script.music_assistant_play_spotify_uri",
         'spotify_uri: "{{ playlist }}"',
     ):
@@ -141,7 +141,7 @@ def test_random_lofi_helper_centralizes_sleep_safe_playlist_pool() -> None:
     block = _script_block("music_assistant_play_random_lofi_playlist")
 
     for token in (
-        "media_player.bedroom_sonos_2",
+        "media_player.ma_bedroom",
         "spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
         "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
         "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
@@ -214,26 +214,26 @@ def test_arrival_music_sets_volume_on_selected_music_assistant_group_members() -
     everywhere_volume_block = arrival_block[everywhere_volume_start:arrival_block.index("sequence:")]
 
     for entity_id in (
-        "media_player.bedroom_sonos_2",
-        "media_player.bathroom_sonos_2",
+        "media_player.ma_bedroom",
+        "media_player.ma_bathroom",
     ):
         assert entity_id in guest_volume_block
         assert entity_id in everywhere_volume_block
 
     for guest_private_entity_id in (
-        "media_player.den_sonos_2",
-        "media_player.office_sonos_2",
-        "media_player.tiki_room_2",
+        "media_player.ma_den",
+        "media_player.ma_office",
+        "media_player.ma_tiki_room",
     ):
         assert guest_private_entity_id not in guest_volume_block
         assert guest_private_entity_id in everywhere_volume_block
 
     for entity_id in (
-        "media_player.bedroom_sonos_2",
-        "media_player.bathroom_sonos_2",
-        "media_player.den_sonos_2",
-        "media_player.office_sonos_2",
-        "media_player.tiki_room_2",
+        "media_player.ma_bedroom",
+        "media_player.ma_bathroom",
+        "media_player.ma_den",
+        "media_player.ma_office",
+        "media_player.ma_tiki_room",
     ):
         assert entity_id in arrival_block
 
@@ -281,7 +281,7 @@ def test_radio_wakeup_prepares_exact_guest_aware_wake_group() -> None:
 
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
-    assert 'playback_player: media_player.bedroom_sonos_2' in block
+    assert 'playback_player: media_player.ma_bedroom' in block
     assert 'input_boolean.guest_mode' in block
     assert 'prepare_group_before_play:' not in block
     assert 'should_prepare_group_before_play' not in block
@@ -294,7 +294,7 @@ def test_radio_wakeup_prepares_exact_guest_aware_wake_group() -> None:
     # Playback is routed through the source helper after preparing the exact group.
     assert 'target_entity: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
-    assert 'media_player.tiki_room_2' not in block
+    assert 'media_player.ma_tiki_room' not in block
 
 
 def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() -> None:
@@ -305,15 +305,15 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert len(re.findall(r"^\s+- media_player\.bedroom_sonos$", block, re.MULTILINE)) == 0
     assert len(re.findall(r"^\s+- media_player\.bathroom_sonos$", block, re.MULTILINE)) == 0
     for entity_id in (
-        "media_player.bedroom_sonos_2",
-        "media_player.bathroom_sonos_2",
-        "media_player.office_sonos_2",
-        "media_player.den_sonos_2",
+        "media_player.ma_bedroom",
+        "media_player.ma_bathroom",
+        "media_player.ma_office",
+        "media_player.ma_den",
     ):
         assert entity_id in block
     assert "media_player.ma_group_everywhere" not in block
     assert "media_player.ma_group_guest" not in block
-    assert "media_player.tiki_room_2" not in block
+    assert "media_player.ma_tiki_room" not in block
     assert block.count('target_entity: "{{ playback_player }}"') >= 1
     assert 'group_members: "{{ group_members }}"' in block
     assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
@@ -377,9 +377,9 @@ def test_prime_wake_group_sets_exact_member_volume_and_joins_to_bedroom() -> Non
     assert 'entity_id: "{{ group_members }}"' in block
     assert 'volume_level: "{{ starting_volume | float(0.01) }}"' in block
     assert 'action: media_player.join' in block
-    assert 'entity_id: media_player.bedroom_sonos_2' in block
-    assert "group_members | reject('eq', 'media_player.bedroom_sonos_2') | list" in block
-    assert 'media_player.tiki_room_2' not in block
+    assert 'entity_id: media_player.ma_bedroom' in block
+    assert "group_members | reject('eq', 'media_player.ma_bedroom') | list" in block
+    assert 'media_player.ma_tiki_room' not in block
 
 
 def test_spotify_wakeup_prepares_exact_guest_aware_wake_group() -> None:
@@ -387,7 +387,7 @@ def test_spotify_wakeup_prepares_exact_guest_aware_wake_group() -> None:
 
     assert 'playback_entity_id:' in block
     assert 'regroup_after_play:' in block
-    assert 'playback_player: media_player.bedroom_sonos_2' in block
+    assert 'playback_player: media_player.ma_bedroom' in block
     assert 'input_boolean.guest_mode' in block
     assert 'prepare_group_before_play:' not in block
     assert 'should_prepare_group_before_play' not in block
@@ -399,7 +399,7 @@ def test_spotify_wakeup_prepares_exact_guest_aware_wake_group() -> None:
     assert 'starting_volume: 0.05' in block
     assert 'entity_id: "{{ playback_player }}"' in block
     assert 'entity_id: script.music_assistant_try_join_bedroom_group_after_play' not in block
-    assert 'media_player.tiki_room_2' not in block
+    assert 'media_player.ma_tiki_room' not in block
 
 
 def test_bathroom_wakeup_automation_uses_policy_wake_group_members() -> None:
@@ -407,16 +407,16 @@ def test_bathroom_wakeup_automation_uses_policy_wake_group_members() -> None:
 
     assert 'action: script.spotify_wake_up' in block
     assert block.count('playback_entity_id: media_player.ma_group_everywhere') == 2
-    assert block.count('playback_entity_id: media_player.bedroom_sonos_2') == 0
-    assert block.count('playback_entity_id: media_player.bathroom_sonos_2') == 0
+    assert block.count('playback_entity_id: media_player.ma_bedroom') == 0
+    assert block.count('playback_entity_id: media_player.ma_bathroom') == 0
     for entity_id in (
-        "media_player.bedroom_sonos_2",
-        "media_player.bathroom_sonos_2",
-        "media_player.office_sonos_2",
-        "media_player.den_sonos_2",
+        "media_player.ma_bedroom",
+        "media_player.ma_bathroom",
+        "media_player.ma_office",
+        "media_player.ma_den",
     ):
         assert entity_id in block
-    assert "media_player.tiki_room_2" not in block
+    assert "media_player.ma_tiki_room" not in block
     assert 'regroup_after_play: true' not in block
     assert 'number.guest_room_fan_switch_ledintensitywhenoff' not in block
     assert 'media_player.media_stop' not in block
@@ -522,7 +522,7 @@ def test_music_assistant_dashboard_exposes_player_card() -> None:
         "Music Assistant",
         '"path": "music-assistant"',
         "custom:mass-player-card",
-        "media_player.bedroom_sonos_2",
+        "media_player.ma_bedroom",
     ):
         assert token in dashboard
 
@@ -585,7 +585,7 @@ def test_lofi_bedroom_playlist_scripts_delegate_to_shared_pool() -> None:
 
     assert 'alias: "Play LoFi"' in primary_block
     assert "action: script.music_assistant_play_random_lofi_playlist" in primary_block
-    assert "entity_id: media_player.bedroom_sonos_2" in primary_block
+    assert "entity_id: media_player.ma_bedroom" in primary_block
     assert "playlist_name: Lowfi" in primary_block
     assert "log_name: Cube Playlist is" in primary_block
     assert "playlist: >-" not in primary_block

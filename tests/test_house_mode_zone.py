@@ -241,7 +241,7 @@ def test_house_transition_guest_mode_grouping_never_unjoins_den() -> None:
             in_unjoin = True
         elif in_unjoin and stripped.startswith("action:"):
             in_unjoin = False
-        if in_unjoin and "media_player.den_sonos_2" in stripped:
+        if in_unjoin and "media_player.ma_den" in stripped:
             raise AssertionError(
                 "house_transition unjoins den_sonos_2 — this disrupts the Den Turntable"
             )
@@ -257,4 +257,4 @@ def test_house_transition_media_grouping_is_idempotent() -> None:
     assert "Reform guest-mode group only if not already correctly formed" in block
     assert "Reform full group only if not already correctly formed" in block
     assert "stop:" not in block
-    assert block.count("state_attr('media_player.bedroom_sonos_2', 'group_members') | default([])") >= 2
+    assert block.count("state_attr('media_player.ma_bedroom', 'group_members') | default([])") >= 2
