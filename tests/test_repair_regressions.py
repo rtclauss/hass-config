@@ -71,7 +71,8 @@ def _group_block(path: Path, group_name: str) -> str:
 def _scene_block(scene_name: str) -> str:
     text = ZONE_PATH.read_text(encoding="utf-8")
     pattern = re.compile(
-        rf"^  - name: {re.escape(scene_name)}\n(.*?)(?=^  - name: |\Z)",
+        rf"^  - (?:id: [^\n]+\n    name|name): {re.escape(scene_name)}\n"
+        rf"(.*?)(?=^  - (?:id|name): |\Z)",
         re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(text)

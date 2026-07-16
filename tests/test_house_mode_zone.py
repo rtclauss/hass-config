@@ -57,11 +57,11 @@ def _zone_script_block(script_id: str) -> str:
 def _scene_block(scene_name: str) -> str:
     lines = ZONE_PATH.read_text(encoding="utf-8").splitlines()
     start = None
-    needle = f"  - name: {scene_name}"
+    names = {f"  - name: {scene_name}", f"    name: {scene_name}"}
 
     for index, line in enumerate(lines):
-        if line == needle:
-            start = index
+        if line in names:
+            start = index - 1 if index and lines[index - 1].startswith("  - id: ") else index
             break
 
     if start is None:
@@ -69,7 +69,7 @@ def _scene_block(scene_name: str) -> str:
 
     end = len(lines)
     for index in range(start + 1, len(lines)):
-        if lines[index].startswith("  - name: "):
+        if lines[index].startswith(("  - id: ", "  - name: ")):
             end = index
             break
 
