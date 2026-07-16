@@ -122,6 +122,7 @@ cards:
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
               {% set home_planner = location_name == 'home' %}
+              {% set resident_home = is_state('person.ryan', 'home') %}
               {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
               {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
               {% if is_state('input_boolean.long_range_travel', 'on') %}
@@ -131,6 +132,7 @@ cards:
                 ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}
                 #### Departure plan: {{ trip_start_raw }}
                 #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int(0) }} mi
+                #### Cabin preconditioning is {% if resident_home %}scheduled{% else %}suppressed because Ryan is away{% endif %}
               {% elif protected_location and not home_planner %}
                 ### Protected location
                 #### Tesla-app charging schedule stays authoritative at {{ location_label }}
@@ -139,6 +141,7 @@ cards:
                 ### Daily planner is active
                 #### Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs
                 #### Cabin preconditioning only runs when a real next-day departure is scheduled
+                #### Cabin preconditioning is scheduled separately when Ryan and Nigori are home
               {% endif %}
               {% if protected_location and home_planner %}
                 #### {% if home_schedule_override_needed %}Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed{% else %}Tesla-app charging schedule stays authoritative at {{ location_label }}{% endif %}
@@ -161,11 +164,14 @@ cards:
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
               {% set home_planner = location_name == 'home' %}
+              {% set resident_home = is_state('person.ryan', 'home') %}
               {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
               {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
               ### {{ charge_limit }}% target
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 #### Manual override is forcing max range
+              {% elif home_planner and has_calendar_departure and not resident_home %}
+                #### Cabin preconditioning is suppressed because Ryan is away
               {% elif home_planner and is_state('binary_sensor.upcoming_trip_charging', 'on') %}
                 #### Planner is following the next trip
               {% elif home_planner and planned_departure and charge_limit == 80 %}
@@ -179,6 +185,7 @@ cards:
               {% else %}
                 #### No next-day departure plan is active
               {% endif %}
+              #### Cabin preconditioning is scheduled separately when Ryan and Nigori are home
               #### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh
               #### Charging schedule: {% if protected_location and not home_planner %}Preserve Tesla app default at {{ location_label }}{% elif home_schedule_override_needed %}Allow a temporary Home Assistant schedule override at {{ location_label }} because extra home charging is needed{% elif home_planner %}Preserve Tesla app default at {{ location_label }} because no extra home charging is needed{% else %}Allow Home Assistant off-peak charging management{% endif %}
           - type: entities
