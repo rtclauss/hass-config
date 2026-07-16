@@ -277,26 +277,26 @@ script:
                     if:
                       - condition: template
                         value_template: >
-                          {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
-                          {{ not ('media_player.bathroom_sonos_2' in members and
-                                  'media_player.office_sonos_2' not in members and
-                                  'media_player.den_sonos_2' not in members) }}
+                          {% set members = state_attr('media_player.ma_bedroom', 'group_members') | default([]) %}
+                          {{ not ('media_player.ma_bathroom' in members and
+                                  'media_player.ma_office' not in members and
+                                  'media_player.ma_den' not in members) }}
                     then:
                       - continue_on_error: true
                         action: media_player.unjoin
                         target:
                           entity_id:
-                            - media_player.bedroom_sonos_2
-                            - media_player.bathroom_sonos_2
-                            - media_player.office_sonos_2
+                            - media_player.ma_bedroom
+                            - media_player.ma_bathroom
+                            - media_player.ma_office
                       - continue_on_error: true
                         action: media_player.join
                         target:
                           entity_id:
-                            - media_player.bedroom_sonos_2
+                            - media_player.ma_bedroom
                         data:
                           group_members:
-                            - media_player.bathroom_sonos_2
+                            - media_player.ma_bathroom
               - conditions:
                   - "{{ should_apply_media and not guest_mode_enabled }}"
                 sequence:
@@ -304,21 +304,21 @@ script:
                     if:
                       - condition: template
                         value_template: >
-                          {% set members = state_attr('media_player.bedroom_sonos_2', 'group_members') | default([]) %}
-                          {{ not ('media_player.bathroom_sonos_2' in members and
-                                  'media_player.office_sonos_2' in members and
-                                  'media_player.den_sonos_2' in members) }}
+                          {% set members = state_attr('media_player.ma_bedroom', 'group_members') | default([]) %}
+                          {{ not ('media_player.ma_bathroom' in members and
+                                  'media_player.ma_office' in members and
+                                  'media_player.ma_den' in members) }}
                     then:
                       - continue_on_error: true
                         action: media_player.join
                         target:
                           entity_id:
-                            - media_player.bedroom_sonos_2
+                            - media_player.ma_bedroom
                         data:
                           group_members:
-                            - media_player.bathroom_sonos_2
-                            - media_player.office_sonos_2
-                            - media_player.den_sonos_2
+                            - media_player.ma_bathroom
+                            - media_player.ma_office
+                            - media_player.ma_den
           - choose:
               - conditions:
                   - "{{ should_apply_trip_policy and trip_mode_enabled }}"
@@ -466,12 +466,12 @@ script:
                 sequence:
                   - variables:
                       bedroom_audio_pause_targets: >-
-                        {%- set bedroom_entity = 'media_player.bedroom_sonos_2' -%}
+                        {%- set bedroom_entity = 'media_player.ma_bedroom' -%}
                         {%- set candidate_players = [
-                          'media_player.bathroom_sonos_2',
-                          'media_player.office_sonos_2',
-                          'media_player.den_sonos_2',
-                          'media_player.tiki_room_2'
+                          'media_player.ma_bathroom',
+                          'media_player.ma_office',
+                          'media_player.ma_den',
+                          'media_player.ma_tiki_room'
                         ] -%}
                         {%- set ns = namespace(
                           protected=[bedroom_entity],
