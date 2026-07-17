@@ -13,7 +13,9 @@ from scripts.ha_label_assignments import (  # noqa: E402
     _references_from_block,
     audit_assignments,
     build_reference_graph,
+    compile_assignments,
     discover_repository_inventory,
+    find_missing_registry_objects,
     load_assignment_manifest,
     plan_assignment_operations,
     plan_retired_label_deletions,
@@ -335,3 +337,72 @@ def test_retired_label_deletion_is_blocked_until_assignments_reach_zero() -> Non
 
     assert "sleep" in deletable
     assert "sleep" not in assigned
+
+
+def test_renamed_automation_is_resolved_to_its_live_entity_id_by_unique_id() -> None:
+    # HA pins an automation's entity_id from the alias at creation; a later alias
+    # rename leaves the registry id unchanged. The manifest's slug-derived
+    # entity_id then points at an entity that does not exist, while the real one
+    # is reachable only via unique_id.
+    manifest = {
+        "behaviors": [
+            {
+                "kind": "automation",
+                # slug from the *current* alias — not what the registry pinned.
+                "entity_id": "automation.restart_appdaemon_on_ha_startup_or_websocket_reconnect_failure",
+                "unique_id": "restart_appdaemon_on_ha_startup",
+                "labels": ["maintenance"],
+            }
+        ],
+        "helpers": [],
+        "area_assignments": {},
+        "rules": [],
+    }
+    live = {
+        "entities": [
+            {
+                "entity_id": "automation.restart_appdaemon_on_ha_startup",
+                "unique_id": "restart_appdaemon_on_ha_startup",
+                "labels": [],
+            }
+        ],
+        "devices": [],
+        "areas": [],
+    }
+
+    desired = compile_assignments(manifest, live)
+
+    # Labels land on the live entity_id, not the stale slug.
+    assert desired["entity"]["automation.restart_appdaemon_on_ha_startup"] == {"maintenance"}
+    assert (
+        "automation.restart_appdaemon_on_ha_startup_or_websocket_reconnect_failure"
+        not in desired["entity"]
+    )
+    # And the guard no longer reports the automation as a missing registry object.
+    assert find_missing_registry_objects(desired, live) == {}
+
+
+def test_behavior_not_yet_in_registry_still_reported_missing() -> None:
+    # A brand-new automation absent from the live registry keeps its slug and is
+    # correctly flagged, so apply refuses rather than silently skipping it.
+    manifest = {
+        "behaviors": [
+            {
+                "kind": "automation",
+                "entity_id": "automation.zeke_arrival_emitter",
+                "unique_id": "zeke_arrival_emitter",
+                "labels": ["presence_house_mode"],
+            }
+        ],
+        "helpers": [],
+        "area_assignments": {},
+        "rules": [],
+    }
+    live = {"entities": [], "devices": [], "areas": []}
+
+    desired = compile_assignments(manifest, live)
+
+    assert desired["entity"]["automation.zeke_arrival_emitter"] == {"presence_house_mode"}
+    assert find_missing_registry_objects(desired, live) == {
+        "entity": ["automation.zeke_arrival_emitter"]
+    }

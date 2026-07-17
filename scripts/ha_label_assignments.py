@@ -488,10 +488,38 @@ def rule_matches(rule: dict[str, Any], entry: dict[str, Any], object_type: str) 
     return any(checks) if rule.get("match_mode") == "any" else all(checks)
 
 
-def _labels_by_entity(rows: Iterable[dict[str, Any]]) -> dict[str, set[str]]:
+def _live_entity_id_by_unique_id(live: dict[str, Any]) -> dict[str, str]:
+    """Map each live entity's unique_id to its registry entity_id.
+
+    Home Assistant derives an automation's entity_id from its alias at *first
+    registration* and then pins it; later alias edits do not move it. The repo
+    cannot know the original alias offline, so the only stable link between a
+    repo behavior and its live entity is the `id:` field (its unique_id).
+    """
+    result: dict[str, str] = {}
+    for entity in live.get("entities", []):
+        unique_id = entity.get("unique_id")
+        entity_id = entity.get("entity_id")
+        if unique_id and entity_id:
+            result[str(unique_id)] = str(entity_id)
+    return result
+
+
+def _labels_by_entity(
+    rows: Iterable[dict[str, Any]],
+    unique_id_to_entity_id: dict[str, str] | None = None,
+) -> dict[str, set[str]]:
     result: dict[str, set[str]] = defaultdict(set)
     for row in rows:
-        result[str(row["entity_id"])].update(str(label) for label in row["labels"])
+        entity_id = str(row["entity_id"])
+        unique_id = row.get("unique_id")
+        # Prefer the live entity_id keyed by unique_id: a renamed automation's
+        # slug-derived entity_id no longer matches the pinned registry id, and
+        # labeling the stale slug would silently miss the real entity. Fall back
+        # to the slug when the behavior is not in the registry yet (not deployed).
+        if unique_id_to_entity_id and unique_id:
+            entity_id = unique_id_to_entity_id.get(str(unique_id), entity_id)
+        result[entity_id].update(str(label) for label in row["labels"])
     return result
 
 
@@ -508,7 +536,8 @@ def compile_assignments(
         desired["area"][str(area_id)].update(labels)
 
     explicit_entities = _labels_by_entity(
-        list(manifest.get("behaviors", [])) + list(manifest.get("helpers", []))
+        list(manifest.get("behaviors", [])) + list(manifest.get("helpers", [])),
+        _live_entity_id_by_unique_id(live),
     )
     for entity_id, labels in explicit_entities.items():
         desired["entity"][entity_id].update(labels)
