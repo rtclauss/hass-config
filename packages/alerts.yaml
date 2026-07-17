@@ -284,13 +284,14 @@ automation:
             Stream from {{ trigger.to_state.attributes.friendly_name }}
           data:
             # camera_entity_id attaches a snapshot from the associated camera
-            # to the iOS/Android companion app notification.
+            # to the iOS/Android companion app notification. Rendered as a
+            # single-line expression so the entity_id has no surrounding
+            # whitespace/newlines — a padded id makes the app request
+            # /api/camera_proxy/<padded-id>, which 404s.
             entity_id: >-
-              {% if trigger.entity_id == "binary_sensor.tikiroomcam_motionsensor" %}
-                camera.tikiroomcamera
-              {% else %}
-                camera.livingroomcamera
-              {% endif %}
+              {{ 'camera.tikiroomcamera'
+                 if trigger.entity_id == 'binary_sensor.tikiroomcam_motionsensor'
+                 else 'camera.livingroomcamera' }}
 
   - alias: arm_alarm
     id: arm_alarm
