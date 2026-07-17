@@ -93,15 +93,3 @@ rule PreserveAdaptiveLightingAfterArrival {
         -- remain disabled until another explicit owner action or maintenance
         -- automation changes them.
 }
-
-rule SyncSelectedInovelliLedBarsToAdaptiveLighting {
-    when: AdaptiveLightingTargetChanged(room)
-    requires: room in {owner_suite, office}
-    requires: not arrival.bed_occupied
-    ensures: SelectedInovelliLedBarsMirrorAdaptiveLighting(room)
-    @guidance
-        -- Selected Inovelli LED bars in owner suite and office mirror the
-        -- current adaptive-lighting target color and brightness. The
-        -- implementation suppresses this sync during trip mode, sleep mode,
-        -- guest-mode office privacy, and owner-suite late-night quiet windows.
-}

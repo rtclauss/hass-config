@@ -1,0 +1,119 @@
+{
+  "protected_scopes": [
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "description": "Owner-suite wake-up scheduling, alarm sync, wake-up execution, bathroom follow-up audio, snooze, cancel, and morning recovery.",
+      "implementation_paths": [
+        "packages/ios_wakeup.yaml",
+        "packages/media_player.yaml",
+        "packages/workday.yaml"
+      ]
+    },
+    {
+      "spec": "specs/night_routines.allium",
+      "description": "Bedtime preparation, overnight goodnight integrity, owner-suite privacy, guest-aware shutdown, and owner-suite LED sleep/wake policies.",
+      "implementation_paths": [
+        "packages/house_mode.yaml",
+        "packages/media_player.yaml",
+        "packages/tv.yaml"
+      ]
+    },
+    {
+      "spec": "specs/z2m_lifecycle.allium",
+      "description": "Zigbee2MQTT join, leave, offline, systemic recovery, decommission, notification, and inventory reconciliation behavior.",
+      "implementation_paths": [
+        "packages/z2m_lifecycle.yaml",
+        "inventory.md"
+      ]
+    },
+    {
+      "spec": "specs/arrival_lighting.allium",
+      "description": "Arrival-time adaptive lighting correction and selected Inovelli LED-bar synchronization behavior.",
+      "implementation_paths": [
+        "packages/adaptive_lighting.yaml"
+      ]
+    },
+    {
+      "spec": "specs/tv_watching.allium",
+      "description": "Basement TV session lifecycle and guest-aware whole-house lighting response.",
+      "implementation_paths": [
+        "packages/tv.yaml"
+      ]
+    }
+  ],
+  "classified_gaps": [
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "packages/media_player.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*\"spotify:*",
+        "+*\"spotify:*"
+      ],
+      "classification": "media-uri-pool change",
+      "reason": "Exact media URIs and playlist composition are explicitly excluded by specs/alarm_wakeup.allium; PR #800 only removes Panic-related Spotify selections from randomized media pools without changing wake-up scheduling, playback verification, retry, fallback, or volume-ramp behavior."
+    },
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "packages/workday.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*radio_uri: \"library://radio/12\"",
+        "+*radio_uri: \"library://radio/21\""
+      ],
+      "classification": "media-library-record repair",
+      "reason": "Exact media URIs are explicitly excluded by specs/alarm_wakeup.allium; issue #875 and PR #876 replace KSDJ's stale Music Assistant library record without changing wake-up scheduling, playback verification, retry, fallback, grouping, or volume-ramp behavior."
+    },
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "packages/media_player.yaml"
+      ],
+      "classification": "non-wakeup-scope change",
+      "reason": "Issue #801 hardens bedtime playback fallback in script.spotify_bedtime and centralizes LoFi playlist selection; wake-up scheduling, playback verification, retry, fallback, and volume-ramp behavior governed by alarm_wakeup.allium are unchanged."
+    },
+    {
+      "spec": "specs/night_routines.allium",
+      "implementation_paths": [
+        "packages/media_player.yaml"
+      ],
+      "classification": "non-night-scope change",
+      "reason": "Issue #772 hardens wake-up radio playback verification, retry, and fallback in script.music_assistant_radio_wake_up; bedtime and goodnight behavior governed by night_routines.allium is unchanged."
+    },
+    {
+      "spec": "specs/arrival_lighting.allium",
+      "implementation_paths": [
+        "packages/adaptive_lighting.yaml"
+      ],
+      "classification": "arrival-lighting implementation detail",
+      "reason": "PR #843 preserves the arrival_lighting.allium empty-house and manual-control gates while moving Adaptive Lighting turn-on execution into script.adaptive_light_turn_on so color temperature is corrected immediately and brightness ramps over the requested transition."
+    },
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "packages/workday.yaml"
+      ],
+      "classification": "Music Assistant entity-id migration",
+      "reason": "Issue #899 and PR #900 replace ambiguous generated and disabled native Sonos entity IDs with explicit media_player.ma_<room> Music Assistant IDs; wake-up scheduling, playback selection, verification, retry, fallback, grouping, and volume-ramp behavior governed by alarm_wakeup.allium are unchanged."
+    },
+    {
+      "spec": "specs/night_routines.allium",
+      "implementation_paths": [
+        "packages/house_mode.yaml",
+        "packages/tv.yaml"
+      ],
+      "classification": "Music Assistant entity-id migration",
+      "reason": "Issue #899 and PR #900 replace ambiguous generated Music Assistant entity IDs with explicit media_player.ma_<room> IDs; bedtime preparation, overnight goodnight integrity, guest-aware shutdown, and owner-suite LED behavior governed by night_routines.allium are unchanged."
+    },
+    {
+      "spec": "specs/tv_watching.allium",
+      "implementation_paths": [
+        "packages/tv.yaml"
+      ],
+      "classification": "Music Assistant entity-id migration",
+      "reason": "Issue #899 and PR #900 replace ambiguous generated Music Assistant entity IDs with explicit media_player.ma_<room> IDs; basement TV session lifecycle and guest-aware whole-house lighting behavior governed by tv_watching.allium are unchanged."
+    }
+  ]
+}

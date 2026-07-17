@@ -133,6 +133,9 @@ def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> No
     assert "forecast_rows = (state_attr('sensor.active_weather_entity_id', 'forecast_json')" in block
     assert "tomorrow_start_ts = as_timestamp(today_at('00:00') + timedelta(days=1))" in block
     assert "forecast.temperature | int(default=none)" in block
+    assert "temperature_f | round(0) | int if temperature_f is number else none" in block
+    assert "temperature_f_rounded ~ 'F / ' ~ temperature_c ~ 'C '" in block
+    assert "forecast_temp ~ 'F / ' ~ forecast_temp_c ~ 'C '" in block
     assert "resolved_mode == 'night_preview'" in block
     assert "'label': 'Tomorrow'" in block
     assert "'value': tomorrow.value" in block
@@ -140,6 +143,16 @@ def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> No
     assert "night_detail_row" in night_block
     assert "'label': 'Alarm'" in night_block
     assert "'label': 'Meeting'" in night_block
+
+
+def test_owner_suite_travel_weather_includes_fahrenheit_and_celsius() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+
+    assert "destination_weather | replace('F', '') | float(default=none)" in block
+    assert "destination_temp_f | round(0) | int if destination_temp_f is number else none" in block
+    assert "destination_temp_f_rounded ~ 'F / ' ~ destination_temp_c ~ 'C'" in block
+    assert "destination_weather ~ ' / '" not in block
+    assert "'label': 'Dest Wx', 'value': destination_weather_value" in block
 
 
 def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> None:
@@ -253,7 +266,10 @@ def test_owner_suite_payload_warns_about_near_term_and_event_precipitation() -> 
     assert "event_start_dt" not in block
     assert "event.max_precip >= 40" in block
     assert "forecast.condition | default('', true) in precip_conditions" in block
-    assert "'Wx for ' ~ event_title" in block
+    assert "' Wx risk'" in block
+    assert "flight_active and flight_destination not in ['', none, 'unknown', 'unavailable']" in block
+    assert "else 'Event Wx risk'" in block
+    assert "'Wx for ' ~ event_title" not in block
 
 
 def test_owner_suite_payload_consumes_flight_status_sources() -> None:

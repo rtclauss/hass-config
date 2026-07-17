@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from functools import cached_property
 from typing import Literal, override
-from homeassistant.core import Event, EventStateChangedData
+from homeassistant.core import Event, EventStateChangedData, CALLBACK_TYPE
 from homeassistant.const import STATE_ON, STATE_OFF
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_call_later
 
 from custom_components.auto_areas.ha_helpers import all_states_are_off
 from custom_components.auto_areas.auto_area import AutoArea
 from custom_components.auto_areas.auto_entity import AutoEntity
 from custom_components.auto_areas.const import (
+    CONFIG_PRESENCE_TIMEOUT,
     DOMAIN,
     LOGGER,
     PRESENCE_BINARY_SENSOR_DEVICE_CLASSES,
@@ -41,10 +41,14 @@ class PresenceBinarySensor(
             PRESENCE_BINARY_SENSOR_ENTITY_PREFIX
         )
         self.presence: bool | None = None
+        self._presence_timeout: int = int(
+            (auto_area.config_entry.options or {}).get(CONFIG_PRESENCE_TIMEOUT, 0) or 0
+        )
+        self._timeout_cancel: CALLBACK_TYPE | None = None
         LOGGER.debug("Presence entities %s", self.entity_ids)
 
     @override
-    @cached_property
+    @property
     def unique_id(self) -> str | None:
         """Return a unique ID."""
         return f"{self.auto_area.config_entry.entry_id}_aggregated_presence"
@@ -90,7 +94,7 @@ class PresenceBinarySensor(
             self.entity_ids,
             PRESENCE_ON_STATES,
         )
-        self.schedule_update_ha_state()
+        self.async_write_ha_state()
 
         LOGGER.info(
             "%s: Initial presence %s",
@@ -104,6 +108,14 @@ class PresenceBinarySensor(
             self.entity_ids,
             self._handle_state_change,
         )
+
+    @override
+    async def async_will_remove_from_hass(self) -> None:
+        """Clean up on removal."""
+        if self._timeout_cancel:
+            self._timeout_cancel()
+            self._timeout_cancel = None
+        await super().async_will_remove_from_hass()
 
     @override
     async def _handle_state_change(self, event: Event[EventStateChangedData]) -> None:
@@ -129,10 +141,14 @@ class PresenceBinarySensor(
         )
 
         if current_state in PRESENCE_ON_STATES:
+            # Cancel any pending timeout
+            if self._timeout_cancel:
+                self._timeout_cancel()
+                self._timeout_cancel = None
             if not self.presence:
-                LOGGER.info("%s: Presence detected", self.auto_area.area_name)
+                LOGGER.debug("%s: Presence detected", self.auto_area.area_name)
                 self.presence = True
-                self.schedule_update_ha_state()
+                self.async_write_ha_state()
         else:
             if all_states_are_off(
                 self.hass,
@@ -140,9 +156,36 @@ class PresenceBinarySensor(
                 PRESENCE_ON_STATES,
             ):
                 if self.presence:
-                    LOGGER.info(
-                        "%s: Presence cleared",
-                        self.auto_area.area_name
-                    )
-                    self.presence = False
-                    self.schedule_update_ha_state()
+                    if self._presence_timeout > 0:
+                        # Schedule delayed clear (reset timer if already pending)
+                        if self._timeout_cancel:
+                            self._timeout_cancel()
+                        LOGGER.debug(
+                            "%s: All sensors off, starting presence timeout (%ss)",
+                            self.auto_area.area_name,
+                            self._presence_timeout,
+                        )
+                        self._timeout_cancel = async_call_later(
+                            self.hass,
+                            self._presence_timeout,
+                            self._handle_timeout,
+                        )
+                    else:
+                        LOGGER.debug(
+                            "%s: Presence cleared",
+                            self.auto_area.area_name
+                        )
+                        self.presence = False
+                        self.async_write_ha_state()
+
+    async def _handle_timeout(self, _now) -> None:
+        """Clear presence after timeout expires if no sensors are still active."""
+        self._timeout_cancel = None
+        if not any(
+            state.state in PRESENCE_ON_STATES
+            for entity_id in self.entity_ids
+            if (state := self.hass.states.get(entity_id)) is not None
+        ):
+            self.presence = False
+            self.async_write_ha_state()
+            LOGGER.debug("%s: Presence cleared after timeout", self.auto_area.area_name)

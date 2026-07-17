@@ -23,8 +23,8 @@ def test_tikiroom_effects_header_exposes_smoothing_helper() -> None:
     assert "constexpr uint8_t F1_CRASH_DURATION_FRAMES = 18;" in text
     assert "constexpr uint8_t LAVA_FIELD_BLEND_AMOUNT = 72;" in text
     assert "constexpr uint8_t THUNDERSTORM_BLEND_AMOUNT = 76;" in text
-    assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 168;" in text
-    assert "constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 60;" in text
+    assert "constexpr uint8_t THUNDERSTORM_FLASH_BLEND_AMOUNT = 148;" in text
+    assert "constexpr uint8_t THUNDERSTORM_FLASH_SCALE = 52;" in text
     assert "constexpr size_t LAVA_FIELD_CELLS = 48;" in text
     assert "constexpr size_t THUNDERSTORM_CELLS = 40;" in text
     assert "inline void add_scaled_inplace(Color &base, const Color &added, uint8_t scale)" in text

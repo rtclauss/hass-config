@@ -102,7 +102,7 @@ def test_tv_bed_prep_starts_low_volume_bedroom_prep_and_delayed_sleep_mode_relea
     block = _automation_block(TV_PATH, "tv_off_at_night_bed_prep")
 
     for token in (
-        "entity_id:\n            - media_player.bedroom_sonos_2\n            - media_player.bathroom_sonos_2",
+        "entity_id:\n            - media_player.ma_bedroom\n            - media_player.ma_bathroom",
         "volume_level: 0.02",
         "entity_id: scene.bedroom_prep",
         "entity_id: script.spotify_bedtime",
@@ -137,11 +137,11 @@ def test_goodnight_integrity_preserves_bedroom_audio_and_pauses_unrelated_rooms(
         "mode: asleep",
         'value_template: "{{ not guest_context_enabled }}"',
         "bedroom_audio_pause_targets",
-        "'media_player.bedroom_sonos_2'",
-        "'media_player.bathroom_sonos_2'",
-        "'media_player.office_sonos_2'",
-        "'media_player.den_sonos_2'",
-        "'media_player.tiki_room_2'",
+        "'media_player.ma_bedroom'",
+        "'media_player.ma_bathroom'",
+        "'media_player.ma_office'",
+        "'media_player.ma_den'",
+        "'media_player.ma_tiki_room'",
         'value_template: "{{ bedroom_audio_pause_targets | trim != \'\' }}"',
         "action: media_player.media_pause",
         'entity_id: "{{ bedroom_audio_pause_targets }}"',

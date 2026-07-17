@@ -3,7 +3,8 @@ DOMAIN = "browser_mod"
 BROWSER_ID = "browserID"
 
 FRONTEND_SCRIPT_URL = "/browser_mod.js"
-SETTINGS_PANEL_URL = "/browser_mod_panel.js"
+BROWSER_PANEL_URL = "/browser_mod_browser_panel.js"
+CONFIG_PANEL_URL = "/browser_mod_config_panel.js"
 
 DATA_BROWSERS = "browsers"
 DATA_ADDERS = "adders"
@@ -16,6 +17,8 @@ WS_UNREGISTER = f"{WS_ROOT}/unregister"
 WS_UPDATE = f"{WS_ROOT}/update"
 WS_SETTINGS = f"{WS_ROOT}/settings"
 WS_RECALL_ID = f"{WS_ROOT}/recall_id"
+WS_STORE_SESSION = f"{WS_ROOT}/store_session"
+WS_DELETE_SESSION = f"{WS_ROOT}/delete_session"
 WS_LOG = f"{WS_ROOT}/log"
 
 BROWSER_MOD_BROWSER_SERVICES = [
@@ -43,3 +46,5 @@ DYNAMIC_ENTITIES = [
     "battery_level",
     "charging",
 ]
+
+DATA_FRONTEND_PATCHES = "frontend_patches"

@@ -44,13 +44,44 @@ def test_owner_suite_light_auto_on_uses_home_presence_sensor() -> None:
     assert "binary_sensor.bayesian_bed_occupancy" in block
     assert "action: switch.turn_on" in block
     assert "switch.adaptive_lighting_owner_suite" in block
-    assert "action: adaptive_lighting.apply" in block
-    assert "entity_id: switch.adaptive_lighting_owner_suite" in block
-    assert "turn_on_lights: true" in block
+    assert "action: script.adaptive_light_turn_on" in block
+    assert "adaptive_switch: switch.adaptive_lighting_owner_suite" in block
     assert "transition: 45" in block
-    assert "manual_control: false" in block
+    assert "reset_manual_control: true" in block
     assert "\n          brightness_pct:" not in block
     assert "\n          color_temp_kelvin:" not in block
+
+
+def test_owner_suite_light_auto_on_debounces_bed_clear_before_turning_on() -> None:
+    block = _automation_block("owner_suite_light_auto_on")
+
+    assert "entity_id: binary_sensor.bayesian_bed_occupancy" in block
+    assert block.count("seconds: 15") == 2
+    assert "Bed clear long enough to ignore roll-over/CPAP-removal blips (#852)" in block
+    assert "Someone is actually in the room" in block
+
+    bed_clear_trigger = block.split("entity_id: binary_sensor.bayesian_bed_occupancy", maxsplit=1)[1].split(
+        "condition:",
+        maxsplit=1,
+    )[0]
+    assert 'from: "on"' in bed_clear_trigger
+    assert 'to: "off"' in bed_clear_trigger
+    assert "for:\n          seconds: 15" in bed_clear_trigger
+
+    bed_clear_condition = block.split("Bed clear long enough", maxsplit=1)[1].split(
+        "Someone is actually in the room",
+        maxsplit=1,
+    )[0]
+    assert 'state: "off"' in bed_clear_condition
+    assert "for:\n            seconds: 15" in bed_clear_condition
+
+    room_presence_condition = block.split("Someone is actually in the room", maxsplit=1)[1].split(
+        "action:",
+        maxsplit=1,
+    )[0]
+    assert "condition: or" in room_presence_condition
+    assert "entity_id: binary_sensor.presense" in room_presence_condition
+    assert "entity_id: binary_sensor.bedroom_occupancy" in room_presence_condition
 
 
 def test_owner_suite_light_auto_off_combines_latch_and_morning_paths() -> None:
@@ -80,5 +111,5 @@ def test_upstairs_hallway_motion_uses_hallway_adaptive_lighting_switch() -> None
 
     assert "light.hall_upstairs_switch" in upstairs_branch
     assert "light.hall_stairway" in upstairs_branch
-    assert "entity_id: switch.adaptive_lighting_hallway" in upstairs_branch
+    assert "adaptive_switch: switch.adaptive_lighting_hallway" in upstairs_branch
     assert "entity_id: switch.adaptive_lighting_owner_suite" not in upstairs_branch

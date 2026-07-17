@@ -197,7 +197,10 @@ script:
             } %}
             {% set weather_icon = weather_icon_map.get(weather_state, 'mdi:weather-cloudy') %}
             {% set temperature = states('sensor.outside_temperature') %}
-            {% set weather_value = (temperature ~ 'F ' ~ weather_state.replace('-', ' ')) if temperature not in ['unknown', 'unavailable'] else weather_state.replace('-', ' ') %}
+            {% set temperature_f = temperature | float(default=none) %}
+            {% set temperature_f_rounded = temperature_f | round(0) | int if temperature_f is number else none %}
+            {% set temperature_c = ((temperature_f - 32) * 5 / 9) | round(0) | int if temperature_f is number else none %}
+            {% set weather_value = (temperature_f_rounded ~ 'F / ' ~ temperature_c ~ 'C ' ~ weather_state.replace('-', ' ')) if temperature_c is number else weather_state.replace('-', ' ') %}
             {% set daily_response = owner_suite_daily_forecast if owner_suite_daily_forecast is mapping else {} %}
             {% set hourly_response = owner_suite_hourly_forecast if owner_suite_hourly_forecast is mapping else {} %}
             {% set daily_forecast_rows = daily_response.get(weather_entity, daily_response.get(preferred_weather_entity, {})).get('forecast', []) | sort(attribute='datetime') %}
@@ -212,13 +215,14 @@ script:
               {% set forecast_ts = as_timestamp(forecast.datetime, default=none) %}
               {% if forecast_ts is number and forecast_ts >= tomorrow_start_ts and forecast_ts < tomorrow_end_ts and tomorrow.value == 'Unavailable' %}
                 {% set forecast_temp = forecast.temperature | int(default=none) %}
+                {% set forecast_temp_c = ((forecast_temp - 32) * 5 / 9) | round(0) | int if forecast_temp is number else none %}
                 {% set forecast_condition = forecast.condition | default('', true) | string | replace('-', ' ') %}
                 {% if forecast_temp is number and forecast_condition | trim != '' %}
-                  {% set tomorrow.value = forecast_temp ~ 'F ' ~ forecast_condition %}
+                  {% set tomorrow.value = forecast_temp ~ 'F / ' ~ forecast_temp_c ~ 'C ' ~ forecast_condition %}
                 {% elif forecast_condition | trim != '' %}
                   {% set tomorrow.value = forecast_condition %}
                 {% elif forecast_temp is number %}
-                  {% set tomorrow.value = forecast_temp ~ 'F' %}
+                  {% set tomorrow.value = forecast_temp ~ 'F / ' ~ forecast_temp_c ~ 'C' %}
                 {% endif %}
               {% endif %}
             {% endfor %}
@@ -308,11 +312,15 @@ script:
             {% set airport_value = (airport_origin ~ ' ' ~ airport_delay_minutes ~ 'm avg') if airport_delay_minutes is number and airport_origin not in ['', 'UNKNOWN', 'UNAVAILABLE'] else 'Airport n/a' %}
             {% set airport_level = 'urgent' if airport_delay_minutes is number and airport_delay_minutes >= 30 else 'normal' %}
             {% set destination_weather = states('sensor.next_travel_flight_destination_weather') %}
+            {% set destination_temp_f = destination_weather | replace('F', '') | float(default=none) %}
+            {% set destination_temp_f_rounded = destination_temp_f | round(0) | int if destination_temp_f is number else none %}
+            {% set destination_temp_c = ((destination_temp_f - 32) * 5 / 9) | round(0) | int if destination_temp_f is number else none %}
+            {% set destination_weather_value = (destination_temp_f_rounded ~ 'F / ' ~ destination_temp_c ~ 'C') if destination_temp_c is number else weather_value %}
             {% set travel_rows = [
               {'label': 'Flight', 'value': (flight_label ~ ' ' ~ flight_destination ~ ' ' ~ flight_time) | trim, 'level': 'emphasis'},
               {'label': 'Status', 'value': flight_delay_value, 'level': 'urgent' if flight_status in ['cancelled', 'diverted'] or delay_minutes | int(0) >= 30 else 'normal'},
               {'label': 'ATC Delay', 'value': airport_value, 'level': airport_level},
-              {'icon': weather_icon, 'label': 'Dest Wx', 'value': destination_weather if destination_weather not in ['unknown', 'unavailable', ''] else weather_value, 'level': 'normal'}
+              {'icon': weather_icon, 'label': 'Dest Wx', 'value': destination_weather_value, 'level': 'normal'}
             ] %}
             {% if weather_alert %}
               {% set status_value = 'Weather alert' %}
@@ -327,7 +335,7 @@ script:
               {% set status_value = 'Rain soon ' ~ precip_next_hour ~ '%' %}
               {% set status_level = 'urgent' %}
             {% elif event_weather %}
-              {% set status_value = 'Wx for ' ~ event_title %}
+              {% set status_value = (flight_destination | string | upper) ~ ' Wx risk' if flight_active and flight_destination not in ['', none, 'unknown', 'unavailable'] else 'Event Wx risk' %}
               {% set status_level = 'urgent' %}
             {% elif trip_mode %}
               {% set status_value = 'Trip mode' %}

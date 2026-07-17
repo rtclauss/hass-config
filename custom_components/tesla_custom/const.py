@@ -1,6 +1,6 @@
 """Const file for Tesla cars."""
 
-VERSION = "3.25.5"
+VERSION = "3.26.3"
 CONF_EXPIRATION = "expiration"
 CONF_INCLUDE_VEHICLES = "include_vehicles"
 CONF_INCLUDE_ENERGYSITES = "include_energysites"
@@ -34,10 +34,6 @@ PLATFORMS = [
     "text",
 ]
 
-AUTH_CALLBACK_PATH = "/auth/tesla/callback"
-AUTH_CALLBACK_NAME = "auth:tesla:callback"
-AUTH_PROXY_PATH = "/auth/tesla/proxy"
-AUTH_PROXY_NAME = "auth:tesla:proxy"
 
 ATTR_PARAMETERS = "parameters"
 ATTR_PATH_VARS = "path_vars"

@@ -22,6 +22,13 @@ HEIGHT = 300
 FOOTER_HEIGHT = 36
 FOOTER_TEXT_SCALE = 2
 FOOTER_TEXT_TOP = HEIGHT - 28
+FOOTER_TEXT_LEFT = 18
+FOOTER_TEXT_WIDTH = WIDTH - (FOOTER_TEXT_LEFT * 2)
+
+ROW_LABEL_LEFT = 56
+ROW_LABEL_WIDTH = 104
+ROW_VALUE_LEFT = 170
+ROW_VALUE_WIDTH = WIDTH - ROW_VALUE_LEFT - 18
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -54,7 +61,14 @@ def render_payload(payload: DisplayPayload) -> bytes:
 
     if payload.footer:
         canvas.rectangle(0, HEIGHT - FOOTER_HEIGHT, WIDTH, HEIGHT, BLACK)
-        canvas.text(18, FOOTER_TEXT_TOP, payload.footer, scale=FOOTER_TEXT_SCALE, color=WHITE)
+        canvas.text(
+            FOOTER_TEXT_LEFT,
+            FOOTER_TEXT_TOP,
+            payload.footer,
+            scale=FOOTER_TEXT_SCALE,
+            color=WHITE,
+            max_width=FOOTER_TEXT_WIDTH,
+        )
 
     return canvas.to_png()
 
@@ -137,8 +151,22 @@ def _render_row(canvas: Canvas, row: dict[str, str], accent: str, y: int) -> Non
         row_color = _text_color_for_background(background_color)
     label = row.get("label", "")
     canvas.icon(26, y - 4, row.get("icon", ""), scale=2, color=row_color)
-    canvas.text(56, y, label, scale=2, color=row_color)
-    canvas.text(170, y, row.get("value", ""), scale=2, color=row_color)
+    canvas.text(
+        ROW_LABEL_LEFT,
+        y,
+        label,
+        scale=2,
+        color=row_color,
+        max_width=ROW_LABEL_WIDTH,
+    )
+    canvas.text(
+        ROW_VALUE_LEFT,
+        y,
+        row.get("value", ""),
+        scale=2,
+        color=row_color,
+        max_width=ROW_VALUE_WIDTH,
+    )
 
 
 def _wrap_text(text: str, scale: int, max_width: int, max_lines: int) -> list[str]:
@@ -205,16 +233,18 @@ class Canvas:
         text: str,
         scale: int,
         color: tuple[int, int, int],
+        max_width: int | None = None,
     ) -> None:
+        max_width = max_width if max_width is not None else self.width - 8 - left
         font = _font_for_scale(scale)
         if font is not None:
             assert self.draw is not None
-            text = _clip_text_to_width(self.draw, text, font, self.width - 8 - left)
+            text = _clip_text_to_width(self.draw, text, font, max_width)
             self.draw.text((left, top), text, font=font, fill=color)
             return
 
         x = left
-        max_x = self.width - 8
+        max_x = min(self.width - 8, left + max_width)
         for char in text.upper():
             glyph = FONT.get(char, FONT["?"])
             if x + 5 * scale > max_x:

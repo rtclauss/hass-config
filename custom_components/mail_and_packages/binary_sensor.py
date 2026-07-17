@@ -3,52 +3,30 @@
 import logging
 
 from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_RESOURCES
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,
 )
 
-from .const import COORDINATOR, DOMAIN, VERSION
+from . import MailAndPackagesConfigEntry
+from .const import BINARY_SENSORS, DOMAIN, VERSION
 from .entity import MailandPackagesBinarySensorEntityDescription
 
 _LOGGER = logging.getLogger(__name__)
 
-BINARY_SENSORS = {
-    "usps_update": MailandPackagesBinarySensorEntityDescription(
-        name="USPS Image Updated",
-        key="usps_update",
-        device_class=BinarySensorDeviceClass.UPDATE,
-        selectable=False,
-        entity_registry_enabled_default=False,
-    ),
-    "amazon_update": MailandPackagesBinarySensorEntityDescription(
-        name="Amazon Image Updated",
-        key="amazon_update",
-        device_class=BinarySensorDeviceClass.UPDATE,
-        selectable=False,
-        entity_registry_enabled_default=False,
-    ),
-    "usps_mail_delivered": MailandPackagesBinarySensorEntityDescription(
-        name="USPS Mail Delivered",
-        key="usps_mail_delivered",
-        entity_registry_enabled_default=False,
-        selectable=True,
-    ),
-}
 
-
-async def async_setup_entry(hass, entry, async_add_devices):
+async def async_setup_entry(hass, entry: MailAndPackagesConfigEntry, async_add_devices):
     """Initialize binary_sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
+    coordinator = entry.runtime_data.coordinator
+    resources = entry.data.get(CONF_RESOURCES, [])
 
     binary_sensors = [
         PackagesBinarySensor(value, coordinator, entry)
         for value in BINARY_SENSORS.values()
+        if not value.selectable or value.key in resources
     ]
     async_add_devices(binary_sensors, False)
 
@@ -60,7 +38,7 @@ class PackagesBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self,
         sensor_description: MailandPackagesBinarySensorEntityDescription,
         coordinator: DataUpdateCoordinator,
-        config: ConfigEntry,
+        config: MailAndPackagesConfigEntry,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
@@ -73,7 +51,9 @@ class PackagesBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._host = config.data[CONF_HOST]
 
         self._attr_name = f"{self._name}"
-        self._attr_unique_id = f"{self._host}_{self._name}_{self._unique_id}"
+        self._attr_unique_id = (
+            f"binary_sensor_{self._host}_{self._type}_{self._unique_id}"
+        )
 
     @property
     def device_info(self) -> dict:
@@ -91,8 +71,15 @@ class PackagesBinarySensor(CoordinatorEntity, BinarySensorEntity):
         return False
 
     @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.data is not None
+
+    @property
     def is_on(self) -> bool:
         """Return True if the image is updated."""
+        if self.coordinator.data is None:
+            return False
         if self._type in self.coordinator.data:
             _LOGGER.debug(
                 "binary_sensor: %s value: %s",
