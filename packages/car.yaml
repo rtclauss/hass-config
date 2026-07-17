@@ -137,6 +137,7 @@ automation:
         id: early_morning
       - trigger: homeassistant
         event: start
+        alias: Planner startup reconciliation
         id: startup
       - trigger: state
         entity_id: binary_sensor.upcoming_trip_charging
@@ -148,6 +149,9 @@ automation:
       - trigger: state
         entity_id: binary_sensor.upcoming_trip_charging
         attribute: all_day
+        id: trip_details_change
+      - trigger: state
+        entity_id: sensor.waze_next_trip_distance
         id: trip_details_change
       - trigger: state
         entity_id:
@@ -166,6 +170,12 @@ automation:
         for:
           minutes: 5
         id: parked_home
+      - trigger: state
+        entity_id:
+          - person.ryan
+          - device_tracker.nigori_location_tracker
+        to: "home"
+        id: home_reconciliation
       - trigger: numeric_state
         entity_id: sensor.outside_temperature
         below: 20
@@ -182,7 +192,8 @@ automation:
         entity_id: device_tracker.nigori_location_tracker
         state: "home"
     action:
-      - choose:
+      - alias: Delay planner startup reconciliation
+        choose:
           - conditions:
               - condition: trigger
                 id: startup
@@ -231,6 +242,7 @@ automation:
             {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
             {% set location_label = location_name | replace('_', ' ') | title %}
             {% set preserve_default_charging_schedule = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+            {% set resident_home = is_state('person.ryan', 'home') %}
             {% set tariff_name = tariff | lower %}
             {% set tariff_display = tariff | replace('_', '-') | title %}
             {% set high_tariff = tariff_name in ['on_peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
@@ -284,7 +296,7 @@ automation:
             {% endif %}
             {% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}
             {% set departure_window_open = departure_dt is not none and departure_dt > now() %}
-            {% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}
+            {% set precondition = has_calendar_departure and departure_window_open and resident_home and location_name == 'home' %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
@@ -334,6 +346,9 @@ automation:
             {% if preserve_default_charging_schedule and not manage_tesla_schedule and departure_time != '' %}
               {% set summary = summary ~ ' No extra home charging override is needed.' %}
             {% endif %}
+            {% if has_calendar_departure and not resident_home %}
+              {% set summary = summary ~ ' Cabin preconditioning is suppressed because Ryan is away.' %}
+            {% endif %}
             {% if precondition and low_tpms %}
               {% set summary = summary ~ ' Tire pressure is low: ' ~ low_tpms_summary ~ '. Get air before you leave.' %}
             {% endif %}
@@ -355,7 +370,8 @@ automation:
               'trip_duration_min': trip_duration_min,
               'outside_temp_f': outside_temp_f,
               'high_tariff': high_tariff,
-              'has_calendar_departure': has_calendar_departure
+              'has_calendar_departure': has_calendar_departure,
+              'resident_home': resident_home
             } | to_json }}
           tesla_plan: "{{ tesla_plan_json | from_json }}"
       - choose:
@@ -371,7 +387,7 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' and tesla_plan.manage_tesla_schedule }}"
+                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' }}"
             sequence:
               - action: script.tesla_set_precondition_schedule_time
                 data:
@@ -386,6 +402,11 @@ automation:
                 target:
                   entity_id: input_boolean.tesla_managed_departure_active
         default:
+          # Keep tracking an HA-managed departure until the Tesla schedule is
+          # actually cleared. The disable path refuses to send enable:false at a
+          # protected location while the Tesla app's scheduled/off-peak charging
+          # is active; dropping the helpers anyway left the preconditioning
+          # schedule armed on the car with nothing on the HA side to retry it.
           - choose:
               - conditions:
                   - condition: template
@@ -394,15 +415,29 @@ automation:
                   - action: script.tesla_set_precondition_schedule_time
                     data:
                       enabled: false
+                      force_disable: "{{ not tesla_plan.resident_home or tesla_plan.location != 'home' }}"
                       reason: "{{ tesla_plan.summary }}"
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.tesla_managed_departure_active
-          - action: input_number.set_value
-            target:
-              entity_id: input_number.tesla_managed_departure_ts
-            data:
-              value: 0
+                    response_variable: tesla_schedule_result
+                  - if:
+                      - condition: template
+                        value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+                    then:
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.tesla_managed_departure_active
+                      - action: input_number.set_value
+                        target:
+                          entity_id: input_number.tesla_managed_departure_ts
+                        data:
+                          value: 0
+                    else:
+                      - action: logbook.log
+                        data:
+                          entity_id: script.tesla_set_precondition_schedule_time
+                          domain: script
+                          name: Tesla scheduled departure planner
+                          message: >-
+                            Kept the HA-managed departure tracked: the Tesla schedule could not be cleared yet.
       - choose:
           - conditions:
               - condition: or
@@ -419,6 +454,75 @@ automation:
                     url: "/ryan-new-mushroom/tesla-v2"
                   message: "{{ tesla_plan.summary }}"
 
+  - id: tesla_departure_cancel_when_home_context_ends
+    alias: tesla_departure_cancel_when_home_context_ends
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      # "home -> anything" would include home -> unavailable/unknown, which a
+      # Tesla API hiccup or an integration reload produces while the car has not
+      # moved. That read as "left home" and force-cleared a live schedule, so
+      # only a known non-home state counts as leaving (see #904/#907).
+      - trigger: state
+        entity_id:
+          - person.ryan
+          - device_tracker.nigori_location_tracker
+        from: "home"
+        not_to:
+          - "unknown"
+          - "unavailable"
+        id: home_context_left
+      # The Tesla API command can return before the integration publishes the
+      # new departure timestamp. If the owner leaves during that window, the
+      # first protected-location clear safely declines because it cannot prove
+      # the live schedule is HA-managed. Retry as soon as Tesla reports the
+      # timestamp, but only while the owner or vehicle is still away.
+      - trigger: state
+        entity_id: binary_sensor.nigori_scheduled_departure
+        attribute: Departure timestamp
+        id: tesla_schedule_synced
+    condition:
+      - condition: state
+        entity_id: input_boolean.tesla_managed_departure_active
+        state: "on"
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: home_context_left
+          # Only a *known* non-home state means away. `not is_state(x, 'home')`
+          # is also true for unknown/unavailable, so the Tesla integration
+          # publishing the departure timestamp at startup — while the trackers
+          # were still restoring — passed this check and force-cleared the
+          # schedule the planner had just armed. The planner could not re-arm it
+          # either: its own condition needs the tracker to read `home`.
+          - condition: template
+            value_template: >-
+              {{ states('person.ryan') not in ['home', 'unknown', 'unavailable'] or
+                 states('device_tracker.nigori_location_tracker') not in ['home', 'unknown', 'unavailable'] }}
+    action:
+      - action: script.tesla_set_precondition_schedule_time
+        data:
+          enabled: false
+          force_disable: true
+          reason: >-
+            Cancel the Home Assistant-managed Tesla departure because Ryan or Nigori left home.
+        response_variable: tesla_schedule_result
+      # Only stop tracking once the Tesla schedule is actually gone; otherwise a
+      # later planner run still has the helpers set and can retry the clear.
+      - if:
+          - condition: template
+            value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tesla_managed_departure_active
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.tesla_managed_departure_ts
+            data:
+              value: 0
+
   - id: tesla_departure_schedule_cleanup
     alias: tesla_departure_schedule_cleanup
     mode: single
@@ -432,9 +536,11 @@ automation:
           {{ is_state('input_boolean.tesla_managed_departure_active', 'on') and stored_departure_ts > 0 and stored_departure_ts | timestamp_local | as_datetime <= now() }}
       - trigger: homeassistant
         event: start
+        alias: Cleanup startup reconciliation
         id: startup
     action:
-      - choose:
+      - alias: Delay cleanup startup reconciliation
+        choose:
           - conditions:
               - condition: trigger
                 id: startup
@@ -455,14 +561,22 @@ automation:
         data:
           enabled: false
           reason: "{{ cleanup_reason }}"
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.tesla_managed_departure_active
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.tesla_managed_departure_ts
-        data:
-          value: 0
+        response_variable: tesla_schedule_result
+      # A passed departure that could not be cleared (Tesla-app scheduled or
+      # off-peak charging active at a protected location) stays tracked, so the
+      # next planner run retries instead of leaving the car armed forever.
+      - if:
+          - condition: template
+            value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tesla_managed_departure_active
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.tesla_managed_departure_ts
+            data:
+              value: 0
 
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
@@ -603,45 +717,35 @@ automation:
         data:
           message: Close the garage door.
 
-  - alias: Tesla set polling time short on startup if charger is connected
-    id: tesla_short_polling_charger_connected
-    description: When HA starts up. We adjust the Polling Interval down from the configured value if we are connected to a charger
+  - alias: Tesla set polling time short on startup
+    id: tesla_short_polling_startup
+    description: When HA starts up, adjust the polling interval down if the charger is connected or the car is driving
+    mode: single
     trace:
       stored_traces: 10
     trigger:
       - trigger: homeassistant
         event: start
+        id: startup
     condition:
-      - condition: state
-        entity_id: binary_sensor.nigori_charging
-        state: "on"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.nigori_charging
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.nigori_parking_brake
+            state: "off"
     action:
       - delay: "00:01:00"
       - action: tesla_custom.polling_interval
         data:
           scan_interval: 30
 
-  - alias: Tesla set polling time short on startup if car is driving
-    id: tesla_short_polling_driving
-    description: When HA starts up. We adjust the Polling Interval down from the configured value if we are driving
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: homeassistant
-        event: start
-    condition:
-      - condition: state
-        entity_id: binary_sensor.nigori_parking_brake
-        state: "off"
-    action:
-      - delay: "00:01:00"
-      - action: tesla_custom.polling_interval
-        data:
-          scan_interval: 30
-
-  - alias: Tesla set polling time long when charger is disconnected
-    description: We adjust the Polling Interval up to the configured value if we are disconnecting from the charger
-    id: tesla_long_polling_charger_disconnected
+  - alias: Tesla set polling time long when idle and unplugged
+    description: Adjust the polling interval up to the configured value when the car is parked and the charger is disconnected
+    id: tesla_long_polling_idle_unplugged
+    mode: restart
     trace:
       stored_traces: 10
     trigger:
@@ -650,30 +754,21 @@ automation:
         to: "off"
         for:
           minutes: 15
-    condition:
-      - condition: state
-        entity_id: binary_sensor.nigori_parking_brake
-        state: "on"
-    action:
-      - action: tesla_custom.polling_interval
-        data:
-          scan_interval: 660
-
-  - alias: Tesla set polling time long when car is parked
-    description: We adjust the Polling Interval up to the configured value when we are parked if the charger is not connected
-    id: tesla_long_polling_charger_diconnected_parked
-    trace:
-      stored_traces: 10
-    trigger:
+        id: charger_disconnected
       - trigger: state
         entity_id: binary_sensor.nigori_parking_brake
         to: "on"
         for:
           minutes: 15
+        id: parked
     condition:
       - condition: state
         entity_id: binary_sensor.nigori_charging
         state: "off"
+      - alias: Confirm Tesla is parked before long polling
+        condition: state
+        entity_id: binary_sensor.nigori_parking_brake
+        state: "on"
     action:
       - action: tesla_custom.polling_interval
         data:
@@ -829,6 +924,9 @@ script:
       reason:
         description: Optional reason to include in the logbook entry.
         example: "Weekday alarm departure plan"
+      force_disable:
+        description: Disable the managed departure even at a protected location, such as when Ryan or Nigori leaves home.
+        example: true
     sequence:
       - variables:
           schedule_enabled: "{{ enabled | default(true) not in [false, 'false', 'False', 'off', 0, '0'] }}"
@@ -878,8 +976,9 @@ script:
           tesla_off_peak_charging_enabled: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Off peak charging enabled') in [true, 'true', 'True', 'on'] }}"
           tesla_managed_departure_matches: >-
             {{ stored_managed_departure_active in [true, 'true', 'True', 'on'] and stored_managed_departure_ts > 0 and tesla_departure_ts > 0 and ((stored_managed_departure_ts - tesla_departure_ts) | abs) <= 300 }}
+          force_disable_requested: "{{ force_disable | default(false) in [true, 'true', 'True', 'on', 1, '1'] }}"
           safe_to_clear_tesla_schedule: >-
-            {{ preserve_default_charging_schedule not in [true, 'true', 'True'] or (tesla_managed_departure_matches in [true, 'true', 'True'] and tesla_scheduled_charging_active not in [true, 'true', 'True'] and tesla_off_peak_charging_enabled not in [true, 'true', 'True']) }}
+            {{ preserve_default_charging_schedule not in [true, 'true', 'True'] or (tesla_managed_departure_matches in [true, 'true', 'True'] and (force_disable_requested in [true, 'true', 'True'] or (tesla_scheduled_charging_active not in [true, 'true', 'True'] and tesla_off_peak_charging_enabled not in [true, 'true', 'True']))) }}
       - choose:
           - conditions:
               - condition: template
@@ -891,7 +990,7 @@ script:
                   domain: script
                   name: Tesla scheduled departure planner
                   message: >-
-                    {{ effective_reason }}{% if safe_to_clear_tesla_schedule in [true, 'true', 'True'] %} Clearing Tesla scheduled departure.{% else %} Preserve the Tesla app charging schedule at {{ location_label }} and skip clearing Tesla schedule state because the live Tesla schedule does not match the last HA-managed protected-location departure.{% endif %}
+                    {{ effective_reason }}{% if safe_to_clear_tesla_schedule in [true, 'true', 'True'] %} Clearing Tesla scheduled departure.{% elif tesla_managed_departure_matches not in [true, 'true', 'True'] %} Preserve the Tesla app charging schedule at {{ location_label }} and skip clearing Tesla schedule state because the live Tesla schedule does not match the last HA-managed protected-location departure.{% else %} Preserve the Tesla app charging schedule at {{ location_label }} and skip clearing Tesla schedule state because scheduled or off-peak charging is active.{% endif %}
               - choose:
                   - conditions:
                       - condition: template
@@ -960,6 +1059,18 @@ script:
                     off_peak_charging_weekdays_only: true
                     end_off_peak_time: 360
                     wake_if_asleep: true
+      # Report whether the Tesla schedule was actually cleared so callers only
+      # drop the HA tracking helpers when there is nothing left to retry. Both
+      # values are read at the top sequence level, where they are set — a value
+      # set inside a choose/then sub-script is not visible here.
+      - variables:
+          tesla_schedule_result:
+            cleared: >-
+              {{ (not schedule_enabled) and safe_to_clear_tesla_schedule in [true, 'true', 'True'] }}
+            skipped_disable: >-
+              {{ (not schedule_enabled) and safe_to_clear_tesla_schedule not in [true, 'true', 'True'] }}
+      - stop: "Tesla departure planner finished"
+        response_variable: tesla_schedule_result
 
   # tesla_set_charge_limit_soc:
   #   alias: Tesla Set Charge Limit SOC
@@ -986,15 +1097,16 @@ template:
   - binary_sensor:
       - name: upcoming_trip_charging
         unique_id: upcoming_trip_charging
-        availability: >-
-          {{ state_attr("sensor.waze_next_trip_distance", "distance") != None }}
         attributes:
           entry: >-
+            {% from 'flight.jinja' import skip_charging_event %}
+            {% set should_skip_charging_event = skip_charging_event | as_function %}
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, entry='None') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% if personal_start_raw not in [none, ''] %}
+            {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
+            {% if personal_start_raw not in [none, ''] and not personal_skip %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
               {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
                 {% set ns.start = personal_start %}
@@ -1002,7 +1114,8 @@ template:
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% if work_start_raw not in [none, ''] %}
+            {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
+            {% if work_start_raw not in [none, ''] and not work_skip %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
               {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
@@ -1010,7 +1123,8 @@ template:
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% if curling_start_raw not in [none, ''] %}
+            {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
+            {% if curling_start_raw not in [none, ''] and not curling_skip %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
               {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
@@ -1019,11 +1133,14 @@ template:
             {% endif %}
             {{ ns.entry }}
           start_time: >-
+            {% from 'flight.jinja' import skip_charging_event %}
+            {% set should_skip_charging_event = skip_charging_event | as_function %}
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, value='None') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% if personal_start_raw not in [none, ''] %}
+            {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
+            {% if personal_start_raw not in [none, ''] and not personal_skip %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
               {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
                 {% set ns.start = personal_start %}
@@ -1031,7 +1148,8 @@ template:
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% if work_start_raw not in [none, ''] %}
+            {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
+            {% if work_start_raw not in [none, ''] and not work_skip %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
               {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
@@ -1039,7 +1157,8 @@ template:
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% if curling_start_raw not in [none, ''] %}
+            {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
+            {% if curling_start_raw not in [none, ''] and not curling_skip %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
               {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
@@ -1048,11 +1167,14 @@ template:
             {% endif %}
             {{ ns.value }}
           all_day: >-
+            {% from 'flight.jinja' import skip_charging_event %}
+            {% set should_skip_charging_event = skip_charging_event | as_function %}
             {% set now_local = now() %}
             {% set horizon = now_local + timedelta(hours=24) %}
             {% set ns = namespace(start=none, value='None') %}
             {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% if personal_start_raw not in [none, ''] %}
+            {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
+            {% if personal_start_raw not in [none, ''] and not personal_skip %}
               {% set personal_start = personal_start_raw | as_datetime | as_local %}
               {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
                 {% set ns.start = personal_start %}
@@ -1060,7 +1182,8 @@ template:
               {% endif %}
             {% endif %}
             {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% if work_start_raw not in [none, ''] %}
+            {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
+            {% if work_start_raw not in [none, ''] and not work_skip %}
               {% set work_start = work_start_raw | as_datetime | as_local %}
               {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
                 {% set ns.start = work_start %}
@@ -1068,7 +1191,8 @@ template:
               {% endif %}
             {% endif %}
             {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% if curling_start_raw not in [none, ''] %}
+            {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
+            {% if curling_start_raw not in [none, ''] and not curling_skip %}
               {% set curling_start = curling_start_raw | as_datetime | as_local %}
               {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
                 {% set ns.start = curling_start %}
@@ -1077,12 +1201,14 @@ template:
             {% endif %}
             {{ ns.value }}
         state: >-
+          {% from 'flight.jinja' import skip_charging_event %}
+          {% set should_skip_charging_event = skip_charging_event | as_function %}
           {% set now_local = now() %}
           {% set horizon = now_local + timedelta(hours=24) %}
           {% set ns = namespace(start=none, eligible=false) %}
           {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-          {% set personal_description = state_attr('calendar.ryan_claussen', 'description') | default('', true) | lower %}
-          {% if personal_start_raw not in [none, ''] and 'nocharge' not in personal_description %}
+          {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
+          {% if personal_start_raw not in [none, ''] and not personal_skip %}
             {% set personal_start = personal_start_raw | as_datetime | as_local %}
             {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
               {% set ns.start = personal_start %}
@@ -1090,8 +1216,8 @@ template:
             {% endif %}
           {% endif %}
           {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-          {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) | lower %}
-          {% if work_start_raw not in [none, ''] and 'nocharge' not in work_description %}
+          {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
+          {% if work_start_raw not in [none, ''] and not work_skip %}
             {% set work_start = work_start_raw | as_datetime | as_local %}
             {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
               {% set ns.start = work_start %}
@@ -1099,8 +1225,8 @@ template:
             {% endif %}
           {% endif %}
           {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-          {% set curling_description = state_attr('calendar.curling', 'description') | default('', true) | lower %}
-          {% if curling_start_raw not in [none, ''] and 'nocharge' not in curling_description %}
+          {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
+          {% if curling_start_raw not in [none, ''] and not curling_skip %}
             {% set curling_start = curling_start_raw | as_datetime | as_local %}
             {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
               {% set ns.start = curling_start %}

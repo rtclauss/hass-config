@@ -1,5 +1,5 @@
 # The Brewery Home Assistant Configuration 🍺
-[![Build Status](https://api.travis-ci.com/rtclauss/hass-config.svg?branch=main)](https://app.travis-ci.com/github/rtclauss/hass-config)
+[![Validate Home Assistant Config](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml/badge.svg?branch=main)](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml?query=branch%3Amain)
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
@@ -26,17 +26,30 @@
 python -m pip install --upgrade pip yamllint
 python scripts/check_ha_python_support.py --python-version-file .python-version
 uv run --with pytest pytest
+python scripts/allium_weed_check.py --changed-from origin/develop
 ```
+
+`scripts/allium_weed_check.py` runs `allium check` when the CLI is installed,
+falls back to lightweight structural checks when it is not, and fails protected
+behavior changes that touch implementation scopes without an owner-approved
+update to the governing `.allium` spec or a classified gap in
+`specs/allium_weed_config.json`. Always compare changed behavior to the Allium
+reference first; do not edit `.allium` definitions automatically. CI installs
+Allium CLI 3.2.3 and runs with `--require-allium` so full language validation
+cannot be skipped silently.
 
 ## Music Assistant Media Flow
 
-Music playback automations now target the Music Assistant-backed Sonos entities, which are the `_2` media players:
+Music playback automations target explicitly named Music Assistant-backed Sonos
+entities. Their `ma_` entity IDs distinguish them from native Home Assistant
+Sonos entities, while their entity-registry names remain clean room names for
+the UI, HomeKit, and Siri:
 
-- `media_player.bedroom_sonos_2`
-- `media_player.bathroom_sonos_2`
-- `media_player.office_sonos_2`
-- `media_player.den_sonos_2`
-- `media_player.tiki_room_2`
+- `media_player.ma_bedroom`
+- `media_player.ma_bathroom`
+- `media_player.ma_office`
+- `media_player.ma_den`
+- `media_player.ma_tiki_room`
 
 The reusable media helpers live in `packages/media_player.yaml`:
 
@@ -79,7 +92,7 @@ If you are creating a brand new script, prefer calling the helper instead of usi
 ```yaml
 - action: script.music_assistant_play_spotify_uri
   data:
-    entity_id: media_player.bedroom_sonos_2
+    entity_id: media_player.ma_bedroom
     spotify_uri: "spotify:playlist:37i9dQZF1DX4WYpdgoIcn6"
 ```
 
@@ -101,7 +114,7 @@ The `Music Assistant` section on the dashboard includes a small search flow:
 6. Use `script.music_assistant_play_selected_search_result` to play the selected result now or add it to the current queue.
 7. Use `script.music_assistant_add_selected_search_result_to_playlist` to append the selected Music Assistant URI to the chosen `plists`-based script and reload scripts.
 
-The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.bedroom_sonos_2`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
+The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.ma_bedroom`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
 
 The supported playlist-script targets are `spotify_bedtime`, `spotify_wake_up`, `spotify_arrival`, and `bedroom_playlist_0` through `bedroom_playlist_5`. Appending a result updates `packages/media_player.yaml` in place and then reloads Home Assistant scripts so the change is immediately available.
 
@@ -111,7 +124,7 @@ Radio wake-up scripts now use Music Assistant item URIs instead of Sonos favorit
 
 Current examples:
 
-- `library://radio/12`
+- `library://radio/21`
 - `tunein--S3NwgspV://radio/s34350`
 - `tunein--S3NwgspV://radio/s20620`
 
@@ -144,16 +157,18 @@ yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disab
   configuration.yaml automations.yaml blueprints packages zigbee2mqtt
 
 # If Docker is available
-docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.5.0 \
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.5.1 \
   python -m homeassistant --config /config --script check_config
 ```
 
 ## Feature Docs
 
+- [Available Device Inventory](inventory.md)
 - [House Transition Framework](docs/house_transition_framework.md)
 - [Home Assistant Label Model](docs/ha_labels.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
+- [Built-In Security Dashboard](docs/security_dashboard.md)
 - [Inky E-Ink Displays](docs/inky_displays.md)
 - [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
@@ -207,12 +222,12 @@ Software on the NUC:
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
   * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/main/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
+  * [Uplift Desk custom component](https://github.com/rtclauss/hass-uplift-desk) - Fork used for standing desk entities and controls in `packages/desk.yaml`.
   * ~~[Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)~~ Moving to Zigbee/Thread/Matter
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
   * [Matter Server](https://github.com/home-assistant/addons/tree/master/matter_server)
-* Running elsewhere
-  * [rtlamr](https://github.com/bemasher/rtlamr) - Runs on a Pi4 and collects ~~electrical~~ gas utility info.
+  * [rtlamr2mqtt](https://github.com/allangood/rtlamr2mqtt) - Local HA add-on (RTLAMR to MQTT bridge) that reads the gas utility meter via a USB RTL-SDR dongle and publishes to MQTT. Exposes `sensor.raw_house_gas_meter_reading` (and `..._last_seen`).
   * [Zigbee2MQTT](https://zigbee2mqtt.io/) - Zigbee control over MQTT
 
 ## Device Audit (2026-03-29)
@@ -260,7 +275,7 @@ replacement below.
 | <a id="live-aqara"></a>Aqara | Motion, temperature/humidity, leak, contact, vibration, button, and cube devices on Zigbee2MQTT, plus an Aqara Motion and Light Sensor P2 on Matter. |
 | <a id="live-ikea"></a>IKEA | FYRTUR blinds, PARASOLL contact sensors, TRADFRI outlets and remotes, SOMRIG shortcut buttons, SYMFONISK sound remotes, and a RODRET dimmer. |
 | <a id="live-inovelli"></a>Inovelli | Multiple Zigbee 2-in-1 switches and dimmers used for room lighting and smart-bulb mode control. |
-| <a id="live-philips-hue"></a>Philips Hue | Hue downlights, filament bulbs, outdoor fixtures, and other bulbs on Zigbee2MQTT. |
+| <a id="live-philips-hue"></a>Philips Hue | Hue downlights, filament bulbs, outdoor fixtures, and other bulbs on Zigbee2MQTT with native Hue control enabled for devices. |
 | <a id="live-eaton-halo"></a>Eaton / Halo | Halo Zigbee downlights in hallway and bathroom areas. |
 | <a id="live-sengled"></a>Sengled | Energy-monitoring smart plugs used for the CPAP and sump pump. |
 | <a id="live-peanut"></a>Securifi / Peanut Smart Plug | A live Peanut Smart Plug remains paired and in service. |
@@ -272,6 +287,7 @@ replacement below.
 | <a id="live-localtuya"></a>LocalTuya / Good Earth | Good Earth / Tuya LED flat panels in kitchen and laundry areas. |
 | <a id="live-rachio"></a>Rachio | Rachio Gen 3 irrigation controller and zone switches. |
 | <a id="live-smartthings"></a>SmartThings | The modified SmartThings Arrival Sensor is still paired via Zigbee2MQTT. |
+| <a id="live-uplift-desk"></a>Uplift Desk | Office standing desk using the [`rtclauss/hass-uplift-desk`](https://github.com/rtclauss/hass-uplift-desk) custom component fork. |
 | <a id="live-tesla"></a>Tesla | Tesla Model 3 (`Nigori`) on the custom Tesla integration. |
 | <a id="live-unifi"></a>UniFi | The `unifi` integration is active for network entities, WLANs, and device trackers, although exact hardware model inventory is no longer fully represented in Home Assistant. |
 | <a id="live-adaptive-lighting"></a>Adaptive Lighting | Active room-specific Adaptive Lighting instances across the lighting stack. |

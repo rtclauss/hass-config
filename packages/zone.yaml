@@ -36,6 +36,14 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
+    automation.zeke_arrival_emitter:
+      <<: *customize
+      friendly_name: Zeke Arrival Event Emitter
+      icon: mdi:home-import-outline
+    automation.zeke_departure_emitter:
+      <<: *customize
+      friendly_name: Zeke Departure Event Emitter
+      icon: mdi:home-export-outline
     automation.cloudy_home_arrival:
       <<: *customize
       friendly_name: Cloudy Day Arrival
@@ -95,6 +103,12 @@ homeassistant:
     input_boolean.bayesian_zeke_home:
       <<: *customize
       friendly_name: Bayesian Presence Constraint
+    ################################################
+    ## Input Datetime
+    ################################################
+    input_datetime.contextual_arrival_last_empty_at:
+      <<: *customize
+      friendly_name: "Contextual Arrival Last Empty House"
     ################################################
     ## Input Numbers
     ################################################
@@ -160,19 +174,76 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: zeke_arrival_emitter
+    alias: zeke_arrival_emitter
+    description: >-
+      Own the canonical Zeke arrival triggers and emit a shared event so each
+      downstream reaction can keep its own mode, trace history, and conditions.
+      Additional people should add their own emitter with the same event
+      contract and a distinct person value.
+    mode: parallel
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        id: tracker_entered_home
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
+      - trigger: state
+        id: bayesian_presence_on
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
+        to: "on"
+    action:
+      - event: zeke_arrival
+        event_data:
+          person: zeke
+          reason: zeke_arrival
+          source_trigger: "{{ trigger.id }}"
+          tracker_entity_id: device_tracker.bayesian_zeke_home
+          presence_entity_id: binary_sensor.bayesian_zeke_home
+
+  - id: zeke_departure_emitter
+    alias: zeke_departure_emitter
+    description: >-
+      Own the canonical Zeke departure triggers and emit a shared event so each
+      downstream reaction can keep its own mode, trace history, and conditions.
+      Additional people should add their own emitter with the same event
+      contract and a distinct person value.
+    mode: parallel
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        id: tracker_left_home
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
+      - trigger: state
+        id: bayesian_presence_off
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
+        to: "off"
+    action:
+      - event: zeke_departure
+        event_data:
+          person: zeke
+          reason: zeke_departure
+          source_trigger: "{{ trigger.id }}"
+          tracker_entity_id: device_tracker.bayesian_zeke_home
+          presence_entity_id: binary_sensor.bayesian_zeke_home
+
   - id: cloudy_home_arrival
     alias: cloudy_home_arrival
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: cloudy_home_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       condition: and
       conditions:
@@ -185,9 +256,9 @@ automation:
           state: "off"
           # enabled: false
     action:
-      - action: script.house_transition
+      - action: script.contextual_arrival_transition
         data:
-          mode: home
+          requested_mode: home
           reason: cloudy_home_arrival
           light_scene: scene.cloudy_arrive_home
           light_transition: 30
@@ -198,14 +269,11 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: default_arrive_home_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       and:
         - condition: state
@@ -217,9 +285,9 @@ automation:
           entity_id: sensor.wethop_activity
           state: "Automotive"
     action:
-      - action: script.house_transition
+      - action: script.contextual_arrival_transition
         data:
-          mode: home
+          requested_mode: home
           reason: default_arrive_home
       # - alias: "Notify action"
       #   action: notify.mobile_app_wethop
@@ -232,14 +300,11 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: leave
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: doors_open_departure_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     variables:
       open_egress_points: >-
         {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
@@ -258,14 +323,11 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: leave
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: garage_door_departure_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     condition:
       - condition: state
         entity_id: cover.garage_door
@@ -288,7 +350,7 @@ automation:
         to: "on"
     action:
       - action: input_boolean.turn_on
-        data:
+        target:
           entity_id: input_boolean.bayesian_zeke_home
 
   - alias: input_boolean_tracker_off
@@ -296,29 +358,40 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        to: "off"
+      - trigger: event
+        id: empty_house_tracker_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
+    condition:
+      # Only the emitter's from:on -> off Bayesian source updates the empty-house
+      # timestamp; the GPS zone leave source can fire before the house is empty.
+      - alias: "Only update empty-house timestamp from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
     action:
       - action: input_boolean.turn_off
-        data:
+        target:
           entity_id: input_boolean.bayesian_zeke_home
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.contextual_arrival_last_empty_at
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
   - id: play_spotify_when_i_get_home
     alias: play_spotify_when_i_get_home
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: arrival_music_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
-      - condition: state
+      - alias: "Arrival music allowed when guest mode is off"
+        condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
       - condition: state
@@ -345,14 +418,11 @@ automation:
     trace:
       stored_traces: 50
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: night_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       condition: and
       conditions:
@@ -369,13 +439,13 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - action: script.house_transition
+      - action: script.contextual_arrival_transition
         data:
-          mode: night
+          requested_mode: night
           reason: night_arrival
           light_transition: 30
       - action: vacuum.return_to_base
-        data:
+        target:
           entity_id: all
       - action: input_boolean.turn_off
         target:
@@ -386,14 +456,11 @@ automation:
     trace:
       stored_traces: 50
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: bedroom_prep_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       condition: and
       conditions:
@@ -409,9 +476,9 @@ automation:
             - condition: sun
               before: sunrise
     action:
-      - action: script.house_transition
+      - action: script.contextual_arrival_transition
         data:
-          mode: night
+          requested_mode: night
           reason: bedroom_prep_arrival
           extra_scene: scene.bedroom_prep
       - action: notify.all
@@ -493,16 +560,14 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: leave
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: departure_house_transition_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     condition:
-      - condition: state
+      - alias: "Departure transition allowed when guest mode is off"
+        condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
       - alias: "Primary tracker confirms departure"
@@ -572,8 +637,9 @@ automation:
           }}
     action:
       - action: input_select.select_option
-        data:
+        target:
           entity_id: input_select.trip_origin
+        data:
           option: "{{ trigger.to_state.state }}"
 
   # - id: update_nest_eta
@@ -609,21 +675,21 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: vacuum_return_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     action:
       - action: vacuum.return_to_base
         target:
           entity_id:
             - vacuum.valetudo_den
-            - vacuum.valetudo_mainlevel
-            - vacuum.valetudo_upstairs_vacuum
+            - vacuum.x40_ultra
+      - action: mqtt.publish
+        data:
+          topic: valetudo/upstairs-vacuum/BasicControlCapability/operation/set
+          payload: HOME
       - action: switch.turn_off
         target:
           entity_id: switch.livingroom_motion_detection
@@ -637,12 +703,17 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: vacuum_departure_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     condition:
-      - condition: state
+      - alias: "Only start departure vacuum from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
+      - alias: "Departure vacuum allowed when guest mode is off"
+        condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
     action:
@@ -720,19 +791,24 @@ binary_sensor:
         prob_given_false: 0.0005
         platform: state
         to_state: "home"
-      - entity_id: device_tracker.wethop_wifi
+      - entity_id: sensor.wethop_ssid
         prob_given_true: 0.98
-        prob_given_false: 0.25
+        prob_given_false: 0.60  # brief disconnects common at home; travel router guards false positives
         platform: state
-        to_state: "home"
+        to_state: !secret home_ssid
       - entity_id: device_tracker.nigori_location_tracker
         prob_given_true: 0.95
-        prob_given_false: 0.55
+        prob_given_false: 0.55  # car stays home when flying; trip observation guards the false positive
         platform: state
         to_state: "home"
       - entity_id: binary_sensor.arrival_sensor_presence
         prob_given_true: 0.999
-        prob_given_false: 0.05
+        prob_given_false: 0.05  # sensor is in the car; car at home ≠ Zeke home; trip observation guards this
+        platform: state
+        to_state: "on"
+      - entity_id: input_boolean.trip
+        prob_given_true: 0.01   # almost never on a trip when home
+        prob_given_false: 0.15  # most non-home time is daily away (work, errands), not a trip
         platform: state
         to_state: "on"
 
@@ -751,6 +827,15 @@ input_boolean:
 # Input Numbers
 ########################
 input_number: {}
+
+########################
+# Input Datetime
+########################
+input_datetime:
+  contextual_arrival_last_empty_at:
+    name: "Contextual Arrival Last Empty House"
+    has_date: true
+    has_time: true
 
 ########################
 # Input Select
@@ -779,8 +864,9 @@ group:
     entities:
       - device_tracker.bayesian_zeke_home
       - device_tracker.wethop
-      - device_tracker.wethop_wifi
+      - sensor.wethop_ssid
       - binary_sensor.arrival_sensor_presence
+      - input_boolean.trip
       - sensor.zeke_speed
       - sensor.wethop_battery_state
       - sensor.wethop_activity
@@ -790,6 +876,12 @@ group:
 # Scenes
 ########################
 scene:
+  - name: arrive_home_quick
+    entities:
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 150
+
   - name: arrive_home
     entities:
       light.hall_foyer_switch:
@@ -802,6 +894,54 @@ scene:
         state: "off"
       switch.tiki_room_camera:
         state: "off"
+
+  - name: arrive_home_full_day
+    entities:
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 255
+      light.hall_transition_switch:
+        state: "on"
+        brightness: 220
+      light.kitchen_sink_overhead:
+        state: "on"
+        brightness: 220
+      light.den_all:
+        state: "on"
+      switch.livingroom_motion_detection:
+        state: "off"
+      switch.tiki_room_camera:
+        state: "off"
+
+  - name: arrive_home_multi_day
+    entities:
+      light.hall_all:
+        state: "on"
+        brightness: 255
+      light.kitchen_sink_overhead:
+        state: "on"
+        brightness: 255
+      light.den_all:
+        state: "on"
+      light.outside_front_hue:
+        state: "on"
+        brightness: 220
+      light.outside_front_door:
+        state: "on"
+        brightness: 220
+      switch.livingroom_motion_detection:
+        state: "off"
+      switch.tiki_room_camera:
+        state: "off"
+
+  - name: night_arrive_home_quick
+    entities:
+      light.hall_foyer_switch:
+        state: "on"
+        brightness: 120
+      light.outside_front_door:
+        state: "on"
+        brightness: 120
 
   - name: turn_on_cameras
     entities:
@@ -846,7 +986,129 @@ scene:
 # Scripts
 ########################
 script:
-  {}
+  contextual_arrival_transition:
+    alias: contextual_arrival_transition
+    description: >-
+      Apply absence-tiered arrival lighting and climate behavior before
+      delegating to the shared house transition script.
+    mode: restart
+    trace:
+      stored_traces: 10
+    fields:
+      requested_mode:
+        description: "Arrival mode to pass to house_transition: home or night."
+        example: home
+      reason:
+        description: Optional logbook reason for the arrival transition.
+        example: default_arrive_home
+      light_scene:
+        description: Optional base scene for half-day arrivals.
+        example: scene.cloudy_arrive_home
+      light_transition:
+        description: Optional base transition seconds.
+        example: 30
+      extra_scene:
+        description: Optional extra scene for non-quick arrivals.
+        example: scene.bedroom_prep
+      notify_message:
+        description: Optional notify.all message for the transition.
+        example: Cloudy day arrival.
+    variables:
+      normalized_mode: >-
+        {% set normalized = (requested_mode | default('home', true) | string | lower | trim) %}
+        {{ 'night' if normalized == 'night' else 'home' }}
+      last_empty_timestamp: >-
+        {% set raw = states('input_datetime.contextual_arrival_last_empty_at') %}
+        {% set parsed = as_timestamp(raw, default=none) %}
+        {{ parsed if parsed is not none else as_timestamp(now()) }}
+      absence_seconds: >-
+        {{ [as_timestamp(now()) - (last_empty_timestamp | float(as_timestamp(now()))), 0] | max | int }}
+      # An arrival automation can re-fire from its GPS zone trigger while the
+      # house is still occupied (e.g. a GPS jitter re-enter). In that case the
+      # house never emptied, so the persisted last_empty timestamp is stale and
+      # would misclassify the re-entry as full/multi day. Treat presence that
+      # has already been established (Bayesian "on" for more than the grace
+      # window) as an occupied re-entry and force the minimal quick tier.
+      seconds_since_presence: >-
+        {% set lc = states.binary_sensor.bayesian_zeke_home.last_changed %}
+        {{ (as_timestamp(now()) - as_timestamp(lc)) | int if lc is not none else 0 }}
+      occupied_reentry: >-
+        {{ is_state('binary_sensor.bayesian_zeke_home', 'on')
+           and (seconds_since_presence | int(0)) > 300 }}
+      arrival_tier: >-
+        {% if occupied_reentry %}
+          quick_errand
+        {% elif absence_seconds < 3600 %}
+          quick_errand
+        {% elif absence_seconds < 28800 %}
+          half_day
+        {% elif absence_seconds < 86400 %}
+          full_day
+        {% else %}
+          multi_day
+        {% endif %}
+      # Reached only when the caller passed no explicit light_scene (the
+      # explicit case is handled first in tier_light_scene).
+      base_light_scene: >-
+        {% if normalized_mode == 'night' %}
+          scene.night_arrive_home
+        {% else %}
+          scene.arrive_home
+        {% endif %}
+      # A caller that passes an explicit light_scene (e.g. the cloudy arrival,
+      # whose whole purpose is a bright dark-house scene) wins over the absence
+      # tier default. Absence tiering only picks the scene when the caller did
+      # not specify one; climate gating below still varies by tier independently.
+      tier_light_scene: >-
+        {% if light_scene is defined and light_scene | string | trim %}
+          {{ light_scene }}
+        {% elif normalized_mode == 'night' and arrival_tier == 'quick_errand' %}
+          scene.night_arrive_home_quick
+        {% elif normalized_mode == 'home' and arrival_tier == 'quick_errand' %}
+          scene.arrive_home_quick
+        {% elif normalized_mode == 'home' and arrival_tier == 'full_day' %}
+          scene.arrive_home_full_day
+        {% elif normalized_mode == 'home' and arrival_tier == 'multi_day' %}
+          scene.arrive_home_multi_day
+        {% else %}
+          {{ base_light_scene }}
+        {% endif %}
+      tier_light_transition: >-
+        {% set base = light_transition | default(30, true) | int(30) %}
+        {% if arrival_tier == 'quick_errand' %}
+          5
+        {% elif arrival_tier == 'multi_day' %}
+          120
+        {% elif arrival_tier == 'full_day' and base < 45 %}
+          45
+        {% else %}
+          {{ base }}
+        {% endif %}
+      tier_extra_scene: >-
+        {% if arrival_tier == 'quick_errand' %}
+          none
+        {% elif extra_scene is defined and extra_scene | string | trim %}
+          {{ extra_scene }}
+        {% else %}
+          none
+        {% endif %}
+      tier_apply_climate: "{{ arrival_tier in ['full_day', 'multi_day'] }}"
+      tier_notify_message: >-
+        {% if notify_message is defined and notify_message | string | trim %}
+          {{ notify_message }}
+        {% else %}
+          {{ '' }}
+        {% endif %}
+    sequence:
+      - action: script.house_transition
+        data:
+          mode: "{{ normalized_mode }}"
+          reason: "{{ reason | default('contextual_arrival', true) }}_{{ arrival_tier }}"
+          light_scene: "{{ tier_light_scene }}"
+          light_transition: "{{ tier_light_transition }}"
+          extra_scene: "{{ tier_extra_scene }}"
+          notify_message: "{{ tier_notify_message }}"
+          apply_climate: "{{ tier_apply_climate }}"
   # update_nest_eta:
   #   sequence:
   #     - action: nest.set_eta

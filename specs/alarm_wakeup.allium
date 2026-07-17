@@ -21,6 +21,7 @@ given {
     wakeup: WakeupState
     calendar: CalendarContext
     wakeup_context: WakeupContext
+    wakeup_audio: WakeupAudioContext
     owner_suite: OwnerSuiteWakeEnvironment
     house_mode: HouseModeStateMachine
 }
@@ -48,6 +49,17 @@ external entity WakeupContext {
     owner_suite_lamps_on: Boolean
     owner_suite_recent_bathroom_activity: Boolean
     owner_suite_recent_bedroom_activity: Boolean
+}
+
+external entity WakeupAudioContext {
+    -- Runtime view of the wake-up audio group used to verify playback before
+    -- the volume ramp. group_playing_requested_source is true only when the
+    -- group is `playing` AND its media changed from the pre-request fingerprint
+    -- (distinguishing a real start from leftover overnight audio or a silent
+    -- failure). primary_retry_attempted latches once the single primary retry
+    -- has been issued.
+    group_playing_requested_source: Boolean
+    primary_retry_attempted: Boolean
 }
 
 ------------------------------------------------------------
@@ -88,7 +100,8 @@ config {
     snooze_duration: Duration = 8.minutes
     morning_blinds_delay: Duration = 175.seconds
     morning_light_ramp_duration: Duration = 3.minutes
-    office_wakeup_peak_volume: Percentage = 20%
+    office_wakeup_peak_volume_percent: Integer = 10
+    wakeup_fallback_source_configured: Boolean = true
 }
 
 ------------------------------------------------------------
@@ -267,15 +280,87 @@ rule PrepareMorningAudioGroup {
         -- bedroom wake-up audio zone.
 }
 
-rule RampWakeupVolumeByRoom {
+rule RequestWakeupAudioPlayback {
     when: WakeupAudioGroupPrepared(group)
+    ensures: WakeupAudioPlaybackRequested(group, primary_wakeup_source)
+    @guidance
+        -- Group members are first silenced (volume floor) so the fade-in starts
+        -- from zero, then the primary wake-up source is requested on the
+        -- prepared group. The primary should prefer the most reliable transport
+        -- for the desired station — e.g. a direct publicradio.org Icecast MP3
+        -- stream over the same station via the TuneIn (opml.radiotime.com)
+        -- resolver. A raw http(s) URL is played as a generic stream; a Music
+        -- Assistant URI (spotify:/library:/tunein--) goes through MA.
+}
+
+rule VerifyWakeupAudioPlaybackBeforeVolumeRamp {
+    when: WakeupAudioPlaybackRequested(group, source)
+    ensures:
+        if wakeup_audio.group_playing_requested_source:
+            WakeupAudioPlaybackConfirmed(group)
+        else:
+            WakeupAudioPlaybackUnverified(group, source)
+    @guidance
+        -- Playback is confirmed only when the group is `playing` AND its media
+        -- changed from the pre-request fingerprint. This distinguishes a real
+        -- start from leftover overnight audio and from a request that silently
+        -- failed (the group falls to idle/off/unavailable with media cleared).
+        -- Confirmation is re-evaluated against live state at the top sequence
+        -- level so a value computed inside a nested branch is never read out of
+        -- scope.
+}
+
+rule RetryWakeupAudioOnTransientFailure {
+    when: WakeupAudioPlaybackUnverified(group, source)
+    requires: source = primary_wakeup_source
+    requires: not wakeup_audio.primary_retry_attempted
+    ensures: WakeupAudioPlaybackRequested(group, primary_wakeup_source)
+    @guidance
+        -- Source-resolution failures are usually transient (e.g. a DNS flap
+        -- contacting opml.radiotime.com). After a short backoff the primary
+        -- source is re-requested exactly once before any fallback.
+}
+
+rule FallBackWhenPrimaryWakeupSourceUnavailable {
+    when: WakeupAudioPlaybackUnverified(group, source)
+    requires: source = primary_wakeup_source
+    requires: wakeup_audio.primary_retry_attempted
+    requires: config.wakeup_fallback_source_configured
+    ensures: WakeupAudioPlaybackRequested(group, fallback_wakeup_source)
+    ensures: WakeupPrimarySourceFailureNotified(primary_wakeup_source)
+    @guidance
+        -- When the primary source still cannot be established, switch to an
+        -- alternate source that reaches the station a different way (e.g. the
+        -- TuneIn station when the direct stream is down, or a Spotify morning
+        -- playlist as a last resort) so the alarm still makes sound, and surface
+        -- that the primary source failed.
+}
+
+rule RampWakeupVolumeByRoom {
+    when: WakeupAudioPlaybackConfirmed(group)
     ensures: WakeupVolumeRampStarted(group)
     @guidance
-        -- All group members fade in from silence using a tan-curve ramp.
-        -- When the group is bedroom_bathroom_office_den, the office is capped
-        -- at config.office_wakeup_peak_volume; all other rooms ramp to the
-        -- full peak. This prevents the wake-up routine from disturbing
-        -- work-in-progress in the office.
+        -- Only runs once playback is verified, so the ramp never fades up a
+        -- silent group. All group members fade in from silence using a tan-curve
+        -- ramp. When the group is bedroom_bathroom_office_den, the office is
+        -- capped at config.office_wakeup_peak_volume_percent; all other rooms
+        -- ramp to the full peak. This prevents the wake-up routine from
+        -- disturbing work-in-progress in the office.
+}
+
+rule AbortSilentWakeupWhenNoSourcePlays {
+    when: WakeupAudioPlaybackUnverified(group, source)
+    requires: wakeup_audio.primary_retry_attempted
+    requires: source = fallback_wakeup_source or not config.wakeup_fallback_source_configured
+    ensures: WakeupAudioPlaybackFailed(group)
+    ensures: WakeupVolumeRampSkipped(group)
+    ensures: MorningAudioRecoveryApplied(radio_playback)
+    @guidance
+        -- If neither the primary (after retry) nor the fallback can be started,
+        -- the failure is surfaced (persistent notification + logbook) and the
+        -- script stops with an error so the trace reflects failure. The volume
+        -- ramp is skipped so a silent group is never reported as a successful
+        -- wake-up — the defect behind issue #772.
 }
 
 rule ChooseWakeupPlaylistFromConfiguredPool {

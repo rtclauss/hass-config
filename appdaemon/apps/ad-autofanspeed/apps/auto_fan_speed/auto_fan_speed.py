@@ -80,9 +80,22 @@ class AutoFanSpeed(hass.Hass):
   def temperature_change(self, entity, attribute, old, new, kwargs):
     
     if self.is_time_okay(self.start, self.end):
-      room_temperature = float(new)
+      room_temperature = self.parse_temperature(new)
+      if room_temperature is None:
+        self.debug_log(f"AUTO FAN SPEED: skipped non-numeric temperature state {new!r}")
+        return
       fan_speed_percentage = self.get_target_fan_speed(room_temperature)
       self.call_service("fan/set_percentage", entity_id = self.fan, percentage = fan_speed_percentage)
+
+
+  def parse_temperature(self, state):
+    if state in (None, "", "unknown", "unavailable"):
+      return None
+
+    try:
+      return float(state)
+    except (TypeError, ValueError):
+      return None
 
 
   def get_target_fan_speed(self, room_temperature):

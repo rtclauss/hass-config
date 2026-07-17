@@ -211,7 +211,7 @@ automation:
     action:
       - action: media_player.media_stop
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: media_player.ma_bedroom
 
   - id: alarm_wake_up
     alias: alarm_wake_up
@@ -309,27 +309,25 @@ automation:
                   entity_id: script.wake_up_script
               - action: media_player.media_pause
                 data:
-                  entity_id: media_player.bedroom_sonos_2
+                  entity_id: media_player.ma_bedroom
               - delay:
                   seconds: 2
               - action: media_player.shuffle_set
                 data:
-                  entity_id: media_player.bedroom_sonos_2
+                  entity_id: media_player.ma_bedroom
                   shuffle: false
               - delay:
                   seconds: 2
               - action: media_player.volume_set
                 target:
-                  entity_id:
-                    - media_player.bedroom_sonos
-                    - media_player.bedroom_sonos_2
+                  entity_id: media_player.ma_bedroom
                 data:
                   volume_level: 0.2
               - delay:
                   seconds: 2
               - action: script.music_assistant_play_spotify_uri
                 data:
-                  entity_id: media_player.bedroom_sonos_2
+                  entity_id: media_player.ma_bedroom
                   spotify_uri: "https://open.spotify.com/track/2Mik4RyMTMGXscX9QGiDoX?si=TBH_9RezQA6d1Y1w5iahHQ"
 
   - id: workday_owner_suite_wake_transition_from_morning_activity
@@ -452,12 +450,28 @@ automation:
     description: Turn off office ceiling when work laptop camera turns on.
     trace:
       stored_traces: 50
+    # Unlike the rest of the #907 hardening, a recovery into `on` must still act
+    # here. This automation is protective — it darkens the office and pauses the
+    # house audio *because* a camera is live — so reacting to a reload that
+    # reveals an already-active camera is the desired outcome, not a spurious
+    # one. Requiring a clean off->on edge would leave the ceiling on and audio
+    # playing through a meeting that was already underway when HA restarted.
+    # The inactive counterpart below keeps the strict `from: "on"`: acting on a
+    # recovery there would turn lights on unbidden.
     trigger:
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+        from:
+          - "off"
+          - "unavailable"
+          - "unknown"
         to: "on"
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+        from:
+          - "off"
+          - "unavailable"
+          - "unknown"
         to: "on"
         for:
           seconds: 15
@@ -486,9 +500,11 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+        from: "on"
         to: "off"
       - trigger: state
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+        from: "on"
         to: "off"
         for:
           seconds: 15
@@ -687,7 +703,7 @@ script:
       - action: media_player.media_stop
         continue_on_error: true
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: media_player.ma_bedroom
       - delay:
           minutes: 8
       - action: script.turn_on
@@ -695,7 +711,7 @@ script:
       - action: media_player.media_play
         continue_on_error: true
         data:
-          entity_id: media_player.bedroom_sonos_2
+          entity_id: media_player.ma_bedroom
 
   sonos_ksdj_wake_up:
     alias: Sonos KSDJ Wake Up
@@ -704,7 +720,7 @@ script:
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
-          radio_uri: "library://radio/12"
+          radio_uri: "library://radio/21"
 
   sonos_mpr_news_wake_up:
     alias: Sonos MPR News Wake Up
@@ -713,10 +729,16 @@ script:
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
-          radio_uri: "tunein--S3NwgspV://radio/s34350"
+          # Primary: direct MPR News Icecast MP3, reached via publicradio.org —
+          # avoids the TuneIn (opml.radiotime.com) resolver that failed on
+          # 2026-06-18. Falls back to the TuneIn station if the direct stream
+          # cannot be reached.
+          radio_uri: "https://nis.stream.publicradio.org/nis.mp3"
           initial_delay: 5
           ramp_steps: 40
           ramp_k_factor: 140
+          fallback_uri: "tunein--S3NwgspV://radio/s34350"
+          fallback_media_type: radio
 
   sonos_the_current_wake_up:
     alias: Sonos The Current Wake Up
@@ -725,7 +747,10 @@ script:
     sequence:
       - action: script.music_assistant_radio_wake_up
         data:
-          radio_uri: "tunein--S3NwgspV://radio/s20620"
+          # Primary: direct The Current Icecast MP3; falls back to TuneIn.
+          radio_uri: "https://current.stream.publicradio.org/current.mp3"
+          fallback_uri: "tunein--S3NwgspV://radio/s20620"
+          fallback_media_type: radio
 
   owner_suite_morning_transition:
     alias: Owner Suite Morning Transition

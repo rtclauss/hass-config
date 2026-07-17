@@ -564,12 +564,14 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.main_foyer_front_door_contact
+        from: "on"
         to: "off"
         for:
           minutes: 2
         id: front-path-vacant
       - trigger: state
         entity_id: binary_sensor.main_foyer_front_door_contact
+        from: "off"
         to: "on"
         id: front-door-opened
       - trigger: state
@@ -577,6 +579,7 @@ automation:
           - binary_sensor.hall_transition_switch_occupancy
           - binary_sensor.hall_transition_switch_area1occupancy
           - binary_sensor.hall_transition_switch_area2occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 2
@@ -611,15 +614,13 @@ automation:
                           brightness_pct: 20
                           transition: 2
                 default:
-                  - action: adaptive_lighting.apply
+                  - action: script.adaptive_light_turn_on
                     data:
+                      adaptive_switch: switch.adaptive_lighting_hallway
                       lights:
                         - light.hall_foyer_switch
                         - light.hall_transition_switch
-                      entity_id: switch.adaptive_lighting_hallway
-                      adapt_brightness: true
-                      adapt_color: true
-                      turn_on_lights: true
+                      transition: 1
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.front_door_auto_on
@@ -740,12 +741,14 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.hall_garage_entry_contact
+        from: "on"
         to: "off"
         for:
           minutes: 2
         id: garage-path-vacant
       - trigger: state
         entity_id: binary_sensor.hall_garage_entry_contact
+        from: "off"
         to: "on"
         id: garage-door-opened
       - trigger: state
@@ -753,6 +756,7 @@ automation:
           - binary_sensor.hall_transition_switch_occupancy
           - binary_sensor.hall_transition_switch_area1occupancy
           - binary_sensor.hall_transition_switch_area2occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 2
@@ -859,6 +863,7 @@ automation:
         entity_id:
           - binary_sensor.hall_main_foyer_motion_occupancy
           - binary_sensor.hall_transition_switch_occupancy
+        from: "on"
         to: "off"
         id: main-motion-not-detected
       - trigger: state
@@ -869,6 +874,7 @@ automation:
       - trigger: state
         entity_id:
           - binary_sensor.hall_upstairs_motion_occupancy
+        from: "on"
         to: "off"
         id: upstairs-motion-not-detected
     condition:
@@ -893,26 +899,16 @@ automation:
           - conditions:
               - condition: trigger
                 id: main-motion-sensed
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity_id:
-                      - binary_sensor.bayesian_bed_occupancy
-                      # - input_boolean.chatgpt_bed_occupied
-                    state: "off"
-                  - condition: state
-                    entity_id:
-                      - input_boolean.guest_mode
-                    state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -985,26 +981,16 @@ automation:
           - conditions:
               - condition: trigger
                 id: upstairs-motion-sensed
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity_id:
-                      - binary_sensor.bayesian_bed_occupancy
-                      # - input_boolean.chatgpt_bed_occupied
-                    state: "off"
-                  - condition: state
-                    entity_id:
-                      - input_boolean.guest_mode
-                    state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -1125,7 +1111,7 @@ automation:
 
   - id: kitchen_lights_toggle
     alias: kitchen_lights_toggle
-    description: Kitchen motion lighting; enabled when guest mode is off.
+    description: Kitchen motion lighting; enabled when guest mode is off and the owner bed is unoccupied.
     mode: restart
     trace:
       stored_traces: 10
@@ -1133,11 +1119,13 @@ automation:
       - trigger: state
         entity_id:
           - binary_sensor.kitchen_motion_occupancy
+        from: "off"
         to: "on"
         id: kitchen-occupied
       - trigger: state
         entity_id:
           - binary_sensor.kitchen_motion_occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 60
@@ -1157,19 +1145,20 @@ automation:
           - conditions:
               - condition: trigger
                 id: kitchen-occupied
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
               - condition: time
                 after: "11:00:00"
                 before: "14:00:00"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_kitchen
                   lights:
                     - light.kitchen_all
                     - light.kitchen_sink_overhead
-                  entity_id: switch.adaptive_lighting_kitchen
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   target:
               #     entity_id:
@@ -1180,19 +1169,20 @@ automation:
           - conditions:
               - condition: trigger
                 id: kitchen-occupied
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
               - condition: time
                 after: "17:00:00"
                 before: "20:00:00"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_kitchen
                   lights:
                     - light.kitchen_all
                     - light.kitchen_sink_overhead
-                  entity_id: switch.adaptive_lighting_adapt_brightness_kitchen
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: kitchen_unoccupied
@@ -1204,15 +1194,16 @@ automation:
                     - light.kitchen_sink_overhead_switch
                     - light.kitchen_all
         default:
-          - action: adaptive_lighting.apply
+          - condition: state
+            entity_id: binary_sensor.bayesian_bed_occupancy
+            state: "off"
+          - action: script.adaptive_light_turn_on
             data:
+              adaptive_switch: switch.adaptive_lighting_kitchen
               lights:
                 - light.kitchen_sink_overhead
                 - light.kitchen_sink_overhead_switch
-              entity_id: switch.adaptive_lighting_kitchen
-              adapt_brightness: true
-              adapt_color: true
-              turn_on_lights: true
+              transition: 1
           # - action: light.turn_on
           #   target:
           #     entity_id:
@@ -1288,10 +1279,12 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+        from: "off"
         to: "on"
         id: motion_detected
       - trigger: state
         entity_id: binary_sensor.owner_suite_bathroom_room_occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 25
@@ -1307,22 +1300,13 @@ automation:
               - condition: trigger
                 id: motion_detected
             sequence:
-              # - action: adaptive_lighting.apply
-              #   data:
-              #     lights:
-              #       - light.owner_suite_bathroom_tub_switch
-              #       - light.owner_suite_bathroom_shower_switch
-              #     entity_id: switch.adaptive_lighting_owner_suite
-              #     adapt_brightness: true
-              #     adapt_color: true
-              #     turn_on_lights: true
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id:
-                    # - light.owner_suite_bathroom_tub_switch
-                    # - light.owner_suite_bathroom_shower_switch
+                  adaptive_switch: switch.adaptive_lighting_owner_suite_vanity
+                  lights:
                     - light.owner_suite_bathroom_lights
                     - light.owner_suite_bathroom_vanity
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: motion_cleared
@@ -1342,6 +1326,7 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.bedroom_occupancy
+        from: "on"
         to: "off"
     condition:
       condition: and
@@ -1416,6 +1401,14 @@ automation:
         entity_id: binary_sensor.presense
         to: "on"
         from: "off"
+      # Real wake-ups fire motion before the bed has been clear for the
+      # debounce window below, so re-check once the bed-clear has held.
+      - trigger: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        from: "on"
+        to: "off"
+        for:
+          seconds: 15
     condition:
       condition: and
       conditions:
@@ -1425,11 +1418,25 @@ automation:
         - condition: state
           entity_id: light.owner_suite_lamps
           state: "off"
-        - condition: state
+        # Recorded blips while still in bed run 0.1-8s; the shortest real
+        # exit in a week of history was 23s, so 15s sits mid-band.
+        - alias: "Bed clear long enough to ignore roll-over/CPAP-removal blips (#852)"
+          condition: state
           entity_id: binary_sensor.bayesian_bed_occupancy
           # entity_id: input_boolean.chatgpt_bed_occupied
           state: "off"
+          for:
+            seconds: 15
           # enabled: false
+        - alias: "Someone is actually in the room"
+          condition: or
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.presense
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.bedroom_occupancy
+              state: "on"
     action:
       - action: switch.turn_on
         target:
@@ -1437,23 +1444,14 @@ automation:
             - switch.adaptive_lighting_owner_suite
             - switch.adaptive_lighting_adapt_brightness_owner_suite
             - switch.adaptive_lighting_adapt_color_owner_suite
-      - action: adaptive_lighting.apply
+      - action: script.adaptive_light_turn_on
         data:
-          entity_id: switch.adaptive_lighting_owner_suite
+          adaptive_switch: switch.adaptive_lighting_owner_suite
           lights:
             - light.owner_suite_lamps
             - light.bed_lightstrip
-          adapt_brightness: true
-          adapt_color: true
-          turn_on_lights: true
           transition: 45
-      - action: adaptive_lighting.set_manual_control
-        data:
-          entity_id: switch.adaptive_lighting_owner_suite
-          lights:
-            - light.owner_suite_lamps
-            - light.bed_lightstrip
-          manual_control: false
+          reset_manual_control: true
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.owner_suite_bedroom_auto_on
@@ -1593,7 +1591,7 @@ automation:
             - light.kitchen_sink_overhead
             - light.hall_all
             # - light.hall_all_downlights
-            - light.dining_room_lamps
+            # - light.dining_room_lamps
             - light.den_flood_switch
             # - light.kitchen_table
             # - light.living_room_lamps
@@ -1659,6 +1657,7 @@ automation:
         entity_id:
           - binary_sensor.hall_main_foyer_motion_occupancy
           - binary_sensor.hall_transition_switch_occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 15
@@ -1671,6 +1670,7 @@ automation:
       - trigger: state
         entity_id:
           - binary_sensor.hall_upstairs_motion_occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 15
@@ -1692,15 +1692,16 @@ automation:
           - conditions:
               - condition: trigger
                 id: main-motion-sensed
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -1734,17 +1735,18 @@ automation:
           - conditions:
               - condition: trigger
                 id: upstairs-motion-sensed
+              - condition: state
+                entity_id: binary_sensor.bayesian_bed_occupancy
+                state: "off"
             sequence:
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
                   lights:
                     - light.hall_upstairs_switch
                     - light.hall_stairway
                     - light.hall_all
-                  entity_id: switch.adaptive_lighting_hallway
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
               # - action: light.turn_on
               #   data:
               #     entity_id:
@@ -2051,14 +2053,12 @@ automation:
           entity_id: sensor.owner_suite_cpap_plug_power
           below: 1.3
     action:
-      - action: adaptive_lighting.apply
+      - action: script.adaptive_light_turn_on
         data:
+          adaptive_switch: switch.adaptive_lighting_owner_suite
           lights:
             - light.bed_lightstrip
-          entity_id: switch.adaptive_lighting_owner_suite
-          adapt_brightness: true
-          adapt_color: true
-          turn_on_lights: true
+          transition: 1
       # - action: light.turn_on
       #   data:
       #     entity_id: light.owner_suite_lamps
@@ -2073,11 +2073,6 @@ automation:
     mode: restart
     trace:
       stored_traces: 50
-    variables:
-      under_bed_brightness_pct: >-
-        {{ state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct') | int(25) }}
-      under_bed_kelvin: >-
-        {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin') | int(2700) }}
     trigger:
       - trigger: state
         id: zone_1_on
@@ -2133,17 +2128,18 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: script.adaptive_light_turn_on
+                data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.bed_lightstrip
+                  transition: 1
               # Split the first 8 guaranteed LIFX Z zones into 4 logical bed quadrants.
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [0, 1]
           - conditions:
               - condition: trigger
@@ -2152,16 +2148,17 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: script.adaptive_light_turn_on
+                data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.bed_lightstrip
+                  transition: 1
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [2, 3]
           - conditions:
               - condition: trigger
@@ -2170,16 +2167,17 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: script.adaptive_light_turn_on
+                data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.bed_lightstrip
+                  transition: 1
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [4, 5]
           - conditions:
               - condition: trigger
@@ -2188,16 +2186,17 @@ automation:
               - condition: state
                 entity_id: light.owner_suite_lamps
                 state: "on"
-              - action: light.turn_off
-                target:
-                  entity_id: light.bed_lightstrip
+              - action: script.adaptive_light_turn_on
+                data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.bed_lightstrip
+                  transition: 1
               - action: lifx.set_state
                 target:
                   entity_id: light.bed_lightstrip
                 data:
                   power: true
-                  brightness_pct: "{{ under_bed_brightness_pct }}"
-                  kelvin: "{{ under_bed_kelvin }}"
                   zones: [6, 7]
           - conditions:
               - condition: trigger
@@ -2213,14 +2212,12 @@ automation:
                   - binary_sensor.everything_presence_lite_2fbc58_zone_3_occupancy
                   - binary_sensor.everything_presence_lite_2fbc58_zone_4_occupancy
                 state: "off"
-              - action: adaptive_lighting.apply
+              - action: script.adaptive_light_turn_on
                 data:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.bed_lightstrip
-                  entity_id: switch.adaptive_lighting_owner_suite
-                  adapt_brightness: true
-                  adapt_color: true
-                  turn_on_lights: true
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: motion_off
@@ -2237,6 +2234,7 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.basement_motion
+        from: "on"
         to: "off"
     condition:
       condition: and
@@ -2266,26 +2264,31 @@ automation:
     trigger:
       - trigger: state
         entity_id: binary_sensor.office_motion_occupancy
+        from: "off"
         to: "on"
         id: office-occupied-motion
       - trigger: state
         entity_id: binary_sensor.office_occupancy_2
+        from: "off"
         to: "on"
         id: office-occupied-homekit
       - trigger: state
         entity_id: binary_sensor.office_confident_occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 10
         id: office-unoccupied-confidence
       - trigger: state
         entity_id: binary_sensor.office_occupancy_2
+        from: "on"
         to: "off"
         for:
           minutes: 10
         id: office-unoccupied-homekit
       - trigger: state
         entity_id: binary_sensor.office_motion_occupancy
+        from: "on"
         to: "off"
         for:
           minutes: 10
@@ -2577,14 +2580,15 @@ script:
             - light.basement_great_room_east_and_middle_switch
             - light.basement_great_room_west_switch
           sequence:
-            - action: adaptive_lighting.apply
+            - action: script.adaptive_light_turn_on
               data:
-                entity_id: switch.adaptive_lighting_basement
+                adaptive_switch: switch.adaptive_lighting_basement
                 lights:
                   - "{{ repeat.item }}"
-                adapt_brightness: true
-                adapt_color: true
-                turn_on_lights: true
+                transition: 1
+                # Apply the adaptive target once. A separate low-brightness
+                # pre-command can be replayed after the target by delayed
+                # Zigbee reports and visibly flash the basement path.
             - delay:
                 seconds: 1
       - action: light.turn_on

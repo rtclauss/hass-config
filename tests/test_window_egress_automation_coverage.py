@@ -106,3 +106,13 @@ def test_fresh_air_open_reuses_any_window_open_state() -> None:
 
     assert 'default_entity_id: binary_sensor.fresh_air_open' in text
     assert 'state: "{{ is_state(\'binary_sensor.any_window_open\', \'on\') }}"' in text
+
+
+def test_any_window_open_ignores_unavailable_parasoll_contacts() -> None:
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+
+    assert "default_entity_id: binary_sensor.any_window_open" in text
+    assert "{% set availability_entity_id = 'binary_sensor.z2m_' ~ contact_slug ~ '_availability' %}" in text
+    assert "sensor.state == 'on' and is_state(availability_entity_id, 'on')" in text
+    assert "open_windows:" in text
+    assert "open_windows.names | join(', ')" in text

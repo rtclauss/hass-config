@@ -586,10 +586,12 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.dining_room_all
-                  brightness_pct: 100
+                  adaptive_switch: switch.dining_room_adaptive_lighting_dining_room
+                  lights:
+                    - light.dining_room_all
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: down-single
@@ -636,9 +638,12 @@ automation:
               - condition: trigger
                 id: up-double
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.kitchen_all
+                  adaptive_switch: switch.adaptive_lighting_kitchen
+                  lights:
+                    - light.kitchen_all
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: down-double
@@ -656,6 +661,7 @@ automation:
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        from: "off"
         to: "on"
         for:
           seconds: 30
@@ -664,6 +670,7 @@ automation:
         # Turn on the west bedside lamp after leaving bed for a bit.
         # Keep this delay/window easy to tune if the sensor still feels jumpy.
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        from: "on"
         to: "off"
         for:
           seconds: 10
@@ -671,6 +678,7 @@ automation:
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "off"
         to: "on"
         for:
           seconds: 30
@@ -678,6 +686,7 @@ automation:
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        from: "on"
         to: "off"
         for:
           seconds: 30
@@ -686,6 +695,7 @@ automation:
         # Turn the west bedside lamp back off after settling into bed.
         # Adjust this delay alongside west_bed_left_bed if nighttime behavior needs refinement.
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_left
+        from: "off"
         to: "on"
         for:
           seconds: 10
@@ -693,18 +703,21 @@ automation:
       - trigger: state
         # entity_id: binary_sensor.bayesian_bed_occupancy
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "on"
         to: "off"
         for:
           seconds: 30
         id: "east_bed_off"
       - trigger: state
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "on"
         to: "off"
         for:
           seconds: 10
         id: "east_bed_left_bed"
       - trigger: state
         entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "off"
         to: "on"
         for:
           seconds: 10
@@ -801,9 +814,12 @@ automation:
                   - condition: time
                     before: "12:00:00"
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.owner_suite_lamp_bulb_1
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamp_bulb_1
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: west_bed_back_in_bed
@@ -836,9 +852,12 @@ automation:
                   - condition: time
                     before: "12:00:00"
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.owner_suite_lamp_bulb_2
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamp_bulb_2
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: east_bed_back_in_bed
@@ -860,9 +879,12 @@ automation:
               - condition: trigger
                 id: east_bed_light_on
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.owner_suite_lamp_bulb_2
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamp_bulb_2
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: east_bed_light_off
@@ -874,9 +896,12 @@ automation:
               - condition: trigger
                 id: west_bed_light_on
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.owner_suite_lamp_bulb_1
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
+                    - light.owner_suite_lamp_bulb_1
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: west_bed_light_off
@@ -947,35 +972,6 @@ automation:
                   entity_id:
                     - input_boolean.master_bed_occupancy
               #       # - input_boolean.chatgpt_bed_occupied
-
-  - id: mail_delivered
-    alias: mail_delivered
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id: binary_sensor.mailbox_contact
-        from: "off"
-        to: "on"
-    condition:
-      - condition: and
-        conditions:
-          - alias: "Mailbox empty"
-            condition: state
-            entity_id: input_boolean.mail_delivered
-            state: "off"
-          - alias: "On a trip"
-            condition: state
-            entity_id: input_boolean.trip
-            state: "off"
-    action:
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.mail_delivered
-      - action: notify.all
-        data:
-          message: >-
-            Mail delivered.
 
   - id: office_light_control_button
     alias: office_light_control_button
@@ -1099,18 +1095,6 @@ automation:
         data:
           position: 50
 
-  - id: reset_mail_delivery
-    alias: reset_mail_delivery
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: time
-        at: "01:00:00"
-    action:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.mail_delivered
-
   - alias: guest_room_switch_actions
     id: guest_room_switch_actions
     trace:
@@ -1229,9 +1213,11 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.kitchen_all
+                  adaptive_switch: switch.adaptive_lighting_kitchen
+                  lights:
+                    - light.kitchen_all
                   transition: 1
           - conditions:
               - condition: trigger
@@ -1326,9 +1312,11 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id: light.laundry_room
+                  adaptive_switch: switch.adaptive_lighting_laundry_room
+                  lights:
+                    - light.laundry_room
                   transition: 1
           - conditions:
               - condition: trigger
@@ -1466,12 +1454,14 @@ automation:
               - condition: trigger
                 id: up-single
             sequence:
-              - action: light.turn_on
+              - action: script.adaptive_light_turn_on
                 data:
-                  entity_id:
+                  adaptive_switch: switch.adaptive_lighting_owner_suite
+                  lights:
                     - light.owner_suite_ceiling
                     - light.owner_suite_lamps
                     - light.bed_lightstrip
+                  transition: 1
           - conditions:
               - condition: trigger
                 id: down-single
@@ -1503,6 +1493,40 @@ automation:
         entity_id: input_button.reset_inovelli_switch_configurations
     action:
       - action: script.reset_inovelli_switches
+
+  - id: enforce_hall_transition_mmwave_ha_control
+    alias: enforce_hall_transition_mmwave_ha_control
+    description: >
+      Keep the Hall/Transition Switch's firmware occupancy-to-load control
+      disabled so Home Assistant can enforce bed-occupancy lighting policy.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+            state: "Disabled"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+            state: "unknown"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+            state: "unavailable"
+    action:
+      - action: select.select_option
+        target:
+          entity_id: select.hall_transition_switch_mmwavecontrolwireddevice
+        data:
+          option: "Disabled"
 
   - id: sync_trip_mode_inovelli_leds
     alias: sync_trip_mode_inovelli_leds
@@ -1546,9 +1570,8 @@ automation:
   - id: reconfigure_z2m_and_vacuums_on_startup
     alias: reconfigure_z2m_and_vacuums_on_startup
     # Reconfigures Zigbee2MQTT and all Valetudo vacuums after HA startup.
-    # Fixed: added continue_on_error: true to each rest_command so that a single
-    # unreachable vacuum (e.g. den vacuum offline at boot) does not abort the
-    # sequence and leave the remaining vacuums un-reconfigured.
+    # Main-level Valetudo reload is intentionally skipped until its current
+    # endpoint is verified; the old .local hostname does not resolve from HA.
     trace:
       stored_traces: 10
     trigger:
@@ -1556,17 +1579,36 @@ automation:
         event: start
     action:
       - delay: "00:01:00"
-      - action: rest_command.reload_den_vacuum
-        continue_on_error: true
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: vacuum.valetudo_den
+                state: unavailable
+        then:
+          - action: rest_command.reload_den_vacuum
+            data:
+              mqtt_username: !secret mqtt_user
+              mqtt_password: !secret mqtt_password
+            continue_on_error: true
+      # The upstairs robot may be absent from HA discovery when its MQTT
+      # configuration needs repair, so retry without checking its entity state.
       - action: rest_command.reload_upstairs_vacuum
-        continue_on_error: true
-      - action: rest_command.reload_main_level_vacuum
+        data:
+          mqtt_username: !secret mqtt_user
+          mqtt_password: !secret mqtt_password
         continue_on_error: true
 
 ########################
 # Binary Sensors
 ########################
 binary_sensor:
+  - platform: threshold
+    name: any_egress_open_threshold
+    entity_id: sensor.open_egress_points
+    device_class: opening
+    upper: 0
+
   - platform: bayesian
     name: "Bayesian Bed Occupancy"
     unique_id: bayesian_bed_occupancy
@@ -1623,7 +1665,6 @@ device_tracker: []
 ########################
 input_boolean:
   master_bed_occupancy:
-  mail_delivered:
   front_door_lock:
 
 ########################
@@ -1758,13 +1799,33 @@ script:
       stored_traces: 10
     variables:
       all_switches_led_color_off: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_color_on: >
-        {%- for device in states.number | select('match', '.*ledcolorwhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_on: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenon.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_switches_led_intensity_off: >
-        {%- for device in states.number | select('match', '.*ledintensitywhenoff.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
     sequence:
       - &trip_led_updates_allowed
         condition: state
@@ -1824,6 +1885,8 @@ script:
       all_off_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1834,6 +1897,8 @@ script:
       all_on_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1844,6 +1909,8 @@ script:
       all_switches_led_intensity_on: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1854,6 +1921,8 @@ script:
       all_switches_led_intensity_off: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'owner_suite_fan_switch')
           | rejectattr('entity_id', 'search', 'owner_suite_bathroom_vanity')
           | rejectattr('entity_id', 'search', 'owner_suite_closet')
@@ -1864,6 +1933,8 @@ script:
       all_day_mode_singletapbehavior_switches: >
         {%- for device in states.select
           | selectattr('entity_id', 'search', 'singletapbehavior')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -1872,6 +1943,8 @@ script:
       all_day_mode_defaultlevellocal_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'defaultlevellocal')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -1880,6 +1953,8 @@ script:
       all_day_mode_defaultlevelremote_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'defaultlevelremote')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -1989,24 +2064,32 @@ script:
       owner_suite_day_mode_off_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_day_mode_on_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_day_mode_led_intensity_on_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_day_mode_led_intensity_off_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', owner_suite_day_mode_entity_pattern) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
@@ -2105,22 +2188,30 @@ script:
     variables:
       owner_suite_led_color_off_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenoff$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenoff$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_color_on_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenon$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledcolorwhenon$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_off_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_on_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
     sequence:
@@ -2164,24 +2255,32 @@ script:
       office_guest_room_off_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       office_guest_room_on_led_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledcolorwhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       office_guest_room_led_intensity_on_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       office_guest_room_led_intensity_off_switches: >
         {%- for device in states.number
           | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | selectattr('entity_id', 'search', '(office_fan_switch|guest_room_fan_switch)') -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
@@ -2226,20 +2325,52 @@ script:
       ha_write_delay: "00:00:01"
       mqtt_bind_delay: "00:00:03"
       all_inovelli_switches_energy_report_rate: >
-        {%- for device in states.number | select('match', '.*periodicpowerandenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'periodicpowerandenergyreports')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_active_energy_report_rate: >
-        {%- for device in states.number | select('match', '.*activeenergyreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'activeenergyreports')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_active_power_report_rate: >
-        {%- for device in states.number | select('match', '.*activepowerreports.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'activepowerreports')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_double_tap_up_mode: >
-        {%- for device in states.select | select('match', '.*_doubletapuptoparam55.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', '_doubletapuptoparam55')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_double_tap_up_brightness: >
-        {%- for device in states.number | select('match', '.*brightnesslevelfordoubletapup.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.number
+          | selectattr('entity_id', 'search', 'brightnesslevelfordoubletapup')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_bindingofftoonsynclevel_mode: >
-        {%- for device in states.select | select('match', '.*bindingofftoonsynclevel.*')%}{%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}{%- if loop.last %}{% endif %}{%- endfor  %}
+        {%- for device in states.select
+          | selectattr('entity_id', 'search', 'bindingofftoonsynclevel')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
+          {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
+        {%- endfor %}
       all_inovelli_switches_singletapbehavior_mode: >
         {%- for device in states.select
           | selectattr('entity_id', 'search', 'singletapbehavior')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
           | rejectattr('entity_id', 'search', 'exhaust')
           | rejectattr('entity_id', 'search', 'fan_switch')
           | rejectattr('entity_id', 'search', 'overhead_outlet') -%}
@@ -2271,6 +2402,7 @@ script:
             - select.den_flood_switch_smartbulbmode
             - select.kitchen_switch_smartbulbmode
             - select.kitchen_bay_switch_smartbulbmode
+            - select.tiki_room_deck_switch_smartbulbmode
         - option: "Disabled"
           entities:
             - select.deck_flood_lights_smartbulbmode
@@ -2284,6 +2416,10 @@ script:
             - select.owner_suite_bathroom_vanity_smartbulbmode
             - select.hall_stairway_smartbulbmode
             - select.kitchen_under_cabinet_smartbulbmode
+      inovelli_mmwave_wired_control_replay:
+        - option: "Disabled"
+          entities:
+            - select.hall_transition_switch_mmwavecontrolwireddevice
       inovelli_output_mode_replay:
         - option: "Dimmer"
           entities:
@@ -2313,6 +2449,7 @@ script:
             - select.den_flood_switch_outputmode
             - select.kitchen_switch_outputmode
             - select.kitchen_bay_switch_outputmode
+            - select.tiki_room_deck_switch_outputmode
         - option: "Exhaust Fan (On/Off)"
           entities:
             - select.guest_bathroom_exhaust_outputmode
@@ -2353,6 +2490,7 @@ script:
             - select.den_flood_switch_switchtype
             - select.kitchen_switch_switchtype
             - select.kitchen_bay_switch_switchtype
+            - select.tiki_room_deck_switch_switchtype
         - option: "Aux Switch"
           entities:
             - select.hall_transition_switch_switchtype
@@ -2363,6 +2501,11 @@ script:
             - select.hall_garage_laundry_switch_switchtype
             - select.hall_upstairs_switch_switchtype
             - select.hall_stairway_switchtype
+      inovelli_fan_control_mode_replay:
+        - option: "Toggle"
+          entities:
+            - select.dining_room_table_switch_fancontrolmode
+            - select.dining_room_wall_switch_fancontrolmode
       # Recreate switch endpoint memberships in Zigbee groups after a reset.
       # For smart-bulb groups, endpoint 1 receives group state so the switch
       # load/LED stays in sync while endpoint 2 remains the bound controller.
@@ -2496,6 +2639,18 @@ script:
             - genLevelCtrl
             - genOnOff
             - genScenes
+        - from: "Dining Room/Table Switch"
+          from_endpoint: 3
+          to: "Kitchen/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
+        - from: "Dining Room/Wall Switch"
+          from_endpoint: 3
+          to: "Kitchen/All"
+          clusters:
+            - genLevelCtrl
+            - genOnOff
         - from: "Hall/Foyer Switch"
           from_endpoint: 2
           to: "Hall/All"
@@ -2559,6 +2714,13 @@ script:
           clusters:
             - genLevelCtrl
             - genOnOff
+        - from: "Tiki Room/Deck Switch"
+          from_endpoint: 2
+          to: "Deck/Tiki Room Door"
+          to_endpoint: 11
+          clusters:
+            - genLevelCtrl
+            - genOnOff
     sequence:
       - action: logbook.log
         data:
@@ -2613,35 +2775,12 @@ script:
           option: "Enabled"
       - delay: "{{ mqtt_bind_delay }}"
       - repeat:
-          for_each: "{{ inovelli_smart_bulb_mode_replay }}"
-          sequence:
-            - variables:
-                replay_option: "{{ repeat.item.option }}"
-                replay_entities: "{{ repeat.item.entities }}"
-            - repeat:
-                for_each: "{{ replay_entities }}"
-                sequence:
-                  - action: select.select_option
-                    data:
-                      entity_id: "{{ repeat.item }}"
-                      option: "{{ replay_option }}"
-                  - delay: "{{ ha_write_delay }}"
-      - repeat:
-          for_each: "{{ inovelli_output_mode_replay }}"
-          sequence:
-            - variables:
-                replay_option: "{{ repeat.item.option }}"
-                replay_entities: "{{ repeat.item.entities }}"
-            - repeat:
-                for_each: "{{ replay_entities }}"
-                sequence:
-                  - action: select.select_option
-                    data:
-                      entity_id: "{{ repeat.item }}"
-                      option: "{{ replay_option }}"
-                  - delay: "{{ ha_write_delay }}"
-      - repeat:
-          for_each: "{{ inovelli_switch_type_replay }}"
+          for_each: >
+            {{ inovelli_smart_bulb_mode_replay
+              + inovelli_mmwave_wired_control_replay
+              + inovelli_output_mode_replay
+              + inovelli_switch_type_replay
+              + inovelli_fan_control_mode_replay }}
           sequence:
             - variables:
                 replay_option: "{{ repeat.item.option }}"
@@ -2705,7 +2844,7 @@ script:
           name: Zigbee2MQTT Reset
           message: >
             Replayed the saved Inovelli smart bulb modes, output modes, switch types,
-            group memberships, and bindings for switches and bulbs/groups.
+            fan control modes, group memberships, and bindings for switches and bulbs/groups.
 
   turn_off_all_inovelli_switch_leds:
     icon: mdi:light-switch-off
@@ -2714,12 +2853,16 @@ script:
     variables:
       all_switches_led_intensity_on: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', 'ledintensitywhenon') -%}
+          | selectattr('entity_id', 'search', 'ledintensitywhenon')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       all_switches_led_intensity_off: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', 'ledintensitywhenoff') -%}
+          | selectattr('entity_id', 'search', 'ledintensitywhenoff')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
     sequence:
@@ -2855,12 +2998,16 @@ script:
     variables:
       owner_suite_led_intensity_off_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenoff$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_on_switches: >
         {%- for device in states.number
-          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$') -%}
+          | selectattr('entity_id', 'search', '^number\\.owner_suite_.*ledintensitywhenon$')
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true) -%}
           {%- if loop.first %}{%- else %}, {% endif %}{{ device.entity_id }}
         {%- endfor %}
       owner_suite_led_intensity_off_with_office: >-
@@ -2908,23 +3055,23 @@ rest_command:
       authorization: !secret proxmoxve_api_token
     payload: "command=shutdown"
   reload_den_vacuum:
-    url: http://valetudo-yummyhurtfulhornet.local/api/v2/valetudo/config/interfaces/mqtt
+    url: http://192.168.1.245/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"10.254.254.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"den"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"den"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
   reload_upstairs_vacuum:
-    url: http://valetudo-zestycurvycaribou.local/api/v2/valetudo/config/interfaces/mqtt
+    url: http://192.168.1.163/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"10.24.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"upstairs-vacuum"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"upstairs-vacuum"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
   reload_main_level_vacuum:
     url: http://valetudo-activeexoticlion.local/api/v2/valetudo/config/interfaces/mqtt
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"10.24.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"<redacted>","password":"<redacted>"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"mainlevel"},"interfaces":{"homie":{"enabled":false,"addICBINVMapProperty":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["CurrentStatisticsCapability","ConsumableMonitoringCapability","TotalStatisticsCapability"]}'
+    payload: '{"enabled":true,"connection":{"host":"10.24.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"mainlevel"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
 
 ########################
 # Sensor
@@ -2940,7 +3087,8 @@ template:
         unique_id: any_egress_open
         default_entity_id: binary_sensor.any_egress_open
         device_class: opening
-        state: "{{ states('sensor.open_egress_points') | int(0) > 0 }}"
+        availability: "{{ has_value('binary_sensor.any_egress_open_threshold') }}"
+        state: "{{ is_state('binary_sensor.any_egress_open_threshold', 'on') }}"
 
       - name: master_bed_occupancy
         unique_id: master_bed_occupancy

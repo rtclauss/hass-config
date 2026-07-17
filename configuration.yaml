@@ -14,6 +14,8 @@ homeassistant:
   packages: !include_dir_named packages
   external_url: !secret public_url
   internal_url: !secret internal_url
+  allowlist_external_dirs:
+    - /config/media/vacuum_stalls
   auth_providers:
     - type: homeassistant
     - type: trusted_networks
@@ -34,6 +36,10 @@ config:
 logger:
   #default: warn
   default: warning
+  logs:
+    # Temporary: blind-forensics diagnostic (see packages/blind_forensics.yaml).
+    # Remove once the unexpected Owner Suite blind opener is identified.
+    homeassistant.components.cover: debug
   # logs:
   #   custom_components.adaptive_lighting: debug
   #  default: warn
@@ -119,6 +125,21 @@ recorder:
       # Keep derived travel sensors recorded instead of these oversized feeds.
       - sensor.flightradar24_airport_arrivals
       - sensor.flightradar24_airport_departures
+      # The raw WeatherAlerts feed carries full alert descriptions and instructions.
+      # Keep the smaller NWS and derived alert sensors recorded instead.
+      - sensor.weatheralerts_dakota_mnz070_mnc037
+      # BirdWeather top-50 feeds carry the full species list in attributes.
+      # Keep smaller current/latest bird summary sensors recorded instead.
+      - sensor.top_50_bird_species
+      - sensor.top_50_bird_species_2
+      # F1 season results carries full race result payloads in attributes.
+      # Keep smaller current/next-session F1 sensors recorded instead.
+      - sensor.f1_season_results
+      # ADS-B raw feeds carry full aircraft/photo/route payloads in attributes.
+      # Keep derived closest-aircraft sensors recorded instead of these oversized feeds.
+      - sensor.adsb_aircraft_raw
+      - sensor.closest_aircraft_photo_raw
+      - sensor.closest_aircraft_route_raw
 
 influxdb:
   exclude:
@@ -141,6 +162,11 @@ influxdb:
       # The Garden Birds MQTT sensor carries an attribute named "time"; InfluxDB
       # rejects fields with that reserved name and drops the entire batch.
       - sensor.garden_birds
+      # ADS-B raw feeds carry full aircraft/photo/route payloads in attributes.
+      # Keep derived closest-aircraft sensors shipped to InfluxDB instead.
+      - sensor.adsb_aircraft_raw
+      - sensor.closest_aircraft_photo_raw
+      - sensor.closest_aircraft_route_raw
 
 cloud:
   alexa:
@@ -179,7 +205,7 @@ panel_custom:
       ingress: core_configurator
 
 lovelace:
-  mode: yaml
+  resource_mode: yaml
   resources:
     - url: /hacsfiles/logbook-card/logbook-card.js
       type: module

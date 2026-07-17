@@ -1,15 +1,12 @@
 """Cover group."""
 
-from functools import cached_property
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.components.group.cover import CoverGroup
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.components.cover import (
-    CoverDeviceClass,
-    DEVICE_CLASSES as COVER_DEVICE_CLASSES,
-)
+from homeassistant.components.cover import CoverDeviceClass
 
 from custom_components.auto_areas.auto_area import AutoArea
+from custom_components.auto_areas.ha_helpers import get_all_entities, is_valid_entity
 from custom_components.auto_areas.const import (
     COVER_GROUP_ENTITY_PREFIX,
     COVER_GROUP_PREFIX,
@@ -22,9 +19,16 @@ async def async_setup_entry(hass, entry, async_add_entities: AddEntitiesCallback
     """Set up the cover platform."""
     auto_area: AutoArea = hass.data[DOMAIN][entry.entry_id]
 
-    cover_entity_ids: list[str] = auto_area.get_area_entity_ids(
-        COVER_DEVICE_CLASSES
-    )
+    cover_entity_ids: list[str] = [
+        entity.entity_id
+        for entity in get_all_entities(
+            auto_area.entity_registry,
+            auto_area.device_registry,
+            auto_area.area_id or "",
+            domains=["cover"],
+        )
+        if is_valid_entity(auto_area.hass, entity)
+    ]
     if not cover_entity_ids:
         LOGGER.info(
             "%s: No covers found in area. Not creating cover group.",
@@ -63,17 +67,17 @@ class AutoCoverGroup(CoverGroup):
             self.entity_ids
         )
 
-    @cached_property
+    @property
     def name(self):
         """Name of this entity."""
         return f"{self._name_prefix}{self.auto_area.area_name}"
 
-    @cached_property
+    @property
     def device_info(self) -> DeviceInfo:
         """Information about this device."""
         return self.auto_area.device_info
 
-    @cached_property
+    @property
     def unique_id(self) -> str | None:
         """Return a unique ID."""
         return f"{self.auto_area.config_entry.entry_id}_cover_group"

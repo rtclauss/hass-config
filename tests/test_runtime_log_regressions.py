@@ -11,6 +11,7 @@ BIRDS_PATH = ROOT / "packages" / "birds.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
 CONFIGURATION_PATH = ROOT / "configuration.yaml"
+OCTOPRINT_PATH = ROOT / "packages" / "octoprint.yaml"
 
 
 def _read(path: Path) -> str:
@@ -38,6 +39,94 @@ def _automation_block(path: Path, automation_id: str) -> str:
     end = len(lines)
     for index in range(start + 1, len(lines)):
         if lines[index].startswith("  - "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _top_level_mapping_block(path: Path, section_name: str, key_name: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    section_header = f"{section_name}:"
+    section_start = None
+
+    for index, line in enumerate(lines):
+        if line == section_header:
+            section_start = index
+            break
+
+    if section_start is None:
+        raise AssertionError(f"Could not find section {section_name!r} in {path.name}")
+
+    key_line = f"  {key_name}:"
+    start = None
+    for index in range(section_start + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith(" "):
+            break
+        if line == key_line:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find {section_name}.{key_name} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.startswith("  ") and not line.startswith("    ") and line.strip():
+            end = index
+            break
+        if line and not line.startswith(" "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _template_sensor_block(path: Path, unique_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    marker = f"        unique_id: {unique_id}"
+    start = None
+
+    for index, line in enumerate(lines):
+        if line != marker:
+            continue
+        for candidate in range(index, -1, -1):
+            if lines[candidate].startswith("      - name: "):
+                start = candidate
+                break
+        if start is not None:
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find template sensor {unique_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("      - name: "):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
+def _template_state_body(sensor_block: str) -> str:
+    lines = sensor_block.splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line == "        state: >":
+            start = index + 1
+            break
+
+    if start is None:
+        raise AssertionError("Template sensor block has no state template")
+
+    end = len(lines)
+    for index in range(start, len(lines)):
+        line = lines[index]
+        if line.startswith("        ") and not line.startswith("          ") and line.strip():
             end = index
             break
 
@@ -131,6 +220,68 @@ def test_raw_fr24_airport_feeds_are_excluded_from_recorder() -> None:
     assert "sensor.flightradar24_airport_arrivals" in recorder_block
     assert "sensor.flightradar24_airport_departures" in recorder_block
     assert "full flight lists in attributes" in recorder_block
+
+
+def test_raw_weatheralerts_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.weatheralerts_dakota_mnz070_mnc037" in recorder_block
+    assert "sensor.nws_alerts" not in recorder_block
+    assert "sensor.nws_dakota_county_alerts" not in recorder_block
+    assert "full alert descriptions and instructions" in recorder_block
+
+
+def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+    recorder_entities = {
+        line.strip().removeprefix("- ").strip()
+        for line in recorder_block.splitlines()
+        if line.strip().startswith("- ")
+    }
+
+    assert "sensor.top_50_bird_species" in recorder_entities
+    assert "sensor.top_50_bird_species_2" in recorder_entities
+    assert "full species list in attributes" in recorder_block
+
+
+def test_octoprint_duration_templates_tolerate_unknown_timestamps() -> None:
+    text = _read(OCTOPRINT_PATH)
+    elapsed_block = _template_sensor_block(OCTOPRINT_PATH, "octoprint_time_elapsed")
+    remaining_block = _template_sensor_block(OCTOPRINT_PATH, "octoprint_time_remaining")
+    elapsed_state = _template_state_body(elapsed_block).lower()
+    remaining_state = _template_state_body(remaining_block).lower()
+
+    assert "start_raw = states('sensor.octoprint_start_time')" in text
+    assert "finish_entity = 'sensor.octoprint_estimated_finish_time'" in text
+    assert "finish_raw = states(finish_entity)" in text
+    assert "as_timestamp(start_raw, default=none)" in text
+    assert "as_timestamp(finish_raw, default=none)" in text
+    assert "{{ has_value('sensor.octoprint_start_time') }}" in elapsed_block
+    assert "{{ has_value('sensor.octoprint_estimated_finish_time') }}" in remaining_block
+    assert "start is number" in text
+    assert "finish is number" in text
+    assert "unknown" not in elapsed_state
+    assert "unknown" not in remaining_state
+    assert "start_time: \"{{ states('sensor.octoprint_start_time') }}\"" in text
+    assert "start_time: \"{{ states('sensor.octoprint_estimated_finish_time') }}\"" in text
+
+
+def test_raw_f1_season_results_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+    recorder_entities = {
+        line.strip().removeprefix("- ").strip()
+        for line in recorder_block.splitlines()
+        if line.strip().startswith("- ")
+    }
+
+    assert "sensor.f1_season_results" in recorder_entities
+    assert "full race result payloads in attributes" in recorder_block
 
 
 def test_garbage_notifications_use_computed_pickup_date_sensor() -> None:
@@ -263,3 +414,50 @@ def test_light_package_uses_kelvin_color_temperature_keys() -> None:
     assert "\n        color_temp:" not in text
     assert "color_temp_kelvin: 2000" in text
     assert "color_temp_kelvin: 2591" in text
+
+
+def test_valetudo_startup_reconfigure_skips_unavailable_vacuums() -> None:
+    block = _automation_block(ZIGBEE_ZWAVE_PATH, "reconfigure_z2m_and_vacuums_on_startup")
+
+    assert "entity_id: vacuum.valetudo_den" in block
+    assert "entity_id: vacuum.valetudo_upstairs_vacuum" not in block
+    assert "entity_id: vacuum.valetudo_mainlevel" not in block
+    assert block.count("condition: not") == 1
+    assert block.count("state: unavailable") == 1
+    assert "action: rest_command.reload_main_level_vacuum" not in block
+    assert "action: rest_command.reload_den_vacuum" in block
+    assert "action: rest_command.reload_upstairs_vacuum" in block
+    assert block.count("continue_on_error: true") == 2
+    assert block.count("mqtt_username: !secret mqtt_user") == 2
+    assert block.count("mqtt_password: !secret mqtt_password") == 2
+
+
+def test_valetudo_reload_commands_use_verified_runtime_endpoints() -> None:
+    den = _top_level_mapping_block(ZIGBEE_ZWAVE_PATH, "rest_command", "reload_den_vacuum")
+    upstairs = _top_level_mapping_block(
+        ZIGBEE_ZWAVE_PATH,
+        "rest_command",
+        "reload_upstairs_vacuum",
+    )
+
+    assert "http://192.168.1.245/api/v2/valetudo/config/interfaces/mqtt" in den
+    assert '"host":"192.168.1.11"' in den
+    assert '"identity":{"identifier":"den"}' in den
+    assert "valetudo-yummyhurtfulhornet.local" not in den
+    assert '"host":"10.254.254.11"' not in den
+
+    assert "http://192.168.1.163/api/v2/valetudo/config/interfaces/mqtt" in upstairs
+    assert '"host":"192.168.1.11"' in upstairs
+    assert '"identity":{"identifier":"upstairs-vacuum"}' in upstairs
+    assert "valetudo-zestycurvycaribou.local" not in upstairs
+
+
+def test_valetudo_reload_payloads_match_current_mqtt_schema() -> None:
+    text = _read(ZIGBEE_ZWAVE_PATH)
+
+    assert "addICBINVMapProperty" not in text
+    assert "ConsumableMonitoringCapability" not in text
+    assert "<redacted>" not in text
+    assert text.count('"username":"{{ mqtt_username }}"') == 3
+    assert text.count('"password":"{{ mqtt_password }}"') == 3
+    assert text.count("CarpetModeControlCapability") == 3

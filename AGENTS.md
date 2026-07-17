@@ -26,6 +26,7 @@
 - Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
 - Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
 - Before changing related Home Assistant automations, scripts, helpers, dashboards, or tests, read the relevant Allium spec first and keep implementation changes aligned with it.
+- Always compare behavior changes against the relevant Allium spec, but do not update `.allium` definitions unless the owner explicitly approves that spec change.
 
 ## E-Ink Displays
 - Use `docs/inky_displays.md` as the source of truth before changing e-ink payloads, renderer behavior, MQTT topics, Pi service deployment, display layouts, or display-triggering automations.
@@ -36,6 +37,16 @@
 - New display content should be distance-legible: high-contrast `400x300`, one large title, one subtitle, at most four rows, Material Design Icons names where possible, and no dense dashboard-style text.
 - Preserve color semantics: red means urgent/exception on the owner-suite board; yellow means emphasis/hospitality on the future office board.
 - Test renderer changes with `python3 -m pytest tests/test_inky_display_renderer.py tests/test_inky_display_service.py tests/test_inky_displays_package.py`. For physical changes, verify on the Pi Zero W and confirm the panel visibly changes, not just that `show()` returns.
+
+## Media / Music Assistant
+- Use `docs/music_assistant.md` as the source of truth before changing Music Assistant / Sonos playback, sync groups, bedtime/wake audio wiring, or Spotify URIs.
+- Never hardcode a `spotify--<instance>` provider-instance id; use bare `spotify:playlist:<id>` URIs and let MA route to the live instance (it changes on every MA re-onboard).
+- Always target the explicit MA room entities (`media_player.ma_bedroom`,
+  `media_player.ma_bathroom`, `media_player.ma_office`, `media_player.ma_den`,
+  and `media_player.ma_tiki_room`), not generated `*_sonos_2` or native
+  `*_sonos` entities. Keep their entity-registry names room-friendly for the UI,
+  HomeKit, and Siri; set group volume on individual member entities, never the
+  group entity.
 
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.

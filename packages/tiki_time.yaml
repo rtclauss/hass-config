@@ -57,18 +57,18 @@ script:
               - condition: or
                 conditions:
                   - condition: state
-                    entity_id: media_player.den_sonos_2
+                    entity_id: media_player.ma_den
                     state: "playing"
                   - condition: state
-                    entity_id: media_player.den_sonos_2
+                    entity_id: media_player.ma_den
                     state: "buffering"
         then:
           - wait_for_trigger:
               - trigger: state
-                entity_id: media_player.den_sonos_2
+                entity_id: media_player.ma_den
                 to: "playing"
               - trigger: state
-                entity_id: media_player.den_sonos_2
+                entity_id: media_player.ma_den
                 to: "buffering"
             timeout: "00:00:10"
             continue_on_timeout: true
@@ -77,10 +77,10 @@ script:
             - condition: or
               conditions:
                 - condition: state
-                  entity_id: media_player.den_sonos_2
+                  entity_id: media_player.ma_den
                   state: "playing"
                 - condition: state
-                  entity_id: media_player.den_sonos_2
+                  entity_id: media_player.ma_den
                   state: "buffering"
           sequence:
             - variables:
@@ -338,18 +338,19 @@ script:
                 continue_on_error: true
                 target:
                   entity_id:
-                    - media_player.bedroom_sonos
-                    - media_player.bathroom_sonos
-                    - media_player.office_sonos
-                    - media_player.den_sonos
-                    - media_player.tiki_room_3
+                    - media_player.ma_bedroom
+                    - media_player.ma_bathroom
+                    - media_player.ma_office
+                    - media_player.ma_den
+                    - media_player.ma_tiki_room
                 data:
                   volume_level: 0.30
               - action: script.music_assistant_play_item
                 continue_on_error: true
                 data:
                   entity_id: media_player.ma_group_everywhere
-                  media_item: "somafm://radio/tikitime"
+                  media_item: "https://ice1.somafm.com/tikitime-128-mp3"
+                  media_type: radio
                   enqueue: replace
               - action: media_player.turn_on
                 target:

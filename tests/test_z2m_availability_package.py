@@ -35,6 +35,25 @@ def _named_devices() -> list[str]:
     return names
 
 
+def _slugify_entity_name(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9_]+", "_", name.lower())
+    return re.sub(r"_+", "_", slug).strip("_")
+
+
+def _package_availability_entity_ids() -> list[str]:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    names = re.findall(r'^    - name: "([^"]+)"$', text, flags=re.MULTILINE)
+    return [f"binary_sensor.{_slugify_entity_name(name)}" for name in names]
+
+
+def _availability_group_entities() -> list[str]:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    group_start = text.index("  z2m_availability_entities:")
+    group_end = text.index("################################################################\n## Template sensors", group_start)
+    group_block = text[group_start:group_end]
+    return re.findall(r"^\s+- (binary_sensor\.z2m_[a-z0-9_]+)$", group_block, flags=re.MULTILINE)
+
+
 def test_package_file_exists() -> None:
     assert PACKAGE_PATH.exists(), f"Package file not found: {PACKAGE_PATH}"
 
@@ -109,11 +128,24 @@ def test_aggregate_template_has_attributes() -> None:
     assert "online_count:" in text
 
 
-def test_aggregate_template_searches_z2m_entities() -> None:
+def test_aggregate_uses_explicit_availability_group() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
-    assert "selectattr('entity_id', 'search', 'z2m_')" in text
-    assert "selectattr('attributes.device_class', 'eq', 'connectivity')" in text
+    assert "group:" in text
+    assert "z2m_availability_entities:" in text
+    assert "expand('group.z2m_availability_entities')" in text
+
+
+def test_aggregate_does_not_scan_binary_sensor_domain() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    aggregate_block = text.split("unique_id: z2m_devices_offline", 1)[1]
+    assert "states.binary_sensor" not in aggregate_block
+    assert "selectattr('entity_id', 'search', 'z2m_')" not in aggregate_block
+    assert "selectattr('attributes.device_class', 'eq', 'connectivity')" not in aggregate_block
     assert "selectattr('state', 'in', ['off', 'unavailable', 'unknown'])" in text
+
+
+def test_availability_group_matches_package_sensors() -> None:
+    assert _availability_group_entities() == _package_availability_entity_ids()
 
 
 def test_package_does_not_duplicate_z2m_lifecycle_sensors() -> None:

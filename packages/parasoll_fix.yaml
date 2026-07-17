@@ -1,17 +1,29 @@
 # IKEA PARASOLL (E2013) — battery drain & drop-off fix
 #
 # Root cause (github.com/Koenkk/zigbee2mqtt/issues/22579):
-#   1. Battery drain: Z2M writes an aggressive genPollCtrl check-in interval.
-#   2. Drop off: a regression removed the ssIasZone cluster binding, so the
-#      device stops sending contact-state changes after a few hours.
+#   1. Drop off / marked offline: the factory MAXIMUM reporting interval of
+#      65000 s (~18 h) on ssIasZone/zoneStatus (and the battery attributes) is
+#      longer than any sane availability timeout, so a healthy sleepy device is
+#      marked offline.  The community fix (jhenkens' reporting-interval
+#      blueprint) clamps max to 14400 s (4 h); this package does the same via
+#      script.parasoll_enforce_intervals.
+#   2. Stuck state: a regression removed the ssIasZone binding and zoneStatus
+#      min reporting was not 0, so rapid open/close pairs were dropped.  Current
+#      stock zigbee-herdsman-converters binds ssIasZone on ep2 and sets
+#      zoneStatus min = 0 (zoneStatusReporting), so no external converter is
+#      needed — this package relies on the built-in E2013 definition.
+#   3. Battery drain: largely a downstream symptom of (1) — drop-offs trigger
+#      rejoin loops that burn the battery.  genPollCtrl is not bound by stock,
+#      and the reconfigure flow unbinds it defensively if a stale binding remains.
 #
-# This package pairs with zigbee2mqtt/external_converters/parasoll.js.
-# Z2M 2.x auto-scans the external_converters/ subdirectory — no configuration.yaml
-# entry is needed.
+# This package is self-contained — no external converter.  Devices report as the
+# stock model "PARASOLL door/window sensor".
 # Deployment order:
-#   1. Ensure zigbee2mqtt/external_converters/parasoll.js is present.
-#   2. Restart Zigbee2MQTT.  Devices should show "PARASOLL door/window sensor (patched)".
-#   3. Run script.parasoll_reconfigure_all from Developer Tools or the UI.
+#   1. Ensure no parasoll external converter is loaded and restart Zigbee2MQTT.
+#      Devices should show "PARASOLL door/window sensor" (stock definition).
+#   2. Run script.parasoll_reconfigure_all from Developer Tools or the UI.  This
+#      reconfigures every joined sensor AND enforces the 14400 s max intervals.
+#   3. Wake each sleepy sensor (open/close) so the queued commands flush.
 #   4. For sensors that are fully unresponsive: pull the battery, reinsert, then
 #      the automation below handles them automatically as they re-join.
 
@@ -39,13 +51,75 @@ input_text:
 ################################################################
 
 script:
+  # Clamp the maximum reporting interval to 14400 s (4 h) on the three
+  # attributes whose factory default of 65000 s (~18 h) lets PARASOLL sensors be
+  # marked offline by availability checks (Koenkk/zigbee2mqtt#22579), and pin
+  # zoneStatus min to 0 so rapid open/close pairs are never dropped.  This is the
+  # actual drop-off fix; it mirrors jhenkens' reporting-interval blueprint.
+  # Commands are queued by Z2M for sleepy devices and applied on the next wakeup.
+  parasoll_enforce_intervals:
+    alias: "PARASOLL - Enforce Reporting Intervals"
+    description: >
+      Sets maximum_report_interval = 14400 s on ssIasZone/zoneStatus (ep2),
+      genPowerCfg/batteryPercentageRemaining (ep1) and genPowerCfg/batteryVoltage
+      (ep1) for a single PARASOLL sensor, identified by IEEE address.  Mins and
+      reportable changes are left at the herdsman-converters factory values
+      (zoneStatus min 0; battery min 3600, change 10).
+    fields:
+      ieee:
+        description: "IEEE address of the PARASOLL sensor."
+        required: true
+        example: "0x04e3e5fffec73748"
+    # parallel so the per-device loop in parasoll_reconfigure_all and the
+    # join/announce automation can both call it without serialising the fleet.
+    mode: parallel
+    max: 30
+    trace:
+      stored_traces: 10
+    sequence:
+      - repeat:
+          for_each:
+            - endpoint: 2
+              cluster: ssIasZone
+              attribute: zoneStatus
+              minimum: 0
+            - endpoint: 1
+              cluster: genPowerCfg
+              attribute: batteryPercentageRemaining
+              minimum: 3600
+              change: 10
+            - endpoint: 1
+              cluster: genPowerCfg
+              attribute: batteryVoltage
+              minimum: 3600
+              change: 10
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: zigbee2mqtt/bridge/request/device/reporting/configure
+                # reportable_change is omitted for zoneStatus (a bitmap) — it has
+                # no "change" key in the loop, matching the proven blueprint.
+                payload: >
+                  {"id": "{{ ieee }}",
+                   "endpoint": {{ repeat.item.endpoint }},
+                   "cluster": "{{ repeat.item.cluster }}",
+                   "attribute": "{{ repeat.item.attribute }}",
+                   "minimum_report_interval": {{ repeat.item.minimum }},
+                   "maximum_report_interval": 14400
+                   {%- if repeat.item.change is defined %},
+                   "reportable_change": {{ repeat.item.change }}
+                   {%- endif %}}
+            - delay:
+                milliseconds: 300
+
   parasoll_reconfigure_all:
     alias: "PARASOLL - Reconfigure All"
     description: >
       For every joined PARASOLL sensor: presses the identify button to nudge the
-      device awake, then sends a Z2M reconfigure command so the patched converter
-      settings (ssIasZone binding, no genPollCtrl) are applied.  Both commands are
-      queued by Z2M for sleepy devices and processed together on the next check-in.
+      device awake, then sends a Z2M reconfigure command so the stock converter
+      settings (ssIasZone binding, no genPollCtrl) are applied, and clamps the
+      reporting intervals to 14400 s.  Commands are queued by Z2M for sleepy
+      devices and processed on the next check-in.
       Sensors that are completely dead still need a battery pull first.
     mode: single
     trace:
@@ -55,7 +129,7 @@ script:
           parasoll_devices: >
             {% set ns = namespace(devices=[]) %}
             {% for entity in states.binary_sensor %}
-              {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)' %}
+              {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor' %}
                 {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
                 {% for id_tuple in ids %}
                   {% if id_tuple[0] == 'mqtt' %}
@@ -102,6 +176,13 @@ script:
                 payload: '{"id": "{{ repeat.item.ieee }}"}'
             - delay:
                 milliseconds: 1500
+            # Clamp max reporting intervals to 14400 s AFTER configure, since
+            # configure re-applies the converter's factory 65000 s max.
+            - action: script.parasoll_enforce_intervals
+              data:
+                ieee: "{{ repeat.item.ieee }}"
+            - delay:
+                milliseconds: 500
 
 ################################################################
 ## Automations
@@ -113,17 +194,24 @@ automation:
     trace:
       stored_traces: 10
     description: >
-      Reconfigures PARASOLL sensors only when the Z2M bridge/devices binding
-      state shows a gap.  Three invariants are checked on every trigger:
-        • ssIasZone bound on ep1       — device will send contact-state reports
+      Reconfigures PARASOLL sensors only when the Z2M bridge/devices state shows
+      a gap.  Four invariants are checked on every trigger:
+        • ssIasZone bound on ep2       — device will send contact-state reports
         • genPollCtrl NOT bound on ep1 — no aggressive check-in → no battery drain
         • genPowerCfg has configured reportings — battery/voltage actively reported
+        • max reporting interval ≤ 14400 s on zoneStatus + battery attrs —
+          device reports often enough to never be marked offline (the actual
+          drop-off fix; without it the factory 65000 s default applies)
       Triggers:
         • device_interview — brand-new join (always reconfigures; no bindings yet)
         • device_announce  — re-join / reboot (reconfigures only if bridge shows gap)
         • contact_change   — PARASOLL state change (reconfigures only if bridge shows
                              genPollCtrl bound or power reporting absent; active contact
                              report already proves IAS zone is enrolled)
+      Rate limit: the first action stops the run if this device had a configure
+      attempt within the last hour, so a rejoin-looping or repeatedly-failing
+      sensor can trigger at most one configure/hour instead of flooding the
+      coordinator with binds (the failure mode that took the network down).
       Notifications gated by 1 h since last successful configure per device;
       contact_change is always silent.
     mode: queued
@@ -179,7 +267,7 @@ automation:
             {% elif type == 'device_announce' %}
               {% set ns = namespace(found=false) %}
               {% for entity in states.binary_sensor %}
-                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor (patched)' %}
+                {% if device_attr(entity.entity_id, 'model') == 'PARASOLL door/window sensor' %}
                   {% set ids = device_attr(entity.entity_id, 'identifiers') | list %}
                   {% for id_tuple in ids %}
                     {% if id_tuple[0] == 'mqtt' and id_tuple[1] == 'zigbee2mqtt_' ~ ieee %}
@@ -194,6 +282,56 @@ automation:
             {% endif %}
           {% endif %}
     action:
+      # ── Rate limit / circuit breaker (per device, ~1 configure per hour) ──────
+      # FIRST action, before any delay/MQTT wait/bind: if this device already had
+      # a configure attempt within the current hour bucket, stop immediately.
+      # input_text.parasoll_configure_state is stamped on every configure attempt
+      # (success, failure, or timeout), so a device that is rejoin-looping or
+      # repeatedly failing to bind is throttled to at most one configure per hour
+      # instead of firing on every announce — which is what previously let a
+      # single looping sensor flood the coordinator with timing-out binds and
+      # overflow this queue. Skipped runs exit in milliseconds, so the queue
+      # drains instead of piling up. A genuinely drifted device still self-heals;
+      # it just retries at most hourly. Fresh joins (no prior stamp) are never
+      # throttled. This reuses the same store + hour granularity as the
+      # notification cooldown below.
+      - variables:
+          _rl_ieee: >
+            {% if trigger.id == 'bridge_event' %}
+              {{ trigger.payload_json.data.ieee_address }}
+            {% else %}
+              {% set ns = namespace(value='') %}
+              {% for id_tuple in device_attr(trigger.entity_id, 'identifiers') | list %}
+                {% if id_tuple[0] == 'mqtt' %}
+                  {% set ns.value = id_tuple[1] | replace('zigbee2mqtt_', '') %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.value }}
+            {% endif %}
+          _rl_prev_h: >
+            {% set raw = states('input_text.parasoll_configure_state') | trim %}
+            {% set key = _rl_ieee[-4:] %}
+            {% set ns = namespace(h=none) %}
+            {% if raw.startswith('{') %}
+              {% set ns.h = (raw | from_json).get(key) %}
+            {% else %}
+              {% for item in raw.split(',') if ':' in item %}
+                {% set parts = item.split(':') %}
+                {% if parts[0] | trim == key %}
+                  {% set ns.h = parts[1] | int(default=none) %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {{ ns.h }}
+          _rl_hours_since: >
+            {% if _rl_prev_h is none %}
+              9999
+            {% else %}
+              {{ ((now().timestamp() / 3600) | int % 10000 - _rl_prev_h | int) % 10000 }}
+            {% endif %}
+      - condition: template
+        value_template: "{{ _rl_hours_since | int >= 1 }}"
+
       # Join/announce: wait for Z2M to finish interview setup.
       # Contact-change: no delay — device is awake right now; every ms counts
       # before it goes back to sleep and Z2M loses the unbind command.
@@ -246,11 +384,14 @@ automation:
 
       # ── Determine whether reconfiguration is actually needed ──────────────────
       # Parse the bridge/devices payload to find this device and inspect endpoints.
-      # Three invariants must hold for the device to be considered fully configured:
+      # Four invariants must hold for the device to be considered fully configured:
       #   _ias_ok      — ssIasZone is bound on ep2 (PARASOLL IAS zone cluster is on
       #                  endpoint 2, confirmed by Z2M Bind tab "Source endpoint 2")
       #   _pollctrl_ok — genPollCtrl is NOT bound on ep1 (no aggressive check-in)
       #   _power_ok    — genPowerCfg has at least one configured reporting on ep1
+      #   _interval_ok — max reporting interval ≤ 14400 s on zoneStatus (ep2) AND
+      #                  on both battery attrs (ep1); false means the factory
+      #                  65000 s default is still in effect → device drops off
       # device_interview always reconfigures (fresh join: no bindings exist yet).
       # If bridge/devices times out or device is absent, defaults to true (safe).
       - variables:
@@ -283,16 +424,50 @@ automation:
             {% else %}
               []
             {% endif %}
+          # Full reporting objects (cluster + attribute + intervals) for the
+          # _interval_ok check below.  _ep1_reportings above keeps only the
+          # cluster names and is used solely for _power_ok.
+          _ep1_reportings_full: >
+            {% if _z2m_device %}
+              {{ _z2m_device.get('endpoints', {}).get('1', {}).get('configured_reportings', []) }}
+            {% else %}
+              []
+            {% endif %}
+          _ep2_reportings_full: >
+            {% if _z2m_device %}
+              {{ _z2m_device.get('endpoints', {}).get('2', {}).get('configured_reportings', []) }}
+            {% else %}
+              []
+            {% endif %}
           _ias_ok: "{{ 'ssIasZone' in _ep2_bindings }}"
           _pollctrl_ok: "{{ 'genPollCtrl' not in _ep1_bindings }}"
           _power_ok: "{{ 'genPowerCfg' in _ep1_reportings }}"
+          _interval_ok: >
+            {% set ns = namespace(zone=false, bpct=false, bv=false) %}
+            {% for r in _ep2_reportings_full %}
+              {% if r.cluster == 'ssIasZone' and r.attribute == 'zoneStatus'
+                    and r.maximum_report_interval | int(99999) <= 14400 %}
+                {% set ns.zone = true %}
+              {% endif %}
+            {% endfor %}
+            {% for r in _ep1_reportings_full %}
+              {% if r.cluster == 'genPowerCfg' and r.attribute == 'batteryPercentageRemaining'
+                    and r.maximum_report_interval | int(99999) <= 14400 %}
+                {% set ns.bpct = true %}
+              {% endif %}
+              {% if r.cluster == 'genPowerCfg' and r.attribute == 'batteryVoltage'
+                    and r.maximum_report_interval | int(99999) <= 14400 %}
+                {% set ns.bv = true %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.zone and ns.bpct and ns.bv }}
           _needs_configure: >
             {% if trigger.id == 'bridge_event' and trigger.payload_json.type == 'device_interview' %}
               true
             {% elif _z2m_device is none %}
               true
             {% else %}
-              {{ not _ias_ok or not _pollctrl_ok or not _power_ok }}
+              {{ not _ias_ok or not _pollctrl_ok or not _power_ok or not _interval_ok }}
             {% endif %}
           # Notification cooldown: suppress within 1 h of last configure attempt.
           # Store format: <last4_ieee>:<mod_hour>,...  (wraps every ~416 days).
@@ -369,6 +544,13 @@ automation:
             timeout:
               seconds: 60
             continue_on_timeout: true
+
+          # Clamp max reporting intervals to 14400 s AFTER configure, since
+          # configure re-applies the converter's factory 65000 s max.  This is
+          # the actual drop-off fix (Koenkk/zigbee2mqtt#22579).
+          - action: script.parasoll_enforce_intervals
+            data:
+              ieee: "{{ _ieee }}"
 
           # ── Update persistent store (gates notification cooldown) ───────────────
           # Always stamp the device after a configure attempt so _can_notify

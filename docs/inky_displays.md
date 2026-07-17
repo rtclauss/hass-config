@@ -81,7 +81,7 @@ Payloads are compact JSON. Required fields:
     {
       "type": "rows",
       "rows": [
-        {"icon": "mdi:weather-snowy", "label": "Weather", "value": "24F Snow", "level": "normal"},
+        {"icon": "mdi:weather-snowy", "label": "Weather", "value": "24F / -4C Snow", "level": "normal"},
         {"icon": "mdi:door-closed", "label": "Doors", "value": "Closed", "level": "normal"}
       ]
     }
@@ -208,7 +208,7 @@ Current owner-suite rows:
 
 | Row | Value source | Level behavior |
 | --- | --- | --- |
-| Weather | `sensor.outside_temperature` plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
+| Weather | `sensor.outside_temperature` converted and shown as Fahrenheit/Celsius, plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | Night-only; `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | Night-only; shown when no urgent status is active |
 | Next | Next `calendar.ryan_claussen` event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
@@ -235,6 +235,11 @@ safety/exception status takes priority over the meeting row. The publish script
 also requests hourly forecast data at publish time for event-weather checks,
 with the legacy `forecast_json` attribute kept only as a fallback.
 
+All temperatures rendered in the owner-suite weather rows use the compact
+`73F / 23C` format. This includes current weather, tomorrow's forecast, and
+destination weather while a flight is active. Both units are rounded to whole
+numbers; the Inky never displays fractional temperature values.
+
 In `morning`, `up_for_day`, and `midday`, alarm and meeting-alarm rows are not
 shown. Those modes use current `Weather`, next calendar event time/title,
 calendar event location, and `Status`. If no calendar event is available in the
@@ -246,8 +251,11 @@ wake-up setup state.
 
 When `sensor.next_travel_flight` is inside its active travel window, `morning`,
 `up_for_day`, and `midday` modes use flight-oriented rows instead of the normal
-calendar/quote rows. Weather alerts, garage-door exceptions, and front-door
-exceptions still take display priority and keep an urgent status row visible.
+calendar/quote rows. Weather alerts, garage-door exceptions, front-door
+exceptions, and event-weather exceptions still take display priority and keep
+an urgent status row visible. When event-weather risk overlaps an active flight,
+the urgent status text stays short and destination-specific, such as
+`SEA Wx risk`.
 
 Flight rows use these normalized entities from `packages/flight_status.yaml`:
 

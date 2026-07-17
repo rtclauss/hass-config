@@ -45,16 +45,23 @@ def test_single_outdoor_holiday_loop_replaces_legacy_holiday_loop_automations() 
 def test_outdoor_holiday_loop_uses_active_outdoor_holiday_selector_and_script() -> None:
     block = _automation_block("outdoor_holiday_light_loop")
 
+    assert "trigger: time_pattern" in block
     assert 'minutes: "/1"' in block
+    assert "event: start" in block
     assert "states('sensor.active_outdoor_holiday') | trim" in block
     assert "action: script.apply_outdoor_holiday_scene" in block
     assert 'holiday_key: "{{ states(\'sensor.active_outdoor_holiday\') | trim }}"' in block
 
 
-def test_christmas_toggle_only_manages_tree_automations() -> None:
-    block = _automation_block("toggle_christmas_automations_on_season_change")
+def test_christmas_tree_behavior_uses_explicit_conditions_not_automation_toggles() -> None:
+    text = HOLIDAYS_PATH.read_text(encoding="utf-8")
+    block = _automation_block("christmas_lights_off")
 
-    assert "automation.christmas_tree_on" in block
-    assert "automation.christmas_tree_off_midnight" in block
-    assert "automation.christmas_lights_off_bedroom_off" in block
-    assert "automation.christmas_outside_light_loop_1" not in block
+    assert "initial_state: false" not in text
+    assert "automation.turn_on" not in text
+    assert "automation.turn_off" not in text
+    assert "toggle_christmas_automation_during_christmas_season" not in text
+    assert "entity_id: binary_sensor.christmas_season" in block
+    assert "id: midnight" in block
+    assert "now().month == 1 and now().day == 1" in block
+    assert "action: script.turn_off_christmas_lights" in block

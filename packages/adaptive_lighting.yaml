@@ -3,8 +3,8 @@ automation:
     alias: reconcile_owner_suite_adaptive_lighting
     description: >
       Reapply the Adaptive Lighting baselines after Home Assistant starts so
-      kitchen, den, basement, dining-room, and owner-suite tuning survive restarts
-      while preserving each room's intended scene and task-lighting behavior.
+      kitchen, den, basement, dining-room, owner-suite, and vanity tuning survive
+      restarts while preserving each room's intended scene and task-lighting behavior.
       The runtime dining-room Adaptive Lighting switch now uses the current dining-room entity id.
     mode: single
     trace:
@@ -64,6 +64,20 @@ automation:
           detect_non_ha_changes: false
       - action: adaptive_lighting.change_switch_settings
         data:
+          entity_id: switch.adaptive_lighting_owner_suite_vanity
+          use_defaults: current
+          include_config_in_attributes: true
+          take_over_control: true
+          adapt_only_on_bare_turn_on: true
+          only_once: true
+          initial_transition: 1
+          sleep_transition: 2
+          transition: 5
+          sleep_brightness: 1
+          sleep_color_temp: 1000
+          detect_non_ha_changes: false
+      - action: adaptive_lighting.change_switch_settings
+        data:
           entity_id: switch.adaptive_lighting_basement
           use_defaults: current
           include_config_in_attributes: true
@@ -80,6 +94,11 @@ automation:
           sleep_brightness: 1
           sleep_color_temp: 1000
           detect_non_ha_changes: false
+      # Signals that startup baseline reconciliation is complete. The Inovelli
+      # LED-bar sync that previously consumed this event was removed (#832), so
+      # it currently has no listeners. Kept intentionally as a documented
+      # "reconcile complete" seam for future automations that must run only
+      # after all room settings are restored.
       - event: adaptive_lighting_startup_reconciled
 
   - id: apply_adaptive_lighting_on_arrival
@@ -219,7 +238,6 @@ automation:
         - switch.adaptive_lighting_den
         - switch.adaptive_lighting_hallway
         - switch.adaptive_lighting_kitchen
-        - switch.adaptive_lighting_office
         - switch.adaptive_lighting_owner_suite
         - switch.dining_room_adaptive_lighting_dining_room
         - switch.adaptive_control
@@ -252,175 +270,223 @@ automation:
             target:
               entity_id: "{{ main_adaptive_switches }}"
 
-  - id: sync_selected_inovelli_led_bars_to_adaptive_lighting
-    alias: sync_selected_inovelli_led_bars_to_adaptive_lighting
-    description: >
-      Keep the owner suite and office Inovelli LED bars aligned with Adaptive
-      Lighting while still yielding to trip mode, sleep mode, and office guest
-      privacy overrides. Startup sync waits for Adaptive Lighting baseline
-      reconciliation so the shared script runs after room settings are
-      restored. The shared script accepts room or rooms so additional rooms
-      can opt in without duplicating the LED-bar mapping logic.
-    mode: restart
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: event
-        event_type: adaptive_lighting_startup_reconciled
-      - trigger: state
-        entity_id:
-          - switch.sleep_mode
-          - input_boolean.guest_mode
-          - switch.adaptive_lighting_owner_suite
-          - switch.adaptive_lighting_sleep_mode_owner_suite
-      - trigger: time_pattern
-        minutes: "/2"
-    action:
-      - action: script.turn_on
-        target:
-          entity_id: script.sync_inovelli_led_bars_to_adaptive_lighting
-        data:
-          variables:
-            rooms:
-              - owner suite
-              - office
-
 script:
-  sync_inovelli_led_bars_to_adaptive_lighting:
-    alias: sync_inovelli_led_bars_to_adaptive_lighting
+  adaptive_light_turn_on:
+    alias: Adaptive Light Turn On
     description: >
-      Mirror Adaptive Lighting color temperature and brightness onto selected
-      Inovelli LED bars. Rooms may provide a preferred Adaptive Lighting
-      switch plus a fallback so guest-sensitive rooms can opt in gradually
-      without breaking when a dedicated switch has not been created yet.
-    icon: mdi:led-strip-variant
-    mode: queued
+      Turn on Adaptive Lighting-managed lights with one atomic adaptive apply so
+      brightness and color cannot arrive as competing Zigbee commands. Optional
+      reset/ramp callers may lock manual control until their transition finishes;
+      lights the user overrides mid-ramp retain that lock. Falls back to a plain
+      light.turn_on when the Adaptive Lighting switch is unavailable so wall
+      switches and motion paths keep working.
+    mode: parallel
+    max: 20
     trace:
       stored_traces: 10
     fields:
-      room:
-        description: Single room to sync.
-        example: owner suite
-      rooms:
-        description: List of rooms to sync.
-        example: "owner suite, office"
+      adaptive_switch:
+        description: Adaptive Lighting switch that owns the target light(s).
+        required: true
+        selector:
+          entity:
+            domain: switch
+      lights:
+        description: Optional list of lights to turn on. If omitted, the Adaptive Lighting switch applies to all configured lights.
+        required: false
+        selector:
+          entity:
+            domain: light
+            multiple: true
+      transition:
+        description: Transition duration in seconds.
+        required: false
+        default: 1
+        selector:
+          number:
+            min: 0
+            max: 300
+            step: 0.5
+            unit_of_measurement: seconds
+      reset_manual_control:
+        description: Clear Adaptive Lighting manual-control state for the same lights after the transition completes.
+        required: false
+        default: false
+        selector:
+          boolean:
     variables:
-      room_configs:
-        owner_suite:
-          preferred_adaptive_switch: switch.adaptive_lighting_owner_suite
-          fallback_adaptive_switch: switch.adaptive_lighting_owner_suite
-          led_color_on: number.owner_suite_fan_switch_ledcolorwhenon
-          led_color_off: number.owner_suite_fan_switch_ledcolorwhenoff
-          led_intensity_on: number.owner_suite_fan_switch_ledintensitywhenon
-          led_intensity_off: number.owner_suite_fan_switch_ledintensitywhenoff
-          guest_mode_blocks_sync: false
-        office:
-          preferred_adaptive_switch: switch.adaptive_lighting_office
-          fallback_adaptive_switch: switch.adaptive_lighting_owner_suite
-          led_color_on: number.office_fan_switch_ledcolorwhenon
-          led_color_off: number.office_fan_switch_ledcolorwhenoff
-          led_intensity_on: number.office_fan_switch_ledintensitywhenon
-          led_intensity_off: number.office_fan_switch_ledintensitywhenoff
-          guest_mode_blocks_sync: true
-      requested_rooms: >-
-        {% set raw_rooms = rooms if rooms is defined else room if room is defined else [] %}
-        {% set items = raw_rooms.split(',') if raw_rooms is string else raw_rooms %}
-        {% set ns = namespace(values=[]) %}
-        {% for item in items %}
-          {% set normalized = item | string | lower | replace('-', '_') | replace(' ', '_') %}
-          {% if normalized == 'owner_suite_bedroom' %}
-            {% set normalized = 'owner_suite' %}
-          {% endif %}
-          {% if normalized in room_configs and normalized not in ns.values %}
-            {% set ns.values = ns.values + [normalized] %}
-          {% endif %}
-        {% endfor %}
-        {{ ns.values }}
+      target_lights: "{{ lights | default([], true) }}"
+      # expand() resolves Home Assistant light groups to their members so a
+      # partially-on group still adapts its individual members; Z2M groups
+      # expose no members and stay atomic, matching how Adaptive Lighting
+      # treats them. unique dedupes overlapping group + member call sites.
+      # Unavailable/unknown lights are handled by the fallback branch below.
+      member_lights: "{{ expand(target_lights) | map(attribute='entity_id') | unique | list }}"
+      off_lights: "{{ member_lights | select('is_state', 'off') | list }}"
+      on_lights: "{{ member_lights | select('is_state', 'on') | list }}"
+      # Targets that classify as neither off nor on (and group entities whose
+      # members all dropped out of expand()): flapping Zigbee2MQTT devices,
+      # entities still unknown after a restart. They get a best-effort plain
+      # turn-on below so a recovering device still receives the command.
+      unreachable_lights: "{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}"
+      apply_transition: "{{ transition | default(1, true) }}"
+      should_reset_manual_control: "{{ reset_manual_control | default(false, true) }}"
+      adaptive_switch_active: "{{ is_state(adaptive_switch, 'on') }}"
     sequence:
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "off"
-      - condition: state
-        entity_id: switch.sleep_mode
-        state: "off"
-      - repeat:
-          for_each: "{{ requested_rooms }}"
-          sequence:
-            - variables:
-                guest_mode_blocks_room: >-
-                  {{
-                    room_configs[repeat.item]['guest_mode_blocks_sync']
-                    and is_state('input_boolean.guest_mode', 'on')
-                  }}
-                adaptive_lighting_entity: >-
-                  {% set preferred = room_configs[repeat.item]['preferred_adaptive_switch'] %}
-                  {% set fallback = room_configs[repeat.item]['fallback_adaptive_switch'] %}
-                  {% if has_value(preferred) %}
-                    {{ preferred }}
-                  {% elif has_value(fallback) %}
-                    {{ fallback }}
-                  {% else %}
-                    {{ '' }}
-                  {% endif %}
-                room_specific_sync_blocked: >-
-                  {{
-                    repeat.item == 'owner_suite'
-                    and is_state('light.owner_suite_lamps', 'on')
-                    and (now().hour >= 22 or now().hour < 6)
-                  }}
-            - if:
-                - condition: template
-                  value_template: >-
-                    {{
-                      not guest_mode_blocks_room
-                      and not room_specific_sync_blocked
-                      and adaptive_lighting_entity != ''
-                    }}
-              then:
-                - variables:
-                    adaptive_brightness_pct: >-
-                      {{ state_attr(adaptive_lighting_entity, 'brightness_pct') | int(75) }}
-                    adaptive_current_kelvin: >-
-                      {{ state_attr(adaptive_lighting_entity, 'color_temp_kelvin') | int(3000) }}
-                    adaptive_min_kelvin: >-
-                      {{
-                        (state_attr(adaptive_lighting_entity, 'configuration') or {})
-                        .get('min_color_temp', 2000)
-                        | int(2000)
-                      }}
-                    adaptive_max_kelvin: >-
-                      {{
-                        (state_attr(adaptive_lighting_entity, 'configuration') or {})
-                        .get('max_color_temp', 5500)
-                        | int(5500)
-                      }}
-                    adaptive_led_color: >-
-                      {% set current_kelvin = adaptive_current_kelvin | int(3000) %}
-                      {% set min_kelvin = adaptive_min_kelvin | int(2000) %}
-                      {% set max_kelvin = adaptive_max_kelvin | int(5500) %}
-                      {% set clamped_kelvin = [[current_kelvin, min_kelvin] | max, max_kelvin] | min %}
-                      {% if max_kelvin <= min_kelvin %}
-                        170
-                      {% else %}
-                        {{ (((clamped_kelvin - min_kelvin) / (max_kelvin - min_kelvin)) * 170) | round(0) | int }}
-                      {% endif %}
-                    adaptive_led_intensity_on: >-
-                      {% set brightness_pct = adaptive_brightness_pct | int(75) %}
-                      {{ [[brightness_pct, 1] | max, 100] | min }}
-                - action: number.set_value
-                  data:
-                    entity_id: >-
-                      {{ room_configs[repeat.item]['led_color_on'] }},
-                      {{ room_configs[repeat.item]['led_color_off'] }}
-                    value: "{{ adaptive_led_color }}"
-                - action: number.set_value
-                  data:
-                    entity_id: "{{ room_configs[repeat.item]['led_intensity_on'] }}"
-                    value: "{{ adaptive_led_intensity_on }}"
-                - action: number.set_value
-                  data:
-                    entity_id: "{{ room_configs[repeat.item]['led_intensity_off'] }}"
-                    value: 1
+      # Reset/ramp callers need the manual-control lock. Owner-suite wake ramps
+      # rely on this to keep interval adaptation from interrupting the long
+      # transition.
+      - if:
+          - condition: template
+            value_template: "{{ should_reset_manual_control and adaptive_switch_active and member_lights | count > 0 }}"
+        then:
+          - action: adaptive_lighting.set_manual_control
+            data:
+              entity_id: "{{ adaptive_switch }}"
+              lights: "{{ member_lights }}"
+              manual_control: true
+      - choose:
+          # Adaptive Lighting switch missing, not loaded, or intentionally
+          # turned off: plain turn-on. Disabling a room's adaptive switch must
+          # keep opting its paddles and motion paths out of adaptive
+          # color/brightness, and a broken switch must not fail the run.
+          - conditions:
+              - condition: template
+                value_template: "{{ not adaptive_switch_active and target_lights | count > 0 }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: "{{ target_lights }}"
+                data:
+                  transition: "{{ apply_transition }}"
+          # No explicit lights: apply across the switch's configured lights.
+          - conditions:
+              - condition: template
+                value_template: "{{ adaptive_switch_active and target_lights | count == 0 }}"
+            sequence:
+              - action: adaptive_lighting.apply
+                data:
+                  entity_id: "{{ adaptive_switch }}"
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
+                  transition: "{{ apply_transition }}"
+          # Apply brightness and color together in one service call. An empty
+          # lights list must never reach apply — Adaptive Lighting treats it as
+          # "all configured lights" — hence the explicit count guard;
+          # unreachable-only targets are handled by the fallback step below.
+          - conditions:
+              - condition: template
+                value_template: "{{ off_lights | count > 0 or on_lights | count > 0 }}"
+            sequence:
+              - action: adaptive_lighting.apply
+                data:
+                  entity_id: "{{ adaptive_switch }}"
+                  lights: "{{ off_lights + on_lights }}"
+                  adapt_brightness: true
+                  adapt_color: true
+                  turn_on_lights: true
+                  transition: "{{ apply_transition }}"
+      # Best-effort plain turn-on for unavailable/unknown targets, even when
+      # other targets classified normally: Zigbee2MQTT still publishes the
+      # command, so a flapping device that recovers picks it up. Skipped when
+      # the adaptive switch is inactive because the first branch above already
+      # sent every target a plain turn-on.
+      - if:
+          - condition: template
+            value_template: "{{ adaptive_switch_active and unreachable_lights | count > 0 }}"
+        then:
+          - action: light.turn_on
+            continue_on_error: true
+            target:
+              entity_id: "{{ unreachable_lights }}"
+            data:
+              transition: "{{ apply_transition }}"
+      # Clear the manual-control marks the script set once the ramp has
+      # finished. Clearing earlier would let set_manual_control force-adapt at
+      # the switch's initial_transition and stomp the requested ramp. The wait
+      # and clear run in a fire-and-forget helper so callers of this script are
+      # not blocked for the ramp duration (the owner-suite wake ramp is 45 s
+      # and its automation sets the auto-on flag right after this call).
+      - variables:
+          clear_candidates: >-
+            {{ member_lights
+               if should_reset_manual_control and adaptive_switch_active else [] }}
+      - if:
+          - condition: template
+            value_template: "{{ clear_candidates | count > 0 }}"
+        then:
+          - action: script.turn_on
+            target:
+              entity_id: script.adaptive_light_clear_manual_control
+            data:
+              variables:
+                adaptive_switch: "{{ adaptive_switch }}"
+                clear_lights: "{{ clear_candidates }}"
+                wait_seconds: "{{ apply_transition | float(0) }}"
+
+  adaptive_light_clear_manual_control:
+    alias: Adaptive Light Clear Manual Control
+    description: >
+      Deferred, guarded manual-control clear for script.adaptive_light_turn_on.
+      Waits out the brightness ramp, then clears the Adaptive Lighting
+      manual-control marks only for lights the user did not override mid-ramp.
+      Invoked non-blocking via script.turn_on with the variables
+      adaptive_switch, clear_lights, and wait_seconds.
+    mode: parallel
+    max: 20
+    trace:
+      stored_traces: 10
+    sequence:
+      - delay:
+          seconds: "{{ wait_seconds | float(0) }}"
+      # Only clear lights that are still on and still at the adaptive
+      # brightness and color-temperature targets: a light the user turned
+      # off, re-dimmed, or re-colored during the ramp keeps its
+      # manual-control mark so the override survives (Adaptive Lighting
+      # drops the mark itself on the next off). The color comparison clamps
+      # the adaptive target to each bulb's supported range, so sleep-mode
+      # targets below a bulb's minimum still match; a CT-capable light sitting
+      # in an hs/rgb color mode reports no color_temp_kelvin and is treated as
+      # overridden. The force-adapt that clearing triggers is a visual no-op
+      # for lights that pass this guard because they already sit at the target.
+      - variables:
+          lights_to_clear: >-
+            {% set target_brightness = (state_attr(adaptive_switch, 'brightness_pct') | float(-1)) * 2.55 %}
+            {% set target_kelvin = state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) %}
+            {% set ns = namespace(items=[]) %}
+            {% for light_id in clear_lights %}
+              {% if is_state(light_id, 'on') %}
+                {% set brightness = state_attr(light_id, 'brightness') %}
+                {% set brightness_ok = brightness is none or target_brightness < 0
+                      or (brightness | float - target_brightness) | abs <= 26 %}
+                {% set modes = state_attr(light_id, 'supported_color_modes') or [] %}
+                {% if 'color_temp' not in modes or target_kelvin <= 0 %}
+                  {% set color_ok = true %}
+                {% else %}
+                  {% set light_kelvin = state_attr(light_id, 'color_temp_kelvin') %}
+                  {% set min_kelvin = state_attr(light_id, 'min_color_temp_kelvin') | int(0) %}
+                  {% set max_kelvin = state_attr(light_id, 'max_color_temp_kelvin') | int(0) %}
+                  {% set floored = [target_kelvin, min_kelvin] | max %}
+                  {% set expected_kelvin = [floored, max_kelvin] | min if max_kelvin > 0 else floored %}
+                  {% set color_ok = light_kelvin is not none
+                        and (light_kelvin | int - expected_kelvin) | abs <= 150 %}
+                {% endif %}
+                {% if brightness_ok and color_ok %}
+                  {% set ns.items = ns.items + [light_id] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.items }}
+      - if:
+          - condition: template
+            value_template: "{{ lights_to_clear | count > 0 }}"
+        then:
+          - action: adaptive_lighting.set_manual_control
+            data:
+              entity_id: "{{ adaptive_switch }}"
+              lights: "{{ lights_to_clear }}"
+              manual_control: false
 
 switch:
   - platform: group

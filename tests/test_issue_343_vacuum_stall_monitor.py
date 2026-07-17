@@ -12,8 +12,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.py"
 APP_CONFIG_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.yaml"
+CONFIGURATION_PATH = ROOT / "configuration.yaml"
 DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
 GITIGNORE_PATH = ROOT / ".gitignore"
+MEDIA_STALL_KEEP_PATH = ROOT / "media" / "vacuum_stalls" / ".gitkeep"
 
 
 def _load_module():
@@ -111,6 +113,18 @@ def test_slug_from_vacuum_entity_drops_duplicate_valetudo_prefix() -> None:
     assert module.slug_from_vacuum_entity("vacuum.valetudo_mainlevel") == "mainlevel"
     assert module.slug_from_vacuum_entity("vacuum.valetudo_den") == "den"
     assert module.slug_from_vacuum_entity("vacuum.valetudo_upstairs_vacuum") == "upstairs_vacuum"
+
+
+def test_snapshot_service_path_uses_home_assistant_allowlisted_config_media_path() -> None:
+    module = _load_module()
+
+    local_path = Path("/homeassistant/media/vacuum_stalls/mainlevel/latest.png")
+
+    assert module.DEFAULT_STORAGE_ROOT == Path("/homeassistant/media/vacuum_stalls")
+    assert module.home_assistant_snapshot_path_for(local_path) == "/config/media/vacuum_stalls/mainlevel/latest.png"
+    assert module.media_url_for(local_path) == (
+        "/media/local/vacuum_stalls/mainlevel/latest.png"
+    )
 
 
 def test_extract_valetudo_map_and_render_png(tmp_path: Path) -> None:
@@ -222,3 +236,13 @@ def test_config_and_dashboard_wire_all_vacuums() -> None:
     assert "Upstairs Stall Evidence" in dashboard_text
     assert "!appdaemon/apps/vacuum_stall_monitor.py" in gitignore_text
     assert "!appdaemon/apps/vacuum_stall_monitor.yaml" in gitignore_text
+
+
+def test_home_assistant_allows_vacuum_stall_snapshot_directory() -> None:
+    config_text = CONFIGURATION_PATH.read_text(encoding="utf-8")
+    gitignore_text = GITIGNORE_PATH.read_text(encoding="utf-8")
+
+    assert "allowlist_external_dirs:" in config_text
+    assert "- /config/media/vacuum_stalls" in config_text
+    assert MEDIA_STALL_KEEP_PATH.exists()
+    assert "!media/vacuum_stalls/.gitkeep" in gitignore_text

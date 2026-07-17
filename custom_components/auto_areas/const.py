@@ -36,6 +36,9 @@ SLEEP_MODE_SWITCH_ENTITY_PREFIX = "switch.area_sleep_mode_"
 PRESENCE_BINARY_SENSOR_PREFIX = "Area Presence "
 PRESENCE_BINARY_SENSOR_ENTITY_PREFIX = "binary_sensor.area_presence_"
 
+SAFETY_BINARY_SENSOR_PREFIX = "Area Safety "
+SAFETY_BINARY_SENSOR_ENTITY_PREFIX = "binary_sensor.area_safety_"
+
 ILLUMINANCE_SENSOR_PREFIX = "Area Illuminance "
 ILLUMINANCE_SENSOR_ENTITY_PREFIX = "sensor.area_illuminance_"
 
@@ -56,6 +59,7 @@ LIGHT_GROUP_ENTITY_PREFIX = "light.area_lights_"
 CONFIG_AREA = "area"
 CONFIG_IS_SLEEPING_AREA = "is_sleeping_area"
 CONFIG_EXCLUDED_LIGHT_ENTITIES = "excluded_light_entities"
+CONFIG_PRESENCE_TIMEOUT = "presence_timeout"
 CONFIG_AUTO_LIGHTS_MAX_ILLUMINANCE = "auto_lights_illuminance_threshold"
 CONFIG_HUMIDITY_CALCULATION = "humidity_calculation"
 CONFIG_TEMPERATURE_CALCULATION = "temperature_calculation"
@@ -89,3 +93,36 @@ PRESENCE_ON_STATES = [
     STATE_HOME,
     STATE_PLAYING,
 ]
+
+# Safety entities
+SAFETY_BINARY_SENSOR_DEVICE_CLASSES = (
+    BinarySensorDeviceClass.SMOKE,
+    BinarySensorDeviceClass.CO,
+    BinarySensorDeviceClass.GAS,
+    BinarySensorDeviceClass.MOISTURE,
+    BinarySensorDeviceClass.HEAT,
+    BinarySensorDeviceClass.SAFETY,
+)
+
+# Open/closed entities
+OPEN_BINARY_SENSOR_PREFIX = "Area Open "
+OPEN_BINARY_SENSOR_ENTITY_PREFIX = "binary_sensor.area_open_"
+OPEN_BINARY_SENSOR_DEVICE_CLASSES = (
+    BinarySensorDeviceClass.DOOR,
+    BinarySensorDeviceClass.WINDOW,
+    BinarySensorDeviceClass.OPENING,
+    BinarySensorDeviceClass.GARAGE_DOOR,
+    BinarySensorDeviceClass.LOCK,
+)
+
+# Safety entities
+SAFETY_BINARY_SENSOR_PREFIX = "Area Safety "
+SAFETY_BINARY_SENSOR_ENTITY_PREFIX = "binary_sensor.area_safety_"
+SAFETY_BINARY_SENSOR_DEVICE_CLASSES = (
+    BinarySensorDeviceClass.SMOKE,
+    BinarySensorDeviceClass.CO,
+    BinarySensorDeviceClass.GAS,
+    BinarySensorDeviceClass.MOISTURE,
+    BinarySensorDeviceClass.HEAT,
+    BinarySensorDeviceClass.SAFETY,
+)

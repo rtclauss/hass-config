@@ -169,6 +169,55 @@ def test_footer_uses_larger_distance_legible_text_band() -> None:
     assert renderer.FOOTER_TEXT_SCALE == 2
 
 
+def test_renderer_bounds_row_and_footer_text_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+    original_text = renderer.Canvas.text
+
+    def spy_text(self, left, top, text, scale, color, max_width=None):
+        calls.append({"left": left, "text": text, "max_width": max_width})
+        return original_text(self, left, top, text, scale, color, max_width=max_width)
+
+    monkeypatch.setattr(renderer.Canvas, "text", spy_text)
+
+    data = _sample("owner_suite_night_preview.json")
+    data["footer"] = "Updated after a deliberately verbose diagnostic publish at 23:59"
+    data["sections"][0]["rows"][0]["label"] = "Weather Forecast Details"
+    data["sections"][0]["rows"][0]["value"] = "Thunderstorms likely with a long advisory headline"
+
+    rendered = render_payload(validate_payload(data))
+
+    assert _png_size(rendered) == (WIDTH, HEIGHT)
+    assert {
+        "left": renderer.ROW_LABEL_LEFT,
+        "text": "Weather Forecas...",
+        "max_width": renderer.ROW_LABEL_WIDTH,
+    } in calls
+    assert {
+        "left": renderer.ROW_VALUE_LEFT,
+        "text": "Thunderstorms likely with...",
+        "max_width": renderer.ROW_VALUE_WIDTH,
+    } in calls
+    assert {
+        "left": renderer.FOOTER_TEXT_LEFT,
+        "text": "Updated after a deliberately verbose diagnost...",
+        "max_width": renderer.FOOTER_TEXT_WIDTH,
+    } in calls
+
+
+def test_renderer_tolerates_extreme_text_without_changing_canvas_size() -> None:
+    data = _sample("owner_suite_morning.json")
+    data["title"] = "A very long owner suite title that should not spill off the e-ink panel"
+    data["subtitle"] = "A long subtitle still belongs inside the fixed 400 by 300 canvas"
+    data["footer"] = "Updated after a very long payload-rendering diagnostic check"
+    for row in data["sections"][0]["rows"]:
+        row["value"] = "Supercalifragilisticexpialidocious weather advisory phrase"
+
+    rendered = render_payload(validate_payload(data))
+
+    assert _png_size(rendered) == (WIDTH, HEIGHT)
+    assert len(rendered) > 1000
+
+
 def test_renderer_prefers_trebuchet_then_verdana_font_stack() -> None:
     bold_stack = "\n".join(renderer.BOLD_FONT_CANDIDATES)
 
