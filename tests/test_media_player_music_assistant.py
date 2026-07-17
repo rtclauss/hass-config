@@ -474,13 +474,15 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
 
 
 def test_active_music_assistant_playlist_pools_exclude_personalized_spotify_ids() -> None:
+    # bedroom_playlist_0 and _5 are delegating aliases (0 -> this LoFi helper,
+    # 5 -> 0), so the pool they share is guarded once at its real home here
+    # rather than inline in either script.
     for script_id in (
-        "bedroom_playlist_0",
+        "music_assistant_play_random_lofi_playlist",
         "bedroom_playlist_1",
         "bedroom_playlist_2",
         "bedroom_playlist_3",
         "bedroom_playlist_4",
-        "bedroom_playlist_5",
         "spotify_arrival",
         "spotify_bedtime",
         "spotify_wake_up",
