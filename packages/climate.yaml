@@ -766,12 +766,21 @@ input_boolean:
   thermal_preemptor_enabled:
     name: Thermal Preemptor Enabled
     icon: mdi:thermometer-auto
-    initial: on
+    # No initial: — an input_boolean only restores its prior state on restart
+    # when initial is unset. With initial: on, every HA restart silently
+    # re-enabled the preemptor even if it was deliberately turned off.
 
   prediction_scorer_nudge_enabled:
     name: Room Temp Retrain Nudge Enabled
     icon: mdi:bell-alert
-    initial: on
+    # No initial: — see thermal_preemptor_enabled; restore the prior state.
+
+  thermal_preemptor_hold_active:
+    name: Thermal Preemptor Hold Active
+    icon: mdi:thermometer-alert
+    # No initial: — the in-flight hold must survive an AppDaemon or HA restart
+    # so the app can re-arm or clear the setpoint override instead of orphaning
+    # it on the thermostat. Owned by ThermalPreemptor, not the user.
 
   window_climate_paused_by_windows:
     name: Climate paused by windows
@@ -789,6 +798,18 @@ input_boolean:
     initial: on
 
 ########################
+# Input Datetimes
+########################
+input_datetime:
+  thermal_preemptor_revert_at:
+    name: Thermal Preemptor Revert Deadline
+    icon: mdi:timer-sand
+    has_date: true
+    has_time: true
+    # No initial: — restored on restart so the app can compute the remaining
+    # hold time and re-arm (or, if already past, resume the schedule at once).
+
+########################
 # Input Text
 ########################
 input_text:
@@ -799,8 +820,13 @@ input_text:
     max: 255
     initial: binary_sensor.mailbox_contact
 
+  thermal_preemptor_hold_reason:
+    name: Thermal Preemptor Hold Reason
+    icon: mdi:information-outline
+    max: 120
+
 ########################
-# Input Numbers
+# Input Buttons
 ########################
 input_button:
   retrain_room_temp_models:
@@ -817,7 +843,7 @@ input_number:
     min: 0.25
     max: 3.0
     step: 0.25
-    initial: 0.5
+    # No initial: — preserve the value the user tuned across restarts.
     mode: box
 
   prediction_retrain_rmse_ratio:
@@ -827,7 +853,7 @@ input_number:
     min: 1.0
     max: 5.0
     step: 0.25
-    initial: 2.0
+    # No initial: — preserve the value the user tuned across restarts.
     mode: box
 
   air_filters_at_home:
@@ -1049,7 +1075,10 @@ template:
 
       - name: room_temp_model_trained_at
         unique_id: room_temp_model_trained_at
-        state: "{{ state_attr('sensor.room_temp_prediction_owner_suite', 'trained_at') | default('never') }}"
+        # state_attr returns None (defined, not Undefined) before the first
+        # train, and default() only substitutes for Undefined unless boolean
+        # mode is on — without `true` this rendered the literal "None".
+        state: "{{ state_attr('sensor.room_temp_prediction_owner_suite', 'trained_at') | default('never', true) }}"
 
       - name: bathroom_humidity_delta
         unique_id: bathroom_humidity_delta

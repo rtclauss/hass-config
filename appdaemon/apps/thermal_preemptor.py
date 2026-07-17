@@ -54,6 +54,21 @@ class ThermalPreemptor(hass.Hass):
         self.min_heat_cool_delta = float(
             self.args.get("min_heat_cool_delta", MIN_HEAT_COOL_DELTA_F)
         )
+        # Persisted hold state — survives an AppDaemon/HA restart so an in-flight
+        # setpoint override is re-armed or resumed rather than orphaned.
+        self.hold_active_switch = self.args.get(
+            "hold_active_switch", "input_boolean.thermal_preemptor_hold_active"
+        )
+        self.hold_deadline_datetime = self.args.get(
+            "hold_deadline_datetime", "input_datetime.thermal_preemptor_revert_at"
+        )
+        self.hold_reason_text = self.args.get(
+            "hold_reason_text", "input_text.thermal_preemptor_hold_reason"
+        )
+
+        # Reconcile any hold left in the helpers before the loop can run, so the
+        # re-entry guard sees it and cannot compound the override.
+        self._reconcile_hold_on_start()
 
         start = datetime.now(timezone.utc) + timedelta(seconds=60)
         self.run_every(self._control_loop, start, 300)
@@ -194,10 +209,12 @@ class ThermalPreemptor(hass.Hass):
 
         self.call_service("climate/set_temperature", **data)
 
+        revert_at = datetime.now(timezone.utc) + timedelta(minutes=lead_min)
         handle = self.run_in(self._revert, lead_min * 60, room=room)
         self.active_hold = {
             "revert_handle": handle,
             "started": datetime.now(timezone.utc).isoformat(),
+            "revert_at": revert_at.isoformat(),
             "reason": room,
             "mode": mode,
             "direction": "cool" if cooling else "heat",
@@ -205,6 +222,7 @@ class ThermalPreemptor(hass.Hass):
             "lead_min": lead_min,
             "new_setpoint": new_setpoint,
         }
+        self._persist_hold(revert_at, room)
         self.log(
             f"Preempting {'cool' if cooling else 'heat'} for {room} ({mode}): "
             f"predicted {gap:.1f}°F breach; set {temp_field}={new_setpoint}°F, "
@@ -223,4 +241,73 @@ class ThermalPreemptor(hass.Hass):
             resume_all=True,
         )
         self.active_hold = None
+        self._clear_persisted_hold()
         self.log(f"Reverted preempt hold to comfort schedule (was driven by {room})")
+
+    # ------------------------------------------------------------------
+    # Persistence — the hold outlives an AppDaemon/HA restart
+    # ------------------------------------------------------------------
+
+    def _persist_hold(self, revert_at, reason):
+        """Mirror the active hold into helpers so a restart can recover it."""
+        self.call_service(
+            "input_datetime/set_datetime",
+            entity_id=self.hold_deadline_datetime,
+            timestamp=revert_at.timestamp(),
+        )
+        self.call_service(
+            "input_text/set_value",
+            entity_id=self.hold_reason_text,
+            value=str(reason)[:120],
+        )
+        # Set the active flag last: a reader that sees it on can trust that the
+        # deadline and reason are already written.
+        self.call_service("input_boolean/turn_on", entity_id=self.hold_active_switch)
+
+    def _clear_persisted_hold(self):
+        self.call_service("input_boolean/turn_off", entity_id=self.hold_active_switch)
+
+    def _reconcile_hold_on_start(self):
+        """Recover a hold the helpers say was active when the app last stopped.
+
+        Without this, a reload drops self.active_hold and the revert timer while
+        the thermostat keeps the shifted setpoint — and the now-clear re-entry
+        guard lets the next loop shift again from the already-shifted value.
+        """
+        if self.get_state(self.hold_active_switch) != "on":
+            return
+
+        deadline_ts = self._safe_attr_float(
+            self.get_state(self.hold_deadline_datetime, attribute="timestamp")
+        )
+        reason = self.get_state(self.hold_reason_text) or "unknown"
+        now_ts = datetime.now(timezone.utc).timestamp()
+
+        if deadline_ts is None or deadline_ts <= now_ts:
+            # Deadline already passed (or unreadable) while the daemon was down —
+            # resume the schedule now rather than leave the override in place.
+            self.call_service(
+                "ecobee/resume_program",
+                entity_id=self.climate_entity,
+                resume_all=True,
+            )
+            self._clear_persisted_hold()
+            self.log(
+                f"Resumed comfort schedule on start: hold for {reason} had "
+                "already expired while the app was stopped."
+            )
+            return
+
+        remaining = int(deadline_ts - now_ts)
+        handle = self.run_in(self._revert, remaining, room=reason)
+        self.active_hold = {
+            "revert_handle": handle,
+            "started": None,
+            "revert_at": datetime.fromtimestamp(deadline_ts, timezone.utc).isoformat(),
+            "reason": reason,
+            "recovered": True,
+        }
+        self.log(
+            f"Recovered in-flight preempt hold for {reason}; reverting in "
+            f"{remaining // 60}min."
+        )
