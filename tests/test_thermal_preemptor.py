@@ -43,6 +43,9 @@ def _app(mode, attrs, predictions, margin=0.5):
     app.rate_sensor = "sensor.ecobee_modeled_rate_deg_per_min"
     app.outside_temp_sensor = "sensor.canonical_outside_temperature"
     app.min_heat_cool_delta = module.MIN_HEAT_COOL_DELTA_F
+    app.hold_active_switch = "input_boolean.thermal_preemptor_hold_active"
+    app.hold_deadline_datetime = "input_datetime.thermal_preemptor_revert_at"
+    app.hold_reason_text = "input_text.thermal_preemptor_hold_reason"
     app.active_hold = None
     app.call_service = Mock()
     app.run_in = Mock(return_value="handle")
@@ -64,16 +67,67 @@ def _app(mode, attrs, predictions, margin=0.5):
         if entity_id.startswith("sensor.room_temp_prediction_"):
             room = entity_id.rsplit("room_temp_prediction_", 1)[1]
             return predictions.get(room)
+        # No persisted hold by default.
+        if entity_id == app.hold_active_switch:
+            return "off"
         return None
 
     app.get_state = Mock(side_effect=get_state)
     return app
 
 
+def _reconcile_app(active, deadline_ts, reason="owner_suite"):
+    """A bare app wired only for _reconcile_hold_on_start.
+
+    _reconcile_hold_on_start reads the current time itself, so tests pass a
+    deadline relative to real now (well outside any scheduling jitter).
+    """
+    app = module.ThermalPreemptor.__new__(module.ThermalPreemptor)
+    app.climate_entity = "climate.my_ecobee"
+    app.hold_active_switch = "input_boolean.thermal_preemptor_hold_active"
+    app.hold_deadline_datetime = "input_datetime.thermal_preemptor_revert_at"
+    app.hold_reason_text = "input_text.thermal_preemptor_hold_reason"
+    app.active_hold = None
+    app.call_service = Mock()
+    app.run_in = Mock(return_value="handle")
+    app.log = Mock()
+
+    def get_state(entity_id, attribute=None):
+        if entity_id == app.hold_active_switch:
+            return "on" if active else "off"
+        if entity_id == app.hold_deadline_datetime and attribute == "timestamp":
+            return deadline_ts
+        if entity_id == app.hold_reason_text:
+            return reason
+        return None
+
+    app.get_state = Mock(side_effect=get_state)
+    return app
+
+
+def _now_ts() -> float:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).timestamp()
+
+
+def _service_calls(app):
+    return [call.args[0] for call in app.call_service.call_args_list]
+
+
+def _set_temperature_call(app):
+    # Persisting the hold adds later call_service calls, so find the
+    # climate/set_temperature one explicitly rather than reading the last call.
+    for call in app.call_service.call_args_list:
+        if call.args and call.args[0] == "climate/set_temperature":
+            return call
+    return None
+
+
 def _sent_range(app):
-    assert app.call_service.called, "expected a set_temperature call"
-    kwargs = app.call_service.call_args.kwargs
-    return kwargs["target_temp_low"], kwargs["target_temp_high"]
+    call = _set_temperature_call(app)
+    assert call is not None, "expected a set_temperature call"
+    return call.kwargs["target_temp_low"], call.kwargs["target_temp_high"]
 
 
 def test_heat_cool_precool_never_inverts_the_range() -> None:
@@ -139,5 +193,94 @@ def test_single_setpoint_cool_mode_is_unaffected_by_the_range_clamp() -> None:
     app = _app("cool", {"temperature": 72.0}, {"owner_suite": 75.0})
     app._control_loop(None)
 
-    assert app.call_service.called
-    assert app.call_service.call_args.kwargs["temperature"] == 69.0
+    call = _set_temperature_call(app)
+    assert call is not None
+    assert call.kwargs["temperature"] == 69.0
+
+
+# --------------------------------------------------------------------------
+# Hold persistence and restart reconciliation (orphaned-override / ratchet bug)
+# --------------------------------------------------------------------------
+
+
+def test_applying_a_hold_persists_it_to_helpers() -> None:
+    # A restart mid-hold must be recoverable, so the setpoint override is
+    # mirrored into helpers whenever it is armed.
+    app = _app("cool", {"temperature": 72.0}, {"owner_suite": 75.0})
+    app._control_loop(None)
+
+    calls = _service_calls(app)
+    assert "input_datetime/set_datetime" in calls
+    assert "input_text/set_value" in calls
+    assert "input_boolean/turn_on" in calls
+    # Active flag set last, after the deadline is written.
+    assert calls.index("input_boolean/turn_on") > calls.index("input_datetime/set_datetime")
+    assert app.active_hold is not None
+
+
+def test_revert_clears_the_persisted_hold() -> None:
+    app = _app("cool", {"temperature": 72.0}, {"owner_suite": 75.0})
+    app._revert({"room": "owner_suite"})
+
+    calls = _service_calls(app)
+    assert "ecobee/resume_program" in calls
+    assert "input_boolean/turn_off" in calls
+    assert app.active_hold is None
+
+
+def test_reconcile_rearms_an_in_flight_hold_after_reload() -> None:
+    # Deadline still in the future: re-arm the revert timer and restore the
+    # in-memory hold so the re-entry guard blocks a second shift.
+    app = _reconcile_app(active=True, deadline_ts=_now_ts() + 600)
+    app._reconcile_hold_on_start()
+
+    assert app.run_in.called
+    delay = app.run_in.call_args.args[1]
+    assert 0 < delay <= 600
+    assert app.active_hold is not None
+    assert app.active_hold["recovered"] is True
+    # It must NOT resume immediately — the hold is still valid.
+    assert "ecobee/resume_program" not in _service_calls(app)
+
+
+def test_reconcile_resumes_immediately_when_the_deadline_already_passed() -> None:
+    # The daemon was down past the revert deadline: resume the schedule now and
+    # clear the flag rather than leave the override on the thermostat.
+    app = _reconcile_app(active=True, deadline_ts=_now_ts() - 60)
+    app._reconcile_hold_on_start()
+
+    calls = _service_calls(app)
+    assert "ecobee/resume_program" in calls
+    assert "input_boolean/turn_off" in calls
+    assert not app.run_in.called
+    assert app.active_hold is None
+
+
+def test_reconcile_resumes_when_the_deadline_is_unreadable() -> None:
+    # Active flag set but no usable deadline — fail safe by resuming.
+    app = _reconcile_app(active=True, deadline_ts=None)
+    app._reconcile_hold_on_start()
+
+    assert "ecobee/resume_program" in _service_calls(app)
+    assert app.active_hold is None
+
+
+def test_reconcile_is_a_noop_when_no_hold_was_persisted() -> None:
+    app = _reconcile_app(active=False, deadline_ts=None)
+    app._reconcile_hold_on_start()
+
+    assert not app.call_service.called
+    assert not app.run_in.called
+    assert app.active_hold is None
+
+
+def test_recovered_hold_blocks_the_control_loop_from_shifting_again() -> None:
+    # The whole point of persistence: after a reload the restored hold must make
+    # the control loop a no-op, so it cannot read the already-shifted setpoint
+    # and ratchet it further. Cooling breach present, but a hold is active.
+    app = _app("cool", {"temperature": 69.0}, {"owner_suite": 75.0})
+    app.active_hold = {"reason": "owner_suite", "recovered": True}
+
+    app._control_loop(None)
+
+    assert _set_temperature_call(app) is None, "shifted the setpoint while a hold was active"
