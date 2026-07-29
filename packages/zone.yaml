@@ -36,6 +36,14 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
+    automation.zeke_arrival_emitter:
+      <<: *customize
+      friendly_name: Zeke Arrival Event Emitter
+      icon: mdi:home-import-outline
+    automation.zeke_departure_emitter:
+      <<: *customize
+      friendly_name: Zeke Departure Event Emitter
+      icon: mdi:home-export-outline
     automation.cloudy_home_arrival:
       <<: *customize
       friendly_name: Cloudy Day Arrival
@@ -166,19 +174,76 @@ homeassistant:
 ## Automation
 ################################################
 automation:
+  - id: zeke_arrival_emitter
+    alias: zeke_arrival_emitter
+    description: >-
+      Own the canonical Zeke arrival triggers and emit a shared event so each
+      downstream reaction can keep its own mode, trace history, and conditions.
+      Additional people should add their own emitter with the same event
+      contract and a distinct person value.
+    mode: parallel
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        id: tracker_entered_home
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: enter
+      - trigger: state
+        id: bayesian_presence_on
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
+        to: "on"
+    action:
+      - event: zeke_arrival
+        event_data:
+          person: zeke
+          reason: zeke_arrival
+          source_trigger: "{{ trigger.id }}"
+          tracker_entity_id: device_tracker.bayesian_zeke_home
+          presence_entity_id: binary_sensor.bayesian_zeke_home
+
+  - id: zeke_departure_emitter
+    alias: zeke_departure_emitter
+    description: >-
+      Own the canonical Zeke departure triggers and emit a shared event so each
+      downstream reaction can keep its own mode, trace history, and conditions.
+      Additional people should add their own emitter with the same event
+      contract and a distinct person value.
+    mode: parallel
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: zone
+        id: tracker_left_home
+        entity_id: device_tracker.bayesian_zeke_home
+        zone: zone.home
+        event: leave
+      - trigger: state
+        id: bayesian_presence_off
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "on"
+        to: "off"
+    action:
+      - event: zeke_departure
+        event_data:
+          person: zeke
+          reason: zeke_departure
+          source_trigger: "{{ trigger.id }}"
+          tracker_entity_id: device_tracker.bayesian_zeke_home
+          presence_entity_id: binary_sensor.bayesian_zeke_home
+
   - id: cloudy_home_arrival
     alias: cloudy_home_arrival
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: cloudy_home_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       condition: and
       conditions:
@@ -204,14 +269,11 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: default_arrive_home_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       and:
         - condition: state
@@ -238,14 +300,11 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: leave
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: doors_open_departure_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     variables:
       open_egress_points: >-
         {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
@@ -264,14 +323,11 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: leave
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: garage_door_departure_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     condition:
       - condition: state
         entity_id: cover.garage_door
@@ -302,13 +358,17 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      # from: "on" guards against unknown/unavailable -> off on HA restart,
-      # which would otherwise overwrite a restored multi-day absence start
-      # with the restart time and misclassify the next arrival as quick/half-day.
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: empty_house_tracker_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
+    condition:
+      # Only the emitter's from:on -> off Bayesian source updates the empty-house
+      # timestamp; the GPS zone leave source can fire before the house is empty.
+      - alias: "Only update empty-house timestamp from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
     action:
       - action: input_boolean.turn_off
         target:
@@ -324,16 +384,14 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: arrival_music_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
-      - condition: state
+      - alias: "Arrival music allowed when guest mode is off"
+        condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
       - condition: state
@@ -360,14 +418,11 @@ automation:
     trace:
       stored_traces: 50
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: night_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       condition: and
       conditions:
@@ -401,14 +456,11 @@ automation:
     trace:
       stored_traces: 50
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: bedroom_prep_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     condition:
       condition: and
       conditions:
@@ -508,16 +560,14 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: leave
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: departure_house_transition_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     condition:
-      - condition: state
+      - alias: "Departure transition allowed when guest mode is off"
+        condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
       - alias: "Primary tracker confirms departure"
@@ -625,14 +675,11 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.home
-        event: enter
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "off"
-        to: "on"
+      - trigger: event
+        id: vacuum_return_arrival_signal
+        event_type: zeke_arrival
+        event_data:
+          person: zeke
     action:
       - action: vacuum.return_to_base
         target:
@@ -656,12 +703,17 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        from: "on"
-        to: "off"
+      - trigger: event
+        id: vacuum_departure_signal
+        event_type: zeke_departure
+        event_data:
+          person: zeke
     condition:
-      - condition: state
+      - alias: "Only start departure vacuum from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
+      - alias: "Departure vacuum allowed when guest mode is off"
+        condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
     action:
