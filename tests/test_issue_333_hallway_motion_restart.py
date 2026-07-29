@@ -63,3 +63,13 @@ def test_hallway_motion_turn_on_paths_require_bed_to_be_unoccupied() -> None:
             branch = block.split(f"id: {trigger_id}", 2)[2].split("sequence:", 1)[0]
             assert "entity_id: binary_sensor.bayesian_bed_occupancy" in branch
             assert 'state: "off"' in branch
+
+
+def test_hallway_vacancy_triggers_ignore_sensor_recovery_to_off() -> None:
+    for automation_name in ("toggle_hallway_day", "hallway_light_toggle_at_night"):
+        block = _automation_block(LIGHT_PATH, automation_name)
+
+        for trigger_id in ("main-motion-not-detected", "upstairs-motion-not-detected"):
+            trigger = block.split(f"id: {trigger_id}", 1)[0].rsplit("      - trigger: state", 1)[1]
+            assert 'from: "on"' in trigger
+            assert 'to: "off"' in trigger
