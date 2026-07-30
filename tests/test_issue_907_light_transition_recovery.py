@@ -115,3 +115,13 @@ def test_camera_inactive_automation_requires_a_sustained_off_state() -> None:
     assert re.search(r"^\s+for:\n\s+seconds: 15$", trigger, re.MULTILINE), trigger
     for state in RECOVERY_STATES:
         assert state not in trigger, (state, trigger)
+
+    assert re.search(
+        r"^\s+condition:\n"
+        r"\s+- alias: Preserve office guest privacy\n"
+        r"\s+condition: state\n"
+        r"\s+entity_id: input_boolean\.guest_mode\n"
+        r'\s+state: "off"$',
+        block,
+        re.MULTILINE,
+    ), block
