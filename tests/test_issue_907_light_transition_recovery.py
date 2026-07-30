@@ -18,7 +18,7 @@ SCOPED_AUTOMATIONS = {
     },
     "packages/workday.yaml": {
         "turn_off_office_lamp_when_work_tp_camera_active": 2,
-        "turn_on_office_lamp_when_work_tp_camera_inactive": 2,
+        "turn_on_office_lamp_when_work_tp_camera_inactive": 1,
     },
     "packages/zigbee_zwave.yaml": {
         "side_of_bed_toggles": 8,
@@ -102,14 +102,16 @@ def test_recovery_sensitive_automations_still_act_on_entity_recovery() -> None:
             assert f'- "{state}"' in trigger, (state, trigger)
 
 
-def test_camera_inactive_automation_keeps_the_strict_edge() -> None:
+def test_camera_inactive_automation_requires_a_sustained_off_state() -> None:
     # The counterpart turns the ceiling back ON, so a recovery into `off` must
-    # not trigger it — that would light the room unbidden after a restart.
+    # not trigger it — that would light the room unbidden after a restart. A
+    # sustained-off guard also filters the camera's sub-second off/on flaps.
     block = _automation_block(ROOT / "packages/workday.yaml", "turn_on_office_lamp_when_work_tp_camera_inactive")
     triggers = _binary_state_triggers(block)
 
-    assert triggers
-    for trigger in triggers:
-        assert 'from: "on"' in trigger, trigger
-        for state in RECOVERY_STATES:
-            assert state not in trigger, (state, trigger)
+    assert len(triggers) == 1
+    trigger = triggers[0]
+    assert 'from: "on"' in trigger
+    assert re.search(r"^\s+for:\n\s+seconds: 15$", trigger, re.MULTILINE), trigger
+    for state in RECOVERY_STATES:
+        assert state not in trigger, (state, trigger)
