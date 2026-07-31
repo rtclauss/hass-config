@@ -78,6 +78,28 @@ def test_garage_entry_path_uses_contact_mmwave_and_auto_on_guard() -> None:
     assert "brightness_pct: 75" in block
 
 
+def test_garage_entry_path_preserves_adaptive_sleep_mode_after_6am() -> None:
+    block = _automation_block("garage_entry_door_light_auto_toggle")
+
+    sleep_branch = block.index("entity_id: switch.sleep_mode")
+    overnight_fallback = block.index('after: "23:00:00"')
+    daytime_default = block.index("brightness_pct: 75")
+
+    assert sleep_branch < overnight_fallback < daytime_default
+    assert "entity_id: switch.adaptive_lighting_hallway" in block
+    assert "action: script.adaptive_light_turn_on" in block
+    assert "adaptive_switch: switch.adaptive_lighting_hallway" in block
+    assert "brightness_pct: 1" in block
+
+
+def test_garage_entry_path_keeps_house_sleep_modes_in_dim_fallback() -> None:
+    block = _automation_block("garage_entry_door_light_auto_toggle")
+
+    assert "entity_id: input_select.house_mode" in block
+    for mode in ("night", "in_bed", "asleep"):
+        assert f"- {mode}" in block
+
+
 def test_garage_entry_path_targets_garage_side_lights_only() -> None:
     block = _automation_block("garage_entry_door_light_auto_toggle")
 
