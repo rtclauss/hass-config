@@ -354,6 +354,29 @@ def test_arrival_adaptive_lighting_scopes_occupied_arrivals_to_non_manual_lights
         assert token in occupied_house_branch
 
 
+def test_hallway_sleep_profile_is_cleared_when_house_sleep_ends_or_ha_restarts() -> None:
+    block = _automation_block(
+        "clear_hallway_adaptive_sleep_mode_when_house_sleep_ends"
+    )
+
+    for token in (
+        "id: house-sleep-ended",
+        "entity_id: switch.sleep_mode",
+        'from: "on"',
+        'to: "off"',
+        "id: ha-start",
+        "trigger: homeassistant",
+        'delay: "00:00:30"',
+        'state: "off"',
+        "entity_id: switch.adaptive_lighting_sleep_mode_hallway",
+        'state: "on"',
+        "action: switch.turn_off",
+    ):
+        assert token in block
+
+    assert block.count("entity_id: switch.adaptive_lighting_sleep_mode_hallway") == 2
+
+
 def test_arrival_lighting_spec_documents_empty_house_and_manual_control_gates() -> None:
     text = ARRIVAL_LIGHTING_SPEC_PATH.read_text(encoding="utf-8")
 

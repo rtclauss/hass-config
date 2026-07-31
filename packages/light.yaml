@@ -735,6 +735,9 @@ automation:
 
   - id: garage_entry_door_light_auto_toggle
     alias: garage_entry_light_auto_toggle
+    description: >
+      Light the garage entry path while preserving Adaptive Lighting sleep
+      mode and the house's overnight state after the fixed 6 AM boundary.
     mode: restart
     trace:
       stored_traces: 10
@@ -769,6 +772,46 @@ automation:
             sequence:
               - choose:
                   - conditions:
+                      - condition: state
+                        entity_id: switch.sleep_mode
+                        state: "on"
+                    sequence:
+                      - alias: "Ensure the hallway controller is using its sleep profile"
+                        continue_on_error: true
+                        action: switch.turn_on
+                        target:
+                          entity_id: switch.adaptive_lighting_sleep_mode_hallway
+                      - if:
+                          - condition: state
+                            entity_id: switch.adaptive_lighting_hallway
+                            state: "on"
+                          - condition: state
+                            entity_id: switch.adaptive_lighting_sleep_mode_hallway
+                            state: "on"
+                        then:
+                          - action: script.adaptive_light_turn_on
+                            data:
+                              adaptive_switch: switch.adaptive_lighting_hallway
+                              lights:
+                                - light.hall_transition_switch
+                                - light.hall_garage_laundry_switch
+                              transition: 1
+                        else:
+                          - action: light.turn_on
+                            target:
+                              entity_id:
+                                - light.hall_transition_switch
+                                - light.hall_garage_laundry_switch
+                            data:
+                              brightness_pct: 1
+                              transition: 1
+                      - action: light.turn_on
+                        target:
+                          entity_id: light.garage_overhead_switch
+                        data:
+                          brightness_pct: 15
+                          transition: 2
+                  - conditions:
                       - or:
                           - condition: time
                             after: "23:00:00"
@@ -776,6 +819,12 @@ automation:
                           - condition: state
                             entity_id: binary_sensor.bayesian_bed_occupancy
                             state: "on"
+                          - condition: state
+                            entity_id: input_select.house_mode
+                            state:
+                              - night
+                              - in_bed
+                              - asleep
                     sequence:
                       - action: light.turn_on
                         target:

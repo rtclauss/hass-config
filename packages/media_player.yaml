@@ -445,8 +445,7 @@ automation:
               entity_id: script.day_mode_switches_office_guest_room
       - choose:
           # Bathroom already had audible playback (alarm ramped up). Switch to Spotify and
-          # ramp all members back to 0.30 — spotify_wake_up pre-sets everything to 0.05
-          # to avoid MA proportional-scaling, so we must ramp all members back up.
+          # ramp non-office members back to the calibrated 0.25 alarm peak.
           - conditions:
               - condition: template
                 value_template: "{{ bathroom_was_playing and bathroom_volume_above_min }}"
@@ -454,7 +453,7 @@ automation:
               - action: script.spotify_wake_up
                 data:
                   playback_entity_id: media_player.ma_group_everywhere
-              - alias: "Ramp all group members back to 0.30 — spotify_wake_up left them at 0.05"
+              - alias: "Ramp non-office group members back to the 0.25 alarm peak"
                 repeat:
                   sequence:
                     - action: media_player.volume_set
@@ -462,7 +461,7 @@ automation:
                       target:
                         entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
                       data:
-                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.30] | min }}"
+                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.25] | min }}"
                     - alias: "Office capped at 10% — bedroom wake-up should not disturb work-in-progress"
                       continue_on_error: true
                       action: media_player.volume_set
@@ -472,7 +471,7 @@ automation:
                         volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.10] | min }}"
                     - delay:
                         seconds: "{{ (1/(tan((repeat.index + 5)/60))) | round(0, 'ceil', 5) }}"
-                  until: "{{ repeat.index == 25 }}"
+                  until: "{{ repeat.index == 20 }}"
         default:
           # Nothing is playing in the bathroom yet, so ease all members up gently.
           - alias: "Prime all members to safe starting volume"
@@ -485,7 +484,7 @@ automation:
           - action: script.spotify_wake_up
             data:
               playback_entity_id: media_player.ma_group_everywhere
-          - alias: "Ramp all group members to 0.30"
+          - alias: "Ramp non-office group members to the 0.25 alarm peak"
             repeat:
               sequence:
                 - alias: "Increase Volume by 0.01"
@@ -494,7 +493,7 @@ automation:
                   target:
                     entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
                   data:
-                    volume_level: "{{ 0.01 * repeat.index }}"
+                    volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"
                 - alias: "Office capped at 10% — bedroom wake-up should not disturb work-in-progress"
                   continue_on_error: true
                   action: media_player.volume_set
@@ -505,7 +504,7 @@ automation:
                 - delay:
                     # As time passes, the delay gets smaller and smaller. 60, 30s, 20s, 15s, 12s,..., 2s
                     seconds: "{{ (1/(tan(repeat.index/60))) | round(0, 'ceil', 5)}}"
-              until: "{{repeat.index == 30}}"
+              until: "{{ repeat.index == 25 }}"
 
   - id: recover_stuck_morning_audio_scripts
     alias: recover_stuck_morning_audio_scripts
@@ -1255,9 +1254,9 @@ script:
       initial_delay:
         description: "Optional delay before playback starts"
       ramp_steps:
-        description: "Number of 0.01 volume steps to ramp through (default 30 → peak 0.30)"
+        description: "Number of 0.01 volume steps to ramp through (default and hard maximum 25 → peak 0.25)"
       ramp_k_factor:
-        description: "tan-curve k factor controlling total ramp duration (default 120 ≈ 7.5 min for 30 steps)"
+        description: "tan-curve k factor controlling total ramp duration (default 120 ≈ 7 min for 25 steps)"
       playback_entity_id:
         description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
@@ -1272,7 +1271,8 @@ script:
         description: "Seconds to wait before retrying the primary source once (default: 15)"
     variables:
       playback_player: media_player.ma_bedroom
-      effective_ramp_steps: "{{ ramp_steps | default(30) | int(30) }}"
+      effective_ramp_steps: >-
+        {{ [[ramp_steps | default(25) | int(25), 1] | max, 25] | min }}
       effective_k_factor: "{{ ramp_k_factor | default(120) | int(120) }}"
       effective_fallback_uri: >-
         {{ fallback_uri | default('spotify:playlist:37i9dQZF1DX7KNKjOK0o75', true) }}
@@ -1424,7 +1424,7 @@ script:
                   target:
                     entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
                   data:
-                    volume_level: "{{ 0.01 * repeat.index }}"
+                    volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"
             - alias: "Office capped at 10% — bedroom wake-up should not disturb work-in-progress"
               continue_on_error: true
               action: media_player.volume_set
@@ -2130,21 +2130,20 @@ script:
                 - media_player.ma_bathroom
                 - media_player.ma_den
               volume_level: 0.1
+            # Keep bedroom at 10%: MA proportional scaling rounds lower
+            # bedroom levels too aggressively after the loudness change.
             - delay_minutes: 2
               entity_id:
-                - media_player.ma_bedroom
                 - media_player.ma_bathroom
                 - media_player.ma_office
               volume_level: 0.07
             - delay_minutes: 2
               entity_id:
-                - media_player.ma_bedroom
                 - media_player.ma_bathroom
                 - media_player.ma_office
               volume_level: 0.05
             - delay_minutes: 2
               entity_id:
-                - media_player.ma_bedroom
                 - media_player.ma_bathroom
                 - media_player.ma_office
               volume_level: 0.01

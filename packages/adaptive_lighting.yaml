@@ -136,6 +136,41 @@ automation:
           brightness_pct: "{{ bed_strip_automatic_max_brightness_percent }}"
           transition: 1
 
+  - id: clear_hallway_adaptive_sleep_mode_when_house_sleep_ends
+    alias: clear_hallway_adaptive_sleep_mode_when_house_sleep_ends
+    description: >
+      Explicitly release the hallway Adaptive Lighting sleep profile when the
+      house sleep group turns off. The hallway sleep switch is currently a
+      member of that UI-managed group, but this cleanup keeps the garage-entry
+      safety path correct if group membership changes and after a restart.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        id: house-sleep-ended
+        entity_id: switch.sleep_mode
+        from: "on"
+        to: "off"
+      - trigger: homeassistant
+        id: ha-start
+        event: start
+    action:
+      - if:
+          - condition: trigger
+            id: ha-start
+        then:
+          - delay: "00:00:30"
+      - condition: state
+        entity_id: switch.sleep_mode
+        state: "off"
+      - condition: state
+        entity_id: switch.adaptive_lighting_sleep_mode_hallway
+        state: "on"
+      - action: switch.turn_off
+        target:
+          entity_id: switch.adaptive_lighting_sleep_mode_hallway
+
   - id: apply_adaptive_lighting_on_arrival
     alias: apply_adaptive_lighting_on_arrival
     description: >

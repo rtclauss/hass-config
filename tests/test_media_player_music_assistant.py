@@ -316,7 +316,11 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert "media_player.ma_tiki_room" not in block
     assert block.count('target_entity: "{{ playback_player }}"') >= 1
     assert 'group_members: "{{ group_members }}"' in block
-    assert 'volume_level: "{{ 0.01 * repeat.index }}"' in block
+    assert 'volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"' in block
+    assert "default(25)" in block
+    assert "starting_volume: 0.01" in block
+    assert 'volume_level: "{{ [0.01 * repeat.index, 0.10] | min }}"' in block
+    assert "0.30" not in block
 
 
 def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
@@ -420,6 +424,10 @@ def test_bathroom_wakeup_automation_uses_policy_wake_group_members() -> None:
     assert 'regroup_after_play: true' not in block
     assert 'number.guest_room_fan_switch_ledintensitywhenoff' not in block
     assert 'media_player.media_stop' not in block
+    assert block.count("0.25] | min") == 2
+    assert 'until: "{{ repeat.index == 20 }}"' in block
+    assert 'until: "{{ repeat.index == 25 }}"' in block
+    assert "0.30" not in block
 
 
 def test_stuck_morning_audio_scripts_are_recovered() -> None:
@@ -617,6 +625,14 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     assert block.count("- delay:") == 1
     # Single data-driven volume_set that every step reuses.
     assert block.count("action: media_player.volume_set") == 1
+    initial_ten_percent_step = block.split("delay_minutes: 0", 1)[1].split(
+        "delay_minutes: 2", 1
+    )[0]
+    below_ten_percent_steps = block.split("delay_minutes: 2", 1)[1]
+    assert "media_player.ma_bedroom" in initial_ten_percent_step
+    assert "media_player.ma_bedroom" not in below_ten_percent_steps
+    assert "media_player.ma_bathroom" in below_ten_percent_steps
+    assert "media_player.ma_office" in below_ten_percent_steps
     # Graceful degradation (#839): an unavailable member must never abort the
     # rampdown, so the volume_set tolerates errors and no step opts out.
     assert "continue_on_error: true" in block
