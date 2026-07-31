@@ -71,6 +71,13 @@ def test_live_status_keeps_compact_raw_payload_for_recorder() -> None:
     assert "payload | to_json" in text
 
 
+def test_fr24_live_status_uses_stable_additional_tracked_entity_id() -> None:
+    text = _package_text()
+
+    assert "sensor.flightradar24_additional_tracked" in text
+    assert "sensor.flightradar24_additional_tracked_2" not in text
+
+
 def test_flightaware_polling_policy_avoids_unnecessary_calls() -> None:
     text = _package_text()
 
