@@ -84,8 +84,21 @@ def test_garage_entry_path_preserves_adaptive_sleep_mode_after_6am() -> None:
     sleep_branch = block.index("entity_id: switch.sleep_mode")
     overnight_fallback = block.index('after: "23:00:00"')
     daytime_default = block.index("brightness_pct: 75")
+    hallway_sleep_enable = block.index(
+        "entity_id: switch.adaptive_lighting_sleep_mode_hallway"
+    )
+    adaptive_apply = block.index("action: script.adaptive_light_turn_on")
 
     assert sleep_branch < overnight_fallback < daytime_default
+    assert sleep_branch < hallway_sleep_enable < adaptive_apply
+    assert (
+        'alias: "Ensure the hallway controller is using its sleep profile"' in block
+    )
+    assert (
+        "action: switch.turn_on"
+        in block[hallway_sleep_enable - 180 : hallway_sleep_enable]
+    )
+    assert block.count("entity_id: switch.adaptive_lighting_sleep_mode_hallway") == 2
     assert "entity_id: switch.adaptive_lighting_hallway" in block
     assert "action: script.adaptive_light_turn_on" in block
     assert "adaptive_switch: switch.adaptive_lighting_hallway" in block
