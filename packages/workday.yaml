@@ -494,7 +494,7 @@ automation:
 
   - id: turn_on_office_lamp_when_work_tp_camera_inactive
     alias: turn_on_office_lamp_when_work_tp_camera_inactive
-    description: Turn on office ceiling when work laptop camera turns off.
+    description: Turn on office ceiling after work laptop camera remains off for 15 seconds.
     trace:
       stored_traces: 50
     trigger:
@@ -502,12 +502,13 @@ automation:
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
         from: "on"
         to: "off"
-      - trigger: state
-        entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        from: "on"
-        to: "off"
         for:
           seconds: 15
+    condition:
+      - alias: Preserve office guest privacy
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
       - action: light.turn_on
         data:
