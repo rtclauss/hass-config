@@ -206,12 +206,12 @@ def test_automatic_bed_strip_brightness_is_capped_but_user_changes_are_allowed()
     block = _automation_block("cap_automatic_bed_lightstrip_brightness")
 
     for token in (
-        "automatic_max_brightness_pct: 25",
+        "bed_strip_automatic_max_brightness_percent: 25",
         "entity_id: light.bed_lightstrip",
         "attribute: brightness",
         "trigger.to_state.context.user_id is none",
         "action: light.turn_on",
-        'brightness_pct: "{{ automatic_max_brightness_pct }}"',
+        'brightness_pct: "{{ bed_strip_automatic_max_brightness_percent }}"',
     ):
         assert token in block
 
