@@ -625,6 +625,14 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     assert block.count("- delay:") == 1
     # Single data-driven volume_set that every step reuses.
     assert block.count("action: media_player.volume_set") == 1
+    initial_ten_percent_step = block.split("delay_minutes: 0", 1)[1].split(
+        "delay_minutes: 2", 1
+    )[0]
+    below_ten_percent_steps = block.split("delay_minutes: 2", 1)[1]
+    assert "media_player.ma_bedroom" in initial_ten_percent_step
+    assert "media_player.ma_bedroom" not in below_ten_percent_steps
+    assert "media_player.ma_bathroom" in below_ten_percent_steps
+    assert "media_player.ma_office" in below_ten_percent_steps
     # Graceful degradation (#839): an unavailable member must never abort the
     # rampdown, so the volume_set tolerates errors and no step opts out.
     assert "continue_on_error: true" in block
