@@ -756,6 +756,8 @@ script:
     mode: single
     trace:
       stored_traces: 50
+    variables:
+      bed_strip_automatic_max_brightness_percent: 25
     sequence:
       - alias: "Start from the owner suite adaptive sleep target"
         continue_on_error: true
@@ -817,17 +819,32 @@ script:
                 data:
                   entity_id:
                     - switch.sleep_mode
-              - alias: "Apply the daytime adaptive target over three minutes"
+              - alias: "Apply the daytime adaptive target to the owner suite lamps over three minutes"
                 continue_on_error: true
                 action: adaptive_lighting.apply
                 data:
                   entity_id: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.owner_suite_lamps
-                    - light.bed_lightstrip
                   adapt_brightness: true
                   adapt_color: true
                   turn_on_lights: true
+                  transition: 180
+              - alias: "Ramp the bed strip to its capped adaptive daytime target over three minutes"
+                continue_on_error: true
+                action: light.turn_on
+                target:
+                  entity_id: light.bed_lightstrip
+                data:
+                  brightness_pct: >-
+                    {% set adaptive_target =
+                      state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct')
+                      | float(bed_strip_automatic_max_brightness_percent) %}
+                    {{ [adaptive_target, bed_strip_automatic_max_brightness_percent | float]
+                       | min | round(0) | int }}
+                  color_temp_kelvin: >-
+                    {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin')
+                       | int(1000) }}
                   transition: 180
               - alias: "Wait for the wake ramp to complete before releasing adaptive lighting control"
                 delay:

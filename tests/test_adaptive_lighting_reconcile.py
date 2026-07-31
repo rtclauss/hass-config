@@ -202,6 +202,23 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "event: adaptive_lighting_startup_reconciled" in block
 
 
+def test_automatic_bed_strip_brightness_is_capped_but_user_changes_are_allowed() -> None:
+    block = _automation_block("cap_automatic_bed_lightstrip_brightness")
+
+    for token in (
+        "bed_strip_automatic_max_brightness_percent: 25",
+        "entity_id: light.bed_lightstrip",
+        "attribute: brightness",
+        "trigger.to_state.context.user_id is none",
+        "action: light.turn_on",
+        'brightness_pct: "{{ bed_strip_automatic_max_brightness_percent }}"',
+    ):
+        assert token in block
+
+    assert "mode: restart" in block
+    assert "state_attr('light.bed_lightstrip', 'brightness')" in block
+
+
 def test_owner_suite_vanity_adaptive_lighting_reconciles_scene_safe_baseline() -> None:
     settings = _adaptive_lighting_settings_block("switch.adaptive_lighting_owner_suite_vanity")
 
