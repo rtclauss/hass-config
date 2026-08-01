@@ -51,7 +51,7 @@ input_datetime:
   # No `initial:` — a configured initial value overrides the restored state on
   # every restart, which would reset the reminder cycle (and could immediately
   # re-fire on startup). The value is restored across restarts and seeded once
-  # by diffuser_oil_bootstrap_last_replaced when it has never been set.
+  # by diffuser_oil_seed_last_replaced when it has never been set.
   diffuser_oil_last_replaced:
     name: Diffuser Oil Last Replaced
     has_date: true
@@ -95,11 +95,11 @@ automation:
   # Seed the last-replaced date the first time only (when it has no restored
   # value), so the ~6-month interval starts counting from deployment without a
   # hard-coded `initial:` that would reset the cycle on every restart.
-  - id: diffuser_oil_bootstrap_last_replaced
-    alias: diffuser_oil_bootstrap_last_replaced
+  - id: diffuser_oil_seed_last_replaced
+    alias: diffuser_oil_seed_last_replaced
     description: Seed diffuser_oil_last_replaced to today if it has never been set.
     trace:
-      stored_traces: 5
+      stored_traces: 10
     trigger:
       - trigger: homeassistant
         event: start
@@ -176,10 +176,12 @@ automation:
 ## Scripts
 ################################################
 script:
-  # Shared by the first-boot bootstrap and the "Replaced" reset so the
+  # Shared by the first-boot seed and the "Replaced" reset so the
   # last-replaced date is stamped in exactly one place.
   diffuser_stamp_oil_replaced_today:
     alias: Diffuser — Stamp Oil Replaced Today
+    trace:
+      stored_traces: 10
     sequence:
       - action: input_datetime.set_datetime
         target:
