@@ -143,10 +143,6 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    sensor.basement_humidity:
-      <<: *customize
-      device_class: humidity
-
     sensor.garage_humidity:
       <<: *customize
       device_class: humidity
@@ -1020,12 +1016,12 @@ template:
         unit_of_measurement: "%"
         state_class: measurement
         availability: >-
-          {{ has_value('sensor.basement_bathroom_tph_humidity') and has_value('sensor.basement_humidity') }}
+          {{ has_value('sensor.basement_bathroom_tph_humidity') and has_value('sensor.basement_tph_humidity') }}
         state: >-
           {{
             (
               states('sensor.basement_bathroom_tph_humidity') | float(default=0)
-              - states('sensor.basement_humidity') | float(default=0)
+              - states('sensor.basement_tph_humidity') | float(default=0)
             )
           }}
 
