@@ -81,11 +81,16 @@ automation:
       - condition: state
         entity_id: group.diffusers
         state: "off"
-      # Skip on a planned vacation: while away there is no CPAP-driven goodnight
-      # to turn the diffusers back off, so turning them on here would leave them
-      # running for the whole trip rather than just the evening.
+      # Skip while away by any trip signal (planned vacation calendar or the
+      # umbrella input_boolean.trip set for work/calendar/manual trips). While
+      # away there is no CPAP-driven goodnight to turn the diffusers back off, so
+      # turning them on here would leave them running for the whole trip rather
+      # than just the evening.
       - condition: state
         entity_id: binary_sensor.planned_vacation_calendar
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip
         state: "off"
     action:
       - action: homeassistant.turn_on

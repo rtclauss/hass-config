@@ -5,8 +5,10 @@
 -- participation in the sleep/wake cycle plus periodic oil-replacement reminders.
 -- Includes:
 --   - turning the diffusers off with the CPAP-triggered goodnight shutdown
---   - turning them on with the owner-suite morning wake transition (any wake:
---     a real alarm OR a motion-based get-up)
+--   - turning them on with the owner-suite morning wake transition: every alarm
+--     wake, plus the workday motion-based (no-alarm) get-up. Non-workday
+--     mornings without an alarm intentionally have no motion wake and are
+--     covered by the afternoon fallback below.
 --   - a mid-afternoon fallback that turns them on when no wake-up happened
 --   - a shared, once-per-cycle "replace the diffuser oils" reminder (~6 months)
 --     and its reset when the oils are replaced
@@ -33,7 +35,9 @@ given {
 ------------------------------------------------------------
 
 external entity TripContext {
-    planned_vacation_active: Boolean
+    -- True while away by any trip signal: a planned vacation calendar event or
+    -- the umbrella trip flag set for planned work, calendar, or manual trips.
+    away_active: Boolean
 }
 
 ------------------------------------------------------------
@@ -76,25 +80,29 @@ rule TurnOnDiffusersAtMorningWake {
     when: OwnerSuiteMorningTransitionStarted()
     ensures: diffusers.power_state = on
     @guidance
-        -- The owner-suite morning transition is shared by both the alarm wake
-        -- and the no-alarm motion-based wake, so any morning wake turns the
-        -- diffusers back on.
+        -- The owner-suite morning transition runs for every alarm wake and for
+        -- the workday motion-based (no-alarm) get-up, so those turn the diffusers
+        -- back on. Non-workday mornings without an alarm have no motion wake by
+        -- design (a weekend get-up must not trigger the full light-ramp/blinds
+        -- transition), so they are covered by TurnOnDiffusersAfternoonFallback
+        -- rather than this rule.
 }
 
 rule TurnOnDiffusersAfternoonFallback {
     when: AfternoonFallbackReached()
     requires: diffusers.power_state = off
-    requires: not trip.planned_vacation_active
+    requires: not trip.away_active
     ensures: diffusers.power_state = on
     @guidance
         -- Fires from a fixed mid-afternoon schedule (16:00). Guarded on the
         -- diffusers still being off, so on a normal day — where the morning
-        -- wake already turned them on — it is a no-op. It only acts on days
-        -- with no wake-up at all (slept through). Suppressed during a planned
-        -- vacation: while away there is no CPAP-driven goodnight to turn the
-        -- diffusers back off, so turning them on would leave them running for
-        -- the whole trip instead of just the evening. The normal
-        -- off-at-night / on-at-wake cycle resumes the next day.
+        -- wake already turned them on — it is a no-op. It is the intended path
+        -- for days with no morning wake at all, including non-workday mornings
+        -- without an alarm. Suppressed while away by any trip signal: with no
+        -- CPAP-driven goodnight to turn the diffusers back off, turning them on
+        -- would leave them running for the whole trip instead of just the
+        -- evening. The normal off-at-night / on-at-wake cycle resumes the next
+        -- day.
 }
 
 rule RemindDiffuserOilReplacement {
