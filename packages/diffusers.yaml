@@ -133,9 +133,10 @@ automation:
           {{ replaced not in ['unknown', 'unavailable', 'none', '']
              and as_timestamp(now()) - as_timestamp(replaced) >= 182 * 24 * 60 * 60 }}
     action:
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.diffuser_oil_reminder_active
+      # Notify first, then latch. If the notification service errors (phone
+      # unregistered / transient failure) the sequence stops before the latch is
+      # set, so the next daily run retries instead of silently suppressing the
+      # reminder for the rest of the cycle.
       - action: notify.mobile_app_wethop
         data:
           title: "Replace diffuser oils"
@@ -149,6 +150,9 @@ automation:
                 authenticationRequired: false
                 destructive: false
                 icon: sfsymbols:checkmark.circle
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.diffuser_oil_reminder_active
 
   # Reset the cycle when the oils are replaced (via the notification action or a
   # manual "I replaced it" trigger of the same event).
