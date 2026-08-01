@@ -1,0 +1,209 @@
+# Home Assistant package for scent/oil diffusers (e.g. the Owner Suite cat diffuser).
+# It ties the diffusers into the existing sleep/wake choreography — off with the
+# CPAP-triggered goodnight shutdown, on with the morning wake transition, with a
+# 4pm fallback for days that have no wake-up — and reminds every ~6 months to
+# replace the diffuser oils.
+#
+# Adding another diffuser is one line: append its switch to group.diffusers below.
+# Everything else (goodnight off-hook, morning on-hook, 4pm fallback, oil reminder)
+# targets the group and needs no further edits.
+
+################################################################
+## Packages / Diffusers
+################################################################
+
+################################################
+## Customize
+################################################
+
+homeassistant:
+  customize:
+    ################################################
+    ## Node Anchors
+    ################################################
+
+    package.node_anchors:
+      customize: &customize
+        package: "diffusers"
+
+################################################
+## Groups
+################################################
+# The single extension point: add a diffuser by appending its switch here.
+group:
+  diffusers:
+    name: Diffusers
+    entities:
+      - switch.owner_suite_cat_diffuser
+      - switch.dining_room_cat_diffuser
+
+################################################
+## Input Booleans
+################################################
+input_boolean:
+  diffuser_oil_reminder_active:
+    name: Diffuser Oil Reminder Active
+    icon: mdi:scent-off
+
+################################################
+## Input Datetime
+################################################
+input_datetime:
+  # No `initial:` — a configured initial value overrides the restored state on
+  # every restart, which would reset the reminder cycle (and could immediately
+  # re-fire on startup). The value is restored across restarts and seeded once
+  # by diffuser_oil_seed_last_replaced when it has never been set.
+  diffuser_oil_last_replaced:
+    name: Diffuser Oil Last Replaced
+    has_date: true
+    has_time: false
+
+################################################
+## Automation
+################################################
+automation:
+  # Fallback for days with no morning wake (slept through / away): if the
+  # diffusers are still off from last night's goodnight shutdown, turn them on
+  # so they run for the evening. On a normal day the wake transition has already
+  # turned them on, so the group is `on` and this is a no-op.
+  - id: diffuser_afternoon_fallback
+    alias: diffuser_afternoon_fallback
+    description: >-
+      If no wake-up turned the diffusers back on, turn them on at 16:00 so they
+      still run through the evening; the normal off-at-night / on-at-wake cycle
+      resumes the next day.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "16:00:00"
+    condition:
+      - condition: state
+        entity_id: group.diffusers
+        state: "off"
+      # Skip while away by any trip signal (planned vacation calendar or the
+      # umbrella input_boolean.trip set for work/calendar/manual trips). While
+      # away there is no CPAP-driven goodnight to turn the diffusers back off, so
+      # turning them on here would leave them running for the whole trip rather
+      # than just the evening.
+      - condition: state
+        entity_id: binary_sensor.planned_vacation_calendar
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+    action:
+      - action: homeassistant.turn_on
+        target:
+          entity_id: group.diffusers
+
+  # Seed the last-replaced date the first time only (when it has no restored
+  # value), so the ~6-month interval starts counting from deployment without a
+  # hard-coded `initial:` that would reset the cycle on every restart.
+  - id: diffuser_oil_seed_last_replaced
+    alias: diffuser_oil_seed_last_replaced
+    description: Seed diffuser_oil_last_replaced to today if it has never been set.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+    condition:
+      # Seed when never set. An absent value shows as unknown/unavailable, and a
+      # fresh date-only input_datetime with no `initial:` defaults to the
+      # 1970-01-01 sentinel (year < 2000) rather than unknown — both mean
+      # "unset". Real replacement dates (year >= 2000) are left untouched so
+      # restored state is preserved across restarts.
+      - condition: template
+        value_template: >-
+          {% set y = state_attr('input_datetime.diffuser_oil_last_replaced', 'year') %}
+          {{ y is none or (y | int(0)) < 2000 }}
+    action:
+      - action: script.diffuser_stamp_oil_replaced_today
+
+  # Remind every ~6 months (182 days) to replace the diffuser oils. A single
+  # shared reminder covers every diffuser in the group. The reminder latches
+  # `diffuser_oil_reminder_active` so it only fires once per cycle.
+  - id: diffuser_oil_reminder
+    alias: diffuser_oil_reminder
+    description: Remind to replace the diffuser oils roughly every six months.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "10:00:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.diffuser_oil_reminder_active
+        state: "off"
+      - condition: template
+        # The year >= 2000 guard ignores the 1970-01-01 sentinel of a not-yet-seeded
+        # helper so a fresh deploy starts the 182-day cycle instead of firing a
+        # "decades overdue" reminder before diffuser_oil_seed_last_replaced runs.
+        value_template: >-
+          {% set replaced = states('input_datetime.diffuser_oil_last_replaced') %}
+          {% set y = state_attr('input_datetime.diffuser_oil_last_replaced', 'year') | int(0) %}
+          {{ replaced not in ['unknown', 'unavailable', 'none', '']
+             and y >= 2000
+             and as_timestamp(now()) - as_timestamp(replaced) >= 182 * 24 * 60 * 60 }}
+    action:
+      # Notify first, then latch. If the notification service errors (phone
+      # unregistered / transient failure) the sequence stops before the latch is
+      # set, so the next daily run retries instead of silently suppressing the
+      # reminder for the rest of the cycle.
+      - action: notify.mobile_app_wethop
+        data:
+          title: "Replace diffuser oils"
+          message: >-
+            It's been about six months — time to replace the diffuser oils. 🐱
+          data:
+            actions:
+              - action: "DIFFUSER_OIL_REPLACED"
+                title: "Replaced"
+                activationMode: background
+                authenticationRequired: false
+                destructive: false
+                icon: sfsymbols:checkmark.circle
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.diffuser_oil_reminder_active
+
+  # Reset the cycle when the oils are replaced (via the notification action or a
+  # manual "I replaced it" trigger of the same event).
+  - id: diffuser_oil_reminder_reset
+    alias: diffuser_oil_reminder_reset
+    description: Reset the diffuser-oil reminder clock when the oils are replaced.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: DIFFUSER_OIL_REPLACED
+    condition: []
+    action:
+      - action: script.diffuser_stamp_oil_replaced_today
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.diffuser_oil_reminder_active
+      - action: notify.all
+        data:
+          message: "Diffuser oils marked replaced — next reminder in ~6 months. 🐱"
+
+################################################
+## Scripts
+################################################
+script:
+  # Shared by the first-boot seed and the "Replaced" reset so the
+  # last-replaced date is stamped in exactly one place.
+  diffuser_stamp_oil_replaced_today:
+    alias: Diffuser — Stamp Oil Replaced Today
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.diffuser_oil_last_replaced
+        data:
+          date: "{{ now().strftime('%Y-%m-%d') }}"
