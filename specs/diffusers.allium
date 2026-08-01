@@ -25,6 +25,15 @@
 
 given {
     diffusers: DiffuserSet
+    trip: TripContext
+}
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity TripContext {
+    planned_vacation_active: Boolean
 }
 
 ------------------------------------------------------------
@@ -75,12 +84,16 @@ rule TurnOnDiffusersAtMorningWake {
 rule TurnOnDiffusersAfternoonFallback {
     when: AfternoonFallbackReached()
     requires: diffusers.power_state = off
+    requires: not trip.planned_vacation_active
     ensures: diffusers.power_state = on
     @guidance
         -- Fires from a fixed mid-afternoon schedule (16:00). Guarded on the
         -- diffusers still being off, so on a normal day — where the morning
         -- wake already turned them on — it is a no-op. It only acts on days
-        -- with no wake-up at all (slept through / away). The normal
+        -- with no wake-up at all (slept through). Suppressed during a planned
+        -- vacation: while away there is no CPAP-driven goodnight to turn the
+        -- diffusers back off, so turning them on would leave them running for
+        -- the whole trip instead of just the evening. The normal
         -- off-at-night / on-at-wake cycle resumes the next day.
 }
 

@@ -48,11 +48,14 @@ input_boolean:
 ## Input Datetime
 ################################################
 input_datetime:
+  # No `initial:` — a configured initial value overrides the restored state on
+  # every restart, which would reset the reminder cycle (and could immediately
+  # re-fire on startup). The value is restored across restarts and seeded once
+  # by diffuser_oil_bootstrap_last_replaced when it has never been set.
   diffuser_oil_last_replaced:
     name: Diffuser Oil Last Replaced
     has_date: true
     has_time: false
-    initial: "2026-08-01"
 
 ################################################
 ## Automation
@@ -78,10 +81,36 @@ automation:
       - condition: state
         entity_id: group.diffusers
         state: "off"
+      # Skip on a planned vacation: while away there is no CPAP-driven goodnight
+      # to turn the diffusers back off, so turning them on here would leave them
+      # running for the whole trip rather than just the evening.
+      - condition: state
+        entity_id: binary_sensor.planned_vacation_calendar
+        state: "off"
     action:
       - action: homeassistant.turn_on
         target:
           entity_id: group.diffusers
+
+  # Seed the last-replaced date the first time only (when it has no restored
+  # value), so the ~6-month interval starts counting from deployment without a
+  # hard-coded `initial:` that would reset the cycle on every restart.
+  - id: diffuser_oil_bootstrap_last_replaced
+    alias: diffuser_oil_bootstrap_last_replaced
+    description: Seed diffuser_oil_last_replaced to today if it has never been set.
+    trace:
+      stored_traces: 5
+    trigger:
+      - trigger: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: input_datetime.diffuser_oil_last_replaced
+        state:
+          - "unknown"
+          - "unavailable"
+    action:
+      - action: script.diffuser_stamp_oil_replaced_today
 
   # Remind every ~6 months (182 days) to replace the diffuser oils. A single
   # shared reminder covers every diffuser in the group. The reminder latches
@@ -94,8 +123,6 @@ automation:
     trigger:
       - trigger: time
         at: "10:00:00"
-      - trigger: homeassistant
-        event: start
     condition:
       - condition: state
         entity_id: input_boolean.diffuser_oil_reminder_active
@@ -137,14 +164,25 @@ automation:
           action: DIFFUSER_OIL_REPLACED
     condition: []
     action:
-      - action: input_datetime.set_datetime
-        target:
-          entity_id: input_datetime.diffuser_oil_last_replaced
-        data:
-          date: "{{ now().strftime('%Y-%m-%d') }}"
+      - action: script.diffuser_stamp_oil_replaced_today
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.diffuser_oil_reminder_active
       - action: notify.all
         data:
           message: "Diffuser oils marked replaced — next reminder in ~6 months. 🐱"
+
+################################################
+## Scripts
+################################################
+script:
+  # Shared by the first-boot bootstrap and the "Replaced" reset so the
+  # last-replaced date is stamped in exactly one place.
+  diffuser_stamp_oil_replaced_today:
+    alias: Diffuser — Stamp Oil Replaced Today
+    sequence:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.diffuser_oil_last_replaced
+        data:
+          date: "{{ now().strftime('%Y-%m-%d') }}"
