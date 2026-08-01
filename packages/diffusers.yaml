@@ -104,11 +104,15 @@ automation:
       - trigger: homeassistant
         event: start
     condition:
-      - condition: state
-        entity_id: input_datetime.diffuser_oil_last_replaced
-        state:
-          - "unknown"
-          - "unavailable"
+      # Seed when never set. An absent value shows as unknown/unavailable, and a
+      # fresh date-only input_datetime with no `initial:` defaults to the
+      # 1970-01-01 sentinel (year < 2000) rather than unknown — both mean
+      # "unset". Real replacement dates (year >= 2000) are left untouched so
+      # restored state is preserved across restarts.
+      - condition: template
+        value_template: >-
+          {% set y = state_attr('input_datetime.diffuser_oil_last_replaced', 'year') %}
+          {{ y is none or (y | int(0)) < 2000 }}
     action:
       - action: script.diffuser_stamp_oil_replaced_today
 
@@ -128,9 +132,14 @@ automation:
         entity_id: input_boolean.diffuser_oil_reminder_active
         state: "off"
       - condition: template
+        # The year >= 2000 guard ignores the 1970-01-01 sentinel of a not-yet-seeded
+        # helper so a fresh deploy starts the 182-day cycle instead of firing a
+        # "decades overdue" reminder before diffuser_oil_seed_last_replaced runs.
         value_template: >-
           {% set replaced = states('input_datetime.diffuser_oil_last_replaced') %}
+          {% set y = state_attr('input_datetime.diffuser_oil_last_replaced', 'year') | int(0) %}
           {{ replaced not in ['unknown', 'unavailable', 'none', '']
+             and y >= 2000
              and as_timestamp(now()) - as_timestamp(replaced) >= 182 * 24 * 60 * 60 }}
     action:
       # Notify first, then latch. If the notification service errors (phone
