@@ -84,6 +84,10 @@ def test_goodnight_integrity_script_coordinates_house_shutdown_and_verification(
 
 def test_goodnight_integrity_skips_inactive_common_area_media_targets() -> None:
     block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
+    assert (
+        "- sequence:\n              - variables:\n"
+        "                  common_area_media_shutdown_targets:"
+    ) in block
     media_shutdown = block.split(
         "common_area_media_shutdown_targets:", maxsplit=1
     )[1].split("script.apply_owner_suite_inovelli_led_policy", maxsplit=1)[0]
