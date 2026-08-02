@@ -2025,27 +2025,16 @@ automation:
         data:
           entity_id:
             - switch.sleep_mode
-      - action: script.house_transition
+      # Route the lamps-off bedtime path through the shared goodnight-integrity
+      # flow so it emits the same GoodnightIntegrityRequested(reason) signal as
+      # the CPAP path. goodnight_integrity performs the sleep house transition,
+      # the lights-off cascade (same outside-light exclusions and 30s
+      # transition), and the diffuser/fan/media/LED shutdown in one place —
+      # keeping the implementation aligned with specs/diffusers.allium
+      # (TurnOffDiffusersForSleep) instead of a diffuser-specific trigger.
+      - action: script.goodnight_integrity
         data:
-          mode: asleep
           reason: bedside_lamps_off
-          apply_lights: false
-          apply_security: false
-          apply_climate: false
-          apply_media: false
-          apply_trip_policy: false
-      - action: script.lights_off_except
-        data:
-          exclude_lights:
-            - light.outside_front_hue
-            - light.outside_north_west_garage
-            - light.outside_south_west_garage
-            - light.outside_front_door
-          transition: 30
-      - continue_on_error: true
-        action: homeassistant.turn_off
-        target:
-          entity_id: group.diffusers
         # Only turn on the humidifier when it's winter
         # Not used with whole-home humidifier
         # - condition: and
