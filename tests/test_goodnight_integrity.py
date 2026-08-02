@@ -126,21 +126,23 @@ def test_cpap_bedtime_lights_off_still_treats_cpap_as_full_sleep() -> None:
     assert "reason: cpap_sleep" in action_block
 
 
-def test_bed_lamps_off_only_finishes_turning_off_lights() -> None:
+def test_bed_lamps_off_routes_through_goodnight_integrity() -> None:
     block = _automation_block(LIGHT_PATH, "turn_off_all_lights_when_bed_off")
 
     assert "sensor.owner_suite_cpap_plug_power" in block
-    assert "script.house_transition" in block
-    assert "mode: asleep" in block
-    assert "script.lights_off_except" in block
-    assert "light.outside_front_hue" in block
-    assert "light.outside_front_door" in block
+
+    # The lamps-off bedtime path now emits the shared goodnight-integrity signal
+    # rather than inlining its own house_transition + lights_off_except, so the
+    # diffuser shutdown stays behind GoodnightIntegrityRequested per
+    # specs/diffusers.allium (TurnOffDiffusersForSleep).
+    assert "script.goodnight_integrity" in block
+    assert "reason: bedside_lamps_off" in block
 
     for token in (
-        "switch.office_red_lava_lamp",
-        "media_player.lg_webos_smart_tv",
-        "media_player.basement",
-        "script.goodnight_integrity",
+        "script.house_transition",
+        "mode: asleep",
+        "script.lights_off_except",
+        "light.outside_front_hue",
     ):
         assert token not in block
 
