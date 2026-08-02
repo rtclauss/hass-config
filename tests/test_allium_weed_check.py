@@ -170,6 +170,28 @@ def test_classified_gap_rejects_non_matching_changed_lines() -> None:
 
 def test_default_config_lists_existing_specs_and_scopes() -> None:
     scopes, classified_gaps = weed.load_config(weed.DEFAULT_CONFIG)
+    goodnight_media_patterns = [
+        "-*media_player*",
+        "-*continue_on_error*",
+        "-*target:*",
+        "-*entity_id:*",
+        "+*common_area_media_shutdown_targets*",
+        "+*media_player*",
+        "+*['off', 'unavailable', 'unknown']*",
+        "+*| *",
+        "+*{{ expand(*",
+        "+*)*",
+        "+*- sequence:*",
+        "+*- variables:*",
+        "+*- if:*",
+        "+*- condition: template*",
+        "+*value_template:*",
+        "+*then:*",
+        "+*- continue_on_error:*",
+        "+*target:*",
+        "+*'state'*",
+        "+*'in'*",
+    ]
 
     assert classified_gaps == [
         {
@@ -246,6 +268,18 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         },
         {
             "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": goodnight_media_patterns,
+            "classification": "goodnight media availability guard",
+            "reason": (
+                "Issue #913 and PR #914 preserve the night_routines.allium requirement "
+                "to shut down common-area media while skipping targets that are already "
+                "off or unavailable; all other bedtime, privacy, guest, diffuser, and "
+                "owner-suite LED behavior is unchanged."
+            ),
+        },
+        {
+            "spec": "specs/night_routines.allium",
             "implementation_paths": ["packages/house_mode.yaml", "packages/tv.yaml"],
             "classification": "Music Assistant entity-id migration",
             "reason": (
@@ -253,6 +287,18 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "entity IDs with explicit media_player.ma_<room> IDs; bedtime "
                 "preparation, overnight goodnight integrity, guest-aware shutdown, and "
                 "owner-suite LED behavior governed by night_routines.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": goodnight_media_patterns,
+            "classification": "non-diffuser goodnight media guard",
+            "reason": (
+                "Issue #913 and PR #914 filter unavailable common-area media players "
+                "during goodnight. The adjacent group.diffusers shutdown action and all "
+                "sleep, wake, fallback, and oil-reminder behavior governed by "
+                "diffusers.allium remain unchanged."
             ),
         },
         {
