@@ -266,6 +266,19 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "by tv_watching.allium are unchanged."
             ),
         },
+        {
+            "spec": "specs/z2m_lifecycle.allium",
+            "implementation_paths": ["packages/z2m_lifecycle.yaml"],
+            "classification": "automation-topology DRY refactor",
+            "reason": (
+                "Issue #529 and PR #926 consolidate duplicate reboot-counter reset "
+                "automations while preserving unconditional manual resets and the "
+                "existing 10-minute sustained-recovery, healthy-bridge, and "
+                "nonzero-counter gates. The observable systemic-recovery behavior "
+                "governed by z2m_lifecycle.allium is unchanged; automation IDs, "
+                "trigger routing, and reusable-script wiring are implementation details."
+            ),
+        },
     ]
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",
