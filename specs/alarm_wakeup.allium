@@ -356,11 +356,16 @@ rule RampWakeupVolumeByRoom {
     ensures: WakeupVolumeRampStarted(group)
     @guidance
         -- Only runs once playback is verified, so the ramp never fades up a
-        -- silent group. All group members fade in from silence using a tan-curve
-        -- ramp. When the group is bedroom_bathroom_office_den, the office is
-        -- capped at config.office_wakeup_peak_volume_percent; all other rooms
-        -- ramp to the full peak. This prevents the wake-up routine from
-        -- disturbing work-in-progress in the office.
+        -- silent group. All group members fade in from silence using small,
+        -- evenly-paced volume steps sized from loudness-perception research
+        -- (roughly half the ~1 dB just-noticeable-difference per step,
+        -- spaced well past the ~4s auditory echoic-memory window) so the
+        -- rise reads as a smooth swell rather than audible jumps, landing
+        -- around six minutes rather than the perceptual minimum of under a
+        -- minute. When the group is bedroom_bathroom_office_den, the office
+        -- is capped at config.office_wakeup_peak_volume_percent; all other
+        -- rooms ramp to the full peak. This prevents the wake-up routine
+        -- from disturbing work-in-progress in the office.
 }
 
 rule AbortSilentWakeupWhenNoSourcePlays {

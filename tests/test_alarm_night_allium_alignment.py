@@ -129,7 +129,7 @@ def test_wakeup_office_volume_caps_match_allium_peak() -> None:
     bathroom_followup = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 
     assert "config.office_wakeup_peak_volume" in spec_text
-    assert radio_wakeup.count(f", {cap}] | min") == 1
+    assert radio_wakeup.count(f"default({cap}) | float({cap})") == 1
     assert bathroom_followup.count(f", {cap}] | min") == 2
 
 

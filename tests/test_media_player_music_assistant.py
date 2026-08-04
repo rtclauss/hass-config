@@ -316,11 +316,113 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert "media_player.ma_tiki_room" not in block
     assert block.count('target_entity: "{{ playback_player }}"') >= 1
     assert 'group_members: "{{ group_members }}"' in block
-    assert 'volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"' in block
-    assert "default(25)" in block
     assert "starting_volume: 0.01" in block
-    assert 'volume_level: "{{ [0.01 * repeat.index, 0.10] | min }}"' in block
+    # Perceptually-paced ramp: reads live volume each iteration and steps it
+    # toward the (distinct) non-office / office peaks rather than using a
+    # precomputed index-based curve.
+    assert "effective_step_volume" in block
+    assert "effective_interval_seconds" in block
+    assert "default(0.01)" in block  # step default
+    assert "default(15)" in block  # interval default
+    assert "default(0.25)" in block  # non-office peak default
+    assert "default(0.10)" in block  # office peak default
     assert "0.30" not in block
+    # Each member is tracked and stepped from its OWN live volume — the
+    # office (if present) gets its own peak via a per-member ternary, not a
+    # split "non-office list + separate office call" structure that could
+    # let one member (e.g. bedroom) proxy for the rest and let the loop end
+    # while another member is still under-ramped.
+    assert "for_each: \"{{ group_members }}\"" in block
+    assert "member_peak = effective_office_peak_volume if repeat.item == 'media_player.ma_office' else effective_peak_volume" in block
+    assert "[(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min" in block
+
+
+def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # An unavailable player must fall back to its own peak (i.e. read as
+    # "already done") rather than the silent starting volume — otherwise the
+    # while-loop condition never clears (issue: office stuck at 0.01 forever).
+    assert "member_peak = effective_office_peak_volume if member == 'media_player.ma_office' else effective_peak_volume" in block
+    assert "float(member_peak)) < member_peak" in block
+    assert "float(0.01)) < " not in block
+    # Guest mode excludes the office from group_members entirely; since the
+    # loop iterates group_members directly, an absent office is simply never
+    # evaluated — no special-casing needed.
+    assert "for member in group_members" in block
+    # Hard iteration cap: a player that keeps failing volume_set under
+    # continue_on_error (stale state, condition never clears) still can't
+    # hold the ramp open indefinitely.
+    assert "effective_max_ramp_iterations" in block
+    assert "repeat.index <= effective_max_ramp_iterations" in block
+
+
+def test_radio_wakeup_office_peak_is_clamped_to_spec_ceiling() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # office_wakeup_peak_volume_percent (10%) is the alarm spec's policy
+    # ceiling for the office ("the office is capped at
+    # config.office_wakeup_peak_volume_percent"), not just a default a
+    # caller can override upward. A caller may still ask for something
+    # quieter than 10%, never louder (Codex review, PR #934).
+    assert (
+        "effective_office_peak_volume: >-\n"
+        "        {{ [(ramp_office_peak_volume_level | default(0.10) | float(0.10)), 0.10] | min }}"
+        in block
+    )
+
+
+def test_radio_wakeup_step_volume_is_clamped_above_zero() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # Jinja's default() filter only substitutes for an *undefined* input,
+    # not an explicitly-passed 0 or negative ramp_step_volume — and
+    # effective_max_ramp_iterations divides by effective_step_volume, so an
+    # unclamped 0 would raise (aborting the whole wake-up before any audio
+    # plays) and a negative value would silently skip the ramp. Non-positive
+    # values snap back to the documented 0.01 default rather than a tiny
+    # epsilon floor — an epsilon would avoid the crash but take ~60 minutes
+    # to reach peak, well past the 12-minute stuck-script watchdog (Codex
+    # review, PR #934).
+    assert "raw_step_volume = ramp_step_volume | default(0.01) | float(0.01)" in block
+    assert "raw_step_volume if raw_step_volume > 0 else 0.01" in block
+    assert "], 0.001] | max" not in block
+
+
+def test_radio_wakeup_step_volume_floors_to_a_watchdog_safe_minimum() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # A positive-but-tiny explicit ramp_step_volume (e.g. 0.001) passes the
+    # "> 0" check above but would still take far longer than the 12-minute
+    # recover_stuck_morning_audio_scripts watchdog to reach peak. The
+    # minimum step is derived from the *configured* peak/interval (not a
+    # fixed constant) so it stays correct if a caller changes those too,
+    # targeting completion inside a 10-minute budget (Codex review, PR #934).
+    assert "watchdog_timeout_seconds = 720" in block
+    assert "watchdog_safety_margin_seconds = 120" in block
+    assert (
+        "max_ramp_distance = [effective_peak_volume, effective_office_peak_volume] | max"
+        in block
+    )
+    assert (
+        "min_step_volume_for_watchdog = (max_ramp_distance * effective_interval_seconds)"
+        " / (watchdog_timeout_seconds - watchdog_safety_margin_seconds)"
+        in block
+    )
+    assert "[positive_step_volume, min_step_volume_for_watchdog] | max" in block
+    # effective_step_volume must be defined after the peak/office-peak/
+    # interval variables it now depends on (HA's variables action renders
+    # sequentially — a variable can only reference earlier siblings).
+    definition_order = block.split("variables:", 1)[1].split("sequence:", 1)[0]
+    assert definition_order.index("effective_interval_seconds:") < definition_order.index(
+        "effective_step_volume:"
+    )
+    assert definition_order.index("effective_peak_volume:") < definition_order.index(
+        "effective_step_volume:"
+    )
+    assert definition_order.index(
+        "effective_office_peak_volume:"
+    ) < definition_order.index("effective_step_volume:")
 
 
 def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
@@ -607,36 +709,131 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     block = _script_block("spotify_bedtime_volume")
 
     for token in (
-        "bedtime_rampdown_steps:",
-        "delay_minutes: 0",
-        "delay_minutes: 2",
-        "volume_level: 0.1",
-        "volume_level: 0.07",
-        "volume_level: 0.05",
-        "volume_level: 0.01",
+        "bedtime_rampdown_targets:",
+        "entity_id: media_player.ma_bedroom",
+        "entity_id: media_player.ma_office",
+        "entity_id: media_player.ma_bathroom",
+        "entity_id: media_player.ma_den",
+        "floor_volume: 0.06",
+        "floor_volume: 0.01",
+        # Perceptual step/interval: ~0.5 dB per update (half the ~1 dB JND),
+        # 12s apart (3x the ~4s echoic-memory window).
+        "bedtime_rampdown_step_volume: 0.01",
+        "bedtime_rampdown_interval_seconds: 12",
         "repeat:",
-        'for_each: "{{ bedtime_rampdown_steps }}"',
-        'minutes: "{{ repeat.item.delay_minutes }}"',
+        "while:",
+        'for_each: "{{ bedtime_rampdown_targets }}"',
         'entity_id: "{{ repeat.item.entity_id }}"',
-        'volume_level: "{{ repeat.item.volume_level }}"',
+        "bedtime_rampdown_step_volume, repeat.item.floor_volume] | max",
     ):
         assert token in block
 
+    # Bedroom keeps a distinct, higher floor than the other three rooms.
+    assert block.count("floor_volume: 0.06") == 1
+    assert block.count("floor_volume: 0.01") == 3
     assert block.count("- delay:") == 1
-    # Single data-driven volume_set that every step reuses.
+    assert 'seconds: "{{ bedtime_rampdown_interval_seconds }}"' in block
+    # Single data-driven volume_set that every target reuses.
     assert block.count("action: media_player.volume_set") == 1
-    initial_ten_percent_step = block.split("delay_minutes: 0", 1)[1].split(
-        "delay_minutes: 2", 1
-    )[0]
-    below_ten_percent_steps = block.split("delay_minutes: 2", 1)[1]
-    assert "media_player.ma_bedroom" in initial_ten_percent_step
-    assert "media_player.ma_bedroom" not in below_ten_percent_steps
-    assert "media_player.ma_bathroom" in below_ten_percent_steps
-    assert "media_player.ma_office" in below_ten_percent_steps
+    # Volume is read live from each entity every iteration (in the loop
+    # condition, the per-target skip guard, and the step itself) rather than
+    # assumed from a fixed starting percentage or a precomputed curve.
+    assert block.count("state_attr(target.entity_id, 'volume_level')") == 1
+    assert block.count("state_attr(repeat.item.entity_id, 'volume_level')") == 2
     # Graceful degradation (#839): an unavailable member must never abort the
     # rampdown, so the volume_set tolerates errors and no step opts out.
     assert "continue_on_error: true" in block
     assert "continue_on_error: false" not in block
+    # Hard iteration cap: a member that keeps failing volume_set under
+    # continue_on_error (stale above-floor state, condition never clears)
+    # still can't hold the rampdown open indefinitely.
+    assert "bedtime_rampdown_max_iterations" in block
+    assert "repeat.index <= bedtime_rampdown_max_iterations" in block
+
+
+def test_bedtime_rampdown_never_raises_a_below_floor_target_back_up() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    # max(current - step, floor) always returns at least floor — so without
+    # a guard, a target already below its floor (e.g. someone manually mutes
+    # a room mid-rampdown) would get raised back UP to floor on the next
+    # iteration, which is backwards for a rampdown. The volume_set must only
+    # fire while the target's live volume is still above its own floor
+    # (Codex review, PR #934).
+    assert (
+        "(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume))"
+        " > repeat.item.floor_volume }}"
+        in block
+    )
+    # The guard must gate the volume_set action itself (inside the `then:`),
+    # not just exist somewhere in the block.
+    guard_to_action = block.split(
+        "(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume))"
+        " > repeat.item.floor_volume }}",
+        1,
+    )[1]
+    assert "then:" in guard_to_action.split("action: media_player.volume_set", 1)[0]
+
+
+def test_bedtime_rampdown_floors_match_stated_policy_not_just_comment() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    # Only bedroom keeps the elevated 6% floor; office, bathroom, and den all
+    # ramp down to 1% (owner-confirmed: "all others...stop at 1%"). This
+    # guards the comment/config from drifting apart again (Codex review,
+    # PR #934) — den must NOT be pulled back up to bedroom's floor.
+    targets_block = block.split("bedtime_rampdown_targets:", 1)[1].split(
+        "bedtime_rampdown_max_iterations", 1
+    )[0]
+    bedroom_entry = targets_block.split("media_player.ma_bedroom", 1)[1].split(
+        "media_player.ma_bathroom", 1
+    )[0]
+    den_entry = targets_block.split("media_player.ma_den", 1)[1]
+    assert "floor_volume: 0.06" in bedroom_entry
+    assert "floor_volume: 0.01" in den_entry
+
+
+def test_bedtime_rampdown_excludes_guest_capable_rooms_in_guest_mode() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    # Office and den are guest_capable_rooms in docs/room_intent.yaml
+    # ("override_when_guest_present: treat as guest-private room at any
+    # time", priority high) — the same rooms the wake-up scripts' group_members
+    # already exclude in guest mode. bed_without_prep calls this script with
+    # no guest-mode guard of its own, so the exclusion must live here.
+    # guest_mode is re-checked live every iteration (not snapshotted once at
+    # script start) — both the loop-continuation condition and the per-target
+    # action guard against it, so a room stops being touched within one
+    # interval of guest mode turning on mid-rampdown (Codex review, PR #934).
+    targets_block = block.split("bedtime_rampdown_targets:", 1)[1].split(
+        "bedtime_rampdown_max_iterations", 1
+    )[0]
+    bedroom_entry = targets_block.split("media_player.ma_bedroom", 1)[1].split(
+        "media_player.ma_bathroom", 1
+    )[0]
+    bathroom_entry = targets_block.split("media_player.ma_bathroom", 1)[1].split(
+        "media_player.ma_office", 1
+    )[0]
+    office_entry = targets_block.split("media_player.ma_office", 1)[1].split(
+        "media_player.ma_den", 1
+    )[0]
+    den_entry = targets_block.split("media_player.ma_den", 1)[1]
+    assert "guest_capable: false" in bedroom_entry
+    assert "guest_capable: false" in bathroom_entry
+    assert "guest_capable: true" in office_entry
+    assert "guest_capable: true" in den_entry
+
+    # The while-loop condition skips guest-capable targets while guest mode
+    # is on, so it doesn't keep running just because an intentionally-skipped
+    # office/den still reads above its floor.
+    assert "guest_mode_on = is_state('input_boolean.guest_mode', 'on')" in block
+    assert "not (guest_mode_on and target.guest_capable)" in block
+    # The per-target action re-checks guest mode fresh each iteration too —
+    # this must NOT be computed once in the outer variables block.
+    assert (
+        "not (is_state('input_boolean.guest_mode', 'on') and repeat.item.guest_capable)"
+        in block
+    )
 
 
 def test_spotify_bedtime_reapplies_repeat_to_started_queue_before_rampdown() -> None:
