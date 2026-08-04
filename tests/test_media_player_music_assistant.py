@@ -357,6 +357,20 @@ def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded()
     assert "repeat.index <= effective_max_ramp_iterations" in block
 
 
+def test_radio_wakeup_step_volume_is_clamped_above_zero() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # Jinja's default() filter only substitutes for an *undefined* input,
+    # not an explicitly-passed 0 or negative ramp_step_volume — and
+    # effective_max_ramp_iterations divides by effective_step_volume, so an
+    # unclamped 0 would raise (aborting the whole wake-up before any audio
+    # plays) and a negative value would silently skip the ramp.
+    assert (
+        'effective_step_volume: "{{ [(ramp_step_volume | default(0.01) | float(0.01)), 0.001] | max }}"'
+        in block
+    )
+
+
 def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 

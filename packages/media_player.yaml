@@ -1275,7 +1275,11 @@ script:
         description: "Seconds to wait before retrying the primary source once (default: 15)"
     variables:
       playback_player: media_player.ma_bedroom
-      effective_step_volume: "{{ ramp_step_volume | default(0.01) | float(0.01) }}"
+      # Clamped to a positive floor: Jinja's default() filter only
+      # substitutes for an *undefined* input, not an explicitly-passed 0 or
+      # negative value, and effective_max_ramp_iterations below divides by
+      # this — an unclamped 0 would raise before any audio plays.
+      effective_step_volume: "{{ [(ramp_step_volume | default(0.01) | float(0.01)), 0.001] | max }}"
       effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
       effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
       effective_office_peak_volume: "{{ ramp_office_peak_volume_level | default(0.10) | float(0.10) }}"
