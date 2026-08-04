@@ -1253,10 +1253,14 @@ script:
         description: "Music Assistant radio URI"
       initial_delay:
         description: "Optional delay before playback starts"
-      ramp_steps:
-        description: "Number of 0.01 volume steps to ramp through (default and hard maximum 25 → peak 0.25)"
-      ramp_k_factor:
-        description: "tan-curve k factor controlling total ramp duration (default 120 ≈ 7 min for 25 steps)"
+      ramp_step_volume:
+        description: "volume_level increment per ramp update (default 0.01 = 1 percentage point ≈ 0.5 dB at the assumed 50 dB Sonos/MA range — half the ~1 dB just-noticeable-difference, same per-step size as the bedtime rampdown)"
+      ramp_interval_seconds:
+        description: "Seconds between ramp updates (default 15). At the default step size this yields ~6 minutes from silence to the peak — stretched well past the ~4s auditory-echoic-memory window so the rise reads as smooth rather than a series of audible jumps"
+      ramp_peak_volume_level:
+        description: "Target volume_level for non-office wake-up members (default 0.25)"
+      ramp_office_peak_volume_level:
+        description: "Target volume_level for the office member, capped lower so the wake-up does not disturb work-in-progress (default 0.10)"
       playback_entity_id:
         description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
@@ -1271,9 +1275,39 @@ script:
         description: "Seconds to wait before retrying the primary source once (default: 15)"
     variables:
       playback_player: media_player.ma_bedroom
-      effective_ramp_steps: >-
-        {{ [[ramp_steps | default(25) | int(25), 1] | max, 25] | min }}
-      effective_k_factor: "{{ ramp_k_factor | default(120) | int(120) }}"
+      effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
+      effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
+      # Clamped to the alarm spec's office_wakeup_peak_volume_percent (10%)
+      # as a ceiling, not just a default — the spec requires the office
+      # capped there so the wake-up never disturbs work-in-progress; a
+      # caller can still ask for something quieter, never louder.
+      effective_office_peak_volume: >-
+        {{ [(ramp_office_peak_volume_level | default(0.10) | float(0.10)), 0.10] | min }}
+      # Non-positive values snap up to the documented 0.01 default; any
+      # positive-but-too-small value (e.g. an explicit 0.001) snaps up to
+      # min_step_volume_for_watchdog instead. Jinja's default() filter only
+      # substitutes for an *undefined* input, not an explicitly-passed value,
+      # so either case would otherwise let the ramp take arbitrarily long to
+      # reach effective_peak_volume — recover_stuck_morning_audio_scripts
+      # (media_player.yaml:509-526) force-stops this script at 12 minutes
+      # regardless, so a too-small step leaves the wake-up stuck partway
+      # instead of ever reaching peak. min_step_volume_for_watchdog is
+      # derived from the *configured* peak/interval (not a fixed constant)
+      # so it stays correct if a caller changes those too, and targets
+      # completing within a 10-minute budget — comfortably inside the
+      # watchdog's 12 minutes.
+      effective_step_volume: >-
+        {% set raw_step_volume = ramp_step_volume | default(0.01) | float(0.01) %}
+        {% set positive_step_volume = raw_step_volume if raw_step_volume > 0 else 0.01 %}
+        {% set watchdog_timeout_seconds = 720 %}
+        {% set watchdog_safety_margin_seconds = 120 %}
+        {% set max_ramp_distance = [effective_peak_volume, effective_office_peak_volume] | max %}
+        {% set min_step_volume_for_watchdog = (max_ramp_distance * effective_interval_seconds) / (watchdog_timeout_seconds - watchdog_safety_margin_seconds) %}
+        {{ [positive_step_volume, min_step_volume_for_watchdog] | max }}
+      # Safety bound so a stuck/unavailable player can never hold the ramp
+      # open indefinitely (the theoretical step count, plus margin).
+      effective_max_ramp_iterations: >-
+        {{ (([effective_peak_volume, effective_office_peak_volume] | max) / effective_step_volume) | round(0, 'ceil') + 10 }}
       effective_fallback_uri: >-
         {{ fallback_uri | default('spotify:playlist:37i9dQZF1DX7KNKjOK0o75', true) }}
       effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
@@ -1404,37 +1438,50 @@ script:
               message: "Wake-up audio playback could not be established; skipped volume ramp."
           - stop: "Wake-up audio playback could not be established; skipped volume ramp."
             error: true
+      # Perceptual design: each update raises volume by effective_step_volume
+      # (default 0.01 ≈ 0.5 dB, half the ~1 dB just-noticeable-difference) and
+      # waits effective_interval_seconds (default 15s, well past the ~4s
+      # echoic-memory window) so the climb reads as smooth rather than as
+      # discrete jumps. Every group member (office included, when present) is
+      # tracked and stepped from its OWN live volume_level — not proxied from
+      # one member — so a member that diverges (a manual adjustment, a missed
+      # update) doesn't let the loop finish while it's still under-ramped.
+      # Office's applicable peak is effective_office_peak_volume; everyone
+      # else's is effective_peak_volume. Guest mode excluding the office from
+      # group_members means it's simply never iterated — no special-casing
+      # needed. Falls back to a member's own peak (not the silent starting
+      # volume) when a volume_level read fails, so an unavailable player reads
+      # as "already done" instead of stalling the loop. Reads live volume each
+      # iteration (rather than a precomputed curve) so continue_on_error never
+      # desyncs the rest of the ramp. effective_max_ramp_iterations is a hard
+      # backstop so a player reporting a stale volume_level while volume_set
+      # keeps silently failing still can't hold the ramp open indefinitely.
       - repeat:
+          while:
+            - condition: template
+              value_template: >-
+                {% set ns = namespace(any_below_peak=false) %}
+                {% for member in group_members %}
+                  {% set member_peak = effective_office_peak_volume if member == 'media_player.ma_office' else effective_peak_volume %}
+                  {% if (state_attr(member, 'volume_level') | float(member_peak)) < member_peak %}
+                    {% set ns.any_below_peak = true %}
+                  {% endif %}
+                {% endfor %}
+                {{ repeat.index <= effective_max_ramp_iterations and ns.any_below_peak }}
           sequence:
-            - if:
-                - condition: template
-                  value_template: "{{ repeat.index <= 20 }}"
-              then:
-                - alias: "Ramp all wake-up group members up to the office cap"
-                  continue_on_error: true
-                  action: media_player.volume_set
-                  target:
-                    entity_id: "{{ group_members }}"
-                  data:
-                    volume_level: "{{ 0.01 * repeat.index }}"
-              else:
-                - alias: "Ramp non-office wake-up group members after the office cap"
-                  continue_on_error: true
-                  action: media_player.volume_set
-                  target:
-                    entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
-                  data:
-                    volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"
-            - alias: "Office capped at 10% — bedroom wake-up should not disturb work-in-progress"
-              continue_on_error: true
-              action: media_player.volume_set
-              target:
-                entity_id: media_player.ma_office
-              data:
-                volume_level: "{{ [0.01 * repeat.index, 0.10] | min }}"
+            - repeat:
+                for_each: "{{ group_members }}"
+                sequence:
+                  - action: media_player.volume_set
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ repeat.item }}"
+                    data:
+                      volume_level: >-
+                        {% set member_peak = effective_office_peak_volume if repeat.item == 'media_player.ma_office' else effective_peak_volume %}
+                        {{ [(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min }}
             - delay:
-                seconds: "{{ (1/(tan(repeat.index/effective_k_factor))) | round(0, 'ceil', 5)}}"
-          until: "{{ repeat.index == effective_ramp_steps }}"
+                seconds: "{{ effective_interval_seconds }}"
 
   bedroom_playlist_0:
     alias: "Play LoFi"
@@ -2122,48 +2169,92 @@ script:
       stored_traces: 50
     sequence:
       - variables:
-          bedtime_rampdown_steps:
-            - delay_minutes: 0
-              entity_id:
-                - media_player.ma_bedroom
-                - media_player.ma_office
-                - media_player.ma_bathroom
-                - media_player.ma_den
-              volume_level: 0.1
-            # Keep bedroom at 10%: MA proportional scaling rounds lower
-            # bedroom levels too aggressively after the loudness change.
-            - delay_minutes: 2
-              entity_id:
-                - media_player.ma_bathroom
-                - media_player.ma_office
-              volume_level: 0.07
-            - delay_minutes: 2
-              entity_id:
-                - media_player.ma_bathroom
-                - media_player.ma_office
-              volume_level: 0.05
-            - delay_minutes: 2
-              entity_id:
-                - media_player.ma_bathroom
-                - media_player.ma_office
-              volume_level: 0.01
+          # Perceptual design: each update lowers volume by
+          # bedtime_rampdown_step_volume (0.01 ≈ 0.5 dB at the assumed 50 dB
+          # Sonos/MA range — half the ~1 dB just-noticeable-difference), then
+          # waits bedtime_rampdown_interval_seconds (12s, 3x the ~4s
+          # auditory-echoic-memory window) so no single step is ever compared
+          # against a fresh reference. Reads live volume each iteration
+          # (rather than a precomputed curve) so a manually raised/lowered
+          # room still tapers smoothly, and a dropped/unavailable member
+          # (continue_on_error, #839) never desyncs the rest of the ramp.
+          # Bedroom alone keeps a higher 6% floor: MA proportional scaling
+          # rounds lower bedroom levels too aggressively after the loudness
+          # change. Office, bathroom, and den all ramp down to 1%. Office and
+          # den are guest_capable_rooms per docs/room_intent.yaml
+          # ("override_when_guest_present: treat as guest-private room at any
+          # time", priority high) — the same rooms the wake-up scripts'
+          # group_members already exclude in guest mode. guest_mode is
+          # re-checked live every iteration (not snapshotted once up front),
+          # so a room stops being touched within one interval of guest mode
+          # turning on mid-rampdown, not just at script start. This script
+          # has callers with no guest-mode guard of their own (e.g.
+          # bed_without_prep), so the exclusion lives here rather than
+          # relying on every caller to remember it.
+          bedtime_rampdown_step_volume: 0.01
+          bedtime_rampdown_interval_seconds: 12
+          bedtime_rampdown_targets:
+            - entity_id: media_player.ma_bedroom
+              floor_volume: 0.06
+              guest_capable: false
+            - entity_id: media_player.ma_bathroom
+              floor_volume: 0.01
+              guest_capable: false
+            - entity_id: media_player.ma_office
+              floor_volume: 0.01
+              guest_capable: true
+            - entity_id: media_player.ma_den
+              floor_volume: 0.01
+              guest_capable: true
+          # Safety bound so a member stuck reporting a stale above-floor
+          # volume (e.g. volume_set silently failing under
+          # continue_on_error) can't hold the rampdown open indefinitely —
+          # the max possible distance (silence to full volume) at the
+          # configured step size, plus margin.
+          bedtime_rampdown_max_iterations: >-
+            {{ (1 / bedtime_rampdown_step_volume) | round(0, 'ceil') + 10 }}
       - repeat:
-          for_each: "{{ bedtime_rampdown_steps }}"
+          while:
+            - condition: template
+              value_template: >-
+                {% set ns = namespace(any_active_above_floor=false) %}
+                {% set guest_mode_on = is_state('input_boolean.guest_mode', 'on') %}
+                {% for target in bedtime_rampdown_targets %}
+                  {% if not (guest_mode_on and target.guest_capable) %}
+                    {% if (state_attr(target.entity_id, 'volume_level') | float(target.floor_volume)) > target.floor_volume %}
+                      {% set ns.any_active_above_floor = true %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+                {{ repeat.index <= bedtime_rampdown_max_iterations and ns.any_active_above_floor }}
           sequence:
-            - if:
-                - condition: template
-                  value_template: "{{ repeat.item.delay_minutes | int(0) > 0 }}"
-              then:
-                - delay:
-                    minutes: "{{ repeat.item.delay_minutes }}"
-            # Every step tolerates an unavailable member (e.g. a faulted bathroom
-            # Sonos, #839) so one dropped speaker never aborts the rampdown.
-            - action: media_player.volume_set
-              continue_on_error: true
-              target:
-                entity_id: "{{ repeat.item.entity_id }}"
-              data:
-                volume_level: "{{ repeat.item.volume_level }}"
+            - repeat:
+                for_each: "{{ bedtime_rampdown_targets }}"
+                sequence:
+                  # Every step tolerates an unavailable member (e.g. a faulted
+                  # bathroom Sonos, #839) so one dropped speaker never aborts
+                  # the rampdown. Guest-capable targets are skipped whenever
+                  # guest mode is currently on, checked fresh each iteration.
+                  # Also skipped once a target's live volume is already at or
+                  # below its floor — otherwise max(current - step, floor)
+                  # would raise it back UP to floor on the next iteration
+                  # (e.g. someone manually mutes a room mid-rampdown), which
+                  # is backwards for a rampdown.
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {{ not (is_state('input_boolean.guest_mode', 'on') and repeat.item.guest_capable)
+                             and (state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) > repeat.item.floor_volume }}
+                    then:
+                      - action: media_player.volume_set
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ repeat.item.entity_id }}"
+                        data:
+                          volume_level: >-
+                            {{ [(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
+            - delay:
+                seconds: "{{ bedtime_rampdown_interval_seconds }}"
 
   spotify_wake_up:
     alias: "Spotify Wake Up"
