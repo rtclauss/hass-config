@@ -1289,7 +1289,12 @@ script:
         {{ raw_step_volume if raw_step_volume > 0 else 0.01 }}
       effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
       effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
-      effective_office_peak_volume: "{{ ramp_office_peak_volume_level | default(0.10) | float(0.10) }}"
+      # Clamped to the alarm spec's office_wakeup_peak_volume_percent (10%)
+      # as a ceiling, not just a default — the spec requires the office
+      # capped there so the wake-up never disturbs work-in-progress; a
+      # caller can still ask for something quieter, never louder.
+      effective_office_peak_volume: >-
+        {{ [(ramp_office_peak_volume_level | default(0.10) | float(0.10)), 0.10] | min }}
       # Safety bound so a stuck/unavailable player can never hold the ramp
       # open indefinitely (the theoretical step count, plus margin).
       effective_max_ramp_iterations: >-
@@ -2170,22 +2175,28 @@ script:
           # den are guest_capable_rooms per docs/room_intent.yaml
           # ("override_when_guest_present: treat as guest-private room at any
           # time", priority high) — the same rooms the wake-up scripts'
-          # group_members already exclude in guest mode. This script has
-          # callers with no guest-mode guard of their own (e.g.
+          # group_members already exclude in guest mode. guest_mode is
+          # re-checked live every iteration (not snapshotted once up front),
+          # so a room stops being touched within one interval of guest mode
+          # turning on mid-rampdown, not just at script start. This script
+          # has callers with no guest-mode guard of their own (e.g.
           # bed_without_prep), so the exclusion lives here rather than
           # relying on every caller to remember it.
           bedtime_rampdown_step_volume: 0.01
           bedtime_rampdown_interval_seconds: 12
-          bedtime_rampdown_targets: >-
-            {{ [
-              {'entity_id': 'media_player.ma_bedroom', 'floor_volume': 0.06},
-              {'entity_id': 'media_player.ma_bathroom', 'floor_volume': 0.01}
-            ] + (
-              [] if is_state('input_boolean.guest_mode', 'on') else [
-                {'entity_id': 'media_player.ma_office', 'floor_volume': 0.01},
-                {'entity_id': 'media_player.ma_den', 'floor_volume': 0.01}
-              ]
-            ) }}
+          bedtime_rampdown_targets:
+            - entity_id: media_player.ma_bedroom
+              floor_volume: 0.06
+              guest_capable: false
+            - entity_id: media_player.ma_bathroom
+              floor_volume: 0.01
+              guest_capable: false
+            - entity_id: media_player.ma_office
+              floor_volume: 0.01
+              guest_capable: true
+            - entity_id: media_player.ma_den
+              floor_volume: 0.01
+              guest_capable: true
           # Safety bound so a member stuck reporting a stale above-floor
           # volume (e.g. volume_set silently failing under
           # continue_on_error) can't hold the rampdown open indefinitely —
@@ -2197,27 +2208,36 @@ script:
           while:
             - condition: template
               value_template: >-
-                {% set ns = namespace(any_above_floor=false) %}
+                {% set ns = namespace(any_active_above_floor=false) %}
+                {% set guest_mode_on = is_state('input_boolean.guest_mode', 'on') %}
                 {% for target in bedtime_rampdown_targets %}
-                  {% if (state_attr(target.entity_id, 'volume_level') | float(target.floor_volume)) > target.floor_volume %}
-                    {% set ns.any_above_floor = true %}
+                  {% if not (guest_mode_on and target.guest_capable) %}
+                    {% if (state_attr(target.entity_id, 'volume_level') | float(target.floor_volume)) > target.floor_volume %}
+                      {% set ns.any_active_above_floor = true %}
+                    {% endif %}
                   {% endif %}
                 {% endfor %}
-                {{ repeat.index <= bedtime_rampdown_max_iterations and ns.any_above_floor }}
+                {{ repeat.index <= bedtime_rampdown_max_iterations and ns.any_active_above_floor }}
           sequence:
             - repeat:
                 for_each: "{{ bedtime_rampdown_targets }}"
                 sequence:
                   # Every step tolerates an unavailable member (e.g. a faulted
                   # bathroom Sonos, #839) so one dropped speaker never aborts
-                  # the rampdown.
-                  - action: media_player.volume_set
-                    continue_on_error: true
-                    target:
-                      entity_id: "{{ repeat.item.entity_id }}"
-                    data:
-                      volume_level: >-
-                        {{ [(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
+                  # the rampdown. Guest-capable targets are skipped whenever
+                  # guest mode is currently on, checked fresh each iteration.
+                  - if:
+                      - condition: template
+                        value_template: >-
+                          {{ not (is_state('input_boolean.guest_mode', 'on') and repeat.item.guest_capable) }}
+                    then:
+                      - action: media_player.volume_set
+                        continue_on_error: true
+                        target:
+                          entity_id: "{{ repeat.item.entity_id }}"
+                        data:
+                          volume_level: >-
+                            {{ [(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
             - delay:
                 seconds: "{{ bedtime_rampdown_interval_seconds }}"
 
