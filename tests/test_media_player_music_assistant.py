@@ -364,11 +364,14 @@ def test_radio_wakeup_step_volume_is_clamped_above_zero() -> None:
     # not an explicitly-passed 0 or negative ramp_step_volume — and
     # effective_max_ramp_iterations divides by effective_step_volume, so an
     # unclamped 0 would raise (aborting the whole wake-up before any audio
-    # plays) and a negative value would silently skip the ramp.
-    assert (
-        'effective_step_volume: "{{ [(ramp_step_volume | default(0.01) | float(0.01)), 0.001] | max }}"'
-        in block
-    )
+    # plays) and a negative value would silently skip the ramp. Non-positive
+    # values snap back to the documented 0.01 default rather than a tiny
+    # epsilon floor — an epsilon would avoid the crash but take ~60 minutes
+    # to reach peak, well past the 12-minute stuck-script watchdog (Codex
+    # review, PR #934).
+    assert "raw_step_volume = ramp_step_volume | default(0.01) | float(0.01)" in block
+    assert "raw_step_volume if raw_step_volume > 0 else 0.01" in block
+    assert "], 0.001] | max" not in block
 
 
 def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
