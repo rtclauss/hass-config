@@ -2235,10 +2235,16 @@ script:
                   # bathroom Sonos, #839) so one dropped speaker never aborts
                   # the rampdown. Guest-capable targets are skipped whenever
                   # guest mode is currently on, checked fresh each iteration.
+                  # Also skipped once a target's live volume is already at or
+                  # below its floor — otherwise max(current - step, floor)
+                  # would raise it back UP to floor on the next iteration
+                  # (e.g. someone manually mutes a room mid-rampdown), which
+                  # is backwards for a rampdown.
                   - if:
                       - condition: template
                         value_template: >-
-                          {{ not (is_state('input_boolean.guest_mode', 'on') and repeat.item.guest_capable) }}
+                          {{ not (is_state('input_boolean.guest_mode', 'on') and repeat.item.guest_capable)
+                             and (state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) > repeat.item.floor_volume }}
                     then:
                       - action: media_player.volume_set
                         continue_on_error: true

@@ -735,11 +735,11 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     assert 'seconds: "{{ bedtime_rampdown_interval_seconds }}"' in block
     # Single data-driven volume_set that every target reuses.
     assert block.count("action: media_player.volume_set") == 1
-    # Volume is read live from each entity every iteration (both in the loop
-    # condition and the step itself) rather than assumed from a fixed
-    # starting percentage or a precomputed curve.
+    # Volume is read live from each entity every iteration (in the loop
+    # condition, the per-target skip guard, and the step itself) rather than
+    # assumed from a fixed starting percentage or a precomputed curve.
     assert block.count("state_attr(target.entity_id, 'volume_level')") == 1
-    assert block.count("state_attr(repeat.item.entity_id, 'volume_level')") == 1
+    assert block.count("state_attr(repeat.item.entity_id, 'volume_level')") == 2
     # Graceful degradation (#839): an unavailable member must never abort the
     # rampdown, so the volume_set tolerates errors and no step opts out.
     assert "continue_on_error: true" in block
@@ -749,6 +749,30 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     # still can't hold the rampdown open indefinitely.
     assert "bedtime_rampdown_max_iterations" in block
     assert "repeat.index <= bedtime_rampdown_max_iterations" in block
+
+
+def test_bedtime_rampdown_never_raises_a_below_floor_target_back_up() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    # max(current - step, floor) always returns at least floor — so without
+    # a guard, a target already below its floor (e.g. someone manually mutes
+    # a room mid-rampdown) would get raised back UP to floor on the next
+    # iteration, which is backwards for a rampdown. The volume_set must only
+    # fire while the target's live volume is still above its own floor
+    # (Codex review, PR #934).
+    assert (
+        "(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume))"
+        " > repeat.item.floor_volume }}"
+        in block
+    )
+    # The guard must gate the volume_set action itself (inside the `then:`),
+    # not just exist somewhere in the block.
+    guard_to_action = block.split(
+        "(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume))"
+        " > repeat.item.floor_volume }}",
+        1,
+    )[1]
+    assert "then:" in guard_to_action.split("action: media_player.volume_set", 1)[0]
 
 
 def test_bedtime_rampdown_floors_match_stated_policy_not_just_comment() -> None:
