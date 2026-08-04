@@ -326,9 +326,15 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert "default(15)" in block  # interval default
     assert "default(0.25)" in block  # non-office peak default
     assert "default(0.10)" in block  # office peak default
-    assert "+ effective_step_volume, effective_peak_volume] | min" in block
-    assert "+ effective_step_volume, effective_office_peak_volume] | min" in block
     assert "0.30" not in block
+    # Each member is tracked and stepped from its OWN live volume — the
+    # office (if present) gets its own peak via a per-member ternary, not a
+    # split "non-office list + separate office call" structure that could
+    # let one member (e.g. bedroom) proxy for the rest and let the loop end
+    # while another member is still under-ramped.
+    assert "for_each: \"{{ group_members }}\"" in block
+    assert "member_peak = effective_office_peak_volume if repeat.item == 'media_player.ma_office' else effective_peak_volume" in block
+    assert "[(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min" in block
 
 
 def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded() -> None:
@@ -337,14 +343,13 @@ def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded()
     # An unavailable player must fall back to its own peak (i.e. read as
     # "already done") rather than the silent starting volume — otherwise the
     # while-loop condition never clears (issue: office stuck at 0.01 forever).
-    assert "float(effective_peak_volume)) < effective_peak_volume" in block
-    assert "float(effective_office_peak_volume)) < effective_office_peak_volume" in block
-    assert "float(0.01)) < effective_peak_volume" not in block
-    assert "float(0.01)) < effective_office_peak_volume" not in block
-    # Guest mode excludes the office from group_members entirely, so the
-    # ramp must neither wait on it nor still nudge its volume.
-    assert "'media_player.ma_office' in group_members" in block
-    assert block.count("'media_player.ma_office' in group_members") >= 2
+    assert "member_peak = effective_office_peak_volume if member == 'media_player.ma_office' else effective_peak_volume" in block
+    assert "float(member_peak)) < member_peak" in block
+    assert "float(0.01)) < " not in block
+    # Guest mode excludes the office from group_members entirely; since the
+    # loop iterates group_members directly, an absent office is simply never
+    # evaluated — no special-casing needed.
+    assert "for member in group_members" in block
     # Hard iteration cap: a player that keeps failing volume_set under
     # continue_on_error (stale state, condition never clears) still can't
     # hold the ramp open indefinitely.

@@ -1417,45 +1417,44 @@ script:
       # (default 0.01 ≈ 0.5 dB, half the ~1 dB just-noticeable-difference) and
       # waits effective_interval_seconds (default 15s, well past the ~4s
       # echoic-memory window) so the climb reads as smooth rather than as
-      # discrete jumps. Reads live volume each iteration rather than a
-      # precomputed curve, so a dropped/unavailable member (continue_on_error)
-      # never desyncs the rest of the ramp. Falls back to each member's own
-      # peak (not the silent starting volume) when a volume_level read fails,
-      # so an unavailable player reads as "already done" instead of stalling
-      # the loop; the office wait is also skipped entirely when guest mode
-      # excludes it from group_members. effective_max_ramp_iterations is a
-      # hard backstop so a player that reports a stale volume_level but keeps
-      # failing volume_set (continue_on_error swallowing it) still can't hold
-      # the ramp open indefinitely.
+      # discrete jumps. Every group member (office included, when present) is
+      # tracked and stepped from its OWN live volume_level — not proxied from
+      # one member — so a member that diverges (a manual adjustment, a missed
+      # update) doesn't let the loop finish while it's still under-ramped.
+      # Office's applicable peak is effective_office_peak_volume; everyone
+      # else's is effective_peak_volume. Guest mode excluding the office from
+      # group_members means it's simply never iterated — no special-casing
+      # needed. Falls back to a member's own peak (not the silent starting
+      # volume) when a volume_level read fails, so an unavailable player reads
+      # as "already done" instead of stalling the loop. Reads live volume each
+      # iteration (rather than a precomputed curve) so continue_on_error never
+      # desyncs the rest of the ramp. effective_max_ramp_iterations is a hard
+      # backstop so a player reporting a stale volume_level while volume_set
+      # keeps silently failing still can't hold the ramp open indefinitely.
       - repeat:
           while:
             - condition: template
               value_template: >-
-                {{ repeat.index <= effective_max_ramp_iterations
-                   and ((state_attr('media_player.ma_bedroom', 'volume_level') | float(effective_peak_volume)) < effective_peak_volume
-                        or ('media_player.ma_office' in group_members
-                            and (state_attr('media_player.ma_office', 'volume_level') | float(effective_office_peak_volume)) < effective_office_peak_volume)) }}
+                {% set ns = namespace(any_below_peak=false) %}
+                {% for member in group_members %}
+                  {% set member_peak = effective_office_peak_volume if member == 'media_player.ma_office' else effective_peak_volume %}
+                  {% if (state_attr(member, 'volume_level') | float(member_peak)) < member_peak %}
+                    {% set ns.any_below_peak = true %}
+                  {% endif %}
+                {% endfor %}
+                {{ repeat.index <= effective_max_ramp_iterations and ns.any_below_peak }}
           sequence:
-            - alias: "Ramp non-office wake-up group members toward the alarm peak"
-              continue_on_error: true
-              action: media_player.volume_set
-              target:
-                entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
-              data:
-                volume_level: >-
-                  {{ [(state_attr('media_player.ma_bedroom', 'volume_level') | float(effective_peak_volume)) + effective_step_volume, effective_peak_volume] | min }}
-            - if:
-                - condition: template
-                  value_template: "{{ 'media_player.ma_office' in group_members }}"
-              then:
-                - alias: "Office capped — bedroom wake-up should not disturb work-in-progress"
-                  continue_on_error: true
-                  action: media_player.volume_set
-                  target:
-                    entity_id: media_player.ma_office
-                  data:
-                    volume_level: >-
-                      {{ [(state_attr('media_player.ma_office', 'volume_level') | float(effective_office_peak_volume)) + effective_step_volume, effective_office_peak_volume] | min }}
+            - repeat:
+                for_each: "{{ group_members }}"
+                sequence:
+                  - action: media_player.volume_set
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ repeat.item }}"
+                    data:
+                      volume_level: >-
+                        {% set member_peak = effective_office_peak_volume if repeat.item == 'media_player.ma_office' else effective_peak_volume %}
+                        {{ [(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min }}
             - delay:
                 seconds: "{{ effective_interval_seconds }}"
 
