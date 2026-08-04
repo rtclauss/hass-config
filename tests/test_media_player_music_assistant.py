@@ -331,6 +331,27 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert "0.30" not in block
 
 
+def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # An unavailable player must fall back to its own peak (i.e. read as
+    # "already done") rather than the silent starting volume — otherwise the
+    # while-loop condition never clears (issue: office stuck at 0.01 forever).
+    assert "float(effective_peak_volume)) < effective_peak_volume" in block
+    assert "float(effective_office_peak_volume)) < effective_office_peak_volume" in block
+    assert "float(0.01)) < effective_peak_volume" not in block
+    assert "float(0.01)) < effective_office_peak_volume" not in block
+    # Guest mode excludes the office from group_members entirely, so the
+    # ramp must neither wait on it nor still nudge its volume.
+    assert "'media_player.ma_office' in group_members" in block
+    assert block.count("'media_player.ma_office' in group_members") >= 2
+    # Hard iteration cap: a player that keeps failing volume_set under
+    # continue_on_error (stale state, condition never clears) still can't
+    # hold the ramp open indefinitely.
+    assert "effective_max_ramp_iterations" in block
+    assert "repeat.index <= effective_max_ramp_iterations" in block
+
+
 def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
@@ -650,6 +671,29 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     # rampdown, so the volume_set tolerates errors and no step opts out.
     assert "continue_on_error: true" in block
     assert "continue_on_error: false" not in block
+    # Hard iteration cap: a member that keeps failing volume_set under
+    # continue_on_error (stale above-floor state, condition never clears)
+    # still can't hold the rampdown open indefinitely.
+    assert "bedtime_rampdown_max_iterations" in block
+    assert "repeat.index <= bedtime_rampdown_max_iterations" in block
+
+
+def test_bedtime_rampdown_floors_match_stated_policy_not_just_comment() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    # Only bedroom keeps the elevated 6% floor; office, bathroom, and den all
+    # ramp down to 1% (owner-confirmed: "all others...stop at 1%"). This
+    # guards the comment/config from drifting apart again (Codex review,
+    # PR #934) — den must NOT be pulled back up to bedroom's floor.
+    targets_block = block.split("bedtime_rampdown_targets:", 1)[1].split(
+        "bedtime_rampdown_max_iterations", 1
+    )[0]
+    bedroom_entry = targets_block.split("media_player.ma_bedroom", 1)[1].split(
+        "media_player.ma_office", 1
+    )[0]
+    den_entry = targets_block.split("media_player.ma_den", 1)[1]
+    assert "floor_volume: 0.06" in bedroom_entry
+    assert "floor_volume: 0.01" in den_entry
 
 
 def test_spotify_bedtime_reapplies_repeat_to_started_queue_before_rampdown() -> None:

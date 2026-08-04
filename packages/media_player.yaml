@@ -1279,6 +1279,10 @@ script:
       effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
       effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
       effective_office_peak_volume: "{{ ramp_office_peak_volume_level | default(0.10) | float(0.10) }}"
+      # Safety bound so a stuck/unavailable player can never hold the ramp
+      # open indefinitely (the theoretical step count, plus margin).
+      effective_max_ramp_iterations: >-
+        {{ (([effective_peak_volume, effective_office_peak_volume] | max) / effective_step_volume) | round(0, 'ceil') + 10 }}
       effective_fallback_uri: >-
         {{ fallback_uri | default('spotify:playlist:37i9dQZF1DX7KNKjOK0o75', true) }}
       effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
@@ -1415,13 +1419,22 @@ script:
       # echoic-memory window) so the climb reads as smooth rather than as
       # discrete jumps. Reads live volume each iteration rather than a
       # precomputed curve, so a dropped/unavailable member (continue_on_error)
-      # never desyncs the rest of the ramp.
+      # never desyncs the rest of the ramp. Falls back to each member's own
+      # peak (not the silent starting volume) when a volume_level read fails,
+      # so an unavailable player reads as "already done" instead of stalling
+      # the loop; the office wait is also skipped entirely when guest mode
+      # excludes it from group_members. effective_max_ramp_iterations is a
+      # hard backstop so a player that reports a stale volume_level but keeps
+      # failing volume_set (continue_on_error swallowing it) still can't hold
+      # the ramp open indefinitely.
       - repeat:
           while:
             - condition: template
               value_template: >-
-                {{ (state_attr('media_player.ma_bedroom', 'volume_level') | float(0.01)) < effective_peak_volume
-                   or (state_attr('media_player.ma_office', 'volume_level') | float(0.01)) < effective_office_peak_volume }}
+                {{ repeat.index <= effective_max_ramp_iterations
+                   and ((state_attr('media_player.ma_bedroom', 'volume_level') | float(effective_peak_volume)) < effective_peak_volume
+                        or ('media_player.ma_office' in group_members
+                            and (state_attr('media_player.ma_office', 'volume_level') | float(effective_office_peak_volume)) < effective_office_peak_volume)) }}
           sequence:
             - alias: "Ramp non-office wake-up group members toward the alarm peak"
               continue_on_error: true
@@ -1430,15 +1443,19 @@ script:
                 entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
               data:
                 volume_level: >-
-                  {{ [(state_attr('media_player.ma_bedroom', 'volume_level') | float(0.01)) + effective_step_volume, effective_peak_volume] | min }}
-            - alias: "Office capped — bedroom wake-up should not disturb work-in-progress"
-              continue_on_error: true
-              action: media_player.volume_set
-              target:
-                entity_id: media_player.ma_office
-              data:
-                volume_level: >-
-                  {{ [(state_attr('media_player.ma_office', 'volume_level') | float(0.01)) + effective_step_volume, effective_office_peak_volume] | min }}
+                  {{ [(state_attr('media_player.ma_bedroom', 'volume_level') | float(effective_peak_volume)) + effective_step_volume, effective_peak_volume] | min }}
+            - if:
+                - condition: template
+                  value_template: "{{ 'media_player.ma_office' in group_members }}"
+              then:
+                - alias: "Office capped — bedroom wake-up should not disturb work-in-progress"
+                  continue_on_error: true
+                  action: media_player.volume_set
+                  target:
+                    entity_id: media_player.ma_office
+                  data:
+                    volume_level: >-
+                      {{ [(state_attr('media_player.ma_office', 'volume_level') | float(effective_office_peak_volume)) + effective_step_volume, effective_office_peak_volume] | min }}
             - delay:
                 seconds: "{{ effective_interval_seconds }}"
 
@@ -2137,9 +2154,9 @@ script:
           # (rather than a precomputed curve) so a manually raised/lowered
           # room still tapers smoothly, and a dropped/unavailable member
           # (continue_on_error, #839) never desyncs the rest of the ramp.
-          # Bedroom/den keep a higher 6% floor: MA proportional scaling
+          # Bedroom alone keeps a higher 6% floor: MA proportional scaling
           # rounds lower bedroom levels too aggressively after the loudness
-          # change.
+          # change. Office, bathroom, and den all ramp down to 1%.
           bedtime_rampdown_step_volume: 0.01
           bedtime_rampdown_interval_seconds: 12
           bedtime_rampdown_targets:
@@ -2151,6 +2168,13 @@ script:
               floor_volume: 0.01
             - entity_id: media_player.ma_den
               floor_volume: 0.01
+          # Safety bound so a member stuck reporting a stale above-floor
+          # volume (e.g. volume_set silently failing under
+          # continue_on_error) can't hold the rampdown open indefinitely —
+          # the max possible distance (silence to full volume) at the
+          # configured step size, plus margin.
+          bedtime_rampdown_max_iterations: >-
+            {{ (1 / bedtime_rampdown_step_volume) | round(0, 'ceil') + 10 }}
       - repeat:
           while:
             - condition: template
@@ -2161,7 +2185,7 @@ script:
                     {% set ns.any_above_floor = true %}
                   {% endif %}
                 {% endfor %}
-                {{ ns.any_above_floor }}
+                {{ repeat.index <= bedtime_rampdown_max_iterations and ns.any_above_floor }}
           sequence:
             - repeat:
                 for_each: "{{ bedtime_rampdown_targets }}"
