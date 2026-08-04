@@ -1253,10 +1253,14 @@ script:
         description: "Music Assistant radio URI"
       initial_delay:
         description: "Optional delay before playback starts"
-      ramp_steps:
-        description: "Number of 0.01 volume steps to ramp through (default and hard maximum 25 → peak 0.25)"
-      ramp_k_factor:
-        description: "tan-curve k factor controlling total ramp duration (default 120 ≈ 7 min for 25 steps)"
+      ramp_step_volume:
+        description: "volume_level increment per ramp update (default 0.01 = 1 percentage point ≈ 0.5 dB at the assumed 50 dB Sonos/MA range — half the ~1 dB just-noticeable-difference, same per-step size as the bedtime rampdown)"
+      ramp_interval_seconds:
+        description: "Seconds between ramp updates (default 15). At the default step size this yields ~6 minutes from silence to the peak — stretched well past the ~4s auditory-echoic-memory window so the rise reads as smooth rather than a series of audible jumps"
+      ramp_peak_volume_level:
+        description: "Target volume_level for non-office wake-up members (default 0.25)"
+      ramp_office_peak_volume_level:
+        description: "Target volume_level for the office member, capped lower so the wake-up does not disturb work-in-progress (default 0.10)"
       playback_entity_id:
         description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
@@ -1271,9 +1275,10 @@ script:
         description: "Seconds to wait before retrying the primary source once (default: 15)"
     variables:
       playback_player: media_player.ma_bedroom
-      effective_ramp_steps: >-
-        {{ [[ramp_steps | default(25) | int(25), 1] | max, 25] | min }}
-      effective_k_factor: "{{ ramp_k_factor | default(120) | int(120) }}"
+      effective_step_volume: "{{ ramp_step_volume | default(0.01) | float(0.01) }}"
+      effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
+      effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
+      effective_office_peak_volume: "{{ ramp_office_peak_volume_level | default(0.10) | float(0.10) }}"
       effective_fallback_uri: >-
         {{ fallback_uri | default('spotify:playlist:37i9dQZF1DX7KNKjOK0o75', true) }}
       effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
@@ -1404,37 +1409,38 @@ script:
               message: "Wake-up audio playback could not be established; skipped volume ramp."
           - stop: "Wake-up audio playback could not be established; skipped volume ramp."
             error: true
+      # Perceptual design: each update raises volume by effective_step_volume
+      # (default 0.01 ≈ 0.5 dB, half the ~1 dB just-noticeable-difference) and
+      # waits effective_interval_seconds (default 15s, well past the ~4s
+      # echoic-memory window) so the climb reads as smooth rather than as
+      # discrete jumps. Reads live volume each iteration rather than a
+      # precomputed curve, so a dropped/unavailable member (continue_on_error)
+      # never desyncs the rest of the ramp.
       - repeat:
+          while:
+            - condition: template
+              value_template: >-
+                {{ (state_attr('media_player.ma_bedroom', 'volume_level') | float(0.01)) < effective_peak_volume
+                   or (state_attr('media_player.ma_office', 'volume_level') | float(0.01)) < effective_office_peak_volume }}
           sequence:
-            - if:
-                - condition: template
-                  value_template: "{{ repeat.index <= 20 }}"
-              then:
-                - alias: "Ramp all wake-up group members up to the office cap"
-                  continue_on_error: true
-                  action: media_player.volume_set
-                  target:
-                    entity_id: "{{ group_members }}"
-                  data:
-                    volume_level: "{{ 0.01 * repeat.index }}"
-              else:
-                - alias: "Ramp non-office wake-up group members after the office cap"
-                  continue_on_error: true
-                  action: media_player.volume_set
-                  target:
-                    entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
-                  data:
-                    volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"
-            - alias: "Office capped at 10% — bedroom wake-up should not disturb work-in-progress"
+            - alias: "Ramp non-office wake-up group members toward the alarm peak"
+              continue_on_error: true
+              action: media_player.volume_set
+              target:
+                entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
+              data:
+                volume_level: >-
+                  {{ [(state_attr('media_player.ma_bedroom', 'volume_level') | float(0.01)) + effective_step_volume, effective_peak_volume] | min }}
+            - alias: "Office capped — bedroom wake-up should not disturb work-in-progress"
               continue_on_error: true
               action: media_player.volume_set
               target:
                 entity_id: media_player.ma_office
               data:
-                volume_level: "{{ [0.01 * repeat.index, 0.10] | min }}"
+                volume_level: >-
+                  {{ [(state_attr('media_player.ma_office', 'volume_level') | float(0.01)) + effective_step_volume, effective_office_peak_volume] | min }}
             - delay:
-                seconds: "{{ (1/(tan(repeat.index/effective_k_factor))) | round(0, 'ceil', 5)}}"
-          until: "{{ repeat.index == effective_ramp_steps }}"
+                seconds: "{{ effective_interval_seconds }}"
 
   bedroom_playlist_0:
     alias: "Play LoFi"
@@ -2122,48 +2128,56 @@ script:
       stored_traces: 50
     sequence:
       - variables:
-          bedtime_rampdown_steps:
-            - delay_minutes: 0
-              entity_id:
-                - media_player.ma_bedroom
-                - media_player.ma_office
-                - media_player.ma_bathroom
-                - media_player.ma_den
-              volume_level: 0.1
-            # Keep bedroom at 10%: MA proportional scaling rounds lower
-            # bedroom levels too aggressively after the loudness change.
-            - delay_minutes: 2
-              entity_id:
-                - media_player.ma_bathroom
-                - media_player.ma_office
-              volume_level: 0.07
-            - delay_minutes: 2
-              entity_id:
-                - media_player.ma_bathroom
-                - media_player.ma_office
-              volume_level: 0.05
-            - delay_minutes: 2
-              entity_id:
-                - media_player.ma_bathroom
-                - media_player.ma_office
-              volume_level: 0.01
+          # Perceptual design: each update lowers volume by
+          # bedtime_rampdown_step_volume (0.01 ≈ 0.5 dB at the assumed 50 dB
+          # Sonos/MA range — half the ~1 dB just-noticeable-difference), then
+          # waits bedtime_rampdown_interval_seconds (12s, 3x the ~4s
+          # auditory-echoic-memory window) so no single step is ever compared
+          # against a fresh reference. Reads live volume each iteration
+          # (rather than a precomputed curve) so a manually raised/lowered
+          # room still tapers smoothly, and a dropped/unavailable member
+          # (continue_on_error, #839) never desyncs the rest of the ramp.
+          # Bedroom/den keep a higher 6% floor: MA proportional scaling
+          # rounds lower bedroom levels too aggressively after the loudness
+          # change.
+          bedtime_rampdown_step_volume: 0.01
+          bedtime_rampdown_interval_seconds: 12
+          bedtime_rampdown_targets:
+            - entity_id: media_player.ma_bedroom
+              floor_volume: 0.06
+            - entity_id: media_player.ma_office
+              floor_volume: 0.01
+            - entity_id: media_player.ma_bathroom
+              floor_volume: 0.01
+            - entity_id: media_player.ma_den
+              floor_volume: 0.01
       - repeat:
-          for_each: "{{ bedtime_rampdown_steps }}"
+          while:
+            - condition: template
+              value_template: >-
+                {% set ns = namespace(any_above_floor=false) %}
+                {% for target in bedtime_rampdown_targets %}
+                  {% if (state_attr(target.entity_id, 'volume_level') | float(target.floor_volume)) > target.floor_volume %}
+                    {% set ns.any_above_floor = true %}
+                  {% endif %}
+                {% endfor %}
+                {{ ns.any_above_floor }}
           sequence:
-            - if:
-                - condition: template
-                  value_template: "{{ repeat.item.delay_minutes | int(0) > 0 }}"
-              then:
-                - delay:
-                    minutes: "{{ repeat.item.delay_minutes }}"
-            # Every step tolerates an unavailable member (e.g. a faulted bathroom
-            # Sonos, #839) so one dropped speaker never aborts the rampdown.
-            - action: media_player.volume_set
-              continue_on_error: true
-              target:
-                entity_id: "{{ repeat.item.entity_id }}"
-              data:
-                volume_level: "{{ repeat.item.volume_level }}"
+            - repeat:
+                for_each: "{{ bedtime_rampdown_targets }}"
+                sequence:
+                  # Every step tolerates an unavailable member (e.g. a faulted
+                  # bathroom Sonos, #839) so one dropped speaker never aborts
+                  # the rampdown.
+                  - action: media_player.volume_set
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ repeat.item.entity_id }}"
+                    data:
+                      volume_level: >-
+                        {{ [(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
+            - delay:
+                seconds: "{{ bedtime_rampdown_interval_seconds }}"
 
   spotify_wake_up:
     alias: "Spotify Wake Up"

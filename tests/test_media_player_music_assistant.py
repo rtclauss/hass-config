@@ -316,10 +316,18 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert "media_player.ma_tiki_room" not in block
     assert block.count('target_entity: "{{ playback_player }}"') >= 1
     assert 'group_members: "{{ group_members }}"' in block
-    assert 'volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"' in block
-    assert "default(25)" in block
     assert "starting_volume: 0.01" in block
-    assert 'volume_level: "{{ [0.01 * repeat.index, 0.10] | min }}"' in block
+    # Perceptually-paced ramp: reads live volume each iteration and steps it
+    # toward the (distinct) non-office / office peaks rather than using a
+    # precomputed index-based curve.
+    assert "effective_step_volume" in block
+    assert "effective_interval_seconds" in block
+    assert "default(0.01)" in block  # step default
+    assert "default(15)" in block  # interval default
+    assert "default(0.25)" in block  # non-office peak default
+    assert "default(0.10)" in block  # office peak default
+    assert "+ effective_step_volume, effective_peak_volume] | min" in block
+    assert "+ effective_step_volume, effective_office_peak_volume] | min" in block
     assert "0.30" not in block
 
 
@@ -607,32 +615,37 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     block = _script_block("spotify_bedtime_volume")
 
     for token in (
-        "bedtime_rampdown_steps:",
-        "delay_minutes: 0",
-        "delay_minutes: 2",
-        "volume_level: 0.1",
-        "volume_level: 0.07",
-        "volume_level: 0.05",
-        "volume_level: 0.01",
+        "bedtime_rampdown_targets:",
+        "entity_id: media_player.ma_bedroom",
+        "entity_id: media_player.ma_office",
+        "entity_id: media_player.ma_bathroom",
+        "entity_id: media_player.ma_den",
+        "floor_volume: 0.06",
+        "floor_volume: 0.01",
+        # Perceptual step/interval: ~0.5 dB per update (half the ~1 dB JND),
+        # 12s apart (3x the ~4s echoic-memory window).
+        "bedtime_rampdown_step_volume: 0.01",
+        "bedtime_rampdown_interval_seconds: 12",
         "repeat:",
-        'for_each: "{{ bedtime_rampdown_steps }}"',
-        'minutes: "{{ repeat.item.delay_minutes }}"',
+        "while:",
+        'for_each: "{{ bedtime_rampdown_targets }}"',
         'entity_id: "{{ repeat.item.entity_id }}"',
-        'volume_level: "{{ repeat.item.volume_level }}"',
+        "bedtime_rampdown_step_volume, repeat.item.floor_volume] | max",
     ):
         assert token in block
 
+    # Bedroom keeps a distinct, higher floor than the other three rooms.
+    assert block.count("floor_volume: 0.06") == 1
+    assert block.count("floor_volume: 0.01") == 3
     assert block.count("- delay:") == 1
-    # Single data-driven volume_set that every step reuses.
+    assert 'seconds: "{{ bedtime_rampdown_interval_seconds }}"' in block
+    # Single data-driven volume_set that every target reuses.
     assert block.count("action: media_player.volume_set") == 1
-    initial_ten_percent_step = block.split("delay_minutes: 0", 1)[1].split(
-        "delay_minutes: 2", 1
-    )[0]
-    below_ten_percent_steps = block.split("delay_minutes: 2", 1)[1]
-    assert "media_player.ma_bedroom" in initial_ten_percent_step
-    assert "media_player.ma_bedroom" not in below_ten_percent_steps
-    assert "media_player.ma_bathroom" in below_ten_percent_steps
-    assert "media_player.ma_office" in below_ten_percent_steps
+    # Volume is read live from each entity every iteration (both in the loop
+    # condition and the step itself) rather than assumed from a fixed
+    # starting percentage or a precomputed curve.
+    assert block.count("state_attr(target.entity_id, 'volume_level')") == 1
+    assert block.count("state_attr(repeat.item.entity_id, 'volume_level')") == 1
     # Graceful degradation (#839): an unavailable member must never abort the
     # rampdown, so the volume_set tolerates errors and no step opts out.
     assert "continue_on_error: true" in block
