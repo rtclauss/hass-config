@@ -2159,18 +2159,26 @@ script:
           # (continue_on_error, #839) never desyncs the rest of the ramp.
           # Bedroom alone keeps a higher 6% floor: MA proportional scaling
           # rounds lower bedroom levels too aggressively after the loudness
-          # change. Office, bathroom, and den all ramp down to 1%.
+          # change. Office, bathroom, and den all ramp down to 1%. Office and
+          # den are guest_capable_rooms per docs/room_intent.yaml
+          # ("override_when_guest_present: treat as guest-private room at any
+          # time", priority high) — the same rooms the wake-up scripts'
+          # group_members already exclude in guest mode. This script has
+          # callers with no guest-mode guard of their own (e.g.
+          # bed_without_prep), so the exclusion lives here rather than
+          # relying on every caller to remember it.
           bedtime_rampdown_step_volume: 0.01
           bedtime_rampdown_interval_seconds: 12
-          bedtime_rampdown_targets:
-            - entity_id: media_player.ma_bedroom
-              floor_volume: 0.06
-            - entity_id: media_player.ma_office
-              floor_volume: 0.01
-            - entity_id: media_player.ma_bathroom
-              floor_volume: 0.01
-            - entity_id: media_player.ma_den
-              floor_volume: 0.01
+          bedtime_rampdown_targets: >-
+            {{ [
+              {'entity_id': 'media_player.ma_bedroom', 'floor_volume': 0.06},
+              {'entity_id': 'media_player.ma_bathroom', 'floor_volume': 0.01}
+            ] + (
+              [] if is_state('input_boolean.guest_mode', 'on') else [
+                {'entity_id': 'media_player.ma_office', 'floor_volume': 0.01},
+                {'entity_id': 'media_player.ma_den', 'floor_volume': 0.01}
+              ]
+            ) }}
           # Safety bound so a member stuck reporting a stale above-floor
           # volume (e.g. volume_set silently failing under
           # continue_on_error) can't hold the rampdown open indefinitely —

@@ -656,12 +656,12 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
 
     for token in (
         "bedtime_rampdown_targets:",
-        "entity_id: media_player.ma_bedroom",
-        "entity_id: media_player.ma_office",
-        "entity_id: media_player.ma_bathroom",
-        "entity_id: media_player.ma_den",
-        "floor_volume: 0.06",
-        "floor_volume: 0.01",
+        "'entity_id': 'media_player.ma_bedroom'",
+        "'entity_id': 'media_player.ma_office'",
+        "'entity_id': 'media_player.ma_bathroom'",
+        "'entity_id': 'media_player.ma_den'",
+        "'floor_volume': 0.06",
+        "'floor_volume': 0.01",
         # Perceptual step/interval: ~0.5 dB per update (half the ~1 dB JND),
         # 12s apart (3x the ~4s echoic-memory window).
         "bedtime_rampdown_step_volume: 0.01",
@@ -675,8 +675,8 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
         assert token in block
 
     # Bedroom keeps a distinct, higher floor than the other three rooms.
-    assert block.count("floor_volume: 0.06") == 1
-    assert block.count("floor_volume: 0.01") == 3
+    assert block.count("'floor_volume': 0.06") == 1
+    assert block.count("'floor_volume': 0.01") == 3
     assert block.count("- delay:") == 1
     assert 'seconds: "{{ bedtime_rampdown_interval_seconds }}"' in block
     # Single data-driven volume_set that every target reuses.
@@ -708,11 +708,37 @@ def test_bedtime_rampdown_floors_match_stated_policy_not_just_comment() -> None:
         "bedtime_rampdown_max_iterations", 1
     )[0]
     bedroom_entry = targets_block.split("media_player.ma_bedroom", 1)[1].split(
-        "media_player.ma_office", 1
+        "media_player.ma_bathroom", 1
     )[0]
     den_entry = targets_block.split("media_player.ma_den", 1)[1]
-    assert "floor_volume: 0.06" in bedroom_entry
-    assert "floor_volume: 0.01" in den_entry
+    assert "'floor_volume': 0.06" in bedroom_entry
+    assert "'floor_volume': 0.01" in den_entry
+
+
+def test_bedtime_rampdown_excludes_guest_capable_rooms_in_guest_mode() -> None:
+    block = _script_block("spotify_bedtime_volume")
+
+    # Office and den are guest_capable_rooms in docs/room_intent.yaml
+    # ("override_when_guest_present: treat as guest-private room at any
+    # time", priority high) — the same rooms the wake-up scripts' group_members
+    # already exclude in guest mode. bed_without_prep calls this script with
+    # no guest-mode guard of its own, so the exclusion must live here
+    # (Codex review, PR #934).
+    targets_block = block.split("bedtime_rampdown_targets:", 1)[1].split(
+        "bedtime_rampdown_max_iterations", 1
+    )[0]
+    assert "is_state('input_boolean.guest_mode', 'on')" in targets_block
+    # Bedroom and bathroom (owner-suite, not guest-capable) are unconditional;
+    # office and den sit inside the guest-mode-gated branch.
+    unconditional_part, guest_gated_part = targets_block.split(
+        "if is_state('input_boolean.guest_mode', 'on')", 1
+    )
+    assert "media_player.ma_bedroom" in unconditional_part
+    assert "media_player.ma_bathroom" in unconditional_part
+    assert "media_player.ma_office" not in unconditional_part
+    assert "media_player.ma_den" not in unconditional_part
+    assert "media_player.ma_office" in guest_gated_part
+    assert "media_player.ma_den" in guest_gated_part
 
 
 def test_spotify_bedtime_reapplies_repeat_to_started_queue_before_rampdown() -> None:
