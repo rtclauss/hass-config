@@ -1275,18 +1275,6 @@ script:
         description: "Seconds to wait before retrying the primary source once (default: 15)"
     variables:
       playback_player: media_player.ma_bedroom
-      # Non-positive values snap back to the documented 0.01 default rather
-      # than a tiny epsilon floor: Jinja's default() filter only substitutes
-      # for an *undefined* input, not an explicitly-passed 0 or negative
-      # value, and effective_max_ramp_iterations below divides by this — an
-      # unclamped 0 would raise before any audio plays. A tiny epsilon
-      # floor (e.g. 0.001) would avoid the crash but still take ~60 minutes
-      # to reach the peak at the default interval, well past the 12-minute
-      # recover_stuck_morning_audio_scripts watchdog — leaving the wake-up
-      # stuck around 6% instead of completing.
-      effective_step_volume: >-
-        {% set raw_step_volume = ramp_step_volume | default(0.01) | float(0.01) %}
-        {{ raw_step_volume if raw_step_volume > 0 else 0.01 }}
       effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
       effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
       # Clamped to the alarm spec's office_wakeup_peak_volume_percent (10%)
@@ -1295,6 +1283,27 @@ script:
       # caller can still ask for something quieter, never louder.
       effective_office_peak_volume: >-
         {{ [(ramp_office_peak_volume_level | default(0.10) | float(0.10)), 0.10] | min }}
+      # Non-positive values snap up to the documented 0.01 default; any
+      # positive-but-too-small value (e.g. an explicit 0.001) snaps up to
+      # min_step_volume_for_watchdog instead. Jinja's default() filter only
+      # substitutes for an *undefined* input, not an explicitly-passed value,
+      # so either case would otherwise let the ramp take arbitrarily long to
+      # reach effective_peak_volume — recover_stuck_morning_audio_scripts
+      # (media_player.yaml:509-526) force-stops this script at 12 minutes
+      # regardless, so a too-small step leaves the wake-up stuck partway
+      # instead of ever reaching peak. min_step_volume_for_watchdog is
+      # derived from the *configured* peak/interval (not a fixed constant)
+      # so it stays correct if a caller changes those too, and targets
+      # completing within a 10-minute budget — comfortably inside the
+      # watchdog's 12 minutes.
+      effective_step_volume: >-
+        {% set raw_step_volume = ramp_step_volume | default(0.01) | float(0.01) %}
+        {% set positive_step_volume = raw_step_volume if raw_step_volume > 0 else 0.01 %}
+        {% set watchdog_timeout_seconds = 720 %}
+        {% set watchdog_safety_margin_seconds = 120 %}
+        {% set max_ramp_distance = [effective_peak_volume, effective_office_peak_volume] | max %}
+        {% set min_step_volume_for_watchdog = (max_ramp_distance * effective_interval_seconds) / (watchdog_timeout_seconds - watchdog_safety_margin_seconds) %}
+        {{ [positive_step_volume, min_step_volume_for_watchdog] | max }}
       # Safety bound so a stuck/unavailable player can never hold the ramp
       # open indefinitely (the theoretical step count, plus margin).
       effective_max_ramp_iterations: >-

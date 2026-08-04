@@ -389,6 +389,42 @@ def test_radio_wakeup_step_volume_is_clamped_above_zero() -> None:
     assert "], 0.001] | max" not in block
 
 
+def test_radio_wakeup_step_volume_floors_to_a_watchdog_safe_minimum() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # A positive-but-tiny explicit ramp_step_volume (e.g. 0.001) passes the
+    # "> 0" check above but would still take far longer than the 12-minute
+    # recover_stuck_morning_audio_scripts watchdog to reach peak. The
+    # minimum step is derived from the *configured* peak/interval (not a
+    # fixed constant) so it stays correct if a caller changes those too,
+    # targeting completion inside a 10-minute budget (Codex review, PR #934).
+    assert "watchdog_timeout_seconds = 720" in block
+    assert "watchdog_safety_margin_seconds = 120" in block
+    assert (
+        "max_ramp_distance = [effective_peak_volume, effective_office_peak_volume] | max"
+        in block
+    )
+    assert (
+        "min_step_volume_for_watchdog = (max_ramp_distance * effective_interval_seconds)"
+        " / (watchdog_timeout_seconds - watchdog_safety_margin_seconds)"
+        in block
+    )
+    assert "[positive_step_volume, min_step_volume_for_watchdog] | max" in block
+    # effective_step_volume must be defined after the peak/office-peak/
+    # interval variables it now depends on (HA's variables action renders
+    # sequentially — a variable can only reference earlier siblings).
+    definition_order = block.split("variables:", 1)[1].split("sequence:", 1)[0]
+    assert definition_order.index("effective_interval_seconds:") < definition_order.index(
+        "effective_step_volume:"
+    )
+    assert definition_order.index("effective_peak_volume:") < definition_order.index(
+        "effective_step_volume:"
+    )
+    assert definition_order.index(
+        "effective_office_peak_volume:"
+    ) < definition_order.index("effective_step_volume:")
+
+
 def test_radio_wakeup_verifies_retries_and_falls_back_before_ramp() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
