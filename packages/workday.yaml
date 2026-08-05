@@ -349,9 +349,17 @@ automation:
         entity_id: binary_sensor.bedroom_occupancy
         to: "on"
     condition:
-      - condition: time
-        after: "04:30:00"
-        before: "12:00:00"
+      - condition: template
+        alias: "within 30 min of the earliest wake alarm (or past it, before noon)"
+        value_template: >-
+          {% set buffer_minutes = 30 %}
+          {% set candidates = [
+               state_attr('input_datetime.weekday_alarm', 'timestamp'),
+               state_attr('input_datetime.next_work_meeting', 'timestamp')
+             ] | select('number') | list %}
+          {% set earliest = candidates | min if candidates else 0 %}
+          {% set now_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
+          {{ now_seconds >= (earliest - buffer_minutes * 60) and now_seconds < 43200 }}
       - condition: state
         entity_id: binary_sensor.workday_sensor
         state: "on"
