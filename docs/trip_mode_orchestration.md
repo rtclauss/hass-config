@@ -46,11 +46,13 @@ That keeps `switch.vacation_simulation` and
 ## Guest And House-Sitter Policy
 
 Guest mode is the current privacy-preserving house-sitter signal. Trip vacuuming
-is suppressed when `input_boolean.guest_mode` is on, matching
+is suppressed when `input_boolean.guest_mode` is on and also requires the exact
+`input_select.vacuum_pet_policy` state `Unattended`, matching
 `docs/room_intent.yaml` guidance that automatic vacuuming should not intrude on
-guest-capable rooms. Trip-mode vacation simulation is still allowed because it is
-an exterior/common-area presence signal and is idempotently controlled by
-`script.house_transition`.
+guest-capable rooms or bypass the cat-safe cleaning policy. Trip and flying-home
+paths are vacuum-only and never force a mop. Trip-mode vacation simulation is
+still allowed because it is an exterior/common-area presence signal and is
+idempotently controlled by `script.house_transition`.
 
 ## Manual Verification
 
@@ -61,5 +63,8 @@ an exterior/common-area presence signal and is idempotently controlled by
    emits `trip_mode_resolution_requested` instead of directly clearing vacation
    entities.
 4. Run `vacuum_on_trip` with guest mode on and confirm no vacuum starts.
-5. Run `vacuum_on_trip` with guest mode off, trip mode on, and the house empty;
-   confirm `script.vacuum_main_and_upstairs_levels` starts once.
+5. Run `vacuum_on_trip` with guest mode off, trip mode on, the house empty, and
+   pet policy set to `Acclimation`; confirm no vacuum starts and no success
+   notification is sent.
+6. After an owner explicitly selects `Unattended`, repeat step 5 and confirm
+   `script.vacuum_main_and_upstairs_levels` starts once without forcing a mop.
