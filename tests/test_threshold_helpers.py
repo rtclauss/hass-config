@@ -71,7 +71,7 @@ def test_bathroom_humidity_delta_sensors_have_availability_guards() -> None:
         ),
         "basement_bathroom_humidity_delta": (
             "sensor.basement_bathroom_tph_humidity",
-            "sensor.basement_humidity",
+            "sensor.basement_tph_humidity",
         ),
         "guest_bathroom_humidity_delta": (
             "sensor.guest_bathroom_tph_humidity",
@@ -89,6 +89,7 @@ def test_bathroom_humidity_delta_sensors_have_availability_guards() -> None:
 
     basement_block = _template_sensor_block(text, "basement_bathroom_humidity_delta")
     assert "sensor.average_house_humidity" not in basement_block
+    assert "sensor.basement_humidity" not in text
 
 
 def test_any_egress_open_uses_native_threshold_helper() -> None:
