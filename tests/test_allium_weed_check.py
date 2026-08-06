@@ -294,6 +294,35 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "diffusers.allium are unchanged."
             ),
         },
+        {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "allowed_changed_line_patterns": [
+                "-*condition: time",
+                "-*04:30:00*",
+                "-*12:00:00*",
+                "+*condition: template",
+                "+*wake alarm*",
+                "+*value_template: >-",
+                "+*buffer_minutes*",
+                "+*candidates*",
+                "+*state_attr('input_datetime.weekday_alarm'*",
+                "+*state_attr('input_datetime.next_work_meeting'*",
+                "+*is_state('input_boolean.weekday_alarm_on'*",
+                "+*is_state('input_boolean.special_meeting'*",
+                "+*select('number')*",
+                "+*earliest*",
+                "+*now_seconds*",
+            ],
+            "classification": "non-diffuser wake-window repair",
+            "reason": (
+                "PR #939 replaces the fixed 04:30 owner-suite morning-activity "
+                "gate with a window derived from enabled wake alarms. This behavior "
+                "is governed by specs/alarm_wakeup.allium and does not change diffuser "
+                "sleep/wake participation, afternoon fallback, or oil reminders "
+                "governed by specs/diffusers.allium."
+            ),
+        },
     ]
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",
