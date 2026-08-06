@@ -108,8 +108,12 @@ def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> Non
     block = _automation_block(WORKDAY_PATH, "workday_owner_suite_wake_transition_from_morning_activity")
 
     for token in (
-        'after: "04:30:00"',
-        'before: "12:00:00"',
+        "within 30 min of the earliest wake alarm",
+        "is_state('input_boolean.weekday_alarm_on', 'on')",
+        "is_state('input_boolean.special_meeting', 'on')",
+        "reject('equalto', 0)",
+        "earliest is number",
+        "now_seconds < 43200",
         "input_select.house_mode",
         "- night",
         "- in_bed",
@@ -127,6 +131,8 @@ def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> Non
         "as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900",
     ):
         assert token in block
+
+    assert 'after: "04:30:00"' not in block
 
 
 def test_close_owner_suite_blinds_catches_evening_recovery_after_missed_sunset() -> None:

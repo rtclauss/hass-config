@@ -354,12 +354,16 @@ automation:
         value_template: >-
           {% set buffer_minutes = 30 %}
           {% set candidates = [
-               state_attr('input_datetime.weekday_alarm', 'timestamp'),
+               state_attr('input_datetime.weekday_alarm', 'timestamp')
+                 if is_state('input_boolean.weekday_alarm_on', 'on') else none,
                state_attr('input_datetime.next_work_meeting', 'timestamp')
-             ] | select('number') | list %}
-          {% set earliest = candidates | min if candidates else 0 %}
+                 if is_state('input_boolean.special_meeting', 'on') else none
+             ] | select('number') | reject('equalto', 0) | list %}
+          {% set earliest = candidates | min if candidates else none %}
           {% set now_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
-          {{ now_seconds >= (earliest - buffer_minutes * 60) and now_seconds < 43200 }}
+          {{ earliest is number
+             and now_seconds >= (earliest - buffer_minutes * 60)
+             and now_seconds < 43200 }}
       - condition: state
         entity_id: binary_sensor.workday_sensor
         state: "on"
