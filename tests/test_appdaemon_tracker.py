@@ -175,3 +175,50 @@ def test_location_update_survives_missing_tracker_entity(monkeypatch) -> None:
     app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_called_once()
+
+
+def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
+    """run_update must not crash when the tracker entity does not exist yet.
+
+    The away branch re-fetches device_tracker.<id> to blend the previous
+    location; on a cold start get_state() returns None, so dereferencing
+    dev_tracker_state["attributes"] raises TypeError. It must be handled so the
+    update falls back to the new location and update_tracker recreates the
+    entity via set_state.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.error = Mock()
+    app.log = Mock()
+
+    def fake_get_state(entity, attribute=None):
+        if entity == "zone":
+            return HOME
+        if entity.startswith("device_tracker."):
+            return None  # tracker not created yet on cold start
+        return {"attributes": {}}
+
+    app.get_state = Mock(side_effect=fake_get_state)
+    app.set_state = Mock()
+
+    bayesian_state = {"state": "off", "attributes": {"probability": 0.9, "probability_threshold": 0.5}}
+    sensor_state = {
+        "entity_id": "device_tracker.wethop",
+        "state": "not_home",
+        "attributes": {
+            "latitude": 44.5,
+            "longitude": -92.5,
+            "gps_accuracy": 10,
+            "speed": 5.0,
+            "battery": 80,
+        },
+    }
+
+    # Should not raise despite the missing tracker entity.
+    app.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
+
+    app.set_state.assert_called_once()
+    args, kwargs = app.set_state.call_args
+    assert args[0] == "device_tracker.bayesian_zeke_home"
+    assert kwargs["attributes"]["source_type"] == "gps"

@@ -261,12 +261,14 @@ class BayesianDeviceTracker(hass.Hass):
                         #     lat=dev_tracker_state["attributes"]["latitude"], lon=dev_tracker_state["attributes"]["longitude"])
                         old_lat_log_p = ellipsoidalNvector.LatLon(
                             dev_tracker_state["attributes"]["latitude"], dev_tracker_state["attributes"]["longitude"])
-                    except KeyError as ke:
-                        # Home Assistant has restarted so we have no previous state for the device tracker. Let's use the new location state
-                        # for the old value.
+                    except (KeyError, TypeError):
+                        # No previous location for the tracker: either HA restarted
+                        # (KeyError: state present, no latitude/longitude yet) or the
+                        # entity does not exist at all (TypeError: get_state returned
+                        # None, now possible since we no longer persist via
+                        # device_tracker.see). Use the new location for the old value
+                        # so update_tracker can (re)create the entity.
                         old_lat_log_p = new_lat_log_p
-                        #self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
-                        pass
 
                     #self.log("old location is: {}".format(old_lat_log_p))
                     
