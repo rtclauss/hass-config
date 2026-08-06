@@ -217,7 +217,9 @@ def test_away_automations_use_shared_whole_floor_helper() -> None:
         assert '"iterations": 4' not in block
 
     flying_home_block = _automation_block(TRIPS_PATH, "vacuum_flying_home")
-    assert "force_mop: true" in flying_home_block
+    # Away/trip paths may vacuum only; pet safety requires an inspected floor
+    # before mopping, so flying home must no longer force a mop pass.
+    assert "force_mop: true" not in flying_home_block
 
 
 def test_x40_replaces_mainlevel_vacuum_in_shared_consumers() -> None:

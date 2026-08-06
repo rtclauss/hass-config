@@ -1006,7 +1006,6 @@ automation:
     action:
       - action: script.trip_vacuum_main_and_upstairs_levels
         data:
-          force_mop: true
           notify_message: >-
             Vacuuming the main and upstairs levels while you fly home 💺
 
@@ -1238,6 +1237,10 @@ script:
           Notification text describing why the trip vacuum pass started.
         example: "Vacuuming the main and upstairs levels while you're away."
     sequence:
+      - alias: "Trip cleaning requires explicit unattended pet policy"
+        condition: state
+        entity_id: input_select.vacuum_pet_policy
+        state: "Unattended"
       - action: script.vacuum_main_and_upstairs_levels
         data:
           force_mop: "{{ force_mop | default(false) | bool }}"
