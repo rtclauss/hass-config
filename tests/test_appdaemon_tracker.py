@@ -40,10 +40,22 @@ def _load_tracker_module(monkeypatch):
     monkeypatch.setitem(sys.modules, "geopy", geopy)
     monkeypatch.setitem(sys.modules, "geopy.distance", geopy_distance)
 
-    # Stub pygeodesy modules used at import time.
+    # Stub pygeodesy modules used at import time. LatLon exposes just enough of
+    # the geodesic API for location_update's distance math to run.
+    class _LatLon:
+        def __init__(self, lat=0.0, lon=0.0):
+            self.lat = lat
+            self.lon = lon
+
+        def distanceTo(self, other):
+            return 1000.0
+
+        def intermediateTo(self, other, ratio):
+            return _LatLon(other.lat, other.lon)
+
     pygeodesy = types.ModuleType("pygeodesy")
     for name in ("ellipsoidalNvector", "ellipsoidalKarney"):
-        setattr(pygeodesy, name, types.SimpleNamespace(LatLon=Mock()))
+        setattr(pygeodesy, name, types.SimpleNamespace(LatLon=_LatLon))
         monkeypatch.setitem(sys.modules, f"pygeodesy.{name}", getattr(pygeodesy, name))
     monkeypatch.setitem(sys.modules, "pygeodesy", pygeodesy)
 
@@ -126,3 +138,40 @@ def test_resolve_state_ignores_passive_zones(monkeypatch) -> None:
 def test_resolve_state_none_coordinates(monkeypatch) -> None:
     app = _make_app(monkeypatch, HOME)
     assert app.resolve_tracker_state(None, None) == "not_home"
+
+
+def test_location_update_survives_missing_tracker_entity(monkeypatch) -> None:
+    """A cold start where the tracker entity does not exist yet must not crash.
+
+    get_state() returns None for the tracker, so the gps_updated lookup raises
+    TypeError; the app should treat that as a fresh restart and proceed to
+    run_update rather than letting the callback error out.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.bayesian = "binary_sensor.bayesian_zeke_home"
+    app.minimum_update_window = 300
+    app.minimum_update_distance = 50
+    app.gps_accuracy_tolerance = 100
+    app.error = Mock()
+    app.log = Mock()
+    app.run_update = Mock()
+    app.convert_utc = Mock()  # real AppDaemon method; present so the None subscript is what raises
+
+    def fake_get_state(entity, attribute=None):
+        if entity == app.bayesian:
+            return {"state": "off", "attributes": {"probability": 0.1}}
+        if entity.startswith("device_tracker."):
+            return None  # entity not created yet on cold start
+        return {"attributes": {}}
+
+    app.get_state = Mock(side_effect=fake_get_state)
+
+    new = {"attributes": {"latitude": 44.5, "longitude": -92.5, "gps_accuracy": 10}}
+    old = {"attributes": {"latitude": 45.0, "longitude": -92.0, "gps_accuracy": 10}}
+
+    # Should not raise despite the missing tracker entity.
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_called_once()

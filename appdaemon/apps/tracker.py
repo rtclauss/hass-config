@@ -74,7 +74,12 @@ class BayesianDeviceTracker(hass.Hass):
                 # self.log("Bayesian Device Tracker GPS Location last changed less than {} seconds ago.  Not Updating.".format(self.minimum_update_window))
                 return
             fresh_restart = False
-        except KeyError as ke:
+        except (KeyError, TypeError):
+            # KeyError: entity exists but has no gps_updated attribute yet.
+            # TypeError: entity does not exist yet (get_state returned None) --
+            #   e.g. a cold start before the first set_state, now that the tracker
+            #   is no longer persisted via the legacy device_tracker.see path.
+            # Either way, treat it as a fresh restart and push a location update.
             fresh_restart = True
             # self.log(
             #     "Newly restarted HASS so there is no gps_updated attribute.  Updating location")
