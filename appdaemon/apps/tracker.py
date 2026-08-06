@@ -37,10 +37,14 @@ class BayesianDeviceTracker(hass.Hass):
             # self.log("bayes_updated and bayes sensor says I am home")
             # self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             # self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
-            self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
-                "course": 0.0, "home_probability": sensor_state["attributes"]["probability"], "latitude": config["latitude"], "longitude": config["longitude"]},
-                gps=[config["latitude"], config["longitude"]]
-                )
+            self.update_tracker(
+                latitude=config["latitude"],
+                longitude=config["longitude"],
+                attributes={
+                    "course": 0.0,
+                    "home_probability": sensor_state["attributes"]["probability"],
+                },
+            )
         else:
             return
 
@@ -165,10 +169,15 @@ class BayesianDeviceTracker(hass.Hass):
             # self.log("Bayesian sensor says I am home. Setting device_tracker to home")
             # self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
             # self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
-            self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={
-                "course": 0.0, "speed": attributes['speed'], "home_probability": bayesian_state["attributes"]["probability"], 
-                "latitude": config["latitude"], "longitude": config["longitude"]},
-                gps=[config["latitude"], config["longitude"]])
+            self.update_tracker(
+                latitude=config["latitude"],
+                longitude=config["longitude"],
+                attributes={
+                    "course": 0.0,
+                    "speed": attributes['speed'],
+                    "home_probability": bayesian_state["attributes"]["probability"],
+                },
+            )
         else:
             # self.log("bayes says I am away")
             if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
@@ -275,7 +284,6 @@ class BayesianDeviceTracker(hass.Hass):
 
 
                     # self.log("{}".format(attributes))
-                    # For some reason setting attributes of gps coordinates overrides the gps data in device_tracker/see
                     attributes['latitude'] = mean_of_points.lat
                     attributes['longitude'] = mean_of_points.lon
 
@@ -284,17 +292,80 @@ class BayesianDeviceTracker(hass.Hass):
 
                     # rtclauss add gps_update_time_attribute
                     attributes['gps_updated'] = datetime.now(timezone.utc).isoformat()
-                    self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id,
+                    self.update_tracker(
+                        # rtclauss 11/15/18 - use mean location
+                        latitude=mean_of_points.lat,
+                        longitude=mean_of_points.lon,
                         attributes=attributes,
                         gps_accuracy=gps_attributes["gps_accuracy"],
-                        # rtclauss 11/15/18 - use mean location
-                        gps=[mean_of_points.lat,mean_of_points.lon]
-                        )
+                    )
                 except KeyError as e:
                     pass
                     # self.error(
                     #     "KeyError {}: missing information from sensor {}. Returning with no action.".format(e, sensor_state['entity_id']))
-                    #self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
             else:
                 self.error("missing information from gps sensor. Returning with no action.")
-                #self.call_service("device_tracker/see", dev_id=self.bayesian_device_tracker_id, attributes={"home_probability": bayesian_state["attributes"]["probability"]})
+
+    def update_tracker(self, latitude, longitude, attributes, gps_accuracy=0):
+        """Update the Bayesian device tracker's state and attributes.
+
+        Replaces the deprecated ``device_tracker.see`` service (removed in Home
+        Assistant Core 2027.5) with a direct ``set_state`` call. Home Assistant's
+        zone triggers evaluate the tracker's ``latitude``/``longitude`` attributes
+        rather than the state string, so preserving accurate GPS attributes keeps
+        the existing zone enter/leave automations working. The state string is
+        resolved to ``home``/zone-name/``not_home`` here to mirror what
+        ``device_tracker.see`` used to compute.
+        """
+        entity_id = "device_tracker." + self.bayesian_device_tracker_id
+        merged = copy.deepcopy(attributes) if attributes else {}
+        merged["latitude"] = latitude
+        merged["longitude"] = longitude
+        merged["gps_accuracy"] = gps_accuracy
+        merged["source_type"] = "gps"
+        state = self.resolve_tracker_state(latitude, longitude, gps_accuracy)
+        self.set_state(entity_id, state=state, attributes=merged)
+
+    def resolve_tracker_state(self, latitude, longitude, gps_accuracy=0):
+        """Map GPS coordinates to a device_tracker state string.
+
+        Mirrors Home Assistant's ``async_active_zone`` / ``device_tracker.see``
+        behavior: the smallest (then closest) active zone containing the point
+        wins, the home zone maps to ``home``, any other zone maps to its friendly
+        name, and no matching zone yields ``not_home``.
+        """
+        if latitude is None or longitude is None:
+            return "not_home"
+        try:
+            zones = self.get_state("zone", attribute="all")
+        except Exception:  # pragma: no cover - defensive; get_state should not raise
+            zones = None
+        if not zones:
+            return "not_home"
+
+        best = None  # tuple of (radius, distance, entity_id, friendly_name)
+        for entity_id, zone in zones.items():
+            attrs = (zone or {}).get("attributes", {}) or {}
+            if attrs.get("passive"):
+                continue
+            zone_lat = attrs.get("latitude")
+            zone_lon = attrs.get("longitude")
+            radius = attrs.get("radius")
+            if zone_lat is None or zone_lon is None or radius is None:
+                continue
+            try:
+                distance = great_circle((latitude, longitude), (zone_lat, zone_lon)).meters
+            except Exception:  # pragma: no cover - defensive against bad coordinates
+                continue
+            # Same in-zone test HA uses: within radius, expanded by GPS accuracy.
+            if distance - (gps_accuracy or 0) >= radius:
+                continue
+            candidate = (radius, distance, entity_id, attrs.get("friendly_name", entity_id))
+            if best is None or candidate[:2] < best[:2]:
+                best = candidate
+
+        if best is None:
+            return "not_home"
+        if best[2] == "zone.home":
+            return "home"
+        return best[3]
