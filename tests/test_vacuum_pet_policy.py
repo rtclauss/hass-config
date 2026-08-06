@@ -103,6 +103,7 @@ def test_every_automatic_cleaning_path_routes_through_a_pet_safe_boundary() -> N
 def test_shared_full_floor_boundaries_fail_closed_for_unknown_or_disabled_policy() -> None:
     for script_id in (
         "vacuum_den_pet_safe_start",
+        "x40_ultra_main_level_vacuum_only",
         "vacuum_main_level_full_floor",
         "vacuum_main_and_upstairs_levels",
         "x40_ultra_main_level_mop_after_vacuum",
@@ -133,6 +134,22 @@ def test_pet_policy_suppresses_non_unattended_and_away_forced_mopping() -> None:
 
     assert "is_state('input_select.vacuum_pet_policy', 'Unattended')" in policy
     assert "force_mop: true" not in flying_home
+
+
+def test_x40_rechecks_policy_after_preparation_and_before_each_start() -> None:
+    for script_id in (
+        "x40_ultra_main_level_vacuum_only",
+        "x40_ultra_main_level_mop_after_vacuum",
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        prepare = block.index("action: script.x40_ultra_prepare_deterministic_cleaning")
+        policy_recheck = block.index(
+            "entity_id: input_select.vacuum_pet_policy",
+            prepare,
+        )
+        start = block.index("action: vacuum.start", policy_recheck)
+
+        assert prepare < policy_recheck < start
 
 
 def test_room_intent_links_durable_cat_safe_cleaning_policy() -> None:
