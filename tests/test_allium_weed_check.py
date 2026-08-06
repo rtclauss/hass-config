@@ -279,6 +279,21 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "trigger routing, and reusable-script wiring are implementation details."
             ),
         },
+        {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "allowed_changed_line_patterns": [
+                "-*ramp_k_factor: 140",
+                "+*ramp_interval_seconds: 18",
+            ],
+            "classification": "non-diffuser wake-ramp change",
+            "reason": (
+                "Issue #937 and PR #934 replace the Music Assistant wake-up "
+                "volume-ramp pacing parameter; diffuser sleep/wake participation, "
+                "afternoon fallback, and oil-replacement behavior governed by "
+                "diffusers.allium are unchanged."
+            ),
+        },
     ]
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",
