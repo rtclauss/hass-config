@@ -64,12 +64,31 @@ important contract is that automated trip resolution delegates to
 with `apply_trip_policy: true` so vacation simulation stays in sync with
 `input_boolean.trip`.
 
+## Verified Departure
+
+`automation.turn_off_lights_when_i_leave` starts only from the canonical
+Bayesian empty-house event and delegates to `script.departure_integrity`.
+That script:
+
+- stops immediately when guest mode is active or resident presence returns;
+- calls `script.house_transition` with `mode: away` and trip-policy handling;
+- waits for the normal shutdown to settle, then retries available lock, cover,
+  light, fan, media, and camera exceptions once;
+- never sends service calls to targets that are `unknown` or `unavailable`;
+- sends one final notification containing every remaining security, egress,
+  lighting, media, fan, camera, and trip-policy exception.
+
+The front exterior lights remain protected. The former independent garage and
+egress departure notifications were consolidated into the final integrity
+summary so a single departure cannot produce duplicate alerts.
+
 ## Manual Verification
 
 1. Trigger `script.house_transition` twice with the same `mode` and confirm no
    unsafe repeat behavior occurs.
 2. Leave home with `input_boolean.guest_mode` off and confirm the lock, garage,
-   leave-home scene, camera scene, and light shutdown still run.
+   leave-home scene, camera scene, media pause/off, fan, and light shutdown run.
+   Confirm a normal successful departure sends no notification.
 3. Leave home with `input_boolean.guest_mode` on and confirm away tracking
    updates without running the destructive leave-home actions.
 4. Arrive home during the day and confirm the normal arrival scene and Ecobee
@@ -83,4 +102,7 @@ with `apply_trip_policy: true` so vacation simulation stays in sync with
    `switch.vacation_simulation` and
    `input_number.random_vacation_light_group` stay in sync.
 8. Temporarily make one target entity unavailable and confirm the script keeps
-   applying the remaining actions because service calls use `continue_on_error`.
+   applying the remaining actions, does not call the unavailable target, and
+   reports it once in the final exception summary.
+9. Leave one available target in the wrong state, confirm it receives one retry,
+   and confirm only the final state is reported if the retry does not succeed.

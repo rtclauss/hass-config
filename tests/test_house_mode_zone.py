@@ -129,12 +129,12 @@ def test_house_transition_supports_in_bed_and_asleep_without_forcing_night_scene
     assert "resolved_light_scene" in block
 
 
-def test_departure_house_transition_runs_in_parallel_without_embedding_vacuum_logic() -> None:
+def test_departure_house_transition_delegates_without_embedding_vacuum_logic() -> None:
     transition_block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
     vacuum_block = _automation_block(ZONE_PATH, "vacuum_leave_home")
 
-    assert "parallel:" in transition_block
-    assert "action: script.house_transition" in transition_block
+    assert "action: script.departure_integrity" in transition_block
+    assert "action: script.house_transition" not in transition_block
     assert "action: mqtt.publish" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" in vacuum_block
@@ -145,7 +145,65 @@ def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
 
     assert "Primary tracker confirms departure" in block
     assert "device_tracker.bayesian_zeke_home" in block
-    assert "not is_state('device_tracker.bayesian_zeke_home', 'home')" in block
+    assert "condition: zone" in block
+    assert "zone: zone.home" in block
+
+
+def test_departure_runs_integrity_only_after_bayesian_empty_house_signal() -> None:
+    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+
+    assert "Only start departure integrity from Bayesian departure" in block
+    assert "trigger.event.data.source_trigger == 'bayesian_presence_off'" in block
+    assert "action: script.departure_integrity" in block
+    assert "action: script.house_transition" not in block
+
+
+def test_departure_integrity_retries_available_failures_and_notifies_once() -> None:
+    block = _zone_script_block("departure_integrity")
+
+    assert "mode: restart" in block
+    assert "action: script.house_transition" in block
+    assert "mode: away" in block
+    assert "apply_trip_policy: true" in block
+    assert "departure_retry_needed" in block
+    assert "unavailable" in block
+    assert "unknown" in block
+    assert "Retry available departure failures once" in block
+    assert "action: script.lights_off_except" in block
+    assert "action: lock.lock" in block
+    assert "action: cover.close_cover" in block
+    assert "action: media_player.turn_off" in block
+    assert "action: fan.turn_off" in block
+    assert "action: switch.turn_on" in block
+    assert block.count("action: notify.all") == 1
+
+
+def test_departure_integrity_summarizes_all_remaining_exceptions() -> None:
+    text = ZONE_PATH.read_text(encoding="utf-8")
+    block = _zone_script_block("departure_integrity")
+
+    assert "id: doors_open_when_leaving_home" not in text
+    assert "id: garage_door_open_when_leaving_home" not in text
+    assert "departure_integrity_issues" in block
+    assert "sensor.open_egress_points" in block
+    assert "lock.front_door_lock" in block
+    assert "cover.garage_door" in block
+    assert "media_player.lg_webos_smart_tv" in block
+    assert "switch.livingroom_motion_detection" in block
+    assert "switch.tiki_room_camera" in block
+    assert "interior_lights_on" in block
+    assert "fans_on" in block
+    assert "trip mode" in block
+    assert "Departure integrity found exceptions" in block
+
+
+def test_departure_integrity_stops_if_guest_or_resident_context_returns() -> None:
+    block = _zone_script_block("departure_integrity")
+
+    assert block.count("entity_id: input_boolean.guest_mode") >= 2
+    assert block.count("entity_id: binary_sensor.bayesian_zeke_home") >= 2
+    assert block.count("condition: zone") >= 2
+    assert block.count("zone: zone.home") >= 2
 
 
 def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
@@ -190,8 +248,6 @@ def test_presence_event_consumers_keep_independent_traces_and_modes() -> None:
         "vacuum_return_home",
     )
     departure_consumers = (
-        "doors_open_when_leaving_home",
-        "garage_door_open_when_leaving_home",
         "input_boolean_tracker_off",
         "turn_off_lights_when_i_leave",
         "vacuum_leave_home",
