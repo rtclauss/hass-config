@@ -468,7 +468,7 @@ automation:
                       target:
                         entity_id: media_player.ma_office
                       data:
-                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.10] | min }}"
+                        volume_level: "{{ [0.05 + (0.01 * repeat.index), 0.07] | min }}"
                     - delay:
                         seconds: "{{ (1/(tan((repeat.index + 5)/60))) | round(0, 'ceil', 5) }}"
                   until: "{{ repeat.index == 20 }}"
@@ -494,13 +494,13 @@ automation:
                     entity_id: "{{ group_members | reject('eq', 'media_player.ma_office') | list }}"
                   data:
                     volume_level: "{{ [0.01 * repeat.index, 0.25] | min }}"
-                - alias: "Office capped at 10% — bedroom wake-up should not disturb work-in-progress"
+                - alias: "Office capped at 7% — bedroom wake-up should not disturb work-in-progress"
                   continue_on_error: true
                   action: media_player.volume_set
                   target:
                     entity_id: media_player.ma_office
                   data:
-                    volume_level: "{{ [0.01 * repeat.index, 0.10] | min }}"
+                    volume_level: "{{ [0.01 * repeat.index, 0.07] | min }}"
                 - delay:
                     # As time passes, the delay gets smaller and smaller. 60, 30s, 20s, 15s, 12s,..., 2s
                     seconds: "{{ (1/(tan(repeat.index/60))) | round(0, 'ceil', 5)}}"
@@ -1258,9 +1258,11 @@ script:
       ramp_interval_seconds:
         description: "Seconds between ramp updates (default 15). At the default step size this yields ~6 minutes from silence to the peak — stretched well past the ~4s auditory-echoic-memory window so the rise reads as smooth rather than a series of audible jumps"
       ramp_peak_volume_level:
-        description: "Target volume_level for non-office wake-up members (default 0.25)"
+        description: "Target volume_level for non-office, non-bedroom wake-up members (default 0.25)"
+      ramp_bedroom_peak_volume_level:
+        description: "Target volume_level for the bedroom member, set higher than the other rooms so the sleeper is reliably woken (default 0.30)"
       ramp_office_peak_volume_level:
-        description: "Target volume_level for the office member, capped lower so the wake-up does not disturb work-in-progress (default 0.10)"
+        description: "Target volume_level for the office member, capped lower so the wake-up does not disturb work-in-progress (default 0.07)"
       playback_entity_id:
         description: "Preferred Music Assistant player for wake-up playback (kept for backwards compatibility; ignored — sync group is used)"
       regroup_after_play:
@@ -1277,12 +1279,16 @@ script:
       playback_player: media_player.ma_bedroom
       effective_interval_seconds: "{{ ramp_interval_seconds | default(15) | int(15) }}"
       effective_peak_volume: "{{ ramp_peak_volume_level | default(0.25) | float(0.25) }}"
-      # Clamped to the alarm spec's office_wakeup_peak_volume_percent (10%)
+      # The bedroom peaks higher than the other rooms — it holds the sleeper,
+      # so the wake-up has to clear the "still asleep" threshold there, not
+      # just be audible. Other rooms stay at effective_peak_volume.
+      effective_bedroom_peak_volume: "{{ ramp_bedroom_peak_volume_level | default(0.30) | float(0.30) }}"
+      # Clamped to the alarm spec's office_wakeup_peak_volume_percent (7%)
       # as a ceiling, not just a default — the spec requires the office
       # capped there so the wake-up never disturbs work-in-progress; a
       # caller can still ask for something quieter, never louder.
       effective_office_peak_volume: >-
-        {{ [(ramp_office_peak_volume_level | default(0.10) | float(0.10)), 0.10] | min }}
+        {{ [(ramp_office_peak_volume_level | default(0.07) | float(0.07)), 0.07] | min }}
       # Non-positive values snap up to the documented 0.01 default; any
       # positive-but-too-small value (e.g. an explicit 0.001) snaps up to
       # min_step_volume_for_watchdog instead. Jinja's default() filter only
@@ -1301,13 +1307,13 @@ script:
         {% set positive_step_volume = raw_step_volume if raw_step_volume > 0 else 0.01 %}
         {% set watchdog_timeout_seconds = 720 %}
         {% set watchdog_safety_margin_seconds = 120 %}
-        {% set max_ramp_distance = [effective_peak_volume, effective_office_peak_volume] | max %}
+        {% set max_ramp_distance = [effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max %}
         {% set min_step_volume_for_watchdog = (max_ramp_distance * effective_interval_seconds) / (watchdog_timeout_seconds - watchdog_safety_margin_seconds) %}
         {{ [positive_step_volume, min_step_volume_for_watchdog] | max }}
       # Safety bound so a stuck/unavailable player can never hold the ramp
       # open indefinitely (the theoretical step count, plus margin).
       effective_max_ramp_iterations: >-
-        {{ (([effective_peak_volume, effective_office_peak_volume] | max) / effective_step_volume) | round(0, 'ceil') + 10 }}
+        {{ (([effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max) / effective_step_volume) | round(0, 'ceil') + 10 }}
       effective_fallback_uri: >-
         {{ fallback_uri | default('spotify:playlist:37i9dQZF1DX7KNKjOK0o75', true) }}
       effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
@@ -1446,8 +1452,10 @@ script:
       # tracked and stepped from its OWN live volume_level — not proxied from
       # one member — so a member that diverges (a manual adjustment, a missed
       # update) doesn't let the loop finish while it's still under-ramped.
-      # Office's applicable peak is effective_office_peak_volume; everyone
-      # else's is effective_peak_volume. Guest mode excluding the office from
+      # Each member resolves its own peak: the bedroom to
+      # effective_bedroom_peak_volume (higher, to wake the sleeper), the office
+      # to effective_office_peak_volume (capped), everyone else to
+      # effective_peak_volume. Guest mode excluding the office from
       # group_members means it's simply never iterated — no special-casing
       # needed. Falls back to a member's own peak (not the silent starting
       # volume) when a volume_level read fails, so an unavailable player reads
@@ -1462,7 +1470,7 @@ script:
               value_template: >-
                 {% set ns = namespace(any_below_peak=false) %}
                 {% for member in group_members %}
-                  {% set member_peak = effective_office_peak_volume if member == 'media_player.ma_office' else effective_peak_volume %}
+                  {% set member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(member, effective_peak_volume) %}
                   {% if (state_attr(member, 'volume_level') | float(member_peak)) < member_peak %}
                     {% set ns.any_below_peak = true %}
                   {% endif %}
@@ -1478,7 +1486,7 @@ script:
                       entity_id: "{{ repeat.item }}"
                     data:
                       volume_level: >-
-                        {% set member_peak = effective_office_peak_volume if repeat.item == 'media_player.ma_office' else effective_peak_volume %}
+                        {% set member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(repeat.item, effective_peak_volume) %}
                         {{ [(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min }}
             - delay:
                 seconds: "{{ effective_interval_seconds }}"
