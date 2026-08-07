@@ -49,7 +49,7 @@ Common optional fields:
   `cloudy_home_arrival`, `default_arrive_home`,
   `turn_on_lights_at_night_when_i_get_home`,
   `turn_on_bedroom_lights_at_night_when_i_get_home`,
-  `turn_off_lights_when_i_leave`
+  `run_verified_departure`
 - `packages/guest.yaml`
   guest-mode enable/disable and guest climate refresh automations
 - `packages/trips.yaml`
@@ -66,8 +66,10 @@ with `apply_trip_policy: true` so vacation simulation stays in sync with
 
 ## Verified Departure
 
-`automation.turn_off_lights_when_i_leave` starts only from the canonical
+`automation.run_verified_departure` starts only from the canonical
 Bayesian empty-house event and delegates to `script.departure_integrity`.
+It confirms the house is empty from `binary_sensor.bayesian_zeke_home` rather
+than the derived GPS tracker, which can still read `home` at that moment.
 That script:
 
 - stops immediately when guest mode is active or resident presence returns;

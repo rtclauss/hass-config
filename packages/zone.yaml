@@ -54,9 +54,9 @@ homeassistant:
     automation.turn_on_bedroom_lights_at_night_when_i_get_home:
       <<: *customize
       friendly_name: Bedroom Night Arrival
-    automation.turn_off_lights_when_i_leave:
+    automation.run_verified_departure:
       <<: *customize
-      friendly_name: Lights Off on Departure
+      friendly_name: Verified Departure
     automation.vacuum_return_home:
       <<: *customize
       friendly_name: Stop Vacuuming on Arrival
@@ -506,8 +506,8 @@ automation:
           message: >-
             Turn off HVAC Away Mode. You {{trigger.event}} {{trigger.zone}} in direction {{ states('sensor.zeke_direction') }}. Setting Ecobee Home.
 
-  - id: turn_off_lights_when_i_leave
-    alias: turn_off_lights_when_i_leave
+  - id: run_verified_departure
+    alias: run_verified_departure
     description: Run the verified away transition only after the house is empty.
     mode: restart
     trace:
@@ -526,12 +526,16 @@ automation:
         condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
-      - alias: "Primary tracker confirms departure"
-        condition: not
-        conditions:
-          - condition: zone
-            entity_id: device_tracker.bayesian_zeke_home
-            zone: zone.home
+      # Gate on the canonical empty-house Bayesian signal, not the derived GPS
+      # tracker: appdaemon/apps/tracker.py only moves the tracker out of the
+      # home zone on a later GPS callback, so at bayesian_presence_off time the
+      # tracker can still read `home`. Requiring the tracker to have left here
+      # made the source check and the tracker check mutually exclusive, so the
+      # away transition never ran (#110, Codex P1).
+      - alias: "House is empty per the Bayesian presence signal"
+        condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
       - alias: "I'm driving away"
         enabled: false
         condition: state
@@ -965,16 +969,14 @@ script:
         condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      # The Bayesian empty-house sensor is the canonical departure signal. The
+      # derived GPS tracker can still read `home` at this point (it only leaves
+      # the home zone on a later GPS callback), so gating on it here would stall
+      # the away transition (#110, Codex P1).
       - alias: "Departure integrity requires an empty house"
         condition: state
         entity_id: binary_sensor.bayesian_zeke_home
         state: "off"
-      - alias: "Departure integrity requires the primary tracker outside home"
-        condition: not
-        conditions:
-          - condition: zone
-            entity_id: device_tracker.bayesian_zeke_home
-            zone: zone.home
       - action: script.house_transition
         data:
           mode: away
@@ -990,12 +992,6 @@ script:
         condition: state
         entity_id: binary_sensor.bayesian_zeke_home
         state: "off"
-      - alias: "Stop retry work if the primary tracker returned home"
-        condition: not
-        conditions:
-          - condition: zone
-            entity_id: device_tracker.bayesian_zeke_home
-            zone: zone.home
       - variables:
           retry_lock: >-
             {{ states('lock.front_door_lock') not in ['locked', 'unknown', 'unavailable'] }}
@@ -1133,12 +1129,6 @@ script:
         condition: state
         entity_id: binary_sensor.bayesian_zeke_home
         state: "off"
-      - alias: "Do not notify if the primary tracker returned home"
-        condition: not
-        conditions:
-          - condition: zone
-            entity_id: device_tracker.bayesian_zeke_home
-            zone: zone.home
       - variables:
           final_interior_lights_on: >-
             {%- set opaque_group_members = {

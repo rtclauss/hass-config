@@ -130,7 +130,7 @@ def test_house_transition_supports_in_bed_and_asleep_without_forcing_night_scene
 
 
 def test_departure_house_transition_delegates_without_embedding_vacuum_logic() -> None:
-    transition_block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+    transition_block = _automation_block(ZONE_PATH, "run_verified_departure")
     vacuum_block = _automation_block(ZONE_PATH, "vacuum_leave_home")
 
     assert "action: script.departure_integrity" in transition_block
@@ -140,17 +140,21 @@ def test_departure_house_transition_delegates_without_embedding_vacuum_logic() -
     assert "action: script.vacuum_main_and_upstairs_levels" in vacuum_block
 
 
-def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
-    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+def test_departure_gates_on_bayesian_empty_house_not_derived_tracker() -> None:
+    # The derived GPS tracker can still read `home` when the Bayesian sensor
+    # turns off (appdaemon/apps/tracker.py only leaves the home zone on a later
+    # GPS callback). Gating on the tracker made the source check and the tracker
+    # check mutually exclusive, so the away transition never ran (#110, Codex P1).
+    block = _automation_block(ZONE_PATH, "run_verified_departure")
 
-    assert "Primary tracker confirms departure" in block
-    assert "device_tracker.bayesian_zeke_home" in block
-    assert "condition: zone" in block
-    assert "zone: zone.home" in block
+    assert "House is empty per the Bayesian presence signal" in block
+    assert "entity_id: binary_sensor.bayesian_zeke_home" in block
+    assert "Primary tracker confirms departure" not in block
+    assert "condition: zone" not in block
 
 
 def test_departure_runs_integrity_only_after_bayesian_empty_house_signal() -> None:
-    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+    block = _automation_block(ZONE_PATH, "run_verified_departure")
 
     assert "Only start departure integrity from Bayesian departure" in block
     assert "trigger.event.data.source_trigger == 'bayesian_presence_off'" in block
@@ -200,10 +204,13 @@ def test_departure_integrity_summarizes_all_remaining_exceptions() -> None:
 def test_departure_integrity_stops_if_guest_or_resident_context_returns() -> None:
     block = _zone_script_block("departure_integrity")
 
-    assert block.count("entity_id: input_boolean.guest_mode") >= 2
-    assert block.count("entity_id: binary_sensor.bayesian_zeke_home") >= 2
-    assert block.count("condition: zone") >= 2
-    assert block.count("zone: zone.home") >= 2
+    # Guest mode and the canonical Bayesian empty-house sensor are re-checked
+    # before the away transition, before the retry pass, and before notifying.
+    # The derived GPS tracker is intentionally not gated on here (#110, Codex P1).
+    assert block.count("entity_id: input_boolean.guest_mode") >= 3
+    assert block.count("entity_id: binary_sensor.bayesian_zeke_home") >= 3
+    assert "condition: zone" not in block
+    assert "zone: zone.home" not in block
 
 
 def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
@@ -249,7 +256,7 @@ def test_presence_event_consumers_keep_independent_traces_and_modes() -> None:
     )
     departure_consumers = (
         "input_boolean_tracker_off",
-        "turn_off_lights_when_i_leave",
+        "run_verified_departure",
         "vacuum_leave_home",
     )
 

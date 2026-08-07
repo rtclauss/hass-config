@@ -150,7 +150,7 @@ def test_upstairs_vacuum_entity_is_not_required_for_ha_automation_control() -> N
 
 
 def test_departure_transition_no_longer_embeds_weekday_room_rotation() -> None:
-    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+    block = _automation_block(ZONE_PATH, "run_verified_departure")
 
     assert "script.departure_integrity" in block
     assert "MapSegmentationCapability/clean/set" not in block
