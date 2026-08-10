@@ -80,7 +80,10 @@ That script:
   `unknown` or `unavailable` target can never abort the shutdown, and the retry
   pass skips those targets so no redundant service call is sent to them;
 - sends one final notification containing every remaining security, egress,
-  lighting, media, fan, camera, and trip-policy exception.
+  lighting, media, fan, camera, and trip-policy exception. `media_player`
+  targets whose off state is reported as `unavailable` (the WebOS TV) count as
+  off, and fans or non-protected lights left `unavailable`/`unknown` are
+  reported as "not verified off" rather than silently passing.
 
 The front exterior lights remain protected. The former independent garage and
 egress departure notifications were consolidated into the final integrity

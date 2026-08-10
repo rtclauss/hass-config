@@ -1166,6 +1166,40 @@ script:
             {{ ns.entities | join(', ') }}
           final_fans_on: >-
             {{ states.fan | selectattr('state', 'eq', 'on') | map(attribute='entity_id') | join(', ') }}
+          # Fans that are unknown/unavailable were never retried (only 'on' fans
+          # are) and their turn-off could not be verified, so surface them so the
+          # unavailable-target contract holds for bulk fan shutdown (#110, Codex).
+          final_fans_unverified: >-
+            {{ states.fan | selectattr('state', 'in', ['unavailable', 'unknown'])
+               | map(attribute='entity_id') | join(', ') }}
+          # Non-protected lights that are unknown/unavailable, same rationale as
+          # the fans above; reuses the group-aware protected filter.
+          final_interior_lights_unverified: >-
+            {%- set opaque_group_members = {
+              'light.outside_front_lights': [
+                'light.outside_front_hue',
+                'light.outside_north_west_garage',
+                'light.outside_south_west_garage',
+                'light.outside_front_door'
+              ]
+            } -%}
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for light in states.light -%}
+              {%- set runtime_members = state_attr(light.entity_id, 'entity_id') -%}
+              {%- if runtime_members is iterable and runtime_members is not string -%}
+                {%- set members = runtime_members | list -%}
+              {%- elif light.entity_id in opaque_group_members -%}
+                {%- set members = opaque_group_members[light.entity_id] -%}
+              {%- else -%}
+                {%- set members = [] -%}
+              {%- endif -%}
+              {%- set protected = light.entity_id in protected_departure_lights
+                or (members | select('in', protected_departure_lights) | list | count > 0) -%}
+              {%- if light.state in ['unavailable', 'unknown'] and not protected -%}
+                {%- set ns.entities = ns.entities + [light.entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
           departure_integrity_issues: >-
             {%- set ns = namespace(issues=[]) -%}
             {%- if not is_state('input_select.house_mode', 'away') -%}
@@ -1183,8 +1217,10 @@ script:
             {%- elif states('binary_sensor.any_egress_open') in ['unknown', 'unavailable'] -%}
               {%- set ns.issues = ns.issues + ['Egress verification is ' ~ states('binary_sensor.any_egress_open') ~ '.'] -%}
             {%- endif -%}
+            {%- set media_off_states = {'media_player.lg_webos_smart_tv': ['off', 'unavailable']} -%}
             {%- for entity_id in departure_media_off_targets -%}
-              {%- if states(entity_id) != 'off' -%}
+              {%- set ok_states = media_off_states.get(entity_id, ['off']) -%}
+              {%- if states(entity_id) not in ok_states -%}
                 {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
                 {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
               {%- endif -%}
@@ -1204,8 +1240,14 @@ script:
             {%- if final_interior_lights_on | trim != '' -%}
               {%- set ns.issues = ns.issues + ['Interior lights still on: ' ~ final_interior_lights_on ~ '.'] -%}
             {%- endif -%}
+            {%- if final_interior_lights_unverified | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Interior lights not verified off (unavailable/unknown): ' ~ final_interior_lights_unverified ~ '.'] -%}
+            {%- endif -%}
             {%- if final_fans_on | trim != '' -%}
               {%- set ns.issues = ns.issues + ['Fans still on: ' ~ final_fans_on ~ '.'] -%}
+            {%- endif -%}
+            {%- if final_fans_unverified | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Fans not verified off (unavailable/unknown): ' ~ final_fans_unverified ~ '.'] -%}
             {%- endif -%}
             {%- if is_state('input_boolean.trip', 'on') and not is_state('switch.vacation_simulation', 'on') -%}
               {%- set ns.issues = ns.issues + ['Vacation simulation is not on while trip mode is on.'] -%}

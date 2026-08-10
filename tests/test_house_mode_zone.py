@@ -215,6 +215,31 @@ def test_departure_integrity_requires_garage_fully_closed(  # noqa: D103
     assert "not in ['closed', 'closing']" not in block
 
 
+def test_departure_integrity_accepts_webos_tv_unavailable_as_off(  # noqa: D103
+) -> None:
+    # The WebOS TV reports its powered-off state as "unavailable" (see
+    # packages/tv.yaml), so a normal power-off must not be flagged as a failed
+    # turn-off in the final summary (#110, Codex P2).
+    block = _zone_script_block("departure_integrity")
+
+    assert "media_off_states" in block
+    assert "'media_player.lg_webos_smart_tv': ['off', 'unavailable']" in block
+    assert "media_off_states.get(entity_id, ['off'])" in block
+
+
+def test_departure_integrity_reports_unverified_fans_and_lights(  # noqa: D103
+) -> None:
+    # Fans/lights that are unavailable/unknown are not retried (only "on" ones
+    # are) but their off state cannot be verified, so they must appear in the
+    # final exception summary per the unavailable-target contract (#110, Codex).
+    block = _zone_script_block("departure_integrity")
+
+    assert "final_fans_unverified" in block
+    assert "final_interior_lights_unverified" in block
+    assert "Fans not verified off" in block
+    assert "Interior lights not verified off" in block
+
+
 def test_departure_integrity_stops_if_guest_or_resident_context_returns() -> None:
     block = _zone_script_block("departure_integrity")
 
