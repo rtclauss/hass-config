@@ -73,6 +73,8 @@ def _make_app(monkeypatch, zones):
     app.get_state = Mock(return_value=zones)
     app.set_state = Mock()
     app.error = Mock()
+    app.log = Mock()
+    app.tracker_friendly_name = "Zeke"
     return app
 
 
@@ -191,6 +193,7 @@ def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
     app.bayesian_device_tracker_id = "bayesian_zeke_home"
     app.error = Mock()
     app.log = Mock()
+    app.tracker_friendly_name = "Zeke"
 
     def fake_get_state(entity, attribute=None):
         if entity == "zone":
@@ -222,3 +225,72 @@ def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
     args, kwargs = app.set_state.call_args
     assert args[0] == "device_tracker.bayesian_zeke_home"
     assert kwargs["attributes"]["source_type"] == "gps"
+
+
+def test_update_tracker_state_override_bypasses_zone_resolution(monkeypatch) -> None:
+    """The bayesian home path forces state='home' even when zone lookup fails.
+
+    Reproduces the production failure: get_state("zone", attribute="all")
+    returns None, so resolve_tracker_state would yield 'not_home'. The explicit
+    state override must win so the tracker still reports home.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.tracker_friendly_name = "Zeke"
+    app.set_state = Mock()
+    app.get_state = Mock(return_value=None)  # every zone lookup fails
+    app.log = Mock()
+    app.error = Mock()
+
+    app.update_tracker(latitude=44.0, longitude=-93.0,
+                       attributes={"course": 0.0}, state="home")
+
+    _, kwargs = app.set_state.call_args
+    assert kwargs["state"] == "home"
+
+
+def test_update_tracker_strips_source_identity_attrs(monkeypatch) -> None:
+    """A GPS source's identity attributes must not leak onto the fused tracker."""
+    app = _make_app(monkeypatch, HOME)
+
+    app.update_tracker(latitude=44.0, longitude=-93.0, attributes={
+        "friendly_name": "Nigori Location tracker",
+        "in_zones": ["zone.neighborhood"],
+        "last_changed": "2026-08-10T00:00:00",
+        "context": {"id": "abc"},
+        "home_probability": 1,
+    })
+
+    _, kwargs = app.set_state.call_args
+    attrs = kwargs["attributes"]
+    assert attrs["friendly_name"] == "Zeke"          # stable name, not the source's
+    assert "in_zones" not in attrs
+    assert "last_changed" not in attrs
+    assert "context" not in attrs
+    assert attrs["home_probability"] == 1            # legitimate attrs preserved
+
+
+def test_zone_states_fallback_when_domain_all_returns_none(monkeypatch) -> None:
+    """resolve_tracker_state recovers when get_state('zone', attribute='all') is None.
+
+    This is the exact runtime bug: the domain + attribute='all' call returns
+    None. The per-entity fallback must still enumerate zones so a home point
+    resolves to 'home'.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.log = Mock()
+
+    def fake_get_state(entity, attribute=None):
+        if entity == "zone" and attribute == "all":
+            return None  # reproduces the AppDaemon runtime behavior
+        if entity == "zone":
+            return {"zone.home": "1"}  # domain enumeration works
+        if entity == "zone.home":
+            return {"attributes": {"latitude": 44.0, "longitude": -93.0, "radius": 100}}
+        return None
+
+    app.get_state = Mock(side_effect=fake_get_state)
+
+    assert app.resolve_tracker_state(44.0, -93.0) == "home"

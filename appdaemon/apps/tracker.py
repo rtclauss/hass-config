@@ -18,25 +18,31 @@ class BayesianDeviceTracker(hass.Hass):
         self.minimum_update_distance = self.args["minimum_update_distance"]
         self.minimum_update_window = self.args["minimum_update_window"]
         self.gps_accuracy_tolerance = self.args["gps_accuracy_tolerance"]
+        # Stable display name for the fused tracker. Without this, set_state would
+        # inherit whatever friendly_name the last GPS source carried (e.g. the
+        # Tesla's "Nigori Location tracker"), since set_state -- unlike the old
+        # device_tracker.see -- applies attributes verbatim.
+        self.tracker_friendly_name = self.args.get(
+            "bayesian_device_tracker_friendly_name", "Zeke")
 
-        # self.log("preparing to system on init")
+        self.log("preparing to system on init")
         self.bayes_updated(entity=self.bayesian, attribute={}, old={}, new={}, kwargs={})
-        # self.log('done with init')
+        self.log('done with init')
 
-        # self.log("registering callback {} {}".format(self.location_update, self.gps_sensor_sources))
-        # self.log("registering callback for changes on bayesian sensor: {}".format(self.bayesian))
+        self.log("registering callback {} {}".format(self.location_update, self.gps_sensor_sources))
+        self.log("registering callback for changes on bayesian sensor: {}".format(self.bayesian))
         self.listen_state(self.bayes_updated, entity_id=self.bayesian)
         for tracker in self.gps_sensor_sources:
-            # self.log("registering tracking callback for gps item {}".format(tracker))
+            self.log("registering tracking callback for gps item {}".format(tracker))
             self.listen_state(self.location_update, entity_id=tracker, attribute="all")
 
     def bayes_updated(self, entity, attribute, old, new, kwargs):
         sensor_state = self.get_state(entity, attribute="all")
         if sensor_state['state'] == 'on':
             config = self.get_plugin_config()
-            # self.log("bayes_updated and bayes sensor says I am home")
-            # self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
-            # self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
+            self.log("bayes_updated and bayes sensor says I am home")
+            self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
+            self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.update_tracker(
                 latitude=config["latitude"],
                 longitude=config["longitude"],
@@ -44,19 +50,24 @@ class BayesianDeviceTracker(hass.Hass):
                     "course": 0.0,
                     "home_probability": sensor_state["attributes"]["probability"],
                 },
+                # The bayesian sensor is the home/away authority; force "home"
+                # rather than relying on zone resolution, which can silently
+                # fail (e.g. get_state("zone") returning None) and leave the
+                # tracker "not_home" while the sensor says we're home.
+                state="home",
             )
         else:
             return
 
     def location_update(self, entity, attribute, old, new, kwargs):
-        # self.log("in location_update")
-        # self.log("triggered by: {} {} {} {} {}".format(entity, attribute, old, new, kwargs))
+        self.log("in location_update")
+        self.log("triggered by: {} {} {} {} {}".format(entity, attribute, old, new, kwargs))
         bayesian_state = self.get_state(self.bayesian, attribute="all")
-        # self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
+        self.log("here is the current bayesian tracker state: {}".format(bayesian_state))
 
         try:
             if new["attributes"].get("gps_accuracy") > self.gps_accuracy_tolerance:
-                # self.log("New GPS coordinates not accurate at {} m. Not updating.".format(new["attributes"].get("gps_accuracy")))
+                self.log("New GPS coordinates not accurate at {} m. Not updating.".format(new["attributes"].get("gps_accuracy")))
                 return
         except TypeError as te:
             self.log("No new GPS Coordinates.  Continuing")
@@ -69,9 +80,9 @@ class BayesianDeviceTracker(hass.Hass):
             difference = datetime.now(timezone.utc) - last_changed
             if difference.total_seconds() > self.minimum_update_window:
                 pass
-                # self.log("Bayesian Device Tracker GPS Location last changed {} seconds ago.  Time for an update".format(difference.total_seconds()))
+                self.log("Bayesian Device Tracker GPS Location last changed {} seconds ago.  Time for an update".format(difference.total_seconds()))
             else:
-                # self.log("Bayesian Device Tracker GPS Location last changed less than {} seconds ago.  Not Updating.".format(self.minimum_update_window))
+                self.log("Bayesian Device Tracker GPS Location last changed less than {} seconds ago.  Not Updating.".format(self.minimum_update_window))
                 return
             fresh_restart = False
         except (KeyError, TypeError):
@@ -81,10 +92,9 @@ class BayesianDeviceTracker(hass.Hass):
             #   is no longer persisted via the legacy device_tracker.see path.
             # Either way, treat it as a fresh restart and push a location update.
             fresh_restart = True
-            # self.log(
-            #     "Newly restarted HASS so there is no gps_updated attribute.  Updating location")
+            self.log("Newly restarted HASS so there is no gps_updated attribute.  Updating location")
         gps_sensors_state = self.get_state(entity, attribute="all")
-        # self.log("here is the GPS state: {}".format(gps_sensors_state))
+        self.log("here is the GPS state: {}".format(gps_sensors_state))
 
         #qbayes_location = self.get_state("device_tracker."+self.bayesian_device_tracker_id, attribute="all")
         
@@ -119,7 +129,7 @@ class BayesianDeviceTracker(hass.Hass):
             # for the old value.
             try:
                 old_lat_log = new_lat_log
-                # self.log("Error getting old lat-long. Setting old value to new value")
+                self.log("Error getting old lat-long. Setting old value to new value")
                 self.error("KeyError deleting {}: missing information from gps sensor. continuing...".format(ke))
                 pass
             except:
@@ -133,31 +143,31 @@ class BayesianDeviceTracker(hass.Hass):
         
         # Get Vincenty distance between old and new points
         distance = new_lat_log.distanceTo(old_lat_log)
-        # self.log("Vincenty Distance between updates is: {}".format(distance))
+        self.log("Vincenty Distance between updates is: {}".format(distance))
         if distance <= self.minimum_update_distance and not fresh_restart:
-            # self.log("Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
+            self.log("Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
             return
         self.run_update(bayesian_state=bayesian_state,
                         sensor_state=gps_sensors_state)
 
     def run_update(self, bayesian_state, sensor_state):
-        #self.log("in run_update")
+        self.log("in run_update")
         gps_attributes = sensor_state["attributes"]
         attributes = copy.deepcopy(gps_attributes)
-        # self.log("sensor state: {}".format(sensor_state))
-        # self.log("here is the gps attribute data: {}".format(gps_attributes))
+        self.log("sensor state: {}".format(sensor_state))
+        self.log("here is the gps attribute data: {}".format(gps_attributes))
         # self.log("do we have everything: {}".format(gps_attributes.viewKeys() & {"latitude", "longitude"})
 
         # iOS apps use m/s as the speed, not mph.  Need to convert.
         if 'speed' in attributes.keys() and 'wethop' in sensor_state['entity_id']:
             if attributes['speed'] == -1:
-                # self.log("ios says speed is -1, setting speed to 0")
+                self.log("ios says speed is -1, setting speed to 0")
                 attributes['speed'] = 0.0
             else:
                 # Convert to mph
                 attributes['speed'] = (attributes['speed'] / 0.44704)
-                # self.log("setting speed from ios to: {}".format(attributes['speed']))
-            # self.log("new ios speed is: {}".format(attributes['speed']))
+                self.log("setting speed from ios to: {}".format(attributes['speed']))
+            self.log("new ios speed is: {}".format(attributes['speed']))
         # elif 'speed' in attributes.keys():
         #     #Traccar reports speed in knots
         #     attributes['speed'] = attributes['speed'] * 1.151
@@ -166,14 +176,14 @@ class BayesianDeviceTracker(hass.Hass):
         #         attributes['speed']))
         elif 'speed' not in attributes.keys():
             attributes['speed'] = 0.0
-            # self.log("No 'speed' in attributes in update from sensor data: {}".format(sensor_state))
+            self.log("No 'speed' in attributes in update from sensor data: {}".format(sensor_state))
 
 
         if bayesian_state['state'] == "on":
             config = self.get_plugin_config()
-            # self.log("Bayesian sensor says I am home. Setting device_tracker to home")
-            # self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
-            # self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
+            self.log("Bayesian sensor says I am home. Setting device_tracker to home")
+            self.log("My current position is {}(Lat), {}(Long)".format(config["latitude"], config["longitude"]))
+            self.log("here we go setting {} to home with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, 0, config["latitude"], config["longitude"]))
             self.update_tracker(
                 latitude=config["latitude"],
                 longitude=config["longitude"],
@@ -182,14 +192,15 @@ class BayesianDeviceTracker(hass.Hass):
                     "speed": attributes['speed'],
                     "home_probability": bayesian_state["attributes"]["probability"],
                 },
+                state="home",
             )
         else:
-            # self.log("bayes says I am away")
+            self.log("bayes says I am away")
             if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
-                # self.log("bayes away log: tracker {}, motion {}, type(motion) {}".format(gps_attributes.get("tracker"), gps_attributes.get("motion"), type(gps_attributes.get("motion"))))
+                self.log("bayes away log: tracker {}, motion {}, type(motion) {}".format(gps_attributes.get("tracker"), gps_attributes.get("motion"), type(gps_attributes.get("motion"))))
                 try:
-                    # self.log("My current position is {}(Lat), {}(Long)".format(gps_attributes["latitude"], gps_attributes["longitude"]))
-                    # self.log("here we go setting {} to somewhere with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, gps_attributes["gps_accuracy"], gps_attributes["latitude"], gps_attributes["longitude"]))
+                    self.log("My current position is {}(Lat), {}(Long)".format(gps_attributes["latitude"], gps_attributes["longitude"]))
+                    self.log("here we go setting {} to somewhere with GPS: Accuracy {}, Latitude: {}, Longitude: {}".format(self.bayesian_device_tracker_id, gps_attributes["gps_accuracy"], gps_attributes["latitude"], gps_attributes["longitude"]))
                     attributes = copy.deepcopy(gps_attributes)
                     # self.log("{}".format(attributes['battery']))
                     probability = bayesian_state["attributes"]["probability"]
@@ -248,13 +259,13 @@ class BayesianDeviceTracker(hass.Hass):
                     dev_tracker_state = self.get_state(
                         "device_tracker." + self.bayesian_device_tracker_id, attribute="all")
                     # todo the old state may not have a latitude or longitude when hass restart
-                    # self.log("here is the previous device_tracker state: {}".format(dev_tracker_state))
+                    self.log("here is the previous device_tracker state: {}".format(dev_tracker_state))
 
                     # new_lat_log_p = ellipsoidalNvector.LatLon(lat=gps_attributes.get(
                     #     "latitude"), lon=gps_attributes.get("longitude"))
                     new_lat_log_p = ellipsoidalNvector.LatLon(gps_attributes.get(
                         "latitude"), gps_attributes.get("longitude"))
-                    # self.log("new location is: {}".format(new_lat_log_p))
+                    self.log("new location is: {}".format(new_lat_log_p))
 
                     try:
                         # old_lat_log_p = ellipsoidalNvector.LatLon(
@@ -270,7 +281,7 @@ class BayesianDeviceTracker(hass.Hass):
                         # so update_tracker can (re)create the entity.
                         old_lat_log_p = new_lat_log_p
 
-                    #self.log("old location is: {}".format(old_lat_log_p))
+                    self.log("old location is: {}".format(old_lat_log_p))
                     
                     # Let's try the intermediate calculation and change the mean depending on the speed.
                     speed = attributes['speed']
@@ -287,10 +298,10 @@ class BayesianDeviceTracker(hass.Hass):
                         else:
                             update_ratio=0.95
                     mean_of_points = old_lat_log_p.intermediateTo(new_lat_log_p, update_ratio)
-                    # self.log("Mean of location between old and new is {}".format(mean_of_points))
+                    self.log("Mean of location between old and new is {}".format(mean_of_points))
 
 
-                    # self.log("{}".format(attributes))
+                    self.log("{}".format(attributes))
                     attributes['latitude'] = mean_of_points.lat
                     attributes['longitude'] = mean_of_points.lon
 
@@ -313,25 +324,44 @@ class BayesianDeviceTracker(hass.Hass):
             else:
                 self.error("missing information from gps sensor. Returning with no action.")
 
-    def update_tracker(self, latitude, longitude, attributes, gps_accuracy=0):
+    # Attributes a GPS source may carry that must never be copied onto the fused
+    # tracker, because set_state applies them verbatim (unlike device_tracker.see).
+    STRIP_ATTRS = (
+        "friendly_name", "in_zones", "context", "entity_id", "state",
+        "last_changed", "last_updated", "last_reported",
+    )
+
+    def update_tracker(self, latitude, longitude, attributes, gps_accuracy=0, state=None):
         """Update the Bayesian device tracker's state and attributes.
 
         Replaces the deprecated ``device_tracker.see`` service (removed in Home
         Assistant Core 2027.5) with a direct ``set_state`` call. Home Assistant's
         zone triggers evaluate the tracker's ``latitude``/``longitude`` attributes
         rather than the state string, so preserving accurate GPS attributes keeps
-        the existing zone enter/leave automations working. The state string is
+        the existing zone enter/leave automations working. Pass ``state`` to force
+        a state string (the bayesian home path does this); otherwise it is
         resolved to ``home``/zone-name/``not_home`` here to mirror what
         ``device_tracker.see`` used to compute.
         """
         entity_id = "device_tracker." + self.bayesian_device_tracker_id
         merged = copy.deepcopy(attributes) if attributes else {}
+        # Drop identity / HA-managed keys that a GPS source may carry. set_state
+        # applies attributes verbatim, so leaving these in makes the fused
+        # tracker impersonate its last source (friendly_name), advertise stale
+        # zone membership (in_zones), or echo state metadata.
+        for key in self.STRIP_ATTRS:
+            merged.pop(key, None)
         merged["latitude"] = latitude
         merged["longitude"] = longitude
         merged["gps_accuracy"] = gps_accuracy
         merged["source_type"] = "gps"
-        state = self.resolve_tracker_state(latitude, longitude, gps_accuracy)
+        merged["friendly_name"] = self.tracker_friendly_name
+        if state is None:
+            state = self.resolve_tracker_state(latitude, longitude, gps_accuracy)
+        self.log("update_tracker: setting {} -> state={!r} lat={} lon={} acc={} attr_keys={}".format(
+            entity_id, state, latitude, longitude, gps_accuracy, sorted(merged.keys())))
         self.set_state(entity_id, state=state, attributes=merged)
+        self.log("update_tracker: readback state after set_state = {!r}".format(self.get_state(entity_id)))
 
     def resolve_tracker_state(self, latitude, longitude, gps_accuracy=0):
         """Map GPS coordinates to a device_tracker state string.
@@ -342,12 +372,11 @@ class BayesianDeviceTracker(hass.Hass):
         name, and no matching zone yields ``not_home``.
         """
         if latitude is None or longitude is None:
+            self.log("resolve_tracker_state: None coordinates -> not_home")
             return "not_home"
-        try:
-            zones = self.get_state("zone", attribute="all")
-        except Exception:  # pragma: no cover - defensive; get_state should not raise
-            zones = None
+        zones = self._zone_states()
         if not zones:
+            self.log("resolve_tracker_state: no zones available -> not_home")
             return "not_home"
 
         best = None  # tuple of (radius, distance, entity_id, friendly_name)
@@ -372,7 +401,38 @@ class BayesianDeviceTracker(hass.Hass):
                 best = candidate
 
         if best is None:
+            self.log("resolve_tracker_state: point ({}, {}) acc={} matched no active zone -> not_home".format(
+                latitude, longitude, gps_accuracy))
             return "not_home"
+        self.log("resolve_tracker_state: best={} radius={} dist={:.1f} for point ({}, {})".format(
+            best[2], best[0], best[1], latitude, longitude))
         if best[2] == "zone.home":
             return "home"
         return best[3]
+
+    def _zone_states(self):
+        """Return ``{zone_entity_id: full_state_dict}`` robustly.
+
+        In this AppDaemon runtime ``get_state("zone", attribute="all")`` returns
+        ``None`` (the domain + ``attribute="all"`` combination is not honored),
+        which silently defeated zone resolution and pinned the tracker to
+        ``not_home``. Fall back to enumerating the zone domain and fetching each
+        zone's attributes individually.
+        """
+        zones = self.get_state("zone", attribute="all")
+        if isinstance(zones, dict) and zones:
+            self.log("_zone_states: {} zones via get_state('zone', attribute='all')".format(len(zones)))
+            return zones
+
+        ids = self.get_state("zone")
+        if isinstance(ids, dict) and ids:
+            result = {}
+            for zid in ids:
+                z = self.get_state(zid, attribute="all")
+                if isinstance(z, dict):
+                    result[zid] = z
+            self.log("_zone_states: {} zones via per-entity fallback".format(len(result)))
+            return result
+
+        self.log("_zone_states: get_state('zone') returned {!r}; no zones".format(ids))
+        return {}
