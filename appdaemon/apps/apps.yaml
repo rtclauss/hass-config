@@ -124,8 +124,15 @@ bayesian_device_tracker:
     - device_tracker.nigori_location_tracker
   bayesian_input: binary_sensor.bayesian_zeke_home
   bayesian_device_tracker_name: "bayesian_zeke_home"
-  gps_accuracy_tolerance: 2000
-  minimum_update_distance: 3
+  # Reject fixes worse than this (meters). resolve_tracker_state expands every
+  # zone by the fix accuracy, so a loose value (was 2000) let a sloppy fix
+  # inflate the 250 m home zone and false-positive "home". Observed real fixes
+  # are <=~65 m, so 200 m rejects junk with comfortable headroom.
+  gps_accuracy_tolerance: 200
+  # Skip updates for movements smaller than this (meters). 3 m sits below normal
+  # stationary GPS jitter (~5-15 m), so the tracker rewrote on noise while
+  # parked/home; 20 m suppresses that churn without missing real movement.
+  minimum_update_distance: 20
   minimum_update_window: 5
 
 # Occupancy Simulator:
