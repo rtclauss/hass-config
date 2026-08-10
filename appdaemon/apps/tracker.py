@@ -265,7 +265,10 @@ class BayesianDeviceTracker(hass.Hass):
                     #     "latitude"), lon=gps_attributes.get("longitude"))
                     new_lat_log_p = ellipsoidalNvector.LatLon(gps_attributes.get(
                         "latitude"), gps_attributes.get("longitude"))
-                    self.log("new location is: {}".format(new_lat_log_p))
+                    # NB: formatting a pygeodesy LatLon with str.format raises
+                    # (_NotImplementedError in named.__format__), so log the raw coords.
+                    self.log("new location is: {}, {}".format(
+                        gps_attributes.get("latitude"), gps_attributes.get("longitude")))
 
                     try:
                         # old_lat_log_p = ellipsoidalNvector.LatLon(
@@ -281,10 +284,17 @@ class BayesianDeviceTracker(hass.Hass):
                         # so update_tracker can (re)create the entity.
                         old_lat_log_p = new_lat_log_p
 
-                    self.log("old location is: {}".format(old_lat_log_p))
+                    # LatLon objects are not str.format-safe (see note above).
+                    # self.log("old location is: {}".format(old_lat_log_p))
                     
                     # Let's try the intermediate calculation and change the mean depending on the speed.
-                    speed = attributes['speed']
+                    # The away branch re-copies gps_attributes above, discarding the
+                    # speed=0.0 default set at the top of run_update. Sources without a
+                    # 'speed' attribute (e.g. the iOS phone tracker) would otherwise
+                    # raise KeyError here -- silently swallowed by the outer
+                    # `except KeyError: pass`, so the away update never ran and the
+                    # tracker stayed 'home' while actually away.
+                    speed = attributes.get('speed', 0.0)
                     if old_lat_log_p.distanceTo(new_lat_log_p) > 402336: # 250 miles or 402 km. Useful when landing at a new destination
                         update_ratio = 1.0
                     else:
@@ -298,7 +308,9 @@ class BayesianDeviceTracker(hass.Hass):
                         else:
                             update_ratio=0.95
                     mean_of_points = old_lat_log_p.intermediateTo(new_lat_log_p, update_ratio)
-                    self.log("Mean of location between old and new is {}".format(mean_of_points))
+                    # LatLon is not str.format-safe; log its scalar coords instead.
+                    self.log("Mean of location between old and new is {}, {}".format(
+                        float(mean_of_points.lat), float(mean_of_points.lon)))
 
 
                     self.log("{}".format(attributes))
@@ -411,28 +423,32 @@ class BayesianDeviceTracker(hass.Hass):
         return best[3]
 
     def _zone_states(self):
-        """Return ``{zone_entity_id: full_state_dict}`` robustly.
+        """Return ``{zone_entity_id: full_state_dict}`` for all zones.
 
-        In this AppDaemon runtime ``get_state("zone", attribute="all")`` returns
-        ``None`` (the domain + ``attribute="all"`` combination is not honored),
-        which silently defeated zone resolution and pinned the tracker to
-        ``not_home``. Fall back to enumerating the zone domain and fetching each
-        zone's attributes individually.
+        NB: this AppDaemon does NOT support ``get_state("zone", attribute="all")``
+        -- querying a specific attribute across a whole domain raises
+        ``ValueError: Querying a specific attribute is only possible for a single
+        entity``. (#940 hid this behind a broad ``except``, which made every
+        resolution fall through to ``not_home``.) So enumerate the domain with a
+        plain ``get_state("zone")`` and fetch each zone's attributes with a
+        single-entity ``attribute="all"`` call.
         """
-        zones = self.get_state("zone", attribute="all")
-        if isinstance(zones, dict) and zones:
-            self.log("_zone_states: {} zones via get_state('zone', attribute='all')".format(len(zones)))
-            return zones
+        try:
+            ids = self.get_state("zone")  # {entity_id: state}
+        except Exception as exc:
+            self.log("_zone_states: get_state('zone') raised {}: {}".format(type(exc).__name__, exc))
+            return {}
+        if not isinstance(ids, dict) or not ids:
+            self.log("_zone_states: get_state('zone') returned {!r}; no zones".format(ids))
+            return {}
 
-        ids = self.get_state("zone")
-        if isinstance(ids, dict) and ids:
-            result = {}
-            for zid in ids:
+        result = {}
+        for zid in ids:
+            try:
                 z = self.get_state(zid, attribute="all")
-                if isinstance(z, dict):
-                    result[zid] = z
-            self.log("_zone_states: {} zones via per-entity fallback".format(len(result)))
-            return result
-
-        self.log("_zone_states: get_state('zone') returned {!r}; no zones".format(ids))
-        return {}
+            except Exception:
+                z = None
+            if isinstance(z, dict):
+                result[zid] = z
+        self.log("_zone_states: {} zones via per-entity enumeration".format(len(result)))
+        return result
