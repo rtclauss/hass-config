@@ -70,9 +70,25 @@ def _make_app(monkeypatch, zones):
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
     app.bayesian_device_tracker_id = "bayesian_zeke_home"
-    app.get_state = Mock(return_value=zones)
+
+    # Mirror the real AppDaemon zone API: get_state("zone") -> {id: state};
+    # per-entity get_state("zone.x", attribute="all") -> full dict. Querying
+    # attribute="all" across the whole domain is NOT supported (raises), so the
+    # app must never rely on it.
+    def _fake_get_state(entity=None, attribute=None):
+        if entity == "zone" and attribute == "all":
+            raise ValueError("Querying a specific attribute is only possible for a single entity")
+        if entity == "zone":
+            return {zid: "1" for zid in zones}
+        if entity in zones:
+            return zones[entity]
+        return None
+
+    app.get_state = Mock(side_effect=_fake_get_state)
     app.set_state = Mock()
     app.error = Mock()
+    app.log = Mock()
+    app.tracker_friendly_name = "Zeke"
     return app
 
 
@@ -191,6 +207,7 @@ def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
     app.bayesian_device_tracker_id = "bayesian_zeke_home"
     app.error = Mock()
     app.log = Mock()
+    app.tracker_friendly_name = "Zeke"
 
     def fake_get_state(entity, attribute=None):
         if entity == "zone":
@@ -222,3 +239,147 @@ def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
     args, kwargs = app.set_state.call_args
     assert args[0] == "device_tracker.bayesian_zeke_home"
     assert kwargs["attributes"]["source_type"] == "gps"
+
+
+def test_update_tracker_state_override_bypasses_zone_resolution(monkeypatch) -> None:
+    """The bayesian home path forces state='home' even when zone lookup fails.
+
+    Reproduces the production failure: get_state("zone", attribute="all")
+    returns None, so resolve_tracker_state would yield 'not_home'. The explicit
+    state override must win so the tracker still reports home.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.tracker_friendly_name = "Zeke"
+    app.set_state = Mock()
+    app.get_state = Mock(return_value=None)  # every zone lookup fails
+    app.log = Mock()
+    app.error = Mock()
+
+    app.update_tracker(latitude=44.0, longitude=-93.0,
+                       attributes={"course": 0.0}, state="home")
+
+    _, kwargs = app.set_state.call_args
+    assert kwargs["state"] == "home"
+
+
+def test_update_tracker_strips_source_identity_attrs(monkeypatch) -> None:
+    """A GPS source's identity attributes must not leak onto the fused tracker."""
+    app = _make_app(monkeypatch, HOME)
+
+    app.update_tracker(latitude=44.0, longitude=-93.0, attributes={
+        "friendly_name": "Nigori Location tracker",
+        "in_zones": ["zone.neighborhood"],
+        "last_changed": "2026-08-10T00:00:00",
+        "context": {"id": "abc"},
+        "home_probability": 1,
+    })
+
+    _, kwargs = app.set_state.call_args
+    attrs = kwargs["attributes"]
+    assert attrs["friendly_name"] == "Zeke"          # stable name, not the source's
+    assert "in_zones" not in attrs
+    assert "last_changed" not in attrs
+    assert "context" not in attrs
+    assert attrs["home_probability"] == 1            # legitimate attrs preserved
+
+
+def test_zone_states_enumerates_per_entity(monkeypatch) -> None:
+    """resolve must never call get_state('zone', attribute='all').
+
+    That call raises ValueError in this AppDaemon ("Querying a specific attribute
+    is only possible for a single entity"). resolve_tracker_state must enumerate
+    the domain and fetch each zone individually so a home point resolves to
+    'home'. If it touches the domain+all form, this fake raises and the test fails.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.log = Mock()
+
+    def fake_get_state(entity=None, attribute=None):
+        if entity == "zone" and attribute == "all":
+            raise ValueError("Querying a specific attribute is only possible for a single entity")
+        if entity == "zone":
+            return {"zone.home": "1"}  # domain enumeration
+        if entity == "zone.home":
+            return {"attributes": {"latitude": 44.0, "longitude": -93.0, "radius": 100}}
+        return None
+
+    app.get_state = Mock(side_effect=fake_get_state)
+
+    assert app.resolve_tracker_state(44.0, -93.0) == "home"
+
+
+def test_resolve_state_not_home_if_zone_query_raises(monkeypatch) -> None:
+    """If even get_state('zone') raises, resolve degrades to not_home (no crash)."""
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.log = Mock()
+
+    def fake_get_state(entity=None, attribute=None):
+        raise ValueError("boom")
+
+    app.get_state = Mock(side_effect=fake_get_state)
+
+    assert app.resolve_tracker_state(44.0, -93.0) == "not_home"
+
+
+def test_run_update_away_source_without_speed_still_updates(monkeypatch) -> None:
+    """Away update from a source lacking 'speed' (e.g. the iOS phone) must complete.
+
+    The away branch re-copies gps_attributes, dropping the speed=0.0 default set
+    at the top of run_update, so a hard attributes['speed'] access raised
+    KeyError -- silently swallowed by the outer handler -- and the tracker never
+    left 'home'. It must resolve zones and call set_state instead.
+    """
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.error = Mock()
+    app.log = Mock()
+    app.tracker_friendly_name = "Zeke"
+
+    def fake_get_state(entity, attribute=None):
+        if entity == "zone":
+            return HOME
+        if entity.startswith("device_tracker."):
+            return {"attributes": {"latitude": 44.0, "longitude": -93.0}}
+        return {"attributes": {}}
+
+    app.get_state = Mock(side_effect=fake_get_state)
+    app.set_state = Mock()
+
+    bayesian_state = {"state": "off", "attributes": {"probability": 0.9, "probability_threshold": 0.5}}
+    sensor_state = {
+        "entity_id": "device_tracker.wethop",
+        "state": "not_home",
+        "attributes": {
+            "latitude": 44.5,
+            "longitude": -92.5,
+            "gps_accuracy": 20,
+            "battery_level": 100,
+            # NB: no 'speed' key -- the iOS phone tracker omits it
+        },
+    }
+
+    app.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
+
+    app.set_state.assert_called_once()
+    _, kwargs = app.set_state.call_args
+    assert kwargs["state"] == "not_home"  # 44.5,-92.5 is outside the test zones
+
+
+def test_update_tracker_replaces_attributes(monkeypatch) -> None:
+    """set_state must use replace=True so stale attributes cannot persist.
+
+    AppDaemon merges attributes by default, so stripping a key from the outgoing
+    dict does not remove it from an entity that already carries it. The fix must
+    replace the whole attribute mapping.
+    """
+    app = _make_app(monkeypatch, HOME)
+
+    app.update_tracker(latitude=44.0, longitude=-93.0, attributes={"course": 0.0}, state="home")
+
+    _, kwargs = app.set_state.call_args
+    assert kwargs.get("replace") is True
