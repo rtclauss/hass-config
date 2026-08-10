@@ -6,6 +6,9 @@ from pathlib import Path
 
 HOUSE_MODE_PATH = Path(__file__).resolve().parents[1] / "packages" / "house_mode.yaml"
 ZONE_PATH = Path(__file__).resolve().parents[1] / "packages" / "zone.yaml"
+ROOT_PATH = Path(__file__).resolve().parents[1]
+CONFIGURATION_PATH = ROOT_PATH / "configuration.yaml"
+SCRIPTS_PATH = ROOT_PATH / "scripts.yaml"
 
 
 def _script_block(script_id: str) -> str:
@@ -76,6 +79,29 @@ def _scene_block(scene_name: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _shared_script_block(script_id: str) -> str:
+    lines = SCRIPTS_PATH.read_text(encoding="utf-8").splitlines()
+    start = None
+    needle = f"{script_id}:"
+
+    for index, line in enumerate(lines):
+        if line == needle:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find shared script id {script_id!r}")
+
+    end = len(lines)
+    next_script = re.compile(r"^[A-Za-z0-9_]+:$")
+    for index in range(start + 1, len(lines)):
+        if next_script.match(lines[index]):
+            end = index
+            break
+
+    return "\n".join(lines[start:end])
+
+
 def _automation_block(path: Path, automation_id: str) -> str:
     lines = path.read_text(encoding="utf-8").splitlines()
     start = None
@@ -138,6 +164,33 @@ def test_departure_house_transition_runs_in_parallel_without_embedding_vacuum_lo
     assert "action: mqtt.publish" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" in vacuum_block
+
+
+def test_leave_home_callers_use_guarded_shared_transition() -> None:
+    house_transition = _script_block("house_transition")
+    trip_departure = _automation_block(
+        Path(__file__).resolve().parents[1] / "packages" / "trips.yaml",
+        "vacation_lights_off",
+    )
+
+    assert "script: !include scripts.yaml" in CONFIGURATION_PATH.read_text(encoding="utf-8")
+    assert "action: script.leave_home_transition" in house_transition
+    assert "action: script.leave_home_transition" in trip_departure
+    assert "entity_id: scene.leave_home" not in house_transition
+    assert "entity_id: scene.leave_home" not in trip_departure
+
+
+def test_leave_home_transition_guards_optional_targets() -> None:
+    script = _shared_script_block("leave_home_transition")
+    scene = _scene_block("leave_home")
+
+    assert "entity_id: scene.leave_home" in script
+    assert "media_player.lg_webos_smart_tv" in script
+    assert "switch.christmas_tree" in script
+    assert "has_value(repeat.item.entity_id)" in script
+    assert 'action: "{{ repeat.item.action }}"' in script
+    assert "media_player.lg_webos_smart_tv" not in scene
+    assert "switch.christmas_tree" not in scene
 
 
 def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
