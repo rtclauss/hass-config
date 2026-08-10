@@ -24,6 +24,9 @@ class BayesianDeviceTracker(hass.Hass):
         # device_tracker.see -- applies attributes verbatim.
         self.tracker_friendly_name = self.args.get(
             "bayesian_device_tracker_friendly_name", "Zeke")
+        # Per-source last accepted position {source_entity_id: (lat, lon)} for the
+        # accumulated-distance gate in location_update.
+        self._last_accepted_pos = {}
 
         self.log("preparing to system on init")
         self.bayes_updated(entity=self.bayesian, attribute={}, old={}, new={}, kwargs={})
@@ -141,14 +144,66 @@ class BayesianDeviceTracker(hass.Hass):
         #    [old_lat_log, new_lat_log], LatLon=ellipsoidalVincenty.LatLon)
         #self.log("Mean of old and new location is {}".format(mean_of_points))
         
-        # Get Vincenty distance between old and new points
-        distance = new_lat_log.distanceTo(old_lat_log)
-        self.log("Vincenty Distance between updates is: {}".format(distance))
-        if distance <= self.minimum_update_distance and not fresh_restart:
-            self.log("Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
-            return
-        self.run_update(bayesian_state=bayesian_state,
-                        sensor_state=gps_sensors_state)
+        # Accumulated-distance gate, measured PER SOURCE against that source's own
+        # last accepted position -- not the source's immediately-previous report and
+        # not the global fused position.
+        #   * Per-source (vs the fused position): with phone + vehicle trackers at
+        #     different places, the fused position reflects whichever source updated
+        #     last, so a stationary source's refresh would read as movement and the
+        #     published location / zone would ping-pong between the two.
+        #   * Accumulated (vs the immediately-previous report): a source that reports
+        #     more often than it travels `minimum_update_distance` (e.g. a phone while
+        #     walking) would otherwise have every small delta discarded and never
+        #     accumulate, leaving the tracker stale and missing zone crossings.
+        baseline = self._last_accepted_pos.get(entity)
+        if not fresh_restart:
+            # Reference position for BOTH the distance gate and the zone check: this
+            # source's own last accepted fix, or -- on first sighting after an
+            # AppDaemon-only restart (fused entity retained, `_last_accepted_pos`
+            # empty) -- the source's own previous report. Using the source's own
+            # reference (never the global fused position/zone) is what keeps a
+            # stationary source in a different zone from ping-ponging the fused
+            # tracker, and keeps an unchanged first sighting from publishing.
+            if baseline is not None:
+                ref_lat, ref_lon = baseline
+            else:
+                old_attrs = (old or {}).get("attributes", {}) or {}
+                ref_lat, ref_lon = old_attrs.get("latitude"), old_attrs.get("longitude")
+                if ref_lat is None or ref_lon is None:
+                    ref_lat, ref_lon = new_lat, new_lon
+            reference = ellipsoidalNvector.LatLon(ref_lat, ref_lon)
+            distance = new_lat_log.distanceTo(reference)
+            self.log("Vincenty Distance from {}'s baseline is: {}".format(entity, distance))
+            if distance <= self.minimum_update_distance:
+                # Under the distance gate: suppress jitter UNLESS this source crossed a
+                # zone boundary relative to its OWN reference (a small move can still
+                # cross a boundary, e.g. 8 m inside -> 8 m outside = 16 m). Only when
+                # away: the bayesian sensor pins state to "home" otherwise.
+                zone_changed = False
+                if bayesian_state and bayesian_state.get("state") != "on":
+                    acc = (new.get("attributes") or {}).get("gps_accuracy", 0)
+                    new_zone = self.resolve_tracker_state(new_lat, new_lon, acc)
+                    base_zone = self.resolve_tracker_state(ref_lat, ref_lon, acc)
+                    zone_changed = new_zone != base_zone
+                    if zone_changed:
+                        self.log("Zone change {} -> {} for {} within distance gate; publishing.".format(
+                            base_zone, new_zone, entity))
+                if not zone_changed:
+                    # First sighting only (setdefault): anchor the baseline at the
+                    # reference (the source's previous report), not `new`, so the
+                    # already-measured segment still participates in accumulation.
+                    self._last_accepted_pos.setdefault(entity, (ref_lat, ref_lon))
+                    self.log("Looks like sensor {} is pretty stationary. Not Updating.".format(entity))
+                    return
+        # Accepted (movement past the threshold, or a genuine fresh restart): publish,
+        # and advance this source's baseline ONLY if run_update actually published.
+        # run_update can reject a report (e.g. the false-positive "home" guard); advancing
+        # the baseline prematurely would make the corrective callback look stationary and
+        # get skipped, leaving the fused tracker stale.
+        published = self.run_update(bayesian_state=bayesian_state,
+                                    sensor_state=gps_sensors_state)
+        if published:
+            self._last_accepted_pos[entity] = (new_lat, new_lon)
 
     def run_update(self, bayesian_state, sensor_state):
         self.log("in run_update")
@@ -194,6 +249,7 @@ class BayesianDeviceTracker(hass.Hass):
                 },
                 state="home",
             )
+            return True
         else:
             self.log("bayes says I am away")
             if gps_attributes.keys() != {"latitude", "longitude", "gps_accuracy"}:
@@ -214,7 +270,7 @@ class BayesianDeviceTracker(hass.Hass):
                         #self.error(
                         #    "Bayesian state: {}".format(bayesian_state))
                         #self.error("Sensor state: {}".format(sensor_state))
-                        return
+                        return False
 
                     try:
                         del attributes['battery']
@@ -329,12 +385,15 @@ class BayesianDeviceTracker(hass.Hass):
                         attributes=attributes,
                         gps_accuracy=gps_attributes["gps_accuracy"],
                     )
+                    return True
                 except KeyError as e:
                     pass
                     # self.error(
                     #     "KeyError {}: missing information from sensor {}. Returning with no action.".format(e, sensor_state['entity_id']))
             else:
                 self.error("missing information from gps sensor. Returning with no action.")
+        # No publish happened (false positive, missing data, or an error path).
+        return False
 
     # Attributes a GPS source may carry that must never be copied onto the fused
     # tracker, because set_state applies them verbatim (unlike device_tracker.see).

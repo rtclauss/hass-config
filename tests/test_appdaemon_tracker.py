@@ -48,7 +48,9 @@ def _load_tracker_module(monkeypatch):
             self.lon = lon
 
         def distanceTo(self, other):
-            return 1000.0
+            # Cheap planar approximation in meters so distance reflects the
+            # actual coordinates (the reference point for the update gate matters).
+            return (((self.lat - other.lat) ** 2 + (self.lon - other.lon) ** 2) ** 0.5) * 111_000
 
         def intermediateTo(self, other, ratio):
             return _LatLon(other.lat, other.lon)
@@ -173,6 +175,7 @@ def test_location_update_survives_missing_tracker_entity(monkeypatch) -> None:
     app.error = Mock()
     app.log = Mock()
     app.run_update = Mock()
+    app._last_accepted_pos = {}
     app.convert_utc = Mock()  # real AppDaemon method; present so the None subscript is what raises
 
     def fake_get_state(entity, attribute=None):
@@ -383,3 +386,229 @@ def test_update_tracker_replaces_attributes(monkeypatch) -> None:
 
     _, kwargs = app.set_state.call_args
     assert kwargs.get("replace") is True
+
+
+def _make_location_update_app(monkeypatch, baselines=None):
+    """An app wired for location_update: away, tracker window open, run_update mocked.
+
+    `baselines` seeds `_last_accepted_pos` ({source_entity_id: (lat, lon)}).
+    """
+    from datetime import datetime, timezone
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.bayesian = "binary_sensor.bayesian_zeke_home"
+    app.minimum_update_window = 5
+    app.minimum_update_distance = 20
+    app.gps_accuracy_tolerance = 200
+    app.error = Mock()
+    app.log = Mock()
+    app.run_update = Mock(return_value=True)  # published, unless a test overrides
+    app._last_accepted_pos = dict(baselines or {})
+    # Old published timestamp so the window check passes (fresh_restart=False).
+    app.convert_utc = Mock(return_value=datetime(2020, 1, 1, tzinfo=timezone.utc))
+
+    def fake_get_state(entity, attribute=None):
+        if entity == app.bayesian:
+            return {"state": "off", "attributes": {"probability": 0.1}}
+        if entity.startswith("device_tracker."):
+            # Fused tracker: only needs gps_updated so the window check passes.
+            return {"attributes": {"latitude": 44.5, "longitude": -93.5,
+                                   "gps_updated": "2020-01-01T00:00:00+00:00"}}
+        return {"attributes": {}}
+
+    app.get_state = Mock(side_effect=fake_get_state)
+    return app
+
+
+def test_location_update_accumulates_against_source_baseline(monkeypatch) -> None:
+    """Sub-threshold consecutive deltas still accumulate against the source's OWN
+    baseline, so walking-pace reports aren't discarded forever."""
+    app = _make_location_update_app(monkeypatch, baselines={"device_tracker.wethop": (44.0, -93.0)})
+    # ~11 m between the source's last two reports, but ~211 m from its baseline.
+    old = {"attributes": {"latitude": 44.0018, "longitude": -93.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 44.0019, "longitude": -93.0, "gps_accuracy": 10}}
+
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_called_once()
+    assert app._last_accepted_pos["device_tracker.wethop"] == (44.0019, -93.0)  # baseline reset
+
+
+def test_location_update_skips_near_own_baseline_no_ping_pong(monkeypatch) -> None:
+    """A near-stationary source is skipped even if its old->new delta is large, and
+    a *different* source's position is irrelevant -- so phone+vehicle can't ping-pong."""
+    app = _make_location_update_app(monkeypatch, baselines={
+        "device_tracker.nigori_location_tracker": (44.0, -93.0),   # Tesla parked
+        "device_tracker.wethop": (44.5, -93.5),                    # phone far away
+    })
+    # Tesla refresh ~11 m from its OWN baseline (the big old->new jump is a red herring).
+    old = {"attributes": {"latitude": 43.99, "longitude": -93.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 44.0001, "longitude": -93.0, "gps_accuracy": 10}}
+
+    app.location_update(entity="device_tracker.nigori_location_tracker", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_not_called()
+
+
+def test_location_update_first_sighting_unchanged_seeds_without_publishing(monkeypatch) -> None:
+    """AppDaemon-only restart (fused entity retained, baselines empty): a source's
+    first report with UNCHANGED coords seeds the baseline but must NOT publish --
+    otherwise a parked vehicle's refresh could yank the fused location off the phone."""
+    app = _make_location_update_app(monkeypatch, baselines={})
+    old = {"attributes": {"latitude": 45.0, "longitude": -94.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 45.0, "longitude": -94.0, "gps_accuracy": 10}}  # unchanged
+
+    app.location_update(entity="device_tracker.nigori_location_tracker", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_not_called()
+    assert app._last_accepted_pos["device_tracker.nigori_location_tracker"] == (45.0, -94.0)
+
+
+def test_location_update_first_sighting_with_movement_publishes(monkeypatch) -> None:
+    """A source's first post-restart report that actually moved is published."""
+    app = _make_location_update_app(monkeypatch, baselines={})
+    old = {"attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 44.01, "longitude": -93.0, "gps_accuracy": 10}}  # ~1.1 km
+
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_called_once()
+    assert app._last_accepted_pos["device_tracker.wethop"] == (44.01, -93.0)
+
+
+def test_location_update_first_sighting_submove_anchors_at_previous_report(monkeypatch) -> None:
+    """A first-sighting sub-threshold move seeds the baseline at the PREVIOUS report
+    (not `new`), so the already-traveled segment still counts toward accumulation."""
+    app = _make_location_update_app(monkeypatch, baselines={})
+    old = {"attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10}}       # P0
+    new = {"attributes": {"latitude": 44.00014, "longitude": -93.0, "gps_accuracy": 10}}   # ~15 m
+
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_not_called()
+    # Baseline anchored at P0 (old), not at `new`, so the 15 m already counts.
+    assert app._last_accepted_pos["device_tracker.wethop"] == (44.0, -93.0)
+
+
+def test_location_update_baseline_not_advanced_when_run_update_rejects(monkeypatch) -> None:
+    """If run_update rejects the report (e.g. a false-positive 'home'), the source
+    baseline must NOT advance -- otherwise a corrective callback looks stationary and
+    gets skipped, leaving the fused tracker stale."""
+    app = _make_location_update_app(monkeypatch, baselines={"device_tracker.wethop": (44.0, -93.0)})
+    app.run_update = Mock(return_value=False)  # simulate rejection
+    old = {"attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 44.01, "longitude": -93.0, "gps_accuracy": 10}}  # moved -> accept path
+
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_called_once()
+    assert app._last_accepted_pos["device_tracker.wethop"] == (44.0, -93.0)  # unchanged
+
+
+def test_run_update_false_positive_home_returns_false(monkeypatch) -> None:
+    """A source flashing 'home' while the bayesian sensor is away is rejected:
+    run_update publishes nothing and returns False."""
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.error = Mock()
+    app.log = Mock()
+    app.tracker_friendly_name = "Zeke"
+    app.get_state = Mock(return_value=HOME)
+    app.set_state = Mock()
+
+    bayesian_state = {"state": "off", "attributes": {"probability": 0.1, "probability_threshold": 0.8}}
+    sensor_state = {
+        "entity_id": "device_tracker.wethop",
+        "state": "home",  # source flashing home...
+        # ...with an extra attr so the away branch is entered (keys != lat/lon/acc)
+        "attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10, "battery_level": 90},
+    }
+
+    result = app.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
+
+    assert result is False
+    app.set_state.assert_not_called()
+
+
+def _make_zone_aware_location_app(monkeypatch, baselines):
+    """location_update app whose get_state also serves zones (single zone.home,
+    radius 100 m at 44.0,-93.0). Bayesian is 'off' (away). `baselines` seeds
+    `_last_accepted_pos`. The zone bypass compares each source's OWN baseline zone
+    to its new zone -- the fused entity's published state is deliberately irrelevant.
+    """
+    from datetime import datetime, timezone
+    module = _load_tracker_module(monkeypatch)
+    app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.bayesian = "binary_sensor.bayesian_zeke_home"
+    app.minimum_update_window = 5
+    app.minimum_update_distance = 20
+    app.gps_accuracy_tolerance = 200
+    app.error = Mock()
+    app.log = Mock()
+    app.run_update = Mock(return_value=True)
+    app._last_accepted_pos = dict(baselines)
+    app.convert_utc = Mock(return_value=datetime(2020, 1, 1, tzinfo=timezone.utc))
+    zones = {"zone.home": {"attributes": {"latitude": 44.0, "longitude": -93.0, "radius": 100}}}
+
+    def fake_get_state(entity, attribute=None):
+        if entity == app.bayesian:
+            return {"state": "off", "attributes": {"probability": 0.1}}
+        if entity == "zone" and attribute == "all":
+            raise ValueError("Querying a specific attribute is only possible for a single entity")
+        if entity == "zone":
+            return {z: "1" for z in zones}
+        if entity in zones:
+            return zones[entity]
+        if entity.startswith("device_tracker."):
+            # Fused entity: only gps_updated matters (for the window check). Its
+            # published state is intentionally a DIFFERENT zone to prove the bypass
+            # compares against the source baseline, not this.
+            return {"state": "Rochester",
+                    "attributes": {"latitude": 44.0, "longitude": -93.0,
+                                   "gps_updated": "2020-01-01T00:00:00+00:00"}}
+        return {"attributes": {}}
+
+    app.get_state = Mock(side_effect=fake_get_state)
+    return app
+
+
+def test_location_update_publishes_zone_change_within_distance_gate(monkeypatch) -> None:
+    """A sub-threshold move that crosses a zone boundary (away) must still publish."""
+    # baseline ~89 m from home center (inside r=100); new ~105 m (outside) -> zone change,
+    # but the two are only ~16 m apart, i.e. under the 20 m gate.
+    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.wethop": (44.00080, -93.0)})
+    old = {"attributes": {"latitude": 44.00080, "longitude": -93.0, "gps_accuracy": 5}}
+    new = {"attributes": {"latitude": 44.00095, "longitude": -93.0, "gps_accuracy": 5}}
+
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_called_once()  # baseline zone home -> new zone not_home, despite <20 m
+
+
+def test_location_update_stationary_source_in_other_zone_no_ping_pong(monkeypatch) -> None:
+    """A stationary source whose baseline zone differs from the fused entity's zone
+    must NOT publish -- the bypass compares against the source's own baseline zone,
+    not the global fused zone (which would ping-pong)."""
+    # Source baseline is OUTSIDE home (not_home); the fused entity currently reads
+    # "Rochester". A refresh ~5 m away is still not_home -> no per-source zone change.
+    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.wethop": (45.0, -94.0)})
+    old = {"attributes": {"latitude": 45.0, "longitude": -94.0, "gps_accuracy": 5}}
+    new = {"attributes": {"latitude": 45.00004, "longitude": -94.0, "gps_accuracy": 5}}  # ~4 m
+
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_not_called()
+
+
+def test_location_update_suppresses_jitter_when_zone_unchanged(monkeypatch) -> None:
+    """A sub-threshold move that stays in the same zone is still suppressed."""
+    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.wethop": (44.00080, -93.0)})
+    old = {"attributes": {"latitude": 44.00080, "longitude": -93.0, "gps_accuracy": 5}}
+    new = {"attributes": {"latitude": 44.00085, "longitude": -93.0, "gps_accuracy": 5}}  # still inside home
+
+    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+
+    app.run_update.assert_not_called()
