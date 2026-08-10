@@ -201,6 +201,20 @@ def test_departure_integrity_summarizes_all_remaining_exceptions() -> None:
     assert "Departure integrity found exceptions" in block
 
 
+def test_departure_integrity_requires_garage_fully_closed(  # noqa: D103
+) -> None:
+    # A door stalled in "closing" must not be treated as verified: wait for the
+    # closed state (bounded), then report anything that is not closed so a stuck
+    # door is surfaced instead of silently suppressing the alert (#110, Codex P1).
+    block = _zone_script_block("departure_integrity")
+
+    assert "wait_template" in block
+    assert "is_state('cover.garage_door', 'closed')" in block
+    assert "continue_on_timeout: true" in block
+    assert "states('cover.garage_door') != 'closed'" in block
+    assert "not in ['closed', 'closing']" not in block
+
+
 def test_departure_integrity_stops_if_guest_or_resident_context_returns() -> None:
     block = _zone_script_block("departure_integrity")
 

@@ -76,7 +76,9 @@ That script:
 - calls `script.house_transition` with `mode: away` and trip-policy handling;
 - waits for the normal shutdown to settle, then retries available lock, cover,
   light, fan, media, and camera exceptions once;
-- never sends service calls to targets that are `unknown` or `unavailable`;
+- the initial `script.house_transition` pass uses `continue_on_error` so an
+  `unknown` or `unavailable` target can never abort the shutdown, and the retry
+  pass skips those targets so no redundant service call is sent to them;
 - sends one final notification containing every remaining security, egress,
   lighting, media, fan, camera, and trip-policy exception.
 
@@ -104,7 +106,8 @@ summary so a single departure cannot produce duplicate alerts.
    `switch.vacation_simulation` and
    `input_number.random_vacation_light_group` stay in sync.
 8. Temporarily make one target entity unavailable and confirm the script keeps
-   applying the remaining actions, does not call the unavailable target, and
-   reports it once in the final exception summary.
+   applying the remaining actions (the initial pass tolerates it via
+   `continue_on_error`), the retry pass does not call the unavailable target,
+   and it is reported once in the final exception summary.
 9. Leave one available target in the wrong state, confirm it receives one retry,
    and confirm only the final state is reported if the retry does not succeed.

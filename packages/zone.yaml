@@ -1121,6 +1121,14 @@ script:
                       transition: 0
           - delay:
               seconds: 15
+      # Give a normally-slow garage door time to finish closing before the final
+      # check; a door stalled in "closing" times out here and is then reported
+      # by the closed-only verification below (#110, Codex P1).
+      - alias: "Allow the garage door to finish closing before verification"
+        wait_template: "{{ is_state('cover.garage_door', 'closed') }}"
+        timeout:
+          seconds: 30
+        continue_on_timeout: true
       - alias: "Do not notify if guest mode became active"
         condition: state
         entity_id: input_boolean.guest_mode
@@ -1166,7 +1174,7 @@ script:
             {%- if states('lock.front_door_lock') != 'locked' -%}
               {%- set ns.issues = ns.issues + ['Front door lock is ' ~ states('lock.front_door_lock') ~ '.'] -%}
             {%- endif -%}
-            {%- if states('cover.garage_door') not in ['closed', 'closing'] -%}
+            {%- if states('cover.garage_door') != 'closed' -%}
               {%- set ns.issues = ns.issues + ['Garage door is ' ~ states('cover.garage_door') ~ '.'] -%}
             {%- endif -%}
             {%- if is_state('binary_sensor.any_egress_open', 'on') -%}
