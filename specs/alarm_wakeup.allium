@@ -103,7 +103,7 @@ config {
     morning_blinds_delay: Duration = 175.seconds
     morning_light_ramp_duration: Duration = 3.minutes
     bed_strip_automatic_max_brightness_percent: Integer = 25
-    office_wakeup_peak_volume_percent: Integer = 10
+    office_wakeup_peak_volume_percent: Integer = 7
     wakeup_fallback_source_configured: Boolean = true
 }
 
@@ -362,9 +362,12 @@ rule RampWakeupVolumeByRoom {
         -- spaced well past the ~4s auditory echoic-memory window) so the
         -- rise reads as a smooth swell rather than audible jumps, landing
         -- around six minutes rather than the perceptual minimum of under a
-        -- minute. When the group is bedroom_bathroom_office_den, the office
-        -- is capped at config.office_wakeup_peak_volume_percent; all other
-        -- rooms ramp to the full peak. This prevents the wake-up routine
+        -- minute. The bedroom ramps to the highest peak — it holds the
+        -- sleeper, so the wake-up has to clear the "still asleep" threshold
+        -- there, not merely be audible. When the group is
+        -- bedroom_bathroom_office_den, the office is capped at
+        -- config.office_wakeup_peak_volume_percent; the remaining rooms ramp
+        -- to the shared non-bedroom peak. This prevents the wake-up routine
         -- from disturbing work-in-progress in the office.
 }
 

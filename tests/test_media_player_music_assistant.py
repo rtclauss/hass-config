@@ -324,16 +324,16 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert "effective_interval_seconds" in block
     assert "default(0.01)" in block  # step default
     assert "default(15)" in block  # interval default
-    assert "default(0.25)" in block  # non-office peak default
-    assert "default(0.10)" in block  # office peak default
-    assert "0.30" not in block
+    assert "default(0.25)" in block  # non-office, non-bedroom peak default
+    assert "default(0.30)" in block  # bedroom peak default (louder, to wake the sleeper)
+    assert "default(0.07)" in block  # office peak default
     # Each member is tracked and stepped from its OWN live volume — the
-    # office (if present) gets its own peak via a per-member ternary, not a
-    # split "non-office list + separate office call" structure that could
-    # let one member (e.g. bedroom) proxy for the rest and let the loop end
+    # bedroom and office each get their own peak via a per-member dict
+    # lookup, not a split "list + separate call" structure that could let
+    # one member (e.g. bedroom) proxy for the rest and let the loop end
     # while another member is still under-ramped.
     assert "for_each: \"{{ group_members }}\"" in block
-    assert "member_peak = effective_office_peak_volume if repeat.item == 'media_player.ma_office' else effective_peak_volume" in block
+    assert "member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(repeat.item, effective_peak_volume)" in block
     assert "[(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min" in block
 
 
@@ -343,7 +343,7 @@ def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded()
     # An unavailable player must fall back to its own peak (i.e. read as
     # "already done") rather than the silent starting volume — otherwise the
     # while-loop condition never clears (issue: office stuck at 0.01 forever).
-    assert "member_peak = effective_office_peak_volume if member == 'media_player.ma_office' else effective_peak_volume" in block
+    assert "member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(member, effective_peak_volume)" in block
     assert "float(member_peak)) < member_peak" in block
     assert "float(0.01)) < " not in block
     # Guest mode excludes the office from group_members entirely; since the
@@ -360,14 +360,14 @@ def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded()
 def test_radio_wakeup_office_peak_is_clamped_to_spec_ceiling() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
-    # office_wakeup_peak_volume_percent (10%) is the alarm spec's policy
+    # office_wakeup_peak_volume_percent (7%) is the alarm spec's policy
     # ceiling for the office ("the office is capped at
     # config.office_wakeup_peak_volume_percent"), not just a default a
     # caller can override upward. A caller may still ask for something
-    # quieter than 10%, never louder (Codex review, PR #934).
+    # quieter than 7%, never louder (Codex review, PR #934).
     assert (
         "effective_office_peak_volume: >-\n"
-        "        {{ [(ramp_office_peak_volume_level | default(0.10) | float(0.10)), 0.10] | min }}"
+        "        {{ [(ramp_office_peak_volume_level | default(0.07) | float(0.07)), 0.07] | min }}"
         in block
     )
 
@@ -401,7 +401,7 @@ def test_radio_wakeup_step_volume_floors_to_a_watchdog_safe_minimum() -> None:
     assert "watchdog_timeout_seconds = 720" in block
     assert "watchdog_safety_margin_seconds = 120" in block
     assert (
-        "max_ramp_distance = [effective_peak_volume, effective_office_peak_volume] | max"
+        "max_ramp_distance = [effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max"
         in block
     )
     assert (
@@ -420,6 +420,9 @@ def test_radio_wakeup_step_volume_floors_to_a_watchdog_safe_minimum() -> None:
     assert definition_order.index("effective_peak_volume:") < definition_order.index(
         "effective_step_volume:"
     )
+    assert definition_order.index(
+        "effective_bedroom_peak_volume:"
+    ) < definition_order.index("effective_step_volume:")
     assert definition_order.index(
         "effective_office_peak_volume:"
     ) < definition_order.index("effective_step_volume:")
