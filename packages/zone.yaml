@@ -48,23 +48,15 @@ homeassistant:
       <<: *customize
       friendly_name: Cloudy Day Arrival
       icon: mdi:weather-cloudy
-    automation.doors_open_when_leaving_home:
-      <<: *customize
-      friendly_name: Egress Left Open When Leaving
-      icon: mdi:door-open
-    automation.garage_door_open_when_leaving_home:
-      <<: *customize
-      friendly_name: Garage Door Left Open When Leaving
-      icon: mdi:garage-alert
     automation.turn_on_lights_at_night_when_i_get_home:
       <<: *customize
       friendly_name: Night Arrival
     automation.turn_on_bedroom_lights_at_night_when_i_get_home:
       <<: *customize
       friendly_name: Bedroom Night Arrival
-    automation.turn_off_lights_when_i_leave:
+    automation.run_verified_departure:
       <<: *customize
-      friendly_name: Lights Off on Departure
+      friendly_name: Verified Departure
     automation.vacuum_return_home:
       <<: *customize
       friendly_name: Stop Vacuuming on Arrival
@@ -119,6 +111,10 @@ homeassistant:
     script.update_nest_eta:
       <<: *customize
       friendly_name: "Distance to Home"
+    script.departure_integrity:
+      <<: *customize
+      friendly_name: "Departure Integrity"
+      icon: mdi:home-export-outline
     ################################################
     ## Sensors
     ################################################
@@ -294,51 +290,6 @@ automation:
       #   data:
       #     message: >-
       #       Arriving home with wethop activity {{ states('sensor.wethop_activity') }}
-
-  - id: doors_open_when_leaving_home
-    alias: doors_open_when_leaving_home
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: event
-        id: doors_open_departure_signal
-        event_type: zeke_departure
-        event_data:
-          person: zeke
-    variables:
-      open_egress_points: >-
-        {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
-    condition:
-      - condition: state
-        entity_id: binary_sensor.any_egress_open
-        state: "on"
-    action:
-      - action: notify.all
-        data:
-          message: >-
-            Door or window left open: {{ open_egress_points }}.
-
-  - id: garage_door_open_when_leaving_home
-    alias: garage_door_open_when_leaving_home
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: event
-        id: garage_door_departure_signal
-        event_type: zeke_departure
-        event_data:
-          person: zeke
-    condition:
-      - condition: state
-        entity_id: cover.garage_door
-        state: open
-    action:
-      - action: notify.all
-        data:
-          message: Garage door is still open! Attempting to close...
-      - action: cover.close_cover
-        target:
-          entity_id: cover.garage_door
 
   - alias: input_boolean_tracker_on
     id: input_boolean_tracker_on
@@ -555,8 +506,10 @@ automation:
           message: >-
             Turn off HVAC Away Mode. You {{trigger.event}} {{trigger.zone}} in direction {{ states('sensor.zeke_direction') }}. Setting Ecobee Home.
 
-  - id: turn_off_lights_when_i_leave
-    alias: turn_off_lights_when_i_leave
+  - id: run_verified_departure
+    alias: run_verified_departure
+    description: Run the verified away transition only after the house is empty.
+    mode: restart
     trace:
       stored_traces: 10
     trigger:
@@ -566,14 +519,23 @@ automation:
         event_data:
           person: zeke
     condition:
+      - alias: "Only start departure integrity from Bayesian departure"
+        condition: template
+        value_template: "{{ trigger.event.data.source_trigger == 'bayesian_presence_off' }}"
       - alias: "Departure transition allowed when guest mode is off"
         condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
-      - alias: "Primary tracker confirms departure"
-        condition: template
-        value_template: >-
-          {{ not is_state('device_tracker.bayesian_zeke_home', 'home') }}
+      # Gate on the canonical empty-house Bayesian signal, not the derived GPS
+      # tracker: appdaemon/apps/tracker.py only moves the tracker out of the
+      # home zone on a later GPS callback, so at bayesian_presence_off time the
+      # tracker can still read `home`. Requiring the tracker to have left here
+      # made the source check and the tracker check mutually exclusive, so the
+      # away transition never ran (#110, Codex P1).
+      - alias: "House is empty per the Bayesian presence signal"
+        condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
       - alias: "I'm driving away"
         enabled: false
         condition: state
@@ -581,23 +543,9 @@ automation:
         state: "Automotive"
         # Todo add biking here?
     action:
-      - parallel:
-          - action: script.house_transition
-            data:
-              mode: away
-              reason: leave_home
-          # - action: notify.all
-          #   data:
-          #     title: "Auf wiedersehen"
-          #     message: "Vacuum the house?"
-          #     data:
-          #       actions:
-          #         - action: "VACUUM_HOUSE"
-          #           title: "Vacuum House"
-          #           activationMode: background
-          #           authenticationRequired: false
-          #           destructive: false
-          #           behavior: default
+      - action: script.departure_integrity
+        data:
+          reason: leave_home
 
   - alias: Update Bayesian Device tracker on start
     description: When HA starts up, update bayesian device tracker GPS items
@@ -986,6 +934,338 @@ scene:
 # Scripts
 ########################
 script:
+  departure_integrity:
+    alias: departure_integrity
+    description: >-
+      Apply the empty-house shutdown, retry available stragglers once, and
+      send one actionable notification only when exceptions remain.
+    mode: restart
+    trace:
+      stored_traces: 10
+    fields:
+      reason:
+        description: Optional reason for the departure integrity run.
+        example: leave_home
+    variables:
+      protected_departure_lights:
+        - light.outside_front_hue
+        - light.outside_north_west_garage
+        - light.outside_south_west_garage
+        - light.outside_front_door
+      departure_media_off_targets:
+        - media_player.lg_webos_smart_tv
+        - media_player.basement
+      departure_ma_targets:
+        - media_player.ma_bedroom
+        - media_player.ma_bathroom
+        - media_player.ma_office
+        - media_player.ma_den
+        - media_player.ma_tiki_room
+      departure_camera_targets:
+        - switch.livingroom_motion_detection
+        - switch.tiki_room_camera
+    sequence:
+      - alias: "Departure integrity is disabled while guest mode is active"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      # The Bayesian empty-house sensor is the canonical departure signal. The
+      # derived GPS tracker can still read `home` at this point (it only leaves
+      # the home zone on a later GPS callback), so gating on it here would stall
+      # the away transition (#110, Codex P1).
+      - alias: "Departure integrity requires an empty house"
+        condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+      - action: script.house_transition
+        data:
+          mode: away
+          reason: "{{ reason | default('departure_integrity', true) }}"
+          apply_trip_policy: true
+      - delay:
+          seconds: 10
+      - alias: "Stop retry work if guest mode became active"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - alias: "Stop retry work if the resident returned"
+        condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+      - variables:
+          retry_lock: >-
+            {{ states('lock.front_door_lock') not in ['locked', 'unknown', 'unavailable'] }}
+          retry_garage: >-
+            {{ states('cover.garage_door') not in ['closed', 'closing', 'unknown', 'unavailable'] }}
+          retry_media_off_targets: >-
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for entity_id in departure_media_off_targets -%}
+              {%- if states(entity_id) not in ['off', 'unknown', 'unavailable'] -%}
+                {%- set ns.entities = ns.entities + [entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          retry_ma_targets: >-
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for entity_id in departure_ma_targets -%}
+              {%- if states(entity_id) in ['playing', 'buffering'] -%}
+                {%- set ns.entities = ns.entities + [entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          retry_camera_targets: >-
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for entity_id in departure_camera_targets -%}
+              {%- if states(entity_id) not in ['on', 'unknown', 'unavailable'] -%}
+                {%- set ns.entities = ns.entities + [entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          fans_on: >-
+            {{ states.fan | selectattr('state', 'eq', 'on') | map(attribute='entity_id') | join(', ') }}
+          interior_lights_on: >-
+            {%- set opaque_group_members = {
+              'light.outside_front_lights': [
+                'light.outside_front_hue',
+                'light.outside_north_west_garage',
+                'light.outside_south_west_garage',
+                'light.outside_front_door'
+              ]
+            } -%}
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for light in states.light -%}
+              {%- set runtime_members = state_attr(light.entity_id, 'entity_id') -%}
+              {%- if runtime_members is iterable and runtime_members is not string -%}
+                {%- set members = runtime_members | list -%}
+              {%- elif light.entity_id in opaque_group_members -%}
+                {%- set members = opaque_group_members[light.entity_id] -%}
+              {%- else -%}
+                {%- set members = [] -%}
+              {%- endif -%}
+              {%- set protected = light.entity_id in protected_departure_lights
+                or (members | select('in', protected_departure_lights) | list | count > 0) -%}
+              {%- if light.state == 'on' and not protected -%}
+                {%- set ns.entities = ns.entities + [light.entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          departure_retry_needed: >-
+            {{ retry_lock or retry_garage
+               or retry_media_off_targets | trim != ''
+               or retry_ma_targets | trim != ''
+               or retry_camera_targets | trim != ''
+               or fans_on | trim != ''
+               or interior_lights_on | trim != '' }}
+      - if:
+          - condition: template
+            value_template: "{{ departure_retry_needed }}"
+        then:
+          - alias: "Retry available departure failures once"
+            parallel:
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_lock }}"
+                then:
+                  - continue_on_error: true
+                    action: lock.lock
+                    target:
+                      entity_id: lock.front_door_lock
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_garage }}"
+                then:
+                  - continue_on_error: true
+                    action: cover.close_cover
+                    target:
+                      entity_id: cover.garage_door
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_media_off_targets | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: media_player.turn_off
+                    target:
+                      entity_id: "{{ retry_media_off_targets }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_ma_targets | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: media_player.media_pause
+                    target:
+                      entity_id: "{{ retry_ma_targets }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ retry_camera_targets | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: switch.turn_on
+                    target:
+                      entity_id: "{{ retry_camera_targets }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ fans_on | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: fan.turn_off
+                    target:
+                      entity_id: "{{ fans_on }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ interior_lights_on | trim != '' }}"
+                then:
+                  - continue_on_error: true
+                    action: script.lights_off_except
+                    data:
+                      exclude_lights: "{{ protected_departure_lights }}"
+                      transition: 0
+          - delay:
+              seconds: 15
+      # Give a normally-slow garage door time to finish closing before the final
+      # check; a door stalled in "closing" times out here and is then reported
+      # by the closed-only verification below (#110, Codex P1).
+      - alias: "Allow the garage door to finish closing before verification"
+        wait_template: "{{ is_state('cover.garage_door', 'closed') }}"
+        timeout:
+          seconds: 30
+        continue_on_timeout: true
+      - alias: "Do not notify if guest mode became active"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - alias: "Do not notify if the resident returned"
+        condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+      - variables:
+          final_interior_lights_on: >-
+            {%- set opaque_group_members = {
+              'light.outside_front_lights': [
+                'light.outside_front_hue',
+                'light.outside_north_west_garage',
+                'light.outside_south_west_garage',
+                'light.outside_front_door'
+              ]
+            } -%}
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for light in states.light -%}
+              {%- set runtime_members = state_attr(light.entity_id, 'entity_id') -%}
+              {%- if runtime_members is iterable and runtime_members is not string -%}
+                {%- set members = runtime_members | list -%}
+              {%- elif light.entity_id in opaque_group_members -%}
+                {%- set members = opaque_group_members[light.entity_id] -%}
+              {%- else -%}
+                {%- set members = [] -%}
+              {%- endif -%}
+              {%- set protected = light.entity_id in protected_departure_lights
+                or (members | select('in', protected_departure_lights) | list | count > 0) -%}
+              {%- if light.state == 'on' and not protected -%}
+                {%- set ns.entities = ns.entities + [light.entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          final_fans_on: >-
+            {{ states.fan | selectattr('state', 'eq', 'on') | map(attribute='entity_id') | join(', ') }}
+          # Fans that are unknown/unavailable were never retried (only 'on' fans
+          # are) and their turn-off could not be verified, so surface them so the
+          # unavailable-target contract holds for bulk fan shutdown (#110, Codex).
+          final_fans_unverified: >-
+            {{ states.fan | selectattr('state', 'in', ['unavailable', 'unknown'])
+               | map(attribute='entity_id') | join(', ') }}
+          # Non-protected lights that are unknown/unavailable, same rationale as
+          # the fans above; reuses the group-aware protected filter.
+          final_interior_lights_unverified: >-
+            {%- set opaque_group_members = {
+              'light.outside_front_lights': [
+                'light.outside_front_hue',
+                'light.outside_north_west_garage',
+                'light.outside_south_west_garage',
+                'light.outside_front_door'
+              ]
+            } -%}
+            {%- set ns = namespace(entities=[]) -%}
+            {%- for light in states.light -%}
+              {%- set runtime_members = state_attr(light.entity_id, 'entity_id') -%}
+              {%- if runtime_members is iterable and runtime_members is not string -%}
+                {%- set members = runtime_members | list -%}
+              {%- elif light.entity_id in opaque_group_members -%}
+                {%- set members = opaque_group_members[light.entity_id] -%}
+              {%- else -%}
+                {%- set members = [] -%}
+              {%- endif -%}
+              {%- set protected = light.entity_id in protected_departure_lights
+                or (members | select('in', protected_departure_lights) | list | count > 0) -%}
+              {%- if light.state in ['unavailable', 'unknown'] and not protected -%}
+                {%- set ns.entities = ns.entities + [light.entity_id] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {{ ns.entities | join(', ') }}
+          departure_integrity_issues: >-
+            {%- set ns = namespace(issues=[]) -%}
+            {%- if not is_state('input_select.house_mode', 'away') -%}
+              {%- set ns.issues = ns.issues + ['House mode is still ' ~ states('input_select.house_mode') ~ '.'] -%}
+            {%- endif -%}
+            {%- if states('lock.front_door_lock') != 'locked' -%}
+              {%- set ns.issues = ns.issues + ['Front door lock is ' ~ states('lock.front_door_lock') ~ '.'] -%}
+            {%- endif -%}
+            {%- if states('cover.garage_door') != 'closed' -%}
+              {%- set ns.issues = ns.issues + ['Garage door is ' ~ states('cover.garage_door') ~ '.'] -%}
+            {%- endif -%}
+            {%- if is_state('binary_sensor.any_egress_open', 'on') -%}
+              {%- set names = state_attr('sensor.open_egress_points', 'friendly_names') | default('unknown egress point', true) -%}
+              {%- set ns.issues = ns.issues + ['Door or window remains open: ' ~ names ~ '.'] -%}
+            {%- elif states('binary_sensor.any_egress_open') in ['unknown', 'unavailable'] -%}
+              {%- set ns.issues = ns.issues + ['Egress verification is ' ~ states('binary_sensor.any_egress_open') ~ '.'] -%}
+            {%- endif -%}
+            {%- set media_off_states = {'media_player.lg_webos_smart_tv': ['off', 'unavailable']} -%}
+            {%- for entity_id in departure_media_off_targets -%}
+              {%- set ok_states = media_off_states.get(entity_id, ['off']) -%}
+              {%- if states(entity_id) not in ok_states -%}
+                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for entity_id in departure_ma_targets -%}
+              {%- if states(entity_id) in ['playing', 'buffering', 'unknown', 'unavailable'] -%}
+                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- for entity_id in departure_camera_targets -%}
+              {%- if states(entity_id) != 'on' -%}
+                {%- set name = state_attr(entity_id, 'friendly_name') | default(entity_id, true) -%}
+                {%- set ns.issues = ns.issues + [name ~ ' is ' ~ states(entity_id) ~ '.'] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- if final_interior_lights_on | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Interior lights still on: ' ~ final_interior_lights_on ~ '.'] -%}
+            {%- endif -%}
+            {%- if final_interior_lights_unverified | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Interior lights not verified off (unavailable/unknown): ' ~ final_interior_lights_unverified ~ '.'] -%}
+            {%- endif -%}
+            {%- if final_fans_on | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Fans still on: ' ~ final_fans_on ~ '.'] -%}
+            {%- endif -%}
+            {%- if final_fans_unverified | trim != '' -%}
+              {%- set ns.issues = ns.issues + ['Fans not verified off (unavailable/unknown): ' ~ final_fans_unverified ~ '.'] -%}
+            {%- endif -%}
+            {%- if is_state('input_boolean.trip', 'on') and not is_state('switch.vacation_simulation', 'on') -%}
+              {%- set ns.issues = ns.issues + ['Vacation simulation is not on while trip mode is on.'] -%}
+            {%- elif is_state('input_boolean.trip', 'off') and is_state('switch.vacation_simulation', 'on') -%}
+              {%- set ns.issues = ns.issues + ['Vacation simulation is still on while trip mode is off.'] -%}
+            {%- endif -%}
+            {{ ns.issues | join('\n') }}
+      - if:
+          - condition: template
+            value_template: "{{ departure_integrity_issues | trim != '' }}"
+        then:
+          - action: notify.all
+            data:
+              message: >-
+                Departure integrity found exceptions{% if reason is defined and reason | string | trim %} ({{ reason }}){% endif %}:
+
+                {{ departure_integrity_issues }}
+
   contextual_arrival_transition:
     alias: contextual_arrival_transition
     description: >-
