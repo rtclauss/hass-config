@@ -357,10 +357,9 @@ class BayesianDeviceTracker(hass.Hass):
         """
         entity_id = "device_tracker." + self.bayesian_device_tracker_id
         merged = copy.deepcopy(attributes) if attributes else {}
-        # Drop identity / HA-managed keys that a GPS source may carry. set_state
-        # applies attributes verbatim, so leaving these in makes the fused
-        # tracker impersonate its last source (friendly_name), advertise stale
-        # zone membership (in_zones), or echo state metadata.
+        # Drop identity / HA-managed keys that a GPS source may carry, so the fused
+        # tracker never impersonates its last source (friendly_name), advertises
+        # stale zone membership (in_zones), or echoes state metadata.
         for key in self.STRIP_ATTRS:
             merged.pop(key, None)
         merged["latitude"] = latitude
@@ -368,11 +367,19 @@ class BayesianDeviceTracker(hass.Hass):
         merged["gps_accuracy"] = gps_accuracy
         merged["source_type"] = "gps"
         merged["friendly_name"] = self.tracker_friendly_name
+        # Always stamp gps_updated: location_update throttles on it, and replace=True
+        # (below) would otherwise drop it on home-path writes that don't set it.
+        merged.setdefault("gps_updated", datetime.now(timezone.utc).isoformat())
         if state is None:
             state = self.resolve_tracker_state(latitude, longitude, gps_accuracy)
         self.log("update_tracker: setting {} -> state={!r} lat={} lon={} acc={} attr_keys={}".format(
             entity_id, state, latitude, longitude, gps_accuracy, sorted(merged.keys())))
-        self.set_state(entity_id, state=state, attributes=merged)
+        # replace=True: AppDaemon's set_state merges attributes by default, so
+        # stripping a key from `merged` does NOT remove it from an entity that
+        # already carries it (stale in_zones/source_tracker/altitude persist
+        # indefinitely). Replace the whole attribute mapping so the tracker only
+        # ever exposes the keys set here.
+        self.set_state(entity_id, state=state, attributes=merged, replace=True)
         self.log("update_tracker: readback state after set_state = {!r}".format(self.get_state(entity_id)))
 
     def resolve_tracker_state(self, latitude, longitude, gps_accuracy=0):

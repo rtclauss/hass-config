@@ -368,3 +368,18 @@ def test_run_update_away_source_without_speed_still_updates(monkeypatch) -> None
     app.set_state.assert_called_once()
     _, kwargs = app.set_state.call_args
     assert kwargs["state"] == "not_home"  # 44.5,-92.5 is outside the test zones
+
+
+def test_update_tracker_replaces_attributes(monkeypatch) -> None:
+    """set_state must use replace=True so stale attributes cannot persist.
+
+    AppDaemon merges attributes by default, so stripping a key from the outgoing
+    dict does not remove it from an entity that already carries it. The fix must
+    replace the whole attribute mapping.
+    """
+    app = _make_app(monkeypatch, HOME)
+
+    app.update_tracker(latitude=44.0, longitude=-93.0, attributes={"course": 0.0}, state="home")
+
+    _, kwargs = app.set_state.call_args
+    assert kwargs.get("replace") is True
