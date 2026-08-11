@@ -72,7 +72,9 @@ def _scene_block(scene_name: str) -> str:
 
     end = len(lines)
     for index in range(start + 1, len(lines)):
-        if lines[index].startswith("  - name: "):
+        if lines[index].startswith("  - name: ") or re.match(
+            r"^[A-Za-z0-9_]+:", lines[index]
+        ):
             end = index
             break
 
@@ -155,12 +157,12 @@ def test_house_transition_supports_in_bed_and_asleep_without_forcing_night_scene
     assert "resolved_light_scene" in block
 
 
-def test_departure_house_transition_runs_in_parallel_without_embedding_vacuum_logic() -> None:
-    transition_block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+def test_departure_house_transition_delegates_without_embedding_vacuum_logic() -> None:
+    transition_block = _automation_block(ZONE_PATH, "run_verified_departure")
     vacuum_block = _automation_block(ZONE_PATH, "vacuum_leave_home")
 
-    assert "parallel:" in transition_block
-    assert "action: script.house_transition" in transition_block
+    assert "action: script.departure_integrity" in transition_block
+    assert "action: script.house_transition" not in transition_block
     assert "action: mqtt.publish" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" not in transition_block
     assert "action: script.vacuum_main_and_upstairs_levels" in vacuum_block
@@ -193,12 +195,116 @@ def test_leave_home_transition_guards_optional_targets() -> None:
     assert "switch.christmas_tree" not in scene
 
 
-def test_departure_waits_for_primary_tracker_to_leave_home() -> None:
-    block = _automation_block(ZONE_PATH, "turn_off_lights_when_i_leave")
+def test_departure_gates_on_bayesian_empty_house_not_derived_tracker() -> None:
+    # The derived GPS tracker can still read `home` when the Bayesian sensor
+    # turns off (appdaemon/apps/tracker.py only leaves the home zone on a later
+    # GPS callback). Gating on the tracker made the source check and the tracker
+    # check mutually exclusive, so the away transition never ran (#110, Codex P1).
+    block = _automation_block(ZONE_PATH, "run_verified_departure")
 
-    assert "Primary tracker confirms departure" in block
-    assert "device_tracker.bayesian_zeke_home" in block
-    assert "not is_state('device_tracker.bayesian_zeke_home', 'home')" in block
+    assert "House is empty per the Bayesian presence signal" in block
+    assert "entity_id: binary_sensor.bayesian_zeke_home" in block
+    assert "Primary tracker confirms departure" not in block
+    assert "condition: zone" not in block
+
+
+def test_departure_runs_integrity_only_after_bayesian_empty_house_signal() -> None:
+    block = _automation_block(ZONE_PATH, "run_verified_departure")
+
+    assert "Only start departure integrity from Bayesian departure" in block
+    assert "trigger.event.data.source_trigger == 'bayesian_presence_off'" in block
+    assert "action: script.departure_integrity" in block
+    assert "action: script.house_transition" not in block
+
+
+def test_departure_integrity_retries_available_failures_and_notifies_once() -> None:
+    block = _zone_script_block("departure_integrity")
+
+    assert "mode: restart" in block
+    assert "action: script.house_transition" in block
+    assert "mode: away" in block
+    assert "apply_trip_policy: true" in block
+    assert "departure_retry_needed" in block
+    assert "unavailable" in block
+    assert "unknown" in block
+    assert "Retry available departure failures once" in block
+    assert "action: script.lights_off_except" in block
+    assert "action: lock.lock" in block
+    assert "action: cover.close_cover" in block
+    assert "action: media_player.turn_off" in block
+    assert "action: fan.turn_off" in block
+    assert "action: switch.turn_on" in block
+    assert block.count("action: notify.all") == 1
+
+
+def test_departure_integrity_summarizes_all_remaining_exceptions() -> None:
+    text = ZONE_PATH.read_text(encoding="utf-8")
+    block = _zone_script_block("departure_integrity")
+
+    assert "id: doors_open_when_leaving_home" not in text
+    assert "id: garage_door_open_when_leaving_home" not in text
+    assert "departure_integrity_issues" in block
+    assert "sensor.open_egress_points" in block
+    assert "lock.front_door_lock" in block
+    assert "cover.garage_door" in block
+    assert "media_player.lg_webos_smart_tv" in block
+    assert "switch.livingroom_motion_detection" in block
+    assert "switch.tiki_room_camera" in block
+    assert "interior_lights_on" in block
+    assert "fans_on" in block
+    assert "trip mode" in block
+    assert "Departure integrity found exceptions" in block
+
+
+def test_departure_integrity_requires_garage_fully_closed(  # noqa: D103
+) -> None:
+    # A door stalled in "closing" must not be treated as verified: wait for the
+    # closed state (bounded), then report anything that is not closed so a stuck
+    # door is surfaced instead of silently suppressing the alert (#110, Codex P1).
+    block = _zone_script_block("departure_integrity")
+
+    assert "wait_template" in block
+    assert "is_state('cover.garage_door', 'closed')" in block
+    assert "continue_on_timeout: true" in block
+    assert "states('cover.garage_door') != 'closed'" in block
+    assert "not in ['closed', 'closing']" not in block
+
+
+def test_departure_integrity_accepts_webos_tv_unavailable_as_off(  # noqa: D103
+) -> None:
+    # The WebOS TV reports its powered-off state as "unavailable" (see
+    # packages/tv.yaml), so a normal power-off must not be flagged as a failed
+    # turn-off in the final summary (#110, Codex P2).
+    block = _zone_script_block("departure_integrity")
+
+    assert "media_off_states" in block
+    assert "'media_player.lg_webos_smart_tv': ['off', 'unavailable']" in block
+    assert "media_off_states.get(entity_id, ['off'])" in block
+
+
+def test_departure_integrity_reports_unverified_fans_and_lights(  # noqa: D103
+) -> None:
+    # Fans/lights that are unavailable/unknown are not retried (only "on" ones
+    # are) but their off state cannot be verified, so they must appear in the
+    # final exception summary per the unavailable-target contract (#110, Codex).
+    block = _zone_script_block("departure_integrity")
+
+    assert "final_fans_unverified" in block
+    assert "final_interior_lights_unverified" in block
+    assert "Fans not verified off" in block
+    assert "Interior lights not verified off" in block
+
+
+def test_departure_integrity_stops_if_guest_or_resident_context_returns() -> None:
+    block = _zone_script_block("departure_integrity")
+
+    # Guest mode and the canonical Bayesian empty-house sensor are re-checked
+    # before the away transition, before the retry pass, and before notifying.
+    # The derived GPS tracker is intentionally not gated on here (#110, Codex P1).
+    assert block.count("entity_id: input_boolean.guest_mode") >= 3
+    assert block.count("entity_id: binary_sensor.bayesian_zeke_home") >= 3
+    assert "condition: zone" not in block
+    assert "zone: zone.home" not in block
 
 
 def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
@@ -243,10 +349,8 @@ def test_presence_event_consumers_keep_independent_traces_and_modes() -> None:
         "vacuum_return_home",
     )
     departure_consumers = (
-        "doors_open_when_leaving_home",
-        "garage_door_open_when_leaving_home",
         "input_boolean_tracker_off",
-        "turn_off_lights_when_i_leave",
+        "run_verified_departure",
         "vacuum_leave_home",
     )
 
