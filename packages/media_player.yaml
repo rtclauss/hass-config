@@ -1511,6 +1511,21 @@ script:
                     target:
                       entity_id: "{{ repeat.item }}"
                     data:
+                      # Absolute curve = step × iteration, capped at the peak.
+                      # A member that was unavailable for part of the fade
+                      # (missed volume_set calls under continue_on_error) snaps
+                      # to the elapsed curve position when it returns, rather
+                      # than fading up from where it dropped. For a wake-up
+                      # ALARM that catch-up is intended: every room must reach
+                      # its peak to wake the sleeper, so a briefly-offline room
+                      # rejoining the group level is correct — leaving it quiet,
+                      # or dropping it from the run, risks not waking someone.
+                      # A readback-relative cap would smooth the catch-up but
+                      # reintroduce the sub-8% dead-zone stall this ramp exists
+                      # to defeat (a pinned member is indistinguishable from a
+                      # recovering one without per-member history, which HA
+                      # templates can't carry across iterations). Matches the
+                      # in-production owner_suite_morning_transition ramp.
                       volume_level: >-
                         {% set member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(repeat.item, effective_peak_volume) %}
                         {{ [effective_step_volume * ramp_index, member_peak] | min }}
