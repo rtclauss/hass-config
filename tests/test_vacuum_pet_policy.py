@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+VACUUM_PATH = ROOT / "packages" / "xiaomi_robot_vacuum.yaml"
+ZONE_PATH = ROOT / "packages" / "zone.yaml"
+WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
+CURLING_PATH = ROOT / "packages" / "curling.yaml"
+TRIPS_PATH = ROOT / "packages" / "trips.yaml"
+ROOM_INTENT_PATH = ROOT / "docs" / "room_intent.yaml"
+POLICY_DOC_PATH = ROOT / "docs" / "vacuum_pet_policy.md"
+
+
+def _automation_block(path: Path, automation_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = None
+
+    for index, line in enumerate(lines):
+        if line not in (f"    id: {automation_id}", f"  - id: {automation_id}"):
+            continue
+        for candidate in range(index, -1, -1):
+            if lines[candidate].startswith("  - "):
+                start = candidate
+                break
+        if start is not None:
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find automation {automation_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("  - "):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
+def _script_block(path: Path, script_id: str) -> str:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = None
+    target = f"  {script_id}:"
+
+    for index, line in enumerate(lines):
+        if line == target:
+            start = index
+            break
+
+    if start is None:
+        raise AssertionError(f"Could not find script {script_id!r} in {path.name}")
+
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.startswith("  ") and not line.startswith("    ") and line.endswith(":"):
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
+def _assert_unattended_gate(block: str) -> None:
+    assert "condition: state" in block
+    assert "entity_id: input_select.vacuum_pet_policy" in block
+    assert 'state: "Unattended"' in block
+
+
+def test_pet_policy_helper_defaults_fail_closed_after_reload() -> None:
+    config = VACUUM_PATH.read_text(encoding="utf-8")
+    helper = config.split("  vacuum_pet_policy:", 1)[1].split("\n\n", 1)[0]
+
+    assert "name: Vacuum Pet Safety Policy" in helper
+    assert "- Acclimation" in helper
+    assert "- Supervised" in helper
+    assert "- Unattended" in helper
+    assert "initial: Acclimation" in helper
+
+
+def test_every_automatic_cleaning_path_routes_through_a_pet_safe_boundary() -> None:
+    shared_floor_callers = (
+        (ZONE_PATH, "vacuum_leave_home"),
+        (WORKDAY_PATH, "vacuum_while_working"),
+        (CURLING_PATH, "leave_home_for_curling"),
+    )
+    for path, automation_id in shared_floor_callers:
+        block = _automation_block(path, automation_id)
+        assert "action: script.vacuum_main_and_upstairs_levels" in block
+
+    maintenance = _automation_block(VACUUM_PATH, "x40_ultra_maintenance_clean_after_four_home_days")
+    assert "action: script.vacuum_main_level_full_floor" in maintenance
+
+    for automation_id in ("vacuum_on_trip", "vacuum_flying_home"):
+        trip = _automation_block(TRIPS_PATH, automation_id)
+        assert "action: script.trip_vacuum_main_and_upstairs_levels" in trip
+
+    den_retry = _automation_block(VACUUM_PATH, "resume_vacuum_on_error_den")
+    departure = _automation_block(ZONE_PATH, "vacuum_leave_home")
+    assert "action: script.vacuum_den_pet_safe_start" in den_retry
+    assert "action: script.vacuum_den_pet_safe_start" in departure
+
+
+def test_shared_full_floor_boundaries_fail_closed_for_unknown_or_disabled_policy() -> None:
+    for script_id in (
+        "vacuum_den_pet_safe_start",
+        "x40_ultra_main_level_vacuum_only",
+        "vacuum_main_level_full_floor",
+        "vacuum_main_and_upstairs_levels",
+        "x40_ultra_main_level_mop_after_vacuum",
+        "trip_vacuum_main_and_upstairs_levels",
+    ):
+        path = TRIPS_PATH if script_id == "trip_vacuum_main_and_upstairs_levels" else VACUUM_PATH
+        _assert_unattended_gate(_script_block(path, script_id))
+
+
+def test_entering_acclimation_immediately_docks_all_robots() -> None:
+    automation = _automation_block(VACUUM_PATH, "vacuum_pet_policy_acclimation_dock")
+    dock_script = _script_block(VACUUM_PATH, "vacuum_dock_all_robots")
+
+    assert "entity_id: input_select.vacuum_pet_policy" in automation
+    assert 'to: "Acclimation"' in automation
+    assert "action: script.vacuum_dock_all_robots" in automation
+    assert dock_script.count("action: vacuum.return_to_base") == 2
+    assert "entity_id: vacuum.valetudo_den" in dock_script
+    assert "entity_id: vacuum.x40_ultra" in dock_script
+    assert "valetudo/upstairs-vacuum/BasicControlCapability/operation/set" in dock_script
+    assert "payload: HOME" in dock_script
+    assert dock_script.count("continue_on_error: true") == 3
+
+
+def test_pet_policy_suppresses_non_unattended_and_away_forced_mopping() -> None:
+    policy = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
+    flying_home = _automation_block(TRIPS_PATH, "vacuum_flying_home")
+
+    assert "is_state('input_select.vacuum_pet_policy', 'Unattended')" in policy
+    assert "force_mop: true" not in flying_home
+
+
+def test_x40_rechecks_policy_after_preparation_and_before_each_start() -> None:
+    for script_id in (
+        "x40_ultra_main_level_vacuum_only",
+        "x40_ultra_main_level_mop_after_vacuum",
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        prepare = block.index("action: script.x40_ultra_prepare_deterministic_cleaning")
+        policy_recheck = block.index(
+            "entity_id: input_select.vacuum_pet_policy",
+            prepare,
+        )
+        start = block.index("action: vacuum.start", policy_recheck)
+
+        assert prepare < policy_recheck < start
+
+
+def test_room_intent_links_durable_cat_safe_cleaning_policy() -> None:
+    room_intent = ROOM_INTENT_PATH.read_text(encoding="utf-8")
+    policy = POLICY_DOC_PATH.read_text(encoding="utf-8")
+
+    assert "cat_safe_robot_cleaning" in room_intent
+    assert "docs/vacuum_pet_policy.md" in room_intent
+    assert "Acclimation" in policy
+    assert "Supervised" in policy
+    assert "Unattended" in policy
+    assert "owner decision" in policy
+    assert "robot-free refuge" in policy
