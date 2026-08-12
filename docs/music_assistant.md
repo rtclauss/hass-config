@@ -33,7 +33,11 @@ Behavior (what plays when) is owned by `specs/alarm_wakeup.allium` and
   They dynamically prepare the exact wake group from MA `ma_<room>` players:
   bedroom + bathroom in guest mode, and bedroom + bathroom + office + den when
   guest mode is off. This keeps Tiki Room out of owner-suite wake-up audio even
-  when the whole-house sync group includes it.
+  when the whole-house sync group includes it. `media_player.join` only *adds*
+  followers, so `music_assistant_prime_wake_group` first **unjoins any stray
+  member** left in the live bedroom group from a prior grouping (e.g. Tiki Room
+  after whole-house/arrival audio) — otherwise a stray plays wake-up audio
+  unprimed and unramped at whatever volume it was left at.
 
 ## NEVER hardcode a Spotify provider-instance id
 
@@ -82,6 +86,15 @@ Recovery steps:
 
 For group playback, set volume on the **individual member `ma_<room>` entities**, never
 on the group entity. Proportional scaling rounds to 0 below ~8%.
+
+Because of that ~8% dead zone, **volume ramps must command an absolute,
+index-driven curve** (`step × iteration`, capped at the target), **not a
+readback-derived `live_volume + step`**. A readback-derived target gets trapped
+below ~8%: the reported volume stops rising, so the next target never advances
+and the ramp stalls (the 2026-08-12 MPR wake-up topped out at ~6%). The wake-up
+ramp (`music_assistant_radio_wake_up`), the bedtime rampdown
+(`spotify_bedtime_volume`), and the owner-suite morning transition all use the
+absolute curve for this reason.
 
 ## MA WebSocket API
 

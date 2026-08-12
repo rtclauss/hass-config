@@ -317,9 +317,12 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert block.count('target_entity: "{{ playback_player }}"') >= 1
     assert 'group_members: "{{ group_members }}"' in block
     assert "starting_volume: 0.01" in block
-    # Perceptually-paced ramp: reads live volume each iteration and steps it
-    # toward the (distinct) non-office / office peaks rather than using a
-    # precomputed index-based curve.
+    # Perceptually-paced ramp: commands an ABSOLUTE, index-driven curve
+    # (step × outer iteration, capped at each member's peak) rather than a
+    # readback-derived (live + step) target. MA proportional scaling "rounds
+    # to 0 below ~8%" (docs/music_assistant.md), so a readback-derived target
+    # gets trapped in the sub-8% dead zone and stalls (the 2026-08-12 MPR
+    # alarm topped out at ~6%); an absolute curve climbs through it.
     assert "effective_step_volume" in block
     assert "effective_interval_seconds" in block
     assert "default(0.01)" in block  # step default
@@ -327,34 +330,64 @@ def test_radio_wakeup_ramps_policy_wake_group_members_not_whole_house_group() ->
     assert "default(0.25)" in block  # non-office, non-bedroom peak default
     assert "default(0.30)" in block  # bedroom peak default (louder, to wake the sleeper)
     assert "default(0.07)" in block  # office peak default
-    # Each member is tracked and stepped from its OWN live volume — the
-    # bedroom and office each get their own peak via a per-member dict
-    # lookup, not a split "list + separate call" structure that could let
-    # one member (e.g. bedroom) proxy for the rest and let the loop end
-    # while another member is still under-ramped.
+    # Each member still gets its own peak via a per-member dict lookup, so the
+    # bedroom and office reach distinct ceilings. The commanded value is the
+    # absolute curve, NOT live volume + a step.
     assert "for_each: \"{{ group_members }}\"" in block
     assert "member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(repeat.item, effective_peak_volume)" in block
-    assert "[(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min" in block
+    assert "[effective_step_volume * ramp_index, member_peak] | min" in block
+    # The outer iteration count is captured before the per-member for_each,
+    # whose own repeat.index would otherwise shadow it.
+    assert 'ramp_index: "{{ repeat.index }}"' in block
+    # No readback-derived stepping — that is exactly the pattern that stalled.
+    assert "state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume" not in block
 
 
 def test_radio_wakeup_ramp_is_bounded_when_a_member_is_unavailable_or_excluded() -> None:
     block = _script_block("music_assistant_radio_wake_up")
 
-    # An unavailable player must fall back to its own peak (i.e. read as
-    # "already done") rather than the silent starting volume — otherwise the
-    # while-loop condition never clears (issue: office stuck at 0.01 forever).
-    assert "member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(member, effective_peak_volume)" in block
-    assert "float(member_peak)) < member_peak" in block
-    assert "float(0.01)) < " not in block
+    # Completion is index-driven, not readback-driven: the loop runs until the
+    # curve reaches the loudest member's peak (steps_to_peak), so a member
+    # reporting a stale/pinned volume_level can neither stall the loop nor keep
+    # it open. An unavailable player is simply skipped by continue_on_error.
+    assert (
+        "steps_to_peak = (max_member_peak / effective_step_volume) | round(0, 'ceil')"
+        in block
+    )
+    assert "repeat.index <= steps_to_peak" in block
+    # The while no longer reads back per-member volume to decide completion —
+    # that readback dependency is exactly what let the ramp stall at ~6%.
+    assert "float(member_peak)) < member_peak" not in block
+    assert "for member in group_members" not in block
     # Guest mode excludes the office from group_members entirely; since the
-    # loop iterates group_members directly, an absent office is simply never
-    # evaluated — no special-casing needed.
-    assert "for member in group_members" in block
-    # Hard iteration cap: a player that keeps failing volume_set under
-    # continue_on_error (stale state, condition never clears) still can't
-    # hold the ramp open indefinitely.
+    # for_each iterates group_members directly, an absent office is simply
+    # never stepped — no special-casing needed.
+    assert "for_each: \"{{ group_members }}\"" in block
+    # Hard iteration cap remains as a belt-and-suspenders backstop.
     assert "effective_max_ramp_iterations" in block
     assert "repeat.index <= effective_max_ramp_iterations" in block
+
+
+def test_radio_wakeup_ramp_commands_absolute_index_curve_not_readback() -> None:
+    block = _script_block("music_assistant_radio_wake_up")
+
+    # Regression guard for the 2026-08-12 MPR alarm that topped out at ~6%:
+    # MA/Sonos "proportional scaling rounds to 0 below ~8%", so a target of
+    # min(live_volume + step, peak) stalls in the sub-8% dead zone (the
+    # readback never rises, so the target never advances). The ramp must
+    # instead command an absolute index-driven curve capped at each member's
+    # peak, which keeps climbing regardless of a pinned readback.
+    assert "[effective_step_volume * ramp_index, member_peak] | min" in block
+    assert (
+        "state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume"
+        not in block
+    )
+    # Completion is index-driven, so a stale readback can't stall or extend it.
+    assert (
+        "steps_to_peak = (max_member_peak / effective_step_volume) | round(0, 'ceil')"
+        in block
+    )
+    assert "repeat.index <= steps_to_peak" in block
 
 
 def test_radio_wakeup_office_peak_is_clamped_to_spec_ceiling() -> None:
@@ -489,6 +522,14 @@ def test_prime_wake_group_sets_exact_member_volume_and_joins_to_bedroom() -> Non
     assert 'entity_id: media_player.ma_bedroom' in block
     assert "group_members | reject('eq', 'media_player.ma_bedroom') | list" in block
     assert 'media_player.ma_tiki_room' not in block
+    # Strays left in the live bedroom sync group from a prior grouping (e.g.
+    # Tiki Room after whole-home audio) are unjoined before priming, so the
+    # wake-up group is exactly group_members — media_player.join only adds
+    # followers, it never removes extras.
+    assert 'action: media_player.unjoin' in block
+    assert "state_attr('media_player.ma_bedroom', 'group_members')" in block
+    assert "reject('in', group_members) | list" in block
+    assert 'entity_id: "{{ stray_members }}"' in block
 
 
 def test_spotify_wakeup_prepares_exact_guest_aware_wake_group() -> None:
@@ -727,9 +768,15 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
         "while:",
         'for_each: "{{ bedtime_rampdown_targets }}"',
         'entity_id: "{{ repeat.item.entity_id }}"',
-        "bedtime_rampdown_step_volume, repeat.item.floor_volume] | max",
+        # Absolute descending curve: start (snapshotted once) − step ×
+        # iteration, floored; min(live, curve) still honors a manual lowering.
+        "bedtime_rampdown_start_volumes:",
+        'rampdown_index: "{{ repeat.index }}"',
+        "start - bedtime_rampdown_step_volume * rampdown_index] | min] | max",
     ):
         assert token in block
+    # No readback-derived step — that is the pattern that can stall.
+    assert "bedtime_rampdown_step_volume, repeat.item.floor_volume] | max" not in block
 
     # Bedroom keeps a distinct, higher floor than the other three rooms.
     assert block.count("floor_volume: 0.06") == 1
@@ -738,9 +785,10 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
     assert 'seconds: "{{ bedtime_rampdown_interval_seconds }}"' in block
     # Single data-driven volume_set that every target reuses.
     assert block.count("action: media_player.volume_set") == 1
-    # Volume is read live from each entity every iteration (in the loop
-    # condition, the per-target skip guard, and the step itself) rather than
-    # assumed from a fixed starting percentage or a precomputed curve.
+    # Volume is still read live in the loop-continuation condition and the
+    # per-target skip guard (and as the min(live, curve) term), so a manual
+    # lowering is honored; the descending target itself follows the absolute
+    # start−step×iteration curve rather than readback−step.
     assert block.count("state_attr(target.entity_id, 'volume_level')") == 1
     assert block.count("state_attr(repeat.item.entity_id, 'volume_level')") == 2
     # Graceful degradation (#839): an unavailable member must never abort the

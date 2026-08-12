@@ -1229,6 +1229,26 @@ script:
       starting_volume:
         description: "Initial per-member volume before playback starts"
     sequence:
+      # Evict any stray member left in the live bedroom sync group from a
+      # prior grouping (e.g. Tiki Room after whole-home / arrival audio) —
+      # media_player.join below ADDS the intended followers but never removes
+      # extras, so without this a stray room stays in the group unprimed and
+      # unramped, playing owner-suite wake-up audio at whatever volume it was
+      # left at. docs/music_assistant.md requires Tiki Room stay out of
+      # wake-up audio; this makes the group exactly group_members.
+      - alias: "Unjoin any stray members not in the intended wake-up group"
+        variables:
+          stray_members: >-
+            {{ (state_attr('media_player.ma_bedroom', 'group_members') or [])
+               | reject('in', group_members) | list }}
+      - if:
+          - condition: template
+            value_template: "{{ stray_members | count > 0 }}"
+        then:
+          - continue_on_error: true
+            action: media_player.unjoin
+            target:
+              entity_id: "{{ stray_members }}"
       - alias: "Set each wake-up member to the starting volume"
         continue_on_error: true
         action: media_player.volume_set
@@ -1449,34 +1469,40 @@ script:
       # waits effective_interval_seconds (default 15s, well past the ~4s
       # echoic-memory window) so the climb reads as smooth rather than as
       # discrete jumps. Every group member (office included, when present) is
-      # tracked and stepped from its OWN live volume_level — not proxied from
-      # one member — so a member that diverges (a manual adjustment, a missed
-      # update) doesn't let the loop finish while it's still under-ramped.
-      # Each member resolves its own peak: the bedroom to
-      # effective_bedroom_peak_volume (higher, to wake the sleeper), the office
-      # to effective_office_peak_volume (capped), everyone else to
-      # effective_peak_volume. Guest mode excluding the office from
-      # group_members means it's simply never iterated — no special-casing
-      # needed. Falls back to a member's own peak (not the silent starting
-      # volume) when a volume_level read fails, so an unavailable player reads
-      # as "already done" instead of stalling the loop. Reads live volume each
-      # iteration (rather than a precomputed curve) so continue_on_error never
-      # desyncs the rest of the ramp. effective_max_ramp_iterations is a hard
-      # backstop so a player reporting a stale volume_level while volume_set
-      # keeps silently failing still can't hold the ramp open indefinitely.
+      # commanded to an ABSOLUTE, index-driven target — effective_step_volume ×
+      # the outer iteration count, capped at that member's peak — NOT its own
+      # live volume_level + a step. This is deliberate: MA/Sonos group volume
+      # "proportional scaling rounds to 0 below ~8%" (docs/music_assistant.md),
+      # so a readback-derived target (min(live + step, peak)) gets trapped in
+      # that sub-8% dead zone — the reported volume stops rising, so the next
+      # target never advances past live+step and the ramp stalls at ~6% (the
+      # 2026-08-12 MPR alarm). An absolute curve keeps raising the COMMANDED
+      # value (0.08, 0.15, 0.25…) regardless of a pinned readback, powering
+      # straight through the dead zone — the same technique the working
+      # owner_suite_morning_transition ramp already uses. Each member resolves
+      # its own peak: the bedroom to effective_bedroom_peak_volume (higher, to
+      # wake the sleeper), the office to effective_office_peak_volume (capped),
+      # everyone else to effective_peak_volume. Priming set every member to the
+      # starting volume, so the curve is authoritative from index 1. Guest mode
+      # excluding the office from group_members means it's simply never iterated
+      # — no special-casing needed. Completion is index-driven (steps_to_peak =
+      # ceil(loudest peak / step)), so a stale/pinned volume_level can neither
+      # stall the loop nor extend it; effective_max_ramp_iterations remains a
+      # hard backstop. continue_on_error keeps one unavailable member from
+      # aborting the rest of the ramp.
       - repeat:
           while:
             - condition: template
               value_template: >-
-                {% set ns = namespace(any_below_peak=false) %}
-                {% for member in group_members %}
-                  {% set member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(member, effective_peak_volume) %}
-                  {% if (state_attr(member, 'volume_level') | float(member_peak)) < member_peak %}
-                    {% set ns.any_below_peak = true %}
-                  {% endif %}
-                {% endfor %}
-                {{ repeat.index <= effective_max_ramp_iterations and ns.any_below_peak }}
+                {% set max_member_peak = [effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max %}
+                {% set steps_to_peak = (max_member_peak / effective_step_volume) | round(0, 'ceil') %}
+                {{ repeat.index <= steps_to_peak and repeat.index <= effective_max_ramp_iterations }}
           sequence:
+            # Capture the OUTER iteration count before descending into the
+            # per-member for_each, whose own repeat.index would otherwise
+            # shadow it (inner index = position within group_members).
+            - variables:
+                ramp_index: "{{ repeat.index }}"
             - repeat:
                 for_each: "{{ group_members }}"
                 sequence:
@@ -1487,7 +1513,7 @@ script:
                     data:
                       volume_level: >-
                         {% set member_peak = {'media_player.ma_office': effective_office_peak_volume, 'media_player.ma_bedroom': effective_bedroom_peak_volume}.get(repeat.item, effective_peak_volume) %}
-                        {{ [(state_attr(repeat.item, 'volume_level') | float(member_peak)) + effective_step_volume, member_peak] | min }}
+                        {{ [effective_step_volume * ramp_index, member_peak] | min }}
             - delay:
                 seconds: "{{ effective_interval_seconds }}"
 
@@ -2221,6 +2247,21 @@ script:
           # configured step size, plus margin.
           bedtime_rampdown_max_iterations: >-
             {{ (1 / bedtime_rampdown_step_volume) | round(0, 'ceil') + 10 }}
+          # Snapshot each target's starting volume ONCE, up front, so the
+          # rampdown descends along an absolute index-driven curve
+          # (start − step × iteration) rather than readback − step. A
+          # readback-derived step can stall if a member reports a
+          # stale/pinned volume_level (the same MA proportional-scaling
+          # failure mode that pinned the wake-up ramp); the curve guarantees
+          # monotonic downward progress. The per-step target still takes
+          # min(live, curve), so a manual mid-rampdown lowering is honored and
+          # never raised back up.
+          bedtime_rampdown_start_volumes: >-
+            {% set ns = namespace(pairs=[]) %}
+            {% for t in bedtime_rampdown_targets %}
+              {% set ns.pairs = ns.pairs + [[t.entity_id, (state_attr(t.entity_id, 'volume_level') | float(t.floor_volume))]] %}
+            {% endfor %}
+            {{ dict(ns.pairs) }}
       - repeat:
           while:
             - condition: template
@@ -2236,6 +2277,11 @@ script:
                 {% endfor %}
                 {{ repeat.index <= bedtime_rampdown_max_iterations and ns.any_active_above_floor }}
           sequence:
+            # Capture the OUTER iteration count before descending into the
+            # per-target for_each, whose own repeat.index would otherwise
+            # shadow it.
+            - variables:
+                rampdown_index: "{{ repeat.index }}"
             - repeat:
                 for_each: "{{ bedtime_rampdown_targets }}"
                 sequence:
@@ -2244,10 +2290,10 @@ script:
                   # the rampdown. Guest-capable targets are skipped whenever
                   # guest mode is currently on, checked fresh each iteration.
                   # Also skipped once a target's live volume is already at or
-                  # below its floor — otherwise max(current - step, floor)
-                  # would raise it back UP to floor on the next iteration
-                  # (e.g. someone manually mutes a room mid-rampdown), which
-                  # is backwards for a rampdown.
+                  # below its floor — otherwise the target could raise it back
+                  # UP toward floor on the next iteration (e.g. someone
+                  # manually mutes a room mid-rampdown), which is backwards for
+                  # a rampdown.
                   - if:
                       - condition: template
                         value_template: >-
@@ -2259,8 +2305,14 @@ script:
                         target:
                           entity_id: "{{ repeat.item.entity_id }}"
                         data:
+                          # Absolute descending curve: start − step × iteration,
+                          # floored. min(live, curve) still honors a manual
+                          # lowering; the curve term forces progress even if the
+                          # readback goes stale-high.
                           volume_level: >-
-                            {{ [(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
+                            {% set start = bedtime_rampdown_start_volumes.get(repeat.item.entity_id, repeat.item.floor_volume) %}
+                            {% set live = state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume) %}
+                            {{ [repeat.item.floor_volume, [live, start - bedtime_rampdown_step_volume * rampdown_index] | min] | max }}
             - delay:
                 seconds: "{{ bedtime_rampdown_interval_seconds }}"
 
