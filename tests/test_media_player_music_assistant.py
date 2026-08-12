@@ -773,10 +773,14 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
         "bedtime_rampdown_start_volumes:",
         'rampdown_index: "{{ repeat.index }}"',
         "start - bedtime_rampdown_step_volume * rampdown_index] | min] | max",
+        # A target unavailable at snapshot time is omitted from the snapshot
+        # and eases down one live step at a time once recovered, so it is
+        # never slammed to floor in a single jump (Codex review, PR #957).
+        "{% if v is not none %}",
+        "{% if start is none %}",
+        "[live - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max",
     ):
         assert token in block
-    # No readback-derived step — that is the pattern that can stall.
-    assert "bedtime_rampdown_step_volume, repeat.item.floor_volume] | max" not in block
 
     # Bedroom keeps a distinct, higher floor than the other three rooms.
     assert block.count("floor_volume: 0.06") == 1

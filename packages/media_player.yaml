@@ -2256,10 +2256,21 @@ script:
           # monotonic downward progress. The per-step target still takes
           # min(live, curve), so a manual mid-rampdown lowering is honored and
           # never raised back up.
+          # Only players with a real volume_level at script start are recorded
+          # — an unavailable member (e.g. a faulted bathroom Sonos, #839) is
+          # deliberately omitted rather than pinned at its floor. If it were
+          # snapshotted at floor and then recovered mid-rampdown, the absolute
+          # curve would command floor on the very next step, dropping it from
+          # its recovered volume to 1% in one jump instead of easing down
+          # (Codex review, PR #957). A target with no snapshot instead eases
+          # down one live step at a time (see the step below).
           bedtime_rampdown_start_volumes: >-
             {% set ns = namespace(pairs=[]) %}
             {% for t in bedtime_rampdown_targets %}
-              {% set ns.pairs = ns.pairs + [[t.entity_id, (state_attr(t.entity_id, 'volume_level') | float(t.floor_volume))]] %}
+              {% set v = state_attr(t.entity_id, 'volume_level') %}
+              {% if v is not none %}
+                {% set ns.pairs = ns.pairs + [[t.entity_id, v | float(t.floor_volume)]] %}
+              {% endif %}
             {% endfor %}
             {{ dict(ns.pairs) }}
       - repeat:
@@ -2308,11 +2319,18 @@ script:
                           # Absolute descending curve: start − step × iteration,
                           # floored. min(live, curve) still honors a manual
                           # lowering; the curve term forces progress even if the
-                          # readback goes stale-high.
+                          # readback goes stale-high. A target with no start
+                          # snapshot (unavailable at script start, now recovered)
+                          # instead eases down one live step at a time, so it is
+                          # never slammed straight to floor.
                           volume_level: >-
-                            {% set start = bedtime_rampdown_start_volumes.get(repeat.item.entity_id, repeat.item.floor_volume) %}
+                            {% set start = bedtime_rampdown_start_volumes.get(repeat.item.entity_id) %}
                             {% set live = state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume) %}
+                            {% if start is none %}
+                            {{ [live - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
+                            {% else %}
                             {{ [repeat.item.floor_volume, [live, start - bedtime_rampdown_step_volume * rampdown_index] | min] | max }}
+                            {% endif %}
             - delay:
                 seconds: "{{ bedtime_rampdown_interval_seconds }}"
 
