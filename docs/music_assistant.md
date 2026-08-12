@@ -87,14 +87,21 @@ Recovery steps:
 For group playback, set volume on the **individual member `ma_<room>` entities**, never
 on the group entity. Proportional scaling rounds to 0 below ~8%.
 
-Because of that ~8% dead zone, **volume ramps must command an absolute,
-index-driven curve** (`step × iteration`, capped at the target), **not a
-readback-derived `live_volume + step`**. A readback-derived target gets trapped
+Because of that ~8% dead zone, an **upward** volume ramp must command an
+absolute, index-driven curve (`step × iteration`, capped at the target), **not
+a readback-derived `live_volume + step`**. A readback-derived climb gets trapped
 below ~8%: the reported volume stops rising, so the next target never advances
 and the ramp stalls (the 2026-08-12 MPR wake-up topped out at ~6%). The wake-up
-ramp (`music_assistant_radio_wake_up`), the bedtime rampdown
-(`spotify_bedtime_volume`), and the owner-suite morning transition all use the
-absolute curve for this reason.
+ramp (`music_assistant_radio_wake_up`) and the owner-suite morning transition
+both use the absolute curve for this reason.
+
+The bedtime **rampdown** (`spotify_bedtime_volume`) is the opposite case and
+deliberately steps DOWN from each room's own live volume (`max(live − step,
+floor)`): it descends toward a low floor — the regime where the dead zone helps
+reach floor rather than trapping the ramp — and its targets are live-paused in
+guest mode, so a live-relative step is the only pause-safe option (an absolute
+global-index curve would resume a paused room many steps below where it was
+left). See its inline comment for the full rationale.
 
 ## MA WebSocket API
 

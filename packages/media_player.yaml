@@ -2247,32 +2247,21 @@ script:
           # configured step size, plus margin.
           bedtime_rampdown_max_iterations: >-
             {{ (1 / bedtime_rampdown_step_volume) | round(0, 'ceil') + 10 }}
-          # Snapshot each target's starting volume ONCE, up front, so the
-          # rampdown descends along an absolute index-driven curve
-          # (start − step × iteration) rather than readback − step. A
-          # readback-derived step can stall if a member reports a
-          # stale/pinned volume_level (the same MA proportional-scaling
-          # failure mode that pinned the wake-up ramp); the curve guarantees
-          # monotonic downward progress. The per-step target still takes
-          # min(live, curve), so a manual mid-rampdown lowering is honored and
-          # never raised back up.
-          # Only players with a real volume_level at script start are recorded
-          # — an unavailable member (e.g. a faulted bathroom Sonos, #839) is
-          # deliberately omitted rather than pinned at its floor. If it were
-          # snapshotted at floor and then recovered mid-rampdown, the absolute
-          # curve would command floor on the very next step, dropping it from
-          # its recovered volume to 1% in one jump instead of easing down
-          # (Codex review, PR #957). A target with no snapshot instead eases
-          # down one live step at a time (see the step below).
-          bedtime_rampdown_start_volumes: >-
-            {% set ns = namespace(pairs=[]) %}
-            {% for t in bedtime_rampdown_targets %}
-              {% set v = state_attr(t.entity_id, 'volume_level') %}
-              {% if v is not none %}
-                {% set ns.pairs = ns.pairs + [[t.entity_id, v | float(t.floor_volume)]] %}
-              {% endif %}
-            {% endfor %}
-            {{ dict(ns.pairs) }}
+      # Unlike the wake-up ramp (which climbs an absolute index-driven curve
+      # to power through MA's "rounds to 0 below ~8%" dead zone), this rampdown
+      # steps DOWN from each target's OWN live volume every iteration:
+      # max(live − step, floor). That is deliberate and NOT a stall risk here —
+      # it descends toward a low floor (0.06 bedroom / 0.01 others), the regime
+      # where the dead zone helps reach floor rather than trapping the climb.
+      # A live-relative step is also the only pause-safe option: guest mode
+      # skips office/den mid-rampdown (re-checked live each iteration), so an
+      # absolute step × global-iteration curve would resume a paused room many
+      # steps below where it was left, slamming it to floor in one jump. A room
+      # unavailable at script start and later recovered is likewise handled for
+      # free — it simply eases one step down from wherever it re-appears. HA
+      # templates can't carry a per-target active-iteration counter across
+      # outer iterations, so an absolute curve can't be made pause-aware here
+      # (Codex review, PR #957).
       - repeat:
           while:
             - condition: template
@@ -2288,11 +2277,6 @@ script:
                 {% endfor %}
                 {{ repeat.index <= bedtime_rampdown_max_iterations and ns.any_active_above_floor }}
           sequence:
-            # Capture the OUTER iteration count before descending into the
-            # per-target for_each, whose own repeat.index would otherwise
-            # shadow it.
-            - variables:
-                rampdown_index: "{{ repeat.index }}"
             - repeat:
                 for_each: "{{ bedtime_rampdown_targets }}"
                 sequence:
@@ -2301,10 +2285,10 @@ script:
                   # the rampdown. Guest-capable targets are skipped whenever
                   # guest mode is currently on, checked fresh each iteration.
                   # Also skipped once a target's live volume is already at or
-                  # below its floor — otherwise the target could raise it back
-                  # UP toward floor on the next iteration (e.g. someone
-                  # manually mutes a room mid-rampdown), which is backwards for
-                  # a rampdown.
+                  # below its floor — otherwise max(live - step, floor) would
+                  # raise it back UP to floor on the next iteration (e.g.
+                  # someone manually mutes a room mid-rampdown), which is
+                  # backwards for a rampdown.
                   - if:
                       - condition: template
                         value_template: >-
@@ -2316,21 +2300,11 @@ script:
                         target:
                           entity_id: "{{ repeat.item.entity_id }}"
                         data:
-                          # Absolute descending curve: start − step × iteration,
-                          # floored. min(live, curve) still honors a manual
-                          # lowering; the curve term forces progress even if the
-                          # readback goes stale-high. A target with no start
-                          # snapshot (unavailable at script start, now recovered)
-                          # instead eases down one live step at a time, so it is
-                          # never slammed straight to floor.
+                          # One step down from the target's OWN live volume,
+                          # floored — self-correcting across pauses, manual
+                          # changes, and unavailable→recovered transitions.
                           volume_level: >-
-                            {% set start = bedtime_rampdown_start_volumes.get(repeat.item.entity_id) %}
-                            {% set live = state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume) %}
-                            {% if start is none %}
-                            {{ [live - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
-                            {% else %}
-                            {{ [repeat.item.floor_volume, [live, start - bedtime_rampdown_step_volume * rampdown_index] | min] | max }}
-                            {% endif %}
+                            {{ [(state_attr(repeat.item.entity_id, 'volume_level') | float(repeat.item.floor_volume)) - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max }}
             - delay:
                 seconds: "{{ bedtime_rampdown_interval_seconds }}"
 

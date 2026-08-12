@@ -768,19 +768,19 @@ def test_bedtime_volume_rampdown_is_data_driven_without_repeating_delay_actions(
         "while:",
         'for_each: "{{ bedtime_rampdown_targets }}"',
         'entity_id: "{{ repeat.item.entity_id }}"',
-        # Absolute descending curve: start (snapshotted once) − step ×
-        # iteration, floored; min(live, curve) still honors a manual lowering.
-        "bedtime_rampdown_start_volumes:",
-        'rampdown_index: "{{ repeat.index }}"',
-        "start - bedtime_rampdown_step_volume * rampdown_index] | min] | max",
-        # A target unavailable at snapshot time is omitted from the snapshot
-        # and eases down one live step at a time once recovered, so it is
-        # never slammed to floor in a single jump (Codex review, PR #957).
-        "{% if v is not none %}",
-        "{% if start is none %}",
-        "[live - bedtime_rampdown_step_volume, repeat.item.floor_volume] | max",
+        # Steps DOWN one step from each target's OWN live volume every
+        # iteration: max(live - step, floor). Unlike the wake-up ramp this is
+        # NOT an absolute index curve — a live-relative step is the only
+        # pause-safe option, since guest mode skips office/den mid-rampdown and
+        # HA templates can't carry a per-target active-iteration counter across
+        # outer iterations (Codex review, PR #957).
+        "bedtime_rampdown_step_volume, repeat.item.floor_volume] | max",
     ):
         assert token in block
+    # No absolute index curve here — that shape can't be made pause-aware for
+    # a rampdown whose targets are live-skipped in guest mode.
+    assert "rampdown_index" not in block
+    assert "bedtime_rampdown_start_volumes" not in block
 
     # Bedroom keeps a distinct, higher floor than the other three rooms.
     assert block.count("floor_volume: 0.06") == 1
