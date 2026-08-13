@@ -1062,9 +1062,15 @@ script:
       before delegating to the requested per-room segment script, so a flip to
       Acclimation (whose dock automation publishes HOME) after the launcher's
       outer gate is not followed by an unconditional segment START. Delegating to
-      the existing per-room scripts keeps the segment maps in one place. The
-      upstairs robot is vacuum-only hardware, so this is a presence/privacy
-      boundary, not a mop one.
+      the existing per-room scripts keeps the segment maps in one place. After
+      delegating it BLOCKS until the upstairs run reaches a terminal state,
+      tracked via the Valetudo MQTT status topic (the trusted control channel,
+      not the flaky upstairs Valetudo HA vacuum entity the config avoids by
+      design). Because the per-room scripts are fire-and-forget, this hold is what
+      keeps the caller (vacuum_supervised_clean, mode: single) in its single-run
+      state for the whole upstairs run, so a second press cannot dispatch a newly
+      selected — possibly guest-private — room mid-run. The upstairs robot is
+      vacuum-only hardware, so this is a presence/privacy boundary, not a mop one.
     mode: queued
     trace:
       stored_traces: 10
@@ -1084,6 +1090,36 @@ script:
         entity_id: input_boolean.guest_mode
         state: "off"
       - action: "{{ room_script }}"
+      # Confirm the run actually started (status -> cleaning) via MQTT. If it
+      # never starts (e.g. a no-op), skip the terminal wait so we do not hang.
+      - alias: "Confirm the upstairs run started"
+        wait_for_trigger:
+          - trigger: mqtt
+            topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+            payload: cleaning
+        timeout:
+          minutes: 5
+        continue_on_timeout: true
+      - if:
+          - condition: template
+            value_template: "{{ wait.trigger is not none }}"
+        then:
+          # Hold until a terminal status so the caller's mode: single stays held
+          # for the whole run — rejecting a concurrent (stale-room) press.
+          - alias: "Hold until the upstairs run reaches a terminal state"
+            wait_for_trigger:
+              - trigger: mqtt
+                topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+                payload: docked
+              - trigger: mqtt
+                topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+                payload: idle
+              - trigger: mqtt
+                topic: valetudo/upstairs-vacuum/StatusStateAttribute/status
+                payload: error
+            timeout:
+              hours: 2
+            continue_on_timeout: true
 
   vacuum_supervised_clean:
     alias: "Vacuum Supervised Clean (One Room)"

@@ -175,6 +175,15 @@ def test_upstairs_supervised_boundary_rechecks_policy_before_delegating() -> Non
     assert guest < delegate
     assert '- "Supervised"' in block
     assert '- "Unattended"' in block
+    # The per-room scripts are fire-and-forget, so after delegating the boundary
+    # must BLOCK until the upstairs run reaches a terminal state — keeping the
+    # caller's mode: single held so a second (stale-room) press is rejected. It
+    # tracks this via the Valetudo MQTT status topic, NOT the flaky vacuum entity
+    # the config avoids by design.
+    assert "valetudo/upstairs-vacuum/StatusStateAttribute/status" in block
+    assert "vacuum.valetudo_upstairs_vacuum" not in block
+    hold = block.index("payload: docked", delegate)
+    assert delegate < hold
 
 
 def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
