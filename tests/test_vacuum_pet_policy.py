@@ -142,9 +142,29 @@ def test_supervised_launcher_is_gated_and_vacuum_only() -> None:
     # Vacuum-only: never launches a mop path from the supervised launcher.
     assert "script.x40_ultra_main_level_mop" not in block
     assert 'option: "mopping"' not in block
-    # Dispatches to the shared per-room scripts (segment maps stay DRY).
+    # Upstairs Valetudo rooms (vacuum-only hardware) dispatch to their scripts.
     assert "action: script.vacuum_master_bedroom" in block
-    assert "action: script.vacuum_kitchen" in block
+    # X40 rooms must route through the deterministic sweeping launcher (which
+    # forces sweeping), NOT the raw segment scripts that could mop under
+    # CleanGenius.
+    assert "action: script.x40_ultra_segment_vacuum_only" in block
+    assert "action: script.vacuum_kitchen" not in block
+    assert "action: script.vacuum_living_room" not in block
+
+
+def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
+    block = _script_block(VACUUM_PATH, "x40_ultra_segment_vacuum_only")
+
+    # CleanGenius off, mode forced to sweeping and verified before any start, so
+    # a leftover mopping mode cannot mop during a "vacuum-only" supervised run.
+    assert "action: script.x40_ultra_prepare_deterministic_cleaning" in block
+    assert 'option: "sweeping"' in block
+    assert 'state: "sweeping"' in block
+    prepare = block.index("action: script.x40_ultra_prepare_deterministic_cleaning")
+    guard = block.index('state: "sweeping"', prepare)
+    start = block.index("action: dreame_vacuum.vacuum_clean_segment", guard)
+    assert prepare < guard < start
+    assert "action: script.x40_ultra_restore_cleangenius" in block
 
 
 def test_trip_path_cleans_all_three_areas() -> None:
@@ -203,6 +223,20 @@ def test_main_level_mop_after_vacuum_is_two_ordered_passes() -> None:
     assert 'option: "mopping"' in mop_only
     assert "entity_id: input_datetime.x40_ultra_last_mopped_at" in mop_only
     assert "entity_id: input_boolean.x40_ultra_mop_pass_pending" in mop_only
+
+
+def test_mop_is_gated_on_a_completed_vacuum_pass() -> None:
+    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+
+    # The mop must only start after the vacuum pass reached a real `completed`
+    # task status. An arrival-triggered return-to-base or a no-op start docks the
+    # robot WITHOUT completion, so the mop is skipped — preserving both the
+    # arrival-to-dock protection and the vacuum-before-water ordering.
+    vacuum_pass = block.index("action: script.x40_ultra_main_level_vacuum_only")
+    completion_gate = block.index("entity_id: sensor.x40_ultra_task_status", vacuum_pass)
+    mop_pass = block.index("action: script.x40_ultra_main_level_mop_only", completion_gate)
+    assert vacuum_pass < completion_gate < mop_pass
+    assert 'state: "completed"' in block
 
 
 def test_room_intent_links_durable_cat_safe_cleaning_policy() -> None:

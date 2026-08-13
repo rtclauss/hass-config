@@ -519,13 +519,18 @@ script:
     alias: "X40 Ultra Main Level Mop After Vacuum"
     description: >-
       Clean the main level as two distinct full passes: a complete sweep-only
-      vacuum of the whole floor, then — once the robot has fully docked — a
-      dedicated mop-only pass. Running the passes separately (instead of the
+      vacuum of the whole floor, then — only if that vacuum actually finished —
+      a dedicated mop-only pass. Running the passes separately (instead of the
       interleaved "mopping_after_sweeping" mode) means all dry debris is picked
       up before any water is applied. Both child scripts are mode: queued and
-      awaited, so the mop never starts until the vacuum pass has docked. Mopping
-      requires the Unattended pet policy; x40_ultra_main_level_mop_only owns the
-      persistent mop-schedule bookkeeping.
+      awaited, so the mop never starts until the vacuum pass has docked. The mop
+      is gated on the vacuum reaching a real `completed` task status: an arrival
+      mid-run (vacuum_return_home -> return_to_base) or a rejected/no-op start
+      docks the robot WITHOUT `completed`, so the mop is skipped and the mop debt
+      is left pending to retry next run — this preserves both the arrival-to-dock
+      protection and the vacuum-before-water ordering. Mopping requires the
+      Unattended pet policy; x40_ultra_main_level_mop_only owns the persistent
+      mop-schedule bookkeeping.
     mode: queued
     trace:
       stored_traces: 10
@@ -535,7 +540,25 @@ script:
         entity_id: input_select.vacuum_pet_policy
         state: "Unattended"
       - action: script.x40_ultra_main_level_vacuum_only
-      - action: script.x40_ultra_main_level_mop_only
+      # Only mop if the vacuum pass genuinely completed. CleanGenius is off
+      # during the sweep, so a full pass emits `completed` once at true end; an
+      # arrival-triggered return-to-base or a no-op start leaves a non-completed
+      # status, in which case we skip the mop rather than put water on a floor
+      # that was not fully vacuumed (or where the owner is arriving).
+      - if:
+          - condition: state
+            entity_id: sensor.x40_ultra_task_status
+            state: "completed"
+        then:
+          - action: script.x40_ultra_main_level_mop_only
+        else:
+          - action: notify.all
+            data:
+              data:
+                url: "/ryan-new-mushroom/cleaning"
+              message: >-
+                X40 Ultra vacuum pass did not finish cleanly, so the mop was
+                skipped; it remains due and will retry on the next run.
 
   x40_ultra_main_level_mop_only:
     alias: "X40 Ultra Main Level Mop Only"
@@ -822,17 +845,71 @@ script:
           payload: >-
             {"action": "start_segment_action","segment_ids": ["2"],"iterations": 4,"customOrder": true}
 
+  x40_ultra_segment_vacuum_only:
+    alias: "X40 Ultra Segment Vacuum Only"
+    description: >-
+      Vacuum-only clean of one X40 map segment with CleanGenius deterministically
+      disabled and the cleaning mode forced to `sweeping` first, so a leftover
+      mopping mode can never put water down. Quiet suction by default. Used by the
+      supervised launcher for X40 rooms: the raw dreame_vacuum.vacuum_clean_segment
+      call alone does not establish sweeping and could mop under CleanGenius.
+    mode: queued
+    trace:
+      stored_traces: 10
+    fields:
+      segments:
+        description: "X40 map segment id to clean."
+        example: 4
+      suction_level:
+        description: "Dreame suction level (1 = quiet). Defaults to 1."
+        example: 1
+    sequence:
+      - action: script.x40_ultra_prepare_deterministic_cleaning
+      - action: select.select_option
+        continue_on_error: true
+        target:
+          entity_id: select.x40_ultra_cleaning_mode
+        data:
+          option: "sweeping"
+      # Guard: only start once the mode actually became `sweeping`, so a leftover
+      # mopping/CleanGenius mode cannot turn a supervised vacuum into a mop.
+      - if:
+          - condition: state
+            entity_id: select.x40_ultra_cleaning_mode
+            state: "sweeping"
+        then:
+          - action: dreame_vacuum.vacuum_clean_segment
+            continue_on_error: true
+            target:
+              entity_id: vacuum.x40_ultra
+            data:
+              segments: "{{ segments | int }}"
+              repeats: 1
+              suction_level: "{{ suction_level | default(1) | int }}"
+        else:
+          - action: notify.all
+            data:
+              data:
+                url: "/ryan-new-mushroom/cleaning"
+              message: >-
+                X40 Ultra could not switch to sweeping mode; supervised room
+                vacuum skipped so it cannot mop.
+      # Always restore CleanGenius, even if the mode change or start failed.
+      - action: script.x40_ultra_restore_cleangenius
+
   vacuum_supervised_clean:
     alias: "Vacuum Supervised Clean (One Room)"
     description: >-
       Cat-safe supervised launcher: clean the single room selected in
       input_select.vacuum_room, vacuum-only, on one robot. Permitted only when
       the pet policy is Supervised or Unattended and guest mode is off — the
-      owner is expected to be present and watching. Dispatches to the existing
-      per-room segment scripts so the segment maps live in exactly one place.
+      owner is expected to be present and watching. Upstairs Valetudo rooms
+      dispatch to the existing vacuum-only segment scripts (that robot cannot
+      mop); X40 rooms route through x40_ultra_segment_vacuum_only, which forces
+      sweeping so a leftover mopping mode can never mop during a supervised run.
       Mopping is never launched from here (only the whole-floor Unattended paths
-      mop). Follow-up: tune the per-room scripts to a single quiet pass; today
-      they inherit their existing pass counts.
+      mop). Follow-up: tune the upstairs per-room scripts to a single quiet pass;
+      today they inherit their existing pass counts.
     mode: queued
     trace:
       stored_traces: 10
@@ -856,7 +933,10 @@ script:
               - action: script.vacuum_guest_room
           - conditions: "{{ is_state('input_select.vacuum_room', 'Living Room') }}"
             sequence:
-              - action: script.vacuum_living_room
+              # X40 room — force sweeping so a supervised vacuum cannot mop.
+              - action: script.x40_ultra_segment_vacuum_only
+                data:
+                  segments: 5
           - conditions: "{{ is_state('input_select.vacuum_room', 'Bathroom') }}"
             sequence:
               - action: script.vacuum_bathroom
@@ -865,7 +945,10 @@ script:
               - action: script.vacuum_hallway
           - conditions: "{{ is_state('input_select.vacuum_room', 'Kitchen') }}"
             sequence:
-              - action: script.vacuum_kitchen
+              # X40 room — force sweeping so a supervised vacuum cannot mop.
+              - action: script.x40_ultra_segment_vacuum_only
+                data:
+                  segments: 4
           - conditions: "{{ is_state('input_select.vacuum_room', 'Office') }}"
             sequence:
               - action: script.vacuum_office
