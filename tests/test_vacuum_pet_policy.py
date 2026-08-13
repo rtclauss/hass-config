@@ -219,15 +219,32 @@ def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
         "states('vacuum.x40_ultra') in ['docked', 'idle']", 0, restore
     )
     assert wait_before_restore < restore
-
-    # The CleanGenius wait can take up to 30s; recheck the pet policy AND the
-    # guest-mode veto immediately before the segment start so a mid-preparation
-    # switch to Acclimation / guest mode is honored (matches the full-floor
-    # scripts' pre-start rechecks).
+    # That wait must fail closed: an external run can take up to 6h, so it must
+    # not bypass to restore after a short timeout and change CleanGenius mid-run.
+    fail_closed = block.index("continue_on_timeout: false", wait_before_restore)
+    assert wait_before_restore < fail_closed < restore
+    # Policy and guest are also rechecked between the sweeping guard and the
+    # dispatch (they can change during the up-to-30s CleanGenius wait).
     policy_recheck = block.index("entity_id: input_select.vacuum_pet_policy", guard)
     guest_recheck = block.index("entity_id: input_boolean.guest_mode", guard)
     assert guard < policy_recheck < start
     assert guard < guest_recheck < start
+
+
+def test_supervised_requires_owner_home_but_unattended_does_not() -> None:
+    # Supervised means the owner is present to watch the cats, so a remote/away
+    # dashboard press must not start it; Unattended is the explicit hands-off mode
+    # and must still run without presence. Enforced at every launch boundary.
+    for script_id in (
+        "vacuum_supervised_clean",
+        "x40_ultra_segment_vacuum_only",
+        "vacuum_upstairs_segment_supervised",
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        assert "binary_sensor.bayesian_zeke_home" in block
+        # The gate allows Unattended regardless of presence, else requires home.
+        assert "is_state('input_select.vacuum_pet_policy', 'Unattended')" in block
+        assert "is_state('binary_sensor.bayesian_zeke_home', 'on')" in block
 
 
 def test_trip_path_cleans_all_three_areas() -> None:

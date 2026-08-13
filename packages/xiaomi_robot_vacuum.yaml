@@ -1028,6 +1028,11 @@ script:
                 state:
                   - "Supervised"
                   - "Unattended"
+              - alias: "Supervised requires the owner home (Unattended does not)"
+                condition: template
+                value_template: >-
+                  {{ is_state('input_select.vacuum_pet_policy', 'Unattended')
+                     or is_state('binary_sensor.bayesian_zeke_home', 'on') }}
               - alias: "Recheck guest-mode veto immediately before segment start"
                 condition: state
                 entity_id: input_boolean.guest_mode
@@ -1073,12 +1078,17 @@ script:
           # If an external run grabbed the robot during the prep wait, do not
           # restore CleanGenius on top of it: wait until the robot is at rest
           # again (their run ended) before restoring. On our own run this passes
-          # immediately (already docked). Fail-safe timeout so it cannot hang.
-          - alias: "Wait for any external run to end before restoring CleanGenius"
+          # immediately (already docked). Fail CLOSED: an external run can take up
+          # to 6h (the X40 terminal wait), so wait well beyond that and, if it is
+          # STILL not at rest, stop WITHOUT restoring rather than changing
+          # CleanGenius on top of an active run — the next deterministic run's
+          # restore heals it. continue_on_timeout: false ties the restore to an
+          # actual idle/docked state.
+          - alias: "Wait for any external run to end before restoring CleanGenius (fail closed)"
             wait_template: "{{ states('vacuum.x40_ultra') in ['docked', 'idle'] }}"
             timeout:
-              hours: 2
-            continue_on_timeout: true
+              hours: 13
+            continue_on_timeout: false
           - action: script.x40_ultra_restore_cleangenius
         else:
           - action: notify.all
@@ -1120,6 +1130,11 @@ script:
         state:
           - "Supervised"
           - "Unattended"
+      - alias: "Supervised requires the owner home (Unattended does not)"
+        condition: template
+        value_template: >-
+          {{ is_state('input_select.vacuum_pet_policy', 'Unattended')
+             or is_state('binary_sensor.bayesian_zeke_home', 'on') }}
       - alias: "Recheck guest-mode veto immediately before the upstairs segment START"
         condition: state
         entity_id: input_boolean.guest_mode
@@ -1184,6 +1199,14 @@ script:
         state:
           - "Supervised"
           - "Unattended"
+      # Supervised means the owner is present to watch the cats, so require
+      # confirmed presence for it (a remote/away dashboard press must not start a
+      # supervised clean). Unattended is the explicit hands-off mode and does not.
+      - alias: "Supervised requires the owner home (Unattended does not)"
+        condition: template
+        value_template: >-
+          {{ is_state('input_select.vacuum_pet_policy', 'Unattended')
+             or is_state('binary_sensor.bayesian_zeke_home', 'on') }}
       - alias: "Guest mode vetoes automatic/supervised vacuuming"
         condition: state
         entity_id: input_boolean.guest_mode
