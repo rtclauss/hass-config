@@ -773,11 +773,17 @@ script:
       # Acquire the deterministic-run mutex so the supervised segment path (on a
       # separate queue) cannot interleave CleanGenius/mode changes with this run.
       # continue_on_timeout keeps a leaked lock from deadlocking forever.
-      - alias: "Wait for the X40 deterministic lock to be free"
+      # Fail closed on timeout: a legitimate vacuum+mop can hold the lock for up
+      # to ~12h (two 6h wait_until_docked passes), so wait well beyond that; if it
+      # is STILL not free, stop this invocation rather than bypass the mutex and
+      # risk concurrent CleanGenius/mode changes. continue_on_timeout: false halts
+      # the script here without acquiring, so the competing run simply does not
+      # start (it retries next time); it never runs unserialized.
+      - alias: "Wait for the X40 deterministic lock to be free (fail closed)"
         wait_template: "{{ is_state('input_boolean.x40_ultra_deterministic_lock', 'off') }}"
         timeout:
-          hours: 2
-        continue_on_timeout: true
+          hours: 13
+        continue_on_timeout: false
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.x40_ultra_deterministic_lock
@@ -963,11 +969,17 @@ script:
     sequence:
       # Acquire the deterministic-run mutex so this segment clean cannot
       # interleave CleanGenius/mode changes with an automatic full-floor run.
-      - alias: "Wait for the X40 deterministic lock to be free"
+      # Fail closed on timeout: a legitimate vacuum+mop can hold the lock for up
+      # to ~12h (two 6h wait_until_docked passes), so wait well beyond that; if it
+      # is STILL not free, stop this invocation rather than bypass the mutex and
+      # risk concurrent CleanGenius/mode changes. continue_on_timeout: false halts
+      # the script here without acquiring, so the competing run simply does not
+      # start (it retries next time); it never runs unserialized.
+      - alias: "Wait for the X40 deterministic lock to be free (fail closed)"
         wait_template: "{{ is_state('input_boolean.x40_ultra_deterministic_lock', 'off') }}"
         timeout:
-          hours: 2
-        continue_on_timeout: true
+          hours: 13
+        continue_on_timeout: false
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.x40_ultra_deterministic_lock

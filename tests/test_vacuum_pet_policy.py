@@ -311,6 +311,10 @@ def test_full_floor_and_segment_paths_share_one_deterministic_lock() -> None:
         assert wait_free < acquire < release
         assert "action: input_boolean.turn_on" in block
         assert "action: input_boolean.turn_off" in block
+        # The lock wait must fail closed: on timeout it stops rather than
+        # bypassing the mutex (a legit vacuum+mop can hold the lock for hours).
+        fail_closed = block.index("continue_on_timeout: false", wait_free)
+        assert wait_free < fail_closed < acquire
 
 
 def test_deterministic_lock_defaults_off_so_restart_never_deadlocks() -> None:
