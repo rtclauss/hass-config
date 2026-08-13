@@ -564,6 +564,17 @@ script:
               message: >-
                 X40 Ultra vacuum-only run skipped: sweeping mode did not apply,
                 or the pet policy / guest mode changed during preparation.
+      # Do not restore CleanGenius on top of a still-active run — a manual/app run
+      # that began during prep, or our own pass still going if x40_ultra_wait_until
+      # _docked hit its 6h timeout. Wait for the robot to be at rest first, fail
+      # closed (13h beyond the 6h max run; if still not at rest, stop WITHOUT
+      # restoring — the next deterministic run heals CleanGenius). On the normal
+      # path the robot is already docked here, so this passes immediately.
+      - alias: "Wait for the robot to be at rest before restoring CleanGenius (fail closed)"
+        wait_template: "{{ states('vacuum.x40_ultra') in ['docked', 'idle'] }}"
+        timeout:
+          hours: 13
+        continue_on_timeout: false
       # Always restore CleanGenius, even if the mode change or start failed.
       - action: script.x40_ultra_restore_cleangenius
 
@@ -732,6 +743,17 @@ script:
               message: >-
                 X40 Ultra could not switch to mop mode (CleanGenius or the mode
                 select was unavailable); mop deferred to the next run.
+      # Do not restore CleanGenius on top of a still-active run — a manual/app run
+      # that began during prep, or our own pass still going if x40_ultra_wait_until
+      # _docked hit its 6h timeout. Wait for the robot to be at rest first, fail
+      # closed (13h beyond the 6h max run; if still not at rest, stop WITHOUT
+      # restoring — the next deterministic run heals CleanGenius). On the normal
+      # path the robot is already docked here, so this passes immediately.
+      - alias: "Wait for the robot to be at rest before restoring CleanGenius (fail closed)"
+        wait_template: "{{ states('vacuum.x40_ultra') in ['docked', 'idle'] }}"
+        timeout:
+          hours: 13
+        continue_on_timeout: false
       # Always restore CleanGenius, even if the mode change or start failed.
       - action: script.x40_ultra_restore_cleangenius
 

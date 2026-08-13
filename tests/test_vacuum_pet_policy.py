@@ -231,6 +231,24 @@ def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
     assert guard < guest_recheck < start
 
 
+def test_full_floor_children_wait_for_rest_before_restoring_cleangenius() -> None:
+    # Both full-floor children must defer restoring CleanGenius until the robot is
+    # at rest (fail closed), so a manual/app run started during prep — or their
+    # own pass still active if wait_until_docked timed out — does not get
+    # CleanGenius re-enabled mid-run.
+    for script_id in (
+        "x40_ultra_main_level_vacuum_only",
+        "x40_ultra_main_level_mop_only",
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        restore = block.index("action: script.x40_ultra_restore_cleangenius")
+        wait_rest = block.rindex(
+            "states('vacuum.x40_ultra') in ['docked', 'idle']", 0, restore
+        )
+        fail_closed = block.index("continue_on_timeout: false", wait_rest)
+        assert wait_rest < fail_closed < restore
+
+
 def test_supervised_requires_owner_home_but_unattended_does_not() -> None:
     # Supervised means the owner is present to watch the cats, so a remote/away
     # dashboard press must not start it; Unattended is the explicit hands-off mode
