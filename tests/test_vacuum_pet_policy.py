@@ -148,10 +148,11 @@ def test_supervised_launcher_is_gated_and_vacuum_only() -> None:
     assert 'option: "mopping"' not in block
     # Upstairs Valetudo rooms (vacuum-only hardware) dispatch to their scripts.
     assert "action: script.vacuum_master_bedroom" in block
-    # X40 rooms must route through the deterministic sweeping launcher (which
-    # forces sweeping), NOT the raw segment scripts that could mop under
-    # CleanGenius.
-    assert "action: script.x40_ultra_segment_vacuum_only" in block
+    # X40 rooms must route through the single deterministic dispatcher as a
+    # segment run (which serializes with automatic runs and forces sweeping),
+    # NOT the raw segment scripts that could mop under CleanGenius.
+    assert "action: script.x40_ultra_main_level_policy_clean" in block
+    assert "kind: segment" in block
     assert "action: script.vacuum_kitchen" not in block
     assert "action: script.vacuum_living_room" not in block
 
@@ -288,39 +289,42 @@ def test_full_floor_starts_require_robot_at_rest_before_starting() -> None:
         assert '- "idle"' in block
 
 
-def test_full_floor_and_segment_paths_share_one_deterministic_lock() -> None:
-    # The automatic full-floor path and the supervised segment path live on
-    # separate script queues, so they must share a mutex to avoid one restoring
-    # CleanGenius mid-run of the other. Both acquire (wait-for-off + turn on) at
-    # the top and release (turn off) at the end.
-    for script_id in (
-        "x40_ultra_main_level_policy_clean",
-        "x40_ultra_segment_vacuum_only",
-    ):
-        block = _script_block(VACUUM_PATH, script_id)
-        wait_free = block.index(
-            "is_state('input_boolean.x40_ultra_deterministic_lock', 'off')"
-        )
-        acquire = block.index(
-            "entity_id: input_boolean.x40_ultra_deterministic_lock", wait_free
-        )
-        # a release turn_off exists after the acquire
-        release = block.index(
-            "entity_id: input_boolean.x40_ultra_deterministic_lock", acquire + 1
-        )
-        assert wait_free < acquire < release
-        assert "action: input_boolean.turn_on" in block
-        assert "action: input_boolean.turn_off" in block
-        # The lock wait must fail closed: on timeout it stops rather than
-        # bypassing the mutex (a legit vacuum+mop can hold the lock for hours).
-        fail_closed = block.index("continue_on_timeout: false", wait_free)
-        assert wait_free < fail_closed < acquire
+def test_single_queued_dispatcher_serializes_full_floor_and_segment() -> None:
+    # Both the automatic full-floor path and the supervised segment path are
+    # invocations of ONE mode:queued script, so the queue serializes them
+    # atomically — no separate lock (and its non-atomic check-then-set) needed.
+    dispatcher = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
+    assert "mode: queued" in dispatcher
+    # Full-floor branch invokes the mop/vacuum children; the segment branch
+    # invokes the segment script — both live inside this one queued script.
+    assert "action: script.x40_ultra_main_level_mop_after_vacuum" in dispatcher
+    assert "action: script.x40_ultra_main_level_vacuum_only" in dispatcher
+    assert "action: script.x40_ultra_segment_vacuum_only" in dispatcher
+    assert "kind | default('full_floor')" in dispatcher
 
+    # The full-floor launcher and the supervised X40 rooms both route through it.
+    full_floor_launcher = _script_block(VACUUM_PATH, "vacuum_main_level_full_floor")
+    assert "script.x40_ultra_main_level_policy_clean" in full_floor_launcher
+    supervised = _script_block(VACUUM_PATH, "vacuum_supervised_clean")
+    assert "action: script.x40_ultra_main_level_policy_clean" in supervised
+    assert "kind: segment" in supervised
 
-def test_deterministic_lock_defaults_off_so_restart_never_deadlocks() -> None:
+    # The lock helper and its acquire/release are gone (replaced by the queue).
     config = VACUUM_PATH.read_text(encoding="utf-8")
-    helper = config.split("  x40_ultra_deterministic_lock:", 1)[1].split("\n\n", 1)[0]
-    assert 'initial: "off"' in helper
+    assert "x40_ultra_deterministic_lock" not in config
+
+
+def test_dispatcher_skips_when_x40_busy_with_external_run() -> None:
+    # An external manual/app run does not go through our queue, so the dispatcher
+    # must require the X40 at rest before touching CleanGenius / the mode.
+    dispatcher = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
+    rest_guard = dispatcher.index("entity_id: vacuum.x40_ultra")
+    branch = dispatcher.index(
+        "action: script.x40_ultra_main_level_vacuum_only", rest_guard
+    )
+    assert rest_guard < branch
+    assert '- "docked"' in dispatcher
+    assert '- "idle"' in dispatcher
 
 
 def test_supervised_segment_waits_for_dock_before_restoring_cleangenius() -> None:

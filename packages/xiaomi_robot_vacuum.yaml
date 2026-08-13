@@ -273,17 +273,6 @@ input_boolean:
   x40_ultra_vacuum_pass_completed:
     name: X40 Ultra Vacuum Pass Completed
     icon: mdi:robot-vacuum
-  # Mutex over every deterministic X40 run that toggles CleanGenius / cleaning
-  # mode. The automatic full-floor path (x40_ultra_main_level_policy_clean) and
-  # the supervised segment path (x40_ultra_segment_vacuum_only) live on separate
-  # script queues, so without this lock a full-floor pass could restore
-  # CleanGenius while a supervised segment is still sweeping. Both paths acquire
-  # this before touching modes and release it at the end. initial: off so a
-  # restart never leaves it stuck held (the startup dock reconciles robots).
-  x40_ultra_deterministic_lock:
-    name: X40 Ultra Deterministic Run Lock
-    icon: mdi:lock
-    initial: "off"
 
 ########################
 # Input Datetime
@@ -747,19 +736,32 @@ script:
       - action: script.x40_ultra_restore_cleangenius
 
   x40_ultra_main_level_policy_clean:
-    alias: "X40 Ultra Main Level Policy Clean"
+    alias: "X40 Ultra Deterministic Run (Full Floor Or Segment)"
     description: >-
-      Single serialized entry for every X40 main-level run (mode: queued, so
-      concurrent launches queue rather than overlap on the device). Vacuums the
-      main level every run and adds a mop when a mop is pending (which is how a
-      forced mop is requested) or the last successful mop is at least three days
-      old. The mop and vacuum-only child scripts are only ever invoked from here,
-      never fire-and-forget, so exactly one run manipulates the robot at a time.
-      Holds x40_ultra_deterministic_lock across the whole run so a supervised
-      segment clean (a separate queue) cannot restore CleanGenius mid-run.
+      THE single serialized entry (mode: queued) for every deterministic X40 run
+      that toggles CleanGenius / cleaning mode — both the automatic full-floor
+      pass and the supervised one-segment clean. Because every such run is an
+      invocation of THIS one queued script, the queue serializes them atomically:
+      no two runs can interleave their CleanGenius/mode changes, so no separate
+      lock helper (and its non-atomic check-then-set) is needed. kind=full_floor
+      (the default) vacuums the main level and adds a mop when one is pending or
+      the last mop is >= 3 days old; kind=segment runs one vacuum-only segment
+      via x40_ultra_segment_vacuum_only. The run is skipped entirely when the X40
+      is already busy with an external (manual/app) run, so we never disable
+      CleanGenius or change the mode on a robot we are not driving.
     mode: queued
     trace:
       stored_traces: 10
+    fields:
+      kind:
+        description: "full_floor (default) or segment."
+        example: full_floor
+      segments:
+        description: "For kind=segment: the X40 map segment id."
+        example: 4
+      suction_level:
+        description: "For kind=segment: Dreame suction level (1 = quiet)."
+        example: 1
     variables:
       last_mopped_timestamp: >-
         {% set raw = states('input_datetime.x40_ultra_last_mopped_at') %}
@@ -770,35 +772,42 @@ script:
                 or (last_mopped_timestamp | float(0)) <= 0
                 or as_timestamp(now()) - (last_mopped_timestamp | float(0)) >= 3 * 24 * 60 * 60) }}
     sequence:
-      # Acquire the deterministic-run mutex so the supervised segment path (on a
-      # separate queue) cannot interleave CleanGenius/mode changes with this run.
-      # continue_on_timeout keeps a leaked lock from deadlocking forever.
-      # Fail closed on timeout: a legitimate vacuum+mop can hold the lock for up
-      # to ~12h (two 6h wait_until_docked passes), so wait well beyond that; if it
-      # is STILL not free, stop this invocation rather than bypass the mutex and
-      # risk concurrent CleanGenius/mode changes. continue_on_timeout: false halts
-      # the script here without acquiring, so the competing run simply does not
-      # start (it retries next time); it never runs unserialized.
-      - alias: "Wait for the X40 deterministic lock to be free (fail closed)"
-        wait_template: "{{ is_state('input_boolean.x40_ultra_deterministic_lock', 'off') }}"
-        timeout:
-          hours: 13
-        continue_on_timeout: false
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.x40_ultra_deterministic_lock
-      - choose:
-          - conditions:
+      # Reject the run if the X40 is already cleaning from an external (manual or
+      # app-initiated) run we do not control: our queue only serializes OUR
+      # invocations, so an external run must gate us out before we disable
+      # CleanGenius or change the mode on a robot mid-run.
+      - if:
+          - condition: state
+            entity_id: vacuum.x40_ultra
+            state:
+              - "docked"
+              - "idle"
+        then:
+          - if:
               - condition: template
-                value_template: "{{ mop_due }}"
-            sequence:
-              - action: script.x40_ultra_main_level_mop_after_vacuum
-        default:
-          - action: script.x40_ultra_main_level_vacuum_only
-      # Release the mutex (always reached: the child scripts do not early-stop).
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.x40_ultra_deterministic_lock
+                value_template: "{{ (kind | default('full_floor')) == 'segment' }}"
+            then:
+              - action: script.x40_ultra_segment_vacuum_only
+                data:
+                  segments: "{{ segments | int }}"
+                  suction_level: "{{ suction_level | default(1) | int }}"
+            else:
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ mop_due }}"
+                    sequence:
+                      - action: script.x40_ultra_main_level_mop_after_vacuum
+                default:
+                  - action: script.x40_ultra_main_level_vacuum_only
+        else:
+          - action: notify.all
+            data:
+              data:
+                url: "/ryan-new-mushroom/cleaning"
+              message: >-
+                X40 Ultra deterministic clean skipped: the robot is already busy
+                with a manual or app-initiated run.
 
   vacuum_main_level_full_floor:
     alias: "Vacuum Main Level Full Floor"
@@ -953,9 +962,11 @@ script:
     description: >-
       Vacuum-only clean of one X40 map segment with CleanGenius deterministically
       disabled and the cleaning mode forced to `sweeping` first, so a leftover
-      mopping mode can never put water down. Quiet suction by default. Used by the
-      supervised launcher for X40 rooms: the raw dreame_vacuum.vacuum_clean_segment
-      call alone does not establish sweeping and could mop under CleanGenius.
+      mopping mode can never put water down. Quiet suction by default. Invoked
+      ONLY from x40_ultra_main_level_policy_clean (kind=segment) so it inherits
+      that single queue's serialization and its at-rest entry guard; the raw
+      dreame_vacuum.vacuum_clean_segment call alone does not establish sweeping
+      and could mop under CleanGenius.
     mode: queued
     trace:
       stored_traces: 10
@@ -967,22 +978,6 @@ script:
         description: "Dreame suction level (1 = quiet). Defaults to 1."
         example: 1
     sequence:
-      # Acquire the deterministic-run mutex so this segment clean cannot
-      # interleave CleanGenius/mode changes with an automatic full-floor run.
-      # Fail closed on timeout: a legitimate vacuum+mop can hold the lock for up
-      # to ~12h (two 6h wait_until_docked passes), so wait well beyond that; if it
-      # is STILL not free, stop this invocation rather than bypass the mutex and
-      # risk concurrent CleanGenius/mode changes. continue_on_timeout: false halts
-      # the script here without acquiring, so the competing run simply does not
-      # start (it retries next time); it never runs unserialized.
-      - alias: "Wait for the X40 deterministic lock to be free (fail closed)"
-        wait_template: "{{ is_state('input_boolean.x40_ultra_deterministic_lock', 'off') }}"
-        timeout:
-          hours: 13
-        continue_on_timeout: false
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.x40_ultra_deterministic_lock
       - action: script.x40_ultra_prepare_deterministic_cleaning
       - action: select.select_option
         continue_on_error: true
@@ -1044,10 +1039,6 @@ script:
       # Always restore CleanGenius, even if the mode change or start failed —
       # now only after the segment run has reached a terminal dock.
       - action: script.x40_ultra_restore_cleangenius
-      # Release the mutex (always reached: no early-stop above).
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.x40_ultra_deterministic_lock
 
   vacuum_supervised_clean:
     alias: "Vacuum Supervised Clean (One Room)"
@@ -1057,11 +1048,13 @@ script:
       the pet policy is Supervised or Unattended and guest mode is off — the
       owner is expected to be present and watching. Upstairs Valetudo rooms
       dispatch to the existing vacuum-only segment scripts (that robot cannot
-      mop); X40 rooms route through x40_ultra_segment_vacuum_only, which forces
-      sweeping so a leftover mopping mode can never mop during a supervised run.
-      Mopping is never launched from here (only the whole-floor Unattended paths
-      mop). Follow-up: tune the upstairs per-room scripts to a single quiet pass;
-      today they inherit their existing pass counts.
+      mop); X40 rooms route through the single deterministic dispatcher
+      (x40_ultra_main_level_policy_clean, kind=segment) so they serialize with
+      automatic full-floor runs and force sweeping — a leftover mopping mode can
+      never mop during a supervised run. Mopping is never launched from here
+      (only the whole-floor Unattended paths mop). Follow-up: tune the upstairs
+      per-room scripts to a single quiet pass; today they inherit their existing
+      pass counts.
     mode: queued
     trace:
       stored_traces: 10
@@ -1085,9 +1078,11 @@ script:
               - action: script.vacuum_guest_room
           - conditions: "{{ is_state('input_select.vacuum_room', 'Living Room') }}"
             sequence:
-              # X40 room — force sweeping so a supervised vacuum cannot mop.
-              - action: script.x40_ultra_segment_vacuum_only
+              # X40 room — route through the single deterministic dispatcher so it
+              # serializes with automatic full-floor runs and forces sweeping.
+              - action: script.x40_ultra_main_level_policy_clean
                 data:
+                  kind: segment
                   segments: 5
           - conditions: "{{ is_state('input_select.vacuum_room', 'Bathroom') }}"
             sequence:
@@ -1097,9 +1092,11 @@ script:
               - action: script.vacuum_hallway
           - conditions: "{{ is_state('input_select.vacuum_room', 'Kitchen') }}"
             sequence:
-              # X40 room — force sweeping so a supervised vacuum cannot mop.
-              - action: script.x40_ultra_segment_vacuum_only
+              # X40 room — route through the single deterministic dispatcher so it
+              # serializes with automatic full-floor runs and forces sweeping.
+              - action: script.x40_ultra_main_level_policy_clean
                 data:
+                  kind: segment
                   segments: 4
           - conditions: "{{ is_state('input_select.vacuum_room', 'Office') }}"
             sequence:
