@@ -48,3 +48,19 @@ Dashboard controls, approval-gated unattended runs, area mapping, and a quiet
 one-area supervised launcher remain follow-up work because they require validated
 live mappings and native Home Assistant UI/API changes; do not edit `.storage`
 files directly.
+
+## Known limitation: external (non-HA) runs
+
+The deterministic X40 flow disables CleanGenius, selects a cleaning mode, runs,
+and restores CleanGenius. Home Assistant cannot atomically lock a physical robot
+against a run started *outside* HA (the vendor phone app or the robot's own
+button). The flow guards this as tightly as HA allows — it refuses to start when
+the robot is already cleaning, rechecks that it is at rest before disabling
+CleanGenius, before selecting the mode, and before starting, and defers restoring
+CleanGenius (fail closed) until the robot is at rest again so it never restores on
+top of an external run. A sub-second residual remains: `prepare` disables
+CleanGenius as its first action, so an external run beginning in the instant
+between a rest check and that mutation can briefly see CleanGenius off. This is
+self-healing — the next deterministic run restores CleanGenius — and cannot be
+fully eliminated without a control channel that external runs also respect. It is
+accepted as a documented limitation rather than chased further.
