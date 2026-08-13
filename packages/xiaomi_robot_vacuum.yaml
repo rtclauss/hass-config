@@ -853,6 +853,20 @@ script:
     trace:
       stored_traces: 10
     sequence:
+      # Recheck the pet policy and guest veto immediately before the START
+      # publish. The whole-house gate can pass under Unattended, then the owner
+      # flips to Acclimation/Supervised (whose dock automation publishes HOME to
+      # this robot) before we get here; an unconditional START would restart it
+      # despite the fail-closed transition. Bare conditions stop the script here,
+      # so no START is published when the policy no longer allows it.
+      - alias: "Recheck pet policy immediately before the upstairs START"
+        condition: state
+        entity_id: input_select.vacuum_pet_policy
+        state: "Unattended"
+      - alias: "Recheck guest-mode veto immediately before the upstairs START"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
       - action: mqtt.publish
         data:
           topic: valetudo/upstairs-vacuum/BasicControlCapability/operation/set

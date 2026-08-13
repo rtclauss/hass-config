@@ -314,6 +314,19 @@ def test_single_queued_dispatcher_serializes_full_floor_and_segment() -> None:
     assert "x40_ultra_deterministic_lock" not in config
 
 
+def test_upstairs_launch_rechecks_policy_before_start() -> None:
+    # The whole-house gate can pass under Unattended, then the owner flips to
+    # Acclimation before the upstairs MQTT START; publishing START unconditionally
+    # would restart the robot the dock automation just sent HOME. Recheck policy
+    # (and guest) right before the START publish so it fails closed.
+    block = _script_block(VACUUM_PATH, "vacuum_upstairs_full_floor")
+    policy = block.index("entity_id: input_select.vacuum_pet_policy")
+    guest = block.index("entity_id: input_boolean.guest_mode")
+    start = block.index("payload: START")
+    assert policy < start
+    assert guest < start
+
+
 def test_dispatcher_skips_when_x40_busy_with_external_run() -> None:
     # An external manual/app run does not go through our queue, so the dispatcher
     # must require the X40 at rest before touching CleanGenius / the mode.
