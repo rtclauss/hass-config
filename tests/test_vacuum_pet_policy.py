@@ -207,6 +207,18 @@ def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
     assert guard < rest < start
     assert '- "docked"' in block
     assert '- "idle"' in block
+    # Rest must also be gated BEFORE any mutation: the entry idle/docked check
+    # comes before prepare_deterministic_cleaning, so a busy robot is left fully
+    # untouched (no CleanGenius/mode change at all).
+    entry_rest = block.index("entity_id: vacuum.x40_ultra")
+    assert entry_rest < prepare
+    # And CleanGenius is not restored on top of an external run: a wait for the
+    # robot to return to rest precedes the restore.
+    restore = block.index("action: script.x40_ultra_restore_cleangenius")
+    wait_before_restore = block.rindex(
+        "states('vacuum.x40_ultra') in ['docked', 'idle']", 0, restore
+    )
+    assert wait_before_restore < restore
 
     # The CleanGenius wait can take up to 30s; recheck the pet policy AND the
     # guest-mode veto immediately before the segment start so a mid-preparation
