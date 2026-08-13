@@ -166,6 +166,15 @@ def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
     assert prepare < guard < start
     assert "action: script.x40_ultra_restore_cleangenius" in block
 
+    # The CleanGenius wait can take up to 30s; recheck the pet policy AND the
+    # guest-mode veto immediately before the segment start so a mid-preparation
+    # switch to Acclimation / guest mode is honored (matches the full-floor
+    # scripts' pre-start rechecks).
+    policy_recheck = block.index("entity_id: input_select.vacuum_pet_policy", guard)
+    guest_recheck = block.index("entity_id: input_boolean.guest_mode", guard)
+    assert guard < policy_recheck < start
+    assert guard < guest_recheck < start
+
 
 def test_trip_path_cleans_all_three_areas() -> None:
     trip_wrapper = _script_block(TRIPS_PATH, "trip_vacuum_main_and_upstairs_levels")

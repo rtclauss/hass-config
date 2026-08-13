@@ -872,11 +872,24 @@ script:
         data:
           option: "sweeping"
       # Guard: only start once the mode actually became `sweeping`, so a leftover
-      # mopping/CleanGenius mode cannot turn a supervised vacuum into a mop.
+      # mopping/CleanGenius mode cannot turn a supervised vacuum into a mop. Also
+      # recheck the pet policy and guest-mode veto here: the CleanGenius wait can
+      # take up to 30s, during which the owner may flip to Acclimation or enable
+      # guest mode (which docks robots), and the segment start must honor that.
       - if:
           - condition: state
             entity_id: select.x40_ultra_cleaning_mode
             state: "sweeping"
+          - alias: "Recheck pet policy immediately before segment start"
+            condition: state
+            entity_id: input_select.vacuum_pet_policy
+            state:
+              - "Supervised"
+              - "Unattended"
+          - alias: "Recheck guest-mode veto immediately before segment start"
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
         then:
           - action: dreame_vacuum.vacuum_clean_segment
             continue_on_error: true
@@ -892,8 +905,9 @@ script:
               data:
                 url: "/ryan-new-mushroom/cleaning"
               message: >-
-                X40 Ultra could not switch to sweeping mode; supervised room
-                vacuum skipped so it cannot mop.
+                X40 Ultra supervised room vacuum skipped: the sweeping mode did
+                not apply, or the pet policy / guest mode changed during
+                preparation, so it cannot mop or run against policy.
       # Always restore CleanGenius, even if the mode change or start failed.
       - action: script.x40_ultra_restore_cleangenius
 
