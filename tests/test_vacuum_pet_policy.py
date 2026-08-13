@@ -199,6 +199,14 @@ def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
     start = block.index("action: dreame_vacuum.vacuum_clean_segment", guard)
     assert prepare < guard < start
     assert "action: script.x40_ultra_restore_cleangenius" in block
+    # The dispatcher's entry idle/docked check can go stale during the up-to-30s
+    # CleanGenius wait, so the child must recheck the X40 is at rest immediately
+    # before dispatch — else an external run started mid-wait would be treated as
+    # our start and have CleanGenius restored around it.
+    rest = block.index("entity_id: vacuum.x40_ultra", guard)
+    assert guard < rest < start
+    assert '- "docked"' in block
+    assert '- "idle"' in block
 
     # The CleanGenius wait can take up to 30s; recheck the pet policy AND the
     # guest-mode veto immediately before the segment start so a mid-preparation

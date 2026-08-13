@@ -1004,6 +1004,10 @@ script:
       # recheck the pet policy and guest-mode veto here: the CleanGenius wait can
       # take up to 30s, during which the owner may flip to Acclimation or enable
       # guest mode (which docks robots), and the segment start must honor that.
+      # And recheck the robot is still at rest: the dispatcher's entry idle/docked
+      # check can go stale during that same wait if a manual/app run starts, and
+      # dispatching then would treat the unrelated run's `cleaning` as our start
+      # and restore CleanGenius around it.
       - if:
           - condition: state
             entity_id: select.x40_ultra_cleaning_mode
@@ -1018,6 +1022,12 @@ script:
             condition: state
             entity_id: input_boolean.guest_mode
             state: "off"
+          - alias: "Recheck the X40 is still at rest immediately before segment start"
+            condition: state
+            entity_id: vacuum.x40_ultra
+            state:
+              - "docked"
+              - "idle"
         then:
           - action: dreame_vacuum.vacuum_clean_segment
             continue_on_error: true
