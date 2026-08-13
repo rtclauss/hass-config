@@ -273,6 +273,17 @@ input_boolean:
   x40_ultra_vacuum_pass_completed:
     name: X40 Ultra Vacuum Pass Completed
     icon: mdi:robot-vacuum
+  # Mutex over every deterministic X40 run that toggles CleanGenius / cleaning
+  # mode. The automatic full-floor path (x40_ultra_main_level_policy_clean) and
+  # the supervised segment path (x40_ultra_segment_vacuum_only) live on separate
+  # script queues, so without this lock a full-floor pass could restore
+  # CleanGenius while a supervised segment is still sweeping. Both paths acquire
+  # this before touching modes and release it at the end. initial: off so a
+  # restart never leaves it stuck held (the startup dock reconciles robots).
+  x40_ultra_deterministic_lock:
+    name: X40 Ultra Deterministic Run Lock
+    icon: mdi:lock
+    initial: "off"
 
 ########################
 # Input Datetime
@@ -744,6 +755,8 @@ script:
       forced mop is requested) or the last successful mop is at least three days
       old. The mop and vacuum-only child scripts are only ever invoked from here,
       never fire-and-forget, so exactly one run manipulates the robot at a time.
+      Holds x40_ultra_deterministic_lock across the whole run so a supervised
+      segment clean (a separate queue) cannot restore CleanGenius mid-run.
     mode: queued
     trace:
       stored_traces: 10
@@ -757,6 +770,17 @@ script:
                 or (last_mopped_timestamp | float(0)) <= 0
                 or as_timestamp(now()) - (last_mopped_timestamp | float(0)) >= 3 * 24 * 60 * 60) }}
     sequence:
+      # Acquire the deterministic-run mutex so the supervised segment path (on a
+      # separate queue) cannot interleave CleanGenius/mode changes with this run.
+      # continue_on_timeout keeps a leaked lock from deadlocking forever.
+      - alias: "Wait for the X40 deterministic lock to be free"
+        wait_template: "{{ is_state('input_boolean.x40_ultra_deterministic_lock', 'off') }}"
+        timeout:
+          hours: 2
+        continue_on_timeout: true
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.x40_ultra_deterministic_lock
       - choose:
           - conditions:
               - condition: template
@@ -765,6 +789,10 @@ script:
               - action: script.x40_ultra_main_level_mop_after_vacuum
         default:
           - action: script.x40_ultra_main_level_vacuum_only
+      # Release the mutex (always reached: the child scripts do not early-stop).
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_deterministic_lock
 
   vacuum_main_level_full_floor:
     alias: "Vacuum Main Level Full Floor"
@@ -933,6 +961,16 @@ script:
         description: "Dreame suction level (1 = quiet). Defaults to 1."
         example: 1
     sequence:
+      # Acquire the deterministic-run mutex so this segment clean cannot
+      # interleave CleanGenius/mode changes with an automatic full-floor run.
+      - alias: "Wait for the X40 deterministic lock to be free"
+        wait_template: "{{ is_state('input_boolean.x40_ultra_deterministic_lock', 'off') }}"
+        timeout:
+          hours: 2
+        continue_on_timeout: true
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.x40_ultra_deterministic_lock
       - action: script.x40_ultra_prepare_deterministic_cleaning
       - action: select.select_option
         continue_on_error: true
@@ -994,6 +1032,10 @@ script:
       # Always restore CleanGenius, even if the mode change or start failed —
       # now only after the segment run has reached a terminal dock.
       - action: script.x40_ultra_restore_cleangenius
+      # Release the mutex (always reached: no early-stop above).
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_deterministic_lock
 
   vacuum_supervised_clean:
     alias: "Vacuum Supervised Clean (One Room)"

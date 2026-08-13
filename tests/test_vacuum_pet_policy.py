@@ -288,6 +288,37 @@ def test_full_floor_starts_require_robot_at_rest_before_starting() -> None:
         assert '- "idle"' in block
 
 
+def test_full_floor_and_segment_paths_share_one_deterministic_lock() -> None:
+    # The automatic full-floor path and the supervised segment path live on
+    # separate script queues, so they must share a mutex to avoid one restoring
+    # CleanGenius mid-run of the other. Both acquire (wait-for-off + turn on) at
+    # the top and release (turn off) at the end.
+    for script_id in (
+        "x40_ultra_main_level_policy_clean",
+        "x40_ultra_segment_vacuum_only",
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        wait_free = block.index(
+            "is_state('input_boolean.x40_ultra_deterministic_lock', 'off')"
+        )
+        acquire = block.index(
+            "entity_id: input_boolean.x40_ultra_deterministic_lock", wait_free
+        )
+        # a release turn_off exists after the acquire
+        release = block.index(
+            "entity_id: input_boolean.x40_ultra_deterministic_lock", acquire + 1
+        )
+        assert wait_free < acquire < release
+        assert "action: input_boolean.turn_on" in block
+        assert "action: input_boolean.turn_off" in block
+
+
+def test_deterministic_lock_defaults_off_so_restart_never_deadlocks() -> None:
+    config = VACUUM_PATH.read_text(encoding="utf-8")
+    helper = config.split("  x40_ultra_deterministic_lock:", 1)[1].split("\n\n", 1)[0]
+    assert 'initial: "off"' in helper
+
+
 def test_supervised_segment_waits_for_dock_before_restoring_cleangenius() -> None:
     block = _script_block(VACUUM_PATH, "x40_ultra_segment_vacuum_only")
 
