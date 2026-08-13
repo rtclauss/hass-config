@@ -36,7 +36,15 @@ exact `Unattended` state.
 
 Issue #890's first implementation stage gates all seven known automatic launch
 or retry automations, the shared whole-floor launchers, and the X40 mop path.
-The previous flying-home forced mop is removed. Dashboard controls, approval-
-gated unattended runs, area mapping, and a quiet one-area supervised launcher
-remain follow-up work because they require validated live mappings and native
-Home Assistant UI/API changes; do not edit `.storage` files directly.
+
+Under `Unattended`, the main floor is cleaned as two distinct passes — a full
+vacuum (cleaning mode `sweeping`), then a full mop (cleaning mode `mopping`) —
+rather than the interleaved `mopping_after_sweeping` mode, so dry debris is fully
+removed before any water is applied. The mop runs when it is due (pending, or the
+last mop is at least three days old); the flying-home path additionally forces
+the mop. Only the X40 mops; the upstairs and den robots are vacuum-only.
+
+Dashboard controls, approval-gated unattended runs, area mapping, and a quiet
+one-area supervised launcher remain follow-up work because they require validated
+live mappings and native Home Assistant UI/API changes; do not edit `.storage`
+files directly.

@@ -107,6 +107,7 @@ def test_shared_full_floor_boundaries_fail_closed_for_unknown_or_disabled_policy
         "vacuum_main_level_full_floor",
         "vacuum_main_and_upstairs_levels",
         "x40_ultra_main_level_mop_after_vacuum",
+        "x40_ultra_main_level_mop_only",
         "trip_vacuum_main_and_upstairs_levels",
     ):
         path = TRIPS_PATH if script_id == "trip_vacuum_main_and_upstairs_levels" else VACUUM_PATH
@@ -128,18 +129,50 @@ def test_entering_acclimation_immediately_docks_all_robots() -> None:
     assert dock_script.count("continue_on_error: true") == 3
 
 
-def test_pet_policy_suppresses_non_unattended_and_away_forced_mopping() -> None:
+def test_supervised_launcher_is_gated_and_vacuum_only() -> None:
+    block = _script_block(VACUUM_PATH, "vacuum_supervised_clean")
+
+    # Allowed under Supervised or Unattended (owner present), never Acclimation.
+    assert "entity_id: input_select.vacuum_pet_policy" in block
+    assert '- "Supervised"' in block
+    assert '- "Unattended"' in block
+    # Guest mode still vetoes.
+    assert "entity_id: input_boolean.guest_mode" in block
+    assert 'state: "off"' in block
+    # Vacuum-only: never launches a mop path from the supervised launcher.
+    assert "script.x40_ultra_main_level_mop" not in block
+    assert 'option: "mopping"' not in block
+    # Dispatches to the shared per-room scripts (segment maps stay DRY).
+    assert "action: script.vacuum_master_bedroom" in block
+    assert "action: script.vacuum_kitchen" in block
+
+
+def test_trip_path_cleans_all_three_areas() -> None:
+    trip_wrapper = _script_block(TRIPS_PATH, "trip_vacuum_main_and_upstairs_levels")
+
+    # Main + upstairs via the shared helper, and the den via its pet-safe
+    # boundary, so trip/flying-home days cover the same areas as departure.
+    assert "action: script.vacuum_main_and_upstairs_levels" in trip_wrapper
+    assert "action: script.vacuum_den_pet_safe_start" in trip_wrapper
+
+
+def test_mopping_only_runs_under_unattended_even_when_forced() -> None:
     policy = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
+    trip_wrapper = _script_block(TRIPS_PATH, "trip_vacuum_main_and_upstairs_levels")
     flying_home = _automation_block(TRIPS_PATH, "vacuum_flying_home")
 
+    # The mop schedule itself is gated on Unattended...
     assert "is_state('input_select.vacuum_pet_policy', 'Unattended')" in policy
-    assert "force_mop: true" not in flying_home
+    # ...and flying home may force a mop, but only after the trip wrapper's
+    # Unattended condition passes, so a forced mop still fails closed.
+    assert "force_mop: true" in flying_home
+    _assert_unattended_gate(trip_wrapper)
 
 
 def test_x40_rechecks_policy_after_preparation_and_before_each_start() -> None:
     for script_id in (
         "x40_ultra_main_level_vacuum_only",
-        "x40_ultra_main_level_mop_after_vacuum",
+        "x40_ultra_main_level_mop_only",
     ):
         block = _script_block(VACUUM_PATH, script_id)
         prepare = block.index("action: script.x40_ultra_prepare_deterministic_cleaning")
@@ -150,6 +183,26 @@ def test_x40_rechecks_policy_after_preparation_and_before_each_start() -> None:
         start = block.index("action: vacuum.start", policy_recheck)
 
         assert prepare < policy_recheck < start
+
+
+def test_main_level_mop_after_vacuum_is_two_ordered_passes() -> None:
+    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+
+    vacuum_pass = block.index("action: script.x40_ultra_main_level_vacuum_only")
+    mop_pass = block.index("action: script.x40_ultra_main_level_mop_only")
+
+    # Vacuum the whole floor first, then mop — dry debris up before any water.
+    assert vacuum_pass < mop_pass
+    # The orchestrator delegates the device work; it must not start the robot
+    # itself or select the interleaved sweep+mop mode.
+    assert "action: vacuum.start" not in block
+    assert 'option: "mopping_after_sweeping"' not in block
+
+    mop_only = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_only")
+    # The mop pass is a dedicated mop-only run and owns the schedule bookkeeping.
+    assert 'option: "mopping"' in mop_only
+    assert "entity_id: input_datetime.x40_ultra_last_mopped_at" in mop_only
+    assert "entity_id: input_boolean.x40_ultra_mop_pass_pending" in mop_only
 
 
 def test_room_intent_links_durable_cat_safe_cleaning_policy() -> None:

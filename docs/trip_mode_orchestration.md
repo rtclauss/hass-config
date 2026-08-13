@@ -49,10 +49,13 @@ Guest mode is the current privacy-preserving house-sitter signal. Trip vacuuming
 is suppressed when `input_boolean.guest_mode` is on and also requires the exact
 `input_select.vacuum_pet_policy` state `Unattended`, matching
 `docs/room_intent.yaml` guidance that automatic vacuuming should not intrude on
-guest-capable rooms or bypass the cat-safe cleaning policy. Trip and flying-home
-paths are vacuum-only and never force a mop. Trip-mode vacation simulation is
-still allowed because it is an exterior/common-area presence signal and is
-idempotently controlled by `script.house_transition`.
+guest-capable rooms or bypass the cat-safe cleaning policy. Under `Unattended`,
+the main floor is cleaned as two passes — a full vacuum, then a mop — with the
+mop running when it is due (a mop is pending or the last mop is at least three
+days old); flying home additionally forces the mop so we arrive to a mopped
+floor. Only the main-floor X40 mops; the upstairs and den robots are vacuum-only.
+Trip-mode vacation simulation is still allowed because it is an exterior/common-
+area presence signal and is idempotently controlled by `script.house_transition`.
 
 ## Manual Verification
 
@@ -67,4 +70,8 @@ idempotently controlled by `script.house_transition`.
    pet policy set to `Acclimation`; confirm no vacuum starts and no success
    notification is sent.
 6. After an owner explicitly selects `Unattended`, repeat step 5 and confirm
-   `script.vacuum_main_and_upstairs_levels` starts once without forcing a mop.
+   `script.vacuum_main_and_upstairs_levels` starts once, the main floor vacuums
+   then mops (if due), the upstairs and den robots start, and the den only runs
+   with its door closed.
+7. Run `vacuum_flying_home` under `Unattended` and confirm the main floor mops
+   even when the last mop is under three days old (forced mop).
