@@ -146,8 +146,14 @@ def test_supervised_launcher_is_gated_and_vacuum_only() -> None:
     # Vacuum-only: never launches a mop path from the supervised launcher.
     assert "script.x40_ultra_main_level_mop" not in block
     assert 'option: "mopping"' not in block
-    # Upstairs Valetudo rooms (vacuum-only hardware) dispatch to their scripts.
-    assert "action: script.vacuum_master_bedroom" in block
+    # mode: single rejects a concurrent press rather than queuing it with a
+    # stale (mutable) room selection.
+    assert "mode: single" in block
+    # Upstairs Valetudo rooms route through the shared supervised boundary (which
+    # rechecks policy/guest at the launch), not the raw per-room scripts directly.
+    assert "action: script.vacuum_upstairs_segment_supervised" in block
+    assert "room_script: script.vacuum_master_bedroom" in block
+    assert "action: script.vacuum_master_bedroom\n" not in block
     # X40 rooms must route through the single deterministic dispatcher as a
     # segment run (which serializes with automatic runs and forces sweeping),
     # NOT the raw segment scripts that could mop under CleanGenius.
@@ -155,6 +161,20 @@ def test_supervised_launcher_is_gated_and_vacuum_only() -> None:
     assert "kind: segment" in block
     assert "action: script.vacuum_kitchen" not in block
     assert "action: script.vacuum_living_room" not in block
+
+
+def test_upstairs_supervised_boundary_rechecks_policy_before_delegating() -> None:
+    block = _script_block(VACUUM_PATH, "vacuum_upstairs_segment_supervised")
+
+    # Recheck policy (Supervised/Unattended) and guest immediately before
+    # delegating to the per-room script that publishes the segment START.
+    policy = block.index("entity_id: input_select.vacuum_pet_policy")
+    guest = block.index("entity_id: input_boolean.guest_mode")
+    delegate = block.index("{{ room_script }}")
+    assert policy < delegate
+    assert guest < delegate
+    assert '- "Supervised"' in block
+    assert '- "Unattended"' in block
 
 
 def test_supervised_x40_segment_launcher_forces_sweeping() -> None:

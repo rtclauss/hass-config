@@ -1054,6 +1054,37 @@ script:
       # now only after the segment run has reached a terminal dock.
       - action: script.x40_ultra_restore_cleangenius
 
+  vacuum_upstairs_segment_supervised:
+    alias: "Vacuum Upstairs Segment (Supervised Boundary)"
+    description: >-
+      Shared launch boundary for supervised upstairs (Valetudo) room cleans:
+      recheck the pet policy (Supervised/Unattended) and guest veto immediately
+      before delegating to the requested per-room segment script, so a flip to
+      Acclimation (whose dock automation publishes HOME) after the launcher's
+      outer gate is not followed by an unconditional segment START. Delegating to
+      the existing per-room scripts keeps the segment maps in one place. The
+      upstairs robot is vacuum-only hardware, so this is a presence/privacy
+      boundary, not a mop one.
+    mode: queued
+    trace:
+      stored_traces: 10
+    fields:
+      room_script:
+        description: "Per-room upstairs script (e.g. script.vacuum_guest_room)."
+        example: script.vacuum_guest_room
+    sequence:
+      - alias: "Recheck pet policy immediately before the upstairs segment START"
+        condition: state
+        entity_id: input_select.vacuum_pet_policy
+        state:
+          - "Supervised"
+          - "Unattended"
+      - alias: "Recheck guest-mode veto immediately before the upstairs segment START"
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+      - action: "{{ room_script }}"
+
   vacuum_supervised_clean:
     alias: "Vacuum Supervised Clean (One Room)"
     description: >-
@@ -1066,10 +1097,13 @@ script:
       (x40_ultra_main_level_policy_clean, kind=segment) so they serialize with
       automatic full-floor runs and force sweeping — a leftover mopping mode can
       never mop during a supervised run. Mopping is never launched from here
-      (only the whole-floor Unattended paths mop). Follow-up: tune the upstairs
-      per-room scripts to a single quiet pass; today they inherit their existing
-      pass counts.
-    mode: queued
+      (only the whole-floor Unattended paths mop). mode: single so a second press
+      while a run is active is REJECTED, not queued: a queued invocation would
+      read the mutable input_select.vacuum_room only when it finally started and
+      could clean a newer (possibly guest-private) room. Follow-up: tune the
+      upstairs per-room scripts to a single quiet pass; today they inherit their
+      existing pass counts.
+    mode: single
     trace:
       stored_traces: 10
     sequence:
@@ -1084,12 +1118,18 @@ script:
         entity_id: input_boolean.guest_mode
         state: "off"
       - choose:
+          # Upstairs Valetudo rooms route through the shared supervised boundary,
+          # which rechecks policy/guest immediately before the segment START.
           - conditions: "{{ is_state('input_select.vacuum_room', 'Master Bedroom') }}"
             sequence:
-              - action: script.vacuum_master_bedroom
+              - action: script.vacuum_upstairs_segment_supervised
+                data:
+                  room_script: script.vacuum_master_bedroom
           - conditions: "{{ is_state('input_select.vacuum_room', 'Guest Room') }}"
             sequence:
-              - action: script.vacuum_guest_room
+              - action: script.vacuum_upstairs_segment_supervised
+                data:
+                  room_script: script.vacuum_guest_room
           - conditions: "{{ is_state('input_select.vacuum_room', 'Living Room') }}"
             sequence:
               # X40 room — route through the single deterministic dispatcher so it
@@ -1100,10 +1140,14 @@ script:
                   segments: 5
           - conditions: "{{ is_state('input_select.vacuum_room', 'Bathroom') }}"
             sequence:
-              - action: script.vacuum_bathroom
+              - action: script.vacuum_upstairs_segment_supervised
+                data:
+                  room_script: script.vacuum_bathroom
           - conditions: "{{ is_state('input_select.vacuum_room', 'Hallway') }}"
             sequence:
-              - action: script.vacuum_hallway
+              - action: script.vacuum_upstairs_segment_supervised
+                data:
+                  room_script: script.vacuum_hallway
           - conditions: "{{ is_state('input_select.vacuum_room', 'Kitchen') }}"
             sequence:
               # X40 room — route through the single deterministic dispatcher so it
@@ -1114,7 +1158,9 @@ script:
                   segments: 4
           - conditions: "{{ is_state('input_select.vacuum_room', 'Office') }}"
             sequence:
-              - action: script.vacuum_office
+              - action: script.vacuum_upstairs_segment_supervised
+                data:
+                  room_script: script.vacuum_office
         default:
           - action: notify.all
             data:
