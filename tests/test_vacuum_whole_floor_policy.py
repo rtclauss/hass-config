@@ -67,6 +67,7 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     policy_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_policy_clean")
     vacuum_only_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_vacuum_only")
     mop_after_vacuum_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+    mop_only_block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_only")
     upstairs_block = _script_block(VACUUM_PATH, "vacuum_upstairs_full_floor")
 
     assert "action: script.vacuum_main_level_full_floor" in helper_block
@@ -89,9 +90,11 @@ def test_whole_floor_helper_starts_both_levels() -> None:
 
     # Vacuum-only pass: CleanGenius is disabled so the cleaning-mode select can
     # be forced to sweeping, then restored. The broken custom-cleaning service
-    # (which 500s while CleanGenius is active) must be gone, completion is gated
-    # on the vacuum entity (never task_status), and the start is gated on the
-    # mode actually becoming sweeping so a not-due run cannot mop.
+    # (which 500s while CleanGenius is active) must be gone, and the start is
+    # gated on the mode actually becoming sweeping so a not-due run cannot mop.
+    # It also publishes a run-scoped completion latch: reset off at the start and
+    # set on only on a real `completed` finish of THIS run, so the mop
+    # orchestrator never trusts an ambient (possibly stale) task_status.
     assert "entity_id: vacuum.x40_ultra" in vacuum_only_block
     assert "action: script.x40_ultra_prepare_deterministic_cleaning" in vacuum_only_block
     assert 'option: "sweeping"' in vacuum_only_block
@@ -100,30 +103,51 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert "action: script.x40_ultra_wait_until_docked" in vacuum_only_block
     assert "action: script.x40_ultra_restore_cleangenius" in vacuum_only_block
     assert "dreame_vacuum.vacuum_set_custom_cleaning" not in vacuum_only_block
-    assert "sensor.x40_ultra_task_status" not in vacuum_only_block
+    # Run-scoped completion latch: turned off first, then on only on a real
+    # `completed` finish (so the mop gate is tied to this run, not ambient state).
+    reset = vacuum_only_block.index(
+        "entity_id: input_boolean.x40_ultra_vacuum_pass_completed"
+    )
+    completed_check = vacuum_only_block.index('state: "completed"', reset)
+    set_on = vacuum_only_block.index(
+        "entity_id: input_boolean.x40_ultra_vacuum_pass_completed", completed_check
+    )
+    assert reset < completed_check < set_on
 
     assert "action: script.x40_ultra_main_level_mop_after_vacuum" in policy_block
     assert "action: script.x40_ultra_main_level_vacuum_only" in policy_block
 
-    # Mop pass: vacuum-then-mop in one run via mopping_after_sweeping, CleanGenius
-    # restored, and the schedule updated only on a real `completed` task status so
-    # an arrival-triggered return-to-base (docked/idle without completion) can't
-    # clear the mop debt. The broken multi-value task_status triggers stay gone.
-    assert 'option: "mopping_after_sweeping"' in mop_after_vacuum_block
-    assert "action: script.x40_ultra_restore_cleangenius" in mop_after_vacuum_block
-    assert "input_boolean.x40_ultra_mop_pass_pending" in mop_after_vacuum_block
-    assert "input_datetime.x40_ultra_last_mopped_at" in mop_after_vacuum_block
-    assert "dreame_vacuum.vacuum_set_custom_cleaning" not in mop_after_vacuum_block
-    assert "entity_id: sensor.x40_ultra_task_status" in mop_after_vacuum_block
-    assert 'state: "completed"' in mop_after_vacuum_block
-    assert 'to: "failed"' not in mop_after_vacuum_block
+    # Mop-after-vacuum is a thin orchestrator: a full vacuum pass, then a
+    # dedicated mop-only pass. It delegates all device work, so it must not
+    # select a mode or start the robot itself, and the vacuum must precede the mop.
+    assert "action: script.x40_ultra_main_level_vacuum_only" in mop_after_vacuum_block
+    assert "action: script.x40_ultra_main_level_mop_only" in mop_after_vacuum_block
+    assert mop_after_vacuum_block.index(
+        "action: script.x40_ultra_main_level_vacuum_only"
+    ) < mop_after_vacuum_block.index("action: script.x40_ultra_main_level_mop_only")
+    assert "action: vacuum.start" not in mop_after_vacuum_block
+    assert 'option: "mopping_after_sweeping"' not in mop_after_vacuum_block
+
+    # Mop-only pass: a standalone `mopping` run (dry debris already vacuumed),
+    # CleanGenius restored, and the schedule updated only on a real `completed`
+    # task status so an arrival-triggered return-to-base (docked/idle without
+    # completion) can't clear the mop debt. The broken multi-value task_status
+    # triggers stay gone.
+    assert 'option: "mopping"' in mop_only_block
+    assert "action: script.x40_ultra_restore_cleangenius" in mop_only_block
+    assert "input_boolean.x40_ultra_mop_pass_pending" in mop_only_block
+    assert "input_datetime.x40_ultra_last_mopped_at" in mop_only_block
+    assert "dreame_vacuum.vacuum_set_custom_cleaning" not in mop_only_block
+    assert "entity_id: sensor.x40_ultra_task_status" in mop_only_block
+    assert 'state: "completed"' in mop_only_block
+    assert 'to: "failed"' not in mop_only_block
     # Robustness guards (codex P1/P2): only record a mop when the mode actually
     # applied, the robot really started, and the run reached a real finish.
-    assert 'state: "mopping_after_sweeping"' in mop_after_vacuum_block
+    assert 'state: "mopping"' in mop_only_block
     # Start confirmation uses wait_template (passes immediately if already
     # cleaning) to avoid the wait_for_trigger already-true race.
-    assert "is_state('vacuum.x40_ultra', 'cleaning')" in mop_after_vacuum_block
-    assert "action: script.x40_ultra_wait_until_docked" in mop_after_vacuum_block
+    assert "is_state('vacuum.x40_ultra', 'cleaning')" in mop_only_block
+    assert "action: script.x40_ultra_wait_until_docked" in mop_only_block
 
     # CleanGenius is toggled off then restored via dedicated helper scripts.
     prepare_block = _script_block(VACUUM_PATH, "x40_ultra_prepare_deterministic_cleaning")
@@ -217,6 +241,9 @@ def test_away_automations_use_shared_whole_floor_helper() -> None:
         assert '"iterations": 4' not in block
 
     flying_home_block = _automation_block(TRIPS_PATH, "vacuum_flying_home")
+    # Flying home forces a mop so we arrive to a mopped main floor. The forced
+    # mop is still fail-closed: trip_vacuum_main_and_upstairs_levels requires the
+    # Unattended pet policy before any cleaning starts.
     assert "force_mop: true" in flying_home_block
 
 

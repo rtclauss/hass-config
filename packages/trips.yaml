@@ -1238,9 +1238,18 @@ script:
           Notification text describing why the trip vacuum pass started.
         example: "Vacuuming the main and upstairs levels while you're away."
     sequence:
+      - alias: "Trip cleaning requires explicit unattended pet policy"
+        condition: state
+        entity_id: input_select.vacuum_pet_policy
+        state: "Unattended"
       - action: script.vacuum_main_and_upstairs_levels
         data:
           force_mop: "{{ force_mop | default(false) | bool }}"
+      # Also clean the den on trip/flying-home days so all three areas match the
+      # departure path. This central boundary already fails closed on den-door
+      # open, guest mode, and non-Unattended policy, so no extra guards here.
+      - action: script.vacuum_den_pet_safe_start
+        continue_on_error: true
       - action: notify.all
         data:
           data:
