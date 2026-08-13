@@ -234,18 +234,37 @@ def test_main_level_mop_after_vacuum_is_two_ordered_passes() -> None:
     assert "entity_id: input_boolean.x40_ultra_mop_pass_pending" in mop_only
 
 
-def test_mop_is_gated_on_a_completed_vacuum_pass() -> None:
+def test_mop_is_gated_on_a_run_scoped_completed_vacuum_pass() -> None:
     block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
 
-    # The mop must only start after the vacuum pass reached a real `completed`
-    # task status. An arrival-triggered return-to-base or a no-op start docks the
-    # robot WITHOUT completion, so the mop is skipped — preserving both the
-    # arrival-to-dock protection and the vacuum-before-water ordering.
+    # The mop must only start when THIS vacuum pass completed, read from the
+    # run-scoped latch — NOT the ambient task_status, which can still read
+    # `completed` from an earlier run when the new pass never started. An
+    # arrival-triggered return-to-base or a no-op start leaves the latch off, so
+    # the mop is skipped (preserving arrival-to-dock + vacuum-before-water).
     vacuum_pass = block.index("action: script.x40_ultra_main_level_vacuum_only")
-    completion_gate = block.index("entity_id: sensor.x40_ultra_task_status", vacuum_pass)
+    completion_gate = block.index(
+        "entity_id: input_boolean.x40_ultra_vacuum_pass_completed", vacuum_pass
+    )
     mop_pass = block.index("action: script.x40_ultra_main_level_mop_only", completion_gate)
     assert vacuum_pass < completion_gate < mop_pass
-    assert 'state: "completed"' in block
+    assert 'state: "on"' in block
+    # The gate must not rely on the ambient task_status sensor.
+    assert "entity_id: sensor.x40_ultra_task_status" not in block
+
+
+def test_full_floor_starts_recheck_guest_mode_before_start() -> None:
+    # Guest mode can be enabled during the (up-to-30s) CleanGenius wait or the
+    # hours-long vacuum pass; both starts must recheck the guest veto right
+    # before vacuum.start, not only the pet policy.
+    for script_id in (
+        "x40_ultra_main_level_vacuum_only",
+        "x40_ultra_main_level_mop_only",
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        guest = block.index("entity_id: input_boolean.guest_mode")
+        start = block.index("action: vacuum.start", guest)
+        assert guest < start
 
 
 def test_room_intent_links_durable_cat_safe_cleaning_policy() -> None:

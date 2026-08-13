@@ -259,6 +259,13 @@ input_boolean:
   x40_ultra_mop_pass_pending:
     name: X40 Ultra Mop Pass Pending
     icon: mdi:robot-vacuum-alert
+  # Run-scoped latch: reset off at the start of every main-level vacuum pass and
+  # set on only when THAT pass reaches a real `completed` finish. The mop
+  # orchestrator gates on this (not the ambient task_status, which can read a
+  # stale `completed` from an earlier run) so a failed/no-op vacuum never mops.
+  x40_ultra_vacuum_pass_completed:
+    name: X40 Ultra Vacuum Pass Completed
+    icon: mdi:robot-vacuum
 
 ########################
 # Input Datetime
@@ -461,12 +468,20 @@ script:
     description: >-
       Sweep-only pass across the main level. Disables CleanGenius, forces the
       cleaning mode to sweeping, cleans the mapped main floor, then always
-      restores CleanGenius. Records no persistent state, so an interruption is
-      harmless. Completion is detected on the vacuum entity state only.
+      restores CleanGenius. Publishes a run-scoped completion latch
+      (input_boolean.x40_ultra_vacuum_pass_completed): reset off at the start and
+      set on only when THIS pass reaches a real `completed` finish, so the mop
+      orchestrator can tell a genuine finish from a no-op/failed/arrival-docked
+      run without trusting the ambient (possibly stale) task_status.
     mode: queued
     trace:
       stored_traces: 10
     sequence:
+      # Reset the run-scoped completion latch: only this pass reaching a real
+      # `completed` finish may set it on, so a failed/no-op run leaves it off.
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_vacuum_pass_completed
       - action: script.x40_ultra_prepare_deterministic_cleaning
       - action: select.select_option
         continue_on_error: true
@@ -477,6 +492,8 @@ script:
       # Guard: only start once the mode actually became `sweeping`. If the mode
       # select was unavailable or rejected the option, starting now would run in
       # a leftover mode (e.g. mopping_after_sweeping) and mop on a not-due run.
+      # Also recheck policy AND guest mode here: the CleanGenius wait can take up
+      # to 30s, during which either may change, and the start must honor that.
       - if:
           - condition: state
             entity_id: select.x40_ultra_cleaning_mode
@@ -485,6 +502,10 @@ script:
             condition: state
             entity_id: input_select.vacuum_pet_policy
             state: "Unattended"
+          - alias: "Recheck guest-mode veto immediately before vacuum start"
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
         then:
           - action: vacuum.start
             continue_on_error: true
@@ -504,14 +525,26 @@ script:
                 value_template: "{{ wait.completed }}"
             then:
               - action: script.x40_ultra_wait_until_docked
+              # Mark THIS run complete only on a real `completed` task status,
+              # checked while CleanGenius is still off (before the restore). An
+              # arrival-triggered return-to-base docks WITHOUT `completed`, so the
+              # latch stays off and the mop orchestrator skips the mop.
+              - if:
+                  - condition: state
+                    entity_id: sensor.x40_ultra_task_status
+                    state: "completed"
+                then:
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.x40_ultra_vacuum_pass_completed
         else:
           - action: notify.all
             data:
               data:
                 url: "/ryan-new-mushroom/cleaning"
               message: >-
-                X40 Ultra could not switch to sweeping mode (CleanGenius or the
-                mode select was unavailable); vacuum-only run skipped this time.
+                X40 Ultra vacuum-only run skipped: sweeping mode did not apply,
+                or the pet policy / guest mode changed during preparation.
       # Always restore CleanGenius, even if the mode change or start failed.
       - action: script.x40_ultra_restore_cleangenius
 
@@ -540,15 +573,16 @@ script:
         entity_id: input_select.vacuum_pet_policy
         state: "Unattended"
       - action: script.x40_ultra_main_level_vacuum_only
-      # Only mop if the vacuum pass genuinely completed. CleanGenius is off
-      # during the sweep, so a full pass emits `completed` once at true end; an
-      # arrival-triggered return-to-base or a no-op start leaves a non-completed
-      # status, in which case we skip the mop rather than put water on a floor
-      # that was not fully vacuumed (or where the owner is arriving).
+      # Only mop if THIS vacuum pass genuinely completed. The vacuum-only script
+      # resets input_boolean.x40_ultra_vacuum_pass_completed off at its start and
+      # sets it on only on a real `completed` finish of this run, so a no-op /
+      # failed start or an arrival-triggered return-to-base leaves it off and we
+      # skip the mop — never trusting an ambient (possibly stale) task_status and
+      # never putting water on a floor that was not fully vacuumed.
       - if:
           - condition: state
-            entity_id: sensor.x40_ultra_task_status
-            state: "completed"
+            entity_id: input_boolean.x40_ultra_vacuum_pass_completed
+            state: "on"
         then:
           - action: script.x40_ultra_main_level_mop_only
         else:
@@ -590,7 +624,9 @@ script:
           option: "mopping"
       # Guard: only clean if the mop mode actually took. If the mode select was
       # unavailable or rejected the option, a leftover mode (e.g. sweeping from
-      # the preceding vacuum pass) must not be recorded as a mop.
+      # the preceding vacuum pass) must not be recorded as a mop. Recheck policy
+      # AND guest mode here too: the preceding vacuum pass can run for hours,
+      # during which either may change, and the mop start must honor that.
       - if:
           - condition: state
             entity_id: select.x40_ultra_cleaning_mode
@@ -599,6 +635,10 @@ script:
             condition: state
             entity_id: input_select.vacuum_pet_policy
             state: "Unattended"
+          - alias: "Recheck guest-mode veto immediately before mop start"
+            condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
         then:
           - action: vacuum.start
             continue_on_error: true

@@ -90,9 +90,11 @@ def test_whole_floor_helper_starts_both_levels() -> None:
 
     # Vacuum-only pass: CleanGenius is disabled so the cleaning-mode select can
     # be forced to sweeping, then restored. The broken custom-cleaning service
-    # (which 500s while CleanGenius is active) must be gone, completion is gated
-    # on the vacuum entity (never task_status), and the start is gated on the
-    # mode actually becoming sweeping so a not-due run cannot mop.
+    # (which 500s while CleanGenius is active) must be gone, and the start is
+    # gated on the mode actually becoming sweeping so a not-due run cannot mop.
+    # It also publishes a run-scoped completion latch: reset off at the start and
+    # set on only on a real `completed` finish of THIS run, so the mop
+    # orchestrator never trusts an ambient (possibly stale) task_status.
     assert "entity_id: vacuum.x40_ultra" in vacuum_only_block
     assert "action: script.x40_ultra_prepare_deterministic_cleaning" in vacuum_only_block
     assert 'option: "sweeping"' in vacuum_only_block
@@ -101,7 +103,16 @@ def test_whole_floor_helper_starts_both_levels() -> None:
     assert "action: script.x40_ultra_wait_until_docked" in vacuum_only_block
     assert "action: script.x40_ultra_restore_cleangenius" in vacuum_only_block
     assert "dreame_vacuum.vacuum_set_custom_cleaning" not in vacuum_only_block
-    assert "sensor.x40_ultra_task_status" not in vacuum_only_block
+    # Run-scoped completion latch: turned off first, then on only on a real
+    # `completed` finish (so the mop gate is tied to this run, not ambient state).
+    reset = vacuum_only_block.index(
+        "entity_id: input_boolean.x40_ultra_vacuum_pass_completed"
+    )
+    completed_check = vacuum_only_block.index('state: "completed"', reset)
+    set_on = vacuum_only_block.index(
+        "entity_id: input_boolean.x40_ultra_vacuum_pass_completed", completed_check
+    )
+    assert reset < completed_check < set_on
 
     assert "action: script.x40_ultra_main_level_mop_after_vacuum" in policy_block
     assert "action: script.x40_ultra_main_level_vacuum_only" in policy_block
