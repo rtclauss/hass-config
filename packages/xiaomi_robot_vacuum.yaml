@@ -170,7 +170,12 @@ automation:
     alias: vacuum_pet_policy_acclimation_dock
     description: >-
       Fail closed when the pet-safety policy enters Acclimation by stopping
-      active cleaning and returning all three robots to their docks.
+      active cleaning and returning all three robots to their docks. Also
+      reconciles on Home Assistant startup: the helper is re-initialized to
+      Acclimation during entity setup (before this listener is active), so no
+      to:"Acclimation" transition is observed — but the documented fail-closed
+      default after every restart means a robot that was cleaning through the
+      restart must still be docked.
     mode: restart
     trace:
       stored_traces: 10
@@ -178,6 +183,8 @@ automation:
       - trigger: state
         entity_id: input_select.vacuum_pet_policy
         to: "Acclimation"
+      - trigger: homeassistant
+        event: start
     action:
       - action: script.vacuum_dock_all_robots
 
@@ -506,6 +513,18 @@ script:
             condition: state
             entity_id: input_boolean.guest_mode
             state: "off"
+          # Only credit a FRESH full-floor pass: require the robot to be at rest
+          # before starting. If it is already `cleaning` (a manual, app, or
+          # room-segment run), our vacuum.start would be a no-op and the
+          # start-confirmation below would credit that unrelated run as the
+          # full-floor sweep — setting the completion latch and launching a mop
+          # without a real full dry pass.
+          - alias: "Robot must be idle/docked so only a fresh pass is credited"
+            condition: state
+            entity_id: vacuum.x40_ultra
+            state:
+              - "docked"
+              - "idle"
         then:
           - action: vacuum.start
             continue_on_error: true
@@ -514,8 +533,8 @@ script:
           # Confirm a real start. wait_template (not wait_for_trigger) so it
           # passes immediately if vacuum.start already flipped the entity to
           # `cleaning` before this step registered; a genuine no-op start times
-          # out with wait.completed false. Only then wait for the finish,
-          # otherwise the docked-wait would hang on an already-docked robot.
+          # out with wait.completed false. The idle/docked guard above ensures
+          # the `cleaning` we observe is our run, not a pre-existing one.
           - wait_template: "{{ is_state('vacuum.x40_ultra', 'cleaning') }}"
             timeout:
               minutes: 10
@@ -639,6 +658,16 @@ script:
             condition: state
             entity_id: input_boolean.guest_mode
             state: "off"
+          # Only credit a FRESH mop pass: require the robot at rest before start.
+          # If it is already `cleaning` (a manual/app/segment run), our start is a
+          # no-op and the confirmation below would credit that unrelated run as a
+          # finished mop, clearing the mop debt without a real mop.
+          - alias: "Robot must be idle/docked so only a fresh mop is credited"
+            condition: state
+            entity_id: vacuum.x40_ultra
+            state:
+              - "docked"
+              - "idle"
         then:
           - action: vacuum.start
             continue_on_error: true
@@ -939,6 +968,20 @@ script:
               segments: "{{ segments | int }}"
               repeats: 1
               suction_level: "{{ suction_level | default(1) | int }}"
+          # vacuum_clean_segment only dispatches the command, so hold the
+          # deterministic sweeping mode until the run reaches a terminal dock —
+          # otherwise CleanGenius would be restored mid-sweep. wait_template (not
+          # wait_for_trigger) passes immediately if the entity already flipped to
+          # `cleaning`; only then wait for the finish.
+          - wait_template: "{{ is_state('vacuum.x40_ultra', 'cleaning') }}"
+            timeout:
+              minutes: 10
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            then:
+              - action: script.x40_ultra_wait_until_docked
         else:
           - action: notify.all
             data:
@@ -948,7 +991,8 @@ script:
                 X40 Ultra supervised room vacuum skipped: the sweeping mode did
                 not apply, or the pet policy / guest mode changed during
                 preparation, so it cannot mop or run against policy.
-      # Always restore CleanGenius, even if the mode change or start failed.
+      # Always restore CleanGenius, even if the mode change or start failed —
+      # now only after the segment run has reached a terminal dock.
       - action: script.x40_ultra_restore_cleangenius
 
   vacuum_supervised_clean:

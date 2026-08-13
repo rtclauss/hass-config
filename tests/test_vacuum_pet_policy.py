@@ -121,6 +121,10 @@ def test_entering_acclimation_immediately_docks_all_robots() -> None:
     assert "entity_id: input_select.vacuum_pet_policy" in automation
     assert 'to: "Acclimation"' in automation
     assert "action: script.vacuum_dock_all_robots" in automation
+    # HA restart re-initializes the helper to Acclimation before the state
+    # listener is active, so a startup trigger reconciles the fail-closed dock.
+    assert "trigger: homeassistant" in automation
+    assert "event: start" in automation
     assert dock_script.count("action: vacuum.return_to_base") == 2
     assert "entity_id: vacuum.valetudo_den" in dock_script
     assert "entity_id: vacuum.x40_ultra" in dock_script
@@ -265,6 +269,35 @@ def test_full_floor_starts_recheck_guest_mode_before_start() -> None:
         guest = block.index("entity_id: input_boolean.guest_mode")
         start = block.index("action: vacuum.start", guest)
         assert guest < start
+
+
+def test_full_floor_starts_require_robot_at_rest_before_starting() -> None:
+    # If the X40 is already `cleaning` (manual/app/segment run), our vacuum.start
+    # would be a no-op and the start-confirmation would credit that unrelated run
+    # as the full-floor pass/mop. Both starts must require an idle/docked robot.
+    for script_id in (
+        "x40_ultra_main_level_vacuum_only",
+        "x40_ultra_main_level_mop_only",
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        rest_guard = block.index("entity_id: vacuum.x40_ultra")
+        start = block.index("action: vacuum.start", rest_guard)
+        # The rest guard (docked/idle) sits in the pre-start condition block.
+        assert rest_guard < start
+        assert '- "docked"' in block
+        assert '- "idle"' in block
+
+
+def test_supervised_segment_waits_for_dock_before_restoring_cleangenius() -> None:
+    block = _script_block(VACUUM_PATH, "x40_ultra_segment_vacuum_only")
+
+    # vacuum_clean_segment only dispatches, so the launcher must hold sweeping
+    # until the run reaches a terminal dock, then restore CleanGenius — otherwise
+    # CleanGenius is re-enabled mid-sweep.
+    segment = block.index("action: dreame_vacuum.vacuum_clean_segment")
+    wait_dock = block.index("action: script.x40_ultra_wait_until_docked", segment)
+    restore = block.index("action: script.x40_ultra_restore_cleangenius", wait_dock)
+    assert segment < wait_dock < restore
 
 
 def test_room_intent_links_durable_cat_safe_cleaning_policy() -> None:
