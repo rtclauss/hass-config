@@ -188,6 +188,28 @@ automation:
     action:
       - action: script.vacuum_dock_all_robots
 
+  - id: vacuum_dock_supervised_on_presence_loss
+    alias: vacuum_dock_supervised_on_presence_loss
+    description: >-
+      Supervised runs assume the owner is present to watch the cats. If confirmed
+      presence is lost (bayesian_zeke_home -> off) while the policy is still
+      Supervised, dock all robots so a room clean started while home cannot keep
+      running with nobody present. Unattended is unaffected (it is the explicit
+      hands-off mode); Acclimation already docks on entry.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_select.vacuum_pet_policy
+        state: "Supervised"
+    action:
+      - action: script.vacuum_dock_all_robots
+
   - id: x40_ultra_record_home_since
     alias: x40_ultra_record_home_since
     description: >-
@@ -490,12 +512,25 @@ script:
         target:
           entity_id: input_boolean.x40_ultra_vacuum_pass_completed
       - action: script.x40_ultra_prepare_deterministic_cleaning
-      - action: select.select_option
-        continue_on_error: true
-        target:
-          entity_id: select.x40_ultra_cleaning_mode
-        data:
-          option: "sweeping"
+      # Recheck rest AFTER preparation and BEFORE changing the mode: the
+      # dispatcher's entry gate can go stale during prepare's up-to-30s wait. If
+      # an external run started, skip the mode change (the guard below then fails
+      # and we fall through to the fail-closed wait + restore) so we never change
+      # the mode on a robot mid-run.
+      - if:
+          - alias: "X40 still at rest before selecting the mode"
+            condition: state
+            entity_id: vacuum.x40_ultra
+            state:
+              - "docked"
+              - "idle"
+        then:
+          - action: select.select_option
+            continue_on_error: true
+            target:
+              entity_id: select.x40_ultra_cleaning_mode
+            data:
+              option: "sweeping"
       # Guard: only start once the mode actually became `sweeping`. If the mode
       # select was unavailable or rejected the option, starting now would run in
       # a leftover mode (e.g. mopping_after_sweeping) and mop on a not-due run.
@@ -646,12 +681,25 @@ script:
         target:
           entity_id: input_boolean.x40_ultra_mop_pass_pending
       - action: script.x40_ultra_prepare_deterministic_cleaning
-      - action: select.select_option
-        continue_on_error: true
-        target:
-          entity_id: select.x40_ultra_cleaning_mode
-        data:
-          option: "mopping"
+      # Recheck rest AFTER preparation and BEFORE changing the mode: the
+      # dispatcher's entry gate can go stale during prepare's up-to-30s wait. If
+      # an external run started, skip the mode change (the guard below then fails
+      # and we fall through to the fail-closed wait + restore) so we never change
+      # the mode on a robot mid-run.
+      - if:
+          - alias: "X40 still at rest before selecting the mode"
+            condition: state
+            entity_id: vacuum.x40_ultra
+            state:
+              - "docked"
+              - "idle"
+        then:
+          - action: select.select_option
+            continue_on_error: true
+            target:
+              entity_id: select.x40_ultra_cleaning_mode
+            data:
+              option: "mopping"
       # Guard: only clean if the mop mode actually took. If the mode select was
       # unavailable or rejected the option, a leftover mode (e.g. sweeping from
       # the preceding vacuum pass) must not be recorded as a mop. Recheck policy
@@ -1027,12 +1075,25 @@ script:
               - "idle"
         then:
           - action: script.x40_ultra_prepare_deterministic_cleaning
-          - action: select.select_option
-            continue_on_error: true
-            target:
-              entity_id: select.x40_ultra_cleaning_mode
-            data:
-              option: "sweeping"
+          # Recheck rest AFTER preparation and BEFORE changing the mode: the entry
+          # gate can go stale during prepare's up-to-30s wait. If an external run
+          # started, skip the mode change (the guard below then fails and we fall
+          # through to the fail-closed wait + restore) so we never change the mode
+          # on a robot mid-run.
+          - if:
+              - alias: "X40 still at rest before selecting the mode"
+                condition: state
+                entity_id: vacuum.x40_ultra
+                state:
+                  - "docked"
+                  - "idle"
+            then:
+              - action: select.select_option
+                continue_on_error: true
+                target:
+                  entity_id: select.x40_ultra_cleaning_mode
+                data:
+                  option: "sweeping"
           # Guard: only start once the mode actually became `sweeping`, so a
           # leftover mopping/CleanGenius mode cannot turn a supervised vacuum into
           # a mop. Also recheck the pet policy and guest-mode veto here (the

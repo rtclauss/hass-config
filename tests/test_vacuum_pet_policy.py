@@ -231,6 +231,32 @@ def test_supervised_x40_segment_launcher_forces_sweeping() -> None:
     assert guard < guest_recheck < start
 
 
+def test_mode_select_is_rechecked_for_rest_after_preparation() -> None:
+    # The entry/dispatcher rest check can go stale during prepare's up-to-30s
+    # wait, so each child must recheck rest AFTER preparation and BEFORE selecting
+    # the cleaning mode — never changing the mode on a robot an external run grabbed.
+    for script_id, mode in (
+        ("x40_ultra_main_level_vacuum_only", "sweeping"),
+        ("x40_ultra_main_level_mop_only", "mopping"),
+        ("x40_ultra_segment_vacuum_only", "sweeping"),
+    ):
+        block = _script_block(VACUUM_PATH, script_id)
+        prepare = block.index("action: script.x40_ultra_prepare_deterministic_cleaning")
+        select = block.index(f'option: "{mode}"', prepare)
+        rest = block.rindex("entity_id: vacuum.x40_ultra", prepare, select)
+        assert prepare < rest < select
+
+
+def test_supervised_run_docks_when_owner_presence_is_lost() -> None:
+    automation = _automation_block(VACUUM_PATH, "vacuum_dock_supervised_on_presence_loss")
+    assert "entity_id: binary_sensor.bayesian_zeke_home" in automation
+    assert 'to: "off"' in automation
+    # Only while the policy is Supervised, and it docks all robots.
+    assert "entity_id: input_select.vacuum_pet_policy" in automation
+    assert 'state: "Supervised"' in automation
+    assert "action: script.vacuum_dock_all_robots" in automation
+
+
 def test_full_floor_children_wait_for_rest_before_restoring_cleangenius() -> None:
     # Both full-floor children must defer restoring CleanGenius until the robot is
     # at rest (fail closed), so a manual/app run started during prep — or their
