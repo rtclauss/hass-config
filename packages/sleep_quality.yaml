@@ -1,0 +1,296 @@
+# Owner-suite sleep-session analytics for issue #373.
+#
+# This observes the existing CPAP power and aggregate bed-presence signals. It
+# does not alter the Allium-governed goodnight or wake-up routines. The score is
+# a local continuity heuristic for trend review, not a medical sleep-quality or
+# CPAP-adherence measurement.
+
+input_boolean:
+  sleep_session_active:
+    name: Sleep session active
+    icon: mdi:sleep
+
+  sleep_session_bed_entry_pending:
+    name: Sleep session bed entry pending
+    icon: mdi:bed-clock
+
+  sleep_session_cpap_stopped:
+    name: Sleep session CPAP stopped
+    icon: mdi:power-sleep
+
+input_datetime:
+  sleep_session_bed_in:
+    name: Sleep session bed in
+    has_date: true
+    has_time: true
+
+  sleep_session_cpap_on:
+    name: Sleep session CPAP on
+    has_date: true
+    has_time: true
+
+  sleep_session_cpap_off:
+    name: Sleep session CPAP off
+    has_date: true
+    has_time: true
+
+  sleep_session_bed_out:
+    name: Sleep session bed out
+    has_date: true
+    has_time: true
+
+input_number:
+  sleep_session_bed_minutes:
+    name: Latest sleep session bed time
+    icon: mdi:bed-clock
+    min: 0
+    max: 1440
+    step: 1
+    unit_of_measurement: min
+    mode: box
+
+  sleep_session_cpap_minutes:
+    name: Latest sleep session CPAP time
+    icon: mdi:medical-bag
+    min: 0
+    max: 1440
+    step: 1
+    unit_of_measurement: min
+    mode: box
+
+  sleep_quality_score:
+    name: Sleep continuity score (heuristic)
+    icon: mdi:sleep
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: pts
+    mode: box
+
+counter:
+  sleep_restlessness_events:
+    name: Latest sleep session bed transitions
+    icon: mdi:swap-horizontal
+    minimum: 0
+    maximum: 500
+    step: 1
+    restore: true
+
+script:
+  finalize_sleep_quality_session:
+    alias: Finalize sleep quality session
+    description: >-
+      Persist the latest owner-suite bed/CPAP durations and bounded continuity
+      heuristic after both CPAP and bed occupancy have stopped.
+    mode: single
+    trace:
+      stored_traces: 10
+    sequence:
+      - variables:
+          bed_in_ts: >-
+            {{ state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0) }}
+          cpap_on_ts: >-
+            {{ state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0) }}
+          cpap_off_ts: >-
+            {{ state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0) }}
+          bed_out_ts: "{{ now().timestamp() }}"
+      - alias: Require a complete, ordered session before persisting analytics
+        condition: template
+        value_template: >-
+          {{ bed_in_ts > 0
+             and cpap_on_ts >= bed_in_ts
+             and cpap_off_ts >= cpap_on_ts
+             and bed_out_ts >= cpap_off_ts }}
+      - variables:
+          bed_minutes: >-
+            {{ [1440, [0, ((bed_out_ts - bed_in_ts) / 60) | round(0)] | max] | min }}
+          cpap_minutes: >-
+            {{ [1440, [0, ((cpap_off_ts - cpap_on_ts) / 60) | round(0)] | max] | min }}
+          bed_transitions: >-
+            {{ states('counter.sleep_restlessness_events') | int(0) }}
+          continuity_score: >-
+            {% set cpap_points = [60, (cpap_minutes | float(0) / 480 * 60)] | min %}
+            {% set bed_points = [40, (bed_minutes | float(0) / 480 * 40)] | min %}
+            {% set transition_penalty = [20, bed_transitions | int(0)] | min %}
+            {{ [100, [0, cpap_points + bed_points - transition_penalty] | max] | min | round(0) }}
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.sleep_session_bed_out
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.sleep_session_bed_minutes
+        data:
+          value: "{{ bed_minutes }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.sleep_session_cpap_minutes
+        data:
+          value: "{{ cpap_minutes }}"
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.sleep_quality_score
+        data:
+          value: "{{ continuity_score }}"
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.sleep_session_active
+            - input_boolean.sleep_session_bed_entry_pending
+            - input_boolean.sleep_session_cpap_stopped
+
+automation:
+  - id: sleep_quality_prepare_session
+    alias: Sleep quality - prepare session
+    description: >-
+      Record the most recent nightly bed entry, then start a persistent session
+      after sustained CPAP use without changing existing goodnight behavior.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+        from: "off"
+        to: "on"
+        id: bed_entry
+      - trigger: numeric_state
+        entity_id: sensor.owner_suite_cpap_plug_power
+        above: 1.3
+        for:
+          seconds: 10
+        id: cpap_start
+    condition:
+      - condition: state
+        entity_id: input_boolean.sleep_session_active
+        state: "off"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: bed_entry
+              - condition: time
+                after: "18:00:00"
+                before: "12:00:00"
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.sleep_session_bed_in
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.sleep_session_bed_entry_pending
+          - conditions:
+              - condition: trigger
+                id: cpap_start
+            sequence:
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.sleep_session_bed_entry_pending
+                    state: "off"
+                then:
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.sleep_session_bed_in
+                    data:
+                      datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.sleep_session_cpap_on
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - action: counter.reset
+                target:
+                  entity_id: counter.sleep_restlessness_events
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.sleep_session_cpap_stopped
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.sleep_session_active
+
+  - id: sleep_quality_track_active_session
+    alias: Sleep quality - track active session
+    description: >-
+      Count bed transitions during CPAP use, persist a guarded CPAP stop, and
+      finalize once the aggregate owner-suite bed is empty.
+    mode: queued
+    max: 20
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id:
+          - binary_sensor.bed_presence_2d0670_bed_occupied_left
+          - binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "on"
+        to: "off"
+        id: bed_transition
+      - trigger: state
+        entity_id:
+          - binary_sensor.bed_presence_2d0670_bed_occupied_left
+          - binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "off"
+        to: "on"
+        id: bed_transition
+      - trigger: numeric_state
+        entity_id: sensor.owner_suite_cpap_plug_power
+        below: 1.3
+        for:
+          minutes: 5
+        id: cpap_stop
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+        from: "on"
+        to: "off"
+        for:
+          minutes: 5
+        id: bed_exit
+    condition:
+      - condition: state
+        entity_id: input_boolean.sleep_session_active
+        state: "on"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: bed_transition
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
+            sequence:
+              - action: counter.increment
+                target:
+                  entity_id: counter.sleep_restlessness_events
+          - conditions:
+              - condition: trigger
+                id: cpap_stop
+            sequence:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.sleep_session_cpap_off
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.sleep_session_cpap_stopped
+              - if:
+                  - condition: state
+                    entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+                    state: "off"
+                then:
+                  - action: script.finalize_sleep_quality_session
+          - conditions:
+              - condition: trigger
+                id: bed_exit
+              - condition: state
+                entity_id: input_boolean.sleep_session_cpap_stopped
+                state: "on"
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                below: 1.3
+            sequence:
+              - action: script.finalize_sleep_quality_session
