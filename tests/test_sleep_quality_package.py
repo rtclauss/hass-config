@@ -87,6 +87,23 @@ def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions
     assert active.count("below: 1.3") == 2
 
 
+def test_bed_exit_timestamp_is_persisted_before_later_session_finalization() -> None:
+    active = _automation_block("sleep_quality_track_active_session")
+    finalize = _script_block("finalize_sleep_quality_session")
+    bed_exit_branch = active.split("id: bed_exit", maxsplit=2)[2]
+
+    bed_out_write = bed_exit_branch.index(
+        "entity_id: input_datetime.sleep_session_bed_out"
+    )
+    finalize_call = bed_exit_branch.index("action: script.finalize_sleep_quality_session")
+
+    assert bed_out_write < finalize_call
+    assert "state_attr('input_datetime.sleep_session_bed_out', 'timestamp')" in finalize
+    assert "bed_out_ts >= bed_in_ts" in finalize
+    assert "bed_out_ts >= cpap_off_ts" not in finalize
+    assert 'bed_out_ts: "{{ now().timestamp() }}"' not in finalize
+
+
 def test_continuity_score_is_bounded_and_does_not_change_governed_routines() -> None:
     block = _script_block("finalize_sleep_quality_session")
     text = PACKAGE_PATH.read_text(encoding="utf-8")
