@@ -33,13 +33,21 @@ def _automation_block(automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_in_bed_toggles_requires_bed_occupancy_to_hold_before_closing_blinds() -> None:
+def test_in_bed_toggles_requires_sustained_vacancy_before_reentry() -> None:
     block = _automation_block("in_bed_toggles")
 
-    bed_occupied_trigger = block.split('id: bed-occupied', maxsplit=1)[0]
+    bed_occupied_trigger, remainder = block.split("id: bed-occupied", maxsplit=1)
+    bed_unoccupied_trigger = remainder.split("id: bed-unoccupied", maxsplit=1)[0]
     assert 'to: "on"' in bed_occupied_trigger
-    assert "for:" in bed_occupied_trigger
-    assert "seconds: 5" in bed_occupied_trigger
+    assert "for:" not in bed_occupied_trigger
+    assert 'to: "off"' in bed_unoccupied_trigger
+    assert "for:" in bed_unoccupied_trigger
+    assert "seconds: 5" in bed_unoccupied_trigger
+
+    occupied_branch = remainder.split("id: bed-unoccupied", maxsplit=1)[1].split("sequence:", maxsplit=1)[0]
+    assert "condition: state" in occupied_branch
+    assert "entity_id: input_boolean.master_bed_occupancy" in occupied_branch
+    assert 'state: "off"' in occupied_branch
 
     assert "action: cover.close_cover" in block
     assert "cover.owner_suite_blinds_ha" in block
