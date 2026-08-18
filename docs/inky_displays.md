@@ -287,8 +287,10 @@ REST resources.
 The footer uses 24-hour local time, for example `Updated 21:42`. This timestamp
 is generated only when the payload is published. Do not add `sensor.time` or a
 minute-level clock trigger for this field. The Pi excludes footer-only changes
-from duplicate detection, so a new footer timestamp reaches the panel only when
-other display content also changes.
+that match the publisher's `Updated HH:MM` timestamp from duplicate detection,
+so a new timestamp reaches the panel only when other display content also
+changes. Meaningful footer copy, including the office guest Wi-Fi prompt,
+remains part of the content hash and refreshes the panel when changed.
 
 The Pi service preserves the last cached `Weather` and `Dest Wx` rows when a new
 payload marks those rows as `unknown` or `unavailable`. Other rows can still
@@ -443,7 +445,8 @@ The service writes:
 - `last_hash.txt`
 
 Duplicate semantic-content hashes are ignored and do not refresh the physical
-panel. Footer-only timestamp changes are deliberately treated as duplicates.
+panel. Footer-only `Updated HH:MM` timestamp changes are deliberately treated as
+duplicates; other footer changes remain meaningful display content.
 Invalid payloads are logged and do not overwrite the last good cache.
 
 ## Raspberry Pi Service

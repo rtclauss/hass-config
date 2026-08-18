@@ -73,9 +73,10 @@ def test_process_payload_suppresses_duplicate_content_hash(tmp_path: Path) -> No
     assert sink.images == []
 
 
-def test_process_payload_suppresses_footer_only_refresh(tmp_path: Path) -> None:
+def test_process_payload_suppresses_update_timestamp_only_refresh(tmp_path: Path) -> None:
     cache = PayloadCache(tmp_path)
     first_data = json.loads(_sample_text())
+    first_data["footer"] = "Updated 13:04"
     first = process_payload(json.dumps(first_data), cache, "owner_suite")
     next_data = {**first_data, "footer": "Updated 13:05"}
     sink = RecordingSink()
@@ -94,6 +95,37 @@ def test_process_payload_suppresses_footer_only_refresh(tmp_path: Path) -> None:
     assert duplicate.content_hash == first.content_hash
     assert sink.images == []
     assert cached["footer"] == first_data["footer"]
+
+
+def test_process_payload_renders_meaningful_footer_change(tmp_path: Path) -> None:
+    cache = PayloadCache(tmp_path)
+    first_data = json.loads(_sample_text())
+    first_data.update(
+        {
+            "display_id": "office",
+            "mode": "guest_info",
+            "accent": "yellow",
+            "footer": "Scan for Guest Wi-Fi",
+        }
+    )
+    first = process_payload(json.dumps(first_data), cache, "office")
+    next_data = {**first_data, "footer": "Wi-Fi details below"}
+    sink = RecordingSink()
+
+    changed = process_payload(
+        json.dumps(next_data),
+        cache,
+        "office",
+        image_sink=sink,
+    )
+    cached = json.loads(cache.payload_path.read_text(encoding="utf-8"))
+
+    assert first.rendered is True
+    assert changed.rendered is True
+    assert changed.reason == "rendered"
+    assert changed.content_hash != first.content_hash
+    assert sink.images == [cache.image_path.read_bytes()]
+    assert cached["footer"] == "Wi-Fi details below"
 
 
 def test_process_payload_ignores_invalid_payload_without_overwriting_cache(tmp_path: Path) -> None:

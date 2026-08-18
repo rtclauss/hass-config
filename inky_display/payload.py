@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import json
+import re
 from typing import Any
 
 
@@ -16,6 +17,7 @@ SUPPORTED_ACCENTS = {"red", "yellow", "black"}
 SUPPORTED_LEVELS = {"normal", "emphasis", "urgent"}
 MAX_ROWS = 4
 MAX_TEXT_LENGTH = 48
+VOLATILE_UPDATE_FOOTER = re.compile(r"^Updated \d{2}:\d{2}$")
 
 
 @dataclass(frozen=True)
@@ -61,8 +63,9 @@ def validate_payload(data: dict[str, Any]) -> DisplayPayload:
 
 
 def payload_hash(payload: DisplayPayload) -> str:
-    # The footer is publish metadata, not a reason to perform an expensive
-    # whole-panel refresh. It is still rendered whenever other content changes.
+    # Suppress only the publisher's volatile timestamp. Other footer text is
+    # guest-facing display content and must participate in duplicate detection.
+    semantic_footer = "" if VOLATILE_UPDATE_FOOTER.fullmatch(payload.footer) else payload.footer
     canonical = json.dumps(
         {
             "schema_version": payload.schema_version,
@@ -72,6 +75,7 @@ def payload_hash(payload: DisplayPayload) -> str:
             "title": payload.title,
             "subtitle": payload.subtitle,
             "sections": payload.sections,
+            "footer": semantic_footer,
         },
         sort_keys=True,
         separators=(",", ":"),
