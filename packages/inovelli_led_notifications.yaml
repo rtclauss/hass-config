@@ -1,36 +1,102 @@
-# Inovelli LED notification scripts backed by the Inovelli LED Settings and Effects
-# Blueprint (blueprints/script/kschlichter/inovelli_led_blueprint.yaml).
-# Targets are selected via the inovelli_switch label — add that label to any new
-# Inovelli switch/dimmer/fan-controller entity to include it automatically.
+# Inovelli LED notification scripts for this installation's Zigbee2MQTT devices.
 #
-# Color note: the blueprint uses named colors; aurora_color 187 maps to "Purple" (190)
-# which is the closest named value. The visual difference is imperceptible at low brightness.
+# The previous multi-integration blueprint embedded ZHA and Z-Wave actions that
+# are unavailable here and therefore produced Home Assistant Repairs even though
+# its runtime selection was intended to use only MQTT. Select active Inovelli
+# MQTT lights/fans directly so restored or unavailable entities are never called.
 
 script:
+  publish_inovelli_z2m_led_effect:
+    alias: Publish Inovelli Z2M LED Effect
+    description: Publish one validated LED effect to every active Inovelli Z2M device.
+    mode: queued
+    max: 10
+    trace:
+      stored_traces: 10
+    fields:
+      color:
+        required: true
+        selector:
+          number:
+            min: 0
+            max: 255
+            mode: box
+      duration:
+        required: true
+        selector:
+          number:
+            min: 0
+            max: 255
+            mode: box
+      effect:
+        required: true
+        selector:
+          text:
+      level:
+        required: true
+        selector:
+          number:
+            min: 0
+            max: 65535
+            mode: box
+    variables:
+      active_inovelli_z2m_entities: >-
+        {{ states
+          | selectattr('domain', 'in', ['light', 'fan'])
+          | selectattr('entity_id', 'is_device_attr', 'manufacturer', 'Inovelli')
+          | selectattr('entity_id', 'in', integration_entities('mqtt'))
+          | rejectattr('state', 'in', ['unknown', 'unavailable'])
+          | rejectattr('attributes.restored', 'eq', true)
+          | map(attribute='entity_id')
+          | unique
+          | sort
+          | list }}
+      effect_payload: >-
+        {{ {'led_effect': {
+          'color': color | int,
+          'duration': duration | int,
+          'effect': effect,
+          'level': level | int
+        }} | tojson }}
+    sequence:
+      - repeat:
+          for_each: "{{ active_inovelli_z2m_entities }}"
+          sequence:
+            - action: mqtt.publish
+              data:
+                topic: >-
+                  zigbee2mqtt/{{ state_attr(repeat.item, 'friendly_name') }}/set
+                payload: "{{ effect_payload }}"
+
   # Aurora effect shown on all Inovelli switches after a configuration reset.
-  # Runs for 10 minutes then auto-clears. Skipped when the bed is occupied
-  # (caller is responsible for the occupancy condition check before calling).
+  # Runs for 10 minutes then auto-clears. The reset caller skips this while the
+  # bed is occupied. Values preserve the last expanded blueprint payload.
   inovelli_led_aurora_notification:
-    use_blueprint:
-      path: kschlichter/inovelli_led_blueprint.yaml
-      input:
-        label:
-          - inovelli_switch
-        effect: Aurora
-        # brightness 5.1 × 10 = 51 on the Z2M 0-100 level scale
-        brightness: 5.1
-        color: Purple
-        duration: 10 Minutes
+    alias: Inovelli LED Aurora Notification
+    mode: parallel
+    max: 10
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: script.publish_inovelli_z2m_led_effect
+        data:
+          color: 190
+          duration: 70
+          effect: aurora
+          level: 130
 
   # Clears any active LED effect on every Inovelli switch (e.g. trip mode).
-    trace:
-      stored_traces: 10
+  # Values preserve the last expanded blueprint payload.
   inovelli_led_clear_all_effects:
-    use_blueprint:
-      path: kschlichter/inovelli_led_blueprint.yaml
-      input:
-        label:
-          - inovelli_switch
-        effect: Clear Effect
+    alias: Clear All Inovelli LED Effects
+    mode: parallel
+    max: 10
     trace:
       stored_traces: 10
+    sequence:
+      - action: script.publish_inovelli_z2m_led_effect
+        data:
+          color: 0
+          duration: 0
+          effect: clear_effect
+          level: 281
