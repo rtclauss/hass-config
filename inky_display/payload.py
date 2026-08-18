@@ -61,6 +61,8 @@ def validate_payload(data: dict[str, Any]) -> DisplayPayload:
 
 
 def payload_hash(payload: DisplayPayload) -> str:
+    # The footer is publish metadata, not a reason to perform an expensive
+    # whole-panel refresh. It is still rendered whenever other content changes.
     canonical = json.dumps(
         {
             "schema_version": payload.schema_version,
@@ -70,7 +72,6 @@ def payload_hash(payload: DisplayPayload) -> str:
             "title": payload.title,
             "subtitle": payload.subtitle,
             "sections": payload.sections,
-            "footer": payload.footer,
         },
         sort_keys=True,
         separators=(",", ":"),
