@@ -401,24 +401,20 @@ automation:
         condition: state
         entity_id: input_boolean.morning_routine
         state: "off"
-      - or:
-          - alias: "weekday morning time"
-            condition: time
-            after: "05:00:00"
-            before: "10:30:00"
-            weekday:
-              - "mon"
-              - "tue"
-              - "wed"
-              - "thu"
-              - "fri"
-          - alias: "weekend morning time"
-            condition: time
-            after: "07:00:00"
-            before: "14:00:00"
-            weekday:
-              - "sat"
-              - "sun"
+      - alias: >-
+          Only the real alarm's wake window starts music — a bathroom trip
+          before the alarm (e.g. waking early and going back to bed) must not
+          trigger it
+        condition: template
+        value_template: >-
+          {% set is_workday = is_state('binary_sensor.workday_sensor', 'on') %}
+          {% set alarm_entity = 'input_datetime.weekday_alarm' if is_workday else 'input_datetime.weekend_alarm' %}
+          {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') if is_workday else is_state('input_boolean.weekend_alarm_on', 'on') %}
+          {% set alarm_timestamp = state_attr(alarm_entity, 'timestamp') | float(0) %}
+          {% set wake_window_seconds = 90 * 60 %}
+          {{ alarm_enabled and alarm_timestamp > 0
+             and now().timestamp() >= alarm_timestamp
+             and now().timestamp() <= (alarm_timestamp + wake_window_seconds) }}
     action:
       - variables:
           bathroom_was_playing: "{{ is_state('media_player.ma_bathroom', 'playing') }}"

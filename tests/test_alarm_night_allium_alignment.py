@@ -215,16 +215,26 @@ def test_bathroom_morning_routine_requires_time_window_and_fresh_state() -> None
         "entity_id: binary_sensor.bayesian_bed_occupancy",
         'state: "off"',
         "entity_id: input_boolean.morning_routine",
-        'after: "05:00:00"',
-        'before: "10:30:00"',
-        '- "mon"',
-        '- "fri"',
-        'after: "07:00:00"',
-        'before: "14:00:00"',
-        '- "sat"',
-        '- "sun"',
+        "input_datetime.weekday_alarm",
+        "input_datetime.weekend_alarm",
+        "input_boolean.weekday_alarm_on",
+        "input_boolean.weekend_alarm_on",
+        "wake_window_seconds = 90 * 60",
     ):
         assert token in block
+
+
+def test_bathroom_morning_routine_only_fires_within_the_real_alarm_window() -> None:
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "now().timestamp() >= alarm_timestamp" in block
+    assert "now().timestamp() <= (alarm_timestamp + wake_window_seconds)" in block
+    assert "alarm_enabled and alarm_timestamp > 0" in block
+    # The old fixed 5:00-10:30 / 7:00-14:00 windows must be gone — a bathroom
+    # trip before today's alarm (e.g. waking early, going back to bed) should
+    # no longer be enough on its own to start wake-up music.
+    assert 'after: "05:00:00"' not in block
+    assert 'before: "10:30:00"' not in block
 
 
 def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:

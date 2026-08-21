@@ -44,8 +44,7 @@ external entity WakeupContext {
     bathroom_occupied: Boolean
     guest_mode_enabled: Boolean
     within_workday_owner_suite_wake_window: Boolean
-    within_weekday_bathroom_window: Boolean
-    within_weekend_bathroom_window: Boolean
+    within_alarm_wake_window: Boolean
     owner_suite_lamps_on: Boolean
     owner_suite_recent_bathroom_activity: Boolean
     owner_suite_recent_bedroom_activity: Boolean
@@ -401,7 +400,7 @@ rule StartBathroomMorningRoutine {
     requires: wakeup_context.bathroom_occupied
     requires: not wakeup_context.resident_in_bed
     requires: not wakeup.morning_routine_started
-    requires: wakeup_context.within_weekday_bathroom_window or wakeup_context.within_weekend_bathroom_window
+    requires: wakeup_context.within_alarm_wake_window
     ensures: wakeup.morning_routine_started = true
     ensures: MorningAudioRequested(morning_playlist, bathroom)
     ensures: BathroomWakeupVolumeStrategyChosen(gentle_fade_in_or_existing_boost)
@@ -409,6 +408,13 @@ rule StartBathroomMorningRoutine {
         if calendar.today_is_workday:
             owner_suite.switch_leds_off = false
         -- weekends: LED bars remain off; morning routine audio still plays
+    @guidance
+        -- The window is anchored to the resident's own scheduled alarm
+        -- (weekday or weekend, whichever applies today), not a fixed clock
+        -- range: it opens at the enabled alarm's time and stays open for 90
+        -- minutes after. A bathroom trip before the alarm — e.g. waking
+        -- early and going back to bed — must not start wake-up music, and
+        -- if no alarm is enabled for today there is no window at all.
 }
 
 rule SnoozeWakeup {
