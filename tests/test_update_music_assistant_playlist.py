@@ -76,6 +76,9 @@ def test_append_item_to_playlist_config_rejects_unknown_targets(media_player_con
         "spotify:playlist:37i9dQZF1E37INBdbw9l8Q",
         "spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD",
         "https://open.spotify.com/playlist/37i9dQZEVXcMDffrPenJPl",
+        # Release Radar family (Codex P2 on #679) — same personalized-
+        # resolution problem as Discover Weekly, one letter apart.
+        "spotify:playlist:37i9dQZEVXbMDffrPenJPl",
     ],
 )
 def test_append_item_to_playlist_config_rejects_personalized_spotify_ids(
