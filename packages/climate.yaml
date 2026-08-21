@@ -815,13 +815,14 @@ sensor:
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative default House Temp Change
-
-  - platform: derivative
-    source: sensor.average_house_temp
-    # source: sensor.glycol_thermostat_temperature
-    name: Derivative 5-5 minutes House Temp Change
     round: 5
-    time_window: "00:5:00"
+    # average_house_temp is a min_max mean over 15 sensors and can emit
+    # several state changes milliseconds apart when multiple sources report
+    # in the same poll burst. Without a time_window the platform divides by
+    # that near-zero elapsed time (issue #973), producing spikes into the
+    # thousands of deg F/h. A window forces the windowed-slope calculation
+    # instead of a raw two-point instantaneous derivative.
+    time_window: "00:05:00"
 
   - platform: derivative
     source: sensor.average_house_temp
@@ -834,29 +835,26 @@ sensor:
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative 10-10 minutes House Temp Change
+    # Recommended for day-to-day use (issue #973): 12h of live history put
+    # this window's stdev at 0.59 deg F/h (median 0.18) vs. 1.6 for the
+    # 2.5-minute window — tight enough to be a believable indoor rate of
+    # change without the multi-hour lag of the 30/60-minute windows.
     round: 5
     time_window: "00:10:00"
 
   - platform: derivative
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
-    name: Derivative 5-10 minutes House Temp Change
-    round: 5
-    time_window: "00:05:00"
-
-  - platform: derivative
-    source: sensor.average_house_temp
-    # source: sensor.glycol_thermostat_temperature
     name: Derivative 30 minutes House Temp Change
     round: 5
-    time_window: "00:15:00"
+    time_window: "00:30:00"
 
   - platform: derivative
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative 60 minutes House Temp Change
     round: 5
-    time_window: "00:30:00"
+    time_window: "01:00:00"
 
   - platform: history_stats
     name: Heating Today
