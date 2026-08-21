@@ -227,9 +227,19 @@ def test_bathroom_morning_routine_requires_time_window_and_fresh_state() -> None
 def test_bathroom_morning_routine_only_fires_within_the_real_alarm_window() -> None:
     block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 
-    assert "now().timestamp() >= alarm_timestamp" in block
-    assert "now().timestamp() <= (alarm_timestamp + wake_window_seconds)" in block
-    assert "alarm_enabled and alarm_timestamp > 0" in block
+    # input_datetime.weekday_alarm/weekend_alarm are has_date: false, so their
+    # timestamp attribute is seconds since midnight (confirmed live:
+    # 07:30:00 -> 27000), not a Unix epoch value. Comparing that against
+    # now().timestamp() (~1.8 billion) made the window condition permanently
+    # false (Codex P1 on #972) — must compare seconds-since-midnight against
+    # seconds-since-midnight, matching the pattern workday.yaml already uses
+    # for the same alarm helpers (#939).
+    assert "now().timestamp() >=" not in block
+    assert "now().timestamp() <=" not in block
+    assert "now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second" in block
+    assert "now_seconds_since_midnight >= alarm_seconds_since_midnight" in block
+    assert "now_seconds_since_midnight <= (alarm_seconds_since_midnight + wake_window_seconds)" in block
+    assert "alarm_enabled and alarm_seconds_since_midnight > 0" in block
     # The old fixed 5:00-10:30 / 7:00-14:00 windows must be gone — a bathroom
     # trip before today's alarm (e.g. waking early, going back to bed) should
     # no longer be enough on its own to start wake-up music.
