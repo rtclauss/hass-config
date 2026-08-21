@@ -5,6 +5,7 @@ from pathlib import Path
 
 CLIMATE_PATH = Path(__file__).resolve().parents[1] / "packages" / "climate.yaml"
 WATER_SOFTENER_PATH = Path(__file__).resolve().parents[1] / "packages" / "water_softener.yaml"
+DASHBOARD_PATH = Path(__file__).resolve().parents[1] / ".storage" / "lovelace.ryan_new_mushroom"
 
 
 def _derivative_block(path: Path, name: str) -> str:
@@ -64,6 +65,18 @@ def test_house_temp_derivative_window_labels_match_their_time_window() -> None:
         assert f"time_window: {expected_window}" in block, (
             f"{name} time_window does not match its stated name"
         )
+
+
+def test_dashboard_does_not_reference_the_removed_duplicate_sensors() -> None:
+    # Codex P2 on #973/#975: the Testing dashboard had a history-graph card
+    # for each of "5-5 minutes" and "5-10 minutes" (now-deleted duplicates).
+    # Left in place they'd render as unavailable-entity cards after reload.
+    text = DASHBOARD_PATH.read_text(encoding="utf-8")
+    assert "sensor.derivative_5_5_minutes_house_temp_change" not in text
+    assert "sensor.derivative_5_10_minutes_house_temp_change" not in text
+    # The surviving sensors' cards should still be there.
+    assert "sensor.derivative_default_house_temp_change" in text
+    assert "sensor.derivative_10_10_minutes_house_temp_change" in text
 
 
 def test_water_softener_derivative_sensors_all_set_a_time_window() -> None:
