@@ -286,12 +286,17 @@ REST resources.
 
 The footer uses 24-hour local time, for example `Updated 21:42`. This timestamp
 is generated only when the payload is published. Do not add `sensor.time` or a
-minute-level clock trigger for this field.
+minute-level clock trigger for this field. The Pi excludes footer-only changes
+that match the publisher's `Updated HH:MM` timestamp from duplicate detection,
+so a new timestamp reaches the panel only when other display content also
+changes. Meaningful footer copy, including the office guest Wi-Fi prompt,
+remains part of the content hash and refreshes the panel when changed.
 
 The Pi service preserves the last cached `Weather` and `Dest Wx` rows when a new
-payload marks those rows as `unknown` or `unavailable`. Other rows and the
-footer can still update, but stale weather source failures should not replace a
-previously useful weather value on the display.
+payload marks those rows as `unknown` or `unavailable`. Other rows can still
+update, and their next render also carries the current footer, but stale weather
+source failures should not replace a previously useful weather value on the
+display.
 
 Manual publish from Home Assistant Developer Tools:
 
@@ -439,7 +444,9 @@ The service writes:
 - `last_image.png`
 - `last_hash.txt`
 
-Duplicate payload hashes are ignored and do not refresh the physical panel.
+Duplicate semantic-content hashes are ignored and do not refresh the physical
+panel. Footer-only `Updated HH:MM` timestamp changes are deliberately treated as
+duplicates; other footer changes remain meaningful display content.
 Invalid payloads are logged and do not overwrite the last good cache.
 
 ## Raspberry Pi Service
