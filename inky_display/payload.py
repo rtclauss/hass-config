@@ -18,6 +18,9 @@ SUPPORTED_LEVELS = {"normal", "emphasis", "urgent"}
 MAX_ROWS = 4
 MAX_TEXT_LENGTH = 48
 VOLATILE_UPDATE_FOOTER = re.compile(r"^Updated \d{2}:\d{2}$")
+# Distinct from any real footer text (including "") so that clearing the
+# footer after a volatile timestamp is never mistaken for a duplicate.
+_VOLATILE_FOOTER_SENTINEL = "\x00volatile-footer\x00"
 
 
 @dataclass(frozen=True)
@@ -65,7 +68,15 @@ def validate_payload(data: dict[str, Any]) -> DisplayPayload:
 def payload_hash(payload: DisplayPayload) -> str:
     # Suppress only the publisher's volatile timestamp. Other footer text is
     # guest-facing display content and must participate in duplicate detection.
-    semantic_footer = "" if VOLATILE_UPDATE_FOOTER.fullmatch(payload.footer) else payload.footer
+    # A sentinel (not "") stands in for the timestamp so an omitted/blank
+    # footer remains distinguishable from a suppressed one — otherwise
+    # clearing the footer after a timestamp was rendered would hash the same
+    # as no change at all, leaving the stale timestamp on the panel forever.
+    semantic_footer = (
+        _VOLATILE_FOOTER_SENTINEL
+        if VOLATILE_UPDATE_FOOTER.fullmatch(payload.footer)
+        else payload.footer
+    )
     canonical = json.dumps(
         {
             "schema_version": payload.schema_version,

@@ -128,6 +128,34 @@ def test_process_payload_renders_meaningful_footer_change(tmp_path: Path) -> Non
     assert cached["footer"] == "Wi-Fi details below"
 
 
+def test_process_payload_renders_when_volatile_footer_is_cleared(tmp_path: Path) -> None:
+    # Codex P2: both a suppressed "Updated HH:MM" timestamp and a genuinely
+    # blank footer mapped to the same "" semantic value, so clearing the
+    # footer after a timestamp was rendered was misclassified as a
+    # duplicate and the stale timestamp stuck on the panel and in the cache.
+    cache = PayloadCache(tmp_path)
+    first_data = json.loads(_sample_text())
+    first_data["footer"] = "Updated 13:04"
+    first = process_payload(json.dumps(first_data), cache, "owner_suite")
+    next_data = {**first_data, "footer": ""}
+    sink = RecordingSink()
+
+    cleared = process_payload(
+        json.dumps(next_data),
+        cache,
+        "owner_suite",
+        image_sink=sink,
+    )
+    cached = json.loads(cache.payload_path.read_text(encoding="utf-8"))
+
+    assert first.rendered is True
+    assert cleared.rendered is True
+    assert cleared.reason == "rendered"
+    assert cleared.content_hash != first.content_hash
+    assert sink.images == [cache.image_path.read_bytes()]
+    assert cached["footer"] == ""
+
+
 def test_process_payload_ignores_invalid_payload_without_overwriting_cache(tmp_path: Path) -> None:
     cache = PayloadCache(tmp_path)
     first = process_payload(_sample_text(), cache, "owner_suite")
