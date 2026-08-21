@@ -103,15 +103,31 @@ class RoomTempPredictor(hass.Hass):
         return sum(slopes) / len(slopes) if slopes else 0.0
 
     def _history_slope(self, entity_id, minutes=30):
-        """°F/min slope from recent history (no numpy — plain least squares)."""
+        """°F/min slope from recent history (no numpy — plain least squares).
+
+        Regresses against actual elapsed minutes from the first sample so the
+        result is stable regardless of how densely the sensor reports.
+        """
         try:
             end = datetime.now(timezone.utc)
             start = end - timedelta(minutes=minutes)
             hist = self.get_history(entity_id=entity_id, start_time=start, end_time=end)
             if not hist or not hist[0]:
                 return 0.0
-            pts = [(i, float(s["state"])) for i, s in enumerate(hist[0])
-                   if s.get("state") not in (None, "unknown", "unavailable", "")]
+            t0 = None
+            pts = []
+            for s in hist[0]:
+                if s.get("state") in (None, "unknown", "unavailable", ""):
+                    continue
+                try:
+                    ts = datetime.fromisoformat(
+                        s["last_changed"].replace("Z", "+00:00")
+                    ).timestamp()
+                    if t0 is None:
+                        t0 = ts
+                    pts.append(((ts - t0) / 60.0, float(s["state"])))
+                except Exception:
+                    continue
             if len(pts) < 2:
                 return 0.0
             n = len(pts)
@@ -122,8 +138,7 @@ class RoomTempPredictor(hass.Hass):
             denom = n * sxx - sx * sx
             if denom == 0:
                 return 0.0
-            slope_per_step = (n * sxy - sx * sy) / denom
-            return slope_per_step * (n / minutes)  # per-step -> per-minute
+            return (n * sxy - sx * sy) / denom  # already °F/min
         except Exception:
             return 0.0
 

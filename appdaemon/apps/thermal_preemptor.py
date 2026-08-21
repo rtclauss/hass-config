@@ -130,12 +130,19 @@ class ThermalPreemptor(hass.Hass):
     # ------------------------------------------------------------------
 
     def _control_loop(self, kwargs):
-        if self.get_state(self.enable_switch) != "on":
-            return
+        enabled = self.get_state(self.enable_switch) == "on"
+        window_open = self.get_state(self.window_gate) == "on"
+
+        # If a kill-switch or window transition occurred while a hold is active,
+        # cancel it immediately rather than waiting for the revert timer.
         if self.active_hold is not None:
-            # Already preempting — let the revert timer clear it.
+            if not enabled or window_open:
+                self._revert({"room": self.active_hold.get("reason", "unknown")})
             return
-        if self.get_state(self.window_gate) == "on":
+
+        if not enabled:
+            return
+        if window_open:
             return
 
         mode = self.get_state(self.climate_entity)
@@ -266,6 +273,7 @@ class ThermalPreemptor(hass.Hass):
 
     def _clear_persisted_hold(self):
         self.call_service("input_boolean/turn_off", entity_id=self.hold_active_switch)
+        self.call_service("input_text/set_value", entity_id=self.hold_reason_text, value="")
 
     def _reconcile_hold_on_start(self):
         """Recover a hold the helpers say was active when the app last stopped.
@@ -274,6 +282,11 @@ class ThermalPreemptor(hass.Hass):
         the thermostat keeps the shifted setpoint — and the now-clear re-entry
         guard lets the next loop shift again from the already-shifted value.
         """
+        if self.get_state(self.hold_active_switch) not in ("on", "off"):
+            # Entity still in 'unknown'/'unavailable' — HA hasn't restored state
+            # yet. Defer reconcile to give it time to settle.
+            self.run_in(self._reconcile_hold_on_start, 10)
+            return
         if self.get_state(self.hold_active_switch) != "on":
             return
 
@@ -298,7 +311,7 @@ class ThermalPreemptor(hass.Hass):
             )
             return
 
-        remaining = int(deadline_ts - now_ts)
+        remaining = max(1, int(deadline_ts - now_ts))
         handle = self.run_in(self._revert, remaining, room=reason)
         self.active_hold = {
             "revert_handle": handle,
