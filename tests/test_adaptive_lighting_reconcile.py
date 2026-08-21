@@ -186,7 +186,7 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "event: start" in block
     assert 'delay: "00:00:30"' in block
     assert "action: adaptive_lighting.change_switch_settings" in block
-    assert "kitchen, den, basement, dining-room, owner-suite, and vanity tuning survive" in block
+    assert "kitchen, laundry-room, den, basement, dining-room, owner-suite, and vanity" in block
     assert "entity_id: switch.adaptive_lighting_owner_suite" in block
     assert "use_defaults: current" in block
     assert "include_config_in_attributes: true" in block
@@ -271,6 +271,24 @@ def test_kitchen_adaptive_lighting_reconciles_bright_scene_safe_settings() -> No
     assert "initial_transition: 1" in block
     assert "transition: 3" in block
     assert "detect_non_ha_changes: false" in block
+
+
+def test_laundry_adaptive_lighting_reconciles_fast_scene_safe_settings() -> None:
+    settings = _adaptive_lighting_settings_block(
+        "switch.adaptive_lighting_laundry_room"
+    )
+
+    for token in (
+        "use_defaults: current",
+        "include_config_in_attributes: true",
+        "take_over_control: true",
+        "adapt_only_on_bare_turn_on: true",
+        "only_once: true",
+        "initial_transition: 1",
+        "transition: 2",
+        "detect_non_ha_changes: false",
+    ):
+        assert token in settings
 
 
 def test_den_adaptive_lighting_reconciles_scene_safe_settings_for_media_use() -> None:
