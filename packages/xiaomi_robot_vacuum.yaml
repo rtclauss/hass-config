@@ -529,6 +529,13 @@ script:
                 the Dreame integration before the next manual or app clean.
           - stop: X40 CleanGenius did not restore to Deep cleaning
             error: true
+        else:
+          # A prior run may have left x40_cleangenius_restore_failed active;
+          # this run verified the restore, so clear it. dismiss is a no-op
+          # if no such notification exists (Codex P2 on #960).
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: x40_cleangenius_restore_failed
 
   x40_ultra_wait_until_docked:
     alias: "X40 Ultra Wait Until Docked"
