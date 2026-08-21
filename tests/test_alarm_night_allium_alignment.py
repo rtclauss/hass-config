@@ -247,6 +247,23 @@ def test_bathroom_morning_routine_only_fires_within_the_real_alarm_window() -> N
     assert 'before: "10:30:00"' not in block
 
 
+def test_bathroom_morning_routine_alarm_window_includes_special_meeting() -> None:
+    # Codex P2 on #972: alarm_wake_up's meeting-alarm branch can wake the
+    # resident via input_datetime.next_work_meeting earlier than the
+    # weekday alarm when input_boolean.special_meeting is on. The window
+    # must consider both candidates and use the earliest, mirroring
+    # workday_owner_suite_wake_transition_from_morning_activity (#939).
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    for token in (
+        "input_datetime.next_work_meeting",
+        "input_boolean.special_meeting",
+        "select('number') | reject('equalto', 0) | list",
+        "candidates | min if candidates else 0",
+    ):
+        assert token in block
+
+
 def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:
     block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 

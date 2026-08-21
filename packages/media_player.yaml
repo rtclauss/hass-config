@@ -417,9 +417,26 @@ automation:
              same alarm helpers (workday_owner_suite_wake_transition_from_
              morning_activity, #939). #}
           {% set is_workday = is_state('binary_sensor.workday_sensor', 'on') %}
-          {% set alarm_entity = 'input_datetime.weekday_alarm' if is_workday else 'input_datetime.weekend_alarm' %}
-          {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') if is_workday else is_state('input_boolean.weekend_alarm_on', 'on') %}
-          {% set alarm_seconds_since_midnight = state_attr(alarm_entity, 'timestamp') | float(0) %}
+          {% if is_workday %}
+            {# A special meeting can wake the resident earlier than the
+               weekday alarm (alarm_wake_up's meeting-alarm branch, gated on
+               input_boolean.special_meeting) — mirrors the candidate-
+               selection pattern workday_owner_suite_wake_transition_from_
+               morning_activity already uses for the same helpers (#939),
+               so a bathroom trip after that earlier real wakeup isn't
+               rejected for being before the weekday alarm (Codex P2). #}
+            {% set candidates = [
+                 state_attr('input_datetime.weekday_alarm', 'timestamp')
+                   if is_state('input_boolean.weekday_alarm_on', 'on') else none,
+                 state_attr('input_datetime.next_work_meeting', 'timestamp')
+                   if is_state('input_boolean.special_meeting', 'on') else none
+               ] | select('number') | reject('equalto', 0) | list %}
+            {% set alarm_enabled = candidates | length > 0 %}
+            {% set alarm_seconds_since_midnight = candidates | min if candidates else 0 %}
+          {% else %}
+            {% set alarm_enabled = is_state('input_boolean.weekend_alarm_on', 'on') %}
+            {% set alarm_seconds_since_midnight = state_attr('input_datetime.weekend_alarm', 'timestamp') | float(0) %}
+          {% endif %}
           {% set now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second %}
           {% set wake_window_seconds = 90 * 60 %}
           {{ alarm_enabled and alarm_seconds_since_midnight > 0
