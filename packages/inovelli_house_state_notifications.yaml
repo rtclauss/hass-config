@@ -1,0 +1,132 @@
+# High-traffic Inovelli LED bars show the highest-priority active house-state
+# signal. Effects are applied through the repository's supported Inovelli
+# blueprint so device-specific MQTT payloads stay centralized there.
+
+script:
+  # Priority 1: an actionable exterior-door security state.
+  inovelli_house_state_front_door_unlocked:
+    use_blueprint:
+      path: kschlichter/inovelli_led_blueprint.yaml
+      input:
+        entity: &house_state_led_targets
+          - light.hall_transition_switch
+          - light.laundry_wall_switch
+          - light.garage_overhead_switch
+        effect: Pulse
+        brightness: 4
+        color: Red
+        duration: Forever
+    trace:
+      stored_traces: 10
+
+  # Priority 2: the garage is open or moving open.
+  inovelli_house_state_garage_open:
+    use_blueprint:
+      path: kschlichter/inovelli_led_blueprint.yaml
+      input:
+        entity: *house_state_led_targets
+        effect: Open Close
+        brightness: 3
+        color: Orange
+        duration: Forever
+    trace:
+      stored_traces: 10
+
+  # Priority 3: mail is waiting to be collected.
+  inovelli_house_state_mail_waiting:
+    use_blueprint:
+      path: kschlichter/inovelli_led_blueprint.yaml
+      input:
+        entity: *house_state_led_targets
+        effect: Solid
+        brightness: 2
+        color: Cyan
+        duration: Forever
+    trace:
+      stored_traces: 10
+
+  inovelli_house_state_clear:
+    use_blueprint:
+      path: kschlichter/inovelli_led_blueprint.yaml
+      input:
+        entity: *house_state_led_targets
+        effect: Clear Effect
+    trace:
+      stored_traces: 10
+
+  apply_inovelli_house_state_notification:
+    alias: Apply Inovelli house-state notification
+    description: >
+      Show the highest-priority active door, garage, or mail signal on the
+      selected high-traffic Inovelli LED bars. Trip mode owns all LEDs while
+      active, so this coordinator exits without changing them during a trip.
+    mode: restart
+    trace:
+      stored_traces: 10
+    sequence:
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "off"
+      - choose:
+          - alias: Front door needs attention
+            conditions:
+              - condition: state
+                entity_id: lock.front_door_lock
+                state:
+                  - unlocked
+                  - unlocking
+                  - open
+                  - opening
+                  - jammed
+            sequence:
+              - action: script.inovelli_house_state_front_door_unlocked
+          - alias: Garage door needs attention
+            conditions:
+              - condition: state
+                entity_id: cover.garage_door
+                state:
+                  - open
+                  - opening
+            sequence:
+              - action: script.inovelli_house_state_garage_open
+          - alias: Mail is waiting
+            conditions:
+              - condition: state
+                entity_id: input_boolean.mail_delivered
+                state: "on"
+            sequence:
+              - action: script.inovelli_house_state_mail_waiting
+        default:
+          - action: script.inovelli_house_state_clear
+
+automation:
+  - id: sync_inovelli_house_state_notification
+    alias: Sync Inovelli house-state notification
+    description: >
+      Re-evaluate the deterministic house-state LED priority whenever a source
+      changes or Home Assistant starts.
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id:
+          - lock.front_door_lock
+          - cover.garage_door
+          - input_boolean.mail_delivered
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "off"
+      - trigger: state
+        entity_id: script.reset_inovelli_switches
+        to: "off"
+        id: reset_completed
+    actions:
+      - if:
+          - condition: trigger
+            id: reset_completed
+        then:
+          - delay: "00:10:00"
+      - action: script.apply_inovelli_house_state_notification
+    mode: restart
+    trace:
+      stored_traces: 10
