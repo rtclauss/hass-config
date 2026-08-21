@@ -1122,7 +1122,17 @@ template:
              recent_rate silently stayed 0 forever and this blend was pure
              dead weight (issue #977). Swapped to the already-audited
              derivative sensor (deg F/hour, #973), converted to deg F/min. #}
-          {% set recent_rate = (states('sensor.derivative_10_10_minutes_house_temp_change') | float(default=0)) / 60 %}
+          {% set raw_recent_rate = (states('sensor.derivative_10_10_minutes_house_temp_change') | float(default=0)) / 60 %}
+          {# Codex P2 on #973/#975: time_window bounds max sample age, not a
+             minimum — right after an HA restart/reload, two samples
+             milliseconds apart can still dominate the windowed derivative
+             before real history accumulates, reproducing a momentary spike.
+             Clamped to a bound well above the fastest real historical rate
+             this model ever uses (+/-0.016 deg F/min) but far below any
+             burst artifact, so a spike can influence the blend by at most
+             this much instead of dominating it outright. #}
+          {% set recent_rate_sanity_bound = 0.05 %}
+          {% set recent_rate = [[raw_recent_rate, -recent_rate_sanity_bound] | max, recent_rate_sanity_bound] | min %}
 
           {% if action == 'heating' %}
             {% if is_state('binary_sensor.ecobee_aux', 'on') %}

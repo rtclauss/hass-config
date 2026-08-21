@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 CLIMATE_PATH = Path(__file__).resolve().parents[1] / "packages" / "climate.yaml"
+DASHBOARD_PATH = Path(__file__).resolve().parents[1] / ".storage" / "lovelace.ryan_new_mushroom"
 
 
 def test_dead_change_rate_statistics_chain_is_removed() -> None:
@@ -50,3 +51,35 @@ def test_ecobee_modeled_rate_uses_the_audited_derivative_sensor() -> None:
         "states('sensor.derivative_10_10_minutes_house_temp_change') | float(default=0)) / 60"
         in block
     )
+
+
+def test_ecobee_modeled_rate_clamps_recent_rate_to_a_sane_bound() -> None:
+    # Codex P2 on #973/#975: time_window bounds max sample age, not a
+    # minimum, so a burst of samples milliseconds apart right after an HA
+    # restart/reload can still dominate the windowed derivative before real
+    # history accumulates. recent_rate must be clamped so a spike can only
+    # ever nudge the blend by a bounded amount, not dominate it.
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+
+    marker = "unique_id: ecobee_modeled_rate_deg_per_min"
+    start = text.index(marker)
+    end = text.index("name: ecobee_modeled_rate_deg_per_min", start)
+    block = text[start:end]
+
+    assert "recent_rate_sanity_bound = 0.05" in block
+    assert (
+        "recent_rate = [[raw_recent_rate, -recent_rate_sanity_bound] | max, "
+        "recent_rate_sanity_bound] | min"
+        in block
+    )
+
+
+def test_dashboard_does_not_reference_the_removed_dead_rate_sensors() -> None:
+    # Codex P2 on #977: the Testing dashboard had a "Rate of Temp Change"
+    # history-graph card pointed at the three now-deleted dead sensors.
+    # Left in place it would render as an unavailable-entity graph after
+    # the next config reload.
+    text = DASHBOARD_PATH.read_text(encoding="utf-8")
+    assert "sensor.rate_of_house_temp_change_5m" not in text
+    assert "sensor.rate_of_house_temp_change_30m" not in text
+    assert "sensor.rate_of_house_temp_change_1h" not in text
