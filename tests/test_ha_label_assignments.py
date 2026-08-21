@@ -401,6 +401,88 @@ def test_renamed_automation_is_resolved_to_its_live_entity_id_by_unique_id() -> 
     assert find_missing_registry_objects(desired, live) == {}
 
 
+def test_unique_id_reused_across_domains_resolves_each_to_its_own_entity() -> None:
+    # Codex P1 on #903/#906: unique_id uniqueness is enforced per-domain, not
+    # globally, so the same unique_id string ("tv_paused") can legitimately
+    # exist on both an automation and a scene. Keying the live lookup by
+    # unique_id alone collapsed both onto whichever domain sorted later
+    # (scene.tv_paused), so the automation's manifest row was mislabeled onto
+    # the scene entity instead of its own.
+    manifest = {
+        "behaviors": [
+            {
+                "kind": "automation",
+                "entity_id": "automation.tv_paused",
+                "unique_id": "tv_paused",
+                "labels": ["media_control"],
+            },
+            {
+                "kind": "scene",
+                "entity_id": "scene.tv_paused",
+                "unique_id": "tv_paused",
+                "labels": ["scene_definition"],
+            },
+        ],
+        "helpers": [],
+        "area_assignments": {},
+        "rules": [],
+    }
+    live = {
+        "entities": [
+            {"entity_id": "automation.tv_paused", "unique_id": "tv_paused", "labels": []},
+            {"entity_id": "scene.tv_paused", "unique_id": "tv_paused", "labels": []},
+        ],
+        "devices": [],
+        "areas": [],
+    }
+
+    desired = compile_assignments(manifest, live)
+
+    assert desired["entity"]["automation.tv_paused"] == {"media_control"}
+    assert desired["entity"]["scene.tv_paused"] == {"scene_definition"}
+
+
+def test_audit_required_entities_resolve_renamed_automation_by_unique_id() -> None:
+    # Codex P2 on #903/#906: compile_assignments resolved a renamed
+    # automation to its live entity via unique_id, but audit_assignments'
+    # required_entities was built from the raw slug-derived manifest ID, so
+    # a correctly-applied assignment was still reported as a missing entity.
+    manifest = {
+        "behaviors": [
+            {
+                "kind": "automation",
+                "entity_id": "automation.restart_appdaemon_on_ha_startup_or_websocket_reconnect_failure",
+                "unique_id": "restart_appdaemon_on_ha_startup",
+                "labels": ["maintenance"],
+            }
+        ],
+        "helpers": [],
+        "area_assignments": {},
+        "rules": [],
+        "retired_labels": [],
+        "extension_labels": [],
+        "minimum_items_for_extension": 0,
+    }
+    live = {
+        "entities": [
+            {
+                "entity_id": "automation.restart_appdaemon_on_ha_startup",
+                "unique_id": "restart_appdaemon_on_ha_startup",
+                "labels": ["maintenance"],
+            }
+        ],
+        "devices": [],
+        "areas": [],
+    }
+
+    result = audit_assignments(manifest, live)
+
+    assert "automation.restart_appdaemon_on_ha_startup_or_websocket_reconnect_failure" not in (
+        result["missing_entities"]
+    )
+    assert result["missing_entities"] == []
+
+
 def test_behavior_not_yet_in_registry_still_reported_missing() -> None:
     # A brand-new automation absent from the live registry keeps its slug and is
     # correctly flagged, so apply refuses rather than silently skipping it.
