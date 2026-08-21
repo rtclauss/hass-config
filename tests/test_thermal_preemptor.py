@@ -35,6 +35,11 @@ module = _load_preemptor_module()
 
 
 def _app(mode, attrs, predictions, margin=0.5):
+    # Default to "on schedule" (preset_mode present in preset_modes) so
+    # existing callers that don't care about hold-detection keep exercising
+    # the normal preemption path; pass preset_mode/preset_modes explicitly
+    # to test the hold-skip behavior itself.
+    attrs = {"preset_mode": "Home Workday", "preset_modes": ["Home Workday"], **attrs}
     app = module.ThermalPreemptor.__new__(module.ThermalPreemptor)
     app.climate_entity = "climate.my_ecobee"
     app.enable_switch = "input_boolean.thermal_preemptor_enabled"
@@ -196,6 +201,48 @@ def test_single_setpoint_cool_mode_is_unaffected_by_the_range_clamp() -> None:
     call = _set_temperature_call(app)
     assert call is not None
     assert call.kwargs["temperature"] == 69.0
+
+
+# --------------------------------------------------------------------------
+# Pre-existing hold preservation (Codex P2 on #864)
+# --------------------------------------------------------------------------
+
+
+def test_skips_preemption_when_a_pre_existing_hold_is_already_active() -> None:
+    # If the thermostat is already under a manual/app hold when the control
+    # loop runs, starting our own hold and later resuming the schedule on
+    # revert would silently discard whatever the user set. preset_mode
+    # outside preset_modes indicates a hold is already active.
+    app = _app(
+        "cool",
+        {
+            "temperature": 72.0,
+            "preset_mode": "temp",
+            "preset_modes": ["Home Workday", "sleep", "away"],
+        },
+        {"owner_suite": 75.0},
+    )
+    app._control_loop(None)
+
+    assert not app.call_service.called
+    assert app.active_hold is None
+
+
+def test_preempts_normally_when_preset_mode_matches_the_active_schedule() -> None:
+    app = _app(
+        "cool",
+        {
+            "temperature": 72.0,
+            "preset_mode": "sleep",
+            "preset_modes": ["Home Workday", "sleep", "away"],
+        },
+        {"owner_suite": 75.0},
+    )
+    app._control_loop(None)
+
+    call = _set_temperature_call(app)
+    assert call is not None
+    assert app.active_hold is not None
 
 
 # --------------------------------------------------------------------------
