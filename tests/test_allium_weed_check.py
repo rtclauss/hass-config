@@ -168,6 +168,60 @@ def test_classified_gap_rejects_non_matching_changed_lines() -> None:
     assert findings[0].classification is None
 
 
+def test_changed_line_patterns_treat_brackets_as_literal_not_character_class() -> None:
+    # Codex P2 on #913/#914: allowed_changed_line_patterns is matched with
+    # fnmatch, where "[...]" is a character class, not a literal bracketed
+    # substring. A pattern like "+*['off', 'unavailable', 'unknown']*" must
+    # match only that literal text — not degrade into a single-character
+    # class (containing letters like 'o', 'f', 'a', etc.) that, combined
+    # with the surrounding '*' wildcards, would match almost any added line.
+    scope = weed.ProtectedScope(
+        spec="specs/night_routines.allium",
+        description="night behavior",
+        implementation_paths=("packages/house_mode.yaml",),
+    )
+    classified_gaps = [
+        {
+            "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": [
+                "+*['off', 'unavailable', 'unknown']*",
+            ],
+            "classification": "goodnight media availability guard",
+            "reason": "Scoped to the availability-guard change only.",
+        }
+    ]
+
+    # An unrelated added line that happens to share common letters/characters
+    # with the bracket contents must NOT be classified as covered.
+    findings = weed.detect_drift_risks(
+        ["packages/house_mode.yaml"],
+        [scope],
+        classified_gaps,
+        {"packages/house_mode.yaml": ["+    action: light.turn_on"]},
+    )
+
+    assert len(findings) == 1
+    assert findings[0].is_failure
+    assert findings[0].classification is None
+
+    # The literal bracketed text itself must still match.
+    matching_findings = weed.detect_drift_risks(
+        ["packages/house_mode.yaml"],
+        [scope],
+        classified_gaps,
+        {
+            "packages/house_mode.yaml": [
+                "+          state: ['off', 'unavailable', 'unknown']"
+            ]
+        },
+    )
+
+    assert len(matching_findings) == 1
+    assert not matching_findings[0].is_failure
+    assert matching_findings[0].classification == "goodnight media availability guard"
+
+
 def test_default_config_lists_existing_specs_and_scopes() -> None:
     scopes, classified_gaps = weed.load_config(weed.DEFAULT_CONFIG)
     goodnight_media_patterns = [
