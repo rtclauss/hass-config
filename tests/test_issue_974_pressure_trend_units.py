@@ -6,13 +6,13 @@ from pathlib import Path
 CLIMATE_PATH = Path(__file__).resolve().parents[1] / "packages" / "climate.yaml"
 
 
-def _trend_sensor_gradient(text: str, name: str) -> float:
+def _trend_sensor_gradient(text: str, name: str, sample_duration: int = 10800) -> float:
     # Anchor on the exact trend-sensor block shape so this can't accidentally
     # match the unrelated `customize:` entry that shares the same entity name.
     marker = (
         f"      {name}:\n"
         "        entity_id: sensor.average_house_pressure\n"
-        "        sample_duration: 10800\n"
+        f"        sample_duration: {sample_duration}\n"
         "        min_gradient: "
     )
     start = text.index(marker) + len(marker)
@@ -62,3 +62,90 @@ def test_pressure_trend_severity_ordering_is_preserved() -> None:
     slowly = abs(_trend_sensor_gradient(text, "pressure_falling_slowly"))
 
     assert v_rapidly > quickly > falling > slowly > 0
+
+
+def test_pressure_fast_short_window_sensor_is_above_the_measured_noise_floor() -> None:
+    # 30 days of live history showed indoor 30-minute rates spiking to
+    # ~6.6 hPa/hr from ordinary multi-sensor-mean noise alone (a milder
+    # version of the burst effect behind #973). The fast tier must sit
+    # meaningfully above that so it doesn't flap on routine noise, while
+    # still being far below the frontal-scale 3-hour thresholds — a short
+    # window needs a much higher instantaneous rate to represent a real,
+    # fast-developing event.
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+
+    falling_fast = _trend_sensor_gradient(text, "pressure_falling_fast", sample_duration=1800)
+    rising_fast = _trend_sensor_gradient(text, "pressure_rising_fast", sample_duration=1800)
+    assert falling_fast == -0.000082
+    assert rising_fast == 0.000082
+
+    measured_30min_noise_ceiling_inhg_per_s = 0.0001962 / 3600  # ~6.6 hPa/hr
+    assert abs(falling_fast) > measured_30min_noise_ceiling_inhg_per_s * 1.25
+
+    v_rapidly = abs(_trend_sensor_gradient(text, "pressure_falling_v_rapidly"))
+    assert abs(falling_fast) > v_rapidly, (
+        "a 30-minute window needs a higher instantaneous rate than the "
+        "3-hour v_rapidly tier to represent an equally significant event"
+    )
+
+
+def test_pressure_binary_sensors_have_no_invalid_device_class() -> None:
+    # "pressure" is not a valid binary_sensor device_class (only sensor
+    # entities have pressure/atmospheric_pressure device classes) — see
+    # https://www.home-assistant.io/integrations/binary_sensor/. Reconciled
+    # away in #974; these are trend/direction flags and don't need one.
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+    names = [
+        "pressure_falling",
+        "pressure_falling_quickly",
+        "pressure_falling_slowly",
+        "pressure_falling_v_rapidly",
+        "pressure_falling_fast",
+        "pressure_rising",
+        "pressure_rising_quickly",
+        "pressure_rising_slowly",
+        "pressure_rising_v_rapidly",
+        "pressure_rising_fast",
+    ]
+    for name in names:
+        marker = f"binary_sensor.{name}:\n      <<: *customize\n      friendly_name: "
+        start = text.index(marker)
+        end = text.index("\n\n", start)
+        block = text[start:end]
+        assert "device_class:" not in block, f"binary_sensor.{name} should not set device_class"
+
+
+def test_average_house_pressure_device_class_matches_its_sources() -> None:
+    # The 9 _tph_pressure sensors it averages all report device_class:
+    # atmospheric_pressure; the aggregate had drifted to device_class:
+    # pressure instead (#974).
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+    marker = (
+        "sensor.average_house_pressure:\n"
+        "      <<: *customize\n"
+        '      friendly_name: "Average House Pressure"\n'
+    )
+    start = text.index(marker) + len(marker)
+    end = text.index("icon: mdi:gauge", start)
+    block = text[start:end]
+    assert "device_class: atmospheric_pressure" in block
+
+
+def test_pressure_trends_group_includes_the_fast_sensors() -> None:
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+    start = text.index("pressure_trends:")
+    end = text.index("\n\n", start)
+    block = text[start:end]
+    assert "binary_sensor.pressure_falling_fast" in block
+    assert "binary_sensor.pressure_rising_fast" in block
+
+
+def test_window_pressure_alert_automation_includes_the_fast_sensor() -> None:
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: alert_house_windows_open_pressure_dropping")
+    end = text.index("\n  - id:", start)
+    block = text[start:end]
+    assert "binary_sensor.pressure_falling_fast" in block
+    assert "binary_sensor.pressure_falling_quickly" in block
+    assert "binary_sensor.pressure_falling_v_rapidly" in block
