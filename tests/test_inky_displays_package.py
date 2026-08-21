@@ -178,6 +178,19 @@ def test_owner_suite_daytime_rows_use_calendar_or_quote_context_not_alarms() -> 
     assert "'label': 'Meeting'" not in daytime_block
 
 
+def test_owner_suite_calendar_lookup_skips_unavailable_calendar() -> None:
+    block = _script_block("publish_owner_suite_inky_display")
+    calendar_action = block.index("action: calendar.get_events")
+
+    assert "owner_suite_calendar_window: {}" in block
+    assert "condition: not" in block[:calendar_action]
+    assert "condition: state" in block[:calendar_action]
+    assert "entity_id: calendar.ryan_claussen" in block[:calendar_action]
+    assert '  - "unknown"' in block[:calendar_action]
+    assert '  - "unavailable"' in block[:calendar_action]
+    assert block.index("owner_suite_calendar_window: {}") < calendar_action
+
+
 def test_owner_suite_flight_rows_show_numeric_airport_delay() -> None:
     block = _script_block("publish_owner_suite_inky_display")
 
