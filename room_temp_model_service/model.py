@@ -296,6 +296,15 @@ class RoomTempModel:
         df["sun_azimuth_sin"] = np.sin(np.radians([v[1] for v in sun_vals]))
         df["sun_azimuth_cos"] = np.cos(np.radians([v[1] for v in sun_vals]))
 
+        # Reindex to a full continuous 5-min grid before applying positional
+        # shifts. Without this, a gap in room_temp longer than the ffill limit
+        # compresses the index so shift(-slots) reaches across the gap in wall
+        # time — a nominal T+60 target would reference a sample hours later.
+        full_idx = pd.date_range(df.index.min(), df.index.max(), freq=f"{SLOT_MIN}min", tz=df.index.tz)
+        df = df.reindex(full_idx)
+        # Rebuild base_dts for sun position at horizon offsets (index grew).
+        base_dts = [ts.to_pydatetime().replace(tzinfo=timezone.utc) for ts in df.index]
+
         for h, slots in HORIZON_SLOTS.items():
             df[f"cloud_cover_{h}m"] = df["cloud_cover"].shift(-slots)
             df[f"outside_temp_{h}m"] = df["outside_temp"].shift(-slots)
