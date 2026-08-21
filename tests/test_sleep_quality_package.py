@@ -104,6 +104,49 @@ def test_bed_exit_timestamp_is_persisted_before_later_session_finalization() -> 
     assert 'bed_out_ts: "{{ now().timestamp() }}"' not in finalize
 
 
+def test_finalize_always_clears_active_session_even_when_data_is_incomplete() -> None:
+    # Codex P2 on #373: a hard `condition:` gate halted the whole script when
+    # the session was incomplete/out-of-order (e.g. CPAP briefly used while
+    # the aggregate bed sensor never registered occupied), so the trailing
+    # input_boolean.turn_off never ran and sleep_session_active stayed
+    # latched on, silently blocking every future session from starting.
+    block = _script_block("finalize_sleep_quality_session")
+
+    if_index = block.index("if:")
+    then_index = block.index("then:", if_index)
+    turn_off_index = block.index("action: input_boolean.turn_off")
+
+    assert if_index < then_index < turn_off_index
+    assert "condition: template" in block[if_index:then_index]
+    assert "bed_out_ts >= bed_in_ts" in block[if_index:then_index]
+    # The cleanup action must be a sibling of the if-block, not nested
+    # inside `then`, so it always runs regardless of completeness.
+    then_block_end = block.index("value: \"{{ continuity_score }}\"", then_index)
+    assert turn_off_index > then_block_end
+
+
+def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() -> None:
+    # Codex P2 on #373: now() inside these 5-minute-delayed (`for:`)
+    # callbacks is ~5 minutes later than the real transition, so every
+    # completed session over-reported cpap_minutes/bed_minutes by about 5
+    # minutes each. trigger.to_state.last_changed is the actual transition
+    # timestamp.
+    active = _automation_block("sleep_quality_track_active_session")
+    cpap_stop_branch = active.split("id: cpap_stop", maxsplit=2)[2]
+    bed_exit_branch = active.split("id: bed_exit", maxsplit=2)[2]
+
+    assert (
+        "datetime: \"{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}\""
+        in cpap_stop_branch
+    )
+    assert (
+        "datetime: \"{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}\""
+        in bed_exit_branch
+    )
+    assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_stop_branch
+    assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in bed_exit_branch
+
+
 def test_continuity_score_is_bounded_and_does_not_change_governed_routines() -> None:
     block = _script_block("finalize_sleep_quality_session")
     text = PACKAGE_PATH.read_text(encoding="utf-8")

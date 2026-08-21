@@ -95,40 +95,48 @@ script:
             {{ state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0) }}
           bed_out_ts: >-
             {{ state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0) }}
-      - alias: Require a complete, ordered session before persisting analytics
-        condition: template
-        value_template: >-
-          {{ bed_in_ts > 0
-             and cpap_on_ts >= bed_in_ts
-             and cpap_off_ts >= cpap_on_ts
-             and bed_out_ts >= bed_in_ts }}
-      - variables:
-          bed_minutes: >-
-            {{ [1440, [0, ((bed_out_ts - bed_in_ts) / 60) | round(0)] | max] | min }}
-          cpap_minutes: >-
-            {{ [1440, [0, ((cpap_off_ts - cpap_on_ts) / 60) | round(0)] | max] | min }}
-          bed_transitions: >-
-            {{ states('counter.sleep_restlessness_events') | int(0) }}
-          continuity_score: >-
-            {% set cpap_points = [60, (cpap_minutes | float(0) / 480 * 60)] | min %}
-            {% set bed_points = [40, (bed_minutes | float(0) / 480 * 40)] | min %}
-            {% set transition_penalty = [20, bed_transitions | int(0)] | min %}
-            {{ [100, [0, cpap_points + bed_points - transition_penalty] | max] | min | round(0) }}
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.sleep_session_bed_minutes
-        data:
-          value: "{{ bed_minutes }}"
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.sleep_session_cpap_minutes
-        data:
-          value: "{{ cpap_minutes }}"
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.sleep_quality_score
-        data:
-          value: "{{ continuity_score }}"
+      - alias: >-
+          Only persist analytics for a complete, ordered session — but
+          always clear the active-session flags below regardless, so an
+          incomplete/out-of-order session (e.g. CPAP briefly used while the
+          aggregate bed sensor never registered occupied) can't leave
+          sleep_session_active latched on and silently block every future
+          session from starting (Codex P2 on #373)
+        if:
+          - condition: template
+            value_template: >-
+              {{ bed_in_ts > 0
+                 and cpap_on_ts >= bed_in_ts
+                 and cpap_off_ts >= cpap_on_ts
+                 and bed_out_ts >= bed_in_ts }}
+        then:
+          - variables:
+              bed_minutes: >-
+                {{ [1440, [0, ((bed_out_ts - bed_in_ts) / 60) | round(0)] | max] | min }}
+              cpap_minutes: >-
+                {{ [1440, [0, ((cpap_off_ts - cpap_on_ts) / 60) | round(0)] | max] | min }}
+              bed_transitions: >-
+                {{ states('counter.sleep_restlessness_events') | int(0) }}
+              continuity_score: >-
+                {% set cpap_points = [60, (cpap_minutes | float(0) / 480 * 60)] | min %}
+                {% set bed_points = [40, (bed_minutes | float(0) / 480 * 40)] | min %}
+                {% set transition_penalty = [20, bed_transitions | int(0)] | min %}
+                {{ [100, [0, cpap_points + bed_points - transition_penalty] | max] | min | round(0) }}
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_bed_minutes
+            data:
+              value: "{{ bed_minutes }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_minutes
+            data:
+              value: "{{ cpap_minutes }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_quality_score
+            data:
+              value: "{{ continuity_score }}"
       - action: input_boolean.turn_off
         target:
           entity_id:
@@ -265,11 +273,16 @@ automation:
               - condition: trigger
                 id: cpap_stop
             sequence:
-              - action: input_datetime.set_datetime
+              - alias: >-
+                  Timestamp the actual power-drop, not this delayed
+                  callback — now() here is ~5 minutes late (the trigger's
+                  for: duration), over-reporting cpap_minutes every session
+                  (Codex P2 on #373)
+                action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_cpap_off
                 data:
-                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  datetime: "{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}"
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.sleep_session_cpap_stopped
@@ -283,11 +296,16 @@ automation:
               - condition: trigger
                 id: bed_exit
             sequence:
-              - action: input_datetime.set_datetime
+              - alias: >-
+                  Timestamp the actual bed-exit, not this delayed callback —
+                  now() here is ~5 minutes late (the trigger's for:
+                  duration), over-reporting bed_minutes every session
+                  (Codex P2 on #373)
+                action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_bed_out
                 data:
-                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  datetime: "{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}"
               - if:
                   - condition: state
                     entity_id: input_boolean.sleep_session_cpap_stopped
