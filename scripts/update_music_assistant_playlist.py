@@ -24,7 +24,8 @@ SUPPORTED_PLAYLIST_SCRIPTS = {
 SCRIPT_START_RE = re.compile(r"^  (?P<script>[A-Za-z0-9_]+):$")
 UNRESOLVABLE_PERSONALIZED_SPOTIFY_PLAYLIST_PATTERNS = (
     "37i9dQZF1E",
-    "37i9dQZEVXc",
+    "37i9dQZEVXc",  # Discover Weekly family
+    "37i9dQZEVXb",  # Release Radar family (Codex P2 on #679)
 )
 
 
@@ -65,8 +66,8 @@ def _reject_unresolvable_personalized_spotify_playlist(item_uri: str) -> None:
         return
 
     raise ValueError(
-        "Spotify personalized playlist IDs with 37i9dQZF1E* or 37i9dQZEVXc* "
-        "do not resolve through Music Assistant"
+        "Spotify personalized playlist IDs with 37i9dQZF1E*, 37i9dQZEVXc*, "
+        "or 37i9dQZEVXb* do not resolve through Music Assistant"
     )
 
 
