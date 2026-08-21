@@ -665,46 +665,63 @@ binary_sensor:
   # threshold directly in inHg/s from the same hPa/hr targets the original
   # values implied (issue #974): v_rapidly ~1.98 hPa/hr, quickly ~1.19 hPa/hr,
   # falling ~0.54 hPa/hr, slowly ~0.033 hPa/hr.
+  #
+  # max_samples is set explicitly (Codex P1 on #974): the trend platform's
+  # config schema defaults max_samples to 2 regardless of sample_duration,
+  # so without it every one of these sensors — including the 3-hour ones —
+  # would compute its gradient from whichever 2 samples happen to be in the
+  # buffer, which can still be milliseconds apart during a burst, the same
+  # instability behind the temperature derivative spike in #973. 500 is
+  # generous enough that sample_duration's age-based pruning is what
+  # actually governs the window, not an artificially small sample cap.
   - platform: trend
     sensors:
       pressure_falling_v_rapidly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: -0.0000162
 
       pressure_rising_v_rapidly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: 0.0000162
 
       pressure_falling_quickly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: -0.0000097
 
       pressure_rising_quickly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: 0.0000097
 
       pressure_falling:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: -0.0000044
 
       pressure_rising:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: 0.0000044
 
       pressure_falling_slowly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: -0.00000027
 
       pressure_rising_slowly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
+        max_samples: 500
         min_gradient: 0.00000027
 
       # Fast tier (issue #974): the 3-hour sensors above are sized for
@@ -724,11 +741,13 @@ binary_sensor:
       pressure_falling_fast:
         entity_id: sensor.average_house_pressure
         sample_duration: 1800
+        max_samples: 500
         min_gradient: -0.000082
 
       pressure_rising_fast:
         entity_id: sensor.average_house_pressure
         sample_duration: 1800
+        max_samples: 500
         min_gradient: 0.000082
 
   - platform: threshold

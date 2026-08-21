@@ -13,6 +13,7 @@ def _trend_sensor_gradient(text: str, name: str, sample_duration: int = 10800) -
         f"      {name}:\n"
         "        entity_id: sensor.average_house_pressure\n"
         f"        sample_duration: {sample_duration}\n"
+        "        max_samples: 500\n"
         "        min_gradient: "
     )
     start = text.index(marker) + len(marker)
@@ -49,6 +50,18 @@ def test_pressure_trend_thresholds_are_reachable_in_inhg() -> None:
     # The old hPa-calibrated magnitudes must be gone.
     for stale in ("-0.00055", "-0.00033", "-0.00015", "-0.000009\n"):
         assert stale not in text
+
+
+def test_pressure_trend_sensors_set_max_samples() -> None:
+    # Codex P1: the trend platform's config schema defaults max_samples to 2
+    # regardless of sample_duration, so without an explicit max_samples every
+    # one of these sensors — including the 3-hour ones — would compute its
+    # gradient from whichever 2 samples happen to be in the buffer, which can
+    # still be milliseconds apart during a burst (the same instability
+    # behind the temperature derivative spike in #973).
+    text = CLIMATE_PATH.read_text(encoding="utf-8")
+    assert text.count("sample_duration: 10800\n        max_samples: 500\n") == 8
+    assert text.count("sample_duration: 1800\n        max_samples: 500\n") == 2
 
 
 def test_pressure_trend_severity_ordering_is_preserved() -> None:
