@@ -642,47 +642,60 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
+  # min_gradient is deg/second in the source sensor's own unit.
+  # sensor.average_house_pressure reports inHg (device_class: atmospheric_pressure,
+  # confirmed live), but these thresholds were sized for hPa/s — off by the
+  # 33.8639 hPa-per-inHg conversion factor. At the old values, "falling"/
+  # "falling_quickly"/"falling_v_rapidly" required 0.54-1.98 inHg/hr
+  # (18-67 hPa/hr), a rate 72h of real history never came close to (largest
+  # observed ~1hr rate was -0.043 inHg/hr, about 1.45 hPa/hr) — those three
+  # tiers could never fire. Only "slowly" (0.0324 hPa/hr, i.e. 0.00096 inHg/hr)
+  # was reachable, and it sat close enough to background noise to flip on/off
+  # roughly half the time over 3 days. Fixed by re-deriving each
+  # threshold directly in inHg/s from the same hPa/hr targets the original
+  # values implied (issue #973): v_rapidly ~1.98 hPa/hr, quickly ~1.19 hPa/hr,
+  # falling ~0.54 hPa/hr, slowly ~0.033 hPa/hr.
   - platform: trend
     sensors:
       pressure_falling_v_rapidly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.00055
+        min_gradient: -0.0000162
 
       pressure_rising_v_rapidly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.00055
+        min_gradient: 0.0000162
 
       pressure_falling_quickly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.00033
+        min_gradient: -0.0000097
 
       pressure_rising_quickly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.00033
+        min_gradient: 0.0000097
 
       pressure_falling:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.00015
+        min_gradient: -0.0000044
 
       pressure_rising:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.00015
+        min_gradient: 0.0000044
 
       pressure_falling_slowly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.000009
+        min_gradient: -0.00000027
 
       pressure_rising_slowly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.000009
+        min_gradient: 0.00000027
 
   - platform: threshold
     name: bathroom_humidity_high_threshold
@@ -815,13 +828,14 @@ sensor:
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative default House Temp Change
-
-  - platform: derivative
-    source: sensor.average_house_temp
-    # source: sensor.glycol_thermostat_temperature
-    name: Derivative 5-5 minutes House Temp Change
     round: 5
-    time_window: "00:5:00"
+    # average_house_temp is a min_max mean over 15 sensors and can emit
+    # several state changes milliseconds apart when multiple sources report
+    # in the same poll burst. Without a time_window the platform divides by
+    # that near-zero elapsed time (issue #973), producing spikes into the
+    # thousands of deg F/h. A window forces the windowed-slope calculation
+    # instead of a raw two-point instantaneous derivative.
+    time_window: "00:05:00"
 
   - platform: derivative
     source: sensor.average_house_temp
@@ -834,29 +848,26 @@ sensor:
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative 10-10 minutes House Temp Change
+    # Recommended for day-to-day use (issue #973): 12h of live history put
+    # this window's stdev at 0.59 deg F/h (median 0.18) vs. 1.6 for the
+    # 2.5-minute window — tight enough to be a believable indoor rate of
+    # change without the multi-hour lag of the 30/60-minute windows.
     round: 5
     time_window: "00:10:00"
 
   - platform: derivative
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
-    name: Derivative 5-10 minutes House Temp Change
-    round: 5
-    time_window: "00:05:00"
-
-  - platform: derivative
-    source: sensor.average_house_temp
-    # source: sensor.glycol_thermostat_temperature
     name: Derivative 30 minutes House Temp Change
     round: 5
-    time_window: "00:15:00"
+    time_window: "00:30:00"
 
   - platform: derivative
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative 60 minutes House Temp Change
     round: 5
-    time_window: "00:30:00"
+    time_window: "01:00:00"
 
   - platform: history_stats
     name: Heating Today
