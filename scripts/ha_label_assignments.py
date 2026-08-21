@@ -488,37 +488,51 @@ def rule_matches(rule: dict[str, Any], entry: dict[str, Any], object_type: str) 
     return any(checks) if rule.get("match_mode") == "any" else all(checks)
 
 
-def _live_entity_id_by_unique_id(live: dict[str, Any]) -> dict[str, str]:
-    """Map each live entity's unique_id to its registry entity_id.
+def _live_entity_id_by_unique_id(live: dict[str, Any]) -> dict[tuple[str, str], str]:
+    """Map each live entity's (domain, unique_id) to its registry entity_id.
 
     Home Assistant derives an automation's entity_id from its alias at *first
     registration* and then pins it; later alias edits do not move it. The repo
     cannot know the original alias offline, so the only stable link between a
     repo behavior and its live entity is the `id:` field (its unique_id).
+
+    unique_id uniqueness is enforced per-domain (per platform/config entry),
+    not globally, so the same unique_id string can legitimately appear on
+    both an automation and a scene. Keying by unique_id alone collapses
+    those into one entry — normalized entities are sorted by entity_id, so
+    the alphabetically-later domain's entity silently overwrites the
+    earlier one (Codex P1 on #903/#906). Keying by (domain, unique_id)
+    keeps them distinct.
     """
-    result: dict[str, str] = {}
+    result: dict[tuple[str, str], str] = {}
     for entity in live.get("entities", []):
         unique_id = entity.get("unique_id")
         entity_id = entity.get("entity_id")
         if unique_id and entity_id:
-            result[str(unique_id)] = str(entity_id)
+            domain = str(entity_id).split(".", 1)[0]
+            result[(domain, str(unique_id))] = str(entity_id)
     return result
 
 
 def _labels_by_entity(
     rows: Iterable[dict[str, Any]],
-    unique_id_to_entity_id: dict[str, str] | None = None,
+    unique_id_to_entity_id: dict[tuple[str, str], str] | None = None,
 ) -> dict[str, set[str]]:
     result: dict[str, set[str]] = defaultdict(set)
     for row in rows:
         entity_id = str(row["entity_id"])
         unique_id = row.get("unique_id")
-        # Prefer the live entity_id keyed by unique_id: a renamed automation's
-        # slug-derived entity_id no longer matches the pinned registry id, and
-        # labeling the stale slug would silently miss the real entity. Fall back
-        # to the slug when the behavior is not in the registry yet (not deployed).
+        # Prefer the live entity_id keyed by (domain, unique_id): a renamed
+        # automation's slug-derived entity_id no longer matches the pinned
+        # registry id, and labeling the stale slug would silently miss the
+        # real entity. The domain comes from the manifest row's own
+        # entity_id, so a unique_id reused across domains (e.g. an
+        # automation and a scene both named "tv_paused") resolves each row
+        # against its own domain instead of colliding. Fall back to the slug
+        # when the behavior is not in the registry yet (not deployed).
         if unique_id_to_entity_id and unique_id:
-            entity_id = unique_id_to_entity_id.get(str(unique_id), entity_id)
+            domain = entity_id.split(".", 1)[0]
+            entity_id = unique_id_to_entity_id.get((domain, str(unique_id)), entity_id)
         result[entity_id].update(str(label) for label in row["labels"])
     return result
 
@@ -638,8 +652,13 @@ def audit_assignments(
         for registry in ("area", "device", "entity")
     }
     missing_registry_objects = find_missing_registry_objects(desired, live)
+    # Resolve through the same (domain, unique_id) -> entity_id mapping
+    # compile_assignments uses, so a renamed behavior's audit result agrees
+    # with what was actually assigned instead of comparing against its
+    # stale slug-derived manifest ID (Codex P2 on #903/#906).
     required_entities = _labels_by_entity(
-        list(manifest.get("behaviors", [])) + list(manifest.get("helpers", []))
+        list(manifest.get("behaviors", [])) + list(manifest.get("helpers", [])),
+        _live_entity_id_by_unique_id(live),
     )
     live_entities_by_id = {
         str(entity["entity_id"]): entity for entity in live.get("entities", [])
