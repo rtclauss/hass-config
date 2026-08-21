@@ -149,6 +149,21 @@ class ThermalPreemptor(hass.Hass):
         if mode in (None, "off", "unavailable", "unknown"):
             return
 
+        # Don't start a new hold on top of one this app didn't create —
+        # _revert's ecobee/resume_program call only returns to the comfort
+        # schedule, so it would silently discard a pre-existing manual/app
+        # hold rather than restoring it. Ecobee's preset_mode reports the
+        # active named comfort schedule (e.g. "Home Workday", present in
+        # preset_modes) while following schedule, and something outside
+        # preset_modes (e.g. a temperature hold) when a hold is already
+        # active (Codex P2 on #864).
+        preset_mode = self.get_state(self.climate_entity, attribute="preset_mode")
+        scheduled_presets = (
+            self.get_state(self.climate_entity, attribute="preset_modes") or []
+        )
+        if preset_mode not in scheduled_presets:
+            return
+
         margin = self._margin()
 
         # Resolve which bound(s) to defend based on the active mode, and pick
