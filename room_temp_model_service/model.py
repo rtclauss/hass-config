@@ -99,7 +99,7 @@ class RoomTempModel:
                         loaded[h] = joblib.load(path)
                     except Exception:
                         pass
-            if loaded:
+            if len(loaded) == len(HORIZONS):
                 self.models[room] = loaded
                 if os.path.exists(self._meta_path(room)):
                     with open(self._meta_path(room)) as f:

@@ -51,9 +51,11 @@ def _app(mode, attrs, predictions, margin=0.5):
     app.hold_active_switch = "input_boolean.thermal_preemptor_hold_active"
     app.hold_deadline_datetime = "input_datetime.thermal_preemptor_revert_at"
     app.hold_reason_text = "input_text.thermal_preemptor_hold_reason"
+    app.hold_gate = "input_boolean.thermal_preemptor_hold_gate"
     app.active_hold = None
     app.call_service = Mock()
     app.run_in = Mock(return_value="handle")
+    app.cancel_timer = Mock()
     app.log = Mock()
 
     def get_state(entity_id, attribute=None):
@@ -64,6 +66,8 @@ def _app(mode, attrs, predictions, margin=0.5):
         if entity_id == app.enable_switch:
             return "on"
         if entity_id == app.window_gate:
+            return "off"
+        if entity_id == app.hold_gate:
             return "off"
         if entity_id == app.margin_number:
             return margin
@@ -331,3 +335,74 @@ def test_recovered_hold_blocks_the_control_loop_from_shifting_again() -> None:
     app._control_loop(None)
 
     assert _set_temperature_call(app) is None, "shifted the setpoint while a hold was active"
+
+
+# --------------------------------------------------------------------------
+# Stale timer cancellation on early revert (Codex P2 on #864)
+# --------------------------------------------------------------------------
+
+
+def test_early_revert_cancels_the_scheduled_timer() -> None:
+    # When the kill switch fires an early revert, _revert must cancel the
+    # original run_in handle so the stale callback cannot call resume_program
+    # a second time and wipe a subsequent hold.
+    app = _app("cool", {"temperature": 72.0}, {"owner_suite": 75.0})
+    app.active_hold = {"revert_handle": "handle_xyz", "reason": "owner_suite"}
+
+    original = app.get_state.side_effect
+
+    def disabled(entity_id, attribute=None):
+        if entity_id == app.enable_switch:
+            return "off"
+        return original(entity_id, attribute)
+
+    app.get_state = Mock(side_effect=disabled)
+    app._control_loop(None)
+
+    app.cancel_timer.assert_called_once_with("handle_xyz")
+    assert app.active_hold is None
+
+
+# --------------------------------------------------------------------------
+# External hold gate (Codex P2 on #864)
+# --------------------------------------------------------------------------
+
+
+def test_hold_gate_blocks_preemption_during_named_preset_hold() -> None:
+    # house_mode.yaml turns this gate on when it applies a named-preset hold
+    # (e.g. guest climate); the preemptor must not start its own override on top.
+    app = _app("cool", {"temperature": 72.0}, {"owner_suite": 75.0})
+
+    original = app.get_state.side_effect
+
+    def gate_on(entity_id, attribute=None):
+        if entity_id == app.hold_gate:
+            return "on"
+        return original(entity_id, attribute)
+
+    app.get_state = Mock(side_effect=gate_on)
+    app._control_loop(None)
+
+    assert not app.call_service.called
+    assert app.active_hold is None
+
+
+def test_hold_gate_cancels_an_active_preempt_hold_when_turned_on() -> None:
+    # If the gate is turned on while preemption is already in flight, the hold
+    # must be reverted immediately — same semantics as kill-switch / window gate.
+    app = _app("cool", {"temperature": 72.0}, {"owner_suite": 75.0})
+    app.active_hold = {"revert_handle": "handle_xyz", "reason": "owner_suite"}
+
+    original = app.get_state.side_effect
+
+    def gate_on(entity_id, attribute=None):
+        if entity_id == app.hold_gate:
+            return "on"
+        return original(entity_id, attribute)
+
+    app.get_state = Mock(side_effect=gate_on)
+    app._control_loop(None)
+
+    assert "ecobee/resume_program" in _service_calls(app)
+    app.cancel_timer.assert_called_once_with("handle_xyz")
+    assert app.active_hold is None

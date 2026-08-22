@@ -261,6 +261,10 @@ script:
                       entity_id: climate.my_ecobee
                     data:
                       preset_mode: "{{ guest_climate_preset }}"
+                  - continue_on_error: true
+                    action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.thermal_preemptor_hold_gate
               - conditions:
                   - "{{ should_apply_climate and requested_mode in ['home', 'night', 'in_bed', 'asleep'] }}"
                 sequence:
@@ -269,6 +273,10 @@ script:
                     data:
                       resume_all: true
                       entity_id: climate.my_ecobee
+                  - continue_on_error: true
+                    action: input_boolean.turn_off
+                    target:
+                      entity_id: input_boolean.thermal_preemptor_hold_gate
           - choose:
               - conditions:
                   - "{{ should_apply_media and guest_mode_enabled }}"
