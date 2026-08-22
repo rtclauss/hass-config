@@ -222,29 +222,74 @@ def test_changed_line_patterns_treat_brackets_as_literal_not_character_class() -
     assert matching_findings[0].classification == "goodnight media availability guard"
 
 
+def test_goodnight_media_patterns_reject_unrelated_diffuser_target_swap() -> None:
+    # Codex P2 follow-up on #913/#914: even after bracket-escaping, generic
+    # patterns like "-*entity_id:*" and "+*media_player*" still matched an
+    # unrelated change — e.g. replacing "entity_id: group.diffusers" with
+    # "entity_id: media_player.ma_bedroom" — because both a bare removed
+    # "entity_id:" and any line mentioning "media_player" satisfied them.
+    # That would misclassify a diffuser drift-gate removal as covered by
+    # the goodnight-media-guard change. The real config's patterns (used in
+    # isolation, so an unrelated unconditional gap elsewhere for the same
+    # file can't paper over a regression here) must not match that swap.
+    scope = weed.ProtectedScope(
+        spec="specs/night_routines.allium",
+        description="night behavior",
+        implementation_paths=("packages/house_mode.yaml",),
+    )
+    _, all_gaps = weed.load_config(weed.DEFAULT_CONFIG)
+    goodnight_gap = next(
+        g for g in all_gaps if g.get("classification") == "goodnight media availability guard"
+    )
+
+    findings = weed.detect_drift_risks(
+        ["packages/house_mode.yaml"],
+        [scope],
+        [goodnight_gap],
+        {
+            "packages/house_mode.yaml": [
+                "-              entity_id: group.diffusers",
+                "+              entity_id: media_player.ma_bedroom",
+            ]
+        },
+    )
+
+    assert len(findings) == 1
+    assert findings[0].is_failure
+    assert findings[0].classification is None
+
+
 def test_default_config_lists_existing_specs_and_scopes() -> None:
     scopes, classified_gaps = weed.load_config(weed.DEFAULT_CONFIG)
     goodnight_media_patterns = [
-        "-*media_player*",
-        "-*continue_on_error*",
-        "-*target:*",
-        "-*entity_id:*",
-        "+*common_area_media_shutdown_targets*",
-        "+*media_player*",
-        "+*['off', 'unavailable', 'unknown']*",
-        "+*| *",
-        "+*{{ expand(*",
-        "+*)*",
-        "+*- sequence:*",
-        "+*- variables:*",
-        "+*- if:*",
-        "+*- condition: template*",
-        "+*value_template:*",
-        "+*then:*",
-        "+*- continue_on_error:*",
-        "+*target:*",
-        "+*'state'*",
-        "+*'in'*",
+        "-*- continue_on_error: true",
+        "-*action: media_player.turn_off",
+        "-*target:",
+        "-*entity_id:",
+        "-*media_player.lg_webos_smart_tv",
+        "-*media_player.basement",
+        "+*- sequence:",
+        "+*- variables:",
+        "+*common_area_media_shutdown_targets: >-",
+        "+*{{ expand(",
+        "+*'media_player.lg_webos_smart_tv',",
+        "+*'media_player.basement'",
+        "+*)",
+        "+*| rejectattr(",
+        "+*'state',",
+        "+*'in',",
+        "+*['off', 'unavailable', 'unknown']",
+        "+*| map(attribute='entity_id')",
+        "+*| list }}",
+        "+*- if:",
+        "+*- condition: template",
+        "+*value_template: >-",
+        "+*common_area_media_shutdown_targets | count > 0 }}",
+        "+*then:",
+        "+*- continue_on_error: true",
+        "+*action: media_player.turn_off",
+        "+*target:",
+        '+*entity_id: "{{ common_area_media_shutdown_targets }}"',
     ]
 
     assert classified_gaps == [
