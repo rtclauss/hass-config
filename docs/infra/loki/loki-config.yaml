@@ -43,6 +43,11 @@ storage_config:
 compactor:
   working_directory: /loki/compactor
   shared_store: filesystem
+  # Explicit even though it matches shared_store: newer Loki releases
+  # require delete_request_store whenever retention_enabled is true rather
+  # than falling back to shared_store, and fail startup validation without
+  # it (Codex P1 on #520).
+  delete_request_store: filesystem
   compaction_interval: 10m
   retention_enabled: true
 
