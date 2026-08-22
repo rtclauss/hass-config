@@ -222,6 +222,14 @@ automation:
         condition: template
         value_template: >-
           {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_house_windows_open_pressure_dropping', 'last_triggered'), 0)) > 14400 }}
+      - alias: >-
+          Require a settled sample buffer before trusting a trend reading —
+          every trend sensor starts empty on restart and can evaluate off
+          its first two samples, which can still be milliseconds apart
+          given average_house_pressure's bursty updates (Codex P2 on #974)
+        condition: template
+        value_template: >-
+          {{ (as_timestamp(now()) - as_timestamp(states('sensor.uptime_at'), 0)) > (35 * 60) }}
     action:
       - action: notify.mobile_app_wethop
         data:
@@ -710,6 +718,15 @@ script:
 ## Sensors
 ################################################
 sensor:
+  # Timestamp HA last started. Used to gate the pressure-drop window alert
+  # below on a settle period: pressure trend sensors start with an empty
+  # sample buffer on every restart, and average_house_pressure is known to
+  # emit clustered mean updates milliseconds apart, so the first couple of
+  # post-restart samples can still produce a spurious trend reading before
+  # enough real history accumulates (Codex P2 on #974).
+  - platform: uptime
+    name: uptime_at
+
   # - platform: wunderground
   #   api_key: !secret wunderground_api_key
   #   monitored_conditions:

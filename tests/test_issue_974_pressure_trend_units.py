@@ -162,3 +162,28 @@ def test_window_pressure_alert_automation_includes_the_fast_sensor() -> None:
     assert "binary_sensor.pressure_falling_fast" in block
     assert "binary_sensor.pressure_falling_quickly" in block
     assert "binary_sensor.pressure_falling_v_rapidly" in block
+
+
+def test_window_pressure_alert_requires_a_settled_sample_buffer() -> None:
+    # Codex P2 follow-up on #974: max_samples only raises the retention cap,
+    # it doesn't require a minimum populated duration — every trend sensor
+    # still starts with an empty buffer on restart and can evaluate off its
+    # first two samples, which can be milliseconds apart given
+    # average_house_pressure's bursty updates. Require HA to have been up
+    # for longer than the shortest (fast, 30-minute) window before trusting
+    # any pressure-drop alert.
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: alert_house_windows_open_pressure_dropping")
+    end = text.index("\n  - id:", start)
+    block = text[start:end]
+
+    assert "sensor.uptime_at" in block
+    assert "35 * 60" in block
+
+
+def test_uptime_sensor_is_defined_for_the_settle_gate() -> None:
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    assert "platform: uptime" in text
+    assert "name: uptime_at" in text
