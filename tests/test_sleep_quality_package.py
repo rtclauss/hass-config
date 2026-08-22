@@ -130,21 +130,24 @@ def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() ->
     # callbacks is ~5 minutes later than the real transition, so every
     # completed session over-reported cpap_minutes/bed_minutes by about 5
     # minutes each. trigger.to_state.last_changed is the actual transition
-    # timestamp.
+    # timestamp — but it's UTC (Codex P1 follow-up on #373): formatting it
+    # directly gets interpreted as local time by input_datetime.set_datetime,
+    # shifting every stored timestamp by the UTC offset. as_local() first is
+    # required.
     active = _automation_block("sleep_quality_track_active_session")
     cpap_stop_branch = active.split("id: cpap_stop", maxsplit=2)[2]
     bed_exit_branch = active.split("id: bed_exit", maxsplit=2)[2]
 
-    assert (
-        "datetime: \"{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}\""
-        in cpap_stop_branch
+    expected = (
+        "datetime: \"{{ as_local(trigger.to_state.last_changed)"
+        ".strftime('%Y-%m-%d %H:%M:%S') }}\""
     )
-    assert (
-        "datetime: \"{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}\""
-        in bed_exit_branch
-    )
+    assert expected in cpap_stop_branch
+    assert expected in bed_exit_branch
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_stop_branch
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in bed_exit_branch
+    assert "trigger.to_state.last_changed.strftime" not in cpap_stop_branch
+    assert "trigger.to_state.last_changed.strftime" not in bed_exit_branch
 
 
 def test_continuity_score_is_bounded_and_does_not_change_governed_routines() -> None:

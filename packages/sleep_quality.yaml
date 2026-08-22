@@ -277,12 +277,16 @@ automation:
                   Timestamp the actual power-drop, not this delayed
                   callback — now() here is ~5 minutes late (the trigger's
                   for: duration), over-reporting cpap_minutes every session
-                  (Codex P2 on #373)
+                  (Codex P2 on #373). as_local() is required:
+                  trigger.to_state.last_changed is UTC, and formatting it
+                  without converting first gets interpreted as local time
+                  by input_datetime.set_datetime, shifting every timestamp
+                  by the UTC offset (Codex P1 follow-up on #373)
                 action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_cpap_off
                 data:
-                  datetime: "{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}"
+                  datetime: "{{ as_local(trigger.to_state.last_changed).strftime('%Y-%m-%d %H:%M:%S') }}"
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.sleep_session_cpap_stopped
@@ -300,12 +304,16 @@ automation:
                   Timestamp the actual bed-exit, not this delayed callback —
                   now() here is ~5 minutes late (the trigger's for:
                   duration), over-reporting bed_minutes every session
-                  (Codex P2 on #373)
+                  (Codex P2 on #373). as_local() is required:
+                  trigger.to_state.last_changed is UTC, and formatting it
+                  without converting first gets interpreted as local time
+                  by input_datetime.set_datetime, shifting every timestamp
+                  by the UTC offset (Codex P1 follow-up on #373)
                 action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_bed_out
                 data:
-                  datetime: "{{ trigger.to_state.last_changed.strftime('%Y-%m-%d %H:%M:%S') }}"
+                  datetime: "{{ as_local(trigger.to_state.last_changed).strftime('%Y-%m-%d %H:%M:%S') }}"
               - if:
                   - condition: state
                     entity_id: input_boolean.sleep_session_cpap_stopped
