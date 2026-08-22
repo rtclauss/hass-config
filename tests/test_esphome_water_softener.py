@@ -24,6 +24,8 @@ def test_active_water_softener_uses_esp32_and_pinned_vl53l1x_component() -> None
     assert "esp32:" in text
     assert "variant: esp32" in text
     assert "type: esp-idf" in text
+    assert 'minimum_chip_revision: "3.0"' in text
+    assert "sram1_as_iram: true" in text
     assert "github://soldierkam/vl53l1x_sensor@v0.5.1" in text
     assert "platform: vl53l1x_sensor" in text
     assert "platform: vl53l0x" not in text
@@ -40,6 +42,7 @@ def test_vl53l1x_wiring_and_measurement_contract_are_explicit() -> None:
     assert "distance_mode: LONG" in text
     assert "timing_budget: 200ms" in text
     assert "unit_of_measurement: \"mm\"" in text
+    assert "accuracy_decimals: 0" in text
     assert "lambda: return x * 1000;" in text
     assert "update_interval: 2s" in text
 
