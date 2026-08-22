@@ -264,6 +264,21 @@ def test_bathroom_morning_routine_alarm_window_includes_special_meeting() -> Non
         assert token in block
 
 
+def test_bathroom_morning_routine_falls_back_to_wakeup_alarm_firing() -> None:
+    # Codex P2 follow-up on #972: alarm_wake_up's meeting-alarm branch turns
+    # special_meeting off the instant it fires, before the resident can
+    # reach the bathroom, so the candidate list above no longer sees it by
+    # the time this template re-evaluates. wakeup_alarm_firing stays on
+    # durably once any branch fires, so it must be an independent,
+    # always-sufficient signal that a real wake-up is already underway.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "is_state('input_boolean.wakeup_alarm_firing', 'on')" in block
+    or_index = block.index("is_state('input_boolean.wakeup_alarm_firing', 'on')")
+    or_clause_index = block.index(" or (alarm_enabled", or_index)
+    assert or_clause_index > or_index
+
+
 def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:
     block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 

@@ -439,9 +439,19 @@ automation:
           {% endif %}
           {% set now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second %}
           {% set wake_window_seconds = 90 * 60 %}
-          {{ alarm_enabled and alarm_seconds_since_midnight > 0
+          {# alarm_wake_up's meeting-alarm branch turns special_meeting off
+             the instant it fires (packages/workday.yaml), before the
+             resident can reach the bathroom — so by the time this template
+             re-evaluates, the candidate list above no longer sees it and
+             falls back to the later weekday alarm (Codex P2 follow-up on
+             #972). wakeup_alarm_firing stays on durably once any branch
+             fires (through snooze, until cancel/rollover), so treat it as
+             an independent, always-sufficient signal that a real wake-up
+             is already underway. #}
+          {{ is_state('input_boolean.wakeup_alarm_firing', 'on')
+             or (alarm_enabled and alarm_seconds_since_midnight > 0
              and now_seconds_since_midnight >= alarm_seconds_since_midnight
-             and now_seconds_since_midnight <= (alarm_seconds_since_midnight + wake_window_seconds) }}
+             and now_seconds_since_midnight <= (alarm_seconds_since_midnight + wake_window_seconds)) }}
     action:
       - variables:
           bathroom_was_playing: "{{ is_state('media_player.ma_bathroom', 'playing') }}"
