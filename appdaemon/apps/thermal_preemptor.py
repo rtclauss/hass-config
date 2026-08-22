@@ -45,6 +45,11 @@ class ThermalPreemptor(hass.Hass):
         )
         # Open-window gate — preemption is skipped while this is `on`.
         self.window_gate = self.args.get("window_gate", "binary_sensor.any_window_open")
+        # External hold gate — lets other automations (e.g. guest mode) block
+        # preemption while a named-preset hold they created is in effect.
+        self.hold_gate = self.args.get(
+            "hold_gate", "input_boolean.thermal_preemptor_hold_gate"
+        )
         self.rate_sensor = self.args.get(
             "rate_sensor", "sensor.ecobee_modeled_rate_deg_per_min"
         )
@@ -132,17 +137,21 @@ class ThermalPreemptor(hass.Hass):
     def _control_loop(self, kwargs):
         enabled = self.get_state(self.enable_switch) == "on"
         window_open = self.get_state(self.window_gate) == "on"
+        hold_gate_active = self.get_state(self.hold_gate) == "on"
 
-        # If a kill-switch or window transition occurred while a hold is active,
-        # cancel it immediately rather than waiting for the revert timer.
+        # If a kill-switch, window, or external hold-gate transition occurred
+        # while a hold is active, cancel it immediately rather than waiting for
+        # the revert timer.
         if self.active_hold is not None:
-            if not enabled or window_open:
+            if not enabled or window_open or hold_gate_active:
                 self._revert({"room": self.active_hold.get("reason", "unknown")})
             return
 
         if not enabled:
             return
         if window_open:
+            return
+        if hold_gate_active:
             return
 
         mode = self.get_state(self.climate_entity)
@@ -256,6 +265,16 @@ class ThermalPreemptor(hass.Hass):
     # ------------------------------------------------------------------
 
     def _revert(self, kwargs):
+        # Cancel the scheduled timer when called early (kill-switch, window gate,
+        # hold gate).  cancel_timer is a safe no-op on an already-fired handle,
+        # so this is also called from the timer callback itself without harm.
+        if self.active_hold is not None:
+            handle = self.active_hold.get("revert_handle")
+            if handle is not None:
+                try:
+                    self.cancel_timer(handle)
+                except Exception:
+                    pass
         room = kwargs.get("room", "unknown")
         self.call_service(
             "ecobee/resume_program",

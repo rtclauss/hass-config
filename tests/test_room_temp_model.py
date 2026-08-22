@@ -218,6 +218,37 @@ def test_predict_surfaces_cv_metrics_and_trained_at(rtm):
     assert out["n_training_samples"] == 4242
 
 
+def test_load_falls_back_to_linear_when_model_set_is_incomplete(rtm, monkeypatch):
+    """A partial on-disk set (some horizons missing) must not be loaded.
+
+    predict() must fall back to linear so a KeyError on models[room][h] cannot
+    surface when inference is requested before a complete retrain finishes.
+    """
+    partial_horizons = set(model.HORIZONS[:-1])  # all but the last
+
+    class _PartialJoblib:
+        @staticmethod
+        def load(path):
+            for h in partial_horizons:
+                if f"_{h}m.joblib" in path:
+                    return _StubModel(1.0)
+            raise FileNotFoundError(path)
+
+    import types
+    fake_jl = types.ModuleType("joblib")
+    fake_jl.load = _PartialJoblib.load
+    monkeypatch.setitem(sys.modules, "joblib", fake_jl)
+
+    # Create the files that should appear to exist for the partial set.
+    for h in partial_horizons:
+        open(rtm._model_path("owner_suite", h), "w").close()
+
+    rtm.load()
+
+    out = rtm.predict("owner_suite", _raw(room_temp=70.0, room_temp_rate_15m=0.0))
+    assert out["prediction_source"] == "fallback_linear"
+
+
 def test_predict_selects_only_trained_feature_cols(rtm):
     """feature_cols drives the vector, so extra candidate features are ignored."""
     pytest.importorskip("pandas")
