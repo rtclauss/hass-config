@@ -246,6 +246,19 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
             ),
         },
         {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "classification": "thermal-preemptor hold-gate wiring",
+            "reason": (
+                "PR #864 adds input_boolean.thermal_preemptor_hold_gate toggling "
+                "alongside guest-climate preset/resume actions; diffuser sleep/wake "
+                "participation, afternoon fallback, and oil-replacement behavior "
+                "governed by diffusers.allium are unchanged — the hold gate only "
+                "signals ThermalPreemptor to stand down while a named-preset hold is "
+                "active."
+            ),
+        },
+        {
             "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/workday.yaml"],
             "classification": "Music Assistant entity-id migration",
