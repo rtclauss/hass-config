@@ -82,6 +82,29 @@ def test_goodnight_integrity_script_coordinates_house_shutdown_and_verification(
         assert token in block
 
 
+def test_goodnight_integrity_skips_inactive_common_area_media_targets() -> None:
+    block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
+    assert (
+        "- sequence:\n              - variables:\n"
+        "                  common_area_media_shutdown_targets:"
+    ) in block
+    media_shutdown = block.split(
+        "common_area_media_shutdown_targets:", maxsplit=1
+    )[1].split("script.apply_owner_suite_inovelli_led_policy", maxsplit=1)[0]
+
+    for token in (
+        "expand(",
+        "'media_player.lg_webos_smart_tv'",
+        "'media_player.basement'",
+        "['off', 'unavailable', 'unknown']",
+        "common_area_media_shutdown_targets | count > 0",
+        'entity_id: "{{ common_area_media_shutdown_targets }}"',
+    ):
+        assert token in media_shutdown
+
+    assert media_shutdown.count("action: media_player.turn_off") == 1
+
+
 def test_goodnight_integrity_respects_guest_mode_and_guest_room_occupancy() -> None:
     block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
 
