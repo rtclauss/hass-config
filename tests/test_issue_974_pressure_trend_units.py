@@ -182,6 +182,22 @@ def test_window_pressure_alert_requires_a_settled_sample_buffer() -> None:
     assert "35 * 60" in block
 
 
+def test_window_pressure_alert_settle_gate_fails_closed() -> None:
+    # Codex P2 follow-up on #974: as_timestamp(states('sensor.uptime_at'), 0)
+    # defaulted to epoch 0 while uptime_at was unknown/unavailable (e.g.
+    # before the uptime platform published its first value), making the
+    # elapsed-time calculation huge and letting the settle gate pass right
+    # when it's needed most. Must require a valid value instead.
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: alert_house_windows_open_pressure_dropping")
+    end = text.index("\n  - id:", start)
+    block = text[start:end]
+
+    assert "has_value('sensor.uptime_at')" in block
+    assert "as_timestamp(states('sensor.uptime_at'), 0)" not in block
+
+
 def test_uptime_sensor_is_defined_for_the_settle_gate() -> None:
     weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
     text = weather_path.read_text(encoding="utf-8")

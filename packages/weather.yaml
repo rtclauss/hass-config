@@ -226,10 +226,16 @@ automation:
           Require a settled sample buffer before trusting a trend reading —
           every trend sensor starts empty on restart and can evaluate off
           its first two samples, which can still be milliseconds apart
-          given average_house_pressure's bursty updates (Codex P2 on #974)
+          given average_house_pressure's bursty updates (Codex P2 on #974).
+          Fails closed (blocks the alert) while uptime_at is unknown/
+          unavailable — e.g. before the uptime platform has published its
+          first value — instead of defaulting to epoch 0, which made the
+          elapsed time huge and let the condition pass right when the
+          settle gate is needed most (Codex P2 follow-up on #974)
         condition: template
         value_template: >-
-          {{ (as_timestamp(now()) - as_timestamp(states('sensor.uptime_at'), 0)) > (35 * 60) }}
+          {{ has_value('sensor.uptime_at')
+             and (as_timestamp(now()) - as_timestamp(states('sensor.uptime_at'))) > (35 * 60) }}
       - alias: >-
           Reject an implausible gradient regardless of cause (Codex P2
           follow-up on #974) — HA uptime only guards the post-restart
