@@ -168,8 +168,129 @@ def test_classified_gap_rejects_non_matching_changed_lines() -> None:
     assert findings[0].classification is None
 
 
+def test_changed_line_patterns_treat_brackets_as_literal_not_character_class() -> None:
+    # Codex P2 on #913/#914: allowed_changed_line_patterns is matched with
+    # fnmatch, where "[...]" is a character class, not a literal bracketed
+    # substring. A pattern like "+*['off', 'unavailable', 'unknown']*" must
+    # match only that literal text — not degrade into a single-character
+    # class (containing letters like 'o', 'f', 'a', etc.) that, combined
+    # with the surrounding '*' wildcards, would match almost any added line.
+    scope = weed.ProtectedScope(
+        spec="specs/night_routines.allium",
+        description="night behavior",
+        implementation_paths=("packages/house_mode.yaml",),
+    )
+    classified_gaps = [
+        {
+            "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": [
+                "+*['off', 'unavailable', 'unknown']*",
+            ],
+            "classification": "goodnight media availability guard",
+            "reason": "Scoped to the availability-guard change only.",
+        }
+    ]
+
+    # An unrelated added line that happens to share common letters/characters
+    # with the bracket contents must NOT be classified as covered.
+    findings = weed.detect_drift_risks(
+        ["packages/house_mode.yaml"],
+        [scope],
+        classified_gaps,
+        {"packages/house_mode.yaml": ["+    action: light.turn_on"]},
+    )
+
+    assert len(findings) == 1
+    assert findings[0].is_failure
+    assert findings[0].classification is None
+
+    # The literal bracketed text itself must still match.
+    matching_findings = weed.detect_drift_risks(
+        ["packages/house_mode.yaml"],
+        [scope],
+        classified_gaps,
+        {
+            "packages/house_mode.yaml": [
+                "+          state: ['off', 'unavailable', 'unknown']"
+            ]
+        },
+    )
+
+    assert len(matching_findings) == 1
+    assert not matching_findings[0].is_failure
+    assert matching_findings[0].classification == "goodnight media availability guard"
+
+
+def test_goodnight_media_patterns_reject_unrelated_diffuser_target_swap() -> None:
+    # Codex P2 follow-up on #913/#914: even after bracket-escaping, generic
+    # patterns like "-*entity_id:*" and "+*media_player*" still matched an
+    # unrelated change — e.g. replacing "entity_id: group.diffusers" with
+    # "entity_id: media_player.ma_bedroom" — because both a bare removed
+    # "entity_id:" and any line mentioning "media_player" satisfied them.
+    # That would misclassify a diffuser drift-gate removal as covered by
+    # the goodnight-media-guard change. The real config's patterns (used in
+    # isolation, so an unrelated unconditional gap elsewhere for the same
+    # file can't paper over a regression here) must not match that swap.
+    scope = weed.ProtectedScope(
+        spec="specs/night_routines.allium",
+        description="night behavior",
+        implementation_paths=("packages/house_mode.yaml",),
+    )
+    _, all_gaps = weed.load_config(weed.DEFAULT_CONFIG)
+    goodnight_gap = next(
+        g for g in all_gaps if g.get("classification") == "goodnight media availability guard"
+    )
+
+    findings = weed.detect_drift_risks(
+        ["packages/house_mode.yaml"],
+        [scope],
+        [goodnight_gap],
+        {
+            "packages/house_mode.yaml": [
+                "-              entity_id: group.diffusers",
+                "+              entity_id: media_player.ma_bedroom",
+            ]
+        },
+    )
+
+    assert len(findings) == 1
+    assert findings[0].is_failure
+    assert findings[0].classification is None
+
+
 def test_default_config_lists_existing_specs_and_scopes() -> None:
     scopes, classified_gaps = weed.load_config(weed.DEFAULT_CONFIG)
+    goodnight_media_patterns = [
+        "-*- continue_on_error: true",
+        "-*action: media_player.turn_off",
+        "-*target:",
+        "-*entity_id:",
+        "-*media_player.lg_webos_smart_tv",
+        "-*media_player.basement",
+        "+*- sequence:",
+        "+*- variables:",
+        "+*common_area_media_shutdown_targets: >-",
+        "+*{{ expand(",
+        "+*'media_player.lg_webos_smart_tv',",
+        "+*'media_player.basement'",
+        "+*)",
+        "+*| rejectattr(",
+        "+*'state',",
+        "+*'in',",
+        "+*['off', 'unavailable', 'unknown']",
+        "+*| map(attribute='entity_id')",
+        "+*| list }}",
+        "+*- if:",
+        "+*- condition: template",
+        "+*value_template: >-",
+        "+*common_area_media_shutdown_targets | count > 0 }}",
+        "+*then:",
+        "+*- continue_on_error: true",
+        "+*action: media_player.turn_off",
+        "+*target:",
+        '+*entity_id: "{{ common_area_media_shutdown_targets }}"',
+    ]
 
     assert classified_gaps == [
         {
@@ -246,6 +367,18 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         },
         {
             "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": goodnight_media_patterns,
+            "classification": "goodnight media availability guard",
+            "reason": (
+                "Issue #913 and PR #914 preserve the night_routines.allium requirement "
+                "to shut down common-area media while skipping targets that are already "
+                "off or unavailable; all other bedtime, privacy, guest, diffuser, and "
+                "owner-suite LED behavior is unchanged."
+            ),
+        },
+        {
+            "spec": "specs/night_routines.allium",
             "implementation_paths": ["packages/house_mode.yaml", "packages/tv.yaml"],
             "classification": "Music Assistant entity-id migration",
             "reason": (
@@ -253,6 +386,18 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "entity IDs with explicit media_player.ma_<room> IDs; bedtime "
                 "preparation, overnight goodnight integrity, guest-aware shutdown, and "
                 "owner-suite LED behavior governed by night_routines.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": goodnight_media_patterns,
+            "classification": "non-diffuser goodnight media guard",
+            "reason": (
+                "Issue #913 and PR #914 filter unavailable common-area media players "
+                "during goodnight. The adjacent group.diffusers shutdown action and all "
+                "sleep, wake, fallback, and oil-reminder behavior governed by "
+                "diffusers.allium remain unchanged."
             ),
         },
         {
