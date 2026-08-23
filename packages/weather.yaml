@@ -230,6 +230,18 @@ automation:
         condition: template
         value_template: >-
           {{ (as_timestamp(now()) - as_timestamp(states('sensor.uptime_at'), 0)) > (35 * 60) }}
+      - alias: >-
+          Reject an implausible gradient regardless of cause (Codex P2
+          follow-up on #974) — HA uptime only guards the post-restart
+          case; if the pressure sources or their integration reconnect
+          after an outage longer than the trend window while HA itself
+          stays up, the uptime check already passes but the trend
+          sensor's own history is still fresh off the same clustered
+          updates. A real storm never approaches this rate (v_rapidly is
+          ~2 hPa/hr); a burst-driven spike, restart or not, does.
+        condition: template
+        value_template: >-
+          {{ (trigger.to_state.attributes.gradient | float(0) | abs) * 3600 * 33.8639 <= 15 }}
     action:
       - action: notify.mobile_app_wethop
         data:

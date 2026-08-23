@@ -187,3 +187,23 @@ def test_uptime_sensor_is_defined_for_the_settle_gate() -> None:
     text = weather_path.read_text(encoding="utf-8")
     assert "platform: uptime" in text
     assert "name: uptime_at" in text
+
+
+def test_window_pressure_alert_rejects_an_implausible_gradient() -> None:
+    # Codex P2 follow-up on #974: HA uptime only guards the post-restart
+    # case. If the pressure sources or their integration reconnect after an
+    # outage longer than the trend window while HA itself stays up, the
+    # uptime check already passes but the trend sensor's own history is
+    # still fresh off the same clustered updates — a two-sample recovery
+    # spike could still fire the alert. A magnitude ceiling on the firing
+    # sensor's own gradient catches this regardless of cause (restart,
+    # reconnect, or anything else), the same way the derivative clamp in
+    # #973/#977 did for temperature.
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: alert_house_windows_open_pressure_dropping")
+    end = text.index("\n  - id:", start)
+    block = text[start:end]
+
+    assert "trigger.to_state.attributes.gradient" in block
+    assert "* 3600 * 33.8639 <= 15" in block
