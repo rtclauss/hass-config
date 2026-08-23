@@ -100,10 +100,16 @@ class RoomTempModel:
                     except Exception:
                         pass
             if len(loaded) == len(HORIZONS):
-                self.models[room] = loaded
+                meta = None
                 if os.path.exists(self._meta_path(room)):
-                    with open(self._meta_path(room)) as f:
-                        self.meta[room] = json.load(f)
+                    try:
+                        with open(self._meta_path(room)) as f:
+                            meta = json.load(f)
+                    except Exception:
+                        pass
+                if meta and meta.get("feature_cols"):
+                    self.models[room] = loaded
+                    self.meta[room] = meta
 
     # ------------------------------------------------------------------
     # InfluxDB helpers (training only)
@@ -405,6 +411,8 @@ class RoomTempModel:
             metrics["trained_at"] = datetime.now(timezone.utc).isoformat()
             metrics["n_samples"] = len(df)
             metrics["feature_cols"] = feature_cols
+            metrics["feature_means"] = {k: float(round(v, 4))
+                                         for k, v in df[feature_cols].mean().items()}
             with open(self._meta_path(room), "w") as f:
                 json.dump(metrics, f)
             self.models[room] = room_models
@@ -495,7 +503,22 @@ class RoomTempModel:
         feature_cols = meta.get("feature_cols")
         if feature_cols:
             import pandas as pd
-            X = pd.DataFrame([row])[feature_cols].fillna(0)
+            X = pd.DataFrame([row])[feature_cols]
+            missing = X.columns[X.isna().any()].tolist()
+            if missing:
+                feature_means = meta.get("feature_means")
+                if feature_means is None:
+                    # Model predates stored means — cannot safely impute; use linear fallback.
+                    rate = 0.0
+                    try:
+                        rate = float(raw.get("room_temp_rate_15m") or 0.0)
+                    except (TypeError, ValueError):
+                        pass
+                    for h in HORIZONS:
+                        result[f"t{h}"] = round(room_temp + rate * h, 2)
+                    result["prediction_source"] = "fallback_linear"
+                    return result
+                X = X.fillna({c: feature_means.get(c, 0.0) for c in missing})
             feat = X.values[0]
         else:
             feat = [row.get(k, 0) or 0 for k in sorted(row.keys())]
