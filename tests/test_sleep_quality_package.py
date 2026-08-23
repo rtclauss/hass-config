@@ -81,7 +81,10 @@ def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions
 
     assert "id: cpap_stop" in active
     assert "below: 1.3" in active
-    assert active.count("minutes: 5") == 2
+    # cpap_stop's own for:, bed_exit's for:, and the ordering guard added
+    # in the cpap_stop branch (test_cpap_stop_waits_for_beds_own_debounce_
+    # before_finalizing) that mirrors bed_exit's debounce.
+    assert active.count("minutes: 5") == 3
     assert "entity_id: input_datetime.sleep_session_cpap_off" in active
     assert "id: bed_exit" in active
     assert active.count("below: 1.3") == 2
@@ -162,6 +165,28 @@ def test_continuity_score_is_bounded_and_does_not_change_governed_routines() -> 
     assert "script.wake_up_script" not in text
     assert "script.goodnight_integrity" not in text
     assert "wakeup_alarm_firing" not in text
+
+
+def test_cpap_stop_waits_for_beds_own_debounce_before_finalizing() -> None:
+    # Codex P2 follow-up on #373: if CPAP drops first and the bed empties
+    # during this branch's own 5-minute debounce, checking the bed's raw
+    # current state let this fire before bed_exit had written bed_out,
+    # finalizing on a stale/prior timestamp, rejecting the session, and
+    # clearing sleep_session_active before bed_exit's own guarded call
+    # could ever run — silently dropping a real completed session. Must
+    # require the bed to have been sustained-off for 5 minutes too, same
+    # as the bed_exit trigger's own debounce.
+    active = _automation_block("sleep_quality_track_active_session")
+    cpap_stop_branch = active.split("id: cpap_stop", maxsplit=2)[2]
+    finalize_index = cpap_stop_branch.index("action: script.finalize_sleep_quality_session")
+    preceding = cpap_stop_branch[:finalize_index]
+
+    state_index = preceding.rindex(
+        "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either"
+    )
+    guard_block = preceding[state_index:]
+    assert 'state: "off"' in guard_block
+    assert "minutes: 5" in guard_block
 
 
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
