@@ -284,18 +284,36 @@ def test_bathroom_morning_routine_bounds_the_firing_fallback_to_the_window() -> 
     # only clears wakeup_alarm_firing at a fixed 14:34:56, not on cancel or
     # after any reasonable delay — an unbounded OR on its raw state reopened
     # essentially the original unbounded-window bug for hours after an early
-    # alarm. Must be bounded to the same wake_window_seconds using its own
-    # last_changed.
+    # alarm. Must be bounded to the same wake_window_seconds.
     block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 
     assert (
-        "as_timestamp(now()) - as_timestamp(states.input_boolean.wakeup_alarm_firing.last_changed)"
+        "as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp')"
         in block
     )
-    assert (
-        "as_timestamp(states.input_boolean.wakeup_alarm_firing.last_changed)) <= wake_window_seconds"
-        in block
-    )
+    assert "float(0))) <= wake_window_seconds" in block
+
+
+def test_bathroom_morning_routine_firing_fallback_survives_a_restart() -> None:
+    # Codex P2 follow-up on #972: input_boolean state is restored across an
+    # HA restart, but the restored entity gets a fresh last_changed at
+    # restore time, not the original fire time — a restart while an alarm
+    # was still "firing" would look like a brand new alarm just fired.
+    # Must use the explicit, restart-safe input_datetime.wakeup_alarm_
+    # fired_at instead of wakeup_alarm_firing's own last_changed.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "input_datetime.wakeup_alarm_fired_at" in block
+    assert "states.input_boolean.wakeup_alarm_firing.last_changed" not in block
+
+
+def test_wake_up_script_records_the_alarm_fire_time_explicitly() -> None:
+    block = _script_block(WORKDAY_PATH, "wake_up_script")
+
+    assert "entity_id: input_datetime.wakeup_alarm_fired_at" in block
+    turn_on_index = block.index("entity_id: input_boolean.wakeup_alarm_firing")
+    set_datetime_index = block.index("entity_id: input_datetime.wakeup_alarm_fired_at")
+    assert set_datetime_index > turn_on_index
 
 
 def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:

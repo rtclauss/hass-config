@@ -451,10 +451,16 @@ automation:
              reasonable delay, so an unbounded OR here reopened
              essentially the original unbounded-window bug for up to ~7
              hours after an early alarm (Codex P1 follow-up on #972).
-             Bound it to the same wake_window_seconds using its own
-             last_changed instead. #}
+             Bound it to the same wake_window_seconds — but not using its
+             own last_changed: input_boolean state is restored across an HA
+             restart, and the restored entity gets a fresh last_changed at
+             restore time, not the original fire time, so a restart while
+             an alarm was still "firing" would look like a brand new alarm
+             (Codex P2 follow-up on #972). wake_up_script now records the
+             real fire time explicitly in a restart-safe input_datetime;
+             use that instead. #}
           {% set alarm_firing_recently = is_state('input_boolean.wakeup_alarm_firing', 'on')
-               and (as_timestamp(now()) - as_timestamp(states.input_boolean.wakeup_alarm_firing.last_changed)) <= wake_window_seconds %}
+               and (as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp') | float(0))) <= wake_window_seconds %}
           {{ alarm_firing_recently
              or (alarm_enabled and alarm_seconds_since_midnight > 0
              and now_seconds_since_midnight >= alarm_seconds_since_midnight
