@@ -268,15 +268,34 @@ def test_bathroom_morning_routine_falls_back_to_wakeup_alarm_firing() -> None:
     # Codex P2 follow-up on #972: alarm_wake_up's meeting-alarm branch turns
     # special_meeting off the instant it fires, before the resident can
     # reach the bathroom, so the candidate list above no longer sees it by
-    # the time this template re-evaluates. wakeup_alarm_firing stays on
-    # durably once any branch fires, so it must be an independent,
-    # always-sufficient signal that a real wake-up is already underway.
+    # the time this template re-evaluates. wakeup_alarm_firing is a durable
+    # signal that some alarm fired, used as a fallback alongside the
+    # timestamp window.
     block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 
-    assert "is_state('input_boolean.wakeup_alarm_firing', 'on')" in block
-    or_index = block.index("is_state('input_boolean.wakeup_alarm_firing', 'on')")
+    assert "alarm_firing_recently = is_state('input_boolean.wakeup_alarm_firing', 'on')" in block
+    or_index = block.index("alarm_firing_recently\n")
     or_clause_index = block.index(" or (alarm_enabled", or_index)
     assert or_clause_index > or_index
+
+
+def test_bathroom_morning_routine_bounds_the_firing_fallback_to_the_window() -> None:
+    # Codex P1 follow-up on #972: turn_off_alarm_firing (packages/light.yaml)
+    # only clears wakeup_alarm_firing at a fixed 14:34:56, not on cancel or
+    # after any reasonable delay — an unbounded OR on its raw state reopened
+    # essentially the original unbounded-window bug for hours after an early
+    # alarm. Must be bounded to the same wake_window_seconds using its own
+    # last_changed.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert (
+        "as_timestamp(now()) - as_timestamp(states.input_boolean.wakeup_alarm_firing.last_changed)"
+        in block
+    )
+    assert (
+        "as_timestamp(states.input_boolean.wakeup_alarm_firing.last_changed)) <= wake_window_seconds"
+        in block
+    )
 
 
 def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:
