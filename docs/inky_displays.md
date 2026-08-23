@@ -81,7 +81,7 @@ Payloads are compact JSON. Required fields:
     {
       "type": "rows",
       "rows": [
-        {"icon": "mdi:weather-snowy", "label": "Weather", "value": "24F Snow", "level": "normal"},
+        {"icon": "mdi:weather-snowy", "label": "Weather", "value": "24F / -4C Snow", "level": "normal"},
         {"icon": "mdi:door-closed", "label": "Doors", "value": "Closed", "level": "normal"}
       ]
     }
@@ -208,7 +208,7 @@ Current owner-suite rows:
 
 | Row | Value source | Level behavior |
 | --- | --- | --- |
-| Weather | `sensor.outside_temperature` plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
+| Weather | `sensor.outside_temperature` converted and shown as Fahrenheit/Celsius, plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | Night-only; `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | Night-only; shown when no urgent status is active |
 | Next | Next `calendar.ryan_claussen` event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
@@ -234,6 +234,11 @@ meeting alarm or urgent `Status`. Meeting alarm details are night-only, and
 safety/exception status takes priority over the meeting row. The publish script
 also requests hourly forecast data at publish time for event-weather checks,
 with the legacy `forecast_json` attribute kept only as a fallback.
+
+All temperatures rendered in the owner-suite weather rows use the compact
+`73F / 23C` format. This includes current weather, tomorrow's forecast, and
+destination weather while a flight is active. Both units are rounded to whole
+numbers; the Inky never displays fractional temperature values.
 
 In `morning`, `up_for_day`, and `midday`, alarm and meeting-alarm rows are not
 shown. Those modes use current `Weather`, next calendar event time/title,
@@ -281,12 +286,17 @@ REST resources.
 
 The footer uses 24-hour local time, for example `Updated 21:42`. This timestamp
 is generated only when the payload is published. Do not add `sensor.time` or a
-minute-level clock trigger for this field.
+minute-level clock trigger for this field. The Pi excludes footer-only changes
+that match the publisher's `Updated HH:MM` timestamp from duplicate detection,
+so a new timestamp reaches the panel only when other display content also
+changes. Meaningful footer copy, including the office guest Wi-Fi prompt,
+remains part of the content hash and refreshes the panel when changed.
 
 The Pi service preserves the last cached `Weather` and `Dest Wx` rows when a new
-payload marks those rows as `unknown` or `unavailable`. Other rows and the
-footer can still update, but stale weather source failures should not replace a
-previously useful weather value on the display.
+payload marks those rows as `unknown` or `unavailable`. Other rows can still
+update, and their next render also carries the current footer, but stale weather
+source failures should not replace a previously useful weather value on the
+display.
 
 Manual publish from Home Assistant Developer Tools:
 
@@ -434,7 +444,9 @@ The service writes:
 - `last_image.png`
 - `last_hash.txt`
 
-Duplicate payload hashes are ignored and do not refresh the physical panel.
+Duplicate semantic-content hashes are ignored and do not refresh the physical
+panel. Footer-only `Updated HH:MM` timestamp changes are deliberately treated as
+duplicates; other footer changes remain meaningful display content.
 Invalid payloads are logged and do not overwrite the last good cache.
 
 ## Raspberry Pi Service

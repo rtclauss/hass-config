@@ -563,8 +563,9 @@ automation:
 
   - alias: Restart Music Assistant when Ryan leaves home
     description: >
-      Restart the Music Assistant app only when Ryan leaves home to refresh
-      Sonos discovery while the house is empty.
+      Restart the Music Assistant app only when Ryan has actually left home to
+      refresh Sonos discovery while the house is empty. Ignore source-tracker
+      zone churn while the aggregated person remains home or is indeterminate.
     id: restart_music_assistant_every_12_17_hours
     trace:
       stored_traces: 10
@@ -573,6 +574,15 @@ automation:
         entity_id: person.ryan
         zone: zone.home
         event: leave
+    condition:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: person.ryan
+            state:
+              - home
+              - unknown
+              - unavailable
     action:
       - action: hassio.addon_restart
         continue_on_error: true

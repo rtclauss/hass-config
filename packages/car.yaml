@@ -170,6 +170,12 @@ automation:
         for:
           minutes: 5
         id: parked_home
+      - trigger: state
+        entity_id:
+          - person.ryan
+          - device_tracker.nigori_location_tracker
+        to: "home"
+        id: home_reconciliation
       - trigger: numeric_state
         entity_id: sensor.outside_temperature
         below: 20
@@ -236,6 +242,7 @@ automation:
             {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
             {% set location_label = location_name | replace('_', ' ') | title %}
             {% set preserve_default_charging_schedule = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+            {% set resident_home = is_state('person.ryan', 'home') %}
             {% set tariff_name = tariff | lower %}
             {% set tariff_display = tariff | replace('_', '-') | title %}
             {% set high_tariff = tariff_name in ['on_peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
@@ -289,7 +296,7 @@ automation:
             {% endif %}
             {% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}
             {% set departure_window_open = departure_dt is not none and departure_dt > now() %}
-            {% set precondition = has_calendar_departure and departure_window_open and manage_tesla_schedule %}
+            {% set precondition = has_calendar_departure and departure_window_open and resident_home and location_name == 'home' %}
             {% if trip_all_day %}
               {% set precondition = false %}
             {% endif %}
@@ -339,6 +346,9 @@ automation:
             {% if preserve_default_charging_schedule and not manage_tesla_schedule and departure_time != '' %}
               {% set summary = summary ~ ' No extra home charging override is needed.' %}
             {% endif %}
+            {% if has_calendar_departure and not resident_home %}
+              {% set summary = summary ~ ' Cabin preconditioning is suppressed because Ryan is away.' %}
+            {% endif %}
             {% if precondition and low_tpms %}
               {% set summary = summary ~ ' Tire pressure is low: ' ~ low_tpms_summary ~ '. Get air before you leave.' %}
             {% endif %}
@@ -360,7 +370,8 @@ automation:
               'trip_duration_min': trip_duration_min,
               'outside_temp_f': outside_temp_f,
               'high_tariff': high_tariff,
-              'has_calendar_departure': has_calendar_departure
+              'has_calendar_departure': has_calendar_departure,
+              'resident_home': resident_home
             } | to_json }}
           tesla_plan: "{{ tesla_plan_json | from_json }}"
       - choose:
@@ -376,7 +387,7 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' and tesla_plan.manage_tesla_schedule }}"
+                value_template: "{{ tesla_plan.precondition and tesla_plan.departure_time != '' }}"
             sequence:
               - action: script.tesla_set_precondition_schedule_time
                 data:
@@ -391,6 +402,11 @@ automation:
                 target:
                   entity_id: input_boolean.tesla_managed_departure_active
         default:
+          # Keep tracking an HA-managed departure until the Tesla schedule is
+          # actually cleared. The disable path refuses to send enable:false at a
+          # protected location while the Tesla app's scheduled/off-peak charging
+          # is active; dropping the helpers anyway left the preconditioning
+          # schedule armed on the car with nothing on the HA side to retry it.
           - choose:
               - conditions:
                   - condition: template
@@ -399,15 +415,29 @@ automation:
                   - action: script.tesla_set_precondition_schedule_time
                     data:
                       enabled: false
+                      force_disable: "{{ not tesla_plan.resident_home or tesla_plan.location != 'home' }}"
                       reason: "{{ tesla_plan.summary }}"
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.tesla_managed_departure_active
-          - action: input_number.set_value
-            target:
-              entity_id: input_number.tesla_managed_departure_ts
-            data:
-              value: 0
+                    response_variable: tesla_schedule_result
+                  - if:
+                      - condition: template
+                        value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+                    then:
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: input_boolean.tesla_managed_departure_active
+                      - action: input_number.set_value
+                        target:
+                          entity_id: input_number.tesla_managed_departure_ts
+                        data:
+                          value: 0
+                    else:
+                      - action: logbook.log
+                        data:
+                          entity_id: script.tesla_set_precondition_schedule_time
+                          domain: script
+                          name: Tesla scheduled departure planner
+                          message: >-
+                            Kept the HA-managed departure tracked: the Tesla schedule could not be cleared yet.
       - choose:
           - conditions:
               - condition: or
@@ -423,6 +453,75 @@ automation:
                   data:
                     url: "/ryan-new-mushroom/tesla-v2"
                   message: "{{ tesla_plan.summary }}"
+
+  - id: tesla_departure_cancel_when_home_context_ends
+    alias: tesla_departure_cancel_when_home_context_ends
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      # "home -> anything" would include home -> unavailable/unknown, which a
+      # Tesla API hiccup or an integration reload produces while the car has not
+      # moved. That read as "left home" and force-cleared a live schedule, so
+      # only a known non-home state counts as leaving (see #904/#907).
+      - trigger: state
+        entity_id:
+          - person.ryan
+          - device_tracker.nigori_location_tracker
+        from: "home"
+        not_to:
+          - "unknown"
+          - "unavailable"
+        id: home_context_left
+      # The Tesla API command can return before the integration publishes the
+      # new departure timestamp. If the owner leaves during that window, the
+      # first protected-location clear safely declines because it cannot prove
+      # the live schedule is HA-managed. Retry as soon as Tesla reports the
+      # timestamp, but only while the owner or vehicle is still away.
+      - trigger: state
+        entity_id: binary_sensor.nigori_scheduled_departure
+        attribute: Departure timestamp
+        id: tesla_schedule_synced
+    condition:
+      - condition: state
+        entity_id: input_boolean.tesla_managed_departure_active
+        state: "on"
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: home_context_left
+          # Only a *known* non-home state means away. `not is_state(x, 'home')`
+          # is also true for unknown/unavailable, so the Tesla integration
+          # publishing the departure timestamp at startup — while the trackers
+          # were still restoring — passed this check and force-cleared the
+          # schedule the planner had just armed. The planner could not re-arm it
+          # either: its own condition needs the tracker to read `home`.
+          - condition: template
+            value_template: >-
+              {{ states('person.ryan') not in ['home', 'unknown', 'unavailable'] or
+                 states('device_tracker.nigori_location_tracker') not in ['home', 'unknown', 'unavailable'] }}
+    action:
+      - action: script.tesla_set_precondition_schedule_time
+        data:
+          enabled: false
+          force_disable: true
+          reason: >-
+            Cancel the Home Assistant-managed Tesla departure because Ryan or Nigori left home.
+        response_variable: tesla_schedule_result
+      # Only stop tracking once the Tesla schedule is actually gone; otherwise a
+      # later planner run still has the helpers set and can retry the clear.
+      - if:
+          - condition: template
+            value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tesla_managed_departure_active
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.tesla_managed_departure_ts
+            data:
+              value: 0
 
   - id: tesla_departure_schedule_cleanup
     alias: tesla_departure_schedule_cleanup
@@ -462,14 +561,22 @@ automation:
         data:
           enabled: false
           reason: "{{ cleanup_reason }}"
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.tesla_managed_departure_active
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.tesla_managed_departure_ts
-        data:
-          value: 0
+        response_variable: tesla_schedule_result
+      # A passed departure that could not be cleared (Tesla-app scheduled or
+      # off-peak charging active at a protected location) stays tracked, so the
+      # next planner run retries instead of leaving the car armed forever.
+      - if:
+          - condition: template
+            value_template: "{{ tesla_schedule_result.cleared | default(false) in [true, 'true', 'True'] }}"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.tesla_managed_departure_active
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.tesla_managed_departure_ts
+            data:
+              value: 0
 
   - id: do_restart_garage_door_esp
     alias: do_restart_garage_door_esp
@@ -817,6 +924,9 @@ script:
       reason:
         description: Optional reason to include in the logbook entry.
         example: "Weekday alarm departure plan"
+      force_disable:
+        description: Disable the managed departure even at a protected location, such as when Ryan or Nigori leaves home.
+        example: true
     sequence:
       - variables:
           schedule_enabled: "{{ enabled | default(true) not in [false, 'false', 'False', 'off', 0, '0'] }}"
@@ -866,8 +976,9 @@ script:
           tesla_off_peak_charging_enabled: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Off peak charging enabled') in [true, 'true', 'True', 'on'] }}"
           tesla_managed_departure_matches: >-
             {{ stored_managed_departure_active in [true, 'true', 'True', 'on'] and stored_managed_departure_ts > 0 and tesla_departure_ts > 0 and ((stored_managed_departure_ts - tesla_departure_ts) | abs) <= 300 }}
+          force_disable_requested: "{{ force_disable | default(false) in [true, 'true', 'True', 'on', 1, '1'] }}"
           safe_to_clear_tesla_schedule: >-
-            {{ preserve_default_charging_schedule not in [true, 'true', 'True'] or (tesla_managed_departure_matches in [true, 'true', 'True'] and tesla_scheduled_charging_active not in [true, 'true', 'True'] and tesla_off_peak_charging_enabled not in [true, 'true', 'True']) }}
+            {{ preserve_default_charging_schedule not in [true, 'true', 'True'] or (tesla_managed_departure_matches in [true, 'true', 'True'] and (force_disable_requested in [true, 'true', 'True'] or (tesla_scheduled_charging_active not in [true, 'true', 'True'] and tesla_off_peak_charging_enabled not in [true, 'true', 'True']))) }}
       - choose:
           - conditions:
               - condition: template
@@ -879,7 +990,7 @@ script:
                   domain: script
                   name: Tesla scheduled departure planner
                   message: >-
-                    {{ effective_reason }}{% if safe_to_clear_tesla_schedule in [true, 'true', 'True'] %} Clearing Tesla scheduled departure.{% else %} Preserve the Tesla app charging schedule at {{ location_label }} and skip clearing Tesla schedule state because the live Tesla schedule does not match the last HA-managed protected-location departure.{% endif %}
+                    {{ effective_reason }}{% if safe_to_clear_tesla_schedule in [true, 'true', 'True'] %} Clearing Tesla scheduled departure.{% elif tesla_managed_departure_matches not in [true, 'true', 'True'] %} Preserve the Tesla app charging schedule at {{ location_label }} and skip clearing Tesla schedule state because the live Tesla schedule does not match the last HA-managed protected-location departure.{% else %} Preserve the Tesla app charging schedule at {{ location_label }} and skip clearing Tesla schedule state because scheduled or off-peak charging is active.{% endif %}
               - choose:
                   - conditions:
                       - condition: template
@@ -948,6 +1059,18 @@ script:
                     off_peak_charging_weekdays_only: true
                     end_off_peak_time: 360
                     wake_if_asleep: true
+      # Report whether the Tesla schedule was actually cleared so callers only
+      # drop the HA tracking helpers when there is nothing left to retry. Both
+      # values are read at the top sequence level, where they are set — a value
+      # set inside a choose/then sub-script is not visible here.
+      - variables:
+          tesla_schedule_result:
+            cleared: >-
+              {{ (not schedule_enabled) and safe_to_clear_tesla_schedule in [true, 'true', 'True'] }}
+            skipped_disable: >-
+              {{ (not schedule_enabled) and safe_to_clear_tesla_schedule not in [true, 'true', 'True'] }}
+      - stop: "Tesla departure planner finished"
+        response_variable: tesla_schedule_result
 
   # tesla_set_charge_limit_soc:
   #   alias: Tesla Set Charge Limit SOC

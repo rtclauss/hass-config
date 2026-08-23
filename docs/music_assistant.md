@@ -7,14 +7,37 @@ Behavior (what plays when) is owned by `specs/alarm_wakeup.allium` and
 
 ## Entity conventions
 
-- `media_player.*_sonos_2` is **Music Assistant's** player entity for each Sonos
-  speaker — NOT "Sonos v2". MA creates a `_2` entity for every Sonos it manages.
-  **Always target `_2` entities** in automations/scripts. The bare `*_sonos`
-  entities are the direct Sonos integration and are disabled.
+- Sonos-backed Music Assistant players use an explicit `ma_<room>` entity ID,
+  while their entity-registry `name` is the clean room name used by Home
+  Assistant, HomeKit, and Siri:
+
+  | Music Assistant entity ID | Entity-registry name |
+  | --- | --- |
+  | `media_player.ma_bedroom` | `Bedroom` |
+  | `media_player.ma_bathroom` | `Bathroom` |
+  | `media_player.ma_office` | `Office` |
+  | `media_player.ma_den` | `Den` |
+  | `media_player.ma_tiki_room` | `Tiki Room` |
+
+  The `ma_` prefix makes integration ownership obvious in YAML and Developer
+  Tools without leaking implementation detail into voice-control names.
+- Bare `media_player.*_sonos` entities belong to Home Assistant's native Sonos
+  integration and remain disabled. Do not target them from automations or
+  scripts. AirPlay-only MA endpoints and `media_player.den_turntable` are
+  separate players and are not aliases for the five room players above.
 - Sync groups (MA Sonos sync-group players, renamed from MA defaults):
   - `media_player.ma_group_everywhere` — bedroom, bathroom, office, den, tiki
     (default whole-house target)
   - `media_player.ma_group_guest` — bedroom, bathroom (used when guest mode is on)
+- Wake-up scripts intentionally do not inherit `ma_group_everywhere` membership.
+  They dynamically prepare the exact wake group from MA `ma_<room>` players:
+  bedroom + bathroom in guest mode, and bedroom + bathroom + office + den when
+  guest mode is off. This keeps Tiki Room out of owner-suite wake-up audio even
+  when the whole-house sync group includes it. `media_player.join` only *adds*
+  followers, so `music_assistant_prime_wake_group` first **unjoins any stray
+  member** left in the live bedroom group from a prior grouping (e.g. Tiki Room
+  after whole-house/arrival audio) — otherwise a stray plays wake-up audio
+  unprimed and unramped at whatever volume it was left at.
 
 ## NEVER hardcode a Spotify provider-instance id
 
@@ -51,16 +74,34 @@ Recovery steps:
    `guest_sonos`).
 2. Recreate any group MA actually lost in the MA UI (Settings → Players → add
    group): Everywhere = the 5 speakers above; Guest = bedroom + bathroom.
-3. Rename back: `everywhere_sonos` → `ma_group_everywhere`,
-   `guest_sonos` → `ma_group_guest` (entity-registry rename; updates no YAML, so
-   keep the names exact).
-4. Let the Spotify library finish syncing; personal playlists self-heal.
-5. Confirm no config pins a `spotify--<instance>` id — bare `spotify:` URIs only.
+3. Rename the groups back: `everywhere_sonos` → `ma_group_everywhere`,
+   `guest_sonos` → `ma_group_guest`.
+4. Restore each Sonos-backed room player's entity ID and entity-registry `name`
+   from the table above. Entity-registry renames do not update YAML, so keep the
+   IDs exact.
+5. Let the Spotify library finish syncing; personal playlists self-heal.
+6. Confirm no config pins a `spotify--<instance>` id — bare `spotify:` URIs only.
 
 ## Group volume
 
-For group playback, set volume on the **individual member `_2` entities**, never
+For group playback, set volume on the **individual member `ma_<room>` entities**, never
 on the group entity. Proportional scaling rounds to 0 below ~8%.
+
+Because of that ~8% dead zone, an **upward** volume ramp must command an
+absolute, index-driven curve (`step × iteration`, capped at the target), **not
+a readback-derived `live_volume + step`**. A readback-derived climb gets trapped
+below ~8%: the reported volume stops rising, so the next target never advances
+and the ramp stalls (the 2026-08-12 MPR wake-up topped out at ~6%). The wake-up
+ramp (`music_assistant_radio_wake_up`) and the owner-suite morning transition
+both use the absolute curve for this reason.
+
+The bedtime **rampdown** (`spotify_bedtime_volume`) is the opposite case and
+deliberately steps DOWN from each room's own live volume (`max(live − step,
+floor)`): it descends toward a low floor — the regime where the dead zone helps
+reach floor rather than trapping the ramp — and its targets are live-paused in
+guest mode, so a live-relative step is the only pause-safe option (an absolute
+global-index curve would resume a paused room many steps below where it was
+left). See its inline comment for the full rationale.
 
 ## MA WebSocket API
 

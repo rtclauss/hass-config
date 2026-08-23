@@ -49,7 +49,7 @@ Common optional fields:
   `cloudy_home_arrival`, `default_arrive_home`,
   `turn_on_lights_at_night_when_i_get_home`,
   `turn_on_bedroom_lights_at_night_when_i_get_home`,
-  `turn_off_lights_when_i_leave`
+  `run_verified_departure`
 - `packages/guest.yaml`
   guest-mode enable/disable and guest climate refresh automations
 - `packages/trips.yaml`
@@ -64,12 +64,38 @@ important contract is that automated trip resolution delegates to
 with `apply_trip_policy: true` so vacation simulation stays in sync with
 `input_boolean.trip`.
 
+## Verified Departure
+
+`automation.run_verified_departure` starts only from the canonical
+Bayesian empty-house event and delegates to `script.departure_integrity`.
+It confirms the house is empty from `binary_sensor.bayesian_zeke_home` rather
+than the derived GPS tracker, which can still read `home` at that moment.
+That script:
+
+- stops immediately when guest mode is active or resident presence returns;
+- calls `script.house_transition` with `mode: away` and trip-policy handling;
+- waits for the normal shutdown to settle, then retries available lock, cover,
+  light, fan, media, and camera exceptions once;
+- the initial `script.house_transition` pass uses `continue_on_error` so an
+  `unknown` or `unavailable` target can never abort the shutdown, and the retry
+  pass skips those targets so no redundant service call is sent to them;
+- sends one final notification containing every remaining security, egress,
+  lighting, media, fan, camera, and trip-policy exception. `media_player`
+  targets whose off state is reported as `unavailable` (the WebOS TV) count as
+  off, and fans or non-protected lights left `unavailable`/`unknown` are
+  reported as "not verified off" rather than silently passing.
+
+The front exterior lights remain protected. The former independent garage and
+egress departure notifications were consolidated into the final integrity
+summary so a single departure cannot produce duplicate alerts.
+
 ## Manual Verification
 
 1. Trigger `script.house_transition` twice with the same `mode` and confirm no
    unsafe repeat behavior occurs.
 2. Leave home with `input_boolean.guest_mode` off and confirm the lock, garage,
-   leave-home scene, camera scene, and light shutdown still run.
+   leave-home scene, camera scene, media pause/off, fan, and light shutdown run.
+   Confirm a normal successful departure sends no notification.
 3. Leave home with `input_boolean.guest_mode` on and confirm away tracking
    updates without running the destructive leave-home actions.
 4. Arrive home during the day and confirm the normal arrival scene and Ecobee
@@ -83,4 +109,8 @@ with `apply_trip_policy: true` so vacation simulation stays in sync with
    `switch.vacation_simulation` and
    `input_number.random_vacation_light_group` stay in sync.
 8. Temporarily make one target entity unavailable and confirm the script keeps
-   applying the remaining actions because service calls use `continue_on_error`.
+   applying the remaining actions (the initial pass tolerates it via
+   `continue_on_error`), the retry pass does not call the unavailable target,
+   and it is reported once in the final exception summary.
+9. Leave one available target in the wrong state, confirm it receives one retry,
+   and confirm only the final state is reported if the retry does not succeed.

@@ -88,35 +88,20 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
         "unreachable_lights: \"{{ (target_lights + member_lights) | unique | select('is_state', ['unavailable', 'unknown']) | list }}\"",
         "apply_transition: \"{{ transition | default(1, true) }}\"",
         "should_reset_manual_control: \"{{ reset_manual_control | default(false, true) }}\"",
-        "should_bootstrap: \"{{ bootstrap | default(false, true) }}\"",
-        "initial_brightness_pct: \"{{ bootstrap_brightness_pct | default(1, true) }}\"",
         "adaptive_switch_active: \"{{ is_state(adaptive_switch, 'on') }}\"",
-        "target_color_temp_kelvin: \"{{ state_attr(adaptive_switch, 'color_temp_kelvin') | int(0) }}\"",
         'value_template: "{{ should_reset_manual_control and adaptive_switch_active and member_lights | count > 0 }}"',
         'lights: "{{ member_lights }}"',
         "value_template: \"{{ not adaptive_switch_active and target_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and target_lights | count == 0 }}\"",
-        "value_template: \"{{ should_bootstrap and target_color_temp_kelvin > 0 and off_lights | count > 0 }}\"",
-        'value_template: "{{ not should_reset_manual_control }}"',
         "value_template: \"{{ off_lights | count > 0 or on_lights | count > 0 }}\"",
         "value_template: \"{{ adaptive_switch_active and unreachable_lights | count > 0 }}\"",
         "action: light.turn_on",
         "continue_on_error: true",
-        'for_each: "{{ off_lights }}"',
-        'entity_id: "{{ repeat.item }}"',
         'entity_id: "{{ unreachable_lights }}"',
-        'brightness_pct: "{{ initial_brightness_pct }}"',
-        "state_attr(repeat.item, 'min_color_temp_kelvin')",
-        "state_attr(repeat.item, 'max_color_temp_kelvin')",
-        "transition: 0",
         "action: adaptive_lighting.apply",
         'entity_id: "{{ adaptive_switch }}"',
-        'lights: "{{ off_lights }}"',
-        'value_template: "{{ on_lights | count > 0 }}"',
-        'lights: "{{ on_lights }}"',
         'lights: "{{ off_lights + on_lights }}"',
         "adapt_brightness: true",
-        "adapt_color: false",
         "adapt_color: true",
         "turn_on_lights: true",
         'transition: "{{ apply_transition }}"',
@@ -128,15 +113,8 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
     ):
         assert token in block
 
-    # The off lights are pre-marked as manually controlled before the
-    # bootstrap turn-on so the Adaptive Lighting interceptor passes it
-    # through unmodified for every switch configuration.
-    mark_index = block.index("manual_control: true")
-    bootstrap_index = block.index('brightness_pct: "{{ initial_brightness_pct }}"')
-    assert mark_index < bootstrap_index
-
     # Reset/ramp callers such as the owner-suite wake sequence still lock
-    # manual control even when the visible bootstrap pulse is disabled.
+    # manual control before the atomic apply.
     reset_lock_index = block.index(
         'value_template: "{{ should_reset_manual_control and adaptive_switch_active '
         'and member_lights | count > 0 }}"'
@@ -154,47 +132,22 @@ def test_adaptive_light_turn_on_script_wraps_atomic_adaptive_apply() -> None:
     )
 
 
-def test_adaptive_light_bootstrap_only_enabled_for_allowed_rooms() -> None:
-    allowed_switches = {
-        "switch.adaptive_lighting_kitchen",
-        "switch.adaptive_lighting_basement",
-        "switch.dining_room_adaptive_lighting_dining_room",
-    }
-    switch_pattern = re.compile(r"adaptive_switch:\s*(\S+)")
-    for path in (
-        ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "light.yaml",
-        ADAPTIVE_LIGHTING_PATH.parents[1] / "packages" / "zigbee_zwave.yaml",
-    ):
-        lines = path.read_text(encoding="utf-8").splitlines()
-        for index, line in enumerate(lines):
-            if line.strip() != "bootstrap: true":
-                continue
+def test_adaptive_light_turn_on_has_no_two_command_predim_path() -> None:
+    repository_root = ADAPTIVE_LIGHTING_PATH.parents[1]
+    package_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((repository_root / "packages").glob("*.yaml"))
+    )
+    block = _script_block("adaptive_light_turn_on")
 
-            # Walk back to the action call that owns this bootstrap field and
-            # read that block's own adaptive_switch. A fixed-size line window
-            # can capture an allowed switch from an adjacent call and mask a
-            # violation (e.g. a short kitchen bootstrap immediately above a
-            # hallway one), so resolve the enclosing block explicitly.
-            switch_name = None
-            owning_action = None
-            for candidate in range(index - 1, -1, -1):
-                stripped = lines[candidate].strip()
-                if switch_name is None:
-                    match = switch_pattern.match(stripped)
-                    if match:
-                        switch_name = match.group(1)
-                if stripped.startswith("- action:"):
-                    owning_action = stripped
-                    break
-
-            assert owning_action == "- action: script.adaptive_light_turn_on", (
-                f"{path.name}:{index + 1} bootstrap: true is not owned by an "
-                "adaptive_light_turn_on call"
-            )
-            assert switch_name in allowed_switches, (
-                f"{path.name}:{index + 1} enables adaptive_light_turn_on bootstrap "
-                f"for {switch_name!r}, outside the kitchen/basement/dining-room allow-list"
-            )
+    # A separate low-brightness command followed by adaptive_lighting.apply
+    # produced 1% -> 100% -> intermediate -> 100% flashes on both basement
+    # and kitchen Zigbee paths. Keep the helper and all callers single-command.
+    assert "bootstrap" not in package_text.lower()
+    assert "brightness_pct:" not in block
+    assert "color_temp_kelvin:" not in block
+    assert "transition: 0" not in block
+    assert "adapt_color: false" not in block
 
 
 def test_adaptive_light_clear_manual_control_waits_and_guards() -> None:
@@ -233,7 +186,7 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "event: start" in block
     assert 'delay: "00:00:30"' in block
     assert "action: adaptive_lighting.change_switch_settings" in block
-    assert "kitchen, den, basement, dining-room, owner-suite, and vanity tuning survive" in block
+    assert "kitchen, laundry-room, den, basement, dining-room, owner-suite, and vanity" in block
     assert "entity_id: switch.adaptive_lighting_owner_suite" in block
     assert "use_defaults: current" in block
     assert "include_config_in_attributes: true" in block
@@ -247,6 +200,23 @@ def test_owner_suite_adaptive_lighting_reconciles_supported_scene_safe_settings(
     assert "sleep_color_temp: 1000" in block
     assert "detect_non_ha_changes: false" in block
     assert "event: adaptive_lighting_startup_reconciled" in block
+
+
+def test_automatic_bed_strip_brightness_is_capped_but_user_changes_are_allowed() -> None:
+    block = _automation_block("cap_automatic_bed_lightstrip_brightness")
+
+    for token in (
+        "bed_strip_automatic_max_brightness_percent: 25",
+        "entity_id: light.bed_lightstrip",
+        "attribute: brightness",
+        "trigger.to_state.context.user_id is none",
+        "action: light.turn_on",
+        'brightness_pct: "{{ bed_strip_automatic_max_brightness_percent }}"',
+    ):
+        assert token in block
+
+    assert "mode: restart" in block
+    assert "state_attr('light.bed_lightstrip', 'brightness')" in block
 
 
 def test_owner_suite_vanity_adaptive_lighting_reconciles_scene_safe_baseline() -> None:
@@ -301,6 +271,24 @@ def test_kitchen_adaptive_lighting_reconciles_bright_scene_safe_settings() -> No
     assert "initial_transition: 1" in block
     assert "transition: 3" in block
     assert "detect_non_ha_changes: false" in block
+
+
+def test_laundry_adaptive_lighting_reconciles_fast_scene_safe_settings() -> None:
+    settings = _adaptive_lighting_settings_block(
+        "switch.adaptive_lighting_laundry_room"
+    )
+
+    for token in (
+        "use_defaults: current",
+        "include_config_in_attributes: true",
+        "take_over_control: true",
+        "adapt_only_on_bare_turn_on: true",
+        "only_once: true",
+        "initial_transition: 1",
+        "transition: 2",
+        "detect_non_ha_changes: false",
+    ):
+        assert token in settings
 
 
 def test_den_adaptive_lighting_reconciles_scene_safe_settings_for_media_use() -> None:
@@ -382,6 +370,29 @@ def test_arrival_adaptive_lighting_scopes_occupied_arrivals_to_non_manual_lights
         "lights: \"{{ eligible_arrival_lights }}\"",
     ):
         assert token in occupied_house_branch
+
+
+def test_hallway_sleep_profile_is_cleared_when_house_sleep_ends_or_ha_restarts() -> None:
+    block = _automation_block(
+        "clear_hallway_adaptive_sleep_mode_when_house_sleep_ends"
+    )
+
+    for token in (
+        "id: house-sleep-ended",
+        "entity_id: switch.sleep_mode",
+        'from: "on"',
+        'to: "off"',
+        "id: ha-start",
+        "trigger: homeassistant",
+        'delay: "00:00:30"',
+        'state: "off"',
+        "entity_id: switch.adaptive_lighting_sleep_mode_hallway",
+        'state: "on"',
+        "action: switch.turn_off",
+    ):
+        assert token in block
+
+    assert block.count("entity_id: switch.adaptive_lighting_sleep_mode_hallway") == 2
 
 
 def test_arrival_lighting_spec_documents_empty_house_and_manual_control_gates() -> None:

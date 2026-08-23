@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY_PATH = ROOT / "inventory.md"
+README_PATH = ROOT / "README.md"
 
 
 def _clean_cell(value: str) -> str:
@@ -56,6 +57,32 @@ def _table_rows(heading: str) -> list[dict[str, str]]:
         cells = [cell.strip() for cell in line.split("|")[1:-1]]
         rows.append(dict(zip(headers, cells, strict=True)))
     return rows
+
+
+def test_available_inventory_has_issue_163_fields_for_every_row() -> None:
+    rows = _table_rows("Inventory")
+    allowed_domains = {
+        "binary_sensor",
+        "button",
+        "light",
+        "plant",
+        "sensor",
+        "switch",
+    }
+
+    assert rows, "Available device inventory must not be empty"
+    for row in rows:
+        assert int(row["quantity"]) > 0
+        assert row["brand"]
+        assert row["model"]
+        assert row["technology"]
+        assert _clean_cell(row["possible_home_assistant_domain"]) in allowed_domains
+
+
+def test_available_inventory_is_linked_from_readme() -> None:
+    readme = README_PATH.read_text(encoding="utf-8")
+
+    assert "[Available Device Inventory](inventory.md)" in readme
 
 
 def test_inventory_rows_cover_issue_201_and_202_updates() -> None:

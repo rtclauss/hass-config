@@ -1,5 +1,5 @@
 # The Brewery Home Assistant Configuration 🍺
-[![Build Status](https://api.travis-ci.com/rtclauss/hass-config.svg?branch=main)](https://app.travis-ci.com/github/rtclauss/hass-config)
+[![Validate Home Assistant Config](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml/badge.svg?branch=main)](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml?query=branch%3Amain)
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
@@ -40,13 +40,16 @@ cannot be skipped silently.
 
 ## Music Assistant Media Flow
 
-Music playback automations now target the Music Assistant-backed Sonos entities, which are the `_2` media players:
+Music playback automations target explicitly named Music Assistant-backed Sonos
+entities. Their `ma_` entity IDs distinguish them from native Home Assistant
+Sonos entities, while their entity-registry names remain clean room names for
+the UI, HomeKit, and Siri:
 
-- `media_player.bedroom_sonos_2`
-- `media_player.bathroom_sonos_2`
-- `media_player.office_sonos_2`
-- `media_player.den_sonos_2`
-- `media_player.tiki_room_2`
+- `media_player.ma_bedroom`
+- `media_player.ma_bathroom`
+- `media_player.ma_office`
+- `media_player.ma_den`
+- `media_player.ma_tiki_room`
 
 The reusable media helpers live in `packages/media_player.yaml`:
 
@@ -89,7 +92,7 @@ If you are creating a brand new script, prefer calling the helper instead of usi
 ```yaml
 - action: script.music_assistant_play_spotify_uri
   data:
-    entity_id: media_player.bedroom_sonos_2
+    entity_id: media_player.ma_bedroom
     spotify_uri: "spotify:playlist:37i9dQZF1DX4WYpdgoIcn6"
 ```
 
@@ -111,7 +114,7 @@ The `Music Assistant` section on the dashboard includes a small search flow:
 6. Use `script.music_assistant_play_selected_search_result` to play the selected result now or add it to the current queue.
 7. Use `script.music_assistant_add_selected_search_result_to_playlist` to append the selected Music Assistant URI to the chosen `plists`-based script and reload scripts.
 
-The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.bedroom_sonos_2`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
+The search helper derives the Music Assistant `config_entry_id` dynamically from `media_player.ma_bedroom`, so it does not depend on a hard-coded config entry. The provider dropdown refreshes from the current unfiltered search response, which keeps the options aligned with the providers that can satisfy the active query.
 
 The supported playlist-script targets are `spotify_bedtime`, `spotify_wake_up`, `spotify_arrival`, and `bedroom_playlist_0` through `bedroom_playlist_5`. Appending a result updates `packages/media_player.yaml` in place and then reloads Home Assistant scripts so the change is immediately available.
 
@@ -121,7 +124,7 @@ Radio wake-up scripts now use Music Assistant item URIs instead of Sonos favorit
 
 Current examples:
 
-- `library://radio/12`
+- `library://radio/21`
 - `tunein--S3NwgspV://radio/s34350`
 - `tunein--S3NwgspV://radio/s20620`
 
@@ -154,16 +157,19 @@ yamllint -d "{extends: relaxed, rules: {line-length: disable, empty-lines: disab
   configuration.yaml automations.yaml blueprints packages zigbee2mqtt
 
 # If Docker is available
-docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.5.0 \
+docker run --rm -v "$PWD:/config" ghcr.io/home-assistant/home-assistant:2026.5.1 \
   python -m homeassistant --config /config --script check_config
 ```
 
 ## Feature Docs
 
+- [Available Device Inventory](inventory.md)
 - [House Transition Framework](docs/house_transition_framework.md)
 - [Home Assistant Label Model](docs/ha_labels.md)
+- [Inovelli Scene Action Map](docs/inovelli_scene_actions.md)
 - [Room Intent Policy](docs/room_intent.yaml)
 - [Room Naming Model](docs/room_names.md)
+- [Built-In Security Dashboard](docs/security_dashboard.md)
 - [Inky E-Ink Displays](docs/inky_displays.md)
 - [ESPHome Layout And Bermuda BLE Proxy Notes](docs/esphome.md)
 - [EV Charging Tariff](docs/ev_charging_tariff.md)
