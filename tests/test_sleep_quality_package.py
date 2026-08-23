@@ -189,6 +189,26 @@ def test_cpap_stop_waits_for_beds_own_debounce_before_finalizing() -> None:
     assert "minutes: 5" in guard_block
 
 
+def test_restart_reconciles_a_lost_cpap_stop_debounce() -> None:
+    # Codex P2 follow-up on #373: a pending numeric_state `for:` debounce is
+    # discarded on an HA restart/reload, not resumed. If CPAP had already
+    # dropped before the restart and the bed later empties,
+    # sleep_session_cpap_stopped is stuck off, finalize is skipped, and
+    # sleep_session_active latches on, blocking every future session.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    assert "trigger: homeassistant" in block
+    assert "event: start" in block
+    assert "entity_id: input_boolean.sleep_session_active" in block
+    assert 'state: "on"' in block
+    assert "entity_id: input_boolean.sleep_session_cpap_stopped" in block
+    assert 'state: "off"' in block
+    assert "entity_id: sensor.owner_suite_cpap_plug_power" in block
+    assert "below: 1.3" in block
+    assert "entity_id: input_datetime.sleep_session_cpap_off" in block
+    assert "action: script.finalize_sleep_quality_session" in block
+
+
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
     dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
 
