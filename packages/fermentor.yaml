@@ -1,0 +1,27 @@
+################################################################
+## Fermentor Host Controls
+################################################################
+
+# The "fermentor" SSH alias, key, and known-host entry are intentionally
+# machine-local. See docs/fermentor_reboot.md for the one-time setup.
+shell_command:
+  reboot_fermentor: >-
+    /usr/bin/ssh
+    -F /config/.ssh/config
+    -o BatchMode=yes
+    -o ConnectTimeout=10
+    -o StrictHostKeyChecking=yes
+    fermentor
+    "sudo -n /usr/bin/systemctl reboot"
+
+script:
+  reboot_fermentor:
+    alias: Reboot Fermentor
+    description: Reboot the fermentor host over its restricted SSH connection.
+    icon: mdi:restart-alert
+    mode: single
+    max_exceeded: silent
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: shell_command.reboot_fermentor

@@ -25,6 +25,7 @@
 ## Behavioral Specs
 - Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
 - Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
+- Use `specs/diffusers.allium` as the source of truth for scent/oil diffuser sleep/wake participation and oil-replacement reminders (owner-approved in PR #925).
 - Before changing related Home Assistant automations, scripts, helpers, dashboards, or tests, read the relevant Allium spec first and keep implementation changes aligned with it.
 - Always compare behavior changes against the relevant Allium spec, but do not update `.allium` definitions unless the owner explicitly approves that spec change.
 
@@ -41,7 +42,12 @@
 ## Media / Music Assistant
 - Use `docs/music_assistant.md` as the source of truth before changing Music Assistant / Sonos playback, sync groups, bedtime/wake audio wiring, or Spotify URIs.
 - Never hardcode a `spotify--<instance>` provider-instance id; use bare `spotify:playlist:<id>` URIs and let MA route to the live instance (it changes on every MA re-onboard).
-- Always target the MA `*_sonos_2` entities (not bare `*_sonos`); set group volume on individual member entities, never the group entity.
+- Always target the explicit MA room entities (`media_player.ma_bedroom`,
+  `media_player.ma_bathroom`, `media_player.ma_office`, `media_player.ma_den`,
+  and `media_player.ma_tiki_room`), not generated `*_sonos_2` or native
+  `*_sonos` entities. Keep their entity-registry names room-friendly for the UI,
+  HomeKit, and Siri; set group volume on individual member entities, never the
+  group entity.
 
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.

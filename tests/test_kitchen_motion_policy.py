@@ -33,11 +33,15 @@ def _automation_block(automation_id: str) -> str:
     return match.group(0)
 
 
-def test_kitchen_room_intent_allows_motion_lighting_when_guest_mode_is_off() -> None:
+def test_kitchen_room_intent_requires_guest_mode_off_and_bed_unoccupied() -> None:
     block = _kitchen_room_block()
 
     assert "disabled_automations" not in block
-    assert "motion-activated lighting is acceptable when guest mode is off" in block
+    assert (
+        "motion-activated lighting is acceptable when guest mode is off and the owner bed is unoccupied"
+        in block
+    )
+    assert "suppress motion-triggered light turn-on while the owner bed is occupied" in block
     assert "keep motion lighting practical and low-friction for food prep" in block
 
 
@@ -49,3 +53,9 @@ def test_kitchen_motion_automation_is_enabled_and_remains_restart_mode() -> None
     assert "mode: restart" in block
     assert "binary_sensor.kitchen_motion_occupancy" in block
     assert "input_boolean.guest_mode" in block
+    assert len(
+        re.findall(
+            r"entity_id: binary_sensor\.bayesian_bed_occupancy\n\s+state: \"off\"",
+            block,
+        )
+    ) == 3

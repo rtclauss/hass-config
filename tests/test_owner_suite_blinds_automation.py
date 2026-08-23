@@ -69,6 +69,7 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
         "entity_id: switch.adaptive_lighting_owner_suite",
         "manual_control: true",
         "manual_control: false",
+        "bed_strip_automatic_max_brightness_percent: 25",
         "transition: 2",
         "transition: 180",
         "seconds: 180",
@@ -77,8 +78,22 @@ def test_owner_suite_morning_transition_keeps_adaptive_lighting_in_control_and_d
         "position: \"{{ repeat.index * 2 }}\"",
         "switch.adaptive_lighting_adapt_brightness_owner_suite",
         "switch.adaptive_lighting_adapt_color_owner_suite",
+        'entity_id: light.bed_lightstrip',
+        "state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct')",
+        "[adaptive_target, bed_strip_automatic_max_brightness_percent | float]",
+        "state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin')",
     ):
         assert token in block
+
+    daytime_apply = block.split(
+        'alias: "Apply the daytime adaptive target to the owner suite lamps over three minutes"',
+        maxsplit=1,
+    )[1].split(
+        'alias: "Ramp the bed strip to its capped adaptive daytime target over three minutes"',
+        maxsplit=1,
+    )[0]
+    assert "light.owner_suite_lamps" in daytime_apply
+    assert "light.bed_lightstrip" not in daytime_apply
 
 
 def test_wake_up_script_uses_shared_owner_suite_morning_transition() -> None:
@@ -93,8 +108,12 @@ def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> Non
     block = _automation_block(WORKDAY_PATH, "workday_owner_suite_wake_transition_from_morning_activity")
 
     for token in (
-        'after: "04:30:00"',
-        'before: "12:00:00"',
+        "within 30 min of the earliest wake alarm",
+        "is_state('input_boolean.weekday_alarm_on', 'on')",
+        "is_state('input_boolean.special_meeting', 'on')",
+        "reject('equalto', 0)",
+        "earliest is number",
+        "now_seconds < 43200",
         "input_select.house_mode",
         "- night",
         "- in_bed",
@@ -112,6 +131,8 @@ def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> Non
         "as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900",
     ):
         assert token in block
+
+    assert 'after: "04:30:00"' not in block
 
 
 def test_close_owner_suite_blinds_catches_evening_recovery_after_missed_sunset() -> None:

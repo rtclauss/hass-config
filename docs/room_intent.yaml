@@ -36,6 +36,16 @@ global_policies:
       - Skip automatic vacuuming while guest mode is on.
       - Suppress convenience automations that assume owner-only use of guest-capable rooms.
 
+  - id: cat_safe_robot_cleaning
+    statement: >
+      Robot cleaning must follow the fail-closed pet-safety policy documented in
+      docs/vacuum_pet_policy.md. Guest mode remains an independent global veto.
+    automation_implications:
+      - Automatic cleaning requires an explicit Unattended policy selection.
+      - Acclimation immediately docks every robot and permits no automatic starts.
+      - Policy promotion is an owner decision and must never happen automatically.
+      - Do not infer cat safety from missing camera, BLE, or presence detections.
+
 rooms:
   owner_suite_bedroom:
     primary_purpose: owner sleeping space
@@ -99,6 +109,7 @@ rooms:
       avoid_without_explicit_request:
         - vacuum runs or other physical intrusions
         - bright disruptive lighting changes while guests may be sleeping
+        - motion-triggered light turn-on while the owner bed is occupied and guest mode is off
 
   guest_room:
     primary_purpose: dedicated guest sleeping space
@@ -161,7 +172,8 @@ rooms:
       priority: low
     automation_guidance:
       safe_defaults:
-        - motion-activated lighting is acceptable when guest mode is off
+        - motion-activated lighting is acceptable when guest mode is off and the owner bed is unoccupied
+        - suppress motion-triggered light turn-on while the owner bed is occupied and guest mode is off
         - keep motion lighting practical and low-friction for food prep
 
   outside:
@@ -191,13 +203,15 @@ rooms:
       priority: low
     automation_guidance:
       safe_defaults:
-        - motion-activated lighting is acceptable at all times
+        - motion-activated lighting is acceptable while the owner bed is unoccupied
+        - suppress motion-triggered light turn-on while the owner bed is occupied and guest mode is off
         - use dimmed scenes late at night instead of full-bright
         - lights should stay on while occupancy moves through the path
         - turn off promptly after vacancy
       notes:
         - the upstairs hallway (Hall/Upstairs) and main-level hallway share this key but have independent motion sensors
         - use hallway_main vs hallway_upstairs sub-context when automations need to distinguish the two levels
+        - keep the Hall/Transition Switch firmware occupancy-to-load control disabled so Home Assistant sleep guards remain authoritative
 
   main_foyer:
     primary_purpose: welcoming entry sub-space at the front door

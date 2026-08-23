@@ -187,6 +187,21 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         },
         {
             "spec": "specs/alarm_wakeup.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "allowed_changed_line_patterns": [
+                '-*radio_uri: "library://radio/12"',
+                '+*radio_uri: "library://radio/21"',
+            ],
+            "classification": "media-library-record repair",
+            "reason": (
+                "Exact media URIs are explicitly excluded by specs/alarm_wakeup.allium; "
+                "issue #875 and PR #876 replace KSDJ's stale Music Assistant library "
+                "record without changing wake-up scheduling, playback verification, "
+                "retry, fallback, grouping, or volume-ramp behavior."
+            ),
+        },
+        {
+            "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/media_player.yaml"],
             "classification": "non-wakeup-scope change",
             "reason": (
@@ -216,11 +231,134 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
                 "into script.adaptive_light_turn_on so color temperature is corrected "
                 "immediately and brightness ramps over the requested transition."
             ),
-        }
+        },
+        {
+            "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "classification": "thermal-preemptor hold-gate wiring",
+            "reason": (
+                "PR #864 adds input_boolean.thermal_preemptor_hold_gate toggling "
+                "alongside the existing guest-climate preset/resume actions; the guest "
+                "sleep climate mode behavior governed by night_routines.allium is "
+                "unchanged — the hold gate only signals ThermalPreemptor to stand down "
+                "while a named-preset hold is active, which is a parallel concern "
+                "orthogonal to the spec-covered bedtime and goodnight integrity flows."
+            ),
+        },
+        {
+            "spec": "specs/alarm_wakeup.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "classification": "Music Assistant entity-id migration",
+            "reason": (
+                "Issue #899 and PR #900 replace ambiguous generated and disabled "
+                "native Sonos entity IDs with explicit media_player.ma_<room> Music "
+                "Assistant IDs; wake-up scheduling, playback selection, verification, "
+                "retry, fallback, grouping, and volume-ramp behavior governed by "
+                "alarm_wakeup.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/night_routines.allium",
+            "implementation_paths": ["packages/house_mode.yaml", "packages/tv.yaml"],
+            "classification": "Music Assistant entity-id migration",
+            "reason": (
+                "Issue #899 and PR #900 replace ambiguous generated Music Assistant "
+                "entity IDs with explicit media_player.ma_<room> IDs; bedtime "
+                "preparation, overnight goodnight integrity, guest-aware shutdown, and "
+                "owner-suite LED behavior governed by night_routines.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/tv_watching.allium",
+            "implementation_paths": ["packages/tv.yaml"],
+            "classification": "Music Assistant entity-id migration",
+            "reason": (
+                "Issue #899 and PR #900 replace ambiguous generated Music Assistant "
+                "entity IDs with explicit media_player.ma_<room> IDs; basement TV "
+                "session lifecycle and guest-aware whole-house lighting behavior governed "
+                "by tv_watching.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/z2m_lifecycle.allium",
+            "implementation_paths": ["packages/z2m_lifecycle.yaml"],
+            "classification": "automation-topology DRY refactor",
+            "reason": (
+                "Issue #529 and PR #926 consolidate duplicate reboot-counter reset "
+                "automations while preserving unconditional manual resets and the "
+                "existing 10-minute sustained-recovery, healthy-bridge, and "
+                "nonzero-counter gates. The observable systemic-recovery behavior "
+                "governed by z2m_lifecycle.allium is unchanged; automation IDs, "
+                "trigger routing, and reusable-script wiring are implementation details."
+            ),
+        },
+        {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": [
+                "-*action: scene.turn_on",
+                "-*target:",
+                "-*entity_id: scene.leave_home",
+                "+*action: script.leave_home_transition",
+            ],
+            "classification": "non-diffuser departure transition repair",
+            "reason": (
+                "Issue #949 and PR #950 route the away-mode leave-home scene through "
+                "a shared script that guards optional media and seasonal targets. "
+                "Diffuser goodnight shutdown, morning-wake participation, afternoon "
+                "fallback, and oil-replacement behavior governed by diffusers.allium "
+                "are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "allowed_changed_line_patterns": [
+                "-*ramp_k_factor: 140",
+                "+*ramp_interval_seconds: 18",
+            ],
+            "classification": "non-diffuser wake-ramp change",
+            "reason": (
+                "Issue #937 and PR #934 replace the Music Assistant wake-up "
+                "volume-ramp pacing parameter; diffuser sleep/wake participation, "
+                "afternoon fallback, and oil-replacement behavior governed by "
+                "diffusers.allium are unchanged."
+            ),
+        },
+        {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/workday.yaml"],
+            "allowed_changed_line_patterns": [
+                "-*condition: time",
+                "-*04:30:00*",
+                "-*12:00:00*",
+                "+*condition: template",
+                "+*wake alarm*",
+                "+*value_template: >-",
+                "+*buffer_minutes*",
+                "+*candidates*",
+                "+*state_attr('input_datetime.weekday_alarm'*",
+                "+*state_attr('input_datetime.next_work_meeting'*",
+                "+*is_state('input_boolean.weekday_alarm_on'*",
+                "+*is_state('input_boolean.special_meeting'*",
+                "+*select('number')*",
+                "+*earliest*",
+                "+*now_seconds*",
+            ],
+            "classification": "non-diffuser wake-window repair",
+            "reason": (
+                "PR #939 replaces the fixed 04:30 owner-suite morning-activity "
+                "gate with a window derived from enabled wake alarms. This behavior "
+                "is governed by specs/alarm_wakeup.allium and does not change diffuser "
+                "sleep/wake participation, afternoon fallback, or oil reminders "
+                "governed by specs/diffusers.allium."
+            ),
+        },
     ]
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",
         "specs/arrival_lighting.allium",
+        "specs/diffusers.allium",
         "specs/night_routines.allium",
         "specs/tv_watching.allium",
         "specs/z2m_lifecycle.allium",

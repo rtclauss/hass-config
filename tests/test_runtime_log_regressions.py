@@ -212,14 +212,26 @@ def test_large_z2m_lifecycle_helper_is_excluded_from_recorder() -> None:
     assert "large selection maps as attributes" in recorder_block
 
 
-def test_raw_fr24_airport_feeds_are_excluded_from_recorder() -> None:
+def test_raw_fr24_large_payload_feeds_are_excluded_from_recorder() -> None:
     text = _read(CONFIGURATION_PATH)
 
     recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
 
+    assert "sensor.flightradar24_additional_tracked" in recorder_block
     assert "sensor.flightradar24_airport_arrivals" in recorder_block
     assert "sensor.flightradar24_airport_departures" in recorder_block
     assert "full flight lists in attributes" in recorder_block
+
+
+def test_raw_weatheralerts_feed_is_excluded_from_recorder() -> None:
+    text = _read(CONFIGURATION_PATH)
+
+    recorder_block = text.split("recorder:\n", 1)[1].split("\ninfluxdb:", 1)[0]
+
+    assert "sensor.weatheralerts_dakota_mnz070_mnc037" in recorder_block
+    assert "sensor.nws_alerts" not in recorder_block
+    assert "sensor.nws_dakota_county_alerts" not in recorder_block
+    assert "full alert descriptions and instructions" in recorder_block
 
 
 def test_raw_birdweather_top_50_feed_is_excluded_from_recorder() -> None:

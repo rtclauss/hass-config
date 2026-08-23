@@ -37,19 +37,19 @@ def _automation_block(path: Path, automation_id: str) -> str:
 
 def test_den_vacuum_error_retry_requires_the_den_door_to_be_closed() -> None:
     block = _automation_block(VACUUM_PATH, "resume_vacuum_on_error_den")
+    config = VACUUM_PATH.read_text(encoding="utf-8")
+    den_policy = config.split("  vacuum_den_pet_safe_start:", 1)[1].split("\n\n", 1)[0]
 
-    assert "condition:" in block
-    assert "entity_id: binary_sensor.den_doors_contact" in block
-    assert 'state: "off"' in block
-    assert "action: vacuum.start" in block
-    assert "entity_id: vacuum.valetudo_den" in block
+    assert "action: script.vacuum_den_pet_safe_start" in block
+    assert "entity_id: binary_sensor.den_doors_contact" in den_policy
+    assert 'state: "off"' in den_policy
+    assert "action: vacuum.start" in den_policy
+    assert "entity_id: vacuum.valetudo_den" in den_policy
 
 
 def test_leave_home_only_starts_the_den_vacuum_when_the_den_door_is_closed() -> None:
     block = _automation_block(ZONE_PATH, "vacuum_leave_home")
 
     assert "action: script.vacuum_main_and_upstairs_levels" in block
-    assert "- if:" in block
-    assert "entity_id: binary_sensor.den_doors_contact" in block
-    assert 'state: "off"' in block
-    assert "entity_id: vacuum.valetudo_den" in block
+    assert "action: script.vacuum_den_pet_safe_start" in block
+    assert "action: vacuum.start" not in block
