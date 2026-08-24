@@ -307,6 +307,26 @@ def test_bathroom_morning_routine_firing_fallback_survives_a_restart() -> None:
     assert "states.input_boolean.wakeup_alarm_firing.last_changed" not in block
 
 
+def test_bathroom_morning_routine_disables_window_on_unavailable_workday_sensor() -> None:
+    # Codex P2 follow-up on #972: alarm_wake_up requires binary_sensor.
+    # workday_sensor to be explicitly "on" (weekday branch) or explicitly
+    # "off" (weekend branch); an unknown/unavailable state (e.g. during
+    # startup) satisfies neither, so no real alarm can fire. is_state(...,
+    # 'on') alone can't distinguish "off" from "unknown"/"unavailable" —
+    # both just aren't "on" — so this used to fall through to the weekend
+    # path and could still open a window off a persistent weekend alarm
+    # even though alarm_wake_up itself stays silent. Must require an exact
+    # 'off' match for the weekend path too, and disable the window entirely
+    # otherwise.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "workday_sensor_state = states('binary_sensor.workday_sensor')" in block
+    assert "{% if workday_sensor_state == 'on' %}" in block
+    assert "{% elif workday_sensor_state == 'off' %}" in block
+    assert "{% set alarm_enabled = false %}" in block
+    assert "{% set alarm_seconds_since_midnight = 0 %}" in block
+
+
 def test_wake_up_script_records_the_alarm_fire_time_explicitly() -> None:
     block = _script_block(WORKDAY_PATH, "wake_up_script")
 

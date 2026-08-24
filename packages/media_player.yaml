@@ -416,8 +416,18 @@ automation:
              since-midnight comparison workday.yaml already uses for the
              same alarm helpers (workday_owner_suite_wake_transition_from_
              morning_activity, #939). #}
-          {% set is_workday = is_state('binary_sensor.workday_sensor', 'on') %}
-          {% if is_workday %}
+          {# alarm_wake_up requires binary_sensor.workday_sensor to be
+             explicitly "on" for its weekday branch and explicitly "off"
+             for its weekend branch — an unknown/unavailable state (e.g.
+             during startup) satisfies neither, so no real alarm can fire
+             at all. is_state(..., 'on') alone can't distinguish "off" from
+             "unknown"/"unavailable" (both are simply "not on"), so this
+             used to fall through to the weekend path in the unavailable
+             case and could still open a window off a persistent weekend
+             alarm even though alarm_wake_up itself would stay silent
+             (Codex P2 follow-up on #972). #}
+          {% set workday_sensor_state = states('binary_sensor.workday_sensor') %}
+          {% if workday_sensor_state == 'on' %}
             {# A special meeting can wake the resident earlier than the
                weekday alarm (alarm_wake_up's meeting-alarm branch, gated on
                input_boolean.special_meeting) — mirrors the candidate-
@@ -433,9 +443,12 @@ automation:
                ] | select('number') | reject('equalto', 0) | list %}
             {% set alarm_enabled = candidates | length > 0 %}
             {% set alarm_seconds_since_midnight = candidates | min if candidates else 0 %}
-          {% else %}
+          {% elif workday_sensor_state == 'off' %}
             {% set alarm_enabled = is_state('input_boolean.weekend_alarm_on', 'on') %}
             {% set alarm_seconds_since_midnight = state_attr('input_datetime.weekend_alarm', 'timestamp') | float(0) %}
+          {% else %}
+            {% set alarm_enabled = false %}
+            {% set alarm_seconds_since_midnight = 0 %}
           {% endif %}
           {% set now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second %}
           {% set wake_window_seconds = 90 * 60 %}
