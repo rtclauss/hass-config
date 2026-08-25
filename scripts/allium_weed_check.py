@@ -326,13 +326,30 @@ def _matches(path: str, patterns: Iterable[str]) -> bool:
     return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
 
 
+def _escape_fnmatch_brackets(pattern: str) -> str:
+    # allowed_changed_line_patterns are authored as literal diff-line
+    # substrings with '*' as the only intended wildcard, but fnmatch also
+    # treats '[' and ']' as character-class delimiters. Left unescaped, a
+    # pattern like "+*['off', 'unavailable', 'unknown']*" degrades into a
+    # single-character class containing common letters, which combined with
+    # the surrounding '*' wildcards matches nearly any added line (Codex P2
+    # on #913/#914) instead of the intended literal substring.
+    return re.sub(r"[\[\]]", lambda m: "[[]" if m.group() == "[" else "[]]", pattern)
+
+
+def _line_matches(line: str, patterns: Iterable[str]) -> bool:
+    return any(
+        fnmatch.fnmatch(line, _escape_fnmatch_brackets(pattern)) for pattern in patterns
+    )
+
+
 def _line_classification_applies(gap: dict[str, Any], changed_lines: list[str]) -> bool:
     patterns = [str(pattern) for pattern in gap.get("allowed_changed_line_patterns", [])]
     if not patterns:
         return True
     if not changed_lines:
         return False
-    return all(_matches(line, patterns) for line in changed_lines)
+    return all(_line_matches(line, patterns) for line in changed_lines)
 
 
 def _classification_for(

@@ -91,12 +91,29 @@ cards:
         graph: line
         show:
           name: false
-  - type: custom:mini-media-player
+  # Native media tiles cover this room's existing playback and TV-volume
+  # controls. Source remains hidden for parity with the prior cards, and the
+  # live entities do not expose sound modes. Sonos group controls elsewhere
+  # still require mini-media-player, so its dashboard resource remains loaded.
+  - type: tile
     entity: media_player.basement
-    hide:
-      source: true
-      volume: true
-  - type: custom:mini-media-player
+    features_position: bottom
+    features:
+      - type: media-player-playback
+        controls:
+          - turn_on
+          - media_play_pause
+          - media_stop
+          - turn_off
+  - type: tile
     entity: media_player.lg_webos_smart_tv
-    hide:
-      source: true
+    features_position: bottom
+    features:
+      - type: media-player-playback
+        controls:
+          - media_play_pause
+          - media_stop
+          - turn_off
+      - type: media-player-volume-buttons
+        step: 5
+        show_mute_button: true

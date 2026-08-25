@@ -36,6 +36,16 @@ global_policies:
       - Skip automatic vacuuming while guest mode is on.
       - Suppress convenience automations that assume owner-only use of guest-capable rooms.
 
+  - id: cat_safe_robot_cleaning
+    statement: >
+      Robot cleaning must follow the fail-closed pet-safety policy documented in
+      docs/vacuum_pet_policy.md. Guest mode remains an independent global veto.
+    automation_implications:
+      - Automatic cleaning requires an explicit Unattended policy selection.
+      - Acclimation immediately docks every robot and permits no automatic starts.
+      - Policy promotion is an owner decision and must never happen automatically.
+      - Do not infer cat safety from missing camera, BLE, or presence detections.
+
 rooms:
   owner_suite_bedroom:
     primary_purpose: owner sleeping space

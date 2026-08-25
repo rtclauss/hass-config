@@ -930,18 +930,17 @@ automation:
           - input_boolean.east_bed_occupied
           - input_boolean.west_bed_occupied
         to: "off"
+        for:
+          seconds: 5
         id: bed-unoccupied
-    # condition:
-    #   condition: state
-    #   entity_id: binary_sensor.bayesian_bed_occupancy
-    #   state: "on"
-    #   for:
-    #     seconds: 5
     action:
       - choose:
           - conditions:
               - condition: trigger
                 id: bed-occupied
+              - condition: state
+                entity_id: input_boolean.master_bed_occupancy
+                state: "off"
             sequence:
               - action: input_boolean.turn_on
                 data:
@@ -1149,6 +1148,9 @@ automation:
 
   - alias: garage_overhead_switch_actions
     id: garage_overhead_switch_actions
+    description: >
+      Use deliberate double taps for garage-door control, but only issue
+      movement commands from fully closed or fully open states.
     trace:
       stored_traces: 10
     trigger:
@@ -1165,6 +1167,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: up-double
+              - condition: state
+                entity_id: cover.garage_door
+                state: "closed"
             sequence:
               - action: cover.open_cover
                 target:
@@ -1172,10 +1177,52 @@ automation:
           - conditions:
               - condition: trigger
                 id: down-double
+              - condition: state
+                entity_id: cover.garage_door
+                state: "open"
             sequence:
               - action: cover.close_cover
                 target:
                   entity_id: cover.garage_door
+
+  - alias: hall_transition_switch_actions
+    id: hall_transition_switch_actions
+    description: >
+      Keep single taps on the local Hall/Transition load and reserve double
+      taps for deliberate whole-path adaptive lighting control.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: sensor.hall_transition_switch_action
+        to: "up_double"
+        id: up-double
+      - trigger: state
+        entity_id: sensor.hall_transition_switch_action
+        to: "down_double"
+        id: down-double
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: up-double
+            sequence:
+              - action: script.adaptive_light_turn_on
+                data:
+                  adaptive_switch: switch.adaptive_lighting_hallway
+                  lights:
+                    - light.hall_all
+                  transition: 1
+          - conditions:
+              - condition: trigger
+                id: down-double
+            sequence:
+              - action: light.turn_off
+                target:
+                  entity_id: light.hall_all
+                data:
+                  transition: 3
 
   - alias: kitchen_overhead_switch_actions
     id: kitchen_overhead_switch_actions
@@ -1278,6 +1325,9 @@ automation:
 
   - alias: laundry_switch_actions
     id: laundry_switch_actions
+    description: >
+      Preserve local single-tap and hold lighting control; acknowledge a
+      completed washer load with an up double tap.
     mode: restart
     trace:
       stored_traces: 10
@@ -1326,6 +1376,22 @@ automation:
                 data:
                   entity_id: light.laundry_room
                   transition: 5
+          - conditions:
+              - condition: trigger
+                id: up-double
+              - condition: state
+                entity_id: input_boolean.washer_reminder_active
+                state: "on"
+              - condition: state
+                entity_id: input_select.washer_state
+                state:
+                  - "CLEAN"
+                  - "REMINDED"
+                  - "MUSTY"
+            sequence:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.washer_reminder_active
           - conditions:
               - condition: trigger
                 id: up-held

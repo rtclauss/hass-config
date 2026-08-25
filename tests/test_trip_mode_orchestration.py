@@ -72,6 +72,8 @@ def test_trip_orchestration_doc_captures_owner_and_guest_policy() -> None:
         "switch.vacation_simulation",
         "input_number.random_vacation_light_group",
         "input_boolean.guest_mode",
+        "input_select.vacuum_pet_policy",
+        "Unattended",
         "docs/room_intent.yaml",
         "vacuum_on_trip",
         "vacuum_flying_home",

@@ -25,6 +25,7 @@
 ## Behavioral Specs
 - Use `specs/alarm_wakeup.allium` as the source of truth for alarm, wake-up, snooze, and morning audio behavior.
 - Use `specs/night_routines.allium` as the source of truth for bedtime preparation and overnight goodnight behavior.
+- Use `specs/diffusers.allium` as the source of truth for scent/oil diffuser sleep/wake participation and oil-replacement reminders (owner-approved in PR #925).
 - Before changing related Home Assistant automations, scripts, helpers, dashboards, or tests, read the relevant Allium spec first and keep implementation changes aligned with it.
 - Always compare behavior changes against the relevant Allium spec, but do not update `.allium` definitions unless the owner explicitly approves that spec change.
 

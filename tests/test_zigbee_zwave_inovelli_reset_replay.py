@@ -487,10 +487,10 @@ def test_reset_script_finishes_with_the_issue_aurora_led_effect() -> None:
 
     assert "action: script.inovelli_led_aurora_notification" in block
     assert "inovelli_led_aurora_notification:" in notification_text
-    assert "effect: Aurora" in notification_text
-    assert "brightness: 5.1" in notification_text
-    assert "color: Purple" in notification_text
-    assert "duration: 10 Minutes" in notification_text
+    assert "effect: aurora" in notification_text
+    assert "level: 130" in notification_text
+    assert "color: 190" in notification_text
+    assert "duration: 70" in notification_text
     assert 'topic: "zigbee2mqtt/{{ repeat.item }}/set"' not in block
     assert "'led_effect': {" not in block
 

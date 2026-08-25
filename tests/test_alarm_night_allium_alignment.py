@@ -99,6 +99,26 @@ def test_alarm_spec_documents_today_workday_as_holiday_aware() -> None:
     assert "Holiday-aware: true only on a weekday that is not a configured holiday." in text
 
 
+def test_bed_strip_automatic_cap_matches_wakeup_ramp_and_reconciliation() -> None:
+    spec_text = ALARM_SPEC_PATH.read_text(encoding="utf-8")
+    match = re.search(
+        r"bed_strip_automatic_max_brightness_percent: Integer = (\d+)",
+        spec_text,
+    )
+
+    assert match is not None
+    cap = match.group(1)
+    wakeup_transition = _script_block(WORKDAY_PATH, "owner_suite_morning_transition")
+    adaptive_package = (ROOT / "packages" / "adaptive_lighting.yaml").read_text(
+        encoding="utf-8"
+    )
+
+    assert f"bed_strip_automatic_max_brightness_percent: {cap}" in wakeup_transition
+    assert f"bed_strip_automatic_max_brightness_percent: {cap}" in adaptive_package
+    assert "owner_suite.bed_strip_brightness_percent = bed_strip_wake_target_percent" in spec_text
+    assert "Direct resident" in spec_text
+
+
 def test_wakeup_office_volume_caps_match_allium_peak() -> None:
     spec_text = ALARM_SPEC_PATH.read_text(encoding="utf-8")
     match = re.search(r"office_wakeup_peak_volume_percent: Integer = (\d+)", spec_text)
@@ -109,7 +129,7 @@ def test_wakeup_office_volume_caps_match_allium_peak() -> None:
     bathroom_followup = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 
     assert "config.office_wakeup_peak_volume" in spec_text
-    assert radio_wakeup.count(f", {cap}] | min") == 1
+    assert radio_wakeup.count(f"default({cap}) | float({cap})") == 1
     assert bathroom_followup.count(f", {cap}] | min") == 2
 
 
