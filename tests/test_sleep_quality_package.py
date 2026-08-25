@@ -209,6 +209,41 @@ def test_restart_reconciles_a_lost_cpap_stop_debounce() -> None:
     assert "action: script.finalize_sleep_quality_session" in block
 
 
+def test_reconcile_also_triggers_on_automation_reload() -> None:
+    # Codex P2 follow-up on #373: a plain automation reload does not emit
+    # homeassistant.start, so a debounce lost to a reload (not just a
+    # restart) went unreconciled with only the start trigger.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    assert "event_type: automation_reloaded" in block
+
+
+def test_reconcile_recovers_a_lost_bed_exit_debounce() -> None:
+    # Codex P2 follow-up on #373: if cpap_stopped is already "on" (set
+    # before the restart/reload, or just reconciled above) but the bed's
+    # own separate bed_exit debounce was the one discarded, sleep_session_
+    # bed_out is left holding a stale/prior value. The sole existing
+    # reconcile branch required cpap_stopped == "off" and so never ran in
+    # this case, leaving sleep_session_active latched on forever.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    bed_out_index = block.index("entity_id: input_datetime.sleep_session_bed_out")
+    preceding = block[:bed_out_index]
+
+    assert "entity_id: input_boolean.sleep_session_cpap_stopped" in preceding
+    state_index = preceding.rindex("entity_id: input_boolean.sleep_session_cpap_stopped")
+    guard_block = preceding[state_index:]
+    assert 'state: "on"' in guard_block
+
+    assert (
+        "state_attr('input_datetime.sleep_session_bed_out', 'timestamp')"
+        in block
+    )
+    assert (
+        "state_attr('input_datetime.sleep_session_bed_in', 'timestamp')"
+        in block
+    )
+
+
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
     dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
 
