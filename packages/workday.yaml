@@ -914,6 +914,15 @@ script:
       - action: input_boolean.turn_on
         data:
           entity_id: input_boolean.wakeup_alarm_firing
+      - alias: >-
+          Record the real fire time explicitly — restart-safe, unlike
+          wakeup_alarm_firing's own last_changed (Codex P2 follow-up on
+          #972)
+        action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.wakeup_alarm_fired_at
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
       - action: script.owner_suite_morning_transition
 
   set_next_work_meeting_from_phone:
@@ -1025,6 +1034,17 @@ input_datetime:
   next_work_meeting:
     has_date: false
     has_time: true
+  wakeup_alarm_fired_at:
+    has_date: true
+    has_time: true
+    # Explicit fire timestamp, set alongside input_boolean.wakeup_alarm_firing
+    # in wake_up_script. input_boolean's own last_changed is not restart-safe
+    # for this purpose: HA restores its state across a restart, but the
+    # restored entity gets a fresh last_changed at restore time, not the
+    # original fire time — a restart while an alarm is still "firing" (it
+    # only clears at a fixed 14:34:56) would otherwise look like a brand new
+    # alarm just fired (Codex P2 follow-up on #972). input_datetime restores
+    # its stored value exactly, so this stays accurate across a restart.
 
 ################################################
 ## Sensor
