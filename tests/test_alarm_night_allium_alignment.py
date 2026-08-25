@@ -268,15 +268,29 @@ def test_bathroom_morning_routine_falls_back_to_wakeup_alarm_firing() -> None:
     # Codex P2 follow-up on #972: alarm_wake_up's meeting-alarm branch turns
     # special_meeting off the instant it fires, before the resident can
     # reach the bathroom, so the candidate list above no longer sees it by
-    # the time this template re-evaluates. wakeup_alarm_firing is a durable
-    # signal that some alarm fired, used as a fallback alongside the
-    # timestamp window.
+    # the time this template re-evaluates. The recorded fire timestamp is a
+    # durable signal that some alarm fired, used as a fallback alongside the
+    # scheduled-candidate window.
     block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
 
-    assert "alarm_firing_recently = is_state('input_boolean.wakeup_alarm_firing', 'on')" in block
-    or_index = block.index("alarm_firing_recently\n")
+    assert "alarm_firing_recently =" in block
+    or_index = block.index("alarm_firing_recently =")
     or_clause_index = block.index(" or (alarm_enabled", or_index)
     assert or_clause_index > or_index
+
+
+def test_bathroom_morning_routine_firing_fallback_ignores_the_fixed_time_latch() -> None:
+    # Codex P2 follow-up on #972: turn_off_alarm_firing (packages/light.yaml)
+    # clears input_boolean.wakeup_alarm_firing at a fixed 14:34:56 every day,
+    # uncorrelated with a variable-length window. A special-meeting alarm
+    # firing later than usual (e.g. 14:00, 90-minute window until 15:30) had
+    # this latch cleared out from under it at 14:34:56 — only 34 minutes into
+    # its own window — incorrectly closing the gate early. The elapsed-time
+    # check against wakeup_alarm_fired_at must stand on its own, without
+    # additionally requiring wakeup_alarm_firing to still read "on".
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "is_state('input_boolean.wakeup_alarm_firing', 'on')" not in block
 
 
 def test_bathroom_morning_routine_bounds_the_firing_fallback_to_the_window() -> None:

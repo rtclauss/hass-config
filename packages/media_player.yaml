@@ -464,16 +464,21 @@ automation:
              reasonable delay, so an unbounded OR here reopened
              essentially the original unbounded-window bug for up to ~7
              hours after an early alarm (Codex P1 follow-up on #972).
-             Bound it to the same wake_window_seconds — but not using its
-             own last_changed: input_boolean state is restored across an HA
-             restart, and the restored entity gets a fresh last_changed at
-             restore time, not the original fire time, so a restart while
-             an alarm was still "firing" would look like a brand new alarm
-             (Codex P2 follow-up on #972). wake_up_script now records the
-             real fire time explicitly in a restart-safe input_datetime;
-             use that instead. #}
-          {% set alarm_firing_recently = is_state('input_boolean.wakeup_alarm_firing', 'on')
-               and (as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp') | float(0))) <= wake_window_seconds %}
+             Bound it to the same wake_window_seconds using the real fire
+             time — wake_up_script records it explicitly in a restart-safe
+             input_datetime, unlike wakeup_alarm_firing's own last_changed,
+             which resets on restore instead of preserving the original
+             fire time (Codex P2 follow-up on #972). Do NOT additionally
+             require wakeup_alarm_firing itself to still read "on": that
+             same fixed 14:34:56 clear-out is uncorrelated with a variable-
+             length window — a special-meeting alarm firing later than
+             usual (e.g. 14:00, 90-minute window until 15:30) had this
+             latch cleared out from under it at 14:34:56, 34 minutes into
+             its own window, incorrectly closing the gate early (Codex P2
+             follow-up on #972). The elapsed-time check against the fire
+             timestamp is sufficient on its own and needs no such latch. #}
+          {% set alarm_firing_recently =
+               (as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp') | float(0))) <= wake_window_seconds %}
           {{ alarm_firing_recently
              or (alarm_enabled and alarm_seconds_since_midnight > 0
              and now_seconds_since_midnight >= alarm_seconds_since_midnight
