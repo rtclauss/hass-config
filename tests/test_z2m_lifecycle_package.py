@@ -110,7 +110,7 @@ def test_z2m_lifecycle_watchdog_treats_sustained_bridge_offline_as_issue() -> No
 def test_z2m_lifecycle_watchdog_does_not_restart_for_ha_republish_candidates() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
     watchdog = _automation_block("shutdown_proxmox_z2m_unavailable")
-    reset = _automation_block("reset_z2m_reboot_counter_on_recovery")
+    reset = _automation_block("reset_z2m_reboot_counter")
     recovery_sensor = text.split("unique_id: z2m_recovery_candidates", maxsplit=1)[1]
 
     assert "sensor.z2m_recovery_candidates" not in watchdog
@@ -118,6 +118,23 @@ def test_z2m_lifecycle_watchdog_does_not_restart_for_ha_republish_candidates() -
     assert "Z2M recovery candidates exceeded threshold" not in watchdog
     assert "sensor.z2m_recovery_candidates" not in reset
     assert "Diagnostic only. Zigbee2MQTT 2.12.1 republishes bridge/state" in recovery_sensor
+
+
+def test_z2m_reboot_counter_reset_combines_manual_and_recovery_paths() -> None:
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    reset = _automation_block("reset_z2m_reboot_counter")
+
+    assert "reset_z2m_reboot_counter_on_recovery" not in text
+    assert "event_type: mobile_app_notification_action" in reset
+    assert "action: REBOOT_Z2M_COUNTER" in reset
+    assert "id: manual_reset" in reset
+    assert reset.count("id: sustained_recovery") == 3
+    assert "entity_id: binary_sensor.zigbee2mqtt_running" in reset
+    assert "entity_id: binary_sensor.z2m_failing" in reset
+    assert reset.count("minutes: 10") == 2
+    assert "condition: numeric_state" in reset
+    assert "entity_id: counter.reboot_counter" in reset
+    assert reset.count("action: script.z2m_reset_reboot_counter") == 1
 
 
 def test_z2m_router_stats_preserves_roster_on_malformed_or_empty_devices_response() -> None:

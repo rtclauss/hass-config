@@ -82,6 +82,29 @@ def test_goodnight_integrity_script_coordinates_house_shutdown_and_verification(
         assert token in block
 
 
+def test_goodnight_integrity_skips_inactive_common_area_media_targets() -> None:
+    block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
+    assert (
+        "- sequence:\n              - variables:\n"
+        "                  common_area_media_shutdown_targets:"
+    ) in block
+    media_shutdown = block.split(
+        "common_area_media_shutdown_targets:", maxsplit=1
+    )[1].split("script.apply_owner_suite_inovelli_led_policy", maxsplit=1)[0]
+
+    for token in (
+        "expand(",
+        "'media_player.lg_webos_smart_tv'",
+        "'media_player.basement'",
+        "['off', 'unavailable', 'unknown']",
+        "common_area_media_shutdown_targets | count > 0",
+        'entity_id: "{{ common_area_media_shutdown_targets }}"',
+    ):
+        assert token in media_shutdown
+
+    assert media_shutdown.count("action: media_player.turn_off") == 1
+
+
 def test_goodnight_integrity_respects_guest_mode_and_guest_room_occupancy() -> None:
     block = _script_block(HOUSE_MODE_PATH, "goodnight_integrity")
 
@@ -126,21 +149,23 @@ def test_cpap_bedtime_lights_off_still_treats_cpap_as_full_sleep() -> None:
     assert "reason: cpap_sleep" in action_block
 
 
-def test_bed_lamps_off_only_finishes_turning_off_lights() -> None:
+def test_bed_lamps_off_routes_through_goodnight_integrity() -> None:
     block = _automation_block(LIGHT_PATH, "turn_off_all_lights_when_bed_off")
 
     assert "sensor.owner_suite_cpap_plug_power" in block
-    assert "script.house_transition" in block
-    assert "mode: asleep" in block
-    assert "script.lights_off_except" in block
-    assert "light.outside_front_hue" in block
-    assert "light.outside_front_door" in block
+
+    # The lamps-off bedtime path now emits the shared goodnight-integrity signal
+    # rather than inlining its own house_transition + lights_off_except, so the
+    # diffuser shutdown stays behind GoodnightIntegrityRequested per
+    # specs/diffusers.allium (TurnOffDiffusersForSleep).
+    assert "script.goodnight_integrity" in block
+    assert "reason: bedside_lamps_off" in block
 
     for token in (
-        "switch.office_red_lava_lamp",
-        "media_player.lg_webos_smart_tv",
-        "media_player.basement",
-        "script.goodnight_integrity",
+        "script.house_transition",
+        "mode: asleep",
+        "script.lights_off_except",
+        "light.outside_front_hue",
     ):
         assert token not in block
 

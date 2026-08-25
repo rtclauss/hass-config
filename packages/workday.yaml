@@ -349,9 +349,21 @@ automation:
         entity_id: binary_sensor.bedroom_occupancy
         to: "on"
     condition:
-      - condition: time
-        after: "04:30:00"
-        before: "12:00:00"
+      - condition: template
+        alias: "within 30 min of the earliest wake alarm (or past it, before noon)"
+        value_template: >-
+          {% set buffer_minutes = 30 %}
+          {% set candidates = [
+               state_attr('input_datetime.weekday_alarm', 'timestamp')
+                 if is_state('input_boolean.weekday_alarm_on', 'on') else none,
+               state_attr('input_datetime.next_work_meeting', 'timestamp')
+                 if is_state('input_boolean.special_meeting', 'on') else none
+             ] | select('number') | reject('equalto', 0) | list %}
+          {% set earliest = candidates | min if candidates else none %}
+          {% set now_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
+          {{ earliest is number
+             and now_seconds >= (earliest - buffer_minutes * 60)
+             and now_seconds < 43200 }}
       - condition: state
         entity_id: binary_sensor.workday_sensor
         state: "on"
@@ -494,7 +506,7 @@ automation:
 
   - id: turn_on_office_lamp_when_work_tp_camera_inactive
     alias: turn_on_office_lamp_when_work_tp_camera_inactive
-    description: Turn on office ceiling when work laptop camera turns off.
+    description: Turn on office ceiling after work laptop camera remains off for 15 seconds.
     trace:
       stored_traces: 50
     trigger:
@@ -502,12 +514,13 @@ automation:
         entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
         from: "on"
         to: "off"
-      - trigger: state
-        entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
-        from: "on"
-        to: "off"
         for:
           seconds: 15
+    condition:
+      - alias: Preserve office guest privacy
+        condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
       - action: light.turn_on
         data:
@@ -735,8 +748,7 @@ script:
           # cannot be reached.
           radio_uri: "https://nis.stream.publicradio.org/nis.mp3"
           initial_delay: 5
-          ramp_steps: 40
-          ramp_k_factor: 140
+          ramp_interval_seconds: 18
           fallback_uri: "tunein--S3NwgspV://radio/s34350"
           fallback_media_type: radio
 
@@ -757,7 +769,14 @@ script:
     mode: single
     trace:
       stored_traces: 50
+    variables:
+      bed_strip_automatic_max_brightness_percent: 25
     sequence:
+      - alias: "Turn the diffusers back on for the day"
+        continue_on_error: true
+        action: homeassistant.turn_on
+        target:
+          entity_id: group.diffusers
       - alias: "Start from the owner suite adaptive sleep target"
         continue_on_error: true
         action: switch.turn_on
@@ -818,17 +837,32 @@ script:
                 data:
                   entity_id:
                     - switch.sleep_mode
-              - alias: "Apply the daytime adaptive target over three minutes"
+              - alias: "Apply the daytime adaptive target to the owner suite lamps over three minutes"
                 continue_on_error: true
                 action: adaptive_lighting.apply
                 data:
                   entity_id: switch.adaptive_lighting_owner_suite
                   lights:
                     - light.owner_suite_lamps
-                    - light.bed_lightstrip
                   adapt_brightness: true
                   adapt_color: true
                   turn_on_lights: true
+                  transition: 180
+              - alias: "Ramp the bed strip to its capped adaptive daytime target over three minutes"
+                continue_on_error: true
+                action: light.turn_on
+                target:
+                  entity_id: light.bed_lightstrip
+                data:
+                  brightness_pct: >-
+                    {% set adaptive_target =
+                      state_attr('switch.adaptive_lighting_owner_suite', 'brightness_pct')
+                      | float(bed_strip_automatic_max_brightness_percent) %}
+                    {{ [adaptive_target, bed_strip_automatic_max_brightness_percent | float]
+                       | min | round(0) | int }}
+                  color_temp_kelvin: >-
+                    {{ state_attr('switch.adaptive_lighting_owner_suite', 'color_temp_kelvin')
+                       | int(1000) }}
                   transition: 180
               - alias: "Wait for the wake ramp to complete before releasing adaptive lighting control"
                 delay:

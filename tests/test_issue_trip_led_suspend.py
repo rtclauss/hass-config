@@ -81,7 +81,8 @@ def test_trip_suspend_script_zeros_led_intensities_and_clears_active_effects() -
     assert "value: 0" in block
     assert "action: script.inovelli_led_clear_all_effects" in block
     assert "inovelli_led_clear_all_effects:" in led_notification_text
-    assert "effect: Clear Effect" in led_notification_text
+    assert "effect: clear_effect" in led_notification_text
+    assert "action: script.publish_inovelli_z2m_led_effect" in led_notification_text
     assert "'clear_effect'" not in block
     assert "zigbee2mqtt/{{ repeat.item }}/set" not in block
 

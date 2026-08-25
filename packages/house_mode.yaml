@@ -202,9 +202,7 @@ script:
                   - "{{ should_apply_lights and requested_mode == 'away' and not guest_mode_enabled }}"
                 sequence:
                   - continue_on_error: true
-                    action: scene.turn_on
-                    target:
-                      entity_id: scene.leave_home
+                    action: script.leave_home_transition
                   - continue_on_error: true
                     action: script.lights_off_except
                     data:
@@ -450,11 +448,32 @@ script:
                 - switch.office_red_lava_lamp
                 - switch.northern_light_lava_lamp
           - continue_on_error: true
-            action: media_player.turn_off
+            action: homeassistant.turn_off
             target:
-              entity_id:
-                - media_player.lg_webos_smart_tv
-                - media_player.basement
+              entity_id: group.diffusers
+          - sequence:
+              - variables:
+                  common_area_media_shutdown_targets: >-
+                    {{ expand(
+                      'media_player.lg_webos_smart_tv',
+                      'media_player.basement'
+                    )
+                      | rejectattr(
+                        'state',
+                        'in',
+                        ['off', 'unavailable', 'unknown']
+                      )
+                      | map(attribute='entity_id')
+                      | list }}
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ common_area_media_shutdown_targets | count > 0 }}
+                then:
+                  - continue_on_error: true
+                    action: media_player.turn_off
+                    target:
+                      entity_id: "{{ common_area_media_shutdown_targets }}"
           - continue_on_error: true
             action: script.apply_owner_suite_inovelli_led_policy
             data:

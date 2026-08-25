@@ -49,6 +49,7 @@ external entity WakeupContext {
     owner_suite_lamps_on: Boolean
     owner_suite_recent_bathroom_activity: Boolean
     owner_suite_recent_bedroom_activity: Boolean
+    owner_suite_adaptive_daytime_brightness_percent: Integer
 }
 
 external entity WakeupAudioContext {
@@ -81,6 +82,7 @@ entity WakeupState {
 
 entity OwnerSuiteWakeEnvironment {
     lighting_state: sleeping | dim_warm | daylight_ramp | daytime
+    bed_strip_brightness_percent: Integer
     adaptive_lighting_enabled: Boolean
     sleep_mode_enabled: Boolean
     blinds_state: closed | opening | mostly_open
@@ -100,7 +102,8 @@ config {
     snooze_duration: Duration = 8.minutes
     morning_blinds_delay: Duration = 175.seconds
     morning_light_ramp_duration: Duration = 3.minutes
-    office_wakeup_peak_volume_percent: Integer = 10
+    bed_strip_automatic_max_brightness_percent: Integer = 25
+    office_wakeup_peak_volume_percent: Integer = 7
     wakeup_fallback_source_configured: Boolean = true
 }
 
@@ -221,6 +224,7 @@ rule BeginWakeupSequence {
     ensures: wakeup.wakeup_alarm_firing = true
     ensures: owner_suite.adaptive_lighting_enabled = true
     ensures: owner_suite.lighting_state = dim_warm
+    ensures: owner_suite.bed_strip_brightness_percent = 1
     ensures: WakeupRampRequested(kind)
     ensures: WakeupBlindTransitionRequested(kind)
     @guidance
@@ -235,7 +239,13 @@ rule BeginWakeupSequence {
 
 rule FinishWakeupSequence {
     when: WakeupRampRequested(kind)
+    let bed_strip_wake_target_percent =
+        if wakeup_context.owner_suite_adaptive_daytime_brightness_percent > config.bed_strip_automatic_max_brightness_percent:
+            config.bed_strip_automatic_max_brightness_percent
+        else:
+            wakeup_context.owner_suite_adaptive_daytime_brightness_percent
     ensures: owner_suite.lighting_state = daytime
+    ensures: owner_suite.bed_strip_brightness_percent = bed_strip_wake_target_percent
     ensures: owner_suite.sleep_mode_enabled = false
     ensures: owner_suite.adaptive_lighting_enabled = true
     ensures:
@@ -243,8 +253,13 @@ rule FinishWakeupSequence {
             owner_suite.switch_leds_off = false
         -- weekends: switch_leds_off remains true (set by goodnight integrity)
     @guidance
-        -- Implementation turns off sleep mode and calls adaptive_lighting.apply
-        -- with transition = config.morning_light_ramp_duration (3 minutes).
+        -- Implementation turns off sleep mode and applies the full adaptive
+        -- daytime target to the owner-suite lamps with transition =
+        -- config.morning_light_ramp_duration (3 minutes). The bed strip ramps
+        -- for the same duration to the lower of that target and
+        -- config.bed_strip_automatic_max_brightness_percent (25 %), so the
+        -- automatic ceiling does not interrupt the wake ramp. Direct resident
+        -- brightness changes remain manual overrides and may exceed the cap.
         -- During the ramp, manual-control is locked on the owner-suite lights
         -- to prevent adaptive lighting's periodic updates from interrupting the
         -- transition. After config.morning_light_ramp_duration elapses, manual
@@ -341,11 +356,19 @@ rule RampWakeupVolumeByRoom {
     ensures: WakeupVolumeRampStarted(group)
     @guidance
         -- Only runs once playback is verified, so the ramp never fades up a
-        -- silent group. All group members fade in from silence using a tan-curve
-        -- ramp. When the group is bedroom_bathroom_office_den, the office is
-        -- capped at config.office_wakeup_peak_volume_percent; all other rooms
-        -- ramp to the full peak. This prevents the wake-up routine from
-        -- disturbing work-in-progress in the office.
+        -- silent group. All group members fade in from silence using small,
+        -- evenly-paced volume steps sized from loudness-perception research
+        -- (roughly half the ~1 dB just-noticeable-difference per step,
+        -- spaced well past the ~4s auditory echoic-memory window) so the
+        -- rise reads as a smooth swell rather than audible jumps, landing
+        -- around six minutes rather than the perceptual minimum of under a
+        -- minute. The bedroom ramps to the highest peak — it holds the
+        -- sleeper, so the wake-up has to clear the "still asleep" threshold
+        -- there, not merely be audible. When the group is
+        -- bedroom_bathroom_office_den, the office is capped at
+        -- config.office_wakeup_peak_volume_percent; the remaining rooms ramp
+        -- to the shared non-bedroom peak. This prevents the wake-up routine
+        -- from disturbing work-in-progress in the office.
 }
 
 rule AbortSilentWakeupWhenNoSourcePlays {

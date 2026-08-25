@@ -212,6 +212,8 @@ automation:
 
   - id: reset_z2m_reboot_counter
     alias: reset_z2m_reboot_counter
+    description: Reset manually from the recovery notification or after Zigbee2MQTT remains healthy for 10 minutes
+    mode: single
     trace:
       stored_traces: 10
     trigger:
@@ -219,36 +221,37 @@ automation:
         event_type: mobile_app_notification_action
         event_data:
           action: REBOOT_Z2M_COUNTER
-    action:
-      - action: script.turn_on
-        target:
-          entity_id: script.z2m_reset_reboot_counter
-
-  - id: reset_z2m_reboot_counter_on_recovery
-    alias: reset_z2m_reboot_counter_on_recovery
-    trace:
-      stored_traces: 10
-    trigger:
+        id: manual_reset
       - trigger: state
         entity_id: binary_sensor.zigbee2mqtt_running
         to: "on"
         for:
           minutes: 10
+        id: sustained_recovery
       - trigger: state
         entity_id: binary_sensor.z2m_failing
         to: "off"
         for:
           minutes: 10
+        id: sustained_recovery
     condition:
-      - condition: state
-        entity_id: binary_sensor.zigbee2mqtt_running
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.z2m_failing
-        state: "off"
-      - condition: numeric_state
-        entity_id: counter.reboot_counter
-        above: 0
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: manual_reset
+          - condition: and
+            conditions:
+              - condition: trigger
+                id: sustained_recovery
+              - condition: state
+                entity_id: binary_sensor.zigbee2mqtt_running
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.z2m_failing
+                state: "off"
+              - condition: numeric_state
+                entity_id: counter.reboot_counter
+                above: 0
     action:
       - action: script.z2m_reset_reboot_counter
 

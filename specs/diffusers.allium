@@ -1,0 +1,129 @@
+-- allium: 3
+-- diffusers.allium
+--
+-- Scope: Scent/oil diffusers (e.g. the Owner Suite cat diffuser) and their
+-- participation in the sleep/wake cycle plus periodic oil-replacement reminders.
+-- Includes:
+--   - turning the diffusers off with the CPAP-triggered goodnight shutdown
+--   - turning them on with the owner-suite morning wake transition: every alarm
+--     wake, plus the workday motion-based (no-alarm) get-up. Non-workday
+--     mornings without an alarm intentionally have no motion wake and are
+--     covered by the afternoon fallback below.
+--   - a mid-afternoon fallback that turns them on when no wake-up happened
+--   - a shared, once-per-cycle "replace the diffuser oils" reminder (~6 months)
+--     and its reset when the oils are replaced
+-- Excludes:
+--   - the internals of the goodnight and wake-up flows (see night_routines.allium
+--     and alarm_wakeup.allium); this spec only consumes their emitted signals
+--   - the specific notification transport and Lovelace presentation
+--
+-- Extension point: the whole spec treats the diffusers as one set. Adding a
+-- second or third diffuser is purely a membership change (group.diffusers in the
+-- implementation) and requires no new rules.
+
+------------------------------------------------------------
+-- Given
+------------------------------------------------------------
+
+given {
+    diffusers: DiffuserSet
+    trip: TripContext
+}
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity TripContext {
+    -- True while away by any trip signal: a planned vacation calendar event or
+    -- the umbrella trip flag set for planned work, calendar, or manual trips.
+    away_active: Boolean
+}
+
+------------------------------------------------------------
+-- Entities
+------------------------------------------------------------
+
+entity DiffuserSet {
+    -- on when at least one member diffuser is powered.
+    power_state: on | off
+    oil_last_replaced: Timestamp
+    oil_reminder_active: Boolean
+
+    -- Derived
+    oil_reminder_due_at: oil_last_replaced + config.oil_replacement_interval
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    -- Replace the diffuser oils roughly twice a year.
+    oil_replacement_interval: Duration = 182.days
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+rule TurnOffDiffusersForSleep {
+    when: GoodnightIntegrityRequested(reason)
+    ensures: diffusers.power_state = off
+    @guidance
+        -- Hooked into the shared goodnight integrity flow so the diffusers shut
+        -- off with the rest of the house at CPAP-detected sleep (and any other
+        -- goodnight path), rather than on a diffuser-specific trigger.
+}
+
+rule TurnOnDiffusersAtMorningWake {
+    when: OwnerSuiteMorningTransitionStarted()
+    ensures: diffusers.power_state = on
+    @guidance
+        -- The owner-suite morning transition runs for every alarm wake and for
+        -- the workday motion-based (no-alarm) get-up, so those turn the diffusers
+        -- back on. Non-workday mornings without an alarm have no motion wake by
+        -- design (a weekend get-up must not trigger the full light-ramp/blinds
+        -- transition), so they are covered by TurnOnDiffusersAfternoonFallback
+        -- rather than this rule.
+}
+
+rule TurnOnDiffusersAfternoonFallback {
+    when: AfternoonFallbackReached()
+    requires: diffusers.power_state = off
+    requires: not trip.away_active
+    ensures: diffusers.power_state = on
+    @guidance
+        -- Fires from a fixed mid-afternoon schedule (16:00). Guarded on the
+        -- diffusers still being off, so on a normal day — where the morning
+        -- wake already turned them on — it is a no-op. It is the intended path
+        -- for days with no morning wake at all, including non-workday mornings
+        -- without an alarm. Suppressed while away by any trip signal: with no
+        -- CPAP-driven goodnight to turn the diffusers back off, turning them on
+        -- would leave them running for the whole trip instead of just the
+        -- evening. The normal off-at-night / on-at-wake cycle resumes the next
+        -- day.
+}
+
+rule RemindDiffuserOilReplacement {
+    when: diffusers.oil_reminder_due_at <= now
+    requires: not diffusers.oil_reminder_active
+    ensures: diffusers.oil_reminder_active = true
+    ensures: DiffuserOilReplacementReminderSent()
+    @guidance
+        -- A single shared reminder covers every diffuser in the set. The
+        -- oil_reminder_active latch makes it fire once per cycle instead of
+        -- every day it stays overdue. The reminder is delivered as an
+        -- actionable notification whose "Replaced" action raises
+        -- DiffuserOilReplaced.
+}
+
+rule ResetDiffuserOilReminderOnReplace {
+    when: DiffuserOilReplaced()
+    ensures: diffusers.oil_last_replaced = now
+    ensures: diffusers.oil_reminder_active = false
+    @guidance
+        -- Replacing the oils (via the notification action or a manual mark)
+        -- restarts the interval and clears the latch so the next reminder is
+        -- armed for one interval later.
+}

@@ -8,6 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIGURATION_PATH = ROOT / "configuration.yaml"
 
 
+def test_http_settings_are_not_declared_in_yaml_after_storage_migration() -> None:
+    text = CONFIGURATION_PATH.read_text(encoding="utf-8")
+
+    assert re.search(r"^http:\s*$", text, re.MULTILINE) is None
+
+
 def _lovelace_block() -> str:
     text = CONFIGURATION_PATH.read_text(encoding="utf-8")
     match = re.search(r"^lovelace:\n(.*?)(?=^\S|\Z)", text, re.MULTILINE | re.DOTALL)

@@ -76,10 +76,10 @@ def test_assignment_manifest_is_valid_and_covers_repository_inventory() -> None:
 
     assert validate_assignment_manifest(manifest, active_label_ids=active) == []
     assert manifest["metadata"]["repository_counts"] == {
-        "automation": 234,
-        "script": 139,
+        "automation": 241,
+        "script": 153,
         "scene": 34,
-        "helper": 104,
+        "helper": 108,
     }
     assert manifest["metadata"]["live_only_counts"] == {
         "automation": 31,
@@ -92,9 +92,9 @@ def test_every_behavior_and_helper_has_explicit_labels() -> None:
 
     assert all(item["labels"] for item in manifest["behaviors"])
     assert all(item["labels"] for item in manifest["helpers"])
-    assert sum(item["source"] == "repository" for item in manifest["behaviors"]) == 407
+    assert sum(item["source"] == "repository" for item in manifest["behaviors"]) == 428
     assert sum(item["source"] == "live_only" for item in manifest["behaviors"]) == 34
-    assert len({item["entity_id"] for item in manifest["helpers"]}) == 104
+    assert len({item["entity_id"] for item in manifest["helpers"]}) == 108
 
 
 def test_new_presence_emitters_and_tesla_cancel_have_domain_labels() -> None:
@@ -133,7 +133,7 @@ def test_all_scenes_have_unique_stable_ids_without_entity_id_changes() -> None:
 def test_reference_graph_covers_all_repository_behaviors() -> None:
     graph = build_reference_graph()
 
-    assert graph["node_count"] == 407
+    assert graph["node_count"] == 428
     assert graph["edge_count"] > 300
     assert "automation.alarm_wake_up" in graph["graph"]
     assert "script.wake_up_script" in graph["graph"]["automation.alarm_wake_up"]

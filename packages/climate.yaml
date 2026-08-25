@@ -143,10 +143,6 @@ homeassistant:
     ################################################
     ## Sensors
     ################################################
-    sensor.basement_humidity:
-      <<: *customize
-      device_class: humidity
-
     sensor.garage_humidity:
       <<: *customize
       device_class: humidity
@@ -819,13 +815,14 @@ sensor:
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative default House Temp Change
-
-  - platform: derivative
-    source: sensor.average_house_temp
-    # source: sensor.glycol_thermostat_temperature
-    name: Derivative 5-5 minutes House Temp Change
     round: 5
-    time_window: "00:5:00"
+    # average_house_temp is a min_max mean over 15 sensors and can emit
+    # several state changes milliseconds apart when multiple sources report
+    # in the same poll burst. Without a time_window the platform divides by
+    # that near-zero elapsed time (issue #973), producing spikes into the
+    # thousands of deg F/h. A window forces the windowed-slope calculation
+    # instead of a raw two-point instantaneous derivative.
+    time_window: "00:05:00"
 
   - platform: derivative
     source: sensor.average_house_temp
@@ -838,29 +835,26 @@ sensor:
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative 10-10 minutes House Temp Change
+    # Recommended for day-to-day use (issue #973): 12h of live history put
+    # this window's stdev at 0.59 deg F/h (median 0.18) vs. 1.6 for the
+    # 2.5-minute window — tight enough to be a believable indoor rate of
+    # change without the multi-hour lag of the 30/60-minute windows.
     round: 5
     time_window: "00:10:00"
 
   - platform: derivative
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
-    name: Derivative 5-10 minutes House Temp Change
-    round: 5
-    time_window: "00:05:00"
-
-  - platform: derivative
-    source: sensor.average_house_temp
-    # source: sensor.glycol_thermostat_temperature
     name: Derivative 30 minutes House Temp Change
     round: 5
-    time_window: "00:15:00"
+    time_window: "00:30:00"
 
   - platform: derivative
     source: sensor.average_house_temp
     # source: sensor.glycol_thermostat_temperature
     name: Derivative 60 minutes House Temp Change
     round: 5
-    time_window: "00:30:00"
+    time_window: "01:00:00"
 
   - platform: history_stats
     name: Heating Today
@@ -940,60 +934,6 @@ sensor:
       - sensor.basement_bathroom_tph_pressure
       - sensor.guest_bathroom_tph_pressure
 
-  - platform: statistics
-    name: min_rate_of_house_temp_change_10m
-    entity_id: sensor.rate_of_house_temp_change_10m
-    state_characteristic: mean
-    sampling_size: 20 # TODO Remove after 2022.12
-
-  - platform: statistics
-    name: min_rate_of_house_temp_change_1h
-    entity_id: sensor.rate_of_house_temp_change_1h
-    state_characteristic: mean
-    sampling_size: 20 # TODO Remove after 2022.12
-
-  - platform: statistics
-    name: min_rate_of_house_temp_change_30m
-    entity_id: sensor.rate_of_house_temp_change_30m
-    state_characteristic: mean
-    sampling_size: 20 # TODO Remove after 2022.12
-
-  - platform: statistics
-    name: house_temperature_stats_5m
-    entity_id: sensor.average_house_temp
-    state_characteristic: mean
-    sampling_size: 20 # TODO Remove after 2022.12
-    max_age:
-      minutes: 5
-    precision: 8
-
-  - platform: statistics
-    name: house_temperature_stats_10m
-    entity_id: sensor.average_house_temp
-    state_characteristic: mean
-    sampling_size: 20 # TODO Remove after 2022.12
-    max_age:
-      minutes: 10
-    precision: 10
-
-  - platform: statistics
-    name: house_temperature_stats_30m
-    entity_id: sensor.average_house_temp
-    state_characteristic: mean
-    sampling_size: 20 # TODO Remove after 2022.12
-    max_age:
-      minutes: 30
-    precision: 8
-
-  - platform: statistics
-    name: house_temperature_stats_1h
-    entity_id: sensor.average_house_temp
-    state_characteristic: mean
-    sampling_size: 20 # TODO Remove after 2022.12
-    max_age:
-      hours: 1
-    precision: 8
-
 ################################################
 ## Templates
 ################################################
@@ -1020,12 +960,12 @@ template:
         unit_of_measurement: "%"
         state_class: measurement
         availability: >-
-          {{ has_value('sensor.basement_bathroom_tph_humidity') and has_value('sensor.average_house_humidity') }}
+          {{ has_value('sensor.basement_bathroom_tph_humidity') and has_value('sensor.basement_tph_humidity') }}
         state: >-
           {{
             (
               states('sensor.basement_bathroom_tph_humidity') | float(default=0)
-              - states('sensor.average_house_humidity') | float(default=0)
+              - states('sensor.basement_tph_humidity') | float(default=0)
             )
           }}
 
@@ -1144,40 +1084,6 @@ template:
         availability: '{{ states("climate.my_ecobee") != None }}'
         state: "{{ state_attr('climate.my_ecobee', 'current_temperature') }}"
         name: ecobee_temperature
-      - unit_of_measurement: °F/5 minute
-        default_entity_id: sensor.rate_of_house_temp_change_5m
-        unique_id: rate_of_house_temp_change_5m
-        availability: >-
-          {{ states("sensor.rate_of_house_temp_change_5m", "change_rate") != None }}
-        state: >-
-          {{ state_attr('sensor.house_temperature_stats_5m', 'change_rate')  |float(default=0)}}
-        name: rate_of_house_temp_change_5m
-      - unit_of_measurement: °F/5 minute
-        default_entity_id: sensor.rate_of_house_temp_change_10m
-        unique_id: rate_of_house_temp_change_10m
-        availability: >-
-          {{ states("sensor.rate_of_house_temp_change_10m", "change_rate") != None }}
-        state: >-
-          {{ state_attr('sensor.house_temperature_stats_10m', 'change_rate')|float(default=0) * 60.0 * 5.0 |float(default=0)}}
-        name: rate_of_house_temp_change_10m
-      - unit_of_measurement: °F/5 minute
-        default_entity_id: sensor.rate_of_house_temp_change_1h
-        unique_id: rate_of_house_temp_change_1h
-        availability: >-
-          {{ state_attr('sensor.house_temperature_stats_1h', 'change_rate') is not none }}
-        state: >-
-          {% set change_rate = state_attr('sensor.house_temperature_stats_1h', 'change_rate') %}
-          {{ (change_rate | float(default=0)) * 60.0 * 5.0 }}
-        name: rate_of_house_temp_change_1h
-      - unit_of_measurement: °F/5 minute
-        default_entity_id: sensor.rate_of_house_temp_change_30m
-        unique_id: rate_of_house_temp_change_30m
-        availability: >-
-          {{ state_attr('sensor.house_temperature_stats_30m', 'change_rate') is not none }}
-        state: >-
-          {% set change_rate = state_attr('sensor.house_temperature_stats_30m', 'change_rate') %}
-          {{ (change_rate | float(default=0)) * 60.0 * 5.0 }}
-        name: rate_of_house_temp_change_30m
       - device_class: temperature
         unit_of_measurement: °F
         default_entity_id: sensor.ecobee_active_target_temperature
@@ -1205,11 +1111,26 @@ template:
         default_entity_id: sensor.ecobee_modeled_rate_deg_per_min
         unique_id: ecobee_modeled_rate_deg_per_min
         availability: >-
-          {{ has_value('sensor.outside_temperature') and has_value('sensor.rate_of_house_temp_change_10m') and states('sensor.hvac_activity') in ['heating', 'cooling'] }}
+          {{ has_value('sensor.outside_temperature') and has_value('sensor.derivative_10_10_minutes_house_temp_change') and states('sensor.hvac_activity') in ['heating', 'cooling'] }}
         state: >-
           {% set action = states('sensor.hvac_activity') %}
           {% set t_out = states('sensor.outside_temperature') | float(default=0) %}
-          {% set recent_rate = (states('sensor.rate_of_house_temp_change_10m') | float(default=0)) / 5 %}
+          {# sensor.rate_of_house_temp_change_10m read a 'change_rate' attribute
+             that this HA version's statistics platform no longer exposes, so
+             recent_rate silently stayed 0 forever and this blend was pure
+             dead weight (issue #977). Swapped to the already-audited
+             derivative sensor (deg F/hour, #973), converted to deg F/min. #}
+          {% set raw_recent_rate = (states('sensor.derivative_10_10_minutes_house_temp_change') | float(default=0)) / 60 %}
+          {# Codex P2 on #973/#975: time_window bounds max sample age, not a
+             minimum — right after an HA restart/reload, two samples
+             milliseconds apart can still dominate the windowed derivative
+             before real history accumulates, reproducing a momentary spike.
+             Clamped to a bound well above the fastest real historical rate
+             this model ever uses (+/-0.016 deg F/min) but far below any
+             burst artifact, so a spike can influence the blend by at most
+             this much instead of dominating it outright. #}
+          {% set recent_rate_sanity_bound = 0.05 %}
+          {% set recent_rate = [[raw_recent_rate, -recent_rate_sanity_bound] | max, recent_rate_sanity_bound] | min %}
 
           {% if action == 'heating' %}
             {% if is_state('binary_sensor.ecobee_aux', 'on') %}
