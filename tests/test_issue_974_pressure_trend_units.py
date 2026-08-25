@@ -92,7 +92,7 @@ def test_pressure_fast_short_window_sensor_is_above_the_measured_noise_floor() -
     assert falling_fast == -0.000082
     assert rising_fast == 0.000082
 
-    measured_30min_noise_ceiling_inhg_per_s = 0.0001962 / 3600  # ~6.6 hPa/hr
+    measured_30min_noise_ceiling_inhg_per_s = (6.6 / 33.8639) / 3600  # ~6.6 hPa/hr
     assert abs(falling_fast) > measured_30min_noise_ceiling_inhg_per_s * 1.25
 
     v_rapidly = abs(_trend_sensor_gradient(text, "pressure_falling_v_rapidly"))
@@ -167,42 +167,65 @@ def test_window_pressure_alert_automation_includes_the_fast_sensor() -> None:
 def test_window_pressure_alert_requires_a_settled_sample_buffer() -> None:
     # Codex P2 follow-up on #974: max_samples only raises the retention cap,
     # it doesn't require a minimum populated duration — every trend sensor
-    # still starts with an empty buffer on restart and can evaluate off its
-    # first two samples, which can be milliseconds apart given
-    # average_house_pressure's bursty updates. Require HA to have been up
-    # for longer than the shortest (fast, 30-minute) window before trusting
-    # any pressure-drop alert.
+    # still starts with an empty buffer whenever average_house_pressure's
+    # own data goes down and comes back, which can be milliseconds apart
+    # given average_house_pressure's bursty updates. Require that source to
+    # have been available for longer than the shortest (fast, 30-minute)
+    # window before trusting any pressure-drop alert.
     weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
     text = weather_path.read_text(encoding="utf-8")
     start = text.index("id: alert_house_windows_open_pressure_dropping")
     end = text.index("\n  - id:", start)
     block = text[start:end]
 
-    assert "sensor.uptime_at" in block
+    assert "input_datetime.pressure_source_available_since" in block
     assert "35 * 60" in block
 
 
 def test_window_pressure_alert_settle_gate_fails_closed() -> None:
-    # Codex P2 follow-up on #974: as_timestamp(states('sensor.uptime_at'), 0)
-    # defaulted to epoch 0 while uptime_at was unknown/unavailable (e.g.
-    # before the uptime platform published its first value), making the
-    # elapsed-time calculation huge and letting the settle gate pass right
-    # when it's needed most. Must require a valid value instead.
+    # Codex P2 follow-up on #974: an unguarded as_timestamp(states(...), 0)
+    # would default to epoch 0 while pressure_source_available_since is
+    # unknown/unavailable (e.g. before the tracking automation has ever
+    # run), making the elapsed-time calculation huge and letting the settle
+    # gate pass right when it's needed most. Must require a valid value
+    # instead.
     weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
     text = weather_path.read_text(encoding="utf-8")
     start = text.index("id: alert_house_windows_open_pressure_dropping")
     end = text.index("\n  - id:", start)
     block = text[start:end]
 
-    assert "has_value('sensor.uptime_at')" in block
-    assert "as_timestamp(states('sensor.uptime_at'), 0)" not in block
+    assert "has_value('input_datetime.pressure_source_available_since')" in block
+    assert "pressure_source_available_since', 'timestamp'), 0)" not in block
+    assert "pressure_source_available_since'), 0)" not in block
 
 
-def test_uptime_sensor_is_defined_for_the_settle_gate() -> None:
+def test_pressure_source_available_since_helper_is_defined() -> None:
     weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
     text = weather_path.read_text(encoding="utf-8")
-    assert "platform: uptime" in text
-    assert "name: uptime_at" in text
+    assert "pressure_source_available_since:" in text
+    assert "has_date: true" in text
+
+
+def test_pressure_source_available_since_is_tracked_on_restart_and_reconnect() -> None:
+    # Codex P2 follow-up on #974: HA uptime alone only catches the
+    # post-restart case. If the pressure source (or its integration)
+    # reconnects after an outage while HA stays up, uptime keeps climbing
+    # right through the gap even though the trend sensor's history is just
+    # as stale — so this must be tracked separately from uptime.
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: track_pressure_source_available_since")
+    end = text.index("\n########", start)
+    block = text[start:end]
+
+    assert "trigger: homeassistant" in block
+    assert "event: start" in block
+    assert "entity_id: sensor.average_house_pressure" in block
+    assert '"unavailable"' in block
+    assert '"unknown"' in block
+    assert "input_datetime.set_datetime" in block
+    assert "input_datetime.pressure_source_available_since" in block
 
 
 def test_window_pressure_alert_rejects_an_implausible_gradient() -> None:

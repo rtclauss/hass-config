@@ -224,27 +224,25 @@ automation:
           {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_house_windows_open_pressure_dropping', 'last_triggered'), 0)) > 14400 }}
       - alias: >-
           Require a settled sample buffer before trusting a trend reading —
-          every trend sensor starts empty on restart and can evaluate off
-          its first two samples, which can still be milliseconds apart
-          given average_house_pressure's bursty updates (Codex P2 on #974).
-          Fails closed (blocks the alert) while uptime_at is unknown/
-          unavailable — e.g. before the uptime platform has published its
-          first value — instead of defaulting to epoch 0, which made the
+          every trend sensor starts empty whenever average_house_pressure's
+          own data goes down and comes back, whether that's an HA restart
+          or just the pressure source/integration reconnecting while HA
+          stays up (Codex P2 on #974, broadened per Codex P2 follow-up: HA
+          uptime alone doesn't catch a same-uptime reconnect, but the
+          trend sensor's history is just as stale). Fails closed (blocks
+          the alert) while pressure_source_available_since is unknown/
+          unavailable instead of defaulting to epoch 0, which made the
           elapsed time huge and let the condition pass right when the
           settle gate is needed most (Codex P2 follow-up on #974)
         condition: template
         value_template: >-
-          {{ has_value('sensor.uptime_at')
-             and (as_timestamp(now()) - as_timestamp(states('sensor.uptime_at'))) > (35 * 60) }}
+          {{ has_value('input_datetime.pressure_source_available_since')
+             and (as_timestamp(now()) - state_attr('input_datetime.pressure_source_available_since', 'timestamp')) > (35 * 60) }}
       - alias: >-
           Reject an implausible gradient regardless of cause (Codex P2
-          follow-up on #974) — HA uptime only guards the post-restart
-          case; if the pressure sources or their integration reconnect
-          after an outage longer than the trend window while HA itself
-          stays up, the uptime check already passes but the trend
-          sensor's own history is still fresh off the same clustered
-          updates. A real storm never approaches this rate (v_rapidly is
-          ~2 hPa/hr); a burst-driven spike, restart or not, does.
+          follow-up on #974) as a second, independent line of defense — a
+          real storm never approaches this rate (v_rapidly is ~2 hPa/hr);
+          a burst-driven spike, restart or not, does.
         condition: template
         value_template: >-
           {{ (trigger.to_state.attributes.gradient | float(0) | abs) * 3600 * 33.8639 <= 15 }}
@@ -661,6 +659,34 @@ automation:
           entity_id: input_text.nws_dakota_county_alerts_triggered_pushbullet_alert_ids
           value: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_id') }}"
 
+  - id: track_pressure_source_available_since
+    alias: track_pressure_source_available_since
+    trace:
+      stored_traces: 10
+    trigger:
+      - alias: >-
+          HA restart — every trend sensor's sample buffer starts empty
+          regardless of whether average_house_pressure itself stayed
+          available (Codex P2 on #974)
+        trigger: homeassistant
+        event: start
+      - alias: >-
+          The pressure source (or its integration) reconnecting after an
+          outage while HA stays up — HA uptime alone doesn't catch this
+          case, but the trend sensor's history is just as stale (Codex P2
+          follow-up on #974)
+        trigger: state
+        entity_id: sensor.average_house_pressure
+        from:
+          - "unavailable"
+          - "unknown"
+    action:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.pressure_source_available_since
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
 ########################
 # Binary Sensors
 ########################
@@ -670,6 +696,20 @@ binary_sensor: []
 # Input Booleans
 ########################
 input_boolean: {}
+
+########################
+# Input Datetimes
+########################
+input_datetime:
+  # Restart-safe unlike last_changed across a restore (confirmed in #972):
+  # records the moment average_house_pressure last became available, so the
+  # pressure-drop alert's settle gate below can require real post-recovery
+  # history regardless of whether the gap was an HA restart or just the
+  # pressure source reconnecting (Codex P2 follow-up on #974).
+  pressure_source_available_since:
+    name: Pressure Source Available Since
+    has_date: true
+    has_time: true
 
 ########################
 # Input Numbers
@@ -736,15 +776,6 @@ script:
 ## Sensors
 ################################################
 sensor:
-  # Timestamp HA last started. Used to gate the pressure-drop window alert
-  # below on a settle period: pressure trend sensors start with an empty
-  # sample buffer on every restart, and average_house_pressure is known to
-  # emit clustered mean updates milliseconds apart, so the first couple of
-  # post-restart samples can still produce a spurious trend reading before
-  # enough real history accumulates (Codex P2 on #974).
-  - platform: uptime
-    name: uptime_at
-
   # - platform: wunderground
   #   api_key: !secret wunderground_api_key
   #   monitored_conditions:
