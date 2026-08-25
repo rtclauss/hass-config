@@ -233,11 +233,21 @@ automation:
           the alert) while pressure_source_available_since is unknown/
           unavailable instead of defaulting to epoch 0, which made the
           elapsed time huge and let the condition pass right when the
-          settle gate is needed most (Codex P2 follow-up on #974)
+          settle gate is needed most (Codex P2 follow-up on #974). A single
+          fixed 35-minute wait only covers the fast tier's 30-minute
+          (1800s) window with margin — quickly/v_rapidly use a 3-hour
+          (10800s) window, so the same fixed wait let them fire off a
+          still-mostly-empty buffer for hours after a reconnect (Codex P2
+          follow-up on #974). Require each triggering sensor's own window
+          plus the same 5-minute margin instead of one fixed duration.
         condition: template
         value_template: >-
+          {% set required_settle_seconds =
+               11100 if trigger.entity_id in
+                 ['binary_sensor.pressure_falling_quickly', 'binary_sensor.pressure_falling_v_rapidly']
+               else 2100 %}
           {{ has_value('input_datetime.pressure_source_available_since')
-             and (as_timestamp(now()) - state_attr('input_datetime.pressure_source_available_since', 'timestamp')) > (35 * 60) }}
+             and (as_timestamp(now()) - state_attr('input_datetime.pressure_source_available_since', 'timestamp')) > required_settle_seconds }}
       - alias: >-
           Reject an implausible gradient regardless of cause (Codex P2
           follow-up on #974) as a second, independent line of defense — a

@@ -179,7 +179,25 @@ def test_window_pressure_alert_requires_a_settled_sample_buffer() -> None:
     block = text[start:end]
 
     assert "input_datetime.pressure_source_available_since" in block
-    assert "35 * 60" in block
+    assert "2100" in block
+
+
+def test_window_pressure_alert_settle_gate_matches_each_triggers_own_window() -> None:
+    # Codex P2 follow-up on #974: a single fixed 35-minute settle wait only
+    # covers the fast tier's 30-minute (1800s) window with margin.
+    # quickly/v_rapidly use a 3-hour (10800s) window, so the same fixed wait
+    # let them fire off a still-mostly-empty buffer for hours after a
+    # restart or reconnect. Require each triggering sensor's own window
+    # (plus the same 5-minute margin the fast tier already used: 1800+300
+    # =2100, 10800+300=11100) instead of one fixed duration for all three.
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: alert_house_windows_open_pressure_dropping")
+    end = text.index("\n  - id:", start)
+    block = text[start:end]
+
+    assert "11100" in block
+    assert "'binary_sensor.pressure_falling_quickly', 'binary_sensor.pressure_falling_v_rapidly'" in block
 
 
 def test_window_pressure_alert_settle_gate_fails_closed() -> None:
