@@ -341,23 +341,25 @@ automation:
   - id: sleep_quality_reconcile_cpap_stop_after_restart
     alias: Sleep quality - reconcile CPAP stop after restart
     description: >-
-      A pending numeric_state/state `for:` debounce (cpap_stop or bed_exit,
-      above) is discarded on an HA restart *or* an automation reload — it
-      does not resume merely because the underlying condition stays true,
-      only if the entity changes state again (Codex P2 follow-up on #373:
-      a plain reload doesn't emit homeassistant.start, so that alone missed
-      the reload case). Two independent debounces can each be lost this
-      way, so both are reconciled here, in order: (1) if CPAP had already
-      dropped before the gap and the branch never ran,
-      sleep_session_cpap_stopped is stuck off; (2) if CPAP's own debounce
-      already completed (cpap_stopped is on) but the bed's separate
-      bed_exit debounce was the one in flight when the gap hit,
-      sleep_session_bed_out is left holding a prior session's stale value
-      (or none), which the state-restore of sleep_session_cpap_stopped
-      doesn't fix — that helper's last_changed resets on restore even
-      though its value is preserved, so this reconciliation must run again
-      every time regardless of how long ago cpap_stopped last changed
-      (Codex P2 follow-up on #373).
+      A pending numeric_state/state `for:` debounce (cpap_start, cpap_stop,
+      or bed_exit, above) is discarded on an HA restart *or* an automation
+      reload — it does not resume merely because the underlying condition
+      stays true, only if the entity changes state again (Codex P2
+      follow-up on #373: a plain reload doesn't emit homeassistant.start,
+      so that alone missed the reload case). Three independent debounces
+      can each be lost this way, so all three are reconciled here, in
+      order: (1) if CPAP was already running before the gap and its own
+      10-second debounce never got to run, no session ever started; (2) if
+      CPAP had already dropped before the gap and its stop debounce never
+      ran, sleep_session_cpap_stopped is stuck off; (3) if CPAP's own
+      debounce already completed (cpap_stopped is on) but the bed's
+      separate bed_exit debounce was the one in flight when the gap hit,
+      sleep_session_bed_out is left stale. Each branch re-checks its
+      underlying condition has held for the SAME full debounce duration the
+      normal trigger requires, not just its instantaneous state, so a
+      reload moments after a genuine transition can't fast-track past a
+      debounce a normal trigger would still be waiting out (Codex P2
+      follow-up on #373).
     trace:
       stored_traces: 10
     trigger:
@@ -365,23 +367,67 @@ automation:
         event: start
       - trigger: event
         event_type: automation_reloaded
-    condition:
-      - condition: state
-        entity_id: input_boolean.sleep_session_active
-        state: "on"
     action:
+      - alias: >-
+          Reconcile a lost cpap_start debounce: no session is active, but
+          CPAP has genuinely been running continuously for its own
+          10-second debounce — sleep_quality_prepare_session's cpap_start
+          branch never got to run because that debounce was discarded
+          mid-flight, and without another threshold crossing it never
+          re-arms on its own (Codex P2 follow-up on #373).
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - condition: numeric_state
+            entity_id: sensor.owner_suite_cpap_plug_power
+            above: 1.3
+            for:
+              seconds: 10
+        then:
+          - if:
+              - condition: state
+                entity_id: input_boolean.sleep_session_bed_entry_pending
+                state: "off"
+            then:
+              - action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.sleep_session_bed_in
+                data:
+                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.sleep_session_cpap_on
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - action: counter.reset
+            target:
+              entity_id: counter.sleep_restlessness_events
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sleep_session_cpap_stopped
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sleep_session_active
       - alias: >-
           Reconcile a lost cpap_stop debounce. Exact power-drop time is
           unknown (the debounce that would have recorded it was
           discarded) — restart/reload time is the best available
-          approximation.
+          approximation. Requires CPAP to have genuinely read below
+          threshold for its own full 5-minute debounce, not just its
+          instantaneous state (Codex P2 follow-up on #373).
         if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
           - condition: state
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "off"
           - condition: numeric_state
             entity_id: sensor.owner_suite_cpap_plug_power
             below: 1.3
+            for:
+              minutes: 5
         then:
           - action: input_datetime.set_datetime
             target:
@@ -394,22 +440,34 @@ automation:
       - alias: >-
           Reconcile a lost bed_exit debounce: cpap_stopped may already be
           on (either from before the gap, or just reconciled above) while
-          the bed is empty but sleep_session_bed_out still holds a
-          timestamp from before the current bed_in (or none), because the
-          debounce that would have written it for *this* session was
-          discarded. Exact bed-exit time is unknown for the same reason —
-          restart/reload time is the best available approximation.
+          the bed has genuinely been empty for its own full 5-minute
+          debounce (same reasoning as the cpap_stop branch above), but
+          sleep_session_bed_out is older than the bed sensor's own most
+          recent off-transition. Comparing against the sensor's own
+          last_changed (rather than sleep_session_bed_in) also catches a
+          later exit within the SAME session whose debounce was lost after
+          an earlier, already-recorded exit-then-reentry — bed_out from
+          that earlier exit is still newer than bed_in and so was missed
+          by a prior-session-only staleness check (Codex P2 follow-up on
+          #373). Exact bed-exit time is unknown for the same reason as
+          cpap_off above — restart/reload time is the best available
+          approximation.
         if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
           - condition: state
             entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
             state: "off"
+            for:
+              minutes: 5
           - condition: state
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "on"
           - condition: template
             value_template: >-
               {{ (state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0))
-                 < (state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)) }}
+                 < as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
         then:
           - action: input_datetime.set_datetime
             target:
@@ -417,6 +475,9 @@ automation:
             data:
               datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
       - if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
           - condition: state
             entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
             state: "off"

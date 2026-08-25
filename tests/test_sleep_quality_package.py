@@ -238,10 +238,64 @@ def test_reconcile_recovers_a_lost_bed_exit_debounce() -> None:
         "state_attr('input_datetime.sleep_session_bed_out', 'timestamp')"
         in block
     )
+
+
+def test_reconcile_bed_exit_freshness_compares_against_current_transition() -> None:
+    # Codex P2 follow-up on #373: comparing sleep_session_bed_out only
+    # against sleep_session_bed_in (the session START) missed a later exit
+    # within the SAME session whose debounce was lost after an earlier,
+    # already-recorded exit-then-reentry — that earlier bed_out is still
+    # newer than bed_in, so the prior-session-only staleness check let the
+    # stale value stand. Comparing against the bed sensor's own last_changed
+    # (the current, most recent off-transition) catches both cases.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
     assert (
-        "state_attr('input_datetime.sleep_session_bed_in', 'timestamp')"
+        "state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0))\n"
+        "                 < as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
         in block
     )
+    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp')" not in block
+
+
+def test_reconcile_requires_the_full_debounce_before_treating_a_transition_as_settled() -> None:
+    # Codex P2 follow-up on #373: without their own `for:` guard, a reload
+    # moments after a genuine CPAP-drop or bed-exit would let these
+    # reconciliation branches treat the transition as already-settled
+    # immediately, fast-tracking past the same 5-minute debounce a normal
+    # trigger would still be waiting out — turning a brief power dip or
+    # temporary bed exit into a premature end-of-session.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    cpap_stop_index = block.index("below: 1.3")
+    cpap_stop_guard = block[cpap_stop_index : cpap_stop_index + 60]
+    assert "minutes: 5" in cpap_stop_guard
+
+    bed_exit_index = block.index(
+        "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either\n            state: \"off\""
+    )
+    bed_exit_guard = block[bed_exit_index : bed_exit_index + 140]
+    assert "minutes: 5" in bed_exit_guard
+
+
+def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
+    # Codex P2 follow-up on #373: sleep_quality_prepare_session's cpap_start
+    # trigger has its own 10-second `for:` debounce. If that debounce is
+    # discarded by a restart/reload mid-flight and the sensor never crosses
+    # the threshold again, no session is ever started for that CPAP run —
+    # and the existing reconciliation branches all required
+    # sleep_session_active to already be "on", so none of them could help.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    start_index = block.index('state: "off"')
+    guard_block = block[start_index : start_index + 300]
+    assert "entity_id: sensor.owner_suite_cpap_plug_power" in guard_block
+    assert "above: 1.3" in guard_block
+    assert "seconds: 10" in guard_block
+
+    assert "entity_id: input_datetime.sleep_session_cpap_on" in block
+    assert "action: counter.reset" in block
+    assert "action: input_boolean.turn_on\n            target:\n              entity_id: input_boolean.sleep_session_active" in block
 
 
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
