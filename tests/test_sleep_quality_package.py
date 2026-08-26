@@ -87,6 +87,32 @@ def test_cpap_running_helper_is_debounced_and_guards_unavailable_readings() -> N
     assert "minutes: 5" in template_section
 
 
+def test_bed_exit_without_session_clears_stale_pending_entry() -> None:
+    # Codex P2 follow-up on #373: a qualifying nightly bed entry sets
+    # bed_entry_pending on and records bed_in, but nothing ever cleared it
+    # if the resident left the bed again without starting CPAP. A later,
+    # unrelated CPAP start (e.g. daytime testing) would then inherit that
+    # stale bed_in -- the finalizer's ordering check only requires
+    # cpap_on_ts >= bed_in_ts (always true for an older bed_in), never
+    # bed_out_ts >= cpap_on_ts, so the two unrelated periods would publish
+    # as one bogus session. Clearing the pending flag when the bed empties
+    # again without a session having started prevents that inheritance.
+    prepare = _automation_block("sleep_quality_prepare_session")
+
+    assert "id: bed_exit_without_session" in prepare
+    branch = prepare.split("id: bed_exit_without_session", maxsplit=2)[2]
+    turn_off_index = branch.index("action: input_boolean.turn_off")
+    guard = branch[:turn_off_index]
+
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in guard
+    assert 'state: "on"' in guard
+
+    target_index = branch.index(
+        "entity_id: input_boolean.sleep_session_bed_entry_pending", turn_off_index
+    )
+    assert target_index > turn_off_index
+
+
 def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions() -> None:
     prepare = _automation_block("sleep_quality_prepare_session")
     active = _automation_block("sleep_quality_track_active_session")
@@ -169,12 +195,13 @@ def test_cpap_start_timestamps_the_actual_transition_not_the_debounce_delay() ->
     prepare = _automation_block("sleep_quality_prepare_session")
     cpap_start_branch = prepare.split("id: cpap_start", maxsplit=2)[2]
 
-    expected = (
-        "datetime: \"{{ as_local(trigger.to_state.last_changed)"
-        ".strftime('%Y-%m-%d %H:%M:%S') }}\""
-    )
+    # Codex P2 follow-up on #373: a naive local datetime string is
+    # ambiguous during the autumn DST fallback (a repeated wall-clock
+    # hour). timestamp: (an absolute epoch) sidesteps that entirely.
+    expected = 'timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"'
     assert cpap_start_branch.count(expected) == 2
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_start_branch
+    assert "strftime" not in cpap_start_branch
 
 
 def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() -> None:
@@ -190,14 +217,16 @@ def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() ->
     cpap_stop_branch = active.split("id: cpap_stop", maxsplit=2)[2]
     bed_exit_branch = active.split("id: bed_exit", maxsplit=2)[2]
 
-    expected = (
-        "datetime: \"{{ as_local(trigger.to_state.last_changed)"
-        ".strftime('%Y-%m-%d %H:%M:%S') }}\""
-    )
+    # Codex P2 follow-up on #373: a naive local datetime string is
+    # ambiguous during the autumn DST fallback (a repeated wall-clock
+    # hour). timestamp: (an absolute epoch) sidesteps that entirely.
+    expected = 'timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"'
     assert expected in cpap_stop_branch
     assert expected in bed_exit_branch
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_stop_branch
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in bed_exit_branch
+    assert "strftime" not in cpap_stop_branch
+    assert "strftime" not in bed_exit_branch
     assert "trigger.to_state.last_changed.strftime" not in cpap_stop_branch
     assert "trigger.to_state.last_changed.strftime" not in bed_exit_branch
 
@@ -460,15 +489,19 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
 
     # cpap_on and the fallback bed_in back the CPAP debounce helper's own
     # delay_on out of its last_changed to recover the real crossing time;
-    # cpap_off backs its delay_off out the same way.
-    assert block.count("as_local(states.binary_sensor.owner_suite_cpap_running.last_changed") == 3
+    # cpap_off backs its delay_off out the same way. timestamp:/
+    # as_timestamp() (an absolute epoch) rather than datetime:/strftime()
+    # (a naive local string) also sidesteps the autumn DST fallback
+    # (Codex P2 follow-up on #373).
+    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 3
     assert block.count("- timedelta(seconds=10))") == 2
     assert block.count("- timedelta(minutes=5))") == 1
     assert (
-        "as_local(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
+        "as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
         in block
     )
     assert 'datetime: "{{ now().strftime(\'%Y-%m-%d %H:%M:%S\') }}"' not in block
+    assert "strftime" not in block
 
 
 def test_reconcile_cpap_start_fallback_bed_in_matches_cpap_on_ordering() -> None:
@@ -488,7 +521,7 @@ def test_reconcile_cpap_start_fallback_bed_in_matches_cpap_on_ordering() -> None
     assert bed_in_index < cpap_on_index
 
     between = cpap_start_branch[bed_in_index:cpap_on_index]
-    assert "as_local(states.binary_sensor.owner_suite_cpap_running.last_changed" in between
+    assert "as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed" in between
     assert "- timedelta(seconds=10))" in between
 
 

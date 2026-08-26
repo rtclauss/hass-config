@@ -191,6 +191,11 @@ automation:
         for:
           seconds: 10
         id: cpap_start
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+        from: "on"
+        to: "off"
+        id: bed_exit_without_session
     condition:
       - condition: state
         entity_id: input_boolean.sleep_session_active
@@ -208,7 +213,7 @@ automation:
                 target:
                   entity_id: input_datetime.sleep_session_bed_in
                 data:
-                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  timestamp: "{{ as_timestamp(now()) }}"
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.sleep_session_bed_entry_pending
@@ -225,7 +230,12 @@ automation:
                   delay). The fallback bed_in must use the same source: if
                   cpap_on used the earlier trigger timestamp while bed_in
                   kept now(), cpap_on_ts could read before bed_in_ts and
-                  fail the finalizer's ordering check.
+                  fail the finalizer's ordering check. Setting timestamp:
+                  (an absolute epoch) rather than datetime: (a naive local
+                  string) also sidesteps the autumn DST fallback, where a
+                  repeated wall-clock hour would otherwise be
+                  indistinguishable once reconstructed (Codex P2
+                  follow-up on #373).
                 if:
                   - condition: state
                     entity_id: input_boolean.sleep_session_bed_entry_pending
@@ -235,12 +245,12 @@ automation:
                     target:
                       entity_id: input_datetime.sleep_session_bed_in
                     data:
-                      datetime: "{{ as_local(trigger.to_state.last_changed).strftime('%Y-%m-%d %H:%M:%S') }}"
+                      timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_cpap_on
                 data:
-                  datetime: "{{ as_local(trigger.to_state.last_changed).strftime('%Y-%m-%d %H:%M:%S') }}"
+                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - action: counter.reset
                 target:
                   entity_id: counter.sleep_restlessness_events
@@ -250,6 +260,25 @@ automation:
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.sleep_session_active
+          - conditions:
+              - condition: trigger
+                id: bed_exit_without_session
+              - condition: state
+                entity_id: input_boolean.sleep_session_bed_entry_pending
+                state: "on"
+            sequence:
+              - alias: >-
+                  Discard a pending nightly bed-entry that never led to a
+                  CPAP session before the bed emptied again — otherwise a
+                  later, unrelated CPAP start (e.g. daytime testing)
+                  would inherit this stale bed_in as its own, and the
+                  finalizer's ordering check never requires
+                  bed_out_ts >= cpap_on_ts, so the two unrelated periods
+                  would be published together as one bogus session
+                  (Codex P2 follow-up on #373).
+                action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.sleep_session_bed_entry_pending
 
   - id: sleep_quality_track_active_session
     alias: Sleep quality - track active session
@@ -318,16 +347,17 @@ automation:
                   Timestamp the actual power-drop, not this delayed
                   callback — now() here is ~5 minutes late (the trigger's
                   for: duration), over-reporting cpap_minutes every session
-                  (Codex P2 on #373). as_local() is required:
-                  trigger.to_state.last_changed is UTC, and formatting it
-                  without converting first gets interpreted as local time
-                  by input_datetime.set_datetime, shifting every timestamp
-                  by the UTC offset (Codex P1 follow-up on #373)
+                  (Codex P2 on #373). Setting timestamp: (an absolute
+                  epoch) rather than datetime: (a naive local string)
+                  avoids both the earlier UTC/local-interpretation P1 bug
+                  and the autumn DST fallback, where a naive string can't
+                  tell a repeated wall-clock hour's two real instants
+                  apart once reconstructed (Codex P2 follow-up on #373).
                 action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_cpap_off
                 data:
-                  datetime: "{{ as_local(trigger.to_state.last_changed).strftime('%Y-%m-%d %H:%M:%S') }}"
+                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.sleep_session_cpap_stopped
@@ -376,16 +406,17 @@ automation:
                   Timestamp the actual bed-exit, not this delayed callback —
                   now() here is ~5 minutes late (the trigger's for:
                   duration), over-reporting bed_minutes every session
-                  (Codex P2 on #373). as_local() is required:
-                  trigger.to_state.last_changed is UTC, and formatting it
-                  without converting first gets interpreted as local time
-                  by input_datetime.set_datetime, shifting every timestamp
-                  by the UTC offset (Codex P1 follow-up on #373)
+                  (Codex P2 on #373). Setting timestamp: (an absolute
+                  epoch) rather than datetime: (a naive local string)
+                  avoids both the earlier UTC/local-interpretation P1 bug
+                  and the autumn DST fallback, where a naive string can't
+                  tell a repeated wall-clock hour's two real instants
+                  apart once reconstructed (Codex P2 follow-up on #373).
                 action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_bed_out
                 data:
-                  datetime: "{{ as_local(trigger.to_state.last_changed).strftime('%Y-%m-%d %H:%M:%S') }}"
+                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - if:
                   - condition: state
                     entity_id: input_boolean.sleep_session_cpap_stopped
@@ -489,16 +520,16 @@ automation:
                 target:
                   entity_id: input_datetime.sleep_session_bed_in
                 data:
-                  datetime: >-
-                    {{ as_local(states.binary_sensor.owner_suite_cpap_running.last_changed
-                       - timedelta(seconds=10)).strftime('%Y-%m-%d %H:%M:%S') }}
+                  timestamp: >-
+                    {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                       - timedelta(seconds=10)) }}
           - action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_cpap_on
             data:
-              datetime: >-
-                {{ as_local(states.binary_sensor.owner_suite_cpap_running.last_changed
-                   - timedelta(seconds=10)).strftime('%Y-%m-%d %H:%M:%S') }}
+              timestamp: >-
+                {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                   - timedelta(seconds=10)) }}
           - action: counter.reset
             target:
               entity_id: counter.sleep_restlessness_events
@@ -560,9 +591,9 @@ automation:
             target:
               entity_id: input_datetime.sleep_session_cpap_off
             data:
-              datetime: >-
-                {{ as_local(states.binary_sensor.owner_suite_cpap_running.last_changed
-                   - timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S') }}
+              timestamp: >-
+                {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                   - timedelta(minutes=5)) }}
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sleep_session_cpap_stopped
@@ -602,9 +633,8 @@ automation:
             target:
               entity_id: input_datetime.sleep_session_bed_out
             data:
-              datetime: >-
-                {{ as_local(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)
-                   .strftime('%Y-%m-%d %H:%M:%S') }}
+              timestamp: >-
+                {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
       - alias: >-
           Require the bed's own 5-minute debounce and a bed-out timestamp
           already current for this exit — otherwise the CPAP-stop branch
