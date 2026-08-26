@@ -54,7 +54,37 @@ def test_sleep_session_uses_restorable_native_helpers() -> None:
         "script:", maxsplit=1
     )[0]
     assert "initial:" not in score_helper
-    assert "\ntemplate:" not in text
+    # The only template: use is the derived CPAP-debounce helper below, not
+    # a substitute for persisted session state -- that must stay on native,
+    # restorable input_datetime/input_number/counter helpers.
+    assert text.count("\ntemplate:") == 1
+
+
+def test_cpap_running_helper_is_debounced_and_guards_unavailable_readings() -> None:
+    # Codex P2 follow-up on #373: the raw power sensor's own last_changed
+    # resets on every in-range fluctuation, not just threshold crossings,
+    # so it can't answer "has this been sustained above/below 1.3W for N
+    # minutes" retrospectively -- and float(0) coercion would treat a
+    # genuinely unavailable/unknown reading as a false "below threshold".
+    # A debounced template helper (delay_on/delay_off, same pattern as
+    # dryer_running in cleaning.yaml) fixes both: its own last_changed only
+    # moves on a genuine, sustained crossing, and its availability template
+    # keeps an unavailable sensor from reading as "off".
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+    template_section = text.split("\ntemplate:", maxsplit=1)[1].split(
+        "\nscript:", maxsplit=1
+    )[0]
+
+    assert "default_entity_id: binary_sensor.owner_suite_cpap_running" in template_section
+    assert "has_value('sensor.owner_suite_cpap_plug_power')" in template_section
+    assert (
+        "state: \"{{ states('sensor.owner_suite_cpap_plug_power') | float(0) > 1.3 }}\""
+        in template_section
+    )
+    assert "delay_on" in template_section
+    assert "seconds: 10" in template_section
+    assert "delay_off" in template_section
+    assert "minutes: 5" in template_section
 
 
 def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions() -> None:
@@ -298,9 +328,11 @@ def test_reconcile_requires_the_full_debounce_before_treating_a_transition_as_se
     # temporary bed exit into a premature end-of-session.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
-    cpap_stop_index = block.index("float(0) < 1.3")
-    cpap_stop_guard = block[cpap_stop_index : cpap_stop_index + 200]
-    assert ">= 300" in cpap_stop_guard
+    assert block.count("entity_id: binary_sensor.owner_suite_cpap_running") == 3
+    cpap_stop_branch = block.split("Reconcile a lost cpap_stop debounce", maxsplit=1)[1]
+    cpap_stop_index = cpap_stop_branch.index("entity_id: binary_sensor.owner_suite_cpap_running")
+    cpap_stop_guard = cpap_stop_branch[cpap_stop_index : cpap_stop_index + 90]
+    assert 'state: "off"' in cpap_stop_guard
 
     bed_exit_index = block.index(
         "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either\n            state: \"off\""
@@ -313,17 +345,24 @@ def test_reconcile_condition_never_puts_for_on_a_numeric_state_condition() -> No
     # Codex P1 follow-up on #373: `for:` is only supported on numeric_state
     # TRIGGERS and on state CONDITIONS, not on numeric_state CONDITIONS —
     # Home Assistant's schema rejects that combination as an unsupported
-    # extra key, which would fail to load. Every numeric_state condition in
-    # this automation must therefore omit `for:`; duration checks against
-    # the CPAP power sensor are expressed as template conditions comparing
-    # its own last_changed against now() instead.
+    # extra key, which would fail to load. This automation must therefore
+    # never put `for:` on a numeric_state condition.
+    #
+    # Codex P2 follow-up on #373: a template comparing the raw power
+    # sensor's own last_changed against now() was tried as a replacement,
+    # but that resets on every in-range wattage fluctuation too, so it
+    # never reached the guard duration while a session was genuinely
+    # ongoing. All three duration checks instead read the debounced
+    # binary_sensor.owner_suite_cpap_running helper (delay_on/delay_off do
+    # the debouncing), whose own last_changed only moves on a genuine,
+    # sustained crossing.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
     for match in re.finditer(r"condition: numeric_state\n(?:.+\n)*?", block):
         segment = block[match.start() : match.start() + 120]
         assert "for:" not in segment
 
-    assert block.count("sensor.owner_suite_cpap_plug_power.last_changed") >= 3
+    assert block.count("condition: state\n            entity_id: binary_sensor.owner_suite_cpap_running") == 3
 
 
 def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
@@ -339,8 +378,8 @@ def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     then_index = block.index("then:", start_index)
     guard_block = block[start_index:then_index]
     assert "entity_id: sensor.owner_suite_cpap_plug_power" not in guard_block
-    assert "sensor.owner_suite_cpap_plug_power') | float(0) > 1.3" in guard_block
-    assert ">= 10" in guard_block
+    assert "entity_id: binary_sensor.owner_suite_cpap_running" in guard_block
+    assert 'state: "on"' in guard_block
 
     assert "entity_id: input_datetime.sleep_session_cpap_on" in block
     assert "action: counter.reset" in block
@@ -419,10 +458,12 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
     # confirms has held continuously.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
-    assert (
-        "as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)"
-        in block
-    )
+    # cpap_on and the fallback bed_in back the CPAP debounce helper's own
+    # delay_on out of its last_changed to recover the real crossing time;
+    # cpap_off backs its delay_off out the same way.
+    assert block.count("as_local(states.binary_sensor.owner_suite_cpap_running.last_changed") == 3
+    assert block.count("- timedelta(seconds=10))") == 2
+    assert block.count("- timedelta(minutes=5))") == 1
     assert (
         "as_local(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
         in block
@@ -447,7 +488,8 @@ def test_reconcile_cpap_start_fallback_bed_in_matches_cpap_on_ordering() -> None
     assert bed_in_index < cpap_on_index
 
     between = cpap_start_branch[bed_in_index:cpap_on_index]
-    assert "as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)" in between
+    assert "as_local(states.binary_sensor.owner_suite_cpap_running.last_changed" in between
+    assert "- timedelta(seconds=10))" in between
 
 
 def test_reconcile_rearms_cpap_stopped_latch_when_cpap_resumes() -> None:
@@ -459,15 +501,12 @@ def test_reconcile_rearms_cpap_stopped_latch_when_cpap_resumes() -> None:
     # has genuinely resumed for its own 10-second debounce.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
-    rearm_index = block.index("input_boolean.sleep_session_cpap_stopped")
-    turn_off_index = block.index(
-        "action: input_boolean.turn_off", rearm_index
-    )
-    guard = block[rearm_index:turn_off_index]
+    rearm_branch = block.split("Re-arm the CPAP-stop latch", maxsplit=1)[1]
+    turn_off_index = rearm_branch.index("action: input_boolean.turn_off")
+    guard = rearm_branch[:turn_off_index]
 
-    assert 'state: "on"' in guard
-    assert "sensor.owner_suite_cpap_plug_power') | float(0) > 1.3" in guard
-    assert ">= 10" in guard
+    assert guard.count('state: "on"') == 3
+    assert "entity_id: binary_sensor.owner_suite_cpap_running" in guard
 
     # The re-arm must run before the final finalize gate so a resumed
     # session's stale latch is cleared in the same evaluation pass.

@@ -76,6 +76,31 @@ counter:
     step: 1
     restore: true
 
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.owner_suite_cpap_running
+        unique_id: owner_suite_cpap_running
+        name: Owner suite CPAP running
+        # A continuously-varying power sensor's own last_changed resets on
+        # every wattage fluctuation, not just threshold crossings, so it
+        # can't be used to check "has this been sustained above/below 1.3W
+        # for N minutes" after the fact (Codex P2 follow-up on #373: a
+        # template comparing the raw sensor's last_changed against now()
+        # never reaches the guard duration while the reading keeps
+        # updating within the same range). delay_on/delay_off give this
+        # helper its own debounced on/off transitions, so its OWN
+        # last_changed/state is meaningful for that check — the same
+        # pattern already used for dryer_running in cleaning.yaml.
+        # availability also guards against a genuinely unavailable sensor
+        # reading as a false "below threshold" via float(0) (Codex P2
+        # follow-up on #373).
+        availability: "{{ has_value('sensor.owner_suite_cpap_plug_power') }}"
+        state: "{{ states('sensor.owner_suite_cpap_plug_power') | float(0) > 1.3 }}"
+        delay_on:
+          seconds: 10
+        delay_off:
+          minutes: 5
+
 script:
   finalize_sleep_quality_session:
     alias: Finalize sleep quality session
@@ -433,16 +458,16 @@ automation:
             entity_id: input_boolean.sleep_session_active
             state: "off"
           - alias: >-
-              numeric_state conditions don't support for: (only numeric_state
-              triggers and state conditions do); Home Assistant rejects the
-              key as an unsupported schema field (Codex P1 follow-up on
-              #373). A template comparing last_changed against now()
-              reproduces the same "genuinely sustained" duration check.
-            condition: template
-            value_template: >-
-              {{ states('sensor.owner_suite_cpap_plug_power') | float(0) > 1.3
-                 and (as_timestamp(now())
-                      - as_timestamp(states.sensor.owner_suite_cpap_plug_power.last_changed)) >= 10 }}
+              A raw numeric sensor's own last_changed resets on every
+              in-range fluctuation, not just threshold crossings, so it
+              can't tell us CPAP has been sustained above 1.3W for 10
+              seconds (Codex P2 follow-up on #373). Check the debounced
+              owner_suite_cpap_running helper instead — its delay_on
+              already enforces that same duration natively, and its state
+              only changes on a genuine crossing.
+            condition: state
+            entity_id: binary_sensor.owner_suite_cpap_running
+            state: "on"
         then:
           - if:
               - condition: state
@@ -453,24 +478,27 @@ automation:
                   Use the same CPAP transition timestamp as cpap_on below
                   for this fallback bed-in, not now() — the finalizer
                   requires cpap_on_ts >= bed_in_ts, and now() (the
-                  reconciliation tick) can run long after the CPAP sensor's
-                  own last_changed, making a recovered session's bed_in
-                  read later than its cpap_on and get discarded (Codex P2
-                  follow-up on #373).
+                  reconciliation tick) can run long after the actual
+                  transition, making a recovered session's bed_in read
+                  later than its cpap_on and get discarded (Codex P2
+                  follow-up on #373). owner_suite_cpap_running's own
+                  last_changed is when its delay_on completed, 10 seconds
+                  after the real crossing, so back that delay out to
+                  recover the actual transition time.
                 action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_bed_in
                 data:
                   datetime: >-
-                    {{ as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)
-                       .strftime('%Y-%m-%d %H:%M:%S') }}
+                    {{ as_local(states.binary_sensor.owner_suite_cpap_running.last_changed
+                       - timedelta(seconds=10)).strftime('%Y-%m-%d %H:%M:%S') }}
           - action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_cpap_on
             data:
               datetime: >-
-                {{ as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)
-                   .strftime('%Y-%m-%d %H:%M:%S') }}
+                {{ as_local(states.binary_sensor.owner_suite_cpap_running.last_changed
+                   - timedelta(seconds=10)).strftime('%Y-%m-%d %H:%M:%S') }}
           - action: counter.reset
             target:
               entity_id: counter.sleep_restlessness_events
@@ -496,11 +524,9 @@ automation:
           - condition: state
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "on"
-          - condition: template
-            value_template: >-
-              {{ states('sensor.owner_suite_cpap_plug_power') | float(0) > 1.3
-                 and (as_timestamp(now())
-                      - as_timestamp(states.sensor.owner_suite_cpap_plug_power.last_changed)) >= 10 }}
+          - condition: state
+            entity_id: binary_sensor.owner_suite_cpap_running
+            state: "on"
         then:
           - action: input_boolean.turn_off
             target:
@@ -519,19 +545,24 @@ automation:
           - condition: state
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "off"
-          - condition: template
-            value_template: >-
-              {{ states('sensor.owner_suite_cpap_plug_power') | float(0) < 1.3
-                 and (as_timestamp(now())
-                      - as_timestamp(states.sensor.owner_suite_cpap_plug_power.last_changed)) >= 300 }}
+          - alias: >-
+              Same reasoning as the cpap_start branch above: check the
+              debounced helper, not the raw sensor's own last_changed,
+              and require it genuinely "off" rather than treating an
+              unavailable/unknown reading as a false stop via float(0)
+              (Codex P2 follow-up on #373 — a "for:" is also unsupported
+              on a numeric_state condition).
+            condition: state
+            entity_id: binary_sensor.owner_suite_cpap_running
+            state: "off"
         then:
           - action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_cpap_off
             data:
               datetime: >-
-                {{ as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)
-                   .strftime('%Y-%m-%d %H:%M:%S') }}
+                {{ as_local(states.binary_sensor.owner_suite_cpap_running.last_changed
+                   - timedelta(minutes=5)).strftime('%Y-%m-%d %H:%M:%S') }}
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sleep_session_cpap_stopped
