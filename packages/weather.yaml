@@ -707,10 +707,45 @@ automation:
           The pressure source (or its integration) reconnecting after an
           outage while HA stays up — HA uptime alone doesn't catch this
           case, but the trend sensor's history is just as stale (Codex P2
-          follow-up on #974)
+          follow-up on #974). Kept alongside the per-input triggers below
+          as a fallback for a simultaneous total outage of every input.
         trigger: state
         entity_id: sensor.average_house_pressure
         from:
+          - "unavailable"
+          - "unknown"
+      - alias: >-
+          An individual pressure input reconnecting (rejoining the
+          average_house_pressure min_max aggregate) — must match
+          climate.yaml's average_house_pressure entity_ids exactly. The
+          aggregate itself stays numeric as long as at least one input
+          remains available, so a single input dropping out or
+          reconnecting never trips the aggregate's own unavailable/
+          unknown trigger above, yet still shifts what's being averaged
+          and can produce a discontinuous jump the trend sensors would
+          read as a real, fast pressure change (Codex P2 follow-up on
+          #974).
+        trigger: state
+        entity_id: &pressure_inputs
+          - sensor.basement_closet_tph_pressure
+          - sensor.guest_room_tph_pressure
+          - sensor.office_tph_pressure
+          - sensor.owner_suite_bathroom_tph_pressure
+          - sensor.owner_suite_tph_pressure
+          - sensor.tiki_room_tph_pressure
+          - sensor.hall_upstairs_linen_closet_tph_pressure
+          - sensor.basement_bathroom_tph_pressure
+          - sensor.guest_bathroom_tph_pressure
+        from:
+          - "unavailable"
+          - "unknown"
+      - alias: >-
+          An individual pressure input disconnecting (leaving the
+          aggregate) — the same membership shift as reconnecting above,
+          just in the other direction (Codex P2 follow-up on #974).
+        trigger: state
+        entity_id: *pressure_inputs
+        to:
           - "unavailable"
           - "unknown"
     action:

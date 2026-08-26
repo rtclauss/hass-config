@@ -248,6 +248,44 @@ def test_pressure_source_available_since_is_tracked_on_restart_and_reconnect() -
     assert "input_datetime.pressure_source_available_since" in block
 
 
+def test_pressure_source_available_since_tracks_each_individual_input() -> None:
+    # Codex P2 follow-up on #974: average_house_pressure is a min_max
+    # aggregate over 9 individual _tph_pressure sensors and stays numeric
+    # as long as at least one input remains available, so a single input
+    # dropping out or reconnecting never trips the aggregate's own
+    # unavailable/unknown trigger — yet still shifts the aggregate's
+    # membership and can produce a discontinuous jump the trend sensors
+    # would read as a real, fast pressure change. Must track each of the
+    # 9 climate.yaml average_house_pressure entity_ids individually, in
+    # both directions (a single input joining or leaving the aggregate).
+    climate_path = Path(__file__).resolve().parents[1] / "packages" / "climate.yaml"
+    climate_text = climate_path.read_text(encoding="utf-8")
+    start = climate_text.index("name: average_house_pressure")
+    end = climate_text.index("\n\n", start)
+    pressure_inputs_block = climate_text[start:end]
+    pressure_inputs = [
+        line.strip().removeprefix("- ")
+        for line in pressure_inputs_block.splitlines()
+        if line.strip().startswith("- sensor.")
+    ]
+    assert len(pressure_inputs) == 9
+
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: track_pressure_source_available_since")
+    end = text.index("\n########", start)
+    block = text[start:end]
+
+    for entity_id in pressure_inputs:
+        assert entity_id in block, f"{entity_id} not tracked individually"
+
+    # One "from" trigger for the aggregate itself (pre-existing) plus one
+    # for the individual inputs reconnecting, and one "to" trigger for an
+    # individual input disconnecting.
+    assert block.count("from:\n          - \"unavailable\"\n          - \"unknown\"") == 2
+    assert block.count("to:\n          - \"unavailable\"\n          - \"unknown\"") == 1
+
+
 def test_window_pressure_alert_rejects_an_implausible_gradient() -> None:
     # Codex P2 follow-up on #974: HA uptime only guards the post-restart
     # case. If the pressure sources or their integration reconnect after an
