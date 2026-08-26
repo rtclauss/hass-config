@@ -128,6 +128,25 @@ def test_finalize_always_clears_active_session_even_when_data_is_incomplete() ->
     assert turn_off_index > then_block_end
 
 
+def test_cpap_start_timestamps_the_actual_transition_not_the_debounce_delay() -> None:
+    # Codex P2 follow-up on #373: cpap_start's own 10-second `for:` debounce
+    # made now() ten seconds late here too (same class of bug as the
+    # already-fixed cpap_stop/bed_exit delay), under-reporting cpap_minutes.
+    # The fallback bed_in write in the same branch must use the identical
+    # source: if cpap_on switched to the earlier trigger timestamp while
+    # bed_in stayed on now(), cpap_on_ts could read before bed_in_ts and
+    # fail the finalizer's cpap_on_ts >= bed_in_ts check.
+    prepare = _automation_block("sleep_quality_prepare_session")
+    cpap_start_branch = prepare.split("id: cpap_start", maxsplit=2)[2]
+
+    expected = (
+        "datetime: \"{{ as_local(trigger.to_state.last_changed)"
+        ".strftime('%Y-%m-%d %H:%M:%S') }}\""
+    )
+    assert cpap_start_branch.count(expected) == 2
+    assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_start_branch
+
+
 def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() -> None:
     # Codex P2 on #373: now() inside these 5-minute-delayed (`for:`)
     # callbacks is ~5 minutes later than the real transition, so every
