@@ -494,15 +494,37 @@ automation:
               entity_id: input_datetime.sleep_session_bed_out
             data:
               datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
-      - if:
+      - alias: >-
+          Require the bed's own 5-minute debounce and a bed-out timestamp
+          already current for this exit — otherwise the CPAP-stop branch
+          just above can flip cpap_stopped on while the bed has been empty
+          less than 5 minutes, and this raw instantaneous bed-off check
+          would finalize before the bed_exit reconcile branch (or the
+          normal automation) has written the current bed_out, discarding
+          the session against a stale timestamp (Codex P2 follow-up on
+          #373). Also require CPAP to currently read below threshold,
+          matching the normal bed_exit branch's own guard, so a latch left
+          on by an earlier mid-session interruption can't finalize using a
+          stale cpap_off while CPAP has since resumed (Codex P2 follow-up
+          on #373).
+        if:
           - condition: state
             entity_id: input_boolean.sleep_session_active
             state: "on"
           - condition: state
             entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
             state: "off"
+            for:
+              minutes: 5
           - condition: state
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "on"
+          - condition: numeric_state
+            entity_id: sensor.owner_suite_cpap_plug_power
+            below: 1.3
+          - condition: template
+            value_template: >-
+              {{ (state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int
+                 >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int) }}
         then:
           - action: script.finalize_sleep_quality_session

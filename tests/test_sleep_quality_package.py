@@ -310,6 +310,42 @@ def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     assert "action: input_boolean.turn_on\n            target:\n              entity_id: input_boolean.sleep_session_active" in block
 
 
+def test_reconcile_final_gate_requires_bed_debounce_and_current_bed_out() -> None:
+    # Codex P2 follow-up on #373: the trailing periodic finalize check used
+    # the bed's raw instantaneous "off" state. If the CPAP-stop branch just
+    # above flips cpap_stopped on while the bed has been empty less than 5
+    # minutes, this check could finalize immediately — before the bed_exit
+    # reconcile branch (or the normal automation) had written the current
+    # bed_out — discarding the session against a stale timestamp. It must
+    # require the same 5-minute debounce as bed_exit, plus a bed_out that is
+    # already current for this exit.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    final_gate = block.rsplit("if:", maxsplit=1)[1]
+
+    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in final_gate
+    assert 'state: "off"' in final_gate
+    assert "minutes: 5" in final_gate
+    assert (
+        "state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int\n"
+        "                 >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)"
+        in final_gate
+    )
+
+
+def test_reconcile_final_gate_requires_cpap_currently_below_threshold() -> None:
+    # Codex P2 follow-up on #373: sleep_session_cpap_stopped latches on and
+    # is never reset if CPAP resumes mid-session after a genuine 5-minute
+    # interruption. Without also checking CPAP's current reading, the
+    # periodic reconciliation could finalize using a stale earlier cpap_off
+    # while CPAP is actively running again. Require CPAP to currently read
+    # below threshold too, matching the normal bed_exit branch's own guard.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    final_gate = block.rsplit("if:", maxsplit=1)[1]
+
+    assert "entity_id: sensor.owner_suite_cpap_plug_power" in final_gate
+    assert "below: 1.3" in final_gate
+
+
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
     dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
 
