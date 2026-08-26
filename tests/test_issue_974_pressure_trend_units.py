@@ -308,6 +308,28 @@ def test_window_pressure_alert_rejects_an_implausible_gradient() -> None:
     assert "trigger.to_state.attributes.gradient" not in block
 
 
+def test_window_pressure_alert_requires_live_aggregate_data() -> None:
+    # Codex P2 follow-up on #974: the settle timer alone isn't enough
+    # during a PROLONGED outage. If every pressure input stays unavailable
+    # longer than the required settle duration, elapsed time since the
+    # last disconnect eventually exceeds it and the settle check passes —
+    # even though average_house_pressure is still unavailable right now.
+    # HA's trend platform retains its last "on" state and gradient when
+    # its source has no numeric state, so the periodic re-check could then
+    # fire the alert off stale, pre-outage data. Must require the
+    # aggregate to currently have a value and to have updated recently.
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: alert_house_windows_open_pressure_dropping")
+    end = text.index("\n  - id:", start)
+    block = text[start:end]
+
+    assert "has_value('sensor.average_house_pressure')" in block
+    assert "states.sensor.average_house_pressure.last_updated" in block
+    assert "pressure_source_live" in block
+    assert "{% if pressure_source_live and has_value('input_datetime.pressure_source_available_since') %}" in block
+
+
 def test_window_pressure_alert_rechecks_periodically_to_catch_a_mid_window_trend() -> None:
     # Codex P2 follow-up on #974: the original off->on state trigger
     # discards its run if it fires while the settle/gradient conditions are

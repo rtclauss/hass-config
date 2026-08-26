@@ -259,17 +259,33 @@ automation:
           independent line of defense regardless of cause — a real storm
           never approaches this rate (v_rapidly is ~2 hPa/hr); a
           burst-driven spike, restart or not, does.
+
+          Live-data requirement (Codex P2 follow-up on #974): the settle
+          timer alone isn't enough during a PROLONGED outage. If every
+          pressure input stays unavailable longer than the required settle
+          duration, elapsed time since the last disconnect eventually
+          exceeds it and the settle check above passes — even though
+          average_house_pressure is still unavailable right now. HA's
+          trend platform retains its last "on" state and gradient when its
+          source has no numeric state, so the periodic re-check could then
+          fire the alert off stale, pre-outage data. Require the aggregate
+          to currently have a value and to have updated within the last
+          hour (an arbitrary but generous staleness bound relative to how
+          often the 9 underlying inputs typically report).
         condition: template
         value_template: >-
           {% set pressure_available_since = state_attr('input_datetime.pressure_source_available_since', 'timestamp') | float(0) %}
           {% set now_ts = as_timestamp(now()) %}
+          {% set pressure_source_live =
+               has_value('sensor.average_house_pressure')
+               and (now_ts - as_timestamp(states.sensor.average_house_pressure.last_updated)) < 3600 %}
           {% set candidates = [
                ('binary_sensor.pressure_falling_fast', 2100),
                ('binary_sensor.pressure_falling_quickly', 11100),
                ('binary_sensor.pressure_falling_v_rapidly', 11100),
              ] %}
           {% set ns = namespace(found=false) %}
-          {% if has_value('input_datetime.pressure_source_available_since') %}
+          {% if pressure_source_live and has_value('input_datetime.pressure_source_available_since') %}
             {% for entity_id, required_settle_seconds in candidates %}
               {% if is_state(entity_id, 'on')
                     and (now_ts - pressure_available_since) > required_settle_seconds
