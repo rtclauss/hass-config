@@ -197,7 +197,9 @@ def test_window_pressure_alert_settle_gate_matches_each_triggers_own_window() ->
     block = text[start:end]
 
     assert "11100" in block
-    assert "'binary_sensor.pressure_falling_quickly', 'binary_sensor.pressure_falling_v_rapidly'" in block
+    assert "'binary_sensor.pressure_falling_quickly', 11100" in block
+    assert "'binary_sensor.pressure_falling_v_rapidly', 11100" in block
+    assert "'binary_sensor.pressure_falling_fast', 2100" in block
 
 
 def test_window_pressure_alert_settle_gate_fails_closed() -> None:
@@ -252,15 +254,34 @@ def test_window_pressure_alert_rejects_an_implausible_gradient() -> None:
     # outage longer than the trend window while HA itself stays up, the
     # uptime check already passes but the trend sensor's own history is
     # still fresh off the same clustered updates — a two-sample recovery
-    # spike could still fire the alert. A magnitude ceiling on the firing
-    # sensor's own gradient catches this regardless of cause (restart,
-    # reconnect, or anything else), the same way the derivative clamp in
-    # #973/#977 did for temperature.
+    # spike could still fire the alert. A magnitude ceiling on each
+    # candidate sensor's own current gradient (not trigger.to_state, which
+    # the periodic re-check trigger below doesn't have) catches this
+    # regardless of cause (restart, reconnect, or anything else), the same
+    # way the derivative clamp in #973/#977 did for temperature.
     weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
     text = weather_path.read_text(encoding="utf-8")
     start = text.index("id: alert_house_windows_open_pressure_dropping")
     end = text.index("\n  - id:", start)
     block = text[start:end]
 
-    assert "trigger.to_state.attributes.gradient" in block
+    assert "state_attr(entity_id, 'gradient')" in block
+    assert "* 3600 * 33.8639 <= 15" in block
+    assert "trigger.to_state.attributes.gradient" not in block
+
+
+def test_window_pressure_alert_rechecks_periodically_to_catch_a_mid_window_trend() -> None:
+    # Codex P2 follow-up on #974: the original off->on state trigger
+    # discards its run if it fires while the settle/gradient conditions are
+    # still false, and being a plain edge trigger it won't fire again while
+    # the sensor stays on — so a genuine trend that began during the settle
+    # window and is still active once it ends would never send the alert.
+    weather_path = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
+    text = weather_path.read_text(encoding="utf-8")
+    start = text.index("id: alert_house_windows_open_pressure_dropping")
+    end = text.index("\n  - id:", start)
+    block = text[start:end]
+
+    assert "trigger: time_pattern" in block
+    assert 'minutes: "/5"' in block
     assert "* 3600 * 33.8639 <= 15" in block

@@ -214,6 +214,16 @@ automation:
           - binary_sensor.pressure_falling_fast
         from: "off"
         to: "on"
+      - alias: >-
+          Re-evaluate periodically so a genuine trend that started during
+          the settle window (below) and is still active once it ends gets
+          caught. The state trigger above is a plain off->on edge: if it
+          fires while the settle/gradient conditions are still false, that
+          run is discarded, and a sustained trend produces no second
+          off->on transition to retry on — the window-close notification
+          would otherwise never send (Codex P2 follow-up on #974).
+        trigger: time_pattern
+        minutes: "/5"
     condition:
       - condition: state
         entity_id: binary_sensor.any_window_open
@@ -223,39 +233,52 @@ automation:
         value_template: >-
           {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_house_windows_open_pressure_dropping', 'last_triggered'), 0)) > 14400 }}
       - alias: >-
-          Require a settled sample buffer before trusting a trend reading —
-          every trend sensor starts empty whenever average_house_pressure's
-          own data goes down and comes back, whether that's an HA restart
-          or just the pressure source/integration reconnecting while HA
-          stays up (Codex P2 on #974, broadened per Codex P2 follow-up: HA
-          uptime alone doesn't catch a same-uptime reconnect, but the
-          trend sensor's history is just as stale). Fails closed (blocks
-          the alert) while pressure_source_available_since is unknown/
+          At least one falling-pressure sensor is on, has settled past its
+          own trend window, and reports a plausible gradient — evaluated
+          directly off each sensor's own current state/attributes rather
+          than the trigger, so the periodic re-check above (which has no
+          trigger.to_state) can evaluate this identically to the state
+          trigger (Codex P2 follow-up on #974).
+
+          Settle requirement (Codex P2 on #974, broadened per follow-up: HA
+          uptime alone doesn't catch a same-uptime pressure-source
+          reconnect, but the trend sensor's history is just as stale as
+          after a restart): every trend sensor starts empty whenever
+          average_house_pressure's own data goes down and comes back.
+          Fails closed while pressure_source_available_since is unknown/
           unavailable instead of defaulting to epoch 0, which made the
-          elapsed time huge and let the condition pass right when the
-          settle gate is needed most (Codex P2 follow-up on #974). A single
-          fixed 35-minute wait only covers the fast tier's 30-minute
-          (1800s) window with margin — quickly/v_rapidly use a 3-hour
-          (10800s) window, so the same fixed wait let them fire off a
-          still-mostly-empty buffer for hours after a reconnect (Codex P2
-          follow-up on #974). Require each triggering sensor's own window
-          plus the same 5-minute margin instead of one fixed duration.
+          elapsed time huge and let the gate pass right when it's needed
+          most. A single fixed 35-minute wait only covered the fast tier's
+          30-minute (1800s) window with margin — quickly/v_rapidly use a
+          3-hour (10800s) window, so the same fixed wait let them fire off
+          a still-mostly-empty buffer for hours after a reconnect (Codex P2
+          follow-up on #974) — so each sensor requires its own window plus
+          a 5-minute margin (2100s fast, 11100s quickly/v_rapidly).
+
+          Gradient ceiling (Codex P2 follow-up on #974) is a second,
+          independent line of defense regardless of cause — a real storm
+          never approaches this rate (v_rapidly is ~2 hPa/hr); a
+          burst-driven spike, restart or not, does.
         condition: template
         value_template: >-
-          {% set required_settle_seconds =
-               11100 if trigger.entity_id in
-                 ['binary_sensor.pressure_falling_quickly', 'binary_sensor.pressure_falling_v_rapidly']
-               else 2100 %}
-          {{ has_value('input_datetime.pressure_source_available_since')
-             and (as_timestamp(now()) - state_attr('input_datetime.pressure_source_available_since', 'timestamp')) > required_settle_seconds }}
-      - alias: >-
-          Reject an implausible gradient regardless of cause (Codex P2
-          follow-up on #974) as a second, independent line of defense — a
-          real storm never approaches this rate (v_rapidly is ~2 hPa/hr);
-          a burst-driven spike, restart or not, does.
-        condition: template
-        value_template: >-
-          {{ (trigger.to_state.attributes.gradient | float(0) | abs) * 3600 * 33.8639 <= 15 }}
+          {% set pressure_available_since = state_attr('input_datetime.pressure_source_available_since', 'timestamp') | float(0) %}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set candidates = [
+               ('binary_sensor.pressure_falling_fast', 2100),
+               ('binary_sensor.pressure_falling_quickly', 11100),
+               ('binary_sensor.pressure_falling_v_rapidly', 11100),
+             ] %}
+          {% set ns = namespace(found=false) %}
+          {% if has_value('input_datetime.pressure_source_available_since') %}
+            {% for entity_id, required_settle_seconds in candidates %}
+              {% if is_state(entity_id, 'on')
+                    and (now_ts - pressure_available_since) > required_settle_seconds
+                    and (state_attr(entity_id, 'gradient') | float(0) | abs) * 3600 * 33.8639 <= 15 %}
+                {% set ns.found = true %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {{ ns.found }}
     action:
       - action: notify.mobile_app_wethop
         data:
