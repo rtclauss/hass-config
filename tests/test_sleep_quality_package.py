@@ -346,6 +346,53 @@ def test_reconcile_final_gate_requires_cpap_currently_below_threshold() -> None:
     assert "below: 1.3" in final_gate
 
 
+def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
+    # Codex P2 follow-up on #373: these three recovery writes used now() —
+    # the periodic-tick or restart/reload evaluation time — rather than the
+    # real transition, inflating (or shrinking) the recovered cpap_on,
+    # cpap_off, and bed_out by however long the debounce plus the wait for
+    # the next reconciliation tick took. Each entity's own last_changed is
+    # the real transition (exact across a reload, and at least the restore
+    # time after a restart), which the guarding `for:` condition already
+    # confirms has held continuously.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    assert (
+        "as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)"
+        in block
+    )
+    assert (
+        "as_local(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
+        in block
+    )
+    assert block.count('datetime: "{{ now().strftime(\'%Y-%m-%d %H:%M:%S\') }}"') == 1
+
+
+def test_reconcile_rearms_cpap_stopped_latch_when_cpap_resumes() -> None:
+    # Codex P2 follow-up on #373: sleep_session_cpap_stopped latches on
+    # during a mid-session CPAP interruption and nothing ever clears it once
+    # CPAP resumes, so a later periodic tick could finalize using that
+    # stale interruption's cpap_off the moment the bed happened to be
+    # empty, rather than requiring a fresh stop. Re-arm the latch once CPAP
+    # has genuinely resumed for its own 10-second debounce.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    rearm_index = block.index("input_boolean.sleep_session_cpap_stopped")
+    turn_off_index = block.index(
+        "action: input_boolean.turn_off", rearm_index
+    )
+    guard = block[rearm_index:turn_off_index]
+
+    assert 'state: "on"' in guard
+    assert "above: 1.3" in guard
+    assert "seconds: 10" in guard
+
+    # The re-arm must run before the final finalize gate so a resumed
+    # session's stale latch is cleared in the same evaluation pass.
+    final_gate_index = block.rindex("if:")
+    assert turn_off_index < final_gate_index
+
+
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
     dashboard = DASHBOARD_PATH.read_text(encoding="utf-8")
 

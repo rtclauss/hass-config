@@ -419,7 +419,9 @@ automation:
             target:
               entity_id: input_datetime.sleep_session_cpap_on
             data:
-              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              datetime: >-
+                {{ as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)
+                   .strftime('%Y-%m-%d %H:%M:%S') }}
           - action: counter.reset
             target:
               entity_id: counter.sleep_restlessness_events
@@ -429,6 +431,31 @@ automation:
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sleep_session_active
+      - alias: >-
+          Re-arm the CPAP-stop latch once CPAP resumes for its own 10-second
+          debounce during an active session. Without this, a mid-session
+          interruption long enough to latch sleep_session_cpap_stopped on
+          leaves it stuck on for the rest of the session even after CPAP
+          resumes — a later periodic reconciliation tick could then finalize
+          using that stale interruption's cpap_off the moment the bed
+          happens to be empty, rather than requiring a fresh stop (Codex P2
+          follow-up on #373).
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.sleep_session_cpap_stopped
+            state: "on"
+          - condition: numeric_state
+            entity_id: sensor.owner_suite_cpap_plug_power
+            above: 1.3
+            for:
+              seconds: 10
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sleep_session_cpap_stopped
       - alias: >-
           Reconcile a lost cpap_stop debounce. Exact power-drop time is
           unknown (the debounce that would have recorded it was
@@ -453,7 +480,9 @@ automation:
             target:
               entity_id: input_datetime.sleep_session_cpap_off
             data:
-              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              datetime: >-
+                {{ as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)
+                   .strftime('%Y-%m-%d %H:%M:%S') }}
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sleep_session_cpap_stopped
@@ -493,7 +522,9 @@ automation:
             target:
               entity_id: input_datetime.sleep_session_bed_out
             data:
-              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+              datetime: >-
+                {{ as_local(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)
+                   .strftime('%Y-%m-%d %H:%M:%S') }}
       - alias: >-
           Require the bed's own 5-minute debounce and a bed-out timestamp
           already current for this exit — otherwise the CPAP-stop branch
