@@ -143,7 +143,13 @@ def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions
     assert active.count("minutes: 5") == 3
     assert "entity_id: input_datetime.sleep_session_cpap_off" in active
     assert "id: bed_exit" in active
-    assert active.count("below: 1.3") == 2
+    # Only the cpap_stop trigger's own threshold remains a raw below: 1.3
+    # — the bed_exit branch's finalize gate checks the debounced
+    # binary_sensor.owner_suite_cpap_running helper instead, so a reading
+    # sitting exactly at the boundary can't be classified differently by
+    # the two gates (Codex P2 follow-up on #373).
+    assert active.count("below: 1.3") == 1
+    assert "entity_id: binary_sensor.owner_suite_cpap_running" in active
 
 
 def test_bed_exit_timestamp_is_persisted_before_later_session_finalization() -> None:
@@ -281,8 +287,7 @@ def test_restart_reconciles_a_lost_cpap_stop_debounce() -> None:
     assert 'state: "on"' in block
     assert "entity_id: input_boolean.sleep_session_cpap_stopped" in block
     assert 'state: "off"' in block
-    assert "entity_id: sensor.owner_suite_cpap_plug_power" in block
-    assert "below: 1.3" in block
+    assert "entity_id: binary_sensor.owner_suite_cpap_running" in block
     assert "entity_id: input_datetime.sleep_session_cpap_off" in block
     assert "action: script.finalize_sleep_quality_session" in block
 
@@ -357,7 +362,9 @@ def test_reconcile_requires_the_full_debounce_before_treating_a_transition_as_se
     # temporary bed exit into a premature end-of-session.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
-    assert block.count("entity_id: binary_sensor.owner_suite_cpap_running") == 3
+    # cpap_start reconcile, re-arm, cpap_stop reconcile, and the trailing
+    # finalize gate all check this same debounced helper.
+    assert block.count("entity_id: binary_sensor.owner_suite_cpap_running") == 4
     cpap_stop_branch = block.split("Reconcile a lost cpap_stop debounce", maxsplit=1)[1]
     cpap_stop_index = cpap_stop_branch.index("entity_id: binary_sensor.owner_suite_cpap_running")
     cpap_stop_guard = cpap_stop_branch[cpap_stop_index : cpap_stop_index + 90]
@@ -392,7 +399,7 @@ def test_reconcile_condition_never_puts_for_on_a_numeric_state_condition() -> No
         segment = block[match.start() : match.start() + 120]
         assert "for:" not in segment
 
-    assert block.count("condition: state\n            entity_id: binary_sensor.owner_suite_cpap_running") == 3
+    assert block.count("condition: state\n            entity_id: binary_sensor.owner_suite_cpap_running") == 4
 
 
 def test_reconcile_clears_pending_bed_entry_missed_by_restart() -> None:
@@ -466,6 +473,26 @@ def test_active_session_rearms_cpap_stopped_latch_in_real_time_on_resume() -> No
     assert target_index > turn_off_index
 
 
+def test_finalize_gates_use_a_single_consistent_cpap_threshold_source() -> None:
+    # Codex P2 follow-up on #373: numeric_state "above" and "below" are
+    # both strict, so a power reading sitting exactly at 1.3W is
+    # classified as neither -- but the debounced helper is a plain
+    # boolean and must commit to one side. If some finalize gates checked
+    # the raw sensor with below: 1.3 while others (or the branch that
+    # latches sleep_session_cpap_stopped) checked the helper, a reading
+    # pinned at exactly 1.3W could make the reconciliation branch believe
+    # CPAP had stopped while a finalize gate never agreed, latching
+    # sleep_session_active forever. Every finalize-relevant gate must
+    # check the same helper, not a raw numeric threshold.
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+
+    # The only remaining raw below: 1.3 is the cpap_stop trigger itself
+    # (which sets the helper's own debounced state, not a competing
+    # classification of it).
+    assert text.count("below: 1.3") == 1
+    assert "condition: numeric_state\n            entity_id: sensor.owner_suite_cpap_plug_power\n            below: 1.3" not in text
+
+
 def test_reconcile_final_gate_requires_bed_debounce_and_current_bed_out() -> None:
     # Codex P2 follow-up on #373: the trailing periodic finalize check used
     # the bed's raw instantaneous "off" state. If the CPAP-stop branch just
@@ -498,8 +525,13 @@ def test_reconcile_final_gate_requires_cpap_currently_below_threshold() -> None:
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
     final_gate = block.rsplit("if:", maxsplit=1)[1]
 
-    assert "entity_id: sensor.owner_suite_cpap_plug_power" in final_gate
-    assert "below: 1.3" in final_gate
+    # Checks the debounced helper rather than a raw below: 1.3 numeric
+    # condition, so a reading sitting exactly at the threshold can't be
+    # classified differently here than by the cpap_stop reconcile branch
+    # that sets sleep_session_cpap_stopped in the first place (Codex P2
+    # follow-up on #373).
+    assert "entity_id: binary_sensor.owner_suite_cpap_running" in final_gate
+    assert 'state: "off"' in final_gate
 
 
 def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
