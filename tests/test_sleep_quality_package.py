@@ -414,16 +414,45 @@ def test_reconcile_clears_pending_bed_entry_missed_by_restart() -> None:
     # branch, so a stale flag can't also suppress that branch's fallback.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
     reconcile_index = block.index("Reconcile a pending bed-entry")
+    recover_entry_index = block.index("Recover a nightly bed entry")
     cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
-    assert reconcile_index < cpap_start_index
+    assert reconcile_index < recover_entry_index < cpap_start_index
 
-    branch = block[reconcile_index:cpap_start_index]
+    branch = block[reconcile_index:recover_entry_index]
     assert "entity_id: input_boolean.sleep_session_active" in branch
     assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in branch
     assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in branch
     assert branch.count('state: "off"') == 2
     assert 'state: "on"' in branch
     assert "action: input_boolean.turn_off" in branch
+
+
+def test_reconcile_recovers_a_bed_entry_missed_during_downtime() -> None:
+    # Codex P2 follow-up on #373: if HA is down when the resident gets
+    # into bed and returns before CPAP starts, the live bed_entry
+    # off->on trigger is never delivered, so sleep_session_bed_entry_
+    # pending stays off. A later CPAP start's fallback would then use its
+    # own (later) transition as bed_in, silently omitting the observed
+    # in-bed interval from bed_minutes. Must run before the cpap_start
+    # reconcile branch so that branch's own fallback doesn't overwrite
+    # this earlier, approximate bed_in with the later CPAP time, and must
+    # respect the same nightly time window the live bed_entry trigger
+    # uses so a daytime bed visit isn't recorded as a session start.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    recover_entry_index = block.index("Recover a nightly bed entry")
+    cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
+    assert recover_entry_index < cpap_start_index
+
+    branch = block[recover_entry_index:cpap_start_index]
+    assert "entity_id: input_boolean.sleep_session_active" in branch
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in branch
+    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in branch
+    assert branch.count('state: "off"') == 2
+    assert 'state: "on"' in branch
+    assert 'after: "18:00:00"' in branch
+    assert 'before: "12:00:00"' in branch
+    assert "entity_id: input_datetime.sleep_session_bed_in" in branch
+    assert "action: input_boolean.turn_on" in branch
 
 
 def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:

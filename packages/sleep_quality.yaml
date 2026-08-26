@@ -512,6 +512,42 @@ automation:
             target:
               entity_id: input_boolean.sleep_session_bed_entry_pending
       - alias: >-
+          Recover a nightly bed entry whose off->on transition was missed
+          entirely because HA was down when it happened: if the bed is
+          already occupied at reconciliation time with no session active
+          and no pending entry recorded, the resident got into bed
+          sometime during the gap. Runs before the cpap_start reconcile
+          branch below so a later CPAP start doesn't use its own,
+          later transition as bed_in instead, under-reporting the
+          observed in-bed time (Codex P2 follow-up on #373).
+          Reconciliation time is the best available approximation for
+          the missed entry, same reasoning as the other approximations
+          in this automation; the same nightly window
+          sleep_quality_prepare_session's own bed_entry trigger requires
+          keeps a daytime bed visit from being recorded as one.
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.sleep_session_bed_entry_pending
+            state: "off"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "on"
+          - condition: time
+            after: "18:00:00"
+            before: "12:00:00"
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.sleep_session_bed_in
+            data:
+              timestamp: "{{ as_timestamp(now()) }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sleep_session_bed_entry_pending
+      - alias: >-
           Reconcile a lost cpap_start debounce: no session is active, but
           CPAP has genuinely been running continuously for its own
           10-second debounce — sleep_quality_prepare_session's cpap_start
