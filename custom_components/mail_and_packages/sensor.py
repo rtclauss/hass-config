@@ -8,7 +8,10 @@ import datetime
 import logging
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_RESOURCES
 from homeassistant.core import HomeAssistant
@@ -17,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import MailAndPackagesConfigEntry
 from .const import (
+    AMAZON_DELIVERING,
     AMAZON_EXCEPTION,
     AMAZON_EXCEPTION_ORDER,
     AMAZON_HUB,
@@ -25,16 +29,19 @@ from .const import (
     AMAZON_OTP,
     AMAZON_OTP_CODE,
     ATTR_CODE,
+    ATTR_EMAIL,
     ATTR_GRID_IMAGE_NAME,
     ATTR_IMAGE,
     ATTR_IMAGE_NAME,
     ATTR_IMAGE_PATH,
     ATTR_ORDER,
+    ATTR_SUBJECT,
     ATTR_TRACKING_NUM,
     ATTR_USPS_IMAGE,
     CONF_PATH,
     DOMAIN,
     IMAGE_SENSORS,
+    SENSOR_DATA,
     SENSOR_TYPES,
     VERSION,
 )
@@ -51,7 +58,7 @@ async def async_setup_entry(
 ):
     """Set up the sensor entities."""
     coordinator = entry.runtime_data.coordinator
-    resources = entry.data.get(CONF_RESOURCES, [])
+    resources = coordinator.config.get(CONF_RESOURCES, [])
 
     sensors = [
         PackagesSensor(entry, SENSOR_TYPES[variable], coordinator)
@@ -67,7 +74,7 @@ async def async_setup_entry(
     async_add_entities(sensors, False)
 
 
-class PackagesSensor(CoordinatorEntity, SensorEntity):
+class PackagesSensor(CoordinatorEntity, RestoreSensor):
     """Representation of a sensor."""
 
     def __init__(
@@ -91,10 +98,24 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
             prefix = "_".join(parts[:-1])
             if parts[-1] in DELIVERED_SUFFIXES:
                 self._tracking_key = f"{prefix}_delivered_tracking"
+            elif parts[-1] == "packages":
+                packages_cfg = SENSOR_DATA.get(self.type, {})
+                # IMAP-backed packages (e.g. DHL "ist unterwegs") keep their
+                # own tracking list; empty-config packages still mirror OFD.
+                if packages_cfg.get(ATTR_EMAIL) or packages_cfg.get(ATTR_SUBJECT):
+                    self._tracking_key = f"{self.type}_tracking"
+                else:
+                    self._tracking_key = f"{prefix}_tracking"
             else:
                 self._tracking_key = f"{prefix}_tracking"
         else:
             self._tracking_key = f"{self.type}_tracking"
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added to hass."""
+        await super().async_added_to_hass()
+        if (sensor_data := await self.async_get_last_sensor_data()) is not None:
+            self._attr_native_value = sensor_data.native_value
 
     @property
     def device_info(self) -> dict:
@@ -120,7 +141,7 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the state of the sensor."""
         if self.coordinator.data is None:
-            return None
+            return getattr(self, "_attr_native_value", None)
         value = self.coordinator.data.get(self.type)
 
         if self.type == "mail_updated":
@@ -130,19 +151,17 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
                     value = datetime.datetime.fromisoformat(value)
                 except ValueError:
                     value = datetime.datetime.now(datetime.UTC)
-            elif value is None:
+            elif value is None and getattr(self, "_attr_native_value", None) is None:
                 value = datetime.datetime.now(datetime.UTC)
-        return value
+
+        if value is not None:
+            self._attr_native_value = value
+        return getattr(self, "_attr_native_value", None)
 
     @property
     def should_poll(self) -> bool:
         """No need to poll. Coordinator notifies entity of updates."""
         return False
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.data is not None
 
     @property
     def extra_state_attributes(self) -> str | None:
@@ -172,6 +191,9 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
         if self.type == AMAZON_EXCEPTION:
             if order := data.get(AMAZON_EXCEPTION_ORDER, data.get(ATTR_ORDER)):
                 attr[ATTR_ORDER] = order
+        elif self.type == AMAZON_DELIVERING:
+            if order := data.get("amazon_delivering_order"):
+                attr[ATTR_ORDER] = order
         elif order := data.get(AMAZON_ORDER):
             attr[ATTR_ORDER] = order
         elif self.type == AMAZON_HUB:
@@ -182,7 +204,7 @@ class PackagesSensor(CoordinatorEntity, SensorEntity):
                 attr[ATTR_CODE] = code
 
 
-class ImagePathSensors(CoordinatorEntity, SensorEntity):
+class ImagePathSensors(CoordinatorEntity, RestoreSensor):
     """Representation of a sensor."""
 
     def __init__(
@@ -202,6 +224,12 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
         self.type = sensor_description.key
         self._host = config.data[CONF_HOST]
         self._unique_id = self._config.entry_id
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added to hass."""
+        await super().async_added_to_hass()
+        if (sensor_data := await self.async_get_last_sensor_data()) is not None:
+            self._attr_native_value = sensor_data.native_value
 
     @property
     def device_info(self) -> dict:
@@ -227,10 +255,7 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
         if self.coordinator.data is None:
-            return None
-
-        image = ""
-        the_path = None
+            return getattr(self, "_attr_native_value", None)
 
         image = self.coordinator.data.get(ATTR_USPS_IMAGE)
 
@@ -238,8 +263,10 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
 
         path = self.coordinator.data.get(
             ATTR_IMAGE_PATH,
-            self._config.data.get(CONF_PATH),
+            self.coordinator.config.get(CONF_PATH),
         )
+
+        the_path = None
 
         if self.type == "usps_mail_image_system_path" and image:
             _LOGGER.debug("Updating system image path to: %s", path)
@@ -251,7 +278,11 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
             url = self._get_base_url()
             if url:
                 the_path = f"{url.rstrip('/')}/local/mail_and_packages/{image}"
-        return the_path
+
+        if the_path is not None:
+            self._attr_native_value = the_path
+
+        return getattr(self, "_attr_native_value", None)
 
     def _get_base_url(self) -> str | None:
         """Return the best available base URL for building image links."""
@@ -265,8 +296,3 @@ class ImagePathSensors(CoordinatorEntity, SensorEntity):
     def should_poll(self) -> bool:
         """No need to poll. Coordinator notifies entity of updates."""
         return False
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.data is not None

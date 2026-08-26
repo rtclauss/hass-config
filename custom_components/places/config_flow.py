@@ -16,9 +16,17 @@ from homeassistant.const import (
     CONF_NAME,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import selector
+from homeassistant.helpers import entity_registry as er, selector
 import voluptuous as vol
 
+from .config_schema import (
+    DATE_FORMAT_OPTIONS,
+    MAP_PROVIDER_OPTIONS,
+    MAP_ZOOM_MAX,
+    MAP_ZOOM_MIN,
+    STATE_OPTIONS,
+    user_schema,
+)
 from .const import (
     CONF_DATE_FORMAT,
     CONF_DEVICETRACKER_ID,
@@ -33,7 +41,6 @@ from .const import (
     DEFAULT_DATE_FORMAT,
     DEFAULT_DISPLAY_OPTIONS,
     DEFAULT_EXTENDED_ATTR,
-    DEFAULT_HOME_ZONE,
     DEFAULT_MAP_PROVIDER,
     DEFAULT_MAP_ZOOM,
     DEFAULT_SHOW_TIME,
@@ -46,11 +53,6 @@ from .const import (
 )
 
 _LOGGER: logging.Logger = logging.getLogger(__name__)
-MAP_PROVIDER_OPTIONS: list[str] = ["apple", "google", "osm"]
-STATE_OPTIONS: list[str] = ["zone, place", "formatted_place", "zone_name, place"]
-DATE_FORMAT_OPTIONS: list[str] = ["mm/dd", "dd/mm"]
-MAP_ZOOM_MIN: int = 1
-MAP_ZOOM_MAX: int = 20
 COMPONENT_CONFIG_URL: str = "https://github.com/custom-components/places#configuration-options"
 
 # Note the input displayed to the user will be translated. See the
@@ -64,20 +66,26 @@ def get_devicetracker_id_entities(
     """Build selector options for trackable entities with usable coordinates.
 
     Args:
-        hass: Home Assistant instance used to inspect current states.
-        current_entity: Existing configured entity to retain in the options
+        hass (HomeAssistant):
+            Home Assistant instance used to inspect current states.
+        current_entity (str | None):
+            Existing configured entity to retain in the options
             list even if it is no longer returned by the normal domain scan.
 
     Returns:
-        Sorted selector options labelled with friendly names and entity IDs.
+        list[selector.SelectOptionDict]:
+            Sorted selector options labelled with friendly names and entity IDs.
     """
     dt_list: list[selector.SelectOptionDict] = []
+    entity_registry = er.async_get(hass)
     for dom in TRACKING_DOMAINS:
         # _LOGGER.debug("Getting entities for domain: %s", dom)
         for ent in hass.states.async_all(dom):
+            registry_entry = entity_registry.async_get(ent.entity_id)
+            if registry_entry is not None and registry_entry.platform == DOMAIN:
+                continue
             if dom not in TRACKING_DOMAINS_NEED_LATLONG or (
-                CONF_LATITUDE in hass.states.get(ent.entity_id).attributes
-                and CONF_LONGITUDE in hass.states.get(ent.entity_id).attributes
+                CONF_LATITUDE in ent.attributes and CONF_LONGITUDE in ent.attributes
             ):
                 # _LOGGER.debug("Entity: %s", ent)
                 dt_list.extend(
@@ -92,14 +100,15 @@ def get_devicetracker_id_entities(
     if current_entity is not None:
         # _LOGGER.debug("current_entity: %s", current_entity)
         dt_list_entities: list[str] = [d["value"] for d in dt_list]
-        if current_entity not in dt_list_entities and hass.states.get(current_entity) is not None:
-            if (
-                ATTR_FRIENDLY_NAME in hass.states.get(current_entity).attributes
-                and hass.states.get(current_entity).attributes.get(ATTR_FRIENDLY_NAME) is not None
-            ):
-                current_name: str = hass.states.get(current_entity).attributes.get(
-                    ATTR_FRIENDLY_NAME
-                )
+        registry_entry = entity_registry.async_get(current_entity)
+        current_state = hass.states.get(current_entity)
+        if (
+            current_entity not in dt_list_entities
+            and current_state is not None
+            and (registry_entry is None or registry_entry.platform != DOMAIN)
+        ):
+            current_name = current_state.attributes.get(ATTR_FRIENDLY_NAME)
+            if current_name is not None:
                 # _LOGGER.debug("current_name: %s", current_name)
                 dt_list.append(
                     selector.SelectOptionDict(
@@ -128,10 +137,12 @@ def get_home_zone_entities(hass: HomeAssistant) -> list[selector.SelectOptionDic
     """Build selector options for zones that can be used as the home reference.
 
     Args:
-        hass: Home Assistant instance used to inspect current zone states.
+        hass (HomeAssistant):
+            Home Assistant instance used to inspect current zone states.
 
     Returns:
-        Sorted selector options labelled with friendly names and entity IDs.
+        list[selector.SelectOptionDict]:
+            Sorted selector options labelled with friendly names and entity IDs.
     """
     zone_list: list[selector.SelectOptionDict] = []
     for dom in HOME_LOCATION_DOMAINS:
@@ -160,13 +171,16 @@ def _validate_brackets(display_options: str, errors: dict[str, Any]) -> bool:
     """Validate bracket and parenthesis pairing in advanced display options.
 
     Args:
-        display_options: Raw display options string entered by the user.
-        errors: Mutable config-flow error mapping to populate on validation
+        display_options (str):
+            Raw display options string entered by the user.
+        errors (dict[str, Any]):
+            Mutable config-flow error mapping to populate on validation
             failure.
 
     Returns:
-        ``True`` when brackets and parentheses are balanced and placed after an
-        option token; otherwise ``False``.
+        bool:
+            ``True`` when brackets and parentheses are balanced and placed after an
+            option token; otherwise ``False``.
     """
     stack = []
     last_token = ""
@@ -243,12 +257,15 @@ def _validate_comma_syntax(display_options: str, errors: dict[str, Any]) -> bool
     """Reject empty list items and dangling commas in grouped options.
 
     Args:
-        display_options: Raw display options string entered by the user.
-        errors: Mutable config-flow error mapping to populate on validation
+        display_options (str):
+            Raw display options string entered by the user.
+        errors (dict[str, Any]):
+            Mutable config-flow error mapping to populate on validation
             failure.
 
     Returns:
-        ``True`` when comma placement is valid; otherwise ``False``.
+        bool:
+            ``True`` when comma placement is valid; otherwise ``False``.
     """
     if re.search(r"(,\s*,)", display_options):
         _LOGGER.error("Invalid syntax: Empty item between commas in '%s'.", display_options)
@@ -268,13 +285,16 @@ def _validate_option_names(display_options: str, errors: dict[str, Any]) -> bool
     """Ensure parsed display option identifiers do not contain spaces.
 
     Args:
-        display_options: Raw display options string entered by the user.
-        errors: Mutable config-flow error mapping to populate on validation
+        display_options (str):
+            Raw display options string entered by the user.
+        errors (dict[str, Any]):
+            Mutable config-flow error mapping to populate on validation
             failure.
 
     Returns:
-        ``True`` when all parsed option identifiers are syntactically valid;
-        otherwise ``False``.
+        bool:
+            ``True`` when all parsed option identifiers are syntactically valid;
+            otherwise ``False``.
     """
     tokens = re.split(r"[\[\]\(\),]", display_options)
     for token in tokens:
@@ -291,13 +311,16 @@ def _validate_known_options(display_options: str, errors: dict[str, Any]) -> boo
     """Validate option identifiers while allowing literal filter values.
 
     Args:
-        display_options: Raw display options string entered by the user.
-        errors: Mutable config-flow error mapping to populate on validation
+        display_options (str):
+            Raw display options string entered by the user.
+        errors (dict[str, Any]):
+            Mutable config-flow error mapping to populate on validation
             failure.
 
     Returns:
-        ``True`` when option identifiers are known or are explicit include/
-        exclude markers; otherwise ``False``.
+        bool:
+            ``True`` when option identifiers are known or are explicit include/
+            exclude markers; otherwise ``False``.
     """
     valid_options = set(DISPLAY_OPTIONS_MAP.keys())
     stack: list[str] = []
@@ -346,13 +369,21 @@ async def validate_display_options(display_options: str, errors: dict[str, Any])
     """Validate advanced display option syntax for the config and options flows.
 
     Args:
-        display_options: Raw display option string entered by the user.
-        errors: Mutable flow error mapping to populate when validation fails.
+        display_options (str):
+            Raw display option string entered by the user.
+        errors (dict[str, Any]):
+            Mutable flow error mapping to populate when validation fails.
 
     Returns:
-        The same error mapping, possibly with ``base`` set to a validation
-        error key.
+        dict[str, Any]:
+            The same error mapping, possibly with ``base`` set to a validation
+            error key.
     """
+    if not display_options.strip():
+        _LOGGER.error("Invalid syntax: Display options cannot be blank.")
+        errors["base"] = "invalid_syntax"
+        return errors
+
     # Only run advanced validation if brackets or parentheses are present
     if "[" in display_options or "(" in display_options:
         # Check bracket/parenthesis matching
@@ -378,7 +409,7 @@ async def validate_display_options(display_options: str, errors: dict[str, Any])
 class PlacesConfigFlow(ConfigFlow, domain=DOMAIN):
     """Create new Places config entries from UI input."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: MutableMapping[str, Any] | None = None
@@ -386,11 +417,13 @@ class PlacesConfigFlow(ConfigFlow, domain=DOMAIN):
         """Show and process the initial Places setup form.
 
         Args:
-            user_input: Submitted form values, or ``None`` while displaying
+            user_input (MutableMapping[str, Any] | None):
+                Submitted form values, or ``None`` while displaying
                 the form.
 
         Returns:
-            A Home Assistant config-flow result for a form or created entry.
+            ConfigFlowResult:
+                A Home Assistant config-flow result for a form or created entry.
         """
         errors: dict[str, Any] = {}
         if user_input is not None:
@@ -407,76 +440,7 @@ class PlacesConfigFlow(ConfigFlow, domain=DOMAIN):
             self.hass
         )
         zone_list = get_home_zone_entities(self.hass)
-        # _LOGGER.debug("Trackable entities with lat/long: %s", devicetracker_id_list)
-        data_schema: vol.Schema = vol.Schema(
-            {
-                vol.Required(CONF_NAME): str,
-                vol.Required(CONF_DEVICETRACKER_ID): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=devicetracker_id_list,
-                        multiple=False,
-                        custom_value=False,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(CONF_API_KEY): str,
-                vol.Optional(
-                    CONF_DISPLAY_OPTIONS, default=DEFAULT_DISPLAY_OPTIONS
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=STATE_OPTIONS,
-                        multiple=False,
-                        custom_value=True,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(CONF_HOME_ZONE, default=DEFAULT_HOME_ZONE): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=zone_list,
-                        multiple=False,
-                        custom_value=False,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(
-                    CONF_MAP_PROVIDER, default=DEFAULT_MAP_PROVIDER
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=MAP_PROVIDER_OPTIONS,
-                        multiple=False,
-                        custom_value=False,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(CONF_MAP_ZOOM, default=int(DEFAULT_MAP_ZOOM)): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=MAP_ZOOM_MIN,
-                        max=MAP_ZOOM_MAX,
-                        mode=selector.NumberSelectorMode.BOX,
-                    )
-                ),
-                vol.Optional(CONF_LANGUAGE): str,
-                vol.Optional(CONF_USE_GPS, default=DEFAULT_USE_GPS): selector.BooleanSelector(
-                    selector.BooleanSelectorConfig()
-                ),
-                vol.Optional(
-                    CONF_EXTENDED_ATTR, default=DEFAULT_EXTENDED_ATTR
-                ): selector.BooleanSelector(selector.BooleanSelectorConfig()),
-                vol.Optional(CONF_SHOW_TIME, default=DEFAULT_SHOW_TIME): selector.BooleanSelector(
-                    selector.BooleanSelectorConfig()
-                ),
-                vol.Optional(
-                    CONF_DATE_FORMAT, default=DEFAULT_DATE_FORMAT
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=DATE_FORMAT_OPTIONS,
-                        multiple=False,
-                        custom_value=False,
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-            }
-        )
+        data_schema: vol.Schema = user_schema(devicetracker_id_list, zone_list)
         return self.async_show_form(
             step_id="user",
             data_schema=data_schema,
@@ -494,10 +458,12 @@ class PlacesConfigFlow(ConfigFlow, domain=DOMAIN):
         """Return the options flow handler for an existing entry.
 
         Args:
-            config_entry: Existing Places config entry.
+            config_entry (ConfigEntry):
+                Existing Places config entry.
 
         Returns:
-            Options flow handler instance.
+            PlacesOptionsFlowHandler:
+                Options flow handler instance.
         """
         return PlacesOptionsFlowHandler()
 
@@ -511,11 +477,13 @@ class PlacesOptionsFlowHandler(OptionsFlow):
         """Show and process the Places options form.
 
         Args:
-            user_input: Submitted option values, or ``None`` while displaying
+            user_input (MutableMapping[str, Any] | None):
+                Submitted option values, or ``None`` while displaying
                 the form.
 
         Returns:
-            A Home Assistant options-flow result for a form or completed update.
+            ConfigFlowResult:
+                A Home Assistant options-flow result for a form or completed update.
         """
         errors: dict[str, Any] = {}
         if user_input is not None:
@@ -662,8 +630,6 @@ class PlacesOptionsFlowHandler(OptionsFlow):
                 ),
             }
         )
-
-        # _LOGGER.debug("[Options Update] initial config: %s", self.config_entry.data)
 
         return self.async_show_form(
             step_id="init",
