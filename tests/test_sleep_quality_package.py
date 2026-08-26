@@ -217,6 +217,18 @@ def test_reconcile_also_triggers_on_automation_reload() -> None:
     assert "event_type: automation_reloaded" in block
 
 
+def test_reconcile_rechecks_periodically_after_a_restart_resets_last_changed() -> None:
+    # Codex P2 follow-up on #373: HA resets a restored entity's last_changed
+    # to the restore moment, so a per-branch `for:` debounce guard almost
+    # never reads as satisfied on the single, one-shot homeassistant.start
+    # evaluation — and with no delayed or state-triggered follow-up, the
+    # reconciliation was simply missed. A periodic re-check lets the same
+    # guard naturally pass once real time has elapsed since the restore.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    assert "trigger: time_pattern" in block
+    assert 'minutes: "/5"' in block
+
+
 def test_reconcile_recovers_a_lost_bed_exit_debounce() -> None:
     # Codex P2 follow-up on #373: if cpap_stopped is already "on" (set
     # before the restart/reload, or just reconciled above) but the bed's

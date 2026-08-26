@@ -360,6 +360,19 @@ automation:
       reload moments after a genuine transition can't fast-track past a
       debounce a normal trigger would still be waiting out (Codex P2
       follow-up on #373).
+
+      That per-branch `for:` guard created a second gap on a real restart
+      (not just a reload): HA resets a restored entity's last_changed to
+      the restore moment, so the guard's duration requirement almost never
+      reads as satisfied on the one-shot homeassistant.start evaluation,
+      and with no delayed or state-triggered follow-up the reconciliation
+      was simply missed (Codex P2 follow-up on #373). Re-check periodically
+      instead of only once: a state's `for:` duration is measured from
+      whenever it last actually changed, so as long as it stays unchanged,
+      a later periodic evaluation naturally satisfies the same guard once
+      enough real time has elapsed since the restore/reload — recovering
+      the debounce without needing to know or trust the original,
+      pre-restart transition time.
     trace:
       stored_traces: 10
     trigger:
@@ -367,6 +380,13 @@ automation:
         event: start
       - trigger: event
         event_type: automation_reloaded
+      - alias: >-
+          Re-evaluate periodically so a debounce guard that read as
+          unsatisfied on the initial start/reload evaluation (because a
+          restored entity's last_changed resets to the restore moment) gets
+          a chance to pass once real time has actually elapsed since then.
+        trigger: time_pattern
+        minutes: "/5"
     action:
       - alias: >-
           Reconcile a lost cpap_start debounce: no session is active, but
