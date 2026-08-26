@@ -310,6 +310,31 @@ def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     assert "action: input_boolean.turn_on\n            target:\n              entity_id: input_boolean.sleep_session_active" in block
 
 
+def test_active_session_rearms_cpap_stopped_latch_in_real_time_on_resume() -> None:
+    # Codex P2 follow-up on #373: relying only on the periodic reconciliation
+    # tick to clear a stale sleep_session_cpap_stopped latch left it stuck
+    # on between ticks. If CPAP resumed and then dropped again entirely
+    # within that window, the bed_exit branch below (which only checks
+    # cpap_stopped == on plus CPAP's raw current state) could finalize
+    # using the old cpap_off before the new drop's own 5-minute debounce
+    # completed. A real-time trigger clears the latch the moment CPAP
+    # genuinely resumes, independent of the periodic tick.
+    active = _automation_block("sleep_quality_track_active_session")
+
+    assert "id: cpap_resume" in active
+    trigger_index = active.index("id: cpap_resume")
+    trigger_def = active[max(0, trigger_index - 120) : trigger_index]
+    assert "above: 1.3" in trigger_def
+    assert "seconds: 10" in trigger_def
+
+    resume_branch = active.split("id: cpap_resume", maxsplit=2)[2]
+    turn_off_index = resume_branch.index("action: input_boolean.turn_off")
+    target_index = resume_branch.index(
+        "entity_id: input_boolean.sleep_session_cpap_stopped", turn_off_index
+    )
+    assert target_index > turn_off_index
+
+
 def test_reconcile_final_gate_requires_bed_debounce_and_current_bed_out() -> None:
     # Codex P2 follow-up on #373: the trailing periodic finalize check used
     # the bed's raw instantaneous "off" state. If the CPAP-stop branch just
@@ -365,7 +390,27 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
         "as_local(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
         in block
     )
-    assert block.count('datetime: "{{ now().strftime(\'%Y-%m-%d %H:%M:%S\') }}"') == 1
+    assert 'datetime: "{{ now().strftime(\'%Y-%m-%d %H:%M:%S\') }}"' not in block
+
+
+def test_reconcile_cpap_start_fallback_bed_in_matches_cpap_on_ordering() -> None:
+    # Codex P2 follow-up on #373: the finalizer requires cpap_on_ts >=
+    # bed_in_ts. The fallback bed_in write (used when no separate bed-entry
+    # is pending) stamped now() -- the reconciliation tick's time -- while
+    # cpap_on right below it stamped the CPAP sensor's own, earlier
+    # last_changed. A recovered session's bed_in could then read later than
+    # its own cpap_on, always failing that ordering check and discarding
+    # the session's analytics. Both must derive from the same CPAP
+    # transition.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    cpap_start_branch = block.split("state: \"off\"", maxsplit=1)[1]
+
+    bed_in_index = cpap_start_branch.index("input_datetime.sleep_session_bed_in")
+    cpap_on_index = cpap_start_branch.index("input_datetime.sleep_session_cpap_on")
+    assert bed_in_index < cpap_on_index
+
+    between = cpap_start_branch[bed_in_index:cpap_on_index]
+    assert "as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)" in between
 
 
 def test_reconcile_rearms_cpap_stopped_latch_when_cpap_resumes() -> None:

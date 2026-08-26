@@ -253,6 +253,12 @@ automation:
         for:
           minutes: 5
         id: bed_exit
+      - trigger: numeric_state
+        entity_id: sensor.owner_suite_cpap_plug_power
+        above: 1.3
+        for:
+          seconds: 10
+        id: cpap_resume
     condition:
       - condition: state
         entity_id: input_boolean.sleep_session_active
@@ -310,6 +316,23 @@ automation:
                       minutes: 5
                 then:
                   - action: script.finalize_sleep_quality_session
+          - conditions:
+              - condition: trigger
+                id: cpap_resume
+            sequence:
+              - alias: >-
+                  Re-arm the stop latch the instant CPAP genuinely resumes,
+                  not just on the next periodic reconciliation tick — a
+                  mid-session interruption long enough to latch
+                  sleep_session_cpap_stopped on left it stuck on after
+                  resumption, so the bed_exit branch below (which only
+                  checks cpap_stopped == on plus CPAP's raw current state)
+                  could finalize using that stale cpap_off if a brand new,
+                  not-yet-debounced drop happened to be in progress when
+                  the bed emptied (Codex P2 follow-up on #373).
+                action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.sleep_session_cpap_stopped
           - conditions:
               - condition: trigger
                 id: bed_exit
@@ -410,11 +433,21 @@ automation:
                 entity_id: input_boolean.sleep_session_bed_entry_pending
                 state: "off"
             then:
-              - action: input_datetime.set_datetime
+              - alias: >-
+                  Use the same CPAP transition timestamp as cpap_on below
+                  for this fallback bed-in, not now() — the finalizer
+                  requires cpap_on_ts >= bed_in_ts, and now() (the
+                  reconciliation tick) can run long after the CPAP sensor's
+                  own last_changed, making a recovered session's bed_in
+                  read later than its cpap_on and get discarded (Codex P2
+                  follow-up on #373).
+                action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_bed_in
                 data:
-                  datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  datetime: >-
+                    {{ as_local(states.sensor.owner_suite_cpap_plug_power.last_changed)
+                       .strftime('%Y-%m-%d %H:%M:%S') }}
           - action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_cpap_on
