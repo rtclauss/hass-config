@@ -478,6 +478,29 @@ automation:
         minutes: "/5"
     action:
       - alias: >-
+          Reconcile a pending bed-entry that never led to a session and
+          whose own bed-exit was itself missed by this same restart/
+          reload gap: sleep_quality_prepare_session's live
+          bed_exit_without_session trigger can only clear
+          sleep_session_bed_entry_pending if it's actually running when
+          the bed empties (Codex P2 follow-up on #373). Runs before the
+          cpap_start reconcile branch below so a stale pending flag can't
+          also suppress that branch's own fallback bed_in.
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.sleep_session_bed_entry_pending
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "off"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sleep_session_bed_entry_pending
+      - alias: >-
           Reconcile a lost cpap_start debounce: no session is active, but
           CPAP has genuinely been running continuously for its own
           10-second debounce — sleep_quality_prepare_session's cpap_start

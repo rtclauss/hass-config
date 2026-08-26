@@ -363,10 +363,11 @@ def test_reconcile_requires_the_full_debounce_before_treating_a_transition_as_se
     cpap_stop_guard = cpap_stop_branch[cpap_stop_index : cpap_stop_index + 90]
     assert 'state: "off"' in cpap_stop_guard
 
-    bed_exit_index = block.index(
+    bed_exit_branch = block.split("Reconcile a lost bed_exit debounce", maxsplit=1)[1]
+    bed_exit_index = bed_exit_branch.index(
         "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either\n            state: \"off\""
     )
-    bed_exit_guard = block[bed_exit_index : bed_exit_index + 140]
+    bed_exit_guard = bed_exit_branch[bed_exit_index : bed_exit_index + 140]
     assert "minutes: 5" in bed_exit_guard
 
 
@@ -394,6 +395,30 @@ def test_reconcile_condition_never_puts_for_on_a_numeric_state_condition() -> No
     assert block.count("condition: state\n            entity_id: binary_sensor.owner_suite_cpap_running") == 3
 
 
+def test_reconcile_clears_pending_bed_entry_missed_by_restart() -> None:
+    # Codex P2 follow-up on #373: sleep_quality_prepare_session's live
+    # bed_exit_without_session trigger only clears a stale
+    # sleep_session_bed_entry_pending if it's actually running when the
+    # bed empties. If HA restarts or automations reload while the bed is
+    # already empty (or becomes empty during the gap), that transition is
+    # never delivered, leaving the pending flag stuck on so a later,
+    # unrelated CPAP start could still inherit the stale bed_in. This
+    # reconciliation branch must run before the cpap_start reconcile
+    # branch, so a stale flag can't also suppress that branch's fallback.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    reconcile_index = block.index("Reconcile a pending bed-entry")
+    cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
+    assert reconcile_index < cpap_start_index
+
+    branch = block[reconcile_index:cpap_start_index]
+    assert "entity_id: input_boolean.sleep_session_active" in branch
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in branch
+    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in branch
+    assert branch.count('state: "off"') == 2
+    assert 'state: "on"' in branch
+    assert "action: input_boolean.turn_off" in branch
+
+
 def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     # Codex P2 follow-up on #373: sleep_quality_prepare_session's cpap_start
     # trigger has its own 10-second `for:` debounce. If that debounce is
@@ -402,10 +427,11 @@ def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     # and the existing reconciliation branches all required
     # sleep_session_active to already be "on", so none of them could help.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    cpap_start_branch = block.split("Reconcile a lost cpap_start debounce", maxsplit=1)[1]
 
-    start_index = block.index('state: "off"')
-    then_index = block.index("then:", start_index)
-    guard_block = block[start_index:then_index]
+    start_index = cpap_start_branch.index('state: "off"')
+    then_index = cpap_start_branch.index("then:", start_index)
+    guard_block = cpap_start_branch[start_index:then_index]
     assert "entity_id: sensor.owner_suite_cpap_plug_power" not in guard_block
     assert "entity_id: binary_sensor.owner_suite_cpap_running" in guard_block
     assert 'state: "on"' in guard_block
