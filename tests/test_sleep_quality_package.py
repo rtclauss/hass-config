@@ -298,15 +298,32 @@ def test_reconcile_requires_the_full_debounce_before_treating_a_transition_as_se
     # temporary bed exit into a premature end-of-session.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
-    cpap_stop_index = block.index("below: 1.3")
-    cpap_stop_guard = block[cpap_stop_index : cpap_stop_index + 60]
-    assert "minutes: 5" in cpap_stop_guard
+    cpap_stop_index = block.index("float(0) < 1.3")
+    cpap_stop_guard = block[cpap_stop_index : cpap_stop_index + 200]
+    assert ">= 300" in cpap_stop_guard
 
     bed_exit_index = block.index(
         "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either\n            state: \"off\""
     )
     bed_exit_guard = block[bed_exit_index : bed_exit_index + 140]
     assert "minutes: 5" in bed_exit_guard
+
+
+def test_reconcile_condition_never_puts_for_on_a_numeric_state_condition() -> None:
+    # Codex P1 follow-up on #373: `for:` is only supported on numeric_state
+    # TRIGGERS and on state CONDITIONS, not on numeric_state CONDITIONS —
+    # Home Assistant's schema rejects that combination as an unsupported
+    # extra key, which would fail to load. Every numeric_state condition in
+    # this automation must therefore omit `for:`; duration checks against
+    # the CPAP power sensor are expressed as template conditions comparing
+    # its own last_changed against now() instead.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    for match in re.finditer(r"condition: numeric_state\n(?:.+\n)*?", block):
+        segment = block[match.start() : match.start() + 120]
+        assert "for:" not in segment
+
+    assert block.count("sensor.owner_suite_cpap_plug_power.last_changed") >= 3
 
 
 def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
@@ -319,10 +336,11 @@ def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
     start_index = block.index('state: "off"')
-    guard_block = block[start_index : start_index + 300]
-    assert "entity_id: sensor.owner_suite_cpap_plug_power" in guard_block
-    assert "above: 1.3" in guard_block
-    assert "seconds: 10" in guard_block
+    then_index = block.index("then:", start_index)
+    guard_block = block[start_index:then_index]
+    assert "entity_id: sensor.owner_suite_cpap_plug_power" not in guard_block
+    assert "sensor.owner_suite_cpap_plug_power') | float(0) > 1.3" in guard_block
+    assert ">= 10" in guard_block
 
     assert "entity_id: input_datetime.sleep_session_cpap_on" in block
     assert "action: counter.reset" in block
@@ -448,8 +466,8 @@ def test_reconcile_rearms_cpap_stopped_latch_when_cpap_resumes() -> None:
     guard = block[rearm_index:turn_off_index]
 
     assert 'state: "on"' in guard
-    assert "above: 1.3" in guard
-    assert "seconds: 10" in guard
+    assert "sensor.owner_suite_cpap_plug_power') | float(0) > 1.3" in guard
+    assert ">= 10" in guard
 
     # The re-arm must run before the final finalize gate so a resumed
     # session's stale latch is cleared in the same evaluation pass.

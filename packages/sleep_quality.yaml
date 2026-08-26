@@ -432,11 +432,17 @@ automation:
           - condition: state
             entity_id: input_boolean.sleep_session_active
             state: "off"
-          - condition: numeric_state
-            entity_id: sensor.owner_suite_cpap_plug_power
-            above: 1.3
-            for:
-              seconds: 10
+          - alias: >-
+              numeric_state conditions don't support for: (only numeric_state
+              triggers and state conditions do); Home Assistant rejects the
+              key as an unsupported schema field (Codex P1 follow-up on
+              #373). A template comparing last_changed against now()
+              reproduces the same "genuinely sustained" duration check.
+            condition: template
+            value_template: >-
+              {{ states('sensor.owner_suite_cpap_plug_power') | float(0) > 1.3
+                 and (as_timestamp(now())
+                      - as_timestamp(states.sensor.owner_suite_cpap_plug_power.last_changed)) >= 10 }}
         then:
           - if:
               - condition: state
@@ -490,11 +496,11 @@ automation:
           - condition: state
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "on"
-          - condition: numeric_state
-            entity_id: sensor.owner_suite_cpap_plug_power
-            above: 1.3
-            for:
-              seconds: 10
+          - condition: template
+            value_template: >-
+              {{ states('sensor.owner_suite_cpap_plug_power') | float(0) > 1.3
+                 and (as_timestamp(now())
+                      - as_timestamp(states.sensor.owner_suite_cpap_plug_power.last_changed)) >= 10 }}
         then:
           - action: input_boolean.turn_off
             target:
@@ -513,11 +519,11 @@ automation:
           - condition: state
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "off"
-          - condition: numeric_state
-            entity_id: sensor.owner_suite_cpap_plug_power
-            below: 1.3
-            for:
-              minutes: 5
+          - condition: template
+            value_template: >-
+              {{ states('sensor.owner_suite_cpap_plug_power') | float(0) < 1.3
+                 and (as_timestamp(now())
+                      - as_timestamp(states.sensor.owner_suite_cpap_plug_power.last_changed)) >= 300 }}
         then:
           - action: input_datetime.set_datetime
             target:
