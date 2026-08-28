@@ -3509,6 +3509,123 @@ template:
       unit_of_measurement: "°F"
       state: "{{ state_attr('sensor.active_weather_entity_id', 'temperature') | int(default=0) }}"
 
+    # ------------------------------------------------------------------
+    # Canonical multi-source outdoor readings.
+    # Average every source that currently reports a numeric value; if only
+    # one is available use it; if none are available the sensor becomes
+    # `unavailable` (never a junk 0). Consumed by the predictive room-temp
+    # control (room_temp_predictor / thermal_preemptor).
+    #
+    # Sources blend the local Ambient Weather PWS ("PineHOTTIES", on-site
+    # ground truth) with Open-Meteo, NWS, ecobee and OpenWeatherMap:
+    #   temperature: PWS + Open-Meteo + NWS + OpenWeatherMap
+    #   humidity:    PWS + NWS + ecobee + OpenWeatherMap
+    #   wind_speed:  PWS + Open-Meteo + NWS + OpenWeatherMap
+    #   cloud_cover: OpenWeatherMap + Tomorrow.io   (resolves #866)
+    #   uv_index:    PWS + OpenWeatherMap           (local solar-intensity proxy)
+    #   precipitation: PWS hourly rain + OpenWeatherMap rain intensity
+    # PWS states() are mixed with weather-entity state_attr() values; the
+    # `is_number` test keeps whichever are currently numeric.
+    # ------------------------------------------------------------------
+    - name: canonical_outside_temperature
+      unique_id: canonical_outside_temperature
+      device_class: temperature
+      state_class: measurement
+      unit_of_measurement: "°F"
+      availability: >-
+        {{ [states('sensor.pinehotties_temperature'),
+            state_attr('weather.the_brewery', 'temperature'),
+            state_attr('weather.kmsp', 'temperature'),
+            state_attr('weather.openweathermap', 'temperature')]
+           | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = [states('sensor.pinehotties_temperature'),
+            state_attr('weather.the_brewery', 'temperature'),
+            state_attr('weather.kmsp', 'temperature'),
+            state_attr('weather.openweathermap', 'temperature')]
+           | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+
+    - name: canonical_outside_humidity
+      unique_id: canonical_outside_humidity
+      device_class: humidity
+      state_class: measurement
+      unit_of_measurement: "%"
+      availability: >-
+        {{ [states('sensor.pinehotties_humidity'),
+            state_attr('weather.kmsp', 'humidity'),
+            state_attr('weather.my_ecobee', 'humidity'),
+            state_attr('weather.openweathermap', 'humidity')]
+           | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = [states('sensor.pinehotties_humidity'),
+            state_attr('weather.kmsp', 'humidity'),
+            state_attr('weather.my_ecobee', 'humidity'),
+            state_attr('weather.openweathermap', 'humidity')]
+           | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+
+    - name: canonical_wind_speed
+      unique_id: canonical_wind_speed
+      device_class: wind_speed
+      state_class: measurement
+      unit_of_measurement: "mph"
+      availability: >-
+        {{ [states('sensor.pinehotties_wind_speed'),
+            state_attr('weather.the_brewery', 'wind_speed'),
+            state_attr('weather.kmsp', 'wind_speed'),
+            state_attr('weather.openweathermap', 'wind_speed')]
+           | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = [states('sensor.pinehotties_wind_speed'),
+            state_attr('weather.the_brewery', 'wind_speed'),
+            state_attr('weather.kmsp', 'wind_speed'),
+            state_attr('weather.openweathermap', 'wind_speed')]
+           | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+
+    - name: canonical_cloud_cover
+      unique_id: canonical_cloud_cover
+      state_class: measurement
+      unit_of_measurement: "%"
+      availability: >-
+        {{ [state_attr('weather.openweathermap', 'cloud_coverage'),
+            states('sensor.tomorrow_io_the_brewery_cloud_cover')]
+           | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = [state_attr('weather.openweathermap', 'cloud_coverage'),
+            states('sensor.tomorrow_io_the_brewery_cloud_cover')]
+           | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+
+    - name: canonical_uv_index
+      unique_id: canonical_uv_index
+      state_class: measurement
+      availability: >-
+        {{ [states('sensor.pinehotties_uv_index'),
+            states('sensor.openweathermap_uv_index')]
+           | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = [states('sensor.pinehotties_uv_index'),
+            states('sensor.openweathermap_uv_index')]
+           | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(2) }}
+
+    - name: canonical_precipitation
+      unique_id: canonical_precipitation
+      device_class: precipitation_intensity
+      state_class: measurement
+      unit_of_measurement: "in/h"
+      availability: >-
+        {{ [states('sensor.pinehotties_hourly_rain'),
+            states('sensor.openweathermap_rain_intensity')]
+           | select('is_number') | list | count > 0 }}
+      state: >-
+        {% set vals = [states('sensor.pinehotties_hourly_rain'),
+            states('sensor.openweathermap_rain_intensity')]
+           | select('is_number') | map('float') | list %}
+        {{ (vals | sum / vals | count) | round(3) }}
+
     - name: precip_next_15m
       unique_id: precip_next_15m
       unit_of_measurement: "%"

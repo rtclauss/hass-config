@@ -762,6 +762,34 @@ group:
 # Input Booleans
 ########################
 input_boolean:
+  thermal_preemptor_enabled:
+    name: Thermal Preemptor Enabled
+    icon: mdi:thermometer-auto
+    # No initial: — an input_boolean only restores its prior state on restart
+    # when initial is unset. With initial: on, every HA restart silently
+    # re-enabled the preemptor even if it was deliberately turned off.
+
+  prediction_scorer_nudge_enabled:
+    name: Room Temp Retrain Nudge Enabled
+    icon: mdi:bell-alert
+    # No initial: — see thermal_preemptor_enabled; restore the prior state.
+
+  thermal_preemptor_hold_active:
+    name: Thermal Preemptor Hold Active
+    icon: mdi:thermometer-alert
+    # No initial: — the in-flight hold must survive an AppDaemon or HA restart
+    # so the app can re-arm or clear the setpoint override instead of orphaning
+    # it on the thermostat. Owned by ThermalPreemptor, not the user.
+
+  thermal_preemptor_hold_gate:
+    name: Thermal Preemptor Hold Gate
+    icon: mdi:gate
+    initial: off
+    # Raised by house_mode automations while a named Ecobee preset (e.g. guest
+    # sleep) is active. ThermalPreemptor checks this gate before creating a
+    # predictive hold; when on it stands down so it cannot overwrite or
+    # prematurely resume the named preset via resume_program.
+
   window_climate_paused_by_windows:
     name: Climate paused by windows
     icon: mdi:air-conditioner
@@ -778,6 +806,18 @@ input_boolean:
     initial: on
 
 ########################
+# Input Datetimes
+########################
+input_datetime:
+  thermal_preemptor_revert_at:
+    name: Thermal Preemptor Revert Deadline
+    icon: mdi:timer-sand
+    has_date: true
+    has_time: true
+    # No initial: — restored on restart so the app can compute the remaining
+    # hold time and re-arm (or, if already past, resume the schedule at once).
+
+########################
 # Input Text
 ########################
 input_text:
@@ -788,10 +828,42 @@ input_text:
     max: 255
     initial: binary_sensor.mailbox_contact
 
+  thermal_preemptor_hold_reason:
+    name: Thermal Preemptor Hold Reason
+    icon: mdi:information-outline
+    max: 120
+
+########################
+# Input Buttons
+########################
+input_button:
+  retrain_room_temp_models:
+    name: Retrain Room Temp Prediction Models
+    icon: mdi:brain
+
 ########################
 # Input Numbers
 ########################
 input_number:
+  thermal_preemptor_comfort_margin:
+    name: Thermal Preemptor Comfort Margin (°F)
+    icon: mdi:thermometer-chevron-up
+    min: 0.25
+    max: 3.0
+    step: 0.25
+    # No initial: — preserve the value the user tuned across restarts.
+    mode: box
+
+  prediction_retrain_rmse_ratio:
+    name: Retrain Nudge RMSE Ratio
+    icon: mdi:chart-bell-curve
+    # Nudge to retrain when live RMSE exceeds training CV RMSE by this factor.
+    min: 1.0
+    max: 5.0
+    step: 0.25
+    # No initial: — preserve the value the user tuned across restarts.
+    mode: box
+
   air_filters_at_home:
     name: Air Filter Inventory at Home
     icon: mdi:shaker-outline
@@ -942,6 +1014,24 @@ sensor:
 ################################################
 template:
   - sensor:
+      - name: thermal_preemptor_status
+        unique_id: thermal_preemptor_status
+        state: >-
+          {% if is_state('input_boolean.thermal_preemptor_enabled', 'off') %}
+            disabled
+          {% elif states('sensor.room_temp_prediction_owner_suite') in ['unknown','unavailable'] %}
+            no_data
+          {% else %}
+            active
+          {% endif %}
+
+      - name: room_temp_model_trained_at
+        unique_id: room_temp_model_trained_at
+        # state_attr returns None (defined, not Undefined) before the first
+        # train, and default() only substitutes for Undefined unless boolean
+        # mode is on — without `true` this rendered the literal "None".
+        state: "{{ state_attr('sensor.room_temp_prediction_owner_suite', 'trained_at') | default('never', true) }}"
+
       - name: bathroom_humidity_delta
         unique_id: bathroom_humidity_delta
         default_entity_id: sensor.bathroom_humidity_delta

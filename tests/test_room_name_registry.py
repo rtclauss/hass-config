@@ -131,7 +131,9 @@ def test_room_name_registry_is_documented_in_readme() -> None:
 def test_validate_config_workflow_runs_pytest_for_room_name_enforcement() -> None:
     text = VALIDATE_WORKFLOW_PATH.read_text(encoding="utf-8")
     assert "name: Pytest" in text
-    assert "uv run --with pytest pytest" in text
+    # Tolerate extra `--with <pkg>` deps (e.g. pandas/numpy for the room-temp
+    # model tests) — the invariant is that CI runs pytest via uv.
+    assert re.search(r"uv run (?:--with \S+ )*pytest\b", text)
 
 
 def test_room_name_registry_keys_are_unique() -> None:

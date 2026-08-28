@@ -500,6 +500,78 @@ thermostat_stats:
   house_average_temp: sensor.average_house_temp
   house_average_humidity: sensor.average_house_humidity
   sun: sun.sun
+  owner_suite_temp: sensor.owner_suite_tph_temperature
+  office_temp: sensor.office_tph_temperature
+  bedroom_room_confidence: sensor.bedroom_room_confidence
+  office_room_confidence: sensor.office_room_confidence
+
+room_temp_predictor:
+  module: room_temp_predictor
+  class: RoomTempPredictor
+  # Thin shim only — training + inference live in the external
+  # room_temp_model_service container. This publishes live features to MQTT
+  # and relays the retrain button; the service publishes the prediction
+  # sensors back via MQTT discovery.
+  mqtt_base_topic: room_temp_model
+  climate_entity: climate.my_ecobee
+  # Room-based config (anchored, shared with prediction_scorer below).
+  # temp_sensors = clean room-air sensors averaged into the room temperature
+  #   (TPH + ecobee remote): both -> mean; one available -> that one. This is
+  #   the model target and the scored actual. Motion sensors and the auto_areas
+  #   aggregate are excluded (they self-heat ~1-3 F).
+  # humidity_sensors is averaged the same way as temp_sensors (mean of the
+  # available members). Only the TPH sensor measures per-room humidity today
+  # (ecobee SmartSensors report temp+occupancy only); the list keeps it
+  # symmetric with temperature and ready for a second sensor later.
+  rooms: &room_temp_rooms
+    - name: owner_suite
+      temp_sensors:
+        - sensor.owner_suite_tph_temperature
+        - sensor.bedroom_temperature
+      humidity_sensors:
+        - sensor.owner_suite_tph_humidity
+      confidence_sensor: sensor.bedroom_room_confidence
+    - name: office
+      temp_sensors:
+        - sensor.office_tph_temperature
+        - sensor.office_temperature
+      humidity_sensors:
+        - sensor.office_tph_humidity
+      confidence_sensor: sensor.office_room_confidence
+    - name: guest_room
+      temp_sensors:
+        - sensor.guest_room_tph_temperature
+        - sensor.guest_room_temperature
+      humidity_sensors:
+        - sensor.guest_room_tph_humidity
+      confidence_sensor: null
+
+thermal_preemptor:
+  module: thermal_preemptor
+  class: ThermalPreemptor
+  climate_entity: climate.my_ecobee
+  enable_switch: input_boolean.thermal_preemptor_enabled
+  comfort_margin: input_number.thermal_preemptor_comfort_margin
+  # Preemption is skipped while this is `on` so we never fight an open window.
+  window_gate: binary_sensor.any_window_open
+  rate_sensor: sensor.ecobee_modeled_rate_deg_per_min
+  outside_temp_sensor: sensor.canonical_outside_temperature
+
+prediction_scorer:
+  module: prediction_scorer
+  class: PredictionScorer
+  model_dir: /config/appdaemon/models
+  window_days: 7
+  influxdb_host: localhost
+  influxdb_port: 8086
+  influxdb_database: home_assistant
+  influx_measurement: room_temp_prediction_error
+  retrain_ratio_helper: input_number.prediction_retrain_rmse_ratio
+  nudge_switch: input_boolean.prediction_scorer_nudge_enabled
+  # Same room map as the predictor so the scored "actual" is the exact target.
+  rooms: *room_temp_rooms
+  # Optional: also route the retrain nudge to a mobile notifier, e.g.
+  # notify_service: notify/mobile_app_ryan
 
 # groups:
 #   module: group_all
