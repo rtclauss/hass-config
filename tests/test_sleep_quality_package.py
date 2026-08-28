@@ -135,15 +135,25 @@ def test_cpap_start_requires_pending_entry_or_nightly_window() -> None:
     assert 'after: "18:00:00"' in guard
     assert 'before: "12:00:00"' in guard
 
-    # Codex P2 follow-up on #373: the nightly window alone isn't enough --
-    # CPAP started before the resident actually gets into bed (e.g.
-    # pre-warming it) would still synthesize a too-early bed_in. The
-    # nightly-window branch of the "or" must also require the aggregate bed
-    # sensor to currently be occupied.
+    # Codex P2 follow-up on #373: bed occupancy must be required
+    # unconditionally, not just for the nightly-window alternative -- a
+    # reload that misses the live bed_exit_without_session trigger can leave
+    # a pending entry stuck "on" after the bed has actually gone empty
+    # again, so a stale pending entry alone must not be enough. The "or"
+    # (pending entry / nightly window) must be nested inside an outer "and"
+    # with the bed-occupancy check.
     assert "condition: and" in guard
     and_index = guard.index("condition: and")
-    time_window_block = guard[and_index:]
-    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in time_window_block
+    or_index = guard.index("condition: or", and_index)
+    assert and_index < or_index
+
+    occupancy_block = guard[and_index:or_index]
+    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in occupancy_block
+    assert 'state: "on"' in occupancy_block
+
+    or_block = guard[or_index:]
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in or_block
+    assert "condition: time" in or_block
 
 
 def test_cpap_resume_banks_interruption_into_accumulated_active_time() -> None:
@@ -646,13 +656,24 @@ def test_reconcile_cpap_start_requires_pending_entry_or_nightly_window() -> None
     assert 'after: "18:00:00"' in guard_block
     assert 'before: "12:00:00"' in guard_block
 
-    # Codex P2 follow-up on #373: the nightly window alone isn't enough here
-    # either -- must also require the aggregate bed sensor to currently be
-    # occupied, same as the live branch's fix.
+    # Codex P2 follow-up on #373: bed occupancy must be required
+    # unconditionally here too, not just for the nightly-window alternative
+    # -- a reload that misses the live bed_exit_without_session trigger can
+    # leave a pending entry stuck "on" after the bed has actually gone empty
+    # again. The "or" (pending entry / nightly window) must be nested inside
+    # an outer "and" with the bed-occupancy check.
     assert "condition: and" in guard_block
     and_index = guard_block.index("condition: and")
-    time_window_block = guard_block[and_index:]
-    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in time_window_block
+    or_index = guard_block.index("condition: or", and_index)
+    assert and_index < or_index
+
+    occupancy_block = guard_block[and_index:or_index]
+    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in occupancy_block
+    assert 'state: "on"' in occupancy_block
+
+    or_block = guard_block[or_index:]
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in or_block
+    assert "condition: time" in or_block
 
 
 def test_active_session_rearms_cpap_stopped_latch_in_real_time_on_resume() -> None:
