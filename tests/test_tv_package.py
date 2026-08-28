@@ -76,11 +76,17 @@ def _automation_block(automation_id: str) -> str:
 
 
 def _scene_block(scene_name: str) -> str:
+    # Scene entries are keyed by a "- id:" field immediately followed by a
+    # matching "name:" field, not a leading "- name:". Automations also use
+    # "- id:" at the same indentation (and can share a scene's name as
+    # their own id), so require the paired "name:" line to disambiguate.
     lines = TV_PATH.read_text(encoding="utf-8").splitlines()
     start = None
 
     for index, line in enumerate(lines):
-        if line != f"  - name: {scene_name}":
+        if line != f"  - id: {scene_name}":
+            continue
+        if index + 1 >= len(lines) or lines[index + 1].strip() != f"name: {scene_name}":
             continue
         start = index
         break
@@ -90,7 +96,7 @@ def _scene_block(scene_name: str) -> str:
 
     end = len(lines)
     for index in range(start + 1, len(lines)):
-        if lines[index].startswith("  - name: "):
+        if lines[index].startswith("  - id: "):
             end = index
             break
 
