@@ -208,8 +208,22 @@ automation:
         entity_id:
           - binary_sensor.pressure_falling_quickly
           - binary_sensor.pressure_falling_v_rapidly
+          # Fast tier (issue #974): catches a storm that is already
+          # arriving (e.g. a thunderstorm gust front), which the 3-hour
+          # quickly/v_rapidly sensors are too slow to flag in time.
+          - binary_sensor.pressure_falling_fast
         from: "off"
         to: "on"
+      - alias: >-
+          Re-evaluate periodically so a genuine trend that started during
+          the settle window (below) and is still active once it ends gets
+          caught. The state trigger above is a plain off->on edge: if it
+          fires while the settle/gradient conditions are still false, that
+          run is discarded, and a sustained trend produces no second
+          off->on transition to retry on — the window-close notification
+          would otherwise never send (Codex P2 follow-up on #974).
+        trigger: time_pattern
+        minutes: "/5"
     condition:
       - condition: state
         entity_id: binary_sensor.any_window_open
@@ -218,6 +232,69 @@ automation:
         condition: template
         value_template: >-
           {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_house_windows_open_pressure_dropping', 'last_triggered'), 0)) > 14400 }}
+      - alias: >-
+          At least one falling-pressure sensor is on, has settled past its
+          own trend window, and reports a plausible gradient — evaluated
+          directly off each sensor's own current state/attributes rather
+          than the trigger, so the periodic re-check above (which has no
+          trigger.to_state) can evaluate this identically to the state
+          trigger (Codex P2 follow-up on #974).
+
+          Settle requirement (Codex P2 on #974, broadened per follow-up: HA
+          uptime alone doesn't catch a same-uptime pressure-source
+          reconnect, but the trend sensor's history is just as stale as
+          after a restart): every trend sensor starts empty whenever
+          average_house_pressure's own data goes down and comes back.
+          Fails closed while pressure_source_available_since is unknown/
+          unavailable instead of defaulting to epoch 0, which made the
+          elapsed time huge and let the gate pass right when it's needed
+          most. A single fixed 35-minute wait only covered the fast tier's
+          30-minute (1800s) window with margin — quickly/v_rapidly use a
+          3-hour (10800s) window, so the same fixed wait let them fire off
+          a still-mostly-empty buffer for hours after a reconnect (Codex P2
+          follow-up on #974) — so each sensor requires its own window plus
+          a 5-minute margin (2100s fast, 11100s quickly/v_rapidly).
+
+          Gradient ceiling (Codex P2 follow-up on #974) is a second,
+          independent line of defense regardless of cause — a real storm
+          never approaches this rate (v_rapidly is ~2 hPa/hr); a
+          burst-driven spike, restart or not, does.
+
+          Live-data requirement (Codex P2 follow-up on #974): the settle
+          timer alone isn't enough during a PROLONGED outage. If every
+          pressure input stays unavailable longer than the required settle
+          duration, elapsed time since the last disconnect eventually
+          exceeds it and the settle check above passes — even though
+          average_house_pressure is still unavailable right now. HA's
+          trend platform retains its last "on" state and gradient when its
+          source has no numeric state, so the periodic re-check could then
+          fire the alert off stale, pre-outage data. Require the aggregate
+          to currently have a value and to have updated within the last
+          hour (an arbitrary but generous staleness bound relative to how
+          often the 9 underlying inputs typically report).
+        condition: template
+        value_template: >-
+          {% set pressure_available_since = state_attr('input_datetime.pressure_source_available_since', 'timestamp') | float(0) %}
+          {% set now_ts = as_timestamp(now()) %}
+          {% set pressure_source_live =
+               has_value('sensor.average_house_pressure')
+               and (now_ts - as_timestamp(states.sensor.average_house_pressure.last_updated)) < 3600 %}
+          {% set candidates = [
+               ('binary_sensor.pressure_falling_fast', 2100),
+               ('binary_sensor.pressure_falling_quickly', 11100),
+               ('binary_sensor.pressure_falling_v_rapidly', 11100),
+             ] %}
+          {% set ns = namespace(found=false) %}
+          {% if pressure_source_live and has_value('input_datetime.pressure_source_available_since') %}
+            {% for entity_id, required_settle_seconds in candidates %}
+              {% if is_state(entity_id, 'on')
+                    and (now_ts - pressure_available_since) > required_settle_seconds
+                    and (state_attr(entity_id, 'gradient') | float(0) | abs) * 3600 * 33.8639 <= 15 %}
+                {% set ns.found = true %}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {{ ns.found }}
     action:
       - action: notify.mobile_app_wethop
         data:
@@ -631,6 +708,69 @@ automation:
           entity_id: input_text.nws_dakota_county_alerts_triggered_pushbullet_alert_ids
           value: "{{ state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_2', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_3', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_4', 'alert_id') }} {{ state_attr('sensor.nws_dakota_county_alerts_alert_5', 'alert_id') }}"
 
+  - id: track_pressure_source_available_since
+    alias: track_pressure_source_available_since
+    trace:
+      stored_traces: 10
+    trigger:
+      - alias: >-
+          HA restart — every trend sensor's sample buffer starts empty
+          regardless of whether average_house_pressure itself stayed
+          available (Codex P2 on #974)
+        trigger: homeassistant
+        event: start
+      - alias: >-
+          The pressure source (or its integration) reconnecting after an
+          outage while HA stays up — HA uptime alone doesn't catch this
+          case, but the trend sensor's history is just as stale (Codex P2
+          follow-up on #974). Kept alongside the per-input triggers below
+          as a fallback for a simultaneous total outage of every input.
+        trigger: state
+        entity_id: sensor.average_house_pressure
+        from:
+          - "unavailable"
+          - "unknown"
+      - alias: >-
+          An individual pressure input reconnecting (rejoining the
+          average_house_pressure min_max aggregate) — must match
+          climate.yaml's average_house_pressure entity_ids exactly. The
+          aggregate itself stays numeric as long as at least one input
+          remains available, so a single input dropping out or
+          reconnecting never trips the aggregate's own unavailable/
+          unknown trigger above, yet still shifts what's being averaged
+          and can produce a discontinuous jump the trend sensors would
+          read as a real, fast pressure change (Codex P2 follow-up on
+          #974).
+        trigger: state
+        entity_id: &pressure_inputs
+          - sensor.basement_closet_tph_pressure
+          - sensor.guest_room_tph_pressure
+          - sensor.office_tph_pressure
+          - sensor.owner_suite_bathroom_tph_pressure
+          - sensor.owner_suite_tph_pressure
+          - sensor.tiki_room_tph_pressure
+          - sensor.hall_upstairs_linen_closet_tph_pressure
+          - sensor.basement_bathroom_tph_pressure
+          - sensor.guest_bathroom_tph_pressure
+        from:
+          - "unavailable"
+          - "unknown"
+      - alias: >-
+          An individual pressure input disconnecting (leaving the
+          aggregate) — the same membership shift as reconnecting above,
+          just in the other direction (Codex P2 follow-up on #974).
+        trigger: state
+        entity_id: *pressure_inputs
+        to:
+          - "unavailable"
+          - "unknown"
+    action:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.pressure_source_available_since
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
 ########################
 # Binary Sensors
 ########################
@@ -640,6 +780,20 @@ binary_sensor: []
 # Input Booleans
 ########################
 input_boolean: {}
+
+########################
+# Input Datetimes
+########################
+input_datetime:
+  # Restart-safe unlike last_changed across a restore (confirmed in #972):
+  # records the moment average_house_pressure last became available, so the
+  # pressure-drop alert's settle gate below can require real post-recovery
+  # history regardless of whether the gap was an HA restart or just the
+  # pressure source reconnecting (Codex P2 follow-up on #974).
+  pressure_source_available_since:
+    name: Pressure Source Available Since
+    has_date: true
+    has_time: true
 
 ########################
 # Input Numbers
