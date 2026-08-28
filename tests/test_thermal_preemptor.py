@@ -389,7 +389,11 @@ def test_hold_gate_blocks_preemption_during_named_preset_hold() -> None:
 
 def test_hold_gate_cancels_an_active_preempt_hold_when_turned_on() -> None:
     # If the gate is turned on while preemption is already in flight, the hold
-    # must be reverted immediately — same semantics as kill-switch / window gate.
+    # must be surrendered — timer cancelled and state cleared — but WITHOUT
+    # calling resume_program. The gate is raised by an external system (e.g.
+    # house_mode applying a guest climate preset) that already owns the
+    # thermostat; calling resume_program here would discard the preset it just
+    # applied.
     app = _app("cool", {"temperature": 72.0}, {"owner_suite": 75.0})
     app.active_hold = {"revert_handle": "handle_xyz", "reason": "owner_suite"}
 
@@ -403,6 +407,6 @@ def test_hold_gate_cancels_an_active_preempt_hold_when_turned_on() -> None:
     app.get_state = Mock(side_effect=gate_on)
     app._control_loop(None)
 
-    assert "ecobee/resume_program" in _service_calls(app)
+    assert "ecobee/resume_program" not in _service_calls(app)
     app.cancel_timer.assert_called_once_with("handle_xyz")
     assert app.active_hold is None
