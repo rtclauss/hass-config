@@ -60,45 +60,52 @@ homeassistant:
       friendly_name: "Ecobee Home/Away/Sleep Mode"
       device_class: presence
 
+    # device_class is intentionally omitted below: "pressure" is not a valid
+    # binary_sensor device_class (only sensor entities have pressure/
+    # atmospheric_pressure device classes — see
+    # https://www.home-assistant.io/integrations/binary_sensor/ for the
+    # binary_sensor device_class list). It was reconciled away here as part
+    # of #974; these are trend/direction flags, not measurements, so they
+    # don't need a device_class at all.
     binary_sensor.pressure_falling:
       <<: *customize
       friendly_name: "Pressure Falling"
-      device_class: pressure
 
     binary_sensor.pressure_falling_quickly:
       <<: *customize
       friendly_name: "Pressure Falling Quickly"
-      device_class: pressure
 
     binary_sensor.pressure_falling_slowly:
       <<: *customize
       friendly_name: "Pressure Falling Slowly"
-      device_class: pressure
 
     binary_sensor.pressure_falling_v_rapidly:
       <<: *customize
       friendly_name: "Pressure Falling Very Rapidly"
-      device_class: pressure
+
+    binary_sensor.pressure_falling_fast:
+      <<: *customize
+      friendly_name: "Pressure Falling Fast"
 
     binary_sensor.pressure_rising:
       <<: *customize
       friendly_name: "Pressure Rising"
-      device_class: pressure
 
     binary_sensor.pressure_rising_quickly:
       <<: *customize
       friendly_name: "Pressure Rising Quickly"
-      device_class: pressure
 
     binary_sensor.pressure_rising_slowly:
       <<: *customize
       friendly_name: "Pressure Rising Slowly"
-      device_class: pressure
 
     binary_sensor.pressure_rising_v_rapidly:
       <<: *customize
       friendly_name: "Pressure Rising Very Rapidly"
-      device_class: pressure
+
+    binary_sensor.pressure_rising_fast:
+      <<: *customize
+      friendly_name: "Pressure Rising Fast"
     ################################################
     ## Groups
     ################################################
@@ -166,7 +173,10 @@ homeassistant:
     sensor.average_house_pressure:
       <<: *customize
       friendly_name: "Average House Pressure"
-      device_class: pressure
+      # Reconciled to match the 9 source _tph_pressure sensors it averages,
+      # which all report device_class: atmospheric_pressure, not pressure
+      # (issue #974).
+      device_class: atmospheric_pressure
       icon: mdi:gauge
 
     sensor.any_window_open_today_duration:
@@ -645,47 +655,103 @@ automation:
 # Binary Sensors
 ########################
 binary_sensor:
+  # min_gradient is deg/second in the source sensor's own unit.
+  # sensor.average_house_pressure reports inHg (device_class: atmospheric_pressure,
+  # confirmed live), but these thresholds were sized for hPa/s — off by the
+  # 33.8639 hPa-per-inHg conversion factor. At the old values, "falling"/
+  # "falling_quickly"/"falling_v_rapidly" required 0.54-1.98 inHg/hr
+  # (18-67 hPa/hr), a rate 72h of real history never came close to (largest
+  # observed ~1hr rate was -0.043 inHg/hr, about 1.45 hPa/hr) — those three
+  # tiers could never fire. Only "slowly" (0.0324 hPa/hr, i.e. 0.00096 inHg/hr)
+  # was reachable, and it sat close enough to background noise to flip on/off
+  # roughly half the time over 3 days. Fixed by re-deriving each
+  # threshold directly in inHg/s from the same hPa/hr targets the original
+  # values implied (issue #974): v_rapidly ~1.98 hPa/hr, quickly ~1.19 hPa/hr,
+  # falling ~0.54 hPa/hr, slowly ~0.033 hPa/hr.
+  #
+  # max_samples is set explicitly (Codex P1 on #974): the trend platform's
+  # config schema defaults max_samples to 2 regardless of sample_duration,
+  # so without it every one of these sensors — including the 3-hour ones —
+  # would compute its gradient from whichever 2 samples happen to be in the
+  # buffer, which can still be milliseconds apart during a burst, the same
+  # instability behind the temperature derivative spike in #973. 500 is
+  # generous enough that sample_duration's age-based pruning is what
+  # actually governs the window, not an artificially small sample cap.
   - platform: trend
     sensors:
       pressure_falling_v_rapidly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.00055
+        max_samples: 500
+        min_gradient: -0.0000162
 
       pressure_rising_v_rapidly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.00055
+        max_samples: 500
+        min_gradient: 0.0000162
 
       pressure_falling_quickly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.00033
+        max_samples: 500
+        min_gradient: -0.0000097
 
       pressure_rising_quickly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.00033
+        max_samples: 500
+        min_gradient: 0.0000097
 
       pressure_falling:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.00015
+        max_samples: 500
+        min_gradient: -0.0000044
 
       pressure_rising:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.00015
+        max_samples: 500
+        min_gradient: 0.0000044
 
       pressure_falling_slowly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: -0.000009
+        max_samples: 500
+        min_gradient: -0.00000027
 
       pressure_rising_slowly:
         entity_id: sensor.average_house_pressure
         sample_duration: 10800
-        min_gradient: 0.000009
+        max_samples: 500
+        min_gradient: 0.00000027
+
+      # Fast tier (issue #974): the 3-hour sensors above are sized for
+      # frontal-scale trends and are too slow to flag a storm that is
+      # already arriving (e.g. a thunderstorm gust front, which develops in
+      # minutes). A shorter window catches that sooner, but average_house_
+      # pressure is a 9-sensor mean that bursts several updates milliseconds
+      # apart (the same effect behind the temperature derivative spike in
+      # #973), so a very short window (e.g. 15 min) is noise-dominated: 30
+      # days of live history showed indoor 15-minute rates spiking to
+      # ~11 hPa/hr from ordinary bursts alone, vs ~6.6 hPa/hr at 30 minutes.
+      # 30 minutes was the shortest window with a believable noise ceiling in
+      # that data, so min_gradient is set to ~10 hPa/hr (0.295 inHg/hr) — about
+      # 1.5x that ceiling, and equivalent to a 5 hPa drop across the half
+      # hour, a rate that should only occur during a genuinely fast-moving
+      # severe system, not routine indoor noise.
+      pressure_falling_fast:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 1800
+        max_samples: 500
+        min_gradient: -0.000082
+
+      pressure_rising_fast:
+        entity_id: sensor.average_house_pressure
+        sample_duration: 1800
+        max_samples: 500
+        min_gradient: 0.000082
 
   - platform: threshold
     name: bathroom_humidity_high_threshold
@@ -739,6 +805,7 @@ group:
   pressure_trends:
     name: Pressure Trends
     entities:
+      - binary_sensor.pressure_rising_fast
       - binary_sensor.pressure_rising_v_rapidly
       - binary_sensor.pressure_rising_quickly
       - binary_sensor.pressure_rising
@@ -747,6 +814,7 @@ group:
       - binary_sensor.pressure_falling
       - binary_sensor.pressure_falling_quickly
       - binary_sensor.pressure_falling_v_rapidly
+      - binary_sensor.pressure_falling_fast
 
   climate:
     name: Climate at a Glance
