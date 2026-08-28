@@ -344,23 +344,43 @@ automation:
                 id: cpap_stop
             sequence:
               - alias: >-
-                  Timestamp the actual power-drop, not this delayed
-                  callback — now() here is ~5 minutes late (the trigger's
-                  for: duration), over-reporting cpap_minutes every session
-                  (Codex P2 on #373). Setting timestamp: (an absolute
-                  epoch) rather than datetime: (a naive local string)
-                  avoids both the earlier UTC/local-interpretation P1 bug
-                  and the autumn DST fallback, where a naive string can't
-                  tell a repeated wall-clock hour's two real instants
-                  apart once reconstructed (Codex P2 follow-up on #373).
-                action: input_datetime.set_datetime
-                target:
-                  entity_id: input_datetime.sleep_session_cpap_off
-                data:
-                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
-              - action: input_boolean.turn_on
-                target:
-                  entity_id: input_boolean.sleep_session_cpap_stopped
+                  Only persist a stop when genuinely transitioning from
+                  running to stopped — a power spike above 1.3W lasting
+                  under 10 seconds is too brief to fire cpap_resume or
+                  clear sleep_session_cpap_stopped, but it does reset this
+                  raw numeric_state trigger's own for: timer. Without this
+                  guard, a second below-1.3-for-5-minutes firing while the
+                  original stop is still latched on would overwrite
+                  cpap_off with this later, spurious repeat, extending the
+                  reported CPAP duration through the entire interval CPAP
+                  was actually already stopped (Codex P2 follow-up on
+                  #373). The finalize check below stays a sibling action
+                  so it still runs on a repeat firing like this.
+                if:
+                  - condition: state
+                    entity_id: input_boolean.sleep_session_cpap_stopped
+                    state: "off"
+                then:
+                  - alias: >-
+                      Timestamp the actual power-drop, not this delayed
+                      callback — now() here is ~5 minutes late (the
+                      trigger's for: duration), over-reporting
+                      cpap_minutes every session (Codex P2 on #373).
+                      Setting timestamp: (an absolute epoch) rather than
+                      datetime: (a naive local string) avoids both the
+                      earlier UTC/local-interpretation P1 bug and the
+                      autumn DST fallback, where a naive string can't
+                      tell a repeated wall-clock hour's two real instants
+                      apart once reconstructed (Codex P2 follow-up on
+                      #373).
+                    action: input_datetime.set_datetime
+                    target:
+                      entity_id: input_datetime.sleep_session_cpap_off
+                    data:
+                      timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.sleep_session_cpap_stopped
               - alias: >-
                   Wait for the bed's own 5-minute debounce AND a bed-out
                   timestamp already current for this exit — matching

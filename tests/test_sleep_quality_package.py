@@ -298,6 +298,36 @@ def test_cpap_stop_requires_fresh_bed_out_before_finalizing() -> None:
     )
 
 
+def test_cpap_stop_ignores_repeat_firings_while_already_latched_stopped() -> None:
+    # Codex P2 follow-up on #373: a power spike above 1.3W lasting under 10
+    # seconds is too brief to fire cpap_resume or clear
+    # sleep_session_cpap_stopped, but it does reset the cpap_stop trigger's
+    # own raw numeric_state for: timer. Without a guard, a second
+    # below-1.3-for-5-minutes firing while the original stop is still
+    # latched on would overwrite cpap_off with this later, spurious repeat,
+    # extending the reported CPAP duration through the entire interval CPAP
+    # was actually already stopped. The write must only happen while
+    # sleep_session_cpap_stopped is still off.
+    active = _automation_block("sleep_quality_track_active_session")
+    cpap_stop_branch = active.split("id: cpap_stop", maxsplit=2)[2]
+    cpap_off_index = cpap_stop_branch.index(
+        "entity_id: input_datetime.sleep_session_cpap_off"
+    )
+    turn_on_index = cpap_stop_branch.index(
+        "action: input_boolean.turn_on", cpap_off_index
+    )
+    guard_end = cpap_stop_branch.index(
+        "entity_id: input_boolean.sleep_session_cpap_stopped", turn_on_index
+    )
+    preceding_guard = cpap_stop_branch[:guard_end]
+
+    state_index = preceding_guard.rindex(
+        "entity_id: input_boolean.sleep_session_cpap_stopped"
+    )
+    guard_block = preceding_guard[state_index:cpap_off_index]
+    assert 'state: "off"' in guard_block
+
+
 def test_restart_reconciles_a_lost_cpap_stop_debounce() -> None:
     # Codex P2 follow-up on #373: a pending numeric_state `for:` debounce is
     # discarded on an HA restart/reload, not resumed. If CPAP had already
