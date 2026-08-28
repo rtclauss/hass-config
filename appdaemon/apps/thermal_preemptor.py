@@ -139,12 +139,21 @@ class ThermalPreemptor(hass.Hass):
         window_open = self.get_state(self.window_gate) == "on"
         hold_gate_active = self.get_state(self.hold_gate) == "on"
 
-        # If a kill-switch, window, or external hold-gate transition occurred
-        # while a hold is active, cancel it immediately rather than waiting for
-        # the revert timer.
+        # If a gate transition or external setpoint change occurred while a hold
+        # is active, act immediately rather than waiting for the revert timer.
         if self.active_hold is not None:
-            if not enabled or window_open or hold_gate_active:
+            if not enabled or window_open:
+                # Kill-switch or window opened — resume the comfort schedule.
                 self._revert({"room": self.active_hold.get("reason", "unknown")})
+            elif hold_gate_active:
+                # External system (e.g. guest climate preset) now owns the
+                # thermostat. Surrender without calling resume_program, so the
+                # preset we didn't create is left intact.
+                self._surrender("hold gate active — external system owns thermostat")
+            elif self._setpoint_changed():
+                # User or another app changed the setpoint while our hold was
+                # active. Abandon without resuming so their change is preserved.
+                self._surrender("setpoint changed during active hold")
             return
 
         if not enabled:
@@ -284,6 +293,51 @@ class ThermalPreemptor(hass.Hass):
         self.active_hold = None
         self._clear_persisted_hold()
         self.log(f"Reverted preempt hold to comfort schedule (was driven by {room})")
+
+    def _surrender(self, reason="external"):
+        """Abandon the active hold without calling resume_program.
+
+        Used when an external system takes thermostat ownership (hold gate) or
+        the user independently changed the setpoint while a hold was in flight.
+        Calling resume_program in those cases would discard the caller's preset
+        or the user's manual change, which is worse than leaving the timer armed.
+        """
+        if self.active_hold is not None:
+            handle = self.active_hold.get("revert_handle")
+            if handle is not None:
+                try:
+                    self.cancel_timer(handle)
+                except Exception:
+                    pass
+        self.active_hold = None
+        self._clear_persisted_hold()
+        self.log(f"Surrendered preempt hold without resuming schedule ({reason})")
+
+    def _setpoint_changed(self):
+        """True if the Ecobee's current setpoint no longer matches what we set.
+
+        Ecobee rounds setpoints to 0.5°F increments, so a 0.4°F tolerance
+        catches any user-initiated change without false-firing on rounding.
+        """
+        hold = self.active_hold
+        if not hold:
+            return False
+        expected = hold.get("new_setpoint")
+        if expected is None:
+            return False
+        mode = hold.get("mode")
+        direction = hold.get("direction")
+        attr = (
+            "target_temp_high"
+            if mode == "heat_cool" and direction == "cool"
+            else "target_temp_low"
+            if mode == "heat_cool"
+            else "temperature"
+        )
+        current = self._attr(attr)
+        if current is None:
+            return False
+        return abs(current - expected) > 0.4
 
     # ------------------------------------------------------------------
     # Persistence — the hold outlives an AppDaemon/HA restart
