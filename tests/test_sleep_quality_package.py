@@ -135,6 +135,16 @@ def test_cpap_start_requires_pending_entry_or_nightly_window() -> None:
     assert 'after: "18:00:00"' in guard
     assert 'before: "12:00:00"' in guard
 
+    # Codex P2 follow-up on #373: the nightly window alone isn't enough --
+    # CPAP started before the resident actually gets into bed (e.g.
+    # pre-warming it) would still synthesize a too-early bed_in. The
+    # nightly-window branch of the "or" must also require the aggregate bed
+    # sensor to currently be occupied.
+    assert "condition: and" in guard
+    and_index = guard.index("condition: and")
+    time_window_block = guard[and_index:]
+    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in time_window_block
+
 
 def test_cpap_resume_banks_interruption_into_accumulated_active_time() -> None:
     # Codex P2 follow-up on #373: rearming the stop latch on a genuine
@@ -635,6 +645,14 @@ def test_reconcile_cpap_start_requires_pending_entry_or_nightly_window() -> None
     assert "condition: time" in guard_block
     assert 'after: "18:00:00"' in guard_block
     assert 'before: "12:00:00"' in guard_block
+
+    # Codex P2 follow-up on #373: the nightly window alone isn't enough here
+    # either -- must also require the aggregate bed sensor to currently be
+    # occupied, same as the live branch's fix.
+    assert "condition: and" in guard_block
+    and_index = guard_block.index("condition: and")
+    time_window_block = guard_block[and_index:]
+    assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in time_window_block
 
 
 def test_active_session_rearms_cpap_stopped_latch_in_real_time_on_resume() -> None:

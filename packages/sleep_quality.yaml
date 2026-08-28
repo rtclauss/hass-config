@@ -247,16 +247,26 @@ automation:
                   finalizes (Codex P2 follow-up on #373). A pending
                   nightly bed entry is always accepted regardless of when
                   CPAP actually starts (e.g. a late sleeper); absent that,
-                  only accept a fresh CPAP start during the same nightly
-                  window bed_entry itself requires.
+                  the nightly window alone isn't enough either — CPAP
+                  started before the resident actually gets into bed (e.g.
+                  pre-warming it) would still synthesize a too-early
+                  bed_in and suppress the real bed_entry trigger once the
+                  session goes active, so also require the aggregate bed
+                  sensor to be currently occupied (Codex P2 follow-up on
+                  #373).
                 condition: or
                 conditions:
                   - condition: state
                     entity_id: input_boolean.sleep_session_bed_entry_pending
                     state: "on"
-                  - condition: time
-                    after: "18:00:00"
-                    before: "12:00:00"
+                  - condition: and
+                    conditions:
+                      - condition: time
+                        after: "18:00:00"
+                        before: "12:00:00"
+                      - condition: state
+                        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+                        state: "on"
             sequence:
               - alias: >-
                   Timestamp the actual threshold crossing, not this
@@ -681,15 +691,24 @@ automation:
               during daytime testing with no pending nightly bed entry
               lets this periodic tick recover a synthetic session the
               same way the live trigger could, overwriting real
-              overnight analytics once it finalizes.
+              overnight analytics once it finalizes. The nightly window
+              alone isn't enough either: CPAP started before the resident
+              actually gets into bed would still synthesize a too-early
+              bed_in here, so also require the aggregate bed sensor to be
+              currently occupied, same as the live branch's fix.
             condition: or
             conditions:
               - condition: state
                 entity_id: input_boolean.sleep_session_bed_entry_pending
                 state: "on"
-              - condition: time
-                after: "18:00:00"
-                before: "12:00:00"
+              - condition: and
+                conditions:
+                  - condition: time
+                    after: "18:00:00"
+                    before: "12:00:00"
+                  - condition: state
+                    entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+                    state: "on"
         then:
           - if:
               - condition: state
