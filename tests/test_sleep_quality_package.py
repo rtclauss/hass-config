@@ -113,6 +113,88 @@ def test_bed_exit_without_session_clears_stale_pending_entry() -> None:
     assert target_index > turn_off_index
 
 
+def test_cpap_start_requires_pending_entry_or_nightly_window() -> None:
+    # Codex P2 follow-up on #373: cpap_start had no time gate at all, unlike
+    # bed_entry. Daytime CPAP testing with no pending nightly bed entry would
+    # fall back to a synthetic bed_in (or inherit a stale one from the last
+    # real session), forming a fully ordered but bogus session that
+    # overwrites real overnight analytics once it finalizes. A pending
+    # nightly bed entry must always be accepted regardless of the current
+    # time (a late sleeper starting CPAP after the nightly window), but
+    # absent that, cpap_start must require the same nightly window bed_entry
+    # itself requires.
+    prepare = _automation_block("sleep_quality_prepare_session")
+    cpap_start_branch = prepare.split("id: cpap_start", maxsplit=2)[2]
+    sequence_index = cpap_start_branch.index("sequence:")
+    guard = cpap_start_branch[:sequence_index]
+
+    assert "condition: or" in guard
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in guard
+    assert 'state: "on"' in guard
+    assert "condition: time" in guard
+    assert 'after: "18:00:00"' in guard
+    assert 'before: "12:00:00"' in guard
+
+
+def test_cpap_resume_banks_interruption_into_accumulated_active_time() -> None:
+    # Codex P2 follow-up on #373: rearming the stop latch on a genuine
+    # mid-session CPAP resumption left sleep_session_cpap_on unchanged, so a
+    # later stop would overwrite cpap_off and finalize would compute the
+    # duration from the ORIGINAL start straight through to that final stop --
+    # counting the entire interruption as active CPAP use and inflating both
+    # cpap_minutes and the continuity score. The ended interruption must be
+    # banked into an accumulator and a fresh segment started at the resume,
+    # only when genuinely re-arming (the latch was actually on).
+    active = _automation_block("sleep_quality_track_active_session")
+    cpap_resume_branch = active.split("id: cpap_resume", maxsplit=2)[2]
+
+    guard_index = cpap_resume_branch.index(
+        "entity_id: input_boolean.sleep_session_cpap_stopped"
+    )
+    guard = cpap_resume_branch[guard_index : guard_index + 90]
+    assert 'state: "on"' in guard
+
+    assert "entity_id: input_number.sleep_session_cpap_active_seconds" in cpap_resume_branch
+    accumulate_index = cpap_resume_branch.index(
+        "entity_id: input_number.sleep_session_cpap_active_seconds"
+    )
+    cpap_on_index = cpap_resume_branch.index(
+        "entity_id: input_datetime.sleep_session_cpap_on", accumulate_index
+    )
+    turn_off_index = cpap_resume_branch.index(
+        "action: input_boolean.turn_off", cpap_on_index
+    )
+    assert accumulate_index < cpap_on_index < turn_off_index
+
+    accumulate_value = cpap_resume_branch[accumulate_index:cpap_on_index]
+    assert "state_attr('input_datetime.sleep_session_cpap_off', 'timestamp')" in accumulate_value
+    assert "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp')" in accumulate_value
+
+
+def test_cpap_start_resets_accumulated_active_time_for_a_fresh_session() -> None:
+    prepare = _automation_block("sleep_quality_prepare_session")
+    cpap_start_branch = prepare.split("id: cpap_start", maxsplit=2)[2]
+    assert "entity_id: input_number.sleep_session_cpap_active_seconds" in cpap_start_branch
+    accumulate_index = cpap_start_branch.index(
+        "entity_id: input_number.sleep_session_cpap_active_seconds"
+    )
+    value_index = cpap_start_branch.index("value:", accumulate_index)
+    assert cpap_start_branch[value_index : value_index + 10].strip() == "value: 0"
+
+
+def test_finalize_adds_accumulated_active_time_to_cpap_minutes() -> None:
+    finalize = _script_block("finalize_sleep_quality_session")
+    cpap_minutes_index = finalize.index("cpap_minutes:")
+    bed_transitions_index = finalize.index("bed_transitions:", cpap_minutes_index)
+    cpap_minutes_template = finalize[cpap_minutes_index:bed_transitions_index]
+
+    assert "cpap_off_ts - cpap_on_ts" in cpap_minutes_template
+    assert (
+        "states('input_number.sleep_session_cpap_active_seconds')"
+        in cpap_minutes_template
+    )
+
+
 def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions() -> None:
     prepare = _automation_block("sleep_quality_prepare_session")
     active = _automation_block("sleep_quality_track_active_session")
@@ -619,8 +701,8 @@ def test_reconcile_final_gate_requires_cpap_currently_below_threshold() -> None:
 
 
 def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
-    # Codex P2 follow-up on #373: these three recovery writes used now() —
-    # the periodic-tick or restart/reload evaluation time — rather than the
+    # Codex P2 follow-up on #373: these recovery writes used now() — the
+    # periodic-tick or restart/reload evaluation time — rather than the
     # real transition, inflating (or shrinking) the recovered cpap_on,
     # cpap_off, and bed_out by however long the debounce plus the wait for
     # the next reconciliation tick took. Each entity's own last_changed is
@@ -631,12 +713,14 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
 
     # cpap_on and the fallback bed_in back the CPAP debounce helper's own
     # delay_on out of its last_changed to recover the real crossing time;
-    # cpap_off backs its delay_off out the same way. timestamp:/
-    # as_timestamp() (an absolute epoch) rather than datetime:/strftime()
-    # (a naive local string) also sidesteps the autumn DST fallback
-    # (Codex P2 follow-up on #373).
-    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 3
-    assert block.count("- timedelta(seconds=10))") == 2
+    # cpap_off backs its delay_off out the same way; the mid-session re-arm
+    # branch's own fresh-segment cpap_on write backs delay_on out again
+    # (Codex P2 follow-up on #373: excluding stopped intervals from CPAP
+    # minutes). timestamp:/as_timestamp() (an absolute epoch) rather than
+    # datetime:/strftime() (a naive local string) also sidesteps the autumn
+    # DST fallback (Codex P2 follow-up on #373).
+    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 4
+    assert block.count("- timedelta(seconds=10))") == 3
     assert block.count("- timedelta(minutes=5))") == 1
     assert (
         "as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
@@ -687,6 +771,21 @@ def test_reconcile_rearms_cpap_stopped_latch_when_cpap_resumes() -> None:
     # session's stale latch is cleared in the same evaluation pass.
     final_gate_index = block.rindex("if:")
     assert turn_off_index < final_gate_index
+
+    # Codex P2 follow-up on #373: same as the real-time cpap_resume re-arm
+    # -- this periodic re-arm must also bank the ended interruption into
+    # the accumulator and start a fresh segment, or a resume recovered only
+    # here (e.g. after a restart/reload swallowed the real-time trigger)
+    # would still count the whole stopped interval as active CPAP use.
+    assert "entity_id: input_number.sleep_session_cpap_active_seconds" in guard
+    accumulate_index = guard.index("entity_id: input_number.sleep_session_cpap_active_seconds")
+    cpap_on_index = guard.index(
+        "entity_id: input_datetime.sleep_session_cpap_on", accumulate_index
+    )
+    assert accumulate_index < cpap_on_index < turn_off_index
+    accumulate_value = guard[accumulate_index:cpap_on_index]
+    assert "state_attr('input_datetime.sleep_session_cpap_off', 'timestamp')" in accumulate_value
+    assert "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp')" in accumulate_value
 
 
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
