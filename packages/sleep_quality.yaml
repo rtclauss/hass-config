@@ -362,23 +362,31 @@ automation:
                 target:
                   entity_id: input_boolean.sleep_session_cpap_stopped
               - alias: >-
-                  Wait for the bed's own 5-minute debounce, not just its raw
-                  current state — if CPAP drops first and the bed empties
-                  during this branch's debounce, the bed_exit branch hasn't
-                  written bed_out yet, so finalizing here would read a
-                  stale/prior bed_out, reject the session, and clear
-                  sleep_session_active before bed_exit's own guarded call
-                  ever runs, silently dropping a real completed session
-                  (Codex P2 follow-up on #373). Matching bed_exit's own
-                  for: duration guarantees bed_out is already written by
-                  the time this fires; otherwise leave it to bed_exit's
-                  symmetric cpap_stopped-gated call.
+                  Wait for the bed's own 5-minute debounce AND a bed-out
+                  timestamp already current for this exit — matching
+                  bed_exit's for: duration is not enough on its own. If
+                  CPAP and the bed both go inactive together, both
+                  branches' debounces become eligible at the same time,
+                  and this branch's queued action can still run before
+                  bed_exit's has written the current bed_out, even though
+                  the bed has technically been off for 5 minutes (Codex P2
+                  follow-up on #373: matching durations doesn't guarantee
+                  callback execution order). Finalizing on the raw
+                  duration alone would then read a stale/prior bed_out and
+                  either reject the session or report an earlier
+                  same-session exit. Requiring bed_out to already be at or
+                  past the bed sensor's own last_changed mirrors the same
+                  freshness check the periodic reconciliation gate uses.
                 if:
                   - condition: state
                     entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
                     state: "off"
                     for:
                       minutes: 5
+                  - condition: template
+                    value_template: >-
+                      {{ (state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int
+                         >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int) }}
                 then:
                   - action: script.finalize_sleep_quality_session
           - conditions:

@@ -273,6 +273,31 @@ def test_cpap_stop_waits_for_beds_own_debounce_before_finalizing() -> None:
     assert "minutes: 5" in guard_block
 
 
+def test_cpap_stop_requires_fresh_bed_out_before_finalizing() -> None:
+    # Codex P2 follow-up on #373: matching bed_exit's 5-minute for: duration
+    # is not enough on its own. If CPAP and the bed both go inactive at the
+    # same time, both branches' debounces become eligible together, and this
+    # branch's queued action can still run before bed_exit's has written the
+    # current bed_out — even though the bed has technically been off for 5
+    # minutes — because matching durations doesn't guarantee callback
+    # execution order. Must also require sleep_session_bed_out to already be
+    # at or past the bed sensor's own last_changed, same freshness check the
+    # periodic reconciliation gate uses.
+    active = _automation_block("sleep_quality_track_active_session")
+    cpap_stop_branch = active.split("id: cpap_stop", maxsplit=2)[2]
+    finalize_index = cpap_stop_branch.index("action: script.finalize_sleep_quality_session")
+    preceding = cpap_stop_branch[:finalize_index]
+
+    assert (
+        "(state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int"
+        in preceding
+    )
+    assert (
+        ">= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)"
+        in preceding
+    )
+
+
 def test_restart_reconciles_a_lost_cpap_stop_debounce() -> None:
     # Codex P2 follow-up on #373: a pending numeric_state `for:` debounce is
     # discarded on an HA restart/reload, not resumed. If CPAP had already
