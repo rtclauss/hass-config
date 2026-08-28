@@ -69,9 +69,13 @@ def _group_block(path: Path, group_name: str) -> str:
 
 
 def _scene_block(scene_name: str) -> str:
+    # Scene entries are keyed by a "- id:" field immediately followed by a
+    # matching "name:" field, not a leading "- name:". Automations also use
+    # "- id:" at the same indentation (and can share a scene's name as
+    # their own id), so require the paired "name:" line to disambiguate.
     text = ZONE_PATH.read_text(encoding="utf-8")
     pattern = re.compile(
-        rf"^  - name: {re.escape(scene_name)}\n(.*?)(?=^  - name: |\Z)",
+        rf"^  - id: {re.escape(scene_name)}\n    name: {re.escape(scene_name)}\n(.*?)(?=^  - id: |\Z)",
         re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(text)

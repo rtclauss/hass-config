@@ -58,21 +58,29 @@ def _zone_script_block(script_id: str) -> str:
 
 
 def _scene_block(scene_name: str) -> str:
+    # Scene entries are keyed by a "- id:" field immediately followed by a
+    # matching "name:" field, not a leading "- name:". Automations also use
+    # "- id:" at the same indentation (and can share a scene's name as
+    # their own id), so require the paired "name:" line to disambiguate.
     lines = ZONE_PATH.read_text(encoding="utf-8").splitlines()
     start = None
-    needle = f"  - name: {scene_name}"
+    needle = f"  - id: {scene_name}"
+    name_needle = f"name: {scene_name}"
 
     for index, line in enumerate(lines):
-        if line == needle:
-            start = index
-            break
+        if line != needle:
+            continue
+        if index + 1 >= len(lines) or lines[index + 1].strip() != name_needle:
+            continue
+        start = index
+        break
 
     if start is None:
         raise AssertionError(f"Could not find scene {scene_name!r}")
 
     end = len(lines)
     for index in range(start + 1, len(lines)):
-        if lines[index].startswith("  - name: ") or re.match(
+        if lines[index].startswith("  - id: ") or re.match(
             r"^[A-Za-z0-9_]+:", lines[index]
         ):
             end = index
