@@ -614,6 +614,29 @@ def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     assert "action: input_boolean.turn_on\n            target:\n              entity_id: input_boolean.sleep_session_active" in block
 
 
+def test_reconcile_cpap_start_requires_pending_entry_or_nightly_window() -> None:
+    # Codex P2 follow-up on #373: same nightly-context gap as the live
+    # cpap_start branch, but here on the periodic reconciliation path. CPAP
+    # running during daytime testing with no pending nightly bed entry could
+    # let this periodic tick recover a synthetic session the same way the
+    # live trigger could, overwriting real overnight analytics once it
+    # finalizes. A pending nightly bed entry must always be accepted
+    # regardless of the current time; absent that, this recovery must
+    # require the same nightly window the live cpap_start branch requires.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    cpap_start_branch = block.split("Reconcile a lost cpap_start debounce", maxsplit=1)[1]
+
+    then_index = cpap_start_branch.index("then:")
+    guard_block = cpap_start_branch[:then_index]
+
+    assert "condition: or" in guard_block
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in guard_block
+    assert 'state: "on"' in guard_block
+    assert "condition: time" in guard_block
+    assert 'after: "18:00:00"' in guard_block
+    assert 'before: "12:00:00"' in guard_block
+
+
 def test_active_session_rearms_cpap_stopped_latch_in_real_time_on_resume() -> None:
     # Codex P2 follow-up on #373: relying only on the periodic reconciliation
     # tick to clear a stale sleep_session_cpap_stopped latch left it stuck

@@ -675,6 +675,21 @@ automation:
             condition: state
             entity_id: binary_sensor.owner_suite_cpap_running
             state: "on"
+          - alias: >-
+              Same nightly-context guard as the live cpap_start branch
+              (Codex P2 follow-up on #373) — without it, CPAP running
+              during daytime testing with no pending nightly bed entry
+              lets this periodic tick recover a synthetic session the
+              same way the live trigger could, overwriting real
+              overnight analytics once it finalizes.
+            condition: or
+            conditions:
+              - condition: state
+                entity_id: input_boolean.sleep_session_bed_entry_pending
+                state: "on"
+              - condition: time
+                after: "18:00:00"
+                before: "12:00:00"
         then:
           - if:
               - condition: state
