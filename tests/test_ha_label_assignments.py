@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 from scripts.ha_label_assignments import (  # noqa: E402
     _references_from_block,
+    apply_assignment_operations,
     audit_assignments,
     build_reference_graph,
     compile_assignments,
@@ -227,6 +228,50 @@ def test_fixture_assignments_preserve_unmanaged_labels_and_migrate_retired_label
 
     hallway = by_object.get(("area", "hallway"))
     assert hallway is None  # Already has hallway plus an unmanaged label.
+
+
+def test_apply_refreshes_registry_labels_before_each_update() -> None:
+    operations = [
+        {
+            "registry": "entity",
+            "object_id": "automation.alarm_wake_up",
+            "before": ["sleep_sensitive"],
+            "after": ["sleep_sensitive", "wake_up_scope"],
+            "managed_add": ["wake_up_scope"],
+            "managed_remove": [],
+        }
+    ]
+    calls: list[tuple[str, dict]] = []
+
+    def command(command_type: str, **kwargs: object) -> object:
+        calls.append((command_type, kwargs))
+        if command_type == "config/entity_registry/list":
+            return [
+                {
+                    "entity_id": "automation.alarm_wake_up",
+                    "labels": ["sleep_sensitive", "unmanaged_added_after_snapshot"],
+                }
+            ]
+        return {"success": True}
+
+    results = apply_assignment_operations(operations, command)
+
+    assert [call[0] for call in calls] == [
+        "config/entity_registry/list",
+        "config/entity_registry/update",
+    ]
+    assert calls[1][1] == {
+        "entity_id": "automation.alarm_wake_up",
+        "labels": [
+            "sleep_sensitive",
+            "unmanaged_added_after_snapshot",
+            "wake_up_scope",
+        ],
+    }
+    assert results[0]["operation"]["before"] == [
+        "sleep_sensitive",
+        "unmanaged_added_after_snapshot",
+    ]
 
 
 def test_extension_labels_resolve_to_at_least_six_fixture_objects() -> None:
