@@ -215,16 +215,139 @@ def test_bathroom_morning_routine_requires_time_window_and_fresh_state() -> None
         "entity_id: binary_sensor.bayesian_bed_occupancy",
         'state: "off"',
         "entity_id: input_boolean.morning_routine",
-        'after: "05:00:00"',
-        'before: "10:30:00"',
-        '- "mon"',
-        '- "fri"',
-        'after: "07:00:00"',
-        'before: "14:00:00"',
-        '- "sat"',
-        '- "sun"',
+        "input_datetime.weekday_alarm",
+        "input_datetime.weekend_alarm",
+        "input_boolean.weekday_alarm_on",
+        "input_boolean.weekend_alarm_on",
+        "wake_window_seconds = 90 * 60",
     ):
         assert token in block
+
+
+def test_bathroom_morning_routine_only_fires_within_the_real_alarm_window() -> None:
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    # input_datetime.weekday_alarm/weekend_alarm are has_date: false, so their
+    # timestamp attribute is seconds since midnight (confirmed live:
+    # 07:30:00 -> 27000), not a Unix epoch value. Comparing that against
+    # now().timestamp() (~1.8 billion) made the window condition permanently
+    # false (Codex P1 on #972) — must compare seconds-since-midnight against
+    # seconds-since-midnight, matching the pattern workday.yaml already uses
+    # for the same alarm helpers (#939).
+    assert "now().timestamp() >=" not in block
+    assert "now().timestamp() <=" not in block
+    assert "now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second" in block
+    assert "now_seconds_since_midnight >= alarm_seconds_since_midnight" in block
+    assert "now_seconds_since_midnight <= (alarm_seconds_since_midnight + wake_window_seconds)" in block
+    assert "alarm_enabled and alarm_seconds_since_midnight > 0" in block
+    # The old fixed 5:00-10:30 / 7:00-14:00 windows must be gone — a bathroom
+    # trip before today's alarm (e.g. waking early, going back to bed) should
+    # no longer be enough on its own to start wake-up music.
+    assert 'after: "05:00:00"' not in block
+    assert 'before: "10:30:00"' not in block
+
+
+def test_bathroom_morning_routine_alarm_window_includes_special_meeting() -> None:
+    # Codex P2 on #972: alarm_wake_up's meeting-alarm branch can wake the
+    # resident via input_datetime.next_work_meeting earlier than the
+    # weekday alarm when input_boolean.special_meeting is on. The window
+    # must consider both candidates and use the earliest, mirroring
+    # workday_owner_suite_wake_transition_from_morning_activity (#939).
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    for token in (
+        "input_datetime.next_work_meeting",
+        "input_boolean.special_meeting",
+        "select('number') | reject('equalto', 0) | list",
+        "candidates | min if candidates else 0",
+    ):
+        assert token in block
+
+
+def test_bathroom_morning_routine_falls_back_to_wakeup_alarm_firing() -> None:
+    # Codex P2 follow-up on #972: alarm_wake_up's meeting-alarm branch turns
+    # special_meeting off the instant it fires, before the resident can
+    # reach the bathroom, so the candidate list above no longer sees it by
+    # the time this template re-evaluates. The recorded fire timestamp is a
+    # durable signal that some alarm fired, used as a fallback alongside the
+    # scheduled-candidate window.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "alarm_firing_recently =" in block
+    or_index = block.index("alarm_firing_recently =")
+    or_clause_index = block.index(" or (alarm_enabled", or_index)
+    assert or_clause_index > or_index
+
+
+def test_bathroom_morning_routine_firing_fallback_ignores_the_fixed_time_latch() -> None:
+    # Codex P2 follow-up on #972: turn_off_alarm_firing (packages/light.yaml)
+    # clears input_boolean.wakeup_alarm_firing at a fixed 14:34:56 every day,
+    # uncorrelated with a variable-length window. A special-meeting alarm
+    # firing later than usual (e.g. 14:00, 90-minute window until 15:30) had
+    # this latch cleared out from under it at 14:34:56 — only 34 minutes into
+    # its own window — incorrectly closing the gate early. The elapsed-time
+    # check against wakeup_alarm_fired_at must stand on its own, without
+    # additionally requiring wakeup_alarm_firing to still read "on".
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "is_state('input_boolean.wakeup_alarm_firing', 'on')" not in block
+
+
+def test_bathroom_morning_routine_bounds_the_firing_fallback_to_the_window() -> None:
+    # Codex P1 follow-up on #972: turn_off_alarm_firing (packages/light.yaml)
+    # only clears wakeup_alarm_firing at a fixed 14:34:56, not on cancel or
+    # after any reasonable delay — an unbounded OR on its raw state reopened
+    # essentially the original unbounded-window bug for hours after an early
+    # alarm. Must be bounded to the same wake_window_seconds.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert (
+        "as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp')"
+        in block
+    )
+    assert "float(0))) <= wake_window_seconds" in block
+
+
+def test_bathroom_morning_routine_firing_fallback_survives_a_restart() -> None:
+    # Codex P2 follow-up on #972: input_boolean state is restored across an
+    # HA restart, but the restored entity gets a fresh last_changed at
+    # restore time, not the original fire time — a restart while an alarm
+    # was still "firing" would look like a brand new alarm just fired.
+    # Must use the explicit, restart-safe input_datetime.wakeup_alarm_
+    # fired_at instead of wakeup_alarm_firing's own last_changed.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "input_datetime.wakeup_alarm_fired_at" in block
+    assert "states.input_boolean.wakeup_alarm_firing.last_changed" not in block
+
+
+def test_bathroom_morning_routine_disables_window_on_unavailable_workday_sensor() -> None:
+    # Codex P2 follow-up on #972: alarm_wake_up requires binary_sensor.
+    # workday_sensor to be explicitly "on" (weekday branch) or explicitly
+    # "off" (weekend branch); an unknown/unavailable state (e.g. during
+    # startup) satisfies neither, so no real alarm can fire. is_state(...,
+    # 'on') alone can't distinguish "off" from "unknown"/"unavailable" —
+    # both just aren't "on" — so this used to fall through to the weekend
+    # path and could still open a window off a persistent weekend alarm
+    # even though alarm_wake_up itself stays silent. Must require an exact
+    # 'off' match for the weekend path too, and disable the window entirely
+    # otherwise.
+    block = _automation_block(MEDIA_PLAYER_PATH, "play_music_in_bathroom_when_up")
+
+    assert "workday_sensor_state = states('binary_sensor.workday_sensor')" in block
+    assert "{% if workday_sensor_state == 'on' %}" in block
+    assert "{% elif workday_sensor_state == 'off' %}" in block
+    assert "{% set alarm_enabled = false %}" in block
+    assert "{% set alarm_seconds_since_midnight = 0 %}" in block
+
+
+def test_wake_up_script_records_the_alarm_fire_time_explicitly() -> None:
+    block = _script_block(WORKDAY_PATH, "wake_up_script")
+
+    assert "entity_id: input_datetime.wakeup_alarm_fired_at" in block
+    turn_on_index = block.index("entity_id: input_boolean.wakeup_alarm_firing")
+    set_datetime_index = block.index("entity_id: input_datetime.wakeup_alarm_fired_at")
+    assert set_datetime_index > turn_on_index
 
 
 def test_bathroom_morning_routine_uses_workday_owner_suite_led_policy() -> None:

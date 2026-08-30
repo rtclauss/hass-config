@@ -401,24 +401,88 @@ automation:
         condition: state
         entity_id: input_boolean.morning_routine
         state: "off"
-      - or:
-          - alias: "weekday morning time"
-            condition: time
-            after: "05:00:00"
-            before: "10:30:00"
-            weekday:
-              - "mon"
-              - "tue"
-              - "wed"
-              - "thu"
-              - "fri"
-          - alias: "weekend morning time"
-            condition: time
-            after: "07:00:00"
-            before: "14:00:00"
-            weekday:
-              - "sat"
-              - "sun"
+      - alias: >-
+          Only the real alarm's wake window starts music — a bathroom trip
+          before the alarm (e.g. waking early and going back to bed) must not
+          trigger it
+        condition: template
+        value_template: >-
+          {# input_datetime.weekday_alarm/weekend_alarm are has_date: false,
+             so their timestamp attribute is seconds since midnight (e.g.
+             07:30:00 -> 27000), not a Unix epoch value — confirmed live.
+             Comparing that against now().timestamp() (~1.8 billion) made
+             the window condition permanently false, so this automation
+             could never fire (Codex P1 on #972). Mirrors the seconds-
+             since-midnight comparison workday.yaml already uses for the
+             same alarm helpers (workday_owner_suite_wake_transition_from_
+             morning_activity, #939). #}
+          {# alarm_wake_up requires binary_sensor.workday_sensor to be
+             explicitly "on" for its weekday branch and explicitly "off"
+             for its weekend branch — an unknown/unavailable state (e.g.
+             during startup) satisfies neither, so no real alarm can fire
+             at all. is_state(..., 'on') alone can't distinguish "off" from
+             "unknown"/"unavailable" (both are simply "not on"), so this
+             used to fall through to the weekend path in the unavailable
+             case and could still open a window off a persistent weekend
+             alarm even though alarm_wake_up itself would stay silent
+             (Codex P2 follow-up on #972). #}
+          {% set workday_sensor_state = states('binary_sensor.workday_sensor') %}
+          {% if workday_sensor_state == 'on' %}
+            {# A special meeting can wake the resident earlier than the
+               weekday alarm (alarm_wake_up's meeting-alarm branch, gated on
+               input_boolean.special_meeting) — mirrors the candidate-
+               selection pattern workday_owner_suite_wake_transition_from_
+               morning_activity already uses for the same helpers (#939),
+               so a bathroom trip after that earlier real wakeup isn't
+               rejected for being before the weekday alarm (Codex P2). #}
+            {% set candidates = [
+                 state_attr('input_datetime.weekday_alarm', 'timestamp')
+                   if is_state('input_boolean.weekday_alarm_on', 'on') else none,
+                 state_attr('input_datetime.next_work_meeting', 'timestamp')
+                   if is_state('input_boolean.special_meeting', 'on') else none
+               ] | select('number') | reject('equalto', 0) | list %}
+            {% set alarm_enabled = candidates | length > 0 %}
+            {% set alarm_seconds_since_midnight = candidates | min if candidates else 0 %}
+          {% elif workday_sensor_state == 'off' %}
+            {% set alarm_enabled = is_state('input_boolean.weekend_alarm_on', 'on') %}
+            {% set alarm_seconds_since_midnight = state_attr('input_datetime.weekend_alarm', 'timestamp') | float(0) %}
+          {% else %}
+            {% set alarm_enabled = false %}
+            {% set alarm_seconds_since_midnight = 0 %}
+          {% endif %}
+          {% set now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second %}
+          {% set wake_window_seconds = 90 * 60 %}
+          {# alarm_wake_up's meeting-alarm branch turns special_meeting off
+             the instant it fires (packages/workday.yaml), before the
+             resident can reach the bathroom — so by the time this template
+             re-evaluates, the candidate list above no longer sees it and
+             falls back to the later weekday alarm (Codex P2 follow-up on
+             #972). wakeup_alarm_firing is a durable signal that some alarm
+             fired, but it is NOT bounded by this automation's window on
+             its own: turn_off_alarm_firing (packages/light.yaml) only
+             clears it at a fixed 14:34:56, not on cancel or after any
+             reasonable delay, so an unbounded OR here reopened
+             essentially the original unbounded-window bug for up to ~7
+             hours after an early alarm (Codex P1 follow-up on #972).
+             Bound it to the same wake_window_seconds using the real fire
+             time — wake_up_script records it explicitly in a restart-safe
+             input_datetime, unlike wakeup_alarm_firing's own last_changed,
+             which resets on restore instead of preserving the original
+             fire time (Codex P2 follow-up on #972). Do NOT additionally
+             require wakeup_alarm_firing itself to still read "on": that
+             same fixed 14:34:56 clear-out is uncorrelated with a variable-
+             length window — a special-meeting alarm firing later than
+             usual (e.g. 14:00, 90-minute window until 15:30) had this
+             latch cleared out from under it at 14:34:56, 34 minutes into
+             its own window, incorrectly closing the gate early (Codex P2
+             follow-up on #972). The elapsed-time check against the fire
+             timestamp is sufficient on its own and needs no such latch. #}
+          {% set alarm_firing_recently =
+               (as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp') | float(0))) <= wake_window_seconds %}
+          {{ alarm_firing_recently
+             or (alarm_enabled and alarm_seconds_since_midnight > 0
+             and now_seconds_since_midnight >= alarm_seconds_since_midnight
+             and now_seconds_since_midnight <= (alarm_seconds_since_midnight + wake_window_seconds)) }}
     action:
       - variables:
           bathroom_was_playing: "{{ is_state('media_player.ma_bathroom', 'playing') }}"
