@@ -14,6 +14,29 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+try:
+    from scripts.ha_label_assignments import (
+        DEFAULT_ASSIGNMENTS_PATH,
+        apply_assignment_operations,
+        audit_assignments,
+        build_reference_graph,
+        load_assignment_manifest,
+        plan_assignment_operations,
+        plan_retired_label_deletions,
+        validate_assignment_manifest,
+    )
+except ModuleNotFoundError:  # Direct execution: python scripts/ha_label_taxonomy.py
+    from ha_label_assignments import (  # type: ignore[no-redef]
+        DEFAULT_ASSIGNMENTS_PATH,
+        apply_assignment_operations,
+        audit_assignments,
+        build_reference_graph,
+        load_assignment_manifest,
+        plan_assignment_operations,
+        plan_retired_label_deletions,
+        validate_assignment_manifest,
+    )
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TAXONOMY_PATH = ROOT / "docs" / "ha_label_taxonomy.yaml"
@@ -226,18 +249,21 @@ def load_live_export(path: Path) -> dict[str, Any]:
 
 
 def normalize_live_export(raw: dict[str, Any]) -> dict[str, Any]:
-    labels = raw.get("labels", [])
-    areas = raw.get("areas", [])
-
-    if isinstance(labels, dict):
-        labels = labels.get("labels", labels.get("result", []))
-    if isinstance(areas, dict):
-        areas = areas.get("areas", areas.get("result", []))
-
-    return {
-        "labels": sorted((label for label in labels), key=lambda label: label.get("label_id", "")),
-        "areas": sorted((area for area in areas), key=lambda area: area.get("area_id", "")),
-    }
+    normalized: dict[str, Any] = {}
+    for key, id_key in (
+        ("labels", "label_id"),
+        ("areas", "area_id"),
+        ("devices", "id"),
+        ("entities", "entity_id"),
+    ):
+        rows = raw.get(key, [])
+        if isinstance(rows, dict):
+            rows = rows.get(key, rows.get("result", []))
+        normalized[key] = sorted(
+            (row for row in rows if isinstance(row, dict)),
+            key=lambda row: str(row.get(id_key, "")),
+        )
+    return normalized
 
 
 def audit_live(specs: list[LabelSpec], live: dict[str, Any]) -> dict[str, Any]:
@@ -390,6 +416,7 @@ class HomeAssistantWebSocket:
         self.timeout = timeout
         self.sock: socket.socket | ssl.SSLSocket | None = None
         self.next_id = 1
+        self._recv_buffer = b""
 
     def __enter__(self) -> "HomeAssistantWebSocket":
         self.connect()
@@ -448,8 +475,10 @@ class HomeAssistantWebSocket:
         response = b""
         while b"\r\n\r\n" not in response:
             response += self._recv_raw(4096)
-        if b" 101 " not in response.split(b"\r\n", 1)[0]:
+        header, _, remainder = response.partition(b"\r\n\r\n")
+        if b" 101 " not in header.split(b"\r\n", 1)[0]:
             raise RuntimeError(f"WebSocket handshake failed: {response[:200]!r}")
+        self._recv_buffer = remainder
 
     def send_json(self, payload: dict[str, object]) -> None:
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
@@ -507,6 +536,10 @@ class HomeAssistantWebSocket:
         self.sock.sendall(payload)
 
     def _recv_raw(self, length: int) -> bytes:
+        if self._recv_buffer:
+            chunk = self._recv_buffer[:length]
+            self._recv_buffer = self._recv_buffer[length:]
+            return chunk
         if self.sock is None:
             raise RuntimeError("WebSocket is not connected")
         chunk = self.sock.recv(length)
@@ -523,7 +556,11 @@ def fetch_live_from_ha() -> dict[str, Any]:
     with HomeAssistantWebSocket(url=url, token=token) as client:
         labels = client.command("config/label_registry/list")
         areas = client.command("config/area_registry/list")
-    return normalize_live_export({"labels": labels, "areas": areas})
+        devices = client.command("config/device_registry/list")
+        entities = client.command("config/entity_registry/list")
+    return normalize_live_export(
+        {"labels": labels, "areas": areas, "devices": devices, "entities": entities}
+    )
 
 
 def apply_operations(operations: list[dict[str, Any]], specs: list[LabelSpec]) -> list[dict[str, Any]]:
@@ -540,11 +577,15 @@ def apply_operations(operations: list[dict[str, Any]], specs: list[LabelSpec]) -
             spec = spec_map[label_id]
             fields = {key: value for key, value in spec.live_fields().items() if value is not None}
             if operation["action"] == "create":
-                result = client.command("config/label_registry/create", **fields)
+                create_fields = {**fields, "name": label_id}
+                result = client.command("config/label_registry/create", **create_fields)
                 if isinstance(result, dict) and result.get("label_id") != label_id:
                     raise RuntimeError(
                         f"Created label {result.get('label_id')!r}, expected {label_id!r}"
                     )
+                result = client.command(
+                    "config/label_registry/update", label_id=label_id, **fields
+                )
             elif operation["action"] == "update":
                 result = client.command("config/label_registry/update", label_id=label_id, **fields)
             else:
@@ -560,9 +601,18 @@ def print_json(payload: object) -> None:
 def command_validate(args: argparse.Namespace) -> int:
     specs = load_label_specs(args.taxonomy)
     errors = validate_specs(specs)
+    manifest = load_assignment_manifest(args.assignments)
+    active_ids = {spec.label_id for spec in specs if spec.lifecycle == "active"}
+    assignment_errors = validate_assignment_manifest(
+        manifest, active_label_ids=active_ids
+    )
+    errors.extend(assignment_errors)
     print_json(
         {
             "label_count": len(specs),
+            "active_label_count": len(active_ids),
+            "behavior_assignment_count": len(manifest.get("behaviors", [])),
+            "helper_assignment_count": len(manifest.get("helpers", [])),
             "status": "valid" if not errors else "invalid",
             "errors": errors,
         }
@@ -572,7 +622,13 @@ def command_validate(args: argparse.Namespace) -> int:
 
 def command_export_live(args: argparse.Namespace) -> int:
     live = load_live_export(args.live_json) if args.live_json else fetch_live_from_ha()
-    print_json(live)
+    if args.output:
+        args.output.write_text(
+            json.dumps(live, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print_json({"output": str(args.output), "counts": {key: len(value) for key, value in live.items()}})
+    else:
+        print_json(live)
     return 0
 
 
@@ -614,6 +670,125 @@ def command_apply_labels(args: argparse.Namespace) -> int:
     return 0
 
 
+def _validated_assignment_inputs(
+    args: argparse.Namespace,
+) -> tuple[list[LabelSpec], dict[str, Any], list[str]]:
+    specs = load_label_specs(args.taxonomy)
+    manifest = load_assignment_manifest(args.assignments)
+    errors = validate_specs(specs)
+    active_ids = {spec.label_id for spec in specs if spec.lifecycle == "active"}
+    errors.extend(validate_assignment_manifest(manifest, active_label_ids=active_ids))
+    return specs, manifest, errors
+
+
+def command_audit_assignments(args: argparse.Namespace) -> int:
+    specs, manifest, errors = _validated_assignment_inputs(args)
+    if errors:
+        print_json({"status": "invalid_configuration", "errors": errors})
+        return 1
+    live = load_live_export(args.live_json) if args.live_json else fetch_live_from_ha()
+    scopes = {spec.label_id: set(spec.scopes) for spec in specs if spec.lifecycle == "active"}
+    audit = audit_assignments(manifest, live, active_label_scopes=scopes)
+    print_json(audit)
+    has_drift = bool(
+        audit["extension_threshold_failures"]
+        or audit["scope_errors"]
+        or audit["missing_entities"]
+        or audit["missing_registry_objects"]
+        or audit["retired_assignments"]
+        or audit["planned_operation_count"]
+    )
+    return 1 if has_drift else 0
+
+
+def command_apply_assignments(args: argparse.Namespace) -> int:
+    specs, manifest, errors = _validated_assignment_inputs(args)
+    if errors:
+        print_json({"status": "invalid_configuration", "errors": errors})
+        return 1
+    live = load_live_export(args.live_json) if args.live_json else fetch_live_from_ha()
+    scopes = {spec.label_id: set(spec.scopes) for spec in specs if spec.lifecycle == "active"}
+    audit = audit_assignments(manifest, live, active_label_scopes=scopes)
+    if audit["missing_registry_objects"]:
+        print_json(
+            {
+                "status": "missing_registry_objects",
+                "dry_run": not args.execute,
+                "missing_registry_objects": audit["missing_registry_objects"],
+            }
+        )
+        return 1
+    if audit["scope_errors"]:
+        print_json(
+            {
+                "status": "scope_errors",
+                "dry_run": not args.execute,
+                "scope_errors": audit["scope_errors"],
+            }
+        )
+        return 1
+    operations = plan_assignment_operations(manifest, live)
+    if not args.execute:
+        print_json({"dry_run": True, "operation_count": len(operations), "operations": operations})
+        return 0
+    url = os.environ.get("HA_URL")
+    token = os.environ.get("HA_TOKEN")
+    if not url or not token:
+        raise RuntimeError("Set HA_URL and HA_TOKEN before using --execute")
+
+    def progress(done: int, total: int) -> None:
+        if done == total or done % 250 == 0:
+            print(f"Applied {done}/{total} assignment updates", file=sys.stderr, flush=True)
+
+    with HomeAssistantWebSocket(url=url, token=token) as client:
+        results = apply_assignment_operations(
+            operations, client.command, progress=progress
+        )
+    print_json({"dry_run": False, "applied_operation_count": len(results)})
+    return 0
+
+
+def command_retire_labels(args: argparse.Namespace) -> int:
+    _specs, manifest, errors = _validated_assignment_inputs(args)
+    if errors:
+        print_json({"status": "invalid_configuration", "errors": errors})
+        return 1
+    live = load_live_export(args.live_json) if args.live_json else fetch_live_from_ha()
+    deletable, assigned = plan_retired_label_deletions(manifest, live)
+    if not args.execute:
+        print_json(
+            {
+                "dry_run": True,
+                "deletable_labels": deletable,
+                "blocked_assignments": assigned,
+            }
+        )
+        return 0
+    if assigned:
+        print_json(
+            {
+                "status": "blocked",
+                "reason": "retired labels still have assignments",
+                "blocked_assignments": assigned,
+            }
+        )
+        return 1
+    url = os.environ.get("HA_URL")
+    token = os.environ.get("HA_TOKEN")
+    if not url or not token:
+        raise RuntimeError("Set HA_URL and HA_TOKEN before using --execute")
+    with HomeAssistantWebSocket(url=url, token=token) as client:
+        for label_id in deletable:
+            client.command("config/label_registry/delete", label_id=label_id)
+    print_json({"dry_run": False, "deleted_labels": deletable})
+    return 0
+
+
+def command_reference_graph(_args: argparse.Namespace) -> int:
+    print_json(build_reference_graph())
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Validate and reconcile HA label taxonomy.")
     parser.add_argument(
@@ -622,13 +797,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_TAXONOMY_PATH,
         help="Path to docs/ha_label_taxonomy.yaml.",
     )
+    parser.add_argument(
+        "--assignments",
+        type=Path,
+        default=DEFAULT_ASSIGNMENTS_PATH,
+        help="Path to docs/ha_label_assignments.json.",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     validate = subparsers.add_parser("validate", help="Validate the repo taxonomy.")
     validate.set_defaults(func=command_validate)
 
-    export_live = subparsers.add_parser("export-live", help="Export live labels and area labels.")
+    export_live = subparsers.add_parser(
+        "export-live",
+        help="Export live labels plus area, device, and entity assignments.",
+    )
     export_live.add_argument("--live-json", type=Path, help="Normalize an existing live export JSON.")
+    export_live.add_argument(
+        "--output", type=Path, help="Write the normalized export to a local-only JSON file."
+    )
     export_live.set_defaults(func=command_export_live)
 
     audit_live_parser = subparsers.add_parser("audit-live", help="Compare live HA labels to taxonomy.")
@@ -642,6 +829,45 @@ def build_parser() -> argparse.ArgumentParser:
     apply_labels.add_argument("--live-json", type=Path, help="Use an existing live export JSON.")
     apply_labels.add_argument("--execute", action="store_true", help="Apply changes to live HA.")
     apply_labels.set_defaults(func=command_apply_labels)
+
+    audit_assignments_parser = subparsers.add_parser(
+        "audit-assignments",
+        help="Audit live registry assignments against the managed manifest.",
+    )
+    audit_assignments_parser.add_argument(
+        "--live-json", type=Path, help="Use an existing live export JSON."
+    )
+    audit_assignments_parser.set_defaults(func=command_audit_assignments)
+
+    apply_assignments_parser = subparsers.add_parser(
+        "apply-assignments",
+        help="Reconcile area, device, and entity assignments. Dry-run by default.",
+    )
+    apply_assignments_parser.add_argument(
+        "--live-json", type=Path, help="Use an existing live export JSON."
+    )
+    apply_assignments_parser.add_argument(
+        "--execute", action="store_true", help="Apply assignments to live HA."
+    )
+    apply_assignments_parser.set_defaults(func=command_apply_assignments)
+
+    retire_labels_parser = subparsers.add_parser(
+        "retire-labels",
+        help="Delete retired label definitions only after their assignments reach zero.",
+    )
+    retire_labels_parser.add_argument(
+        "--live-json", type=Path, help="Use an existing live export JSON."
+    )
+    retire_labels_parser.add_argument(
+        "--execute", action="store_true", help="Delete safe retired labels from live HA."
+    )
+    retire_labels_parser.set_defaults(func=command_retire_labels)
+
+    reference_graph = subparsers.add_parser(
+        "reference-graph",
+        help="Build the repository automation/script/scene entity-reference graph.",
+    )
+    reference_graph.set_defaults(func=command_reference_graph)
 
     return parser
 

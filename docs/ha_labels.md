@@ -1,62 +1,104 @@
 # Home Assistant Label Model
 
-Issue `#511` defines the repo-owned canonical label taxonomy for Home Assistant. The source of truth is `docs/ha_label_taxonomy.yaml`; live labels should be reconciled from that file instead of being invented ad hoc in the UI.
+The repository owns both parts of the Home Assistant label configuration:
 
-## Model
+- `docs/ha_label_taxonomy.yaml` defines label IDs, display metadata, allowed scopes, and lifecycle.
+- `docs/ha_label_assignments.json` defines explicit behavior/helper assignments, room-sensitive area assignments, matching rules for devices/entities, live-only drift, and retired-label migrations.
 
-- Use floors and areas for physical location. They answer where something is.
-- Use labels for logical cross-cutting concerns. They answer why something matters or which behavior it can affect.
-- Use categories for UI organization of automations, scripts, helpers, and scenes. They are not the behavioral taxonomy.
-- Do not use labels as replacements for entity IDs, room names, Zigbee2MQTT namespaces, or the room naming registry.
-- Do not rely on label inheritance. A label assigned to an area or device is useful for organization, but it does not automatically become an entity label in every registry and template context.
+Labels express cross-cutting purpose: what an object affects or why it matters. Areas and floors remain the source of physical location, while categories remain table-specific UI organization.
 
-## Community Findings
+## Model rules
 
-- Home Assistant 2024.4 introduced floors, labels, and categories as different tools, not as competing names for the same thing.
-- Community usage generally keeps areas physical and uses labels for logical sets such as "all lights", "debug/history", or "maintenance".
-- A common pain point is assigning a label to a device but still needing explicit labels on selected entities for reliable searches, templates, and automation targets.
+- Keep active label IDs stable, lowercase, and snake case.
+- Add a label beyond the initial taxonomy only when at least six objects need it and an existing label cannot express the concept accurately.
+- Automations, scripts, scenes, and behavior-related helpers require explicit manifest entries and may have multiple labels.
+- Ordinary devices and entities receive labels only when an explicit assignment or a meaningful domain, integration, manufacturer, area, or name rule matches.
+- Do not rely on label inheritance. A label assigned to an area or device does not automatically become an entity label in every registry or template context, so the reconciler writes each intended assignment directly.
+- Preserve labels outside the manifest's managed and retired sets. The reconciler owns only the labels named in those sets.
+- Raw live exports contain household inventory and must remain local and uncommitted.
 
-## Canonical Label Rules
+## Active domains
 
-- New labels must be added to `docs/ha_label_taxonomy.yaml` before they are created in live Home Assistant.
-- Label IDs use lowercase snake_case and should not be renamed. Deprecate and replace instead.
-- Each label needs a description, at least one scope, a lifecycle, an owner, and a reason.
-- Unknown live labels are drift. Either add them to the taxonomy or remove them intentionally.
-- Deprecated labels can remain in the taxonomy only with a replacement or a removal rationale.
-- The current live `hallway` label is intentionally valid for the `hallway` and `upstairs_hallway` areas because both represent circulation space while remaining distinct HA areas.
+The 33 active labels cover privacy and behavioral context; wake-up and bedtime; presence; music and television; lighting, climate, openings, and security; cleaning, appliances, water, and energy; weather and travel; vehicles and aviation; notifications and deliveries; cameras and work; holidays and wildlife; maintenance and connectivity; sports and maker projects.
 
-## Reconciliation Workflow
+The complete names, descriptions, icons, colors, owners, reasons, and scopes live in the taxonomy file. The initial extensions above 30 are `device_connectivity`, `sports_recreation`, and `maker_projects`; live assignment audit must show at least six matching objects for each.
 
-Validate the repo taxonomy:
+Room-sensitive area assignments are explicit and aligned with `docs/room_intent.yaml`:
+
+- `guest_sensitive`: office, den, guest room, guest bathroom, and basement great room.
+- `sleep_sensitive`: owner-suite bedroom/bathroom, office, den, guest room, and basement great room.
+- `privacy_sensitive`: owner-suite bedroom/bathroom, office, den, guest room, and guest bathroom.
+- `hallway`: hallway and upstairs hallway.
+
+## Repository validation
+
+Validate taxonomy, explicit coverage, stable scene IDs, matching rules, and the repository inventory:
 
 ```bash
 python3 scripts/ha_label_taxonomy.py validate
 ```
 
-Create a read-only live export when `HA_URL` and `HA_TOKEN` are available:
+Build the read-only behavior reference graph used to review multi-domain assignments:
 
 ```bash
-HA_URL="https://home-assistant.example" HA_TOKEN="..." \
-  python3 scripts/ha_label_taxonomy.py export-live
+python3 scripts/ha_label_taxonomy.py reference-graph
 ```
 
-Audit live drift without changing Home Assistant:
+Run the focused tests:
 
 ```bash
-python3 scripts/ha_label_taxonomy.py audit-live --live-json live-labels.json
+uv run --with pytest pytest \
+  tests/test_ha_label_taxonomy.py \
+  tests/test_ha_label_assignments.py
 ```
 
-Preview label definition reconciliation:
+## Live reconciliation
 
-```bash
-python3 scripts/ha_label_taxonomy.py apply-labels --live-json live-labels.json
-```
+Set `HA_URL` and `HA_TOKEN` in the shell. Do not store credentials or live exports in the repository.
 
-Only after reviewing the dry-run output, apply label definition changes:
+1. Export and retain a local backup:
 
-```bash
-HA_URL="https://home-assistant.example" HA_TOKEN="..." \
-  python3 scripts/ha_label_taxonomy.py apply-labels --execute
-```
+   ```bash
+   python3 scripts/ha_label_taxonomy.py export-live \
+     --output /tmp/ha-label-live-before.json
+   ```
 
-`apply-labels` creates and updates label definitions only. It never removes labels and never assigns labels to areas, devices, or entities. Assignment batches should be planned separately so room intent and privacy behavior remain reviewable.
+2. Deploy the stable scene IDs and reload scenes so YAML scenes are registry-backed.
+3. Preview, then create/update active definitions:
+
+   ```bash
+   python3 scripts/ha_label_taxonomy.py apply-labels
+   python3 scripts/ha_label_taxonomy.py apply-labels --execute
+   ```
+
+4. Audit compiled assignments and runtime-only drift:
+
+   ```bash
+   python3 scripts/ha_label_taxonomy.py audit-assignments
+   ```
+
+   The audit fails when any desired area, device, or entity ID is absent from
+   its live registry. `apply-assignments` uses the same guard and refuses to
+   silently skip missing objects. Apply also refuses assignments whose label
+   taxonomy scope does not include the target registry.
+
+5. Preview and apply area, device, entity, automation, script, scene, and helper assignments:
+
+   ```bash
+   python3 scripts/ha_label_taxonomy.py apply-assignments
+   python3 scripts/ha_label_taxonomy.py apply-assignments --execute
+   ```
+
+6. Re-export and verify that coverage is complete, extension thresholds pass, and retired assignments are zero.
+7. Preview and remove retired definitions:
+
+   ```bash
+   python3 scripts/ha_label_taxonomy.py retire-labels
+   python3 scripts/ha_label_taxonomy.py retire-labels --execute
+   ```
+
+`retire-labels --execute` refuses to delete anything while a retired label remains assigned. No reconciliation runs automatically at Home Assistant startup.
+
+## Runtime drift policy
+
+The manifest keeps the current 31 live-only automations and three live-only scripts labeled with `source: live_only`. Reconciliation never deletes them. They remain visible in audit output until their configuration is restored to the repository or intentionally removed through a separate reviewed change.

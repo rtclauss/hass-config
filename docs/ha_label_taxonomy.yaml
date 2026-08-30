@@ -1,49 +1,53 @@
-version: 1
-last_updated: "2026-04-19"
+version: 2
+last_updated: "2026-07-16"
 owner: "rtclauss"
-summary: "Canonical Home Assistant labels for cross-cutting device, entity, and automation context."
+summary: "Canonical Home Assistant labels for cross-cutting domain, behavior, privacy, and operational context."
 labels:
   - label_id: hallway
     name: "Hallway"
-    description: "Shared hallway context that spans the main hallway and upstairs hallway areas."
+    description: "Shared hallway context spanning the main and upstairs hallway areas."
     scopes:
       - area
     lifecycle: active
     owner: "room_naming"
-    reason: "Keeps the live hallway label valid for both hallway and upstairs_hallway areas without replacing physical areas."
+    reason: "Preserves the existing cross-area hallway grouping without replacing physical areas."
     icon: "mdi:floor-plan"
     color: "blue"
   - label_id: guest_sensitive
     name: "Guest Sensitive"
-    description: "Rooms, devices, or entities where guest presence should suppress intrusive convenience behavior."
+    description: "Objects whose behavior must respect guest presence and guest-capable rooms."
     scopes:
       - area
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
     owner: "room_intent"
-    reason: "Supports privacy-first searches and automation audits for guest-capable spaces."
+    reason: "Supports privacy-first review and suppression of intrusive behavior."
     icon: "mdi:account-group"
     color: "purple"
   - label_id: sleep_sensitive
     name: "Sleep Sensitive"
-    description: "Items that should avoid disruptive changes while someone may be sleeping."
+    description: "Objects that can disturb occupants who may be sleeping."
     scopes:
       - area
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
     owner: "room_intent"
-    reason: "Identifies lighting, media, climate, and physical actions that need sleep-aware review."
+    reason: "Makes sleep-impacting lighting, media, climate, and physical actions searchable."
     icon: "mdi:sleep"
     color: "indigo"
   - label_id: privacy_sensitive
     name: "Privacy Sensitive"
-    description: "Items that can affect private rooms, private sensors, or private notifications."
+    description: "Objects that affect private rooms, private sensors, cameras, or private notifications."
     scopes:
       - area
       - device
@@ -51,264 +55,736 @@ labels:
       - automation
       - script
       - scene
+      - helper
     lifecycle: active
     owner: "room_intent"
-    reason: "Makes privacy-impacting behavior easy to find even when entity names are room-specific."
+    reason: "Highlights behavior requiring explicit privacy review."
     icon: "mdi:shield-lock"
     color: "deep-purple"
-  - label_id: arrival_scope
-    name: "Arrival Scope"
-    description: "Items involved in arriving-home behavior, welcome scenes, or post-arrival recovery."
-    scopes:
-      - device
-      - entity
-      - automation
-      - script
-      - scene
-    lifecycle: active
-    owner: "arrival_lighting"
-    reason: "Groups cross-room arrival behavior that is otherwise spread across lighting, media, and house mode packages."
-    icon: "mdi:home-import-outline"
-    color: "green"
-  - label_id: goodnight_scope
-    name: "Goodnight Scope"
-    description: "Items involved in bedtime preparation, goodnight scenes, or overnight safety behavior."
-    scopes:
-      - device
-      - entity
-      - automation
-      - script
-      - scene
-    lifecycle: active
-    owner: "night_routines"
-    reason: "Supports drift checks against the night routines behavioral spec."
-    icon: "mdi:weather-night"
-    color: "blue-grey"
-  - label_id: wake_up_scope
-    name: "Wake-Up Scope"
-    description: "Items involved in alarms, snooze behavior, wake-up lighting, or morning audio."
-    scopes:
-      - device
-      - entity
-      - automation
-      - script
-      - scene
-    lifecycle: active
-    owner: "alarm_wakeup"
-    reason: "Keeps alarm and wake-up impact searchable across helpers, scripts, media players, and lights."
-    icon: "mdi:alarm"
-    color: "orange"
-  - label_id: vacuum_scope
-    name: "Vacuum Scope"
-    description: "Items involved in vacuum routing, room cleaning, guest-mode suppression, or robot recovery."
+  - label_id: critical
+    name: "Critical"
+    description: "Objects protecting safety, water damage, security, access, or core availability."
     scopes:
       - area
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
-    owner: "cleaning"
-    reason: "Finds physical-intrusion behavior that can affect guest privacy and room intent."
-    icon: "mdi:robot-vacuum"
-    color: "cyan"
-  - label_id: media_scope
-    name: "Media Scope"
-    description: "Items involved in music, TV, speaker grouping, playback handoff, or announcements."
+    owner: "operations"
+    reason: "Marks behavior requiring conservative changes and explicit verification."
+    icon: "mdi:alert-circle"
+    color: "red"
+  - label_id: wake_up_scope
+    name: "Wake Up"
+    description: "Alarms, snooze, morning lighting, blinds, and wake audio."
     scopes:
       - device
       - entity
       - automation
       - script
       - scene
+      - helper
+    lifecycle: active
+    owner: "alarm_wakeup"
+    reason: "Keeps the complete wake-up path searchable across object types."
+    icon: "mdi:alarm"
+    color: "orange"
+  - label_id: goodnight_scope
+    name: "Bedtime & Goodnight"
+    description: "Bed preparation, sleep audio, overnight shutdown, and integrity checks."
+    scopes:
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "night_routines"
+    reason: "Supports drift checks against the night-routines behavioral spec."
+    icon: "mdi:weather-night"
+    color: "blue-grey"
+  - label_id: arrival_scope
+    name: "Arrival & Departure"
+    description: "Arrival, departure, welcome, away, and return-home behavior."
+    scopes:
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "arrival_lighting"
+    reason: "Groups cross-room arrival and departure behavior."
+    icon: "mdi:home-import-outline"
+    color: "green"
+  - label_id: presence_house_mode
+    name: "Presence & House Mode"
+    description: "Occupancy, tracking, guest and trip modes, and house-state transitions."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "house_mode"
+    reason: "Connects presence signals to the house-state behaviors they influence."
+    icon: "mdi:home-account"
+    color: "light-blue"
+  - label_id: music
+    name: "Music"
+    description: "Music Assistant, Sonos, Spotify, radio, grouping, and audio playback."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
     lifecycle: active
     owner: "media_player"
-    reason: "Groups media effects that can cross room names and impact privacy or sleep behavior."
-    icon: "mdi:speaker-multiple"
+    reason: "Groups music behavior independently from television and video."
+    icon: "mdi:music"
     color: "pink"
-  - label_id: lighting_scope
-    name: "Lighting Scope"
-    description: "Items involved in automatic lighting, scenes, adaptive lighting, and LED policy."
+  - label_id: tv_video
+    name: "TV & Video"
+    description: "Plex, television, streaming, video games, and viewing-session behavior."
     scopes:
+      - area
       - device
       - entity
       - automation
       - script
       - scene
+      - helper
+    lifecycle: active
+    owner: "tv"
+    reason: "Groups television and video behavior independently from music."
+    icon: "mdi:television-play"
+    color: "deep-purple"
+  - label_id: lighting_scope
+    name: "Lighting"
+    description: "Lights, scenes, adaptive lighting, decorative effects, and LED policy."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
     lifecycle: active
     owner: "lighting"
-    reason: "Makes room lighting effects searchable beyond individual light entity names."
+    reason: "Makes lighting effects searchable beyond individual rooms."
     icon: "mdi:lightbulb-group"
     color: "yellow"
   - label_id: climate_scope
-    name: "Climate Scope"
-    description: "Items involved in HVAC, fans, exhaust, temperature policy, or humidity response."
+    name: "Climate & Air"
+    description: "HVAC, fans, humidity, air filters, ventilation, and comfort policy."
     scopes:
       - area
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
     owner: "climate"
-    reason: "Groups comfort and air-quality behavior that crosses climate, fan, binary sensor, and helper domains."
+    reason: "Groups comfort and air-quality behavior across domains."
     icon: "mdi:thermostat"
     color: "teal"
-  - label_id: critical
-    name: "Critical"
-    description: "Items that protect safety, water damage, security, access, or core availability."
+  - label_id: doors_windows_covers
+    name: "Doors, Windows & Covers"
+    description: "Doors, garage doors, windows, locks, blinds, and covers."
     scopes:
+      - area
       - device
       - entity
       - automation
       - script
-    lifecycle: active
-    owner: "operations"
-    reason: "Highlights items that deserve conservative changes, monitoring, and explicit test coverage."
-    icon: "mdi:alert-circle"
-    color: "red"
-  - label_id: battery_powered
-    name: "Battery Powered"
-    description: "Devices and entities that rely on replaceable or rechargeable batteries."
-    scopes:
-      - device
-      - entity
-    lifecycle: active
-    owner: "operations"
-    reason: "Supports battery maintenance searches and low-battery notification audits."
-    icon: "mdi:battery"
-    color: "lime"
-  - label_id: maintenance
-    name: "Maintenance"
-    description: "Items that exist primarily for repair, diagnostics, reset, calibration, or periodic upkeep."
-    scopes:
-      - device
-      - entity
-      - automation
-      - script
+      - scene
       - helper
     lifecycle: active
-    owner: "operations"
-    reason: "Separates operational support controls from normal household behavior."
-    icon: "mdi:wrench"
-    color: "grey"
-  - label_id: firmware_update
-    name: "Firmware Update"
-    description: "Update entities and devices where firmware or software lifecycle needs review."
-    scopes:
-      - device
-      - entity
-      - automation
-    lifecycle: active
-    owner: "operations"
-    reason: "Keeps update and recovery work findable without depending on integration-specific names."
-    icon: "mdi:update"
-    color: "light-blue"
-  - label_id: energy_monitoring
-    name: "Energy Monitoring"
-    description: "Meters, plugs, tariffs, and calculated sensors used for energy or utility accounting."
-    scopes:
-      - device
-      - entity
-      - automation
-      - script
-      - helper
-    lifecycle: active
-    owner: "utilities"
-    reason: "Groups energy behavior across EV charging, house electrical, gas, and tariff helpers."
-    icon: "mdi:flash"
-    color: "deep-orange"
+    owner: "access"
+    reason: "Groups physical openings and access behavior."
+    icon: "mdi:door"
+    color: "brown"
   - label_id: security
     name: "Security"
-    description: "Locks, doors, alarm behavior, cameras, and presence-sensitive security logic."
+    description: "Alarms, cameras, access control, intrusion, and away security."
     scopes:
       - area
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
     owner: "security"
-    reason: "Collects security-impacting items that may not share names or domains."
+    reason: "Collects security-impacting items across integrations."
     icon: "mdi:shield-home"
     color: "black"
-  - label_id: water_safety
-    name: "Water Safety"
-    description: "Leak, water shutoff, softener, humidity, sump, and water-damage prevention items."
+  - label_id: vacuum_scope
+    name: "Vacuum & Cleaning"
+    description: "Robot vacuums, cleaning routes, map guards, and cleaning recovery."
     scopes:
       - area
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "cleaning"
+    reason: "Finds physical-intrusion and cleaning behavior."
+    icon: "mdi:robot-vacuum"
+    color: "cyan"
+  - label_id: laundry_appliances
+    name: "Laundry & Appliances"
+    description: "Washer, dryer, household appliances, and completion reminders."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "appliances"
+    reason: "Groups appliance state, control, and notification behavior."
+    icon: "mdi:washing-machine"
+    color: "blue"
+  - label_id: water_safety
+    name: "Water"
+    description: "Leaks, sump, shutoff, metering, softener, irrigation, and water risk."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
     lifecycle: active
     owner: "utilities"
-    reason: "Makes water-risk behavior searchable across sensors, switches, and notifications."
+    reason: "Makes water use and water-risk behavior searchable."
     icon: "mdi:water-alert"
     color: "blue"
-  - label_id: zigbee2mqtt
-    name: "Zigbee2MQTT"
-    description: "Items sourced from or managed through the Zigbee2MQTT integration."
+  - label_id: energy_monitoring
+    name: "Energy & Utilities"
+    description: "Electricity, tariffs, EV charging, cost summaries, and utility accounting."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "utilities"
+    reason: "Groups energy measurement, control, and accounting."
+    icon: "mdi:flash"
+    color: "deep-orange"
+  - label_id: weather
+    name: "Weather"
+    description: "Forecasts, severe alerts, rain and pressure logic, and weather displays."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "weather"
+    reason: "Groups weather inputs, alerts, and weather-driven behavior."
+    icon: "mdi:weather-partly-cloudy"
+    color: "light-blue"
+  - label_id: travel_trips
+    name: "Travel & Trips"
+    description: "Vacations, trip orchestration, destinations, and travel calendars."
     scopes:
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
-    owner: "platform"
-    reason: "Supports Zigbee2MQTT lifecycle, recovery, and migration audits."
-    icon: "mdi:zigbee"
-    color: "orange"
-  - label_id: esphome
-    name: "ESPHome"
-    description: "Items sourced from or managed through ESPHome devices."
+    owner: "trips"
+    reason: "Connects travel state with house behavior."
+    icon: "mdi:bag-suitcase"
+    color: "teal"
+  - label_id: vehicles_ev
+    name: "Vehicles & EV"
+    description: "Tesla, charging, preconditioning, garage integration, and vehicle maintenance."
     scopes:
+      - area
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
-    owner: "platform"
-    reason: "Supports ESPHome build, proxy, and device maintenance audits."
-    icon: "mdi:chip"
+    owner: "vehicles"
+    reason: "Groups vehicle and EV behavior."
+    icon: "mdi:car-electric"
     color: "green"
-  - label_id: inovelli
-    name: "Inovelli"
-    description: "Inovelli switches, dimmers, LED bars, bindings, and related recovery automations."
+  - label_id: aviation
+    name: "Aviation"
+    description: "ADS-B, FlightRadar24, airport status, and flight tracking."
     scopes:
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
-    owner: "platform"
-    reason: "Groups Inovelli-specific LED, binding, and firmware behavior across rooms."
-    icon: "mdi:light-switch"
-    color: "purple"
-  - label_id: music_assistant
-    name: "Music Assistant"
-    description: "Music Assistant players, services, queue controls, provider selectors, and playback scripts."
+    owner: "aviation"
+    reason: "Separates aviation telemetry from broader travel behavior."
+    icon: "mdi:airplane"
+    color: "light-blue"
+  - label_id: notifications
+    name: "Notifications"
+    description: "Push, television, persistent, actionable, and reminder notifications."
     scopes:
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "notifications"
+    reason: "Makes notification producers and controls searchable."
+    icon: "mdi:bell"
+    color: "orange"
+  - label_id: mail_deliveries
+    name: "Mail & Deliveries"
+    description: "Mail, packages, garbage collection, and delivery-state handling."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "deliveries"
+    reason: "Groups delivery and collection workflows."
+    icon: "mdi:package-variant-closed"
+    color: "brown"
+  - label_id: cameras
+    name: "Cameras"
+    description: "Camera capture, work-camera state, surveillance, and snapshots."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "cameras"
+    reason: "Groups camera devices and camera-driven behavior."
+    icon: "mdi:cctv"
+    color: "blue-grey"
+  - label_id: work_office
+    name: "Work & Office"
+    description: "Workday routines, desk control, office lighting, and meeting state."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "workday"
+    reason: "Groups work-context behavior across the office and calendar."
+    icon: "mdi:briefcase"
+    color: "indigo"
+  - label_id: holidays_seasonal
+    name: "Holidays & Seasonal"
+    description: "Holiday calendars, seasonal lighting, and seasonal enablement."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "holidays"
+    reason: "Groups seasonal behavior without creating one label per holiday."
+    icon: "mdi:calendar-star"
+    color: "red"
+  - label_id: garden_wildlife
+    name: "Garden & Wildlife"
+    description: "Plants, irrigation, birds, and pest monitoring."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "outdoors"
+    reason: "Groups garden and wildlife monitoring and care."
+    icon: "mdi:flower"
+    color: "green"
+  - label_id: maintenance
+    name: "System & Maintenance"
+    description: "Diagnostics, restarts, updates, repairs, health checks, and infrastructure."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "operations"
+    reason: "Separates operational support controls from household behavior."
+    icon: "mdi:wrench"
+    color: "grey"
+  - label_id: device_connectivity
+    name: "Device Connectivity"
+    description: "MQTT, Zigbee, Z-Wave, ESPHome, Matter, availability, and recovery."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
       - helper
     lifecycle: active
     owner: "platform"
-    reason: "Keeps Music Assistant migration and playback behavior searchable."
-    icon: "mdi:music"
-    color: "pink"
-  - label_id: matter_thread
-    name: "Matter / Thread"
-    description: "Matter, Thread, border-router, and related device lifecycle items."
+    reason: "Groups connectivity and device-lifecycle behavior across protocols."
+    icon: "mdi:lan-connect"
+    color: "cyan"
+  - label_id: sports_recreation
+    name: "Sports & Recreation"
+    description: "Formula One, curling, and related recreation workflows."
     scopes:
       - device
       - entity
       - automation
       - script
+      - scene
+      - helper
     lifecycle: active
-    owner: "platform"
-    reason: "Separates Matter and Thread lifecycle concerns from Zigbee2MQTT and ESPHome."
-    icon: "mdi:graph"
-    color: "teal"
+    owner: "recreation"
+    reason: "Retained above the core 30 because the inventory contains at least six related objects."
+    icon: "mdi:trophy"
+    color: "amber"
+  - label_id: maker_projects
+    name: "Maker Projects"
+    description: "OctoPrint, 3D printing, fermentor, and related controls."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: active
+    owner: "maker"
+    reason: "Retained above the core 30 because the inventory contains at least six related objects."
+    icon: "mdi:tools"
+    color: "deep-orange"
+  - label_id: media_scope
+    name: "Media Scope"
+    description: "Split into music and TV & Video based on actual behavior."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Split into music and TV & Video based on actual behavior."
+    removal_reason: "Use music and/or tv_video; a single replacement would lose meaning."
+  - label_id: battery_powered
+    name: "Battery Powered"
+    description: "Consolidated into System & Maintenance."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into System & Maintenance."
+    removal_reason: "Replacement: maintenance."
+  - label_id: firmware_update
+    name: "Firmware Update"
+    description: "Consolidated into System & Maintenance."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into System & Maintenance."
+    removal_reason: "Replacement: maintenance."
+  - label_id: zigbee2mqtt
+    name: "Zigbee2MQTT"
+    description: "Consolidated into Device Connectivity."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Device Connectivity."
+    removal_reason: "Replacement: device_connectivity."
+  - label_id: esphome
+    name: "ESPHome"
+    description: "Consolidated into Device Connectivity."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Device Connectivity."
+    removal_reason: "Replacement: device_connectivity."
+  - label_id: inovelli
+    name: "Inovelli"
+    description: "Consolidated into Device Connectivity plus functional labels."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Device Connectivity plus functional labels."
+    removal_reason: "Use device_connectivity plus functional labels."
+  - label_id: music_assistant
+    name: "Music Assistant"
+    description: "Consolidated into Music."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Music."
+    removal_reason: "Replacement: music."
+  - label_id: matter_thread
+    name: "Matter / Thread"
+    description: "Consolidated into Device Connectivity."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Device Connectivity."
+    removal_reason: "Replacement: device_connectivity."
+  - label_id: inovelli_switch
+    name: "Inovelli Switch"
+    description: "Consolidated into Device Connectivity plus functional labels."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Device Connectivity plus functional labels."
+    removal_reason: "Use device_connectivity plus lighting_scope or climate_scope."
+  - label_id: sonos
+    name: "Sonos"
+    description: "Consolidated into Music."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Music."
+    removal_reason: "Replacement: music."
+  - label_id: apple_tv
+    name: "Apple TV"
+    description: "Consolidated into TV & Video."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into TV & Video."
+    removal_reason: "Replacement: tv_video."
+  - label_id: lg_webos
+    name: "LG WebOS"
+    description: "Consolidated into TV & Video."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into TV & Video."
+    removal_reason: "Replacement: tv_video."
+  - label_id: spotify
+    name: "Spotify"
+    description: "Consolidated into Music."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Music."
+    removal_reason: "Replacement: music."
+  - label_id: plex
+    name: "Plex"
+    description: "Consolidated into TV & Video."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into TV & Video."
+    removal_reason: "Replacement: tv_video."
+  - label_id: homepod
+    name: "HomePod"
+    description: "Consolidated into Music."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Consolidated into Music."
+    removal_reason: "Replacement: music."
+  - label_id: sleep
+    name: "Sleep"
+    description: "Split into Sleep Sensitive, Wake Up, and Bedtime & Goodnight."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Split into Sleep Sensitive, Wake Up, and Bedtime & Goodnight."
+    removal_reason: "Use item-specific sleep_sensitive, wake_up_scope, and/or goodnight_scope."
+  - label_id: notification
+    name: "Notification"
+    description: "Renamed to Notifications."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Renamed to Notifications."
+    removal_reason: "Replacement: notifications."
+  - label_id: fixme
+    name: "Fixme"
+    description: "Removed after reporting the affected item as runtime drift."
+    scopes:
+      - area
+      - device
+      - entity
+      - automation
+      - script
+      - scene
+      - helper
+    lifecycle: deprecated
+    owner: "label_migration"
+    reason: "Removed after reporting the affected item as runtime drift."
+    removal_reason: "No semantic replacement; track the defect through issue/PR workflow."
