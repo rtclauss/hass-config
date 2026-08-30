@@ -767,7 +767,35 @@ def apply_assignment_operations(
     for operation in operations:
         registry = operation["registry"]
         object_id = operation["object_id"]
-        labels = operation["after"]
+        registry_details = {
+            "area": ("config/area_registry/list", "area_id"),
+            "device": ("config/device_registry/list", "id"),
+            "entity": ("config/entity_registry/list", "entity_id"),
+        }
+        try:
+            list_command, id_field = registry_details[registry]
+        except KeyError as error:
+            raise ValueError(f"Unsupported registry: {registry}") from error
+
+        current_rows = command(list_command)
+        if not isinstance(current_rows, list):
+            raise RuntimeError(f"{list_command} returned a non-list result")
+        current_row = next(
+            (
+                row
+                for row in current_rows
+                if isinstance(row, dict) and str(row.get(id_field, "")) == object_id
+            ),
+            None,
+        )
+        if current_row is None:
+            raise RuntimeError(f"{registry} registry object disappeared: {object_id}")
+
+        current_labels = set(str(label) for label in current_row.get("labels", []) or [])
+        labels = sorted(
+            (current_labels - set(operation["managed_remove"]))
+            | set(operation["managed_add"])
+        )
         if registry == "area":
             result = command(
                 "config/area_registry/update", area_id=object_id, labels=labels
@@ -780,9 +808,12 @@ def apply_assignment_operations(
             result = command(
                 "config/entity_registry/update", entity_id=object_id, labels=labels
             )
-        else:
-            raise ValueError(f"Unsupported registry: {registry}")
-        results.append({"operation": operation, "result": result})
+        applied_operation = {
+            **operation,
+            "before": sorted(current_labels),
+            "after": labels,
+        }
+        results.append({"operation": applied_operation, "result": result})
         if progress is not None:
             progress(len(results), len(operations))
     return results
