@@ -256,6 +256,30 @@ automation:
                 data:
                   datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
 
+  - id: vacuum_laundry_room_daily_litter
+    alias: Vacuum laundry room daily (litter pickup)
+    description: >-
+      Daily 1 PM vacuum-only clean of the laundry room (X40 map "Utility Room",
+      segment 6) with three passes on Strong suction to pick up kitty litter.
+      Routes through the single serialized policy entry (kind=segment), so it
+      inherits the at-rest guard, the CleanGenius-off / sweeping-only guarantee
+      (never mops), the guest-mode veto, and the pet-safety policy: skipped under
+      Acclimation, requires the owner home under Supervised, runs freely under
+      Unattended.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: time
+        at: "13:00:00"
+    action:
+      - action: script.x40_ultra_main_level_policy_clean
+        data:
+          kind: segment
+          segments: 6
+          suction_level: 3
+          repeats: 3
+
 ########################
 # Binary Sensors
 ########################
@@ -905,6 +929,9 @@ script:
       suction_level:
         description: "For kind=segment: Dreame suction level (1 = quiet)."
         example: 1
+      repeats:
+        description: "For kind=segment: cleaning passes over the segment (1-3). Defaults to 1."
+        example: 1
     variables:
       last_mopped_timestamp: >-
         {% set raw = states('input_datetime.x40_ultra_last_mopped_at') %}
@@ -934,6 +961,7 @@ script:
                 data:
                   segments: "{{ segments | int }}"
                   suction_level: "{{ suction_level | default(1) | int }}"
+                  repeats: "{{ repeats | default(1) | int }}"
             else:
               - choose:
                   - conditions:
@@ -1134,6 +1162,9 @@ script:
       suction_level:
         description: "Dreame suction level (1 = quiet). Defaults to 1."
         example: 1
+      repeats:
+        description: "Cleaning passes over the segment (1-3). Defaults to 1."
+        example: 1
     sequence:
       # Do not disable CleanGenius or touch the cleaning mode unless the X40 is
       # at rest: an external (manual/app) run must gate us out BEFORE any config
@@ -1206,7 +1237,7 @@ script:
                   entity_id: vacuum.x40_ultra
                 data:
                   segments: "{{ segments | int }}"
-                  repeats: 1
+                  repeats: "{{ [[repeats | default(1) | int, 1] | max, 3] | min }}"
                   suction_level: "{{ suction_level | default(1) | int }}"
               # vacuum_clean_segment only dispatches the command, so hold the
               # deterministic sweeping mode until the run reaches a terminal dock —
