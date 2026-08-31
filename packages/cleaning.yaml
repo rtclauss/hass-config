@@ -370,9 +370,14 @@ automation:
         entity_id: sensor.x40_ultra_cleaning_progress
         id: progress
     condition:
-      # Throttle progress ticks to 5% steps; state/room always pass (no native modulo throttle).
+      # Drop noise: a progress tick only passes on a 5% step, and a `vac` trigger
+      # only passes on a real state-VALUE change — not attribute-only updates
+      # (battery, cleaning_time, status), which would otherwise flood the activity
+      # while cleaning and, while docked, repeat the completion branch. room always
+      # passes. (No native modulo/attribute throttle exists.)
       - condition: template
-        value_template: "{{ trigger.id != 'progress' or (states('sensor.x40_ultra_cleaning_progress') | int(0)) % 5 == 0 }}"
+        value_template: >-
+          {% if trigger.id == 'progress' %}{{ (states('sensor.x40_ultra_cleaning_progress') | int(0)) % 5 == 0 }}{% elif trigger.id == 'vac' %}{{ trigger.from_state is not none and trigger.to_state is not none and trigger.from_state.state != trigger.to_state.state }}{% else %}true{% endif %}
     action:
       - choose:
           - conditions:
@@ -381,6 +386,11 @@ automation:
               - condition: state
                 entity_id: vacuum.x40_ultra
                 state: docked
+              # Only treat docked as completion on a genuine active->docked
+              # transition, so idle->docked (or a manual dock) never posts a false
+              # "Cleaning complete".
+              - condition: template
+                value_template: "{{ trigger.from_state.state in ['cleaning', 'returning', 'paused'] }}"
             sequence:
               - action: notify.mobile_app_wethop
                 data:
@@ -555,9 +565,18 @@ automation:
     trace:
       stored_traces: 10
     trigger:
+      # Split the running sensor into explicit on/off edges so completion fires
+      # only on a real on->off transition — never when the sensor initializes or
+      # recovers from unavailable into "off".
       - trigger: state
         entity_id: binary_sensor.dryer_running
-        id: run
+        to: "on"
+        id: run_on
+      - trigger: state
+        entity_id: binary_sensor.dryer_running
+        from: "on"
+        to: "off"
+        id: run_off
       - trigger: state
         entity_id: sensor.dryer_current_phase
         id: phase
@@ -572,10 +591,7 @@ automation:
       - choose:
           - conditions:
               - condition: trigger
-                id: run
-              - condition: state
-                entity_id: binary_sensor.dryer_running
-                state: "off"
+                id: run_off
             sequence:
               - action: notify.mobile_app_wethop
                 data:
