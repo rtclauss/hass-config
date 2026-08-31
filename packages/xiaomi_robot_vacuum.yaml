@@ -263,15 +263,26 @@ automation:
       segment 6) with three passes on Strong suction to pick up kitty litter.
       Routes through the single serialized policy entry (kind=segment), so it
       inherits the at-rest guard, the CleanGenius-off / sweeping-only guarantee
-      (never mops), the guest-mode veto, and the pet-safety policy: skipped under
-      Acclimation, requires the owner home under Supervised, runs freely under
-      Unattended.
+      (never mops), and the guest-mode veto. Because this is an AUTOMATIC launch,
+      it additionally requires the exact Unattended pet policy: Supervised is
+      reserved for owner-initiated runs after inspecting the area, and Acclimation
+      fails closed — only Unattended permits an automatic start
+      (docs/vacuum_pet_policy.md).
     mode: single
     trace:
       stored_traces: 10
     trigger:
       - trigger: time
         at: "13:00:00"
+    condition:
+      # Automatic boundaries require the exact Unattended state
+      # (docs/vacuum_pet_policy.md). Without this, a scheduled run under
+      # Supervised (owner home) would reach x40_ultra_segment_vacuum_only, whose
+      # guard permits Supervised, and auto-start against the cat-safety boundary.
+      - alias: "Automatic scheduled runs require the exact Unattended pet policy"
+        condition: state
+        entity_id: input_select.vacuum_pet_policy
+        state: "Unattended"
     action:
       - action: script.x40_ultra_main_level_policy_clean
         data:
