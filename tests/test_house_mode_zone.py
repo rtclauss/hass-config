@@ -60,10 +60,14 @@ def _zone_script_block(script_id: str) -> str:
 def _scene_block(scene_name: str) -> str:
     lines = ZONE_PATH.read_text(encoding="utf-8").splitlines()
     start = None
-    needle = f"  - name: {scene_name}"
+    needle = f"  - id: {scene_name}"
 
     for index, line in enumerate(lines):
-        if line == needle:
+        if (
+            line == needle
+            and index + 1 < len(lines)
+            and lines[index + 1] == f"    name: {scene_name}"
+        ):
             start = index
             break
 
@@ -72,13 +76,15 @@ def _scene_block(scene_name: str) -> str:
 
     end = len(lines)
     for index in range(start + 1, len(lines)):
-        if lines[index].startswith("  - name: ") or re.match(
+        if lines[index].startswith("  - id: ") or re.match(
             r"^[A-Za-z0-9_]+:", lines[index]
         ):
             end = index
             break
 
-    return "\n".join(lines[start:end])
+    block = "\n".join(lines[start:end])
+    assert f"    name: {scene_name}" in block
+    return block
 
 
 def _shared_script_block(script_id: str) -> str:
