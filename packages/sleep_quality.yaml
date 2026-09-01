@@ -594,8 +594,10 @@ automation:
     trigger:
       - trigger: homeassistant
         event: start
+        id: startup_or_reload
       - trigger: event
         event_type: automation_reloaded
+        id: startup_or_reload
       - alias: >-
           Re-evaluate periodically so a debounce guard that read as
           unsatisfied on the initial start/reload evaluation (because a
@@ -603,6 +605,7 @@ automation:
           a chance to pass once real time has actually elapsed since then.
         trigger: time_pattern
         minutes: "/5"
+        id: periodic_tick
     action:
       - alias: >-
           Reconcile a pending bed-entry that never led to a session and
@@ -640,8 +643,18 @@ automation:
           the missed entry, same reasoning as the other approximations
           in this automation; the same nightly window
           sleep_quality_prepare_session's own bed_entry trigger requires
-          keeps a daytime bed visit from being recorded as one.
+          keeps a daytime bed visit from being recorded as one. Restricted
+          to the startup/reload trigger, not the periodic tick — unlike
+          the other branches here, this check has no for: duration to
+          wait out, so it doesn't need re-evaluation over time; on the
+          periodic tick alone it would misfire during ordinary operation
+          any time the bed happened to already be occupied when the
+          nightly window opened (e.g. an earlier nap that never ended),
+          inventing a bed entry that never actually happened at that
+          moment (Codex P2 follow-up on #373).
         if:
+          - condition: trigger
+            id: startup_or_reload
           - condition: state
             entity_id: input_boolean.sleep_session_active
             state: "off"
@@ -655,11 +668,31 @@ automation:
             after: "18:00:00"
             before: "12:00:00"
         then:
-          - action: input_datetime.set_datetime
+          - alias: >-
+              Cap the recovered bed_in at the CPAP helper's own transition
+              when CPAP is already running: the very next branch below
+              recovers cpap_on from that same helper's (earlier) last_changed
+              whenever it finds CPAP already on, but this branch's own
+              bed_in would otherwise be reconciliation time (now()) —
+              always later than an already-running CPAP's actual start.
+              That inversion (cpap_on_ts < bed_in_ts) fails the finalizer's
+              ordering check and silently discards an otherwise complete,
+              valid session (Codex P2 follow-up on #373). Bed entry must
+              have preceded CPAP starting, so when CPAP is already on, use
+              its own (10-second-debounce-backed-out) transition time
+              instead of now() -- otherwise now() is still the best
+              available approximation.
+            action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_bed_in
             data:
-              timestamp: "{{ as_timestamp(now()) }}"
+              timestamp: >-
+                {{ [as_timestamp(now()),
+                    (as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed)
+                       - 10)
+                    if is_state('binary_sensor.owner_suite_cpap_running', 'on')
+                    else as_timestamp(now())]
+                   | min }}
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sleep_session_bed_entry_pending

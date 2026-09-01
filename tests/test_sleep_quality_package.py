@@ -609,6 +609,51 @@ def test_reconcile_recovers_a_bed_entry_missed_during_downtime() -> None:
     assert 'after: "18:00:00"' in branch
     assert 'before: "12:00:00"' in branch
     assert "entity_id: input_datetime.sleep_session_bed_in" in branch
+
+
+def test_reconcile_bed_entry_recovery_only_runs_on_startup_or_reload() -> None:
+    # Codex P2 follow-up on #373: unlike the other branches in this
+    # automation, this check has no for: duration to wait out, so letting it
+    # also run on the periodic 5-minute tick (not just startup/reload) makes
+    # it misfire during ordinary operation -- any time the bed happens to
+    # already be occupied when the nightly window opens (e.g. an earlier nap
+    # that never ended), it invents a bed entry that never actually happened
+    # right then. Must be gated to the startup/reload trigger only.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+
+    assert "id: startup_or_reload" in block
+    assert "id: periodic_tick" in block
+
+    recover_entry_index = block.index("Recover a nightly bed entry")
+    cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
+    branch = block[recover_entry_index:cpap_start_index]
+
+    assert "condition: trigger" in branch
+    assert "id: startup_or_reload" in branch
+
+
+def test_reconcile_recovered_bed_entry_never_lands_after_recovered_cpap_start() -> None:
+    # Codex P2 follow-up on #373: when CPAP is already running at
+    # reconciliation time, the very next branch (reconcile a lost
+    # cpap_start debounce) recovers cpap_on from the CPAP helper's own
+    # (earlier) last_changed. If this branch still wrote bed_in as plain
+    # now() (reconciliation time), that would almost always land AFTER the
+    # already-running CPAP's recovered start, failing the finalizer's
+    # cpap_on_ts >= bed_in_ts ordering check and silently discarding an
+    # otherwise complete, valid session. Must cap bed_in at the CPAP
+    # helper's own transition whenever CPAP is already on.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    recover_entry_index = block.index("Recover a nightly bed entry")
+    cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
+    branch = block[recover_entry_index:cpap_start_index]
+
+    bed_in_index = branch.index("entity_id: input_datetime.sleep_session_bed_in")
+    timestamp_block = branch[bed_in_index:]
+
+    assert "as_timestamp(now())" in timestamp_block
+    assert "as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed)" in timestamp_block
+    assert "is_state('binary_sensor.owner_suite_cpap_running', 'on')" in timestamp_block
+    assert "| min" in timestamp_block
     assert "action: input_boolean.turn_on" in branch
 
 
@@ -778,10 +823,13 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
     # cpap_off backs its delay_off out the same way; the mid-session re-arm
     # branch's own fresh-segment cpap_on write backs delay_on out again
     # (Codex P2 follow-up on #373: excluding stopped intervals from CPAP
-    # minutes). timestamp:/as_timestamp() (an absolute epoch) rather than
-    # datetime:/strftime() (a naive local string) also sidesteps the autumn
-    # DST fallback (Codex P2 follow-up on #373).
-    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 4
+    # minutes); the recovered-bed-entry branch's own cap on bed_in backs it
+    # out a fifth time, via plain epoch-second arithmetic rather than
+    # timedelta (Codex P2 follow-up on #373: keep recovered bed entry before
+    # the recovered CPAP start). timestamp:/as_timestamp() (an absolute
+    # epoch) rather than datetime:/strftime() (a naive local string) also
+    # sidesteps the autumn DST fallback (Codex P2 follow-up on #373).
+    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 5
     assert block.count("- timedelta(seconds=10))") == 3
     assert block.count("- timedelta(minutes=5))") == 1
     assert (
