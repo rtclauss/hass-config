@@ -286,7 +286,21 @@ switch: []
 ########################
 ## Templates
 ########################
-template: []
+template:
+  - binary_sensor:
+      # Debounced view of the bed occupancy sensor, derived DIRECTLY from the
+      # single intended source (binary_sensor.bayesian_bed_occupancy) rather than
+      # the aggregate input_boolean.master_bed_occupancy latch (which in_bed_toggles
+      # can clear on the east/west side helpers alone while the Bayesian sensor is
+      # still on, producing spurious re-triggers). The raw Bayesian sensor blips
+      # off ~2s on every weight shift; delay_off rides through those so bedtime
+      # automations see one clean, stable "in bed" edge. delay_on is 0 so getting
+      # into bed is still detected immediately.
+      - name: "Bed Occupied Debounced"
+        unique_id: bed_occupied_debounced
+        icon: mdi:bed
+        state: "{{ is_state('binary_sensor.bayesian_bed_occupancy', 'on') }}"
+        delay_off: "00:00:45"
 
 ########################
 ## Adaptive Lighting
