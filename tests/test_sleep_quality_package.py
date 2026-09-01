@@ -307,9 +307,22 @@ def test_cpap_start_timestamps_the_actual_transition_not_the_debounce_delay() ->
     # ambiguous during the autumn DST fallback (a repeated wall-clock
     # hour). timestamp: (an absolute epoch) sidesteps that entirely.
     expected = 'timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"'
-    assert cpap_start_branch.count(expected) == 2
+    assert cpap_start_branch.count(expected) == 1
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_start_branch
     assert "strftime" not in cpap_start_branch
+
+    # Codex P2 follow-up on #373: if CPAP crosses less than 10 seconds
+    # before the resident gets into bed, this delayed callback runs after a
+    # live bed_entry trigger has already recorded a later bed_in, so
+    # writing cpap_on from the earlier crossing unconditionally would read
+    # cpap_on_ts < bed_in_ts and fail the finalizer's ordering check. Must
+    # clamp cpap_on to never be earlier than the current bed_in.
+    cpap_on_index = cpap_start_branch.index("entity_id: input_datetime.sleep_session_cpap_on")
+    counter_index = cpap_start_branch.index("action: counter.reset", cpap_on_index)
+    cpap_on_write = cpap_start_branch[cpap_on_index:counter_index]
+    assert "as_timestamp(trigger.to_state.last_changed)" in cpap_on_write
+    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)" in cpap_on_write
+    assert "| max" in cpap_on_write
 
 
 def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() -> None:
@@ -507,7 +520,19 @@ def test_reconcile_bed_exit_freshness_compares_against_current_transition() -> N
         "                 < as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
         in block
     )
-    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp')" not in block
+
+    # The staleness check itself (not the unrelated cpap_on clamp added
+    # later, Codex P2 follow-up on #373: clamp CPAP start to a later bed
+    # entry) must not fall back to comparing against bed_in.
+    bed_exit_index = block.index("Reconcile a lost bed_exit debounce")
+    next_branch_index = block.index(
+        "Require the bed's own 5-minute debounce", bed_exit_index
+    )
+    bed_exit_reconcile_branch = block[bed_exit_index:next_branch_index]
+    assert (
+        "state_attr('input_datetime.sleep_session_bed_in', 'timestamp')"
+        not in bed_exit_reconcile_branch
+    )
 
 
 def test_reconcile_requires_the_full_debounce_before_treating_a_transition_as_settled() -> None:
@@ -719,6 +744,50 @@ def test_reconcile_cpap_start_requires_pending_entry_or_nightly_window() -> None
     or_block = guard_block[or_index:]
     assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in or_block
     assert "condition: time" in or_block
+
+
+def test_cpap_start_clamps_cpap_on_to_a_later_bed_entry() -> None:
+    # Codex P2 follow-up on #373: if CPAP crosses the threshold less than
+    # 10 seconds before the resident enters bed, this delayed callback
+    # (cpap_start's own for: duration) runs after the live bed_entry
+    # trigger has already recorded a later bed_in. Writing cpap_on from the
+    # earlier CPAP crossing unconditionally would then read
+    # cpap_on_ts < bed_in_ts, failing the finalizer's ordering check and
+    # silently discarding an otherwise complete session. Must never record
+    # cpap_on earlier than the current bed_in.
+    prepare = _automation_block("sleep_quality_prepare_session")
+    cpap_start_branch = prepare.split("id: cpap_start", maxsplit=2)[2]
+
+    cpap_on_index = cpap_start_branch.index("entity_id: input_datetime.sleep_session_cpap_on")
+    counter_index = cpap_start_branch.index("action: counter.reset", cpap_on_index)
+    cpap_on_write = cpap_start_branch[cpap_on_index:counter_index]
+
+    assert "as_timestamp(trigger.to_state.last_changed)" in cpap_on_write
+    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)" in cpap_on_write
+    assert "| max" in cpap_on_write
+
+
+def test_reconcile_cpap_start_clamps_cpap_on_to_a_later_bed_entry() -> None:
+    # Codex P2 follow-up on #373: same clamp as the live cpap_start branch,
+    # on the periodic reconciliation path. When CPAP was already running
+    # before a pending bed entry existed, the fallback bed_in write is
+    # skipped (pending is already on), so writing cpap_on from the CPAP
+    # helper's own transition unconditionally could read
+    # cpap_on_ts < bed_in_ts if that pending entry's bed_in is later,
+    # discarding an otherwise complete session.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    cpap_start_branch = block.split("Reconcile a lost cpap_start debounce", maxsplit=1)[1]
+
+    cpap_on_index = cpap_start_branch.index("entity_id: input_datetime.sleep_session_cpap_on")
+    counter_index = cpap_start_branch.index("action: counter.reset", cpap_on_index)
+    cpap_on_write = cpap_start_branch[cpap_on_index:counter_index]
+
+    assert (
+        "as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed"
+        in cpap_on_write
+    )
+    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)" in cpap_on_write
+    assert "| max" in cpap_on_write
 
 
 def test_active_session_rearms_cpap_stopped_latch_in_real_time_on_resume() -> None:

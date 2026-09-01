@@ -293,11 +293,27 @@ automation:
                       entity_id: input_datetime.sleep_session_bed_in
                     data:
                       timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
-              - action: input_datetime.set_datetime
+              - alias: >-
+                  Clamp cpap_on to bed_in when a bed entry landed after the
+                  CPAP crossing but before this delayed callback fires — if
+                  CPAP crosses less than 10 seconds before the resident
+                  gets into bed, this callback runs after the live
+                  bed_entry trigger has already recorded a later bed_in
+                  (or after a pending entry from any other source), so
+                  writing cpap_on from the earlier crossing unconditionally
+                  would read cpap_on_ts < bed_in_ts, failing the
+                  finalizer's ordering check and silently discarding an
+                  otherwise complete session (Codex P2 follow-up on #373).
+                  Bed entry must precede CPAP starting, so never record a
+                  cpap_on earlier than the current bed_in.
+                action: input_datetime.set_datetime
                 target:
                   entity_id: input_datetime.sleep_session_cpap_on
                 data:
-                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+                  timestamp: >-
+                    {{ [as_timestamp(trigger.to_state.last_changed),
+                        state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)]
+                       | max }}
               - action: counter.reset
                 target:
                   entity_id: counter.sleep_restlessness_events
@@ -768,13 +784,25 @@ automation:
                   timestamp: >-
                     {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
                        - timedelta(seconds=10)) }}
-          - action: input_datetime.set_datetime
+          - alias: >-
+              Same clamp as the live cpap_start branch (Codex P2 follow-up
+              on #373): when CPAP was already running before a pending bed
+              entry existed (so the fallback bed_in write above was
+              skipped), writing cpap_on from the CPAP helper's own
+              transition unconditionally could read cpap_on_ts < bed_in_ts
+              if that pending entry's bed_in is later, failing the
+              finalizer's ordering check and discarding an otherwise
+              complete session. Never record a cpap_on earlier than the
+              current bed_in.
+            action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_cpap_on
             data:
               timestamp: >-
-                {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
-                   - timedelta(seconds=10)) }}
+                {{ [as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                       - timedelta(seconds=10)),
+                    state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)]
+                   | max }}
           - action: counter.reset
             target:
               entity_id: counter.sleep_restlessness_events
