@@ -2387,6 +2387,17 @@ automation:
               - condition: state
                 entity_id: binary_sensor.office_motion_occupancy
                 state: "off"
+              # Meeting guard: never auto-off while the work laptop camera is
+              # active. Sitting still on a video call ages out all three
+              # presence sensors, so treat "camera in use" as occupancy.
+              # Negated rather than state: "off" to stay fail-open: if the
+              # sensor goes unavailable/unknown it is not "on", so auto-off
+              # still works and an outage cannot strand the lights on.
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+                    state: "on"
             sequence:
               - action: light.turn_off
                 data:
