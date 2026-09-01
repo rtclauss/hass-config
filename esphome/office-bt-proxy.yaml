@@ -13,9 +13,8 @@ packages:
   bluetooth_proxy: !include packages/common/bluetooth_proxy.yaml
 
 esphome:
-  platformio_options:
-    build_flags:
-      - -Wno-maybe-uninitialized
+  build_flags:
+    - -Wno-maybe-uninitialized
 
 esp32_ble_tracker:
   on_ble_advertise:
@@ -26,7 +25,7 @@ esp32_ble_tracker:
             optional<int16_t> best_rssi = nullopt;
             for (auto data : x.get_manufacturer_datas()) {
               // Guard against non-Apple datagrams, or those that are too small.
-              if (data.data.size() < 4 || data.uuid.to_str() != "0x004C" || data.data[0] != 0x10 || data.data[1] < 5) {
+              if (data.data.size() < 4 || data.uuid != esphome::ble_device_base::ESPBTUUID::from_uint16(0x004C) || data.data[0] != 0x10 || data.data[1] < 5) {
                 continue;
               }
               const int16_t rssi = x.get_rssi();
