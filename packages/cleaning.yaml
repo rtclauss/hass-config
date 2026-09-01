@@ -599,6 +599,15 @@ automation:
         from: "on"
         to: "off"
         id: run_off
+      # Power telemetry can drop mid-run (dryer_running is an availability
+      # template over the dryer power sensor), so the sensor may recover
+      # unavailable->off after the cycle already stopped; run_off (from "on")
+      # cannot catch that, so reconcile it explicitly.
+      - trigger: state
+        entity_id: binary_sensor.dryer_running
+        from: "unavailable"
+        to: "off"
+        id: recover_off
       - trigger: state
         entity_id: sensor.dryer_current_phase
         id: phase
@@ -616,12 +625,16 @@ automation:
         value_template: "{{ trigger.id != 'progress' or (trigger.from_state is not none and trigger.to_state is not none and (trigger.to_state.state | int(0)) // 5 != (trigger.from_state.state | int(0)) // 5) }}"
     action:
       - choose:
-          # On HA restart, clear any activity stranded when a completion delay was
-          # interrupted before its clear_notification ran. Off = no cycle in
-          # progress, so this clears without announcing another completion.
+          # Clear a stranded activity WITHOUT announcing completion when the dryer
+          # is off but the genuine on->off edge never fired: on HA restart (boot,
+          # if a completion delay was interrupted before its clear ran), or when
+          # power telemetry recovers unavailable->off after the cycle already
+          # stopped.
           - conditions:
               - condition: trigger
-                id: boot
+                id:
+                  - boot
+                  - recover_off
               - condition: state
                 entity_id: binary_sensor.dryer_running
                 state: "off"
