@@ -2718,15 +2718,6 @@
               "cards": [
                 {
                   "type": "history-graph",
-                  "title": "Rate of Temp Change",
-                  "entities": [
-                    "sensor.rate_of_house_temp_change_5m",
-                    "sensor.rate_of_house_temp_change_30m",
-                    "sensor.rate_of_house_temp_change_1h"
-                  ]
-                },
-                {
-                  "type": "history-graph",
                   "title": "Default Derivative of Temp Change",
                   "entities": [
                     "sensor.glycol_thermostat_temperature",
@@ -2739,22 +2730,6 @@
                   "entities": [
                     "sensor.glycol_thermostat_temperature",
                     "sensor.derivative_2_5_5_minutes_house_temp_change"
-                  ]
-                },
-                {
-                  "type": "history-graph",
-                  "title": "Default 5-5 min Derivative of Temp Change",
-                  "entities": [
-                    "sensor.glycol_thermostat_temperature",
-                    "sensor.derivative_5_5_minutes_house_temp_change"
-                  ]
-                },
-                {
-                  "type": "history-graph",
-                  "title": "Default 5-10 minDerivative of Temp Change",
-                  "entities": [
-                    "sensor.glycol_thermostat_temperature",
-                    "sensor.derivative_5_10_minutes_house_temp_change"
                   ]
                 },
                 {
@@ -3266,13 +3241,41 @@
               "cards": [
                 {
                   "type": "weather-forecast",
-                  "entity": "weather.my_ecobee"
+                  "entity": "weather.my_ecobee",
+                  "forecast_type": "daily"
                 },
                 {
                   "show_current": true,
                   "show_forecast": true,
                   "type": "weather-forecast",
-                  "entity": "weather.tomorrow_io_the_brewery_daily"
+                  "entity": "weather.tomorrow_io_the_brewery_daily",
+                  "forecast_type": "daily"
+                },
+                {
+                  "type": "weather-forecast",
+                  "entity": "weather.openweathermap",
+                  "forecast_type": "daily"
+                },
+                {
+                  "show_current": true,
+                  "show_forecast": true,
+                  "type": "weather-forecast",
+                  "entity": "weather.forecast_home",
+                  "forecast_type": "daily"
+                },
+                {
+                  "show_current": true,
+                  "show_forecast": true,
+                  "type": "weather-forecast",
+                  "entity": "weather.the_brewery",
+                  "forecast_type": "daily"
+                },
+                {
+                  "show_current": true,
+                  "show_forecast": true,
+                  "type": "weather-forecast",
+                  "entity": "weather.kmsp",
+                  "forecast_type": "hourly"
                 }
               ]
             },
@@ -3319,6 +3322,56 @@
           "icon": "mdi:spray-bottle",
           "type": "sections",
           "sections": [
+            {
+              "type": "grid",
+              "cards": [
+                {
+                  "type": "heading",
+                  "heading": "Cat-Safe Cleaning Policy",
+                  "icon": "mdi:cat"
+                },
+                {
+                  "type": "markdown",
+                  "content": "**Current policy:** {{ states('input_select.vacuum_pet_policy') }}\n\n- **Acclimation** — no automatic cleaning; entering it docks all robots (fail-closed default).\n- **Supervised** — one room, vacuum-only, requires you home.\n- **Unattended** — the only mode that permits automatic away/trip cleaning + mopping.\n\nGuest mode always vetoes automatic cleaning."
+                },
+                {
+                  "type": "entities",
+                  "title": "Policy",
+                  "entities": [
+                    {
+                      "entity": "input_select.vacuum_pet_policy"
+                    }
+                  ]
+                },
+                {
+                  "type": "button",
+                  "name": "Dock all robots",
+                  "icon": "mdi:robot-vacuum",
+                  "tap_action": {
+                    "action": "perform-action",
+                    "perform_action": "script.vacuum_dock_all_robots"
+                  }
+                },
+                {
+                  "type": "entities",
+                  "title": "Supervised one-room clean",
+                  "entities": [
+                    {
+                      "entity": "input_select.vacuum_room"
+                    }
+                  ]
+                },
+                {
+                  "type": "button",
+                  "name": "Start supervised clean",
+                  "icon": "mdi:broom",
+                  "tap_action": {
+                    "action": "perform-action",
+                    "perform_action": "script.vacuum_supervised_clean"
+                  }
+                }
+              ]
+            },
             {
               "type": "grid",
               "cards": [

@@ -452,17 +452,90 @@ script:
     alias: "X40 Ultra Restore CleanGenius"
     description: >-
       Restore CleanGenius to Deep cleaning after a deterministic policy run so
-      manual/app-initiated cleans keep the user's default behavior.
+      manual/app-initiated cleans keep the user's default behavior. The select
+      can briefly recover as off and become unavailable again while the dock
+      finishes post-clean work, so wait for stable availability, retry the
+      request, and fail visibly if the postcondition never becomes true.
     mode: queued
     trace:
       stored_traces: 10
     sequence:
-      - action: select.select_option
-        continue_on_error: true
-        target:
-          entity_id: select.x40_ultra_cleangenius
-        data:
-          option: "deep_cleaning"
+      - repeat:
+          sequence:
+            # wait_template is deliberate: it passes immediately when the
+            # select is already available, unlike wait_for_trigger.
+            - wait_template: >-
+                {{ states('select.x40_ultra_cleangenius') not in
+                   ['unavailable', 'unknown'] }}
+              timeout:
+                minutes: 2
+              continue_on_timeout: true
+            # The select can briefly expose `off` before post-clean dock work
+            # makes it unavailable again. Require it to stay available before
+            # issuing the restore request.
+            - delay:
+                seconds: 2
+            - if:
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: select.x40_ultra_cleangenius
+                      state:
+                        - "unavailable"
+                        - "unknown"
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: select.x40_ultra_cleangenius
+                      state: "deep_cleaning"
+              then:
+                - action: select.select_option
+                  # A post-dock race can still occur between the stable-state
+                  # guard and the call. The bounded loop verifies and retries;
+                  # the terminal check below makes a persistent failure loud.
+                  continue_on_error: true
+                  target:
+                    entity_id: select.x40_ultra_cleangenius
+                  data:
+                    option: "deep_cleaning"
+                - wait_template: >-
+                    {{ is_state('select.x40_ultra_cleangenius',
+                                'deep_cleaning') }}
+                  timeout:
+                    seconds: 15
+                  continue_on_timeout: true
+          until:
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: select.x40_ultra_cleangenius
+                  state: "deep_cleaning"
+                - condition: template
+                  value_template: "{{ repeat.index >= 3 }}"
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: select.x40_ultra_cleangenius
+                state: "deep_cleaning"
+        then:
+          - action: persistent_notification.create
+            data:
+              notification_id: x40_cleangenius_restore_failed
+              title: X40 CleanGenius restore failed
+              message: >-
+                The X40 finished its deterministic run but CleanGenius did not
+                return to Deep cleaning after three verified attempts. Check
+                the Dreame integration before the next manual or app clean.
+          - stop: X40 CleanGenius did not restore to Deep cleaning
+            error: true
+        else:
+          # A prior run may have left x40_cleangenius_restore_failed active;
+          # this run verified the restore, so clear it. dismiss is a no-op
+          # if no such notification exists (Codex P2 on #960).
+          - action: persistent_notification.dismiss
+            data:
+              notification_id: x40_cleangenius_restore_failed
 
   x40_ultra_wait_until_docked:
     alias: "X40 Ultra Wait Until Docked"

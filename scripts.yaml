@@ -1,1 +1,26 @@
-{}
+leave_home_transition:
+  alias: Leave home transition
+  description: >-
+    Apply the stable leave-home scene, then turn off optional media and
+    seasonal targets only when Home Assistant has a usable state for them.
+  mode: restart
+  sequence:
+    - continue_on_error: true
+      action: scene.turn_on
+      target:
+        entity_id: scene.leave_home
+    - variables:
+        optional_shutdown_targets:
+          - action: media_player.turn_off
+            entity_id: media_player.lg_webos_smart_tv
+          - action: switch.turn_off
+            entity_id: switch.christmas_tree
+    - repeat:
+        for_each: "{{ optional_shutdown_targets }}"
+        sequence:
+          - condition: template
+            value_template: "{{ has_value(repeat.item.entity_id) }}"
+          - continue_on_error: true
+            action: "{{ repeat.item.action }}"
+            target:
+              entity_id: "{{ repeat.item.entity_id }}"

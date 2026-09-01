@@ -930,18 +930,17 @@ automation:
           - input_boolean.east_bed_occupied
           - input_boolean.west_bed_occupied
         to: "off"
+        for:
+          seconds: 5
         id: bed-unoccupied
-    # condition:
-    #   condition: state
-    #   entity_id: binary_sensor.bayesian_bed_occupancy
-    #   state: "on"
-    #   for:
-    #     seconds: 5
     action:
       - choose:
           - conditions:
               - condition: trigger
                 id: bed-occupied
+              - condition: state
+                entity_id: input_boolean.master_bed_occupancy
+                state: "off"
             sequence:
               - action: input_boolean.turn_on
                 data:
@@ -3197,9 +3196,11 @@ template:
             'binary_sensor.pressure_falling_quickly',
             'binary_sensor.pressure_falling_slowly',
             'binary_sensor.pressure_falling_v_rapidly',
+            'binary_sensor.pressure_falling_fast',
             'binary_sensor.pressure_rising_quickly',
             'binary_sensor.pressure_rising_slowly',
             'binary_sensor.pressure_rising_v_rapidly',
+            'binary_sensor.pressure_rising_fast',
             'binary_sensor.pressure_rising'
           ] %}
           {% set open_entities = namespace(entity_ids=[]) %}
@@ -3226,9 +3227,11 @@ template:
               'binary_sensor.pressure_falling_quickly',
               'binary_sensor.pressure_falling_slowly',
               'binary_sensor.pressure_falling_v_rapidly',
+              'binary_sensor.pressure_falling_fast',
               'binary_sensor.pressure_rising_quickly',
               'binary_sensor.pressure_rising_slowly',
               'binary_sensor.pressure_rising_v_rapidly',
+              'binary_sensor.pressure_rising_fast',
               'binary_sensor.pressure_rising'
             ] %}
             {% set open_entities = namespace(entity_ids=[]) %}
@@ -3254,9 +3257,11 @@ template:
               'binary_sensor.pressure_falling_quickly',
               'binary_sensor.pressure_falling_slowly',
               'binary_sensor.pressure_falling_v_rapidly',
+              'binary_sensor.pressure_falling_fast',
               'binary_sensor.pressure_rising_quickly',
               'binary_sensor.pressure_rising_slowly',
               'binary_sensor.pressure_rising_v_rapidly',
+              'binary_sensor.pressure_rising_fast',
               'binary_sensor.pressure_rising'
             ] %}
             {% set open_entities = namespace(names=[]) %}

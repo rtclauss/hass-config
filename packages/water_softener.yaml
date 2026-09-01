@@ -299,15 +299,20 @@ automation:
     trigger:
       - trigger: state
         entity_id:
-          - sensor.zeke_place
-          - sensor.tesla_place
-        attribute: place_name
+          - sensor.zeke_place_place_name
+          - sensor.tesla_place_place_name
         to:
           - "Home Depot"
           - "The Home Depot"
           - "Menards"
           - "Lowe's"
           - "Fleet Farm"
+          - "Ace Hardware"
+      - trigger: state
+        entity_id:
+          - sensor.zeke_place_place_type
+          - sensor.tesla_place_place_type
+        to: "doityourself"
     condition:
       - alias: "Salt Bag Inventory Low"
         condition: numeric_state
@@ -367,7 +372,7 @@ automation:
     trigger:
       - trigger: state
         enabled: false
-        entity_id: sensor.zeke_place
+        entity_id: sensor.zeke_place_place_name
         to:
     condition: []
     action:
@@ -375,10 +380,8 @@ automation:
         action: notify.mobile_app_wethop
         data:
           message: >-
-            At place_name: {{state_attr("sensor.zeke_place", "place_name")}},
-            at place: {{state_attr("sensor.zeke_place", "place")}},
-            at named place: {{state_attr("sensor.zeke_place", "name")}},
-            of category: {{state_attr("sensor.zeke_place", "place_category")}}
+            At place_name: {{ states("sensor.zeke_place_place_name") }},
+            of category: {{ states("sensor.zeke_place_place_category") }}
 
 ########################
 # Binary Sensors

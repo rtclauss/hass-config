@@ -259,3 +259,29 @@ def test_x40_replaces_mainlevel_vacuum_in_shared_consumers() -> None:
 
     cleaning_config = (ROOT / "packages" / "cleaning.yaml").read_text(encoding="utf-8")
     assert "- vacuum.x40_ultra" in cleaning_config
+
+
+def test_cleangenius_restore_waits_retries_verifies_and_fails_loudly() -> None:
+    block = _script_block(VACUUM_PATH, "x40_ultra_restore_cleangenius")
+
+    # Runtime issue #960: the select briefly recovered as `off`, then became
+    # unavailable again while post-mop dock work started. The restore must wait
+    # for stable availability before calling the service.
+    availability_wait = block.index(
+        "states('select.x40_ultra_cleangenius') not in"
+    )
+    stability_delay = block.index("seconds: 2", availability_wait)
+    select_option = block.index("action: select.select_option", stability_delay)
+    assert availability_wait < stability_delay < select_option
+
+    # A service call reporting no exception is not proof of restoration. Verify
+    # the actual postcondition, retry only a bounded number of times, then make
+    # the trace and persistent notification clearly show terminal failure.
+    postcondition_wait = block.index(
+        "is_state('select.x40_ultra_cleangenius',", select_option
+    )
+    retry_limit = block.index("repeat.index >= 3", postcondition_wait)
+    terminal_check = block.index("persistent_notification.create", retry_limit)
+    assert select_option < postcondition_wait < retry_limit < terminal_check
+    assert "notification_id: x40_cleangenius_restore_failed" in block
+    assert "error: true" in block
