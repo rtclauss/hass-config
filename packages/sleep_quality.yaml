@@ -110,6 +110,58 @@ template:
           minutes: 5
 
 script:
+  sleep_quality_rearm_cpap_resume:
+    alias: Sleep quality - re-arm CPAP resume
+    description: >-
+      Bank the interruption that just ended into accumulated active time,
+      start a fresh segment at resume_timestamp, and clear the stop latch.
+      Routed through this single mode: single script so the live
+      cpap_resume trigger (in sleep_quality_track_active_session) and the
+      periodic reconciliation re-arm (in
+      sleep_quality_reconcile_cpap_stop_after_restart) can't both observe
+      sleep_session_cpap_stopped as "on" and independently bank the same
+      interruption — mode: single means a concurrent second call is
+      dropped outright while the first is still running, and the internal
+      state check below still protects a call that starts only after the
+      first has already finished (Codex P2 follow-up on #373: serialize
+      concurrent CPAP resume recovery).
+    mode: single
+    max_exceeded: silent
+    trace:
+      stored_traces: 10
+    fields:
+      resume_timestamp:
+        description: >-
+          Epoch seconds for the genuine resume transition, computed by the
+          caller (trigger.to_state.last_changed for the live trigger, or
+          the debounced helper's last_changed backed out by its own
+          delay_on for the periodic reconciliation path).
+        required: true
+        selector:
+          number:
+    sequence:
+      - if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_cpap_stopped
+            state: "on"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_active_seconds
+            data:
+              value: >-
+                {{ (states('input_number.sleep_session_cpap_active_seconds') | float(0))
+                   + ((state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0))
+                      - (state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0))) }}
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.sleep_session_cpap_on
+            data:
+              timestamp: "{{ resume_timestamp }}"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sleep_session_cpap_stopped
+
   finalize_sleep_quality_session:
     alias: Finalize sleep quality session
     description: >-
@@ -496,40 +548,26 @@ automation:
                   could finalize using that stale cpap_off if a brand new,
                   not-yet-debounced drop happened to be in progress when
                   the bed emptied (Codex P2 follow-up on #373). Only a
-                  genuine re-arm (the latch was actually on) needs to
-                  bank the ended interruption and start a fresh active
-                  segment below — a spurious firing right at session
-                  start, before any stop has ever latched it on, is a
-                  no-op here.
+                  genuine re-arm (the latch was actually on) needs to bank
+                  the ended interruption and start a fresh active segment
+                  — a spurious firing right at session start, before any
+                  stop has ever latched it on, is a no-op here. Routed
+                  through the shared sleep_quality_rearm_cpap_resume
+                  script (mode: single) rather than banking inline, so
+                  this live trigger and the periodic reconciliation
+                  re-arm branch below can't both observe the latch "on"
+                  and double-bank the same interruption if a 5-minute
+                  tick lands inside this trigger's own 10-second debounce
+                  window (Codex P2 follow-up on #373: serialize
+                  concurrent CPAP resume recovery).
                 if:
                   - condition: state
                     entity_id: input_boolean.sleep_session_cpap_stopped
                     state: "on"
                 then:
-                  - alias: >-
-                      Bank the interruption that just ended into the
-                      session's accumulated active time, and start a
-                      fresh segment at this resume — otherwise
-                      finalize's single cpap_off - cpap_on span would
-                      count the entire stopped interval as active CPAP
-                      use, inflating cpap_minutes and the continuity
-                      score (Codex P2 follow-up on #373).
-                    action: input_number.set_value
-                    target:
-                      entity_id: input_number.sleep_session_cpap_active_seconds
+                  - action: script.sleep_quality_rearm_cpap_resume
                     data:
-                      value: >-
-                        {{ (states('input_number.sleep_session_cpap_active_seconds') | float(0))
-                           + ((state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0))
-                              - (state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0))) }}
-                  - action: input_datetime.set_datetime
-                    target:
-                      entity_id: input_datetime.sleep_session_cpap_on
-                    data:
-                      timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
-                  - action: input_boolean.turn_off
-                    target:
-                      entity_id: input_boolean.sleep_session_cpap_stopped
+                      resume_timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
           - conditions:
               - condition: trigger
                 id: bed_exit
@@ -833,7 +871,13 @@ automation:
           accumulated active time and start a fresh segment here, same as
           the real-time cpap_resume re-arm — otherwise finalize's single
           cpap_off - cpap_on span would count this stopped interval as
-          active CPAP use too (Codex P2 follow-up on #373).
+          active CPAP use too (Codex P2 follow-up on #373). Routed through
+          the shared sleep_quality_rearm_cpap_resume script (mode: single)
+          rather than banking inline, so this periodic tick and the live
+          cpap_resume trigger above can't both observe the latch "on" and
+          double-bank the same interruption if this tick lands inside that
+          trigger's own 10-second debounce window (Codex P2 follow-up on
+          #373: serialize concurrent CPAP resume recovery).
         if:
           - condition: state
             entity_id: input_boolean.sleep_session_active
@@ -845,24 +889,11 @@ automation:
             entity_id: binary_sensor.owner_suite_cpap_running
             state: "on"
         then:
-          - action: input_number.set_value
-            target:
-              entity_id: input_number.sleep_session_cpap_active_seconds
+          - action: script.sleep_quality_rearm_cpap_resume
             data:
-              value: >-
-                {{ (states('input_number.sleep_session_cpap_active_seconds') | float(0))
-                   + ((state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0))
-                      - (state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0))) }}
-          - action: input_datetime.set_datetime
-            target:
-              entity_id: input_datetime.sleep_session_cpap_on
-            data:
-              timestamp: >-
+              resume_timestamp: >-
                 {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
                    - timedelta(seconds=10)) }}
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.sleep_session_cpap_stopped
       - alias: >-
           Reconcile a lost cpap_stop debounce. Exact power-drop time is
           unknown (the debounce that would have recorded it was

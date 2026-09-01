@@ -23,7 +23,7 @@ def _automation_block(automation_id: str) -> str:
 def _script_block(script_id: str) -> str:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
     pattern = re.compile(
-        rf"^  {re.escape(script_id)}:\n(.*?)(?=^automation:)",
+        rf"^  {re.escape(script_id)}:\n(.*?)(?=^  [A-Za-z_][A-Za-z0-9_]*:\n|^automation:)",
         re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(text)
@@ -164,7 +164,10 @@ def test_cpap_resume_banks_interruption_into_accumulated_active_time() -> None:
     # counting the entire interruption as active CPAP use and inflating both
     # cpap_minutes and the continuity score. The ended interruption must be
     # banked into an accumulator and a fresh segment started at the resume,
-    # only when genuinely re-arming (the latch was actually on).
+    # only when genuinely re-arming (the latch was actually on). Banking
+    # itself is routed through the shared sleep_quality_rearm_cpap_resume
+    # script (Codex P2 follow-up on #373: serialize concurrent CPAP resume
+    # recovery), not done inline here.
     active = _automation_block("sleep_quality_track_active_session")
     cpap_resume_branch = active.split("id: cpap_resume", maxsplit=2)[2]
 
@@ -174,21 +177,64 @@ def test_cpap_resume_banks_interruption_into_accumulated_active_time() -> None:
     guard = cpap_resume_branch[guard_index : guard_index + 90]
     assert 'state: "on"' in guard
 
-    assert "entity_id: input_number.sleep_session_cpap_active_seconds" in cpap_resume_branch
-    accumulate_index = cpap_resume_branch.index(
+    assert "action: script.sleep_quality_rearm_cpap_resume" in cpap_resume_branch
+    assert "resume_timestamp:" in cpap_resume_branch
+    assert "as_timestamp(trigger.to_state.last_changed)" in cpap_resume_branch
+
+
+def test_rearm_cpap_resume_script_banks_and_starts_fresh_segment() -> None:
+    # The actual banking logic: add the just-ended interruption's elapsed
+    # time to the accumulator, then start a fresh active segment at the
+    # caller-supplied resume_timestamp, then clear the stop latch -- only
+    # when the latch is genuinely on (a call arriving after another instance
+    # already cleared it must be a no-op).
+    script = _script_block("sleep_quality_rearm_cpap_resume")
+
+    assert "mode: single" in script
+    assert "resume_timestamp" in script
+
+    guard_index = script.index("entity_id: input_boolean.sleep_session_cpap_stopped")
+    guard = script[guard_index : guard_index + 90]
+    assert 'state: "on"' in guard
+
+    accumulate_index = script.index(
         "entity_id: input_number.sleep_session_cpap_active_seconds"
     )
-    cpap_on_index = cpap_resume_branch.index(
+    cpap_on_index = script.index(
         "entity_id: input_datetime.sleep_session_cpap_on", accumulate_index
     )
-    turn_off_index = cpap_resume_branch.index(
-        "action: input_boolean.turn_off", cpap_on_index
-    )
+    turn_off_index = script.index("action: input_boolean.turn_off", cpap_on_index)
     assert accumulate_index < cpap_on_index < turn_off_index
 
-    accumulate_value = cpap_resume_branch[accumulate_index:cpap_on_index]
+    accumulate_value = script[accumulate_index:cpap_on_index]
     assert "state_attr('input_datetime.sleep_session_cpap_off', 'timestamp')" in accumulate_value
     assert "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp')" in accumulate_value
+
+    cpap_on_write = script[cpap_on_index:turn_off_index]
+    assert "{{ resume_timestamp }}" in cpap_on_write
+
+
+def test_rearm_cpap_resume_calls_are_serialized_against_the_periodic_tick() -> None:
+    # Codex P2 follow-up on #373: the live cpap_resume trigger and the
+    # periodic reconciliation re-arm branch could both independently read
+    # sleep_session_cpap_stopped as "on" and both bank the same interruption
+    # if a 5-minute tick landed inside the live trigger's own 10-second
+    # debounce window. Both call sites must route through the same
+    # mode: single script rather than banking inline, so only one can ever
+    # actually execute the bank-and-clear at a time.
+    active = _automation_block("sleep_quality_track_active_session")
+    cpap_resume_branch = active.split("id: cpap_resume", maxsplit=2)[2]
+    assert "action: script.sleep_quality_rearm_cpap_resume" in cpap_resume_branch
+    # Inline banking must be gone from the live trigger's branch.
+    assert "entity_id: input_number.sleep_session_cpap_active_seconds" not in cpap_resume_branch
+
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    rearm_branch = block.split("Re-arm the CPAP-stop latch", maxsplit=1)[1]
+    then_index = rearm_branch.index("then:")
+    rearm_then = rearm_branch[then_index:]
+    assert "action: script.sleep_quality_rearm_cpap_resume" in rearm_then
+    # Inline banking must be gone from the periodic re-arm branch too.
+    assert "entity_id: input_number.sleep_session_cpap_active_seconds" not in rearm_then
 
 
 def test_cpap_start_resets_accumulated_active_time_for_a_fresh_session() -> None:
@@ -808,11 +854,10 @@ def test_active_session_rearms_cpap_stopped_latch_in_real_time_on_resume() -> No
     assert "seconds: 10" in trigger_def
 
     resume_branch = active.split("id: cpap_resume", maxsplit=2)[2]
-    turn_off_index = resume_branch.index("action: input_boolean.turn_off")
-    target_index = resume_branch.index(
-        "entity_id: input_boolean.sleep_session_cpap_stopped", turn_off_index
-    )
-    assert target_index > turn_off_index
+    # The latch is cleared by the shared sleep_quality_rearm_cpap_resume
+    # script (Codex P2 follow-up on #373: serialize concurrent CPAP resume
+    # recovery), not by an inline action here.
+    assert "action: script.sleep_quality_rearm_cpap_resume" in resume_branch
 
 
 def test_finalize_gates_use_a_single_consistent_cpap_threshold_source() -> None:
@@ -940,31 +985,34 @@ def test_reconcile_rearms_cpap_stopped_latch_when_cpap_resumes() -> None:
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
     rearm_branch = block.split("Re-arm the CPAP-stop latch", maxsplit=1)[1]
-    turn_off_index = rearm_branch.index("action: input_boolean.turn_off")
-    guard = rearm_branch[:turn_off_index]
+    then_index = rearm_branch.index("then:")
+    guard = rearm_branch[:then_index]
 
     assert guard.count('state: "on"') == 3
     assert "entity_id: binary_sensor.owner_suite_cpap_running" in guard
 
+    # Codex P2 follow-up on #373: banking is routed through the shared
+    # sleep_quality_rearm_cpap_resume script (serialize concurrent CPAP
+    # resume recovery), not done inline here -- same as the real-time
+    # cpap_resume re-arm, so a resume recovered only here (e.g. after a
+    # restart/reload swallowed the real-time trigger) still banks the
+    # ended interruption instead of counting the whole stopped interval as
+    # active CPAP use, and can't double-bank against the live trigger.
+    call_index = rearm_branch.index("action: script.sleep_quality_rearm_cpap_resume", then_index)
+    assert "resume_timestamp:" in rearm_branch[call_index:]
+    resume_timestamp_block = rearm_branch[call_index:]
+    assert (
+        "as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed"
+        in resume_timestamp_block
+    )
+    assert "- timedelta(seconds=10))" in resume_timestamp_block
+    # Inline banking must be gone from this branch.
+    assert "entity_id: input_number.sleep_session_cpap_active_seconds" not in rearm_branch
+
     # The re-arm must run before the final finalize gate so a resumed
     # session's stale latch is cleared in the same evaluation pass.
     final_gate_index = block.rindex("if:")
-    assert turn_off_index < final_gate_index
-
-    # Codex P2 follow-up on #373: same as the real-time cpap_resume re-arm
-    # -- this periodic re-arm must also bank the ended interruption into
-    # the accumulator and start a fresh segment, or a resume recovered only
-    # here (e.g. after a restart/reload swallowed the real-time trigger)
-    # would still count the whole stopped interval as active CPAP use.
-    assert "entity_id: input_number.sleep_session_cpap_active_seconds" in guard
-    accumulate_index = guard.index("entity_id: input_number.sleep_session_cpap_active_seconds")
-    cpap_on_index = guard.index(
-        "entity_id: input_datetime.sleep_session_cpap_on", accumulate_index
-    )
-    assert accumulate_index < cpap_on_index < turn_off_index
-    accumulate_value = guard[accumulate_index:cpap_on_index]
-    assert "state_attr('input_datetime.sleep_session_cpap_off', 'timestamp')" in accumulate_value
-    assert "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp')" in accumulate_value
+    assert call_index < final_gate_index
 
 
 def test_owner_suite_dashboard_shows_recent_sleep_history() -> None:
