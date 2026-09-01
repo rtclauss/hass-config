@@ -210,6 +210,17 @@ def test_rearm_cpap_resume_script_banks_and_starts_fresh_segment() -> None:
     assert "state_attr('input_datetime.sleep_session_cpap_off', 'timestamp')" in accumulate_value
     assert "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp')" in accumulate_value
 
+    # The banked value must stay inside sleep_session_cpap_active_seconds'
+    # own min/max: a single out-of-range input_number.set_value raises and
+    # aborts this script mid-sequence, which would leave cpap_on unrewritten
+    # and sleep_session_cpap_stopped stranded "on" for the rest of the
+    # session. An inverted (cpap_off < cpap_on) or absent timestamp pair
+    # must degrade to a no-op bank instead.
+    assert "[0," in accumulate_value
+    assert "| max" in accumulate_value
+    assert "[86400," in accumulate_value
+    assert "| min" in accumulate_value
+
     cpap_on_write = script[cpap_on_index:turn_off_index]
     assert "{{ resume_timestamp }}" in cpap_on_write
 
@@ -506,6 +517,36 @@ def test_restart_reconciles_a_lost_cpap_stop_debounce() -> None:
     assert "entity_id: binary_sensor.owner_suite_cpap_running" in block
     assert "entity_id: input_datetime.sleep_session_cpap_off" in block
     assert "action: script.finalize_sleep_quality_session" in block
+
+
+def test_reconciled_cpap_off_never_precedes_cpap_on() -> None:
+    # Codex P2 follow-up on #373: this branch recovers cpap_off by backing
+    # the helper's 5-minute delay_off out of its last_changed. On a real
+    # restart HA resets a restored entity's last_changed to the restore
+    # moment, so that lands ~5 minutes BEFORE the restart -- earlier than
+    # cpap_on whenever the session started less than 5 minutes before the
+    # restart. An inverted cpap_off is doubly damaging: finalize's
+    # cpap_off_ts >= cpap_on_ts check discards the session, and the re-arm
+    # script's cpap_off - cpap_on bank goes negative, violating
+    # sleep_session_cpap_active_seconds' min: 0 and aborting that script
+    # mid-sequence so sleep_session_cpap_stopped is stranded on. Must clamp
+    # the recovered value to at least the current cpap_on, same as the
+    # cpap_on/bed_in clamps elsewhere.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    cpap_stop_branch = block.split("Reconcile a lost cpap_stop debounce", maxsplit=1)[1]
+
+    cpap_off_index = cpap_stop_branch.index(
+        "entity_id: input_datetime.sleep_session_cpap_off"
+    )
+    turn_on_index = cpap_stop_branch.index("action: input_boolean.turn_on", cpap_off_index)
+    cpap_off_write = cpap_stop_branch[cpap_off_index:turn_on_index]
+
+    assert "- timedelta(minutes=5))" in cpap_off_write
+    assert (
+        "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0)"
+        in cpap_off_write
+    )
+    assert "| max" in cpap_off_write
 
 
 def test_reconcile_also_triggers_on_automation_reload() -> None:

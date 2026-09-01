@@ -145,14 +145,23 @@ script:
             entity_id: input_boolean.sleep_session_cpap_stopped
             state: "on"
         then:
-          - action: input_number.set_value
+          - alias: >-
+              Keep the running total inside the helper's own min/max. A
+              single out-of-range set_value raises and aborts this script
+              mid-sequence, which would leave cpap_on unrewritten and
+              sleep_session_cpap_stopped stranded on for the rest of the
+              session — so an inverted or absent timestamp pair must
+              degrade to a no-op bank rather than breaking the re-arm
+              entirely (Codex P2 follow-up on #373).
+            action: input_number.set_value
             target:
               entity_id: input_number.sleep_session_cpap_active_seconds
             data:
               value: >-
-                {{ (states('input_number.sleep_session_cpap_active_seconds') | float(0))
-                   + ((state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0))
-                      - (state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0))) }}
+                {{ [86400, [0, (states('input_number.sleep_session_cpap_active_seconds') | float(0))
+                   + [0, (state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0))
+                        - (state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0))]
+                     | max] | max] | min }}
           - action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_cpap_on
@@ -919,13 +928,30 @@ automation:
             entity_id: binary_sensor.owner_suite_cpap_running
             state: "off"
         then:
-          - action: input_datetime.set_datetime
+          - alias: >-
+              Clamp the recovered cpap_off to never precede cpap_on. On a
+              real restart HA resets the restored helper's last_changed to
+              the restore moment, so backing the 5-minute delay_off out of
+              it lands ~5 minutes BEFORE the restart — which is earlier
+              than cpap_on whenever the session started less than 5
+              minutes before that restart. An inverted cpap_off is doubly
+              damaging: finalize's cpap_off_ts >= cpap_on_ts check
+              discards the session, and the re-arm script's
+              cpap_off - cpap_on bank goes negative, which violates
+              sleep_session_cpap_active_seconds' own min: 0 and aborts
+              that script mid-sequence, stranding
+              sleep_session_cpap_stopped on for the rest of the session
+              (Codex P2 follow-up on #373, same class as the cpap_on and
+              bed_in clamps above).
+            action: input_datetime.set_datetime
             target:
               entity_id: input_datetime.sleep_session_cpap_off
             data:
               timestamp: >-
-                {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
-                   - timedelta(minutes=5)) }}
+                {{ [as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                       - timedelta(minutes=5)),
+                    state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0)]
+                   | max }}
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sleep_session_cpap_stopped
