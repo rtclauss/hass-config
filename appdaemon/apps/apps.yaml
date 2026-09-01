@@ -278,7 +278,15 @@ bayesian_device_tracker:
 Restart HA if network down:
   class: restart_ha
   module: reboot
-  host_to_ping: "8.8.8.8"
+  # Ping always-on LAN infrastructure, never an external IP. A cycle only
+  # counts as a failure when EVERY target is unreachable, so one host that
+  # drops ICMP can't drive a reboot loop (incident 2026-09-01, was 8.8.8.8).
+  hosts_to_ping:
+    - "10.24.1.253"   # Proxmox host - this VM's hypervisor, same subnet
+    - "10.24.1.252"   # LAN DNS / firewall
+  max_failures: 5
+  check_interval_minutes: 33
+  min_reboot_interval_hours: 6
 
   # original ryan 6/3/2025
 # Get Bed Load Cell Average Empty Data:

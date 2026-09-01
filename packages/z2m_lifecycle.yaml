@@ -255,6 +255,35 @@ automation:
     action:
       - action: script.z2m_reset_reboot_counter
 
+  - id: arm_z2m_host_watchdog_after_start
+    alias: arm_z2m_host_watchdog_after_start
+    description: >-
+      Hold the host/Proxmox shutdown watchdog disarmed for 20 minutes after
+      every Home Assistant start. Zigbee2MQTT needs ~10-15 min to fully
+      recover on this host after a reboot; without this grace period that
+      normal recovery looks like a bridge failure and trips the watchdog
+      (recovery restarts, and eventually rest_command.proxmox_shutdown).
+      Also clears the reboot counter so a reboot that happened mid-recovery
+      can't leave it pre-loaded toward escalation.
+    mode: restart
+    trace:
+      stored_traces: 5
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.z2m_host_watchdog_armed
+      - action: counter.reset
+        target:
+          entity_id: counter.reboot_counter
+      - delay:
+          minutes: 20
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.z2m_host_watchdog_armed
+
   # This automation depends on a HA host restart path configured elsewhere.
   # It should only react to bridge-wide problems, not a single end device that
   # leaves the network or drops right after joining.
@@ -321,6 +350,12 @@ automation:
     condition:
       - condition: template
         value_template: "{{ issue_active }}"
+      # Stay quiet during the post-restart recovery window (see
+      # arm_z2m_host_watchdog_after_start). initial: off means this is always
+      # disarmed for the first 20 min after an HA start.
+      - condition: state
+        entity_id: input_boolean.z2m_host_watchdog_armed
+        state: "on"
     action:
       - if:
           - condition: numeric_state
@@ -511,6 +546,14 @@ automation:
 ################################################################
 ## Input Helpers
 ################################################################
+
+input_boolean:
+  z2m_host_watchdog_armed:
+    name: Z2M host watchdog armed
+    icon: mdi:shield-refresh
+    # initial: off (and no restore) => always disarmed right after an HA
+    # start; arm_z2m_host_watchdog_after_start re-arms it 20 min later.
+    initial: false
 
 input_number:
   z2m_router_offline_threshold_pct:
