@@ -264,10 +264,10 @@ automation:
       Routes through the single serialized policy entry (kind=segment), so it
       inherits the at-rest guard, the CleanGenius-off / sweeping-only guarantee
       (never mops), and the guest-mode veto. Because this is an AUTOMATIC launch,
-      it additionally requires the exact Unattended pet policy: Supervised is
-      reserved for owner-initiated runs after inspecting the area, and Acclimation
-      fails closed — only Unattended permits an automatic start
-      (docs/vacuum_pet_policy.md).
+      it additionally requires the exact Unattended pet policy (Supervised is
+      reserved for owner-initiated runs after inspecting the area; Acclimation
+      fails closed) and an empty bed (bayesian_bed_occupancy off) — matching the
+      sibling 13:00 maintenance clean (docs/vacuum_pet_policy.md).
     mode: single
     trace:
       stored_traces: 10
@@ -283,6 +283,13 @@ automation:
         condition: state
         entity_id: input_select.vacuum_pet_policy
         state: "Unattended"
+      # Bed-occupancy is an independent guard (docs/vacuum_pet_policy.md) that the
+      # sibling 13:00 maintenance clean also enforces: never start an automatic
+      # run while someone is in bed.
+      - alias: "Do not start an automatic run while the bed is occupied"
+        condition: state
+        entity_id: binary_sensor.bayesian_bed_occupancy
+        state: "off"
     action:
       - action: script.x40_ultra_main_level_policy_clean
         data:
