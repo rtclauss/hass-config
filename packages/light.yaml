@@ -2390,12 +2390,14 @@ automation:
               # Meeting guard: never auto-off while the work laptop camera is
               # active. Sitting still on a video call ages out all three
               # presence sensors, so treat "camera in use" as occupancy.
-              # Fail-open: if the sensor is unavailable, the attribute is
-              # absent -> length 0 -> auto-off is still allowed.
-              - condition: template
-                value_template: >-
-                  {{ state_attr('sensor.f7m69c_5d3d6e76_active_camera',
-                     'Active Camera') | default([], true) | length == 0 }}
+              # Negated rather than state: "off" to stay fail-open: if the
+              # sensor goes unavailable/unknown it is not "on", so auto-off
+              # still works and an outage cannot strand the lights on.
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.f7m69c_5d3d6e76_camera_in_use
+                    state: "on"
             sequence:
               - action: light.turn_off
                 data:
