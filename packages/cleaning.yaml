@@ -345,6 +345,352 @@ automation:
         target:
           entity_id: input_boolean.washer_reminder_active
 
+  ################################################
+  ## Live Activities (iOS lock-screen)
+  ################################################
+
+  - id: x40_vacuum_live_activity
+    alias: X40 Vacuum Live Activity
+    description: >-
+      Lock-screen Live Activity on the Wethop iPhone tracking the X40 Ultra while it cleans
+      the house. Starts/updates on state, room, and progress changes; shows complete then
+      clears when it docks.
+    mode: queued
+    max: 10
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: vacuum.x40_ultra
+        id: vac
+      - trigger: state
+        entity_id: sensor.x40_ultra_current_room
+        id: room
+      - trigger: state
+        entity_id: sensor.x40_ultra_cleaning_progress
+        id: progress
+      - trigger: state
+        entity_id: sensor.x40_ultra_error
+        id: error
+      - trigger: homeassistant
+        event: start
+        id: boot
+    condition:
+      # Drop noise: a progress tick only passes when it crosses into a new 5%
+      # bucket (so an irregular 3% -> 7% jump still updates rather than waiting for
+      # an exact multiple of 5), and a `vac` trigger only passes on a real
+      # state-VALUE change — not attribute-only updates (battery, cleaning_time,
+      # status), which would otherwise flood the activity while cleaning and, while
+      # docked, repeat the completion branch. room and boot always pass.
+      - condition: template
+        value_template: >-
+          {% if trigger.id == 'progress' %}{{ trigger.from_state is not none and trigger.to_state is not none and (trigger.to_state.state | int(0)) // 5 != (trigger.from_state.state | int(0)) // 5 }}{% elif trigger.id == 'vac' %}{{ trigger.from_state is not none and trigger.to_state is not none and trigger.from_state.state != trigger.to_state.state }}{% else %}true{% endif %}
+    action:
+      - choose:
+          # On HA restart, clear any activity left stranded when a completion
+          # delay was interrupted before its clear_notification ran. Docked means
+          # no run is in progress, so clearing is safe and posts nothing.
+          - conditions:
+              - condition: trigger
+                id: boot
+              - condition: state
+                entity_id: vacuum.x40_ultra
+                state: docked
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: clear_notification
+                  data:
+                    tag: x40_vacuum
+          - conditions:
+              - condition: trigger
+                id: vac
+              - condition: state
+                entity_id: vacuum.x40_ultra
+                state: docked
+              # Only treat docked as completion on a genuine active->docked
+              # transition, so idle->docked (or a manual dock) never posts a false
+              # "Cleaning complete".
+              - condition: template
+                value_template: "{{ trigger.from_state.state in ['cleaning', 'returning', 'paused'] }}"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Vacuum
+                  message: Cleaning complete
+                  data:
+                    tag: x40_vacuum
+                    live_update: true
+                    progress: 100
+                    progress_max: 100
+                    critical_text: Done
+                    notification_icon: mdi:robot-vacuum
+                    notification_icon_color: "#43A047"
+                    progress_bar_color: "#43A047"
+              - delay: "00:02:00"
+              - action: notify.mobile_app_wethop
+                data:
+                  message: clear_notification
+                  data:
+                    tag: x40_vacuum
+          - conditions:
+              - condition: state
+                entity_id: vacuum.x40_ultra
+                state: error
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Vacuum
+                  message: "Error: {{ states('sensor.x40_ultra_error') }}"
+                  data:
+                    tag: x40_vacuum
+                    live_update: true
+                    critical_text: Error
+                    notification_icon: mdi:robot-vacuum-alert
+                    notification_icon_color: "#E53935"
+                    progress_bar_color: "#E53935"
+                    url: /lovelace/0
+          - conditions:
+              - condition: state
+                entity_id: vacuum.x40_ultra
+                state:
+                  - cleaning
+                  - returning
+                  - paused
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Vacuum
+                  message: >-
+                    {% set v = states('vacuum.x40_ultra') %}{% set r =
+                    states('sensor.x40_ultra_current_room') %}{% if v == 'returning' %}Returning
+                    to dock{% elif v == 'paused' %}Paused{% elif r not in
+                    ['unknown','unavailable','',None] %}Cleaning {{ r }}{% else %}Cleaning{% endif %}
+                  data:
+                    tag: x40_vacuum
+                    live_update: true
+                    progress: "{{ states('sensor.x40_ultra_cleaning_progress') | int(0) }}"
+                    progress_max: 100
+                    critical_text: "{{ states('sensor.x40_ultra_cleaning_progress') | int(0) }}%"
+                    notification_icon: mdi:robot-vacuum
+                    notification_icon_color: "#1E88E5"
+                    progress_bar_color: "#1E88E5"
+                    url: /lovelace/0
+
+  - id: washer_live_activity
+    alias: Washer Live Activity
+    description: >-
+      Lock-screen Live Activity on the Wethop iPhone for the washing machine. Shows phase +
+      progress while running (CLEANING), persists as an unload reminder through CLEAN/REMINDED,
+      flags MUSTY, and clears when emptied (IDLE). Keyed off input_select.washer_state.
+    mode: queued
+    max: 10
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: input_select.washer_state
+        id: lifecycle
+      - trigger: state
+        entity_id: sensor.washing_machine_current_phase
+        id: phase
+      - trigger: state
+        entity_id: sensor.washing_machine_progress
+        id: progress
+    condition:
+      # Throttle progress ticks to 5% steps; lifecycle/phase always pass.
+      - condition: template
+        value_template: "{{ trigger.id != 'progress' or (trigger.from_state is not none and trigger.to_state is not none and (trigger.to_state.state | int(0)) // 5 != (trigger.from_state.state | int(0)) // 5) }}"
+    action:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_select.washer_state
+                state: CLEANING
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Washer
+                  message: >-
+                    {% set p = states('sensor.washing_machine_current_phase') %}{% if p not in
+                    ['unknown','unavailable','',None,'off'] %}{{ p }}{% else %}Running{% endif %}
+                  data:
+                    tag: washer_cycle
+                    live_update: true
+                    progress: "{{ states('sensor.washing_machine_progress') | int(0) }}"
+                    progress_max: 100
+                    critical_text: >-
+                      {% set p = states('sensor.washing_machine_current_phase') %}{% if p not in
+                      ['unknown','unavailable','',None,'off'] %}{{ p }}{% else %}Wash{% endif %}
+                    notification_icon: mdi:washing-machine
+                    notification_icon_color: "#1E88E5"
+                    progress_bar_color: "#1E88E5"
+                    url: /lovelace/0
+          - conditions:
+              - condition: state
+                entity_id: input_select.washer_state
+                state:
+                  - CLEAN
+                  - REMINDED
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Washer
+                  message: "Cycle complete — ready to unload"
+                  data:
+                    tag: washer_cycle
+                    live_update: true
+                    progress: 100
+                    progress_max: 100
+                    critical_text: Done
+                    notification_icon: mdi:washing-machine
+                    notification_icon_color: "#43A047"
+                    progress_bar_color: "#43A047"
+                    url: /lovelace/0
+          - conditions:
+              - condition: state
+                entity_id: input_select.washer_state
+                state: MUSTY
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Washer
+                  message: "Laundry has been sitting — may need a rewash"
+                  data:
+                    tag: washer_cycle
+                    live_update: true
+                    progress: 100
+                    progress_max: 100
+                    critical_text: Musty
+                    notification_icon: mdi:washing-machine-alert
+                    notification_icon_color: "#E53935"
+                    progress_bar_color: "#E53935"
+                    url: /lovelace/0
+          - conditions:
+              - condition: state
+                entity_id: input_select.washer_state
+                state: IDLE
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: clear_notification
+                  data:
+                    tag: washer_cycle
+
+  - id: dryer_live_activity
+    alias: Dryer Live Activity
+    description: >-
+      Lock-screen Live Activity on the Wethop iPhone for the dryer. Shows phase + progress while
+      running; shows complete then clears when the cycle ends.
+    mode: queued
+    max: 10
+    trace:
+      stored_traces: 10
+    trigger:
+      # Split the running sensor into explicit on/off edges so completion fires
+      # only on a real on->off transition — never when the sensor initializes or
+      # recovers from unavailable into "off".
+      - trigger: state
+        entity_id: binary_sensor.dryer_running
+        to: "on"
+        id: run_on
+      - trigger: state
+        entity_id: binary_sensor.dryer_running
+        from: "on"
+        to: "off"
+        id: run_off
+      # Power telemetry can drop mid-run (dryer_running is an availability
+      # template over the dryer power sensor), so the sensor may recover
+      # unavailable->off after the cycle already stopped; run_off (from "on")
+      # cannot catch that, so reconcile it explicitly.
+      - trigger: state
+        entity_id: binary_sensor.dryer_running
+        from: "unavailable"
+        to: "off"
+        id: recover_off
+      - trigger: state
+        entity_id: sensor.dryer_current_phase
+        id: phase
+      - trigger: state
+        entity_id: sensor.dryer_progress
+        id: progress
+      - trigger: homeassistant
+        event: start
+        id: boot
+    condition:
+      # A progress tick passes only when it crosses into a new 5% bucket (so an
+      # irregular jump still updates rather than waiting for an exact multiple of
+      # 5); run/phase/boot always pass.
+      - condition: template
+        value_template: "{{ trigger.id != 'progress' or (trigger.from_state is not none and trigger.to_state is not none and (trigger.to_state.state | int(0)) // 5 != (trigger.from_state.state | int(0)) // 5) }}"
+    action:
+      - choose:
+          # Clear a stranded activity WITHOUT announcing completion when the dryer
+          # is off but the genuine on->off edge never fired: on HA restart (boot,
+          # if a completion delay was interrupted before its clear ran), or when
+          # power telemetry recovers unavailable->off after the cycle already
+          # stopped.
+          - conditions:
+              - condition: trigger
+                id:
+                  - boot
+                  - recover_off
+              - condition: state
+                entity_id: binary_sensor.dryer_running
+                state: "off"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: clear_notification
+                  data:
+                    tag: dryer_cycle
+          - conditions:
+              - condition: trigger
+                id: run_off
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Dryer
+                  message: Cycle complete
+                  data:
+                    tag: dryer_cycle
+                    live_update: true
+                    progress: 100
+                    progress_max: 100
+                    critical_text: Done
+                    notification_icon: mdi:tumble-dryer
+                    notification_icon_color: "#43A047"
+                    progress_bar_color: "#43A047"
+              - delay: "00:02:00"
+              - action: notify.mobile_app_wethop
+                data:
+                  message: clear_notification
+                  data:
+                    tag: dryer_cycle
+          - conditions:
+              - condition: state
+                entity_id: binary_sensor.dryer_running
+                state: "on"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Dryer
+                  message: >-
+                    {% set p = states('sensor.dryer_current_phase') %}{% if p not in
+                    ['unknown','unavailable','',None,'off'] %}{{ p }}{% else %}Drying{% endif %}
+                  data:
+                    tag: dryer_cycle
+                    live_update: true
+                    progress: "{{ states('sensor.dryer_progress') | int(0) }}"
+                    progress_max: 100
+                    critical_text: >-
+                      {% set p = states('sensor.dryer_current_phase') %}{% if p not in
+                      ['unknown','unavailable','',None,'off'] %}{{ p }}{% else %}Dry{% endif %}
+                    notification_icon: mdi:tumble-dryer
+                    notification_icon_color: "#FB8C00"
+                    progress_bar_color: "#FB8C00"
+                    url: /lovelace/0
+
 ########################
 # Binary Sensors
 ########################
