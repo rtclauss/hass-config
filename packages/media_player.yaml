@@ -163,17 +163,19 @@ automation:
 
   - id: bed_without_prep
     alias: bed_without_prep
+    # Trigger on the DEBOUNCED bed signal (input_boolean.master_bed_occupancy,
+    # maintained by in_bed_toggles with a 5s off-debounce) rather than the raw
+    # binary_sensor.bayesian_bed_occupancy, which blips off for ~2s on every
+    # weight shift. Those blips fired this automation repeatedly and, under the
+    # former mode: single, dropped the settled trigger as failed_single so the
+    # music rampdown never ran on the real "in bed" state. mode: restart lets a
+    # genuine re-entry (out of bed and back in) supersede a stale run.
+    mode: restart
     trace:
       stored_traces: 50
     trigger:
-      # - platform: event
-      #   event_type: zha_event
-      #   event_data:
-      #     device_ieee: "00:15:8d:00:02:8f:66:12"
-      #     command: "knock"
       - trigger: state
-        entity_id: binary_sensor.bayesian_bed_occupancy
-        # entity_id: input_boolean.chatgpt_bed_occupied
+        entity_id: input_boolean.master_bed_occupancy
         to: "on"
     condition:
       - and:
@@ -189,15 +191,20 @@ automation:
               - media_player.ma_bedroom
             state: "playing"
     action:
-      - action: script.turn_on
-        target:
-          entity_id: script.night_tv_mode_switches
-      - action: script.apply_owner_suite_inovelli_led_policy
-        data:
-          policy: dark
-      - action: script.turn_on
-        target:
-          entity_id: script.spotify_bedtime_volume
+      # Run all three concurrently so the ~77s owner-suite LED policy can never
+      # delay the music rampdown. Previously the blocking LED call sat in front
+      # of spotify_bedtime_volume, so the music only started tapering ~77s after
+      # getting into bed.
+      - parallel:
+          - action: script.turn_on
+            target:
+              entity_id: script.night_tv_mode_switches
+          - action: script.turn_on
+            target:
+              entity_id: script.spotify_bedtime_volume
+          - action: script.apply_owner_suite_inovelli_led_policy
+            data:
+              policy: dark
       # - delay: "00:10:00"
       # - action: switch.turn_on
       #   entity_id: switch.sleep_mode

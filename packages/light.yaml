@@ -1113,10 +1113,13 @@ automation:
     trace:
       stored_traces: 50
     trigger:
+      # Debounced bed signal (input_boolean.master_bed_occupancy has a 5s
+      # off-debounce via in_bed_toggles) so the 10-minute settle timer is not
+      # reset by the raw pad's ~2s weight-shift blips, which previously kept
+      # restarting the clock and delayed (or prevented) the other-room lights
+      # turning off.
       - trigger: state
-        entity_id:
-          - binary_sensor.bayesian_bed_occupancy
-          # - input_boolean.chatgpt_bed_occupied
+        entity_id: input_boolean.master_bed_occupancy
         to: "on"
         from: "off"
         for:
