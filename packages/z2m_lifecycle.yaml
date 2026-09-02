@@ -284,22 +284,27 @@ automation:
         target:
           entity_id: input_boolean.z2m_host_watchdog_armed
 
-  - id: failsafe_rearm_z2m_host_watchdog
-    alias: failsafe_rearm_z2m_host_watchdog
+  - id: reconcile_z2m_host_watchdog_armed
+    alias: reconcile_z2m_host_watchdog_armed
     description: >-
-      Fail-safe backstop for arm_z2m_host_watchdog_after_start. If that run is
-      cancelled before it re-arms the helper (e.g. an automation reload during
-      the 20-minute delay), the helper would otherwise stay off forever and the
-      host/Proxmox watchdog would never recover a real Z2M outage. This re-arms
-      it whenever it has been left off for longer than the intended grace
-      window. The `for:` uses the helper's last_changed, so it survives reloads.
+      Reload-safe backstop for arm_z2m_host_watchdog_after_start. A state
+      *trigger's* `for:` timer is dropped when an automation is reloaded and is
+      not rescheduled for an already-matching state, so this polls instead: a
+      time_pattern trigger with a state *condition* that carries `for:` (checked
+      against last_changed each run). Whenever the helper has been off longer
+      than the grace window - e.g. a reload cancelled the arming run mid-delay -
+      it is re-armed, so the host/Proxmox watchdog is never left disarmed
+      indefinitely.
     mode: single
     trace:
       stored_traces: 5
     trigger:
-      - trigger: state
+      - trigger: time_pattern
+        minutes: "/5"
+    condition:
+      - condition: state
         entity_id: input_boolean.z2m_host_watchdog_armed
-        to: "off"
+        state: "off"
         for:
           minutes: 25
     action:
