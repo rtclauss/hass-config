@@ -727,9 +727,29 @@ automation:
           - condition: state
             entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
             state: "on"
-          - condition: time
-            after: "18:00:00"
-            before: "12:00:00"
+          - alias: >-
+              Test the nightly window against the occupancy transition, not
+              against now(). Gating to startup_or_reload closed the
+              periodic-tick vector but not the automation_reloaded one: a
+              reload is an ordinary, frequent event that re-evaluates the
+              same steady state, so a 17:30 nap continuing past 18:00 would
+              be accepted by a now()-based check on any reload after 18:00
+              — inventing an entry even though no transition was ever
+              missed, since the live bed_entry trigger already saw that
+              17:30 transition and correctly rejected it (Codex P2
+              follow-up on #373). Unlike a restart, a reload leaves other
+              entities untouched, so the bed sensor's last_changed is still
+              the real transition and can be tested directly. On a genuine
+              restart HA resets it to the restore moment, which is exactly
+              the "best available approximation" this branch already
+              assumes, so restart recovery is unchanged. The bed sensor is
+              undebounced, so its last_changed IS the transition — no
+              delay to back out, unlike the CPAP helper.
+            condition: template
+            value_template: >-
+              {% set entered = as_local(
+                   states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) %}
+              {{ entered.hour >= 18 or entered.hour < 12 }}
         then:
           - alias: >-
               Cap the recovered bed_in at the CPAP helper's own transition

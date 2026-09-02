@@ -718,9 +718,38 @@ def test_reconcile_recovers_a_bed_entry_missed_during_downtime() -> None:
     assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in branch
     assert branch.count('state: "off"') == 2
     assert 'state: "on"' in branch
-    assert 'after: "18:00:00"' in branch
-    assert 'before: "12:00:00"' in branch
     assert "entity_id: input_datetime.sleep_session_bed_in" in branch
+
+
+def test_recovered_bed_entry_window_tests_the_occupancy_transition() -> None:
+    # Codex P2 follow-up on #373: gating this branch to startup_or_reload
+    # closed the periodic-tick vector but not the automation_reloaded one.
+    # A reload is an ordinary, frequent event that re-evaluates the same
+    # steady state, so a 17:30 nap continuing past 18:00 would be accepted
+    # by a now()-based condition: time on any reload after 18:00 --
+    # inventing an entry even though the live bed_entry trigger already saw
+    # that 17:30 transition and correctly rejected it. Unlike a restart, a
+    # reload leaves other entities untouched, so the bed sensor's
+    # last_changed is still the real transition and must be tested directly.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    recover_entry_index = block.index("Recover a nightly bed entry")
+    cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
+    branch = block[recover_entry_index:cpap_start_index]
+
+    then_index = branch.index("then:")
+    guard = branch[:then_index]
+
+    assert 'after: "18:00:00"' not in guard
+    assert 'before: "12:00:00"' not in guard
+    assert "as_local(" in guard
+    assert (
+        "states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed"
+        in guard
+    )
+    assert "entered.hour >= 18 or entered.hour < 12" in guard
+    # The bed sensor is undebounced, so its last_changed IS the transition --
+    # no delay_on to back out, unlike the CPAP helper's own recovery guard.
+    assert "- timedelta(" not in guard
 
 
 def test_reconcile_bed_entry_recovery_only_runs_on_startup_or_reload() -> None:
