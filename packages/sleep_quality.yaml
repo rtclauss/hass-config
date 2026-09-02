@@ -18,28 +18,53 @@ input_boolean:
     name: Sleep session CPAP stopped
     icon: mdi:power-sleep
 
-input_datetime:
-  sleep_session_bed_in:
-    name: Sleep session bed in
-    has_date: true
-    has_time: true
-
-  sleep_session_cpap_on:
-    name: Sleep session CPAP on
-    has_date: true
-    has_time: true
-
-  sleep_session_cpap_off:
-    name: Sleep session CPAP off
-    has_date: true
-    has_time: true
-
-  sleep_session_bed_out:
-    name: Sleep session bed out
-    has_date: true
-    has_time: true
-
 input_number:
+  # The four session timestamps are stored as absolute epoch seconds in
+  # plain numeric helpers rather than in input_datetime helpers (Codex P2
+  # follow-up on #373). input_datetime's timestamp: service field and its
+  # timestamp attribute are exact only in memory: its state property
+  # persists self._current_datetime.strftime("%Y-%m-%d %H:%M:%S"), a
+  # naive local wall clock carrying no UTC offset and no fold, and a
+  # restart restores it via dt_util.parse_datetime() on that same naive
+  # string. A value recorded during the repeated autumn hour therefore
+  # comes back as the wrong one of the two real instants — verified
+  # against America/Chicago at the 2026-11-01 fallback, where 01:30 CDT
+  # and 01:30 CST are 3600s apart yet persist identically, restoring an
+  # hour early. That silently shortens a duration or trips the
+  # finalizer's ordering check. An epoch in a numeric helper has no
+  # timezone semantics at all, so it round-trips a restart exactly.
+  sleep_session_bed_in_ts:
+    name: Sleep session bed in (epoch)
+    icon: mdi:bed-clock
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
+  sleep_session_cpap_on_ts:
+    name: Sleep session CPAP on (epoch)
+    icon: mdi:medical-bag
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
+  sleep_session_cpap_off_ts:
+    name: Sleep session CPAP off (epoch)
+    icon: mdi:medical-bag
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
+  sleep_session_bed_out_ts:
+    name: Sleep session bed out (epoch)
+    icon: mdi:bed-clock
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
   sleep_session_bed_minutes:
     name: Latest sleep session bed time
     icon: mdi:bed-clock
@@ -159,14 +184,14 @@ script:
             data:
               value: >-
                 {{ [86400, [0, (states('input_number.sleep_session_cpap_active_seconds') | float(0))
-                   + [0, (state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0))
-                        - (state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0))]
+                   + [0, (states('input_number.sleep_session_cpap_off_ts') | float(0))
+                        - (states('input_number.sleep_session_cpap_on_ts') | float(0))]
                      | max] | max] | min }}
-          - action: input_datetime.set_datetime
+          - action: input_number.set_value
             target:
-              entity_id: input_datetime.sleep_session_cpap_on
+              entity_id: input_number.sleep_session_cpap_on_ts
             data:
-              timestamp: "{{ resume_timestamp }}"
+              value: "{{ resume_timestamp }}"
           - action: input_boolean.turn_off
             target:
               entity_id: input_boolean.sleep_session_cpap_stopped
@@ -182,13 +207,13 @@ script:
     sequence:
       - variables:
           bed_in_ts: >-
-            {{ state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0) }}
+            {{ states('input_number.sleep_session_bed_in_ts') | float(0) }}
           cpap_on_ts: >-
-            {{ state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0) }}
+            {{ states('input_number.sleep_session_cpap_on_ts') | float(0) }}
           cpap_off_ts: >-
-            {{ state_attr('input_datetime.sleep_session_cpap_off', 'timestamp') | float(0) }}
+            {{ states('input_number.sleep_session_cpap_off_ts') | float(0) }}
           bed_out_ts: >-
-            {{ state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0) }}
+            {{ states('input_number.sleep_session_bed_out_ts') | float(0) }}
       - alias: >-
           Only persist analytics for a complete, ordered session — but
           always clear the active-session flags below regardless, so an
@@ -286,11 +311,11 @@ automation:
                 after: "18:00:00"
                 before: "12:00:00"
             sequence:
-              - action: input_datetime.set_datetime
+              - action: input_number.set_value
                 target:
-                  entity_id: input_datetime.sleep_session_bed_in
+                  entity_id: input_number.sleep_session_bed_in_ts
                 data:
-                  timestamp: "{{ as_timestamp(now()) }}"
+                  value: "{{ as_timestamp(now()) }}"
               - action: input_boolean.turn_on
                 target:
                   entity_id: input_boolean.sleep_session_bed_entry_pending
@@ -349,11 +374,11 @@ automation:
                     entity_id: input_boolean.sleep_session_bed_entry_pending
                     state: "off"
                 then:
-                  - action: input_datetime.set_datetime
+                  - action: input_number.set_value
                     target:
-                      entity_id: input_datetime.sleep_session_bed_in
+                      entity_id: input_number.sleep_session_bed_in_ts
                     data:
-                      timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+                      value: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - alias: >-
                   Clamp cpap_on to bed_in when a bed entry landed after the
                   CPAP crossing but before this delayed callback fires — if
@@ -367,13 +392,13 @@ automation:
                   otherwise complete session (Codex P2 follow-up on #373).
                   Bed entry must precede CPAP starting, so never record a
                   cpap_on earlier than the current bed_in.
-                action: input_datetime.set_datetime
+                action: input_number.set_value
                 target:
-                  entity_id: input_datetime.sleep_session_cpap_on
+                  entity_id: input_number.sleep_session_cpap_on_ts
                 data:
-                  timestamp: >-
+                  value: >-
                     {{ [as_timestamp(trigger.to_state.last_changed),
-                        state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)]
+                        states('input_number.sleep_session_bed_in_ts') | float(0)]
                        | max }}
               - action: counter.reset
                 target:
@@ -507,11 +532,11 @@ automation:
                       tell a repeated wall-clock hour's two real instants
                       apart once reconstructed (Codex P2 follow-up on
                       #373).
-                    action: input_datetime.set_datetime
+                    action: input_number.set_value
                     target:
-                      entity_id: input_datetime.sleep_session_cpap_off
+                      entity_id: input_number.sleep_session_cpap_off_ts
                     data:
-                      timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+                      value: "{{ as_timestamp(trigger.to_state.last_changed) }}"
                   - action: input_boolean.turn_on
                     target:
                       entity_id: input_boolean.sleep_session_cpap_stopped
@@ -539,7 +564,7 @@ automation:
                       minutes: 5
                   - condition: template
                     value_template: >-
-                      {{ (state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int
+                      {{ (states('input_number.sleep_session_bed_out_ts') | float(0)) | int
                          >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int) }}
                 then:
                   - action: script.finalize_sleep_quality_session
@@ -591,11 +616,11 @@ automation:
                   and the autumn DST fallback, where a naive string can't
                   tell a repeated wall-clock hour's two real instants
                   apart once reconstructed (Codex P2 follow-up on #373).
-                action: input_datetime.set_datetime
+                action: input_number.set_value
                 target:
-                  entity_id: input_datetime.sleep_session_bed_out
+                  entity_id: input_number.sleep_session_bed_out_ts
                 data:
-                  timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+                  value: "{{ as_timestamp(trigger.to_state.last_changed) }}"
               - if:
                   - condition: state
                     entity_id: input_boolean.sleep_session_cpap_stopped
@@ -733,13 +758,13 @@ automation:
             condition: template
             value_template: >-
               {{ (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)
-                 > (state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0) | int) }}
+                 > (states('input_number.sleep_session_bed_in_ts') | float(0) | int) }}
         then:
-          - action: input_datetime.set_datetime
+          - action: input_number.set_value
             target:
-              entity_id: input_datetime.sleep_session_bed_in
+              entity_id: input_number.sleep_session_bed_in_ts
             data:
-              timestamp: >-
+              value: >-
                 {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
       - alias: >-
           Recover a nightly bed entry whose off->on transition was missed
@@ -813,11 +838,11 @@ automation:
               its own (10-second-debounce-backed-out) transition time
               instead of now() -- otherwise now() is still the best
               available approximation.
-            action: input_datetime.set_datetime
+            action: input_number.set_value
             target:
-              entity_id: input_datetime.sleep_session_bed_in
+              entity_id: input_number.sleep_session_bed_in_ts
             data:
-              timestamp: >-
+              value: >-
                 {{ [as_timestamp(now()),
                     (as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed)
                        - 10)
@@ -935,11 +960,11 @@ automation:
                   last_changed is when its delay_on completed, 10 seconds
                   after the real crossing, so back that delay out to
                   recover the actual transition time.
-                action: input_datetime.set_datetime
+                action: input_number.set_value
                 target:
-                  entity_id: input_datetime.sleep_session_bed_in
+                  entity_id: input_number.sleep_session_bed_in_ts
                 data:
-                  timestamp: >-
+                  value: >-
                     {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
                        - timedelta(seconds=10)) }}
           - alias: >-
@@ -952,14 +977,14 @@ automation:
               finalizer's ordering check and discarding an otherwise
               complete session. Never record a cpap_on earlier than the
               current bed_in.
-            action: input_datetime.set_datetime
+            action: input_number.set_value
             target:
-              entity_id: input_datetime.sleep_session_cpap_on
+              entity_id: input_number.sleep_session_cpap_on_ts
             data:
-              timestamp: >-
+              value: >-
                 {{ [as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
                        - timedelta(seconds=10)),
-                    state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)]
+                    states('input_number.sleep_session_bed_in_ts') | float(0)]
                    | max }}
           - action: counter.reset
             target:
@@ -1054,14 +1079,14 @@ automation:
               sleep_session_cpap_stopped on for the rest of the session
               (Codex P2 follow-up on #373, same class as the cpap_on and
               bed_in clamps above).
-            action: input_datetime.set_datetime
+            action: input_number.set_value
             target:
-              entity_id: input_datetime.sleep_session_cpap_off
+              entity_id: input_number.sleep_session_cpap_off_ts
             data:
-              timestamp: >-
+              value: >-
                 {{ [as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
                        - timedelta(minutes=5)),
-                    state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0)]
+                    states('input_number.sleep_session_cpap_on_ts') | float(0)]
                    | max }}
           - action: input_boolean.turn_on
             target:
@@ -1095,14 +1120,14 @@ automation:
             state: "on"
           - condition: template
             value_template: >-
-              {{ (state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0))
+              {{ (states('input_number.sleep_session_bed_out_ts') | float(0))
                  < as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
         then:
-          - action: input_datetime.set_datetime
+          - action: input_number.set_value
             target:
-              entity_id: input_datetime.sleep_session_bed_out
+              entity_id: input_number.sleep_session_bed_out_ts
             data:
-              timestamp: >-
+              value: >-
                 {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
       - alias: >-
           Require the bed's own 5-minute debounce and a bed-out timestamp
@@ -1145,7 +1170,7 @@ automation:
             state: "off"
           - condition: template
             value_template: >-
-              {{ (state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int
+              {{ (states('input_number.sleep_session_bed_out_ts') | float(0)) | int
                  >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int) }}
         then:
           - action: script.finalize_sleep_quality_session

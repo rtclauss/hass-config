@@ -34,30 +34,69 @@ def _script_block(script_id: str) -> str:
 
 def test_sleep_session_uses_restorable_native_helpers() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
-    input_datetimes = text.split("input_datetime:", maxsplit=1)[1].split(
-        "input_number:", maxsplit=1
+    input_numbers = text.split("input_number:", maxsplit=1)[1].split(
+        "counter:", maxsplit=1
     )[0]
     score_helper = text.split("  sleep_quality_score:", maxsplit=1)[1].split(
         "counter:", maxsplit=1
     )[0]
 
     for helper_id in (
-        "sleep_session_bed_in",
-        "sleep_session_cpap_on",
-        "sleep_session_cpap_off",
-        "sleep_session_bed_out",
+        "sleep_session_bed_in_ts",
+        "sleep_session_cpap_on_ts",
+        "sleep_session_cpap_off_ts",
+        "sleep_session_bed_out_ts",
     ):
-        assert f"  {helper_id}:" in input_datetimes
-    assert input_datetimes.count("has_date: true") == 4
-    assert input_datetimes.count("has_time: true") == 4
+        assert f"  {helper_id}:" in input_numbers
     assert "restore: true" in text.split("counter:", maxsplit=1)[1].split(
         "script:", maxsplit=1
     )[0]
     assert "initial:" not in score_helper
     # The only template: use is the derived CPAP-debounce helper below, not
     # a substitute for persisted session state -- that must stay on native,
-    # restorable input_datetime/input_number/counter helpers.
+    # restorable input_number/counter helpers.
     assert text.count("\ntemplate:") == 1
+
+
+def test_session_timestamps_persist_as_epochs_not_input_datetime() -> None:
+    # Codex P2 follow-up on #373: input_datetime's timestamp: service field
+    # and timestamp attribute are exact only in memory. Its state property
+    # persists strftime("%Y-%m-%d %H:%M:%S") -- a naive local wall clock
+    # with no UTC offset and no fold -- and a restart restores it by
+    # re-parsing that naive string. A value recorded during the repeated
+    # autumn hour therefore comes back as the wrong one of the two real
+    # instants (verified for America/Chicago at the 2026-11-01 fallback:
+    # 01:30 CDT and 01:30 CST are 3600s apart yet persist identically),
+    # silently shortening a duration or tripping the finalizer's ordering
+    # check. Epochs in plain numeric helpers carry no timezone semantics,
+    # so they round-trip a restart exactly.
+    text = PACKAGE_PATH.read_text(encoding="utf-8")
+
+    # No input_datetime storage anywhere -- not the platform, not a write,
+    # not a read. (The only surviving mentions are in the explanatory
+    # comment recording why.)
+    assert "\ninput_datetime:" not in text
+    assert "input_datetime.set_datetime" not in text
+    assert "state_attr('input_datetime." not in text
+    assert "entity_id: input_datetime." not in text
+
+    # Every session timestamp is written as an epoch value and read back as
+    # a plain numeric state.
+    for helper_id in (
+        "sleep_session_bed_in_ts",
+        "sleep_session_cpap_on_ts",
+        "sleep_session_cpap_off_ts",
+        "sleep_session_bed_out_ts",
+    ):
+        assert f"entity_id: input_number.{helper_id}" in text
+        assert f"states('input_number.{helper_id}')" in text
+
+    # The helpers must admit any plausible epoch (year 2100 headroom); an
+    # out-of-range set_value would raise and abort the calling sequence.
+    input_numbers = text.split("input_number:", maxsplit=1)[1].split(
+        "counter:", maxsplit=1
+    )[0]
+    assert input_numbers.count("max: 4102444800") == 4
 
 
 def test_cpap_running_helper_is_debounced_and_guards_unavailable_readings() -> None:
@@ -201,14 +240,14 @@ def test_rearm_cpap_resume_script_banks_and_starts_fresh_segment() -> None:
         "entity_id: input_number.sleep_session_cpap_active_seconds"
     )
     cpap_on_index = script.index(
-        "entity_id: input_datetime.sleep_session_cpap_on", accumulate_index
+        "entity_id: input_number.sleep_session_cpap_on_ts", accumulate_index
     )
     turn_off_index = script.index("action: input_boolean.turn_off", cpap_on_index)
     assert accumulate_index < cpap_on_index < turn_off_index
 
     accumulate_value = script[accumulate_index:cpap_on_index]
-    assert "state_attr('input_datetime.sleep_session_cpap_off', 'timestamp')" in accumulate_value
-    assert "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp')" in accumulate_value
+    assert "states('input_number.sleep_session_cpap_off_ts')" in accumulate_value
+    assert "states('input_number.sleep_session_cpap_on_ts')" in accumulate_value
 
     # The banked value must stay inside sleep_session_cpap_active_seconds'
     # own min/max: a single out-of-range input_number.set_value raises and
@@ -281,7 +320,7 @@ def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions
     assert "entity_id: sensor.owner_suite_cpap_plug_power" in prepare
     assert "above: 1.3" in prepare
     assert "seconds: 10" in prepare
-    assert "entity_id: input_datetime.sleep_session_cpap_on" in prepare
+    assert "entity_id: input_number.sleep_session_cpap_on_ts" in prepare
 
     assert "binary_sensor.bed_presence_2d0670_bed_occupied_left" in active
     assert "binary_sensor.bed_presence_2d0670_bed_occupied_right" in active
@@ -300,7 +339,7 @@ def test_cpap_session_records_timestamps_and_counts_only_guarded_bed_transitions
     # in the cpap_stop branch (test_cpap_stop_waits_for_beds_own_debounce_
     # before_finalizing) that mirrors bed_exit's debounce.
     assert active.count("minutes: 5") == 3
-    assert "entity_id: input_datetime.sleep_session_cpap_off" in active
+    assert "entity_id: input_number.sleep_session_cpap_off_ts" in active
     assert "id: bed_exit" in active
     # Only the cpap_stop trigger's own threshold remains a raw below: 1.3
     # — the bed_exit branch's finalize gate checks the debounced
@@ -317,12 +356,12 @@ def test_bed_exit_timestamp_is_persisted_before_later_session_finalization() -> 
     bed_exit_branch = active.split("id: bed_exit", maxsplit=2)[2]
 
     bed_out_write = bed_exit_branch.index(
-        "entity_id: input_datetime.sleep_session_bed_out"
+        "entity_id: input_number.sleep_session_bed_out_ts"
     )
     finalize_call = bed_exit_branch.index("action: script.finalize_sleep_quality_session")
 
     assert bed_out_write < finalize_call
-    assert "state_attr('input_datetime.sleep_session_bed_out', 'timestamp')" in finalize
+    assert "states('input_number.sleep_session_bed_out_ts')" in finalize
     assert "bed_out_ts >= bed_in_ts" in finalize
     assert "bed_out_ts >= cpap_off_ts" not in finalize
     assert 'bed_out_ts: "{{ now().timestamp() }}"' not in finalize
@@ -363,7 +402,7 @@ def test_cpap_start_timestamps_the_actual_transition_not_the_debounce_delay() ->
     # Codex P2 follow-up on #373: a naive local datetime string is
     # ambiguous during the autumn DST fallback (a repeated wall-clock
     # hour). timestamp: (an absolute epoch) sidesteps that entirely.
-    expected = 'timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"'
+    expected = 'value: "{{ as_timestamp(trigger.to_state.last_changed) }}"'
     assert cpap_start_branch.count(expected) == 1
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_start_branch
     assert "strftime" not in cpap_start_branch
@@ -374,11 +413,11 @@ def test_cpap_start_timestamps_the_actual_transition_not_the_debounce_delay() ->
     # writing cpap_on from the earlier crossing unconditionally would read
     # cpap_on_ts < bed_in_ts and fail the finalizer's ordering check. Must
     # clamp cpap_on to never be earlier than the current bed_in.
-    cpap_on_index = cpap_start_branch.index("entity_id: input_datetime.sleep_session_cpap_on")
+    cpap_on_index = cpap_start_branch.index("entity_id: input_number.sleep_session_cpap_on_ts")
     counter_index = cpap_start_branch.index("action: counter.reset", cpap_on_index)
     cpap_on_write = cpap_start_branch[cpap_on_index:counter_index]
     assert "as_timestamp(trigger.to_state.last_changed)" in cpap_on_write
-    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)" in cpap_on_write
+    assert "states('input_number.sleep_session_bed_in_ts') | float(0)" in cpap_on_write
     assert "| max" in cpap_on_write
 
 
@@ -388,7 +427,7 @@ def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() ->
     # completed session over-reported cpap_minutes/bed_minutes by about 5
     # minutes each. trigger.to_state.last_changed is the actual transition
     # timestamp — but it's UTC (Codex P1 follow-up on #373): formatting it
-    # directly gets interpreted as local time by input_datetime.set_datetime,
+    # directly gets interpreted as local time by input_number.set_value,
     # shifting every stored timestamp by the UTC offset. as_local() first is
     # required.
     active = _automation_block("sleep_quality_track_active_session")
@@ -398,7 +437,7 @@ def test_cpap_off_and_bed_out_timestamp_the_actual_transition_not_the_delay() ->
     # Codex P2 follow-up on #373: a naive local datetime string is
     # ambiguous during the autumn DST fallback (a repeated wall-clock
     # hour). timestamp: (an absolute epoch) sidesteps that entirely.
-    expected = 'timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"'
+    expected = 'value: "{{ as_timestamp(trigger.to_state.last_changed) }}"'
     assert expected in cpap_stop_branch
     assert expected in bed_exit_branch
     assert "datetime: \"{{ now().strftime('%Y-%m-%d %H:%M:%S') }}\"" not in cpap_stop_branch
@@ -461,7 +500,7 @@ def test_cpap_stop_requires_fresh_bed_out_before_finalizing() -> None:
     preceding = cpap_stop_branch[:finalize_index]
 
     assert (
-        "(state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int"
+        "(states('input_number.sleep_session_bed_out_ts') | float(0)) | int"
         in preceding
     )
     assert (
@@ -483,7 +522,7 @@ def test_cpap_stop_ignores_repeat_firings_while_already_latched_stopped() -> Non
     active = _automation_block("sleep_quality_track_active_session")
     cpap_stop_branch = active.split("id: cpap_stop", maxsplit=2)[2]
     cpap_off_index = cpap_stop_branch.index(
-        "entity_id: input_datetime.sleep_session_cpap_off"
+        "entity_id: input_number.sleep_session_cpap_off_ts"
     )
     turn_on_index = cpap_stop_branch.index(
         "action: input_boolean.turn_on", cpap_off_index
@@ -515,7 +554,7 @@ def test_restart_reconciles_a_lost_cpap_stop_debounce() -> None:
     assert "entity_id: input_boolean.sleep_session_cpap_stopped" in block
     assert 'state: "off"' in block
     assert "entity_id: binary_sensor.owner_suite_cpap_running" in block
-    assert "entity_id: input_datetime.sleep_session_cpap_off" in block
+    assert "entity_id: input_number.sleep_session_cpap_off_ts" in block
     assert "action: script.finalize_sleep_quality_session" in block
 
 
@@ -536,14 +575,14 @@ def test_reconciled_cpap_off_never_precedes_cpap_on() -> None:
     cpap_stop_branch = block.split("Reconcile a lost cpap_stop debounce", maxsplit=1)[1]
 
     cpap_off_index = cpap_stop_branch.index(
-        "entity_id: input_datetime.sleep_session_cpap_off"
+        "entity_id: input_number.sleep_session_cpap_off_ts"
     )
     turn_on_index = cpap_stop_branch.index("action: input_boolean.turn_on", cpap_off_index)
     cpap_off_write = cpap_stop_branch[cpap_off_index:turn_on_index]
 
     assert "- timedelta(minutes=5))" in cpap_off_write
     assert (
-        "state_attr('input_datetime.sleep_session_cpap_on', 'timestamp') | float(0)"
+        "states('input_number.sleep_session_cpap_on_ts') | float(0)"
         in cpap_off_write
     )
     assert "| max" in cpap_off_write
@@ -578,7 +617,7 @@ def test_reconcile_recovers_a_lost_bed_exit_debounce() -> None:
     # this case, leaving sleep_session_active latched on forever.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
-    bed_out_index = block.index("entity_id: input_datetime.sleep_session_bed_out")
+    bed_out_index = block.index("entity_id: input_number.sleep_session_bed_out_ts")
     preceding = block[:bed_out_index]
 
     assert "entity_id: input_boolean.sleep_session_cpap_stopped" in preceding
@@ -587,7 +626,7 @@ def test_reconcile_recovers_a_lost_bed_exit_debounce() -> None:
     assert 'state: "on"' in guard_block
 
     assert (
-        "state_attr('input_datetime.sleep_session_bed_out', 'timestamp')"
+        "states('input_number.sleep_session_bed_out_ts')"
         in block
     )
 
@@ -603,7 +642,7 @@ def test_reconcile_bed_exit_freshness_compares_against_current_transition() -> N
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
 
     assert (
-        "state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0))\n"
+        "states('input_number.sleep_session_bed_out_ts') | float(0))\n"
         "                 < as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
         in block
     )
@@ -617,7 +656,7 @@ def test_reconcile_bed_exit_freshness_compares_against_current_transition() -> N
     )
     bed_exit_reconcile_branch = block[bed_exit_index:next_branch_index]
     assert (
-        "state_attr('input_datetime.sleep_session_bed_in', 'timestamp')"
+        "states('input_number.sleep_session_bed_in_ts')"
         not in bed_exit_reconcile_branch
     )
 
@@ -721,7 +760,7 @@ def test_reconcile_recovers_a_bed_entry_missed_during_downtime() -> None:
     assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in branch
     assert branch.count('state: "off"') == 2
     assert 'state: "on"' in branch
-    assert "entity_id: input_datetime.sleep_session_bed_in" in branch
+    assert "entity_id: input_number.sleep_session_bed_in_ts" in branch
 
 
 def test_reconcile_refreshes_a_pending_entry_after_a_missed_off_on_cycle() -> None:
@@ -753,10 +792,10 @@ def test_reconcile_refreshes_a_pending_entry_after_a_missed_off_on_cycle() -> No
         "as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)"
         in guard
     )
-    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0) | int)" in guard
+    assert "states('input_number.sleep_session_bed_in_ts') | float(0) | int)" in guard
 
     # ...and the replacement is that same transition.
-    assert "entity_id: input_datetime.sleep_session_bed_in" in action
+    assert "entity_id: input_number.sleep_session_bed_in_ts" in action
     assert (
         "as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
         in action
@@ -852,7 +891,7 @@ def test_reconcile_recovered_bed_entry_never_lands_after_recovered_cpap_start() 
     cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
     branch = block[recover_entry_index:cpap_start_index]
 
-    bed_in_index = branch.index("entity_id: input_datetime.sleep_session_bed_in")
+    bed_in_index = branch.index("entity_id: input_number.sleep_session_bed_in_ts")
     timestamp_block = branch[bed_in_index:]
 
     assert "as_timestamp(now())" in timestamp_block
@@ -879,7 +918,7 @@ def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
     assert "entity_id: binary_sensor.owner_suite_cpap_running" in guard_block
     assert 'state: "on"' in guard_block
 
-    assert "entity_id: input_datetime.sleep_session_cpap_on" in block
+    assert "entity_id: input_number.sleep_session_cpap_on_ts" in block
     assert "action: counter.reset" in block
     assert "action: input_boolean.turn_on\n            target:\n              entity_id: input_boolean.sleep_session_active" in block
 
@@ -950,12 +989,12 @@ def test_cpap_start_clamps_cpap_on_to_a_later_bed_entry() -> None:
     prepare = _automation_block("sleep_quality_prepare_session")
     cpap_start_branch = prepare.split("id: cpap_start", maxsplit=2)[2]
 
-    cpap_on_index = cpap_start_branch.index("entity_id: input_datetime.sleep_session_cpap_on")
+    cpap_on_index = cpap_start_branch.index("entity_id: input_number.sleep_session_cpap_on_ts")
     counter_index = cpap_start_branch.index("action: counter.reset", cpap_on_index)
     cpap_on_write = cpap_start_branch[cpap_on_index:counter_index]
 
     assert "as_timestamp(trigger.to_state.last_changed)" in cpap_on_write
-    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)" in cpap_on_write
+    assert "states('input_number.sleep_session_bed_in_ts') | float(0)" in cpap_on_write
     assert "| max" in cpap_on_write
 
 
@@ -970,7 +1009,7 @@ def test_reconcile_cpap_start_clamps_cpap_on_to_a_later_bed_entry() -> None:
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
     cpap_start_branch = block.split("Reconcile a lost cpap_start debounce", maxsplit=1)[1]
 
-    cpap_on_index = cpap_start_branch.index("entity_id: input_datetime.sleep_session_cpap_on")
+    cpap_on_index = cpap_start_branch.index("entity_id: input_number.sleep_session_cpap_on_ts")
     counter_index = cpap_start_branch.index("action: counter.reset", cpap_on_index)
     cpap_on_write = cpap_start_branch[cpap_on_index:counter_index]
 
@@ -978,7 +1017,7 @@ def test_reconcile_cpap_start_clamps_cpap_on_to_a_later_bed_entry() -> None:
         "as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed"
         in cpap_on_write
     )
-    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0)" in cpap_on_write
+    assert "states('input_number.sleep_session_bed_in_ts') | float(0)" in cpap_on_write
     assert "| max" in cpap_on_write
 
 
@@ -1042,7 +1081,7 @@ def test_reconcile_final_gate_requires_bed_debounce_and_current_bed_out() -> Non
     assert 'state: "off"' in final_gate
     assert "minutes: 5" in final_gate
     assert (
-        "state_attr('input_datetime.sleep_session_bed_out', 'timestamp') | float(0)) | int\n"
+        "states('input_number.sleep_session_bed_out_ts') | float(0)) | int\n"
         "                 >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)"
         in final_gate
     )
@@ -1120,8 +1159,8 @@ def test_reconcile_cpap_start_fallback_bed_in_matches_cpap_on_ordering() -> None
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
     cpap_start_branch = block.split("state: \"off\"", maxsplit=1)[1]
 
-    bed_in_index = cpap_start_branch.index("input_datetime.sleep_session_bed_in")
-    cpap_on_index = cpap_start_branch.index("input_datetime.sleep_session_cpap_on")
+    bed_in_index = cpap_start_branch.index("input_number.sleep_session_bed_in_ts")
+    cpap_on_index = cpap_start_branch.index("input_number.sleep_session_cpap_on_ts")
     assert bed_in_index < cpap_on_index
 
     between = cpap_start_branch[bed_in_index:cpap_on_index]
