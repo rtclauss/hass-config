@@ -804,9 +804,29 @@ automation:
                   - condition: state
                     entity_id: input_boolean.sleep_session_bed_entry_pending
                     state: "on"
-                  - condition: time
-                    after: "18:00:00"
-                    before: "12:00:00"
+                  - alias: >-
+                      Test the nightly window against the CPAP transition
+                      being recovered, not against now(). Unlike the live
+                      cpap_start branch — where the guard runs ~10 seconds
+                      after the crossing, so now() is the transition — this
+                      branch re-evaluates on every 5-minute periodic tick.
+                      A daytime CPAP run the live path correctly rejected
+                      leaves a persistent state (helper on, bed occupied,
+                      no session) that a now()-based check starts accepting
+                      the moment the wall clock enters the window, so an
+                      afternoon test would be recovered at 18:00 and
+                      published as overnight analytics using its own much
+                      earlier transition timestamp (Codex P2 follow-up on
+                      #373). Backing the helper's delay_on out of its
+                      last_changed gives the real crossing, and matches
+                      the wrapping 18:00-12:00 window a condition: time
+                      would apply to it.
+                    condition: template
+                    value_template: >-
+                      {% set started = as_local(
+                           states.binary_sensor.owner_suite_cpap_running.last_changed
+                           - timedelta(seconds=10)) %}
+                      {{ started.hour >= 18 or started.hour < 12 }}
         then:
           - if:
               - condition: state

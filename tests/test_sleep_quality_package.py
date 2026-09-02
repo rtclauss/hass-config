@@ -809,9 +809,21 @@ def test_reconcile_cpap_start_requires_pending_entry_or_nightly_window() -> None
     assert "condition: or" in guard_block
     assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in guard_block
     assert 'state: "on"' in guard_block
-    assert "condition: time" in guard_block
-    assert 'after: "18:00:00"' in guard_block
-    assert 'before: "12:00:00"' in guard_block
+
+    # Codex P2 follow-up on #373: the nightly window must be tested against
+    # the CPAP transition being recovered, NOT against now(). This branch
+    # re-evaluates every 5-minute periodic tick, so a daytime run the live
+    # path correctly rejected leaves a persistent state (helper on, bed
+    # occupied, no session) that a now()-based condition: time starts
+    # accepting the moment the wall clock enters the window -- publishing an
+    # afternoon test as overnight analytics using its own much earlier
+    # transition timestamp.
+    assert 'after: "18:00:00"' not in guard_block
+    assert 'before: "12:00:00"' not in guard_block
+    assert "as_local(" in guard_block
+    assert "states.binary_sensor.owner_suite_cpap_running.last_changed" in guard_block
+    assert "- timedelta(seconds=10))" in guard_block
+    assert "started.hour >= 18 or started.hour < 12" in guard_block
 
     # Codex P2 follow-up on #373: bed occupancy must be required
     # unconditionally here too, not just for the nightly-window alternative
@@ -830,7 +842,7 @@ def test_reconcile_cpap_start_requires_pending_entry_or_nightly_window() -> None
 
     or_block = guard_block[or_index:]
     assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in or_block
-    assert "condition: time" in or_block
+    assert "started.hour >= 18 or started.hour < 12" in or_block
 
 
 def test_cpap_start_clamps_cpap_on_to_a_later_bed_entry() -> None:
@@ -985,7 +997,11 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
     # epoch) rather than datetime:/strftime() (a naive local string) also
     # sidesteps the autumn DST fallback (Codex P2 follow-up on #373).
     assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 5
-    assert block.count("- timedelta(seconds=10))") == 3
+    # A fourth delay_on back-out is the cpap_start recovery's nightly-window
+    # guard, which tests the transition being recovered rather than now()
+    # (Codex P2 follow-up on #373: validate recovered starts against their
+    # transition time) -- a condition, not a timestamp write.
+    assert block.count("- timedelta(seconds=10))") == 4
     assert block.count("- timedelta(minutes=5))") == 1
     assert (
         "as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
