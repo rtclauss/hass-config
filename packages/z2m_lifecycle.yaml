@@ -264,10 +264,13 @@ automation:
       normal recovery looks like a bridge failure and trips the watchdog
       (recovery restarts, and eventually rest_command.proxmox_shutdown).
       Also clears the reboot counter so a reboot that happened mid-recovery
-      can't leave it pre-loaded toward escalation.
+      can't leave it pre-loaded toward escalation. The helper's `initial: false`
+      means it is already disarmed the instant HA restarts (before any retained
+      MQTT / early trigger can run the watchdog); this run only re-arms it 20
+      min later.
     mode: restart
     trace:
-      stored_traces: 5
+      stored_traces: 10
     trigger:
       - trigger: homeassistant
         event: start
@@ -287,17 +290,18 @@ automation:
   - id: reconcile_z2m_host_watchdog_armed
     alias: reconcile_z2m_host_watchdog_armed
     description: >-
-      Reload-safe backstop for arm_z2m_host_watchdog_after_start. A state
-      *trigger's* `for:` timer is dropped when an automation is reloaded and is
-      not rescheduled for an already-matching state, so this polls instead: a
-      time_pattern trigger with a state *condition* that carries `for:` (checked
-      against last_changed each run). Whenever the helper has been off longer
-      than the grace window - e.g. a reload cancelled the arming run mid-delay -
-      it is re-armed, so the host/Proxmox watchdog is never left disarmed
-      indefinitely.
+      Reload-safe backstop for arm_z2m_host_watchdog_after_start. The helper can
+      be left disarmed with no pending re-arm when a reload cancels the arming
+      run mid-delay, or an input_boolean/full reload reapplies `initial: false`.
+      A state *trigger's* `for:` timer would be lost the same way, so poll on a
+      time_pattern and use state *conditions* (evaluated against last_changed
+      each run). Re-arm when Zigbee2MQTT is fully healthy again (nothing left to
+      protect - handles a reload during normal operation) or when it has simply
+      been disarmed past the grace window (arming run was cancelled - a real
+      outage must still be able to escalate).
     mode: single
     trace:
-      stored_traces: 5
+      stored_traces: 10
     trigger:
       - trigger: time_pattern
         minutes: "/5"
@@ -305,8 +309,24 @@ automation:
       - condition: state
         entity_id: input_boolean.z2m_host_watchdog_armed
         state: "off"
-        for:
-          minutes: 25
+      - condition: or
+        conditions:
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: binary_sensor.zigbee2mqtt_running
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.z2m_failing
+                state: "off"
+              - condition: state
+                entity_id: binary_sensor.z2m_bridge
+                state: "on"
+          - condition: state
+            entity_id: input_boolean.z2m_host_watchdog_armed
+            state: "off"
+            for:
+              minutes: 25
     action:
       - action: input_boolean.turn_on
         target:
@@ -579,11 +599,13 @@ input_boolean:
   z2m_host_watchdog_armed:
     name: Z2M host watchdog armed
     icon: mdi:shield-refresh
-    # No `initial:` on purpose - the state must persist across automation and
-    # input_boolean reloads (an `initial:` is reapplied on every reload). On a
-    # real HA restart, arm_z2m_host_watchdog_after_start disarms it for 20 min;
-    # failsafe_rearm_z2m_host_watchdog re-arms it if it is ever left off longer
-    # than that. The fail-safe direction is always "armed" (watchdog active).
+    # initial: false - the helper is DISARMED the instant HA restarts, so an
+    # early/retained-MQTT trigger can't run shutdown_proxmox_z2m_unavailable
+    # before arm_z2m_host_watchdog_after_start gets a chance to disarm it.
+    # arm_... re-arms it 20 min later; reconcile_z2m_host_watchdog_armed is the
+    # backstop for any path that leaves it disarmed with no pending re-arm
+    # (reload during the delay, or `initial: false` reapplied by a reload).
+    initial: false
 
 input_number:
   z2m_router_offline_threshold_pct:
