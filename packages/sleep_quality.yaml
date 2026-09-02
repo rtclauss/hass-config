@@ -694,6 +694,54 @@ automation:
             target:
               entity_id: input_boolean.sleep_session_bed_entry_pending
       - alias: >-
+          Refresh a pending bed-entry whose bed_in predates the bed's
+          current occupancy. If HA is down while the resident both leaves
+          AND returns to bed, neither neighbouring branch covers it: the
+          cleanup above needs the bed to read "off" (it reads "on" again)
+          and the missed-entry recovery below needs the pending flag off
+          (it is still latched from before the gap). The pre-downtime
+          bed_in therefore survives and the next CPAP start consumes it,
+          merging two separate bed visits into one session that can report
+          most of a day in bed (Codex P2 follow-up on #373). Runs before
+          both the missed-entry recovery and the cpap_start reconcile so
+          the refreshed value is the one they see.
+
+          The bed sensor's own last_changed is the right replacement in
+          both gap kinds: a reload preserves it, so it is exactly the
+          return-to-bed moment; a restart resets it to the restore moment,
+          which is the same "best available approximation" every other
+          recovery here already assumes. That restart reset also means a
+          bed that simply stayed occupied across a restart is refreshed
+          too, trading a bounded loss (a pending entry only lives from bed
+          entry until CPAP starts) against an unbounded merge of two
+          unrelated visits.
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.sleep_session_bed_entry_pending
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "on"
+          - alias: >-
+              Both floored to whole seconds, matching the bed_out freshness
+              check below — the stored timestamp carries second-only
+              precision, so a sub-second difference is not a real
+              transition.
+            condition: template
+            value_template: >-
+              {{ (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)
+                 > (state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0) | int) }}
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.sleep_session_bed_in
+            data:
+              timestamp: >-
+                {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
+      - alias: >-
           Recover a nightly bed entry whose off->on transition was missed
           entirely because HA was down when it happened: if the bed is
           already occupied at reconciliation time with no session active
@@ -819,6 +867,29 @@ automation:
               - condition: state
                 entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
                 state: "on"
+              - alias: >-
+                  Require the bed to have been occupied ALREADY AT the CPAP
+                  transition being recovered, not merely occupied now. The
+                  window test below validates when CPAP started, but the
+                  occupancy check above is still evaluated at now(), so CPAP
+                  started inside the window against an empty bed — correctly
+                  rejected by the live path — stays eligible for the whole
+                  run: once the bed is occupied again much later (an
+                  afternoon nap, say), a periodic tick accepts that stale
+                  transition and the fallback records bed_in at it too,
+                  inventing a session spanning hours when the bed was empty
+                  (Codex P2 follow-up on #373). The bed sensor's own
+                  last_changed is when its current occupancy began, so
+                  requiring it at or before the CPAP crossing proves the
+                  overlap. The minute of slack absorbs restart load-order
+                  jitter — on a restart both entities' last_changed reset to
+                  roughly the same restore moment, and their order is not
+                  guaranteed — while staying far below the multi-hour
+                  mismatch this exists to reject.
+                condition: template
+                value_template: >-
+                  {{ (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)
+                     <= ((as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed) - 10) | int) + 60 }}
               - condition: or
                 conditions:
                   - condition: state

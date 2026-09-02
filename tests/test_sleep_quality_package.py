@@ -683,11 +683,14 @@ def test_reconcile_clears_pending_bed_entry_missed_by_restart() -> None:
     # branch, so a stale flag can't also suppress that branch's fallback.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
     reconcile_index = block.index("Reconcile a pending bed-entry")
+    refresh_index = block.index("Refresh a pending bed-entry")
     recover_entry_index = block.index("Recover a nightly bed entry")
     cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
-    assert reconcile_index < recover_entry_index < cpap_start_index
+    assert reconcile_index < refresh_index < recover_entry_index < cpap_start_index
 
-    branch = block[reconcile_index:recover_entry_index]
+    # Bounded at the refresh branch that now follows it, so this only
+    # inspects the bed-empty cleanup itself.
+    branch = block[reconcile_index:refresh_index]
     assert "entity_id: input_boolean.sleep_session_active" in branch
     assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in branch
     assert "entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either" in branch
@@ -719,6 +722,67 @@ def test_reconcile_recovers_a_bed_entry_missed_during_downtime() -> None:
     assert branch.count('state: "off"') == 2
     assert 'state: "on"' in branch
     assert "entity_id: input_datetime.sleep_session_bed_in" in branch
+
+
+def test_reconcile_refreshes_a_pending_entry_after_a_missed_off_on_cycle() -> None:
+    # Codex P2 follow-up on #373: if HA is down while the resident both
+    # leaves AND returns to bed, neither neighbouring branch covers it --
+    # the bed-empty cleanup needs the bed "off" (it reads "on" again) and
+    # the missed-entry recovery needs the pending flag off (still latched
+    # from before the gap). The pre-downtime bed_in survives and the next
+    # CPAP start consumes it, merging two separate bed visits into one
+    # session that can report most of a day in bed. Must refresh bed_in to
+    # the bed's current occupancy transition when that is newer.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    refresh_index = block.index("Refresh a pending bed-entry")
+    recover_entry_index = block.index("Recover a nightly bed entry")
+    branch = block[refresh_index:recover_entry_index]
+
+    then_index = branch.index("then:")
+    guard, action = branch[:then_index], branch[then_index:]
+
+    # Latched pending + bed occupied again is exactly the gap between the
+    # two neighbouring branches.
+    assert "entity_id: input_boolean.sleep_session_bed_entry_pending" in guard
+    assert guard.count('state: "on"') == 2
+    assert "entity_id: input_boolean.sleep_session_active" in guard
+
+    # Staleness is the bed's own transition being newer than the recorded
+    # bed_in, both floored to whole seconds.
+    assert (
+        "as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)"
+        in guard
+    )
+    assert "state_attr('input_datetime.sleep_session_bed_in', 'timestamp') | float(0) | int)" in guard
+
+    # ...and the replacement is that same transition.
+    assert "entity_id: input_datetime.sleep_session_bed_in" in action
+    assert (
+        "as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed)"
+        in action
+    )
+
+
+def test_reconciled_cpap_start_requires_occupancy_at_the_transition() -> None:
+    # Codex P2 follow-up on #373: the window guard validates WHEN CPAP
+    # started, but the bed-occupancy check is still evaluated at now(). CPAP
+    # started inside the window against an empty bed -- correctly rejected
+    # by the live path -- therefore stays eligible for the whole run, and
+    # once the bed is occupied again much later a periodic tick accepts that
+    # stale transition, with the fallback recording bed_in at it too. Must
+    # prove the bed was ALREADY occupied at the recovered transition.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    cpap_start_branch = block.split("Reconcile a lost cpap_start debounce", maxsplit=1)[1]
+    guard = cpap_start_branch[: cpap_start_branch.index("then:")]
+
+    assert (
+        "(as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)"
+        in guard
+    )
+    assert (
+        "<= ((as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed) - 10) | int) + 60"
+        in guard
+    )
 
 
 def test_recovered_bed_entry_window_tests_the_occupancy_transition() -> None:
@@ -1025,7 +1089,11 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
     # the recovered CPAP start). timestamp:/as_timestamp() (an absolute
     # epoch) rather than datetime:/strftime() (a naive local string) also
     # sidesteps the autumn DST fallback (Codex P2 follow-up on #373).
-    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 5
+    # A sixth reference is the cpap_start recovery's occupancy-overlap
+    # guard, which compares the bed's own last_changed against this
+    # transition (Codex P2 follow-up on #373: validate occupancy at the
+    # recovered CPAP transition) -- a condition, not a timestamp write.
+    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 6
     # A fourth delay_on back-out is the cpap_start recovery's nightly-window
     # guard, which tests the transition being recovered rather than now()
     # (Codex P2 follow-up on #373: validate recovered starts against their
