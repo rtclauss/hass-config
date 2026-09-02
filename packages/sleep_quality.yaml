@@ -303,6 +303,24 @@ automation:
         entity_id: input_boolean.sleep_session_active
         state: "off"
     action:
+      - alias: >-
+          Re-check inactivity here, at execution time. The top-level
+          condition: above is evaluated in async_trigger BEFORE
+          action_script.async_run(), and mode: queued waits for its lock
+          INSIDE async_run — so that condition gates admission to the
+          queue, never the dequeued run's actions (Codex P2 follow-up on
+          #373, confirmed against HA's automation source). If a nightly
+          bed_entry and the debounced cpap_start become ready together,
+          both are admitted while inactive; cpap_start can execute first
+          and establish the session, and the still-queued bed_entry run
+          would then overwrite bed_in with its own later now(), leaving
+          cpap_on_ts < bed_in_ts so the finalizer discards the completed
+          session. A bare condition action halts the sequence instead,
+          which covers every branch below at once rather than repeating
+          the guard in each.
+        condition: state
+        entity_id: input_boolean.sleep_session_active
+        state: "off"
       - choose:
           - conditions:
               - condition: trigger

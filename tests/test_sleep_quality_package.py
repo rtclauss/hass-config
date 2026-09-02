@@ -152,6 +152,33 @@ def test_bed_exit_without_session_clears_stale_pending_entry() -> None:
     assert target_index > turn_off_index
 
 
+def test_prepare_session_rechecks_inactivity_at_execution_time() -> None:
+    # Codex P2 follow-up on #373: HA evaluates an automation's top-level
+    # condition: in async_trigger BEFORE action_script.async_run(), and
+    # mode: queued waits for its lock INSIDE async_run -- so that condition
+    # gates admission to the queue, never the dequeued run's actions. If a
+    # nightly bed_entry and the debounced cpap_start become ready together,
+    # both are admitted while inactive; cpap_start can execute first and
+    # establish the session, and the still-queued bed_entry run would then
+    # overwrite bed_in with its own later now(), leaving
+    # cpap_on_ts < bed_in_ts so the finalizer discards the session. A bare
+    # condition action at the top of the sequence halts the run instead,
+    # covering every branch at once.
+    prepare = _automation_block("sleep_quality_prepare_session")
+
+    action_index = prepare.index("\n    action:")
+    choose_index = prepare.index("- choose:", action_index)
+    preamble = prepare[action_index:choose_index]
+
+    # A guard must sit between `action:` and the `choose:`, not inside it.
+    assert "condition: state" in preamble
+    assert "entity_id: input_boolean.sleep_session_active" in preamble
+    assert 'state: "off"' in preamble
+
+    # It must be queued mode -- that is what makes the recheck necessary.
+    assert "mode: queued" in prepare
+
+
 def test_cpap_start_requires_pending_entry_or_nightly_window() -> None:
     # Codex P2 follow-up on #373: cpap_start had no time gate at all, unlike
     # bed_entry. Daytime CPAP testing with no pending nightly bed entry would
