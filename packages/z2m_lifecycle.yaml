@@ -284,6 +284,29 @@ automation:
         target:
           entity_id: input_boolean.z2m_host_watchdog_armed
 
+  - id: failsafe_rearm_z2m_host_watchdog
+    alias: failsafe_rearm_z2m_host_watchdog
+    description: >-
+      Fail-safe backstop for arm_z2m_host_watchdog_after_start. If that run is
+      cancelled before it re-arms the helper (e.g. an automation reload during
+      the 20-minute delay), the helper would otherwise stay off forever and the
+      host/Proxmox watchdog would never recover a real Z2M outage. This re-arms
+      it whenever it has been left off for longer than the intended grace
+      window. The `for:` uses the helper's last_changed, so it survives reloads.
+    mode: single
+    trace:
+      stored_traces: 5
+    trigger:
+      - trigger: state
+        entity_id: input_boolean.z2m_host_watchdog_armed
+        to: "off"
+        for:
+          minutes: 25
+    action:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.z2m_host_watchdog_armed
+
   # This automation depends on a HA host restart path configured elsewhere.
   # It should only react to bridge-wide problems, not a single end device that
   # leaves the network or drops right after joining.
@@ -551,9 +574,11 @@ input_boolean:
   z2m_host_watchdog_armed:
     name: Z2M host watchdog armed
     icon: mdi:shield-refresh
-    # initial: off (and no restore) => always disarmed right after an HA
-    # start; arm_z2m_host_watchdog_after_start re-arms it 20 min later.
-    initial: false
+    # No `initial:` on purpose - the state must persist across automation and
+    # input_boolean reloads (an `initial:` is reapplied on every reload). On a
+    # real HA restart, arm_z2m_host_watchdog_after_start disarms it for 20 min;
+    # failsafe_rearm_z2m_host_watchdog re-arms it if it is ever left off longer
+    # than that. The fail-safe direction is always "armed" (watchdog active).
 
 input_number:
   z2m_router_offline_threshold_pct:
