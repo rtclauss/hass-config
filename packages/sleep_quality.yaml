@@ -843,30 +843,32 @@ automation:
               {{ entered.hour >= 18 or entered.hour < 12 }}
         then:
           - alias: >-
-              Cap the recovered bed_in at the CPAP helper's own transition
-              when CPAP is already running: the very next branch below
-              recovers cpap_on from that same helper's (earlier) last_changed
-              whenever it finds CPAP already on, but this branch's own
-              bed_in would otherwise be reconciliation time (now()) —
-              always later than an already-running CPAP's actual start.
-              That inversion (cpap_on_ts < bed_in_ts) fails the finalizer's
-              ordering check and silently discards an otherwise complete,
-              valid session (Codex P2 follow-up on #373). Bed entry must
-              have preceded CPAP starting, so when CPAP is already on, use
-              its own (10-second-debounce-backed-out) transition time
-              instead of now() -- otherwise now() is still the best
-              available approximation.
+              Record the bed's own occupancy transition, not reconciliation
+              time. The guard above already tests the nightly window
+              against this same last_changed, so the branch only runs when
+              that transition is itself the missed entry — use it as the
+              value too (Codex P2 follow-up on #373). A reload leaves other
+              entities untouched, so it IS the real entry moment; on a full
+              restart HA resets it to the restore moment, degrading exactly
+              to the now()-era approximation this previously used. The bed
+              sensor is undebounced, so there is no delay to back out.
+              Using now() instead under-reported bed_minutes by however
+              long the bed had been occupied before reconciliation ran.
+
+              No ordering clamp is needed here: the cpap_start reconcile
+              branch below writes cpap_on as [cpap transition, bed_in] |
+              max, so it can never land before whatever this records. The
+              previous min() against the CPAP transition existed only to
+              prevent that inversion back when this wrote now(); keeping it
+              would now actively hurt, dragging bed_in earlier than the
+              real entry whenever the bed transition is the later of the
+              two.
             action: input_number.set_value
             target:
               entity_id: input_number.sleep_session_bed_in_ts
             data:
               value: >-
-                {{ [as_timestamp(now()),
-                    (as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed)
-                       - 10)
-                    if is_state('binary_sensor.owner_suite_cpap_running', 'on')
-                    else as_timestamp(now())]
-                   | min }}
+                {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
           - action: input_boolean.turn_on
             target:
               entity_id: input_boolean.sleep_session_bed_entry_pending

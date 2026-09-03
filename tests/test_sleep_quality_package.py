@@ -903,16 +903,16 @@ def test_reconcile_bed_entry_recovery_only_runs_on_startup_or_reload() -> None:
     assert "id: startup_or_reload" in branch
 
 
-def test_reconcile_recovered_bed_entry_never_lands_after_recovered_cpap_start() -> None:
-    # Codex P2 follow-up on #373: when CPAP is already running at
-    # reconciliation time, the very next branch (reconcile a lost
-    # cpap_start debounce) recovers cpap_on from the CPAP helper's own
-    # (earlier) last_changed. If this branch still wrote bed_in as plain
-    # now() (reconciliation time), that would almost always land AFTER the
-    # already-running CPAP's recovered start, failing the finalizer's
-    # cpap_on_ts >= bed_in_ts ordering check and silently discarding an
-    # otherwise complete, valid session. Must cap bed_in at the CPAP
-    # helper's own transition whenever CPAP is already on.
+def test_reconcile_recovered_bed_entry_uses_the_preserved_bed_transition() -> None:
+    # Codex P2 follow-up on #373: this branch must record the bed sensor's
+    # own occupancy transition, not reconciliation time. The branch's guard
+    # already tests the nightly window against that same last_changed, so
+    # the branch only runs when that transition IS the missed entry. Across
+    # a reload other entities are untouched, so it is the real entry moment;
+    # writing now() instead under-reported bed_minutes by however long the
+    # bed had been occupied before reconciliation ran. On a full restart
+    # last_changed is reset to the restore moment, degrading exactly to the
+    # now()-era approximation this used to write, so nothing regresses there.
     block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
     recover_entry_index = block.index("Recover a nightly bed entry")
     cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
@@ -921,11 +921,38 @@ def test_reconcile_recovered_bed_entry_never_lands_after_recovered_cpap_start() 
     bed_in_index = branch.index("entity_id: input_number.sleep_session_bed_in_ts")
     timestamp_block = branch[bed_in_index:]
 
-    assert "as_timestamp(now())" in timestamp_block
-    assert "as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed)" in timestamp_block
-    assert "is_state('binary_sensor.owner_suite_cpap_running', 'on')" in timestamp_block
-    assert "| min" in timestamp_block
+    assert (
+        "as_timestamp(states.binary_sensor."
+        "bed_presence_2d0670_bed_occupied_either.last_changed)"
+    ) in timestamp_block
+
+    # The old now()-based write and its min() clamp against the CPAP
+    # transition must both be gone. The clamp existed only to stop now()
+    # from landing after an already-running CPAP's recovered start; keeping
+    # it would now drag bed_in earlier than the real entry whenever the bed
+    # transition is the later of the two.
+    assert "as_timestamp(now())" not in timestamp_block
+    assert "| min" not in timestamp_block
+
     assert "action: input_boolean.turn_on" in branch
+
+
+def test_reconcile_recovered_cpap_start_still_clamps_ordering() -> None:
+    # The companion to the test above: dropping that min() clamp is only
+    # safe because the cpap_start reconcile branch writes cpap_on as
+    # [cpap transition, bed_in] | max, so a recovered cpap_on can never land
+    # before whatever the recovered bed entry recorded. If that clamp were
+    # ever removed, the finalizer's cpap_on_ts >= bed_in_ts ordering check
+    # could start silently discarding complete sessions again.
+    block = _automation_block("sleep_quality_reconcile_cpap_stop_after_restart")
+    cpap_start_index = block.index("Reconcile a lost cpap_start debounce")
+    branch = block[cpap_start_index:]
+
+    cpap_on_index = branch.index("entity_id: input_number.sleep_session_cpap_on_ts")
+    timestamp_block = branch[cpap_on_index:]
+
+    assert "states('input_number.sleep_session_bed_in_ts') | float(0)" in timestamp_block
+    assert "| max" in timestamp_block
 
 
 def test_reconcile_recovers_a_lost_cpap_start_debounce() -> None:
@@ -1149,17 +1176,19 @@ def test_reconcile_writes_preserve_the_actual_transition_time() -> None:
     # cpap_off backs its delay_off out the same way; the mid-session re-arm
     # branch's own fresh-segment cpap_on write backs delay_on out again
     # (Codex P2 follow-up on #373: excluding stopped intervals from CPAP
-    # minutes); the recovered-bed-entry branch's own cap on bed_in backs it
-    # out a fifth time, via plain epoch-second arithmetic rather than
-    # timedelta (Codex P2 follow-up on #373: keep recovered bed entry before
-    # the recovered CPAP start). timestamp:/as_timestamp() (an absolute
-    # epoch) rather than datetime:/strftime() (a naive local string) also
-    # sidesteps the autumn DST fallback (Codex P2 follow-up on #373).
-    # A sixth reference is the cpap_start recovery's occupancy-overlap
+    # minutes). timestamp:/as_timestamp() (an absolute epoch) rather than
+    # datetime:/strftime() (a naive local string) also sidesteps the autumn
+    # DST fallback (Codex P2 follow-up on #373).
+    # A fifth reference is the cpap_start recovery's occupancy-overlap
     # guard, which compares the bed's own last_changed against this
     # transition (Codex P2 follow-up on #373: validate occupancy at the
     # recovered CPAP transition) -- a condition, not a timestamp write.
-    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 6
+    # The recovered-bed-entry branch used to reference this helper a sixth
+    # time, capping its bed_in against the CPAP transition; it now records
+    # the bed sensor's own last_changed instead and relies on the cpap_on
+    # write's [.., bed_in] | max for ordering (Codex P2 follow-up on #373:
+    # record the preserved bed transition during reload recovery).
+    assert block.count("as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed") == 5
     # A fourth delay_on back-out is the cpap_start recovery's nightly-window
     # guard, which tests the transition being recovered rather than now()
     # (Codex P2 follow-up on #373: validate recovered starts against their
