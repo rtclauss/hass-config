@@ -171,11 +171,12 @@ automation:
     description: >-
       Fail closed when the pet-safety policy enters Acclimation by stopping
       active cleaning and returning all three robots to their docks. Also
-      reconciles on Home Assistant startup: the helper is re-initialized to
-      Acclimation during entity setup (before this listener is active), so no
-      to:"Acclimation" transition is observed — but the documented fail-closed
-      default after every restart means a robot that was cleaning through the
-      restart must still be docked.
+      reconciles on Home Assistant startup: the helper restores its last
+      selected value during entity setup (before this listener is active), so a
+      restart that comes back up already in Acclimation produces no
+      to:"Acclimation" transition — and robot state through a restart is unknown
+      regardless — so a robot that was cleaning through the restart is still
+      docked as a safety reconcile.
     mode: restart
     trace:
       stored_traces: 10
@@ -371,7 +372,10 @@ input_select:
       - Acclimation
       - Supervised
       - Unattended
-    initial: Acclimation
+    # No `initial:` — the helper restores its last selected value across
+    # restarts/reloads (docs/vacuum_pet_policy.md). Automatic boundaries still
+    # require the exact `Unattended` state, and any unavailable/unknown state
+    # fails closed, so dropping the forced re-init does not weaken the guard.
   vacuum_room:
     name: Choose a room to clean
     options:
