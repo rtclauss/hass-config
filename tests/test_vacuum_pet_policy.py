@@ -104,6 +104,21 @@ def test_every_automatic_cleaning_path_routes_through_a_pet_safe_boundary() -> N
     assert "action: script.vacuum_den_pet_safe_start" in departure
 
 
+def test_den_error_retry_does_not_countermand_the_startup_dock_reconcile() -> None:
+    # Removing `initial: Acclimation` means the policy can restore to Unattended
+    # across a restart, so the den error-retry must not fire on the transient
+    # unknown/unavailable -> error transition, and must yield to the
+    # homeassistant-start dock reconcile for a settle window.
+    block = _automation_block(VACUUM_PATH, "resume_vacuum_on_error_den")
+
+    assert "not_from:" in block
+    assert '- "unknown"' in block
+    assert '- "unavailable"' in block
+    assert "automation.vacuum_pet_policy_acclimation_dock" in block
+    assert "last_triggered" in block
+    assert "action: script.vacuum_den_pet_safe_start" in block
+
+
 def test_shared_full_floor_boundaries_fail_closed_for_unknown_or_disabled_policy() -> None:
     for script_id in (
         "vacuum_den_pet_safe_start",

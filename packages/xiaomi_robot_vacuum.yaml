@@ -113,13 +113,32 @@ alarm_control_panel: []
 automation:
   - alias: "Resume vacuum on error (den)"
     id: resume_vacuum_on_error_den
+    description: >-
+      Retry a den run through the pet-safe boundary after the robot drops into
+      `error`. Two startup guards keep this from countermanding the
+      homeassistant-start dock reconcile (vacuum_pet_policy_acclimation_dock):
+      the trigger ignores the unknown/unavailable -> error transition the entity
+      makes while reconnecting after a restart, and the settle condition
+      suppresses retries for two minutes after that dock automation last ran
+      (its start trigger fires on every boot). Steady-state error retries are
+      unaffected.
     mode: single
     trace:
       stored_traces: 10
     trigger:
       - trigger: state
         entity_id: vacuum.valetudo_den
+        not_from:
+          - "unknown"
+          - "unavailable"
         to: "error"
+    condition:
+      - alias: >-
+          Let the homeassistant-start dock reconcile win before any auto-resume
+        condition: template
+        value_template: >-
+          {% set docked_at = state_attr('automation.vacuum_pet_policy_acclimation_dock', 'last_triggered') %}
+          {{ docked_at is none or (now() - docked_at).total_seconds() > 120 }}
     action:
       - delay: "00:00:05"
       - action: script.vacuum_den_pet_safe_start
