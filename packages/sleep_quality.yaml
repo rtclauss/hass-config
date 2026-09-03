@@ -1,0 +1,1196 @@
+# Owner-suite sleep-session analytics for issue #373.
+#
+# This observes the existing CPAP power and aggregate bed-presence signals. It
+# does not alter the Allium-governed goodnight or wake-up routines. The score is
+# a local continuity heuristic for trend review, not a medical sleep-quality or
+# CPAP-adherence measurement.
+
+input_boolean:
+  sleep_session_active:
+    name: Sleep session active
+    icon: mdi:sleep
+
+  sleep_session_bed_entry_pending:
+    name: Sleep session bed entry pending
+    icon: mdi:bed-clock
+
+  sleep_session_cpap_stopped:
+    name: Sleep session CPAP stopped
+    icon: mdi:power-sleep
+
+input_number:
+  # The four session timestamps are stored as absolute epoch seconds in
+  # plain numeric helpers rather than in input_datetime helpers (Codex P2
+  # follow-up on #373). input_datetime's timestamp: service field and its
+  # timestamp attribute are exact only in memory: its state property
+  # persists self._current_datetime.strftime("%Y-%m-%d %H:%M:%S"), a
+  # naive local wall clock carrying no UTC offset and no fold, and a
+  # restart restores it via dt_util.parse_datetime() on that same naive
+  # string. A value recorded during the repeated autumn hour therefore
+  # comes back as the wrong one of the two real instants — verified
+  # against America/Chicago at the 2026-11-01 fallback, where 01:30 CDT
+  # and 01:30 CST are 3600s apart yet persist identically, restoring an
+  # hour early. That silently shortens a duration or trips the
+  # finalizer's ordering check. An epoch in a numeric helper has no
+  # timezone semantics at all, so it round-trips a restart exactly.
+  sleep_session_bed_in_ts:
+    name: Sleep session bed in (epoch)
+    icon: mdi:bed-clock
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
+  sleep_session_cpap_on_ts:
+    name: Sleep session CPAP on (epoch)
+    icon: mdi:medical-bag
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
+  sleep_session_cpap_off_ts:
+    name: Sleep session CPAP off (epoch)
+    icon: mdi:medical-bag
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
+  sleep_session_bed_out_ts:
+    name: Sleep session bed out (epoch)
+    icon: mdi:bed-clock
+    min: 0
+    max: 4102444800
+    step: 1
+    mode: box
+
+  sleep_session_bed_minutes:
+    name: Latest sleep session bed time
+    icon: mdi:bed-clock
+    min: 0
+    max: 1440
+    step: 1
+    unit_of_measurement: min
+    mode: box
+
+  sleep_session_cpap_minutes:
+    name: Latest sleep session CPAP time
+    icon: mdi:medical-bag
+    min: 0
+    max: 1440
+    step: 1
+    unit_of_measurement: min
+    mode: box
+
+  sleep_session_cpap_active_seconds:
+    name: Sleep session CPAP accumulated active seconds
+    icon: mdi:timer-sand
+    min: 0
+    max: 86400
+    step: 1
+    mode: box
+
+  sleep_quality_score:
+    name: Sleep continuity score (heuristic)
+    icon: mdi:sleep
+    min: 0
+    max: 100
+    step: 1
+    unit_of_measurement: pts
+    mode: box
+
+counter:
+  sleep_restlessness_events:
+    name: Latest sleep session bed transitions
+    icon: mdi:swap-horizontal
+    minimum: 0
+    maximum: 500
+    step: 1
+    restore: true
+
+template:
+  - binary_sensor:
+      - default_entity_id: binary_sensor.owner_suite_cpap_running
+        unique_id: owner_suite_cpap_running
+        name: Owner suite CPAP running
+        # A continuously-varying power sensor's own last_changed resets on
+        # every wattage fluctuation, not just threshold crossings, so it
+        # can't be used to check "has this been sustained above/below 1.3W
+        # for N minutes" after the fact (Codex P2 follow-up on #373: a
+        # template comparing the raw sensor's last_changed against now()
+        # never reaches the guard duration while the reading keeps
+        # updating within the same range). delay_on/delay_off give this
+        # helper its own debounced on/off transitions, so its OWN
+        # last_changed/state is meaningful for that check — the same
+        # pattern already used for dryer_running in cleaning.yaml.
+        # availability also guards against a genuinely unavailable sensor
+        # reading as a false "below threshold" via float(0) (Codex P2
+        # follow-up on #373).
+        availability: "{{ has_value('sensor.owner_suite_cpap_plug_power') }}"
+        state: "{{ states('sensor.owner_suite_cpap_plug_power') | float(0) > 1.3 }}"
+        delay_on:
+          seconds: 10
+        delay_off:
+          minutes: 5
+
+script:
+  sleep_quality_rearm_cpap_resume:
+    alias: Sleep quality - re-arm CPAP resume
+    description: >-
+      Bank the interruption that just ended into accumulated active time,
+      start a fresh segment at resume_timestamp, and clear the stop latch.
+      Routed through this single mode: single script so the live
+      cpap_resume trigger (in sleep_quality_track_active_session) and the
+      periodic reconciliation re-arm (in
+      sleep_quality_reconcile_cpap_stop_after_restart) can't both observe
+      sleep_session_cpap_stopped as "on" and independently bank the same
+      interruption — mode: single means a concurrent second call is
+      dropped outright while the first is still running, and the internal
+      state check below still protects a call that starts only after the
+      first has already finished (Codex P2 follow-up on #373: serialize
+      concurrent CPAP resume recovery).
+    mode: single
+    max_exceeded: silent
+    trace:
+      stored_traces: 10
+    fields:
+      resume_timestamp:
+        description: >-
+          Epoch seconds for the genuine resume transition, computed by the
+          caller (trigger.to_state.last_changed for the live trigger, or
+          the debounced helper's last_changed backed out by its own
+          delay_on for the periodic reconciliation path).
+        required: true
+        selector:
+          number:
+    sequence:
+      - if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_cpap_stopped
+            state: "on"
+        then:
+          - alias: >-
+              Keep the running total inside the helper's own min/max. A
+              single out-of-range set_value raises and aborts this script
+              mid-sequence, which would leave cpap_on unrewritten and
+              sleep_session_cpap_stopped stranded on for the rest of the
+              session — so an inverted or absent timestamp pair must
+              degrade to a no-op bank rather than breaking the re-arm
+              entirely (Codex P2 follow-up on #373).
+            action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_active_seconds
+            data:
+              value: >-
+                {{ [86400, [0, (states('input_number.sleep_session_cpap_active_seconds') | float(0))
+                   + [0, (states('input_number.sleep_session_cpap_off_ts') | float(0))
+                        - (states('input_number.sleep_session_cpap_on_ts') | float(0))]
+                     | max] | max] | min }}
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_on_ts
+            data:
+              value: "{{ resume_timestamp }}"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sleep_session_cpap_stopped
+
+  finalize_sleep_quality_session:
+    alias: Finalize sleep quality session
+    description: >-
+      Persist the latest owner-suite bed/CPAP durations and bounded continuity
+      heuristic after both CPAP and bed occupancy have stopped.
+    mode: single
+    trace:
+      stored_traces: 10
+    sequence:
+      - variables:
+          bed_in_ts: >-
+            {{ states('input_number.sleep_session_bed_in_ts') | float(0) }}
+          cpap_on_ts: >-
+            {{ states('input_number.sleep_session_cpap_on_ts') | float(0) }}
+          cpap_off_ts: >-
+            {{ states('input_number.sleep_session_cpap_off_ts') | float(0) }}
+          bed_out_ts: >-
+            {{ states('input_number.sleep_session_bed_out_ts') | float(0) }}
+      - alias: >-
+          Only persist analytics for a complete, ordered session — but
+          always clear the active-session flags below regardless, so an
+          incomplete/out-of-order session (e.g. CPAP briefly used while the
+          aggregate bed sensor never registered occupied) can't leave
+          sleep_session_active latched on and silently block every future
+          session from starting (Codex P2 on #373)
+        if:
+          - condition: template
+            value_template: >-
+              {{ bed_in_ts > 0
+                 and cpap_on_ts >= bed_in_ts
+                 and cpap_off_ts >= cpap_on_ts
+                 and bed_out_ts >= bed_in_ts }}
+        then:
+          - variables:
+              bed_minutes: >-
+                {{ [1440, [0, ((bed_out_ts - bed_in_ts) / 60) | round(0)] | max] | min }}
+              cpap_minutes: >-
+                {# Codex P2 follow-up on #373: a single cpap_off - cpap_on
+                   span only covers the final active segment; any earlier
+                   mid-session interruption (banked into
+                   sleep_session_cpap_active_seconds by the cpap_resume
+                   re-arm branches) has to be added back in or the whole
+                   stopped interval is silently dropped from the total. #}
+                {{ [1440, [0, (((cpap_off_ts - cpap_on_ts)
+                   + (states('input_number.sleep_session_cpap_active_seconds') | float(0))) / 60)
+                   | round(0)] | max] | min }}
+              bed_transitions: >-
+                {{ states('counter.sleep_restlessness_events') | int(0) }}
+              continuity_score: >-
+                {% set cpap_points = [60, (cpap_minutes | float(0) / 480 * 60)] | min %}
+                {% set bed_points = [40, (bed_minutes | float(0) / 480 * 40)] | min %}
+                {% set transition_penalty = [20, bed_transitions | int(0)] | min %}
+                {{ [100, [0, cpap_points + bed_points - transition_penalty] | max] | min | round(0) }}
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_bed_minutes
+            data:
+              value: "{{ bed_minutes }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_minutes
+            data:
+              value: "{{ cpap_minutes }}"
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_quality_score
+            data:
+              value: "{{ continuity_score }}"
+      - action: input_boolean.turn_off
+        target:
+          entity_id:
+            - input_boolean.sleep_session_active
+            - input_boolean.sleep_session_bed_entry_pending
+            - input_boolean.sleep_session_cpap_stopped
+
+automation:
+  - id: sleep_quality_prepare_session
+    alias: Sleep quality - prepare session
+    description: >-
+      Record the most recent nightly bed entry, then start a persistent session
+      after sustained CPAP use without changing existing goodnight behavior.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+        from: "off"
+        to: "on"
+        id: bed_entry
+      - trigger: numeric_state
+        entity_id: sensor.owner_suite_cpap_plug_power
+        above: 1.3
+        for:
+          seconds: 10
+        id: cpap_start
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+        from: "on"
+        to: "off"
+        id: bed_exit_without_session
+    condition:
+      - condition: state
+        entity_id: input_boolean.sleep_session_active
+        state: "off"
+    action:
+      - alias: >-
+          Re-check inactivity here, at execution time. The top-level
+          condition: above is evaluated in async_trigger BEFORE
+          action_script.async_run(), and mode: queued waits for its lock
+          INSIDE async_run — so that condition gates admission to the
+          queue, never the dequeued run's actions (Codex P2 follow-up on
+          #373, confirmed against HA's automation source). If a nightly
+          bed_entry and the debounced cpap_start become ready together,
+          both are admitted while inactive; cpap_start can execute first
+          and establish the session, and the still-queued bed_entry run
+          would then overwrite bed_in with its own later now(), leaving
+          cpap_on_ts < bed_in_ts so the finalizer discards the completed
+          session. A bare condition action halts the sequence instead,
+          which covers every branch below at once rather than repeating
+          the guard in each.
+        condition: state
+        entity_id: input_boolean.sleep_session_active
+        state: "off"
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: bed_entry
+              - condition: time
+                after: "18:00:00"
+                before: "12:00:00"
+            sequence:
+              - action: input_number.set_value
+                target:
+                  entity_id: input_number.sleep_session_bed_in_ts
+                data:
+                  value: "{{ as_timestamp(now()) }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.sleep_session_bed_entry_pending
+          - conditions:
+              - condition: trigger
+                id: cpap_start
+              - alias: >-
+                  Require a qualifying nightly context before starting a
+                  session from CPAP alone — otherwise a daytime CPAP test
+                  with no pending bed entry falls back to a synthetic
+                  bed_in equal to cpap_on (or, once bed_entry_pending is
+                  off from a prior real session, inherits that session's
+                  stale bed_in), forming a fully ordered but bogus session
+                  that overwrites real overnight analytics once it
+                  finalizes (Codex P2 follow-up on #373). A pending
+                  nightly bed entry is normally accepted regardless of
+                  when CPAP actually starts (e.g. a late sleeper), but a
+                  reload that misses the live bed_exit_without_session
+                  trigger can leave that flag stuck on after the bed has
+                  actually gone empty again, so require the bed to be
+                  currently occupied unconditionally — not just for the
+                  nightly-window alternative — or a stale pending entry
+                  could combine with a later, unrelated CPAP run (Codex P2
+                  follow-up on #373).
+                condition: and
+                conditions:
+                  - condition: state
+                    entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+                    state: "on"
+                  - condition: or
+                    conditions:
+                      - condition: state
+                        entity_id: input_boolean.sleep_session_bed_entry_pending
+                        state: "on"
+                      - condition: time
+                        after: "18:00:00"
+                        before: "12:00:00"
+            sequence:
+              - alias: >-
+                  Timestamp the actual threshold crossing, not this
+                  delayed callback — now() here is ~10 seconds late (the
+                  trigger's own for: duration), under-reporting
+                  cpap_minutes every session (Codex P2 follow-up on #373,
+                  same class as the already-fixed cpap_stop/bed_exit
+                  delay). The fallback bed_in must use the same source: if
+                  cpap_on used the earlier trigger timestamp while bed_in
+                  kept now(), cpap_on_ts could read before bed_in_ts and
+                  fail the finalizer's ordering check. Setting timestamp:
+                  (an absolute epoch) rather than datetime: (a naive local
+                  string) also sidesteps the autumn DST fallback, where a
+                  repeated wall-clock hour would otherwise be
+                  indistinguishable once reconstructed (Codex P2
+                  follow-up on #373).
+                if:
+                  - condition: state
+                    entity_id: input_boolean.sleep_session_bed_entry_pending
+                    state: "off"
+                then:
+                  - action: input_number.set_value
+                    target:
+                      entity_id: input_number.sleep_session_bed_in_ts
+                    data:
+                      value: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+              - alias: >-
+                  Clamp cpap_on to bed_in when a bed entry landed after the
+                  CPAP crossing but before this delayed callback fires — if
+                  CPAP crosses less than 10 seconds before the resident
+                  gets into bed, this callback runs after the live
+                  bed_entry trigger has already recorded a later bed_in
+                  (or after a pending entry from any other source), so
+                  writing cpap_on from the earlier crossing unconditionally
+                  would read cpap_on_ts < bed_in_ts, failing the
+                  finalizer's ordering check and silently discarding an
+                  otherwise complete session (Codex P2 follow-up on #373).
+                  Bed entry must precede CPAP starting, so never record a
+                  cpap_on earlier than the current bed_in.
+                action: input_number.set_value
+                target:
+                  entity_id: input_number.sleep_session_cpap_on_ts
+                data:
+                  value: >-
+                    {{ [as_timestamp(trigger.to_state.last_changed),
+                        states('input_number.sleep_session_bed_in_ts') | float(0)]
+                       | max }}
+              - action: counter.reset
+                target:
+                  entity_id: counter.sleep_restlessness_events
+              - alias: >-
+                  Start this session's accumulated-active-time total fresh
+                  — it carries a prior session's mid-session-interruption
+                  segments forward otherwise (Codex P2 follow-up on #373,
+                  same class as the mid-session-interruption fix below).
+                action: input_number.set_value
+                target:
+                  entity_id: input_number.sleep_session_cpap_active_seconds
+                data:
+                  value: 0
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.sleep_session_cpap_stopped
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.sleep_session_active
+          - conditions:
+              - condition: trigger
+                id: bed_exit_without_session
+              - condition: state
+                entity_id: input_boolean.sleep_session_bed_entry_pending
+                state: "on"
+            sequence:
+              - alias: >-
+                  Discard a pending nightly bed-entry that never led to a
+                  CPAP session before the bed emptied again — otherwise a
+                  later, unrelated CPAP start (e.g. daytime testing)
+                  would inherit this stale bed_in as its own, and the
+                  finalizer's ordering check never requires
+                  bed_out_ts >= cpap_on_ts, so the two unrelated periods
+                  would be published together as one bogus session
+                  (Codex P2 follow-up on #373).
+                action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.sleep_session_bed_entry_pending
+
+  - id: sleep_quality_track_active_session
+    alias: Sleep quality - track active session
+    description: >-
+      Count bed transitions during CPAP use, persist a guarded CPAP stop, and
+      finalize once the aggregate owner-suite bed is empty.
+    mode: queued
+    max: 20
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id:
+          - binary_sensor.bed_presence_2d0670_bed_occupied_left
+          - binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "on"
+        to: "off"
+        id: bed_transition
+      - trigger: state
+        entity_id:
+          - binary_sensor.bed_presence_2d0670_bed_occupied_left
+          - binary_sensor.bed_presence_2d0670_bed_occupied_right
+        from: "off"
+        to: "on"
+        id: bed_transition
+      - trigger: numeric_state
+        entity_id: sensor.owner_suite_cpap_plug_power
+        below: 1.3
+        for:
+          minutes: 5
+        id: cpap_stop
+      - trigger: state
+        entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+        from: "on"
+        to: "off"
+        for:
+          minutes: 5
+        id: bed_exit
+      - trigger: numeric_state
+        entity_id: sensor.owner_suite_cpap_plug_power
+        above: 1.3
+        for:
+          seconds: 10
+        id: cpap_resume
+    condition:
+      - condition: state
+        entity_id: input_boolean.sleep_session_active
+        state: "on"
+    action:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: bed_transition
+              - condition: numeric_state
+                entity_id: sensor.owner_suite_cpap_plug_power
+                above: 1.3
+            sequence:
+              - action: counter.increment
+                target:
+                  entity_id: counter.sleep_restlessness_events
+          - conditions:
+              - condition: trigger
+                id: cpap_stop
+            sequence:
+              - alias: >-
+                  Only persist a stop when genuinely transitioning from
+                  running to stopped — a power spike above 1.3W lasting
+                  under 10 seconds is too brief to fire cpap_resume or
+                  clear sleep_session_cpap_stopped, but it does reset this
+                  raw numeric_state trigger's own for: timer. Without this
+                  guard, a second below-1.3-for-5-minutes firing while the
+                  original stop is still latched on would overwrite
+                  cpap_off with this later, spurious repeat, extending the
+                  reported CPAP duration through the entire interval CPAP
+                  was actually already stopped (Codex P2 follow-up on
+                  #373). The finalize check below stays a sibling action
+                  so it still runs on a repeat firing like this.
+                if:
+                  - condition: state
+                    entity_id: input_boolean.sleep_session_cpap_stopped
+                    state: "off"
+                then:
+                  - alias: >-
+                      Timestamp the actual power-drop, not this delayed
+                      callback — now() here is ~5 minutes late (the
+                      trigger's for: duration), over-reporting
+                      cpap_minutes every session (Codex P2 on #373).
+                      Setting timestamp: (an absolute epoch) rather than
+                      datetime: (a naive local string) avoids both the
+                      earlier UTC/local-interpretation P1 bug and the
+                      autumn DST fallback, where a naive string can't
+                      tell a repeated wall-clock hour's two real instants
+                      apart once reconstructed (Codex P2 follow-up on
+                      #373).
+                    action: input_number.set_value
+                    target:
+                      entity_id: input_number.sleep_session_cpap_off_ts
+                    data:
+                      value: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.sleep_session_cpap_stopped
+              - alias: >-
+                  Wait for the bed's own 5-minute debounce AND a bed-out
+                  timestamp already current for this exit — matching
+                  bed_exit's for: duration is not enough on its own. If
+                  CPAP and the bed both go inactive together, both
+                  branches' debounces become eligible at the same time,
+                  and this branch's queued action can still run before
+                  bed_exit's has written the current bed_out, even though
+                  the bed has technically been off for 5 minutes (Codex P2
+                  follow-up on #373: matching durations doesn't guarantee
+                  callback execution order). Finalizing on the raw
+                  duration alone would then read a stale/prior bed_out and
+                  either reject the session or report an earlier
+                  same-session exit. Requiring bed_out to already be at or
+                  past the bed sensor's own last_changed mirrors the same
+                  freshness check the periodic reconciliation gate uses.
+                if:
+                  - condition: state
+                    entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+                    state: "off"
+                    for:
+                      minutes: 5
+                  - condition: template
+                    value_template: >-
+                      {{ (states('input_number.sleep_session_bed_out_ts') | float(0)) | int
+                         >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int) }}
+                then:
+                  - action: script.finalize_sleep_quality_session
+          - conditions:
+              - condition: trigger
+                id: cpap_resume
+            sequence:
+              - alias: >-
+                  Re-arm the stop latch the instant CPAP genuinely resumes,
+                  not just on the next periodic reconciliation tick — a
+                  mid-session interruption long enough to latch
+                  sleep_session_cpap_stopped on left it stuck on after
+                  resumption, so the bed_exit branch below (which only
+                  checks cpap_stopped == on plus CPAP's raw current state)
+                  could finalize using that stale cpap_off if a brand new,
+                  not-yet-debounced drop happened to be in progress when
+                  the bed emptied (Codex P2 follow-up on #373). Only a
+                  genuine re-arm (the latch was actually on) needs to bank
+                  the ended interruption and start a fresh active segment
+                  — a spurious firing right at session start, before any
+                  stop has ever latched it on, is a no-op here. Routed
+                  through the shared sleep_quality_rearm_cpap_resume
+                  script (mode: single) rather than banking inline, so
+                  this live trigger and the periodic reconciliation
+                  re-arm branch below can't both observe the latch "on"
+                  and double-bank the same interruption if a 5-minute
+                  tick lands inside this trigger's own 10-second debounce
+                  window (Codex P2 follow-up on #373: serialize
+                  concurrent CPAP resume recovery).
+                if:
+                  - condition: state
+                    entity_id: input_boolean.sleep_session_cpap_stopped
+                    state: "on"
+                then:
+                  - action: script.sleep_quality_rearm_cpap_resume
+                    data:
+                      resume_timestamp: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+          - conditions:
+              - condition: trigger
+                id: bed_exit
+            sequence:
+              - alias: >-
+                  Timestamp the actual bed-exit, not this delayed callback —
+                  now() here is ~5 minutes late (the trigger's for:
+                  duration), over-reporting bed_minutes every session
+                  (Codex P2 on #373). Setting timestamp: (an absolute
+                  epoch) rather than datetime: (a naive local string)
+                  avoids both the earlier UTC/local-interpretation P1 bug
+                  and the autumn DST fallback, where a naive string can't
+                  tell a repeated wall-clock hour's two real instants
+                  apart once reconstructed (Codex P2 follow-up on #373).
+                action: input_number.set_value
+                target:
+                  entity_id: input_number.sleep_session_bed_out_ts
+                data:
+                  value: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.sleep_session_cpap_stopped
+                    state: "on"
+                  - alias: >-
+                      Check the debounced helper, not a raw numeric
+                      threshold condition on the power sensor — the
+                      "above" and "below" numeric comparisons are both
+                      strict, leaving a reading sitting exactly at the
+                      cutoff classified as neither, which could latch
+                      sleep_session_cpap_stopped via the helper (used
+                      elsewhere) while this raw check never agrees the
+                      session is stopped (Codex P2 follow-up on #373).
+                      Using the same single source of truth everywhere
+                      removes the possibility of disagreement.
+                    condition: state
+                    entity_id: binary_sensor.owner_suite_cpap_running
+                    state: "off"
+                then:
+                  - action: script.finalize_sleep_quality_session
+
+  - id: sleep_quality_reconcile_cpap_stop_after_restart
+    alias: Sleep quality - reconcile CPAP stop after restart
+    description: >-
+      A pending numeric_state/state `for:` debounce (cpap_start, cpap_stop,
+      or bed_exit, above) is discarded on an HA restart *or* an automation
+      reload — it does not resume merely because the underlying condition
+      stays true, only if the entity changes state again (Codex P2
+      follow-up on #373: a plain reload doesn't emit homeassistant.start,
+      so that alone missed the reload case). Three independent debounces
+      can each be lost this way, so all three are reconciled here, in
+      order: (1) if CPAP was already running before the gap and its own
+      10-second debounce never got to run, no session ever started; (2) if
+      CPAP had already dropped before the gap and its stop debounce never
+      ran, sleep_session_cpap_stopped is stuck off; (3) if CPAP's own
+      debounce already completed (cpap_stopped is on) but the bed's
+      separate bed_exit debounce was the one in flight when the gap hit,
+      sleep_session_bed_out is left stale. Each branch re-checks its
+      underlying condition has held for the SAME full debounce duration the
+      normal trigger requires, not just its instantaneous state, so a
+      reload moments after a genuine transition can't fast-track past a
+      debounce a normal trigger would still be waiting out (Codex P2
+      follow-up on #373).
+
+      That per-branch `for:` guard created a second gap on a real restart
+      (not just a reload): HA resets a restored entity's last_changed to
+      the restore moment, so the guard's duration requirement almost never
+      reads as satisfied on the one-shot homeassistant.start evaluation,
+      and with no delayed or state-triggered follow-up the reconciliation
+      was simply missed (Codex P2 follow-up on #373). Re-check periodically
+      instead of only once: a state's `for:` duration is measured from
+      whenever it last actually changed, so as long as it stays unchanged,
+      a later periodic evaluation naturally satisfies the same guard once
+      enough real time has elapsed since the restore/reload — recovering
+      the debounce without needing to know or trust the original,
+      pre-restart transition time.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+        id: startup_or_reload
+      - trigger: event
+        event_type: automation_reloaded
+        id: startup_or_reload
+      - alias: >-
+          Re-evaluate periodically so a debounce guard that read as
+          unsatisfied on the initial start/reload evaluation (because a
+          restored entity's last_changed resets to the restore moment) gets
+          a chance to pass once real time has actually elapsed since then.
+        trigger: time_pattern
+        minutes: "/5"
+        id: periodic_tick
+    action:
+      - alias: >-
+          Reconcile a pending bed-entry that never led to a session and
+          whose own bed-exit was itself missed by this same restart/
+          reload gap: sleep_quality_prepare_session's live
+          bed_exit_without_session trigger can only clear
+          sleep_session_bed_entry_pending if it's actually running when
+          the bed empties (Codex P2 follow-up on #373). Runs before the
+          cpap_start reconcile branch below so a stale pending flag can't
+          also suppress that branch's own fallback bed_in.
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.sleep_session_bed_entry_pending
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "off"
+        then:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sleep_session_bed_entry_pending
+      - alias: >-
+          Refresh a pending bed-entry whose bed_in predates the bed's
+          current occupancy. If HA is down while the resident both leaves
+          AND returns to bed, neither neighbouring branch covers it: the
+          cleanup above needs the bed to read "off" (it reads "on" again)
+          and the missed-entry recovery below needs the pending flag off
+          (it is still latched from before the gap). The pre-downtime
+          bed_in therefore survives and the next CPAP start consumes it,
+          merging two separate bed visits into one session that can report
+          most of a day in bed (Codex P2 follow-up on #373). Runs before
+          both the missed-entry recovery and the cpap_start reconcile so
+          the refreshed value is the one they see.
+
+          The bed sensor's own last_changed is the right replacement in
+          both gap kinds: a reload preserves it, so it is exactly the
+          return-to-bed moment; a restart resets it to the restore moment,
+          which is the same "best available approximation" every other
+          recovery here already assumes. That restart reset also means a
+          bed that simply stayed occupied across a restart is refreshed
+          too, trading a bounded loss (a pending entry only lives from bed
+          entry until CPAP starts) against an unbounded merge of two
+          unrelated visits.
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.sleep_session_bed_entry_pending
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "on"
+          - alias: >-
+              Both floored to whole seconds, matching the bed_out freshness
+              check below — the stored timestamp carries second-only
+              precision, so a sub-second difference is not a real
+              transition.
+            condition: template
+            value_template: >-
+              {{ (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)
+                 > (states('input_number.sleep_session_bed_in_ts') | float(0) | int) }}
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_bed_in_ts
+            data:
+              value: >-
+                {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
+      - alias: >-
+          Recover a nightly bed entry whose off->on transition was missed
+          entirely because HA was down when it happened: if the bed is
+          already occupied at reconciliation time with no session active
+          and no pending entry recorded, the resident got into bed
+          sometime during the gap. Runs before the cpap_start reconcile
+          branch below so a later CPAP start doesn't use its own,
+          later transition as bed_in instead, under-reporting the
+          observed in-bed time (Codex P2 follow-up on #373).
+          Reconciliation time is the best available approximation for
+          the missed entry, same reasoning as the other approximations
+          in this automation; the same nightly window
+          sleep_quality_prepare_session's own bed_entry trigger requires
+          keeps a daytime bed visit from being recorded as one. Restricted
+          to the startup/reload trigger, not the periodic tick — unlike
+          the other branches here, this check has no for: duration to
+          wait out, so it doesn't need re-evaluation over time; on the
+          periodic tick alone it would misfire during ordinary operation
+          any time the bed happened to already be occupied when the
+          nightly window opened (e.g. an earlier nap that never ended),
+          inventing a bed entry that never actually happened at that
+          moment (Codex P2 follow-up on #373).
+        if:
+          - condition: trigger
+            id: startup_or_reload
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - condition: state
+            entity_id: input_boolean.sleep_session_bed_entry_pending
+            state: "off"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "on"
+          - alias: >-
+              Test the nightly window against the occupancy transition, not
+              against now(). Gating to startup_or_reload closed the
+              periodic-tick vector but not the automation_reloaded one: a
+              reload is an ordinary, frequent event that re-evaluates the
+              same steady state, so a 17:30 nap continuing past 18:00 would
+              be accepted by a now()-based check on any reload after 18:00
+              — inventing an entry even though no transition was ever
+              missed, since the live bed_entry trigger already saw that
+              17:30 transition and correctly rejected it (Codex P2
+              follow-up on #373). Unlike a restart, a reload leaves other
+              entities untouched, so the bed sensor's last_changed is still
+              the real transition and can be tested directly. On a genuine
+              restart HA resets it to the restore moment, which is exactly
+              the "best available approximation" this branch already
+              assumes, so restart recovery is unchanged. The bed sensor is
+              undebounced, so its last_changed IS the transition — no
+              delay to back out, unlike the CPAP helper.
+            condition: template
+            value_template: >-
+              {% set entered = as_local(
+                   states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) %}
+              {{ entered.hour >= 18 or entered.hour < 12 }}
+        then:
+          - alias: >-
+              Record the bed's own occupancy transition, not reconciliation
+              time. The guard above already tests the nightly window
+              against this same last_changed, so the branch only runs when
+              that transition is itself the missed entry — use it as the
+              value too (Codex P2 follow-up on #373). A reload leaves other
+              entities untouched, so it IS the real entry moment; on a full
+              restart HA resets it to the restore moment, degrading exactly
+              to the now()-era approximation this previously used. The bed
+              sensor is undebounced, so there is no delay to back out.
+              Using now() instead under-reported bed_minutes by however
+              long the bed had been occupied before reconciliation ran.
+
+              No ordering clamp is needed here: the cpap_start reconcile
+              branch below writes cpap_on as [cpap transition, bed_in] |
+              max, so it can never land before whatever this records. The
+              previous min() against the CPAP transition existed only to
+              prevent that inversion back when this wrote now(); keeping it
+              would now actively hurt, dragging bed_in earlier than the
+              real entry whenever the bed transition is the later of the
+              two.
+            action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_bed_in_ts
+            data:
+              value: >-
+                {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sleep_session_bed_entry_pending
+      - alias: >-
+          Reconcile a lost cpap_start debounce: no session is active, but
+          CPAP has genuinely been running continuously for its own
+          10-second debounce — sleep_quality_prepare_session's cpap_start
+          branch never got to run because that debounce was discarded
+          mid-flight, and without another threshold crossing it never
+          re-arms on its own (Codex P2 follow-up on #373).
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "off"
+          - alias: >-
+              A raw numeric sensor's own last_changed resets on every
+              in-range fluctuation, not just threshold crossings, so it
+              can't tell us CPAP has been sustained above 1.3W for 10
+              seconds (Codex P2 follow-up on #373). Check the debounced
+              owner_suite_cpap_running helper instead — its delay_on
+              already enforces that same duration natively, and its state
+              only changes on a genuine crossing.
+            condition: state
+            entity_id: binary_sensor.owner_suite_cpap_running
+            state: "on"
+          - alias: >-
+              Same nightly-context guard as the live cpap_start branch
+              (Codex P2 follow-up on #373) — without it, CPAP running
+              during daytime testing with no pending nightly bed entry
+              lets this periodic tick recover a synthetic session the
+              same way the live trigger could, overwriting real
+              overnight analytics once it finalizes. A reload that misses
+              the live bed_exit_without_session trigger can leave a
+              pending entry stuck on after the bed has actually gone
+              empty again, so require the bed to be currently occupied
+              unconditionally here too — not just for the nightly-window
+              alternative — or a stale pending entry could combine with a
+              later, unrelated CPAP run (Codex P2 follow-up on #373).
+            condition: and
+            conditions:
+              - condition: state
+                entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+                state: "on"
+              - alias: >-
+                  Require the bed to have been occupied ALREADY AT the CPAP
+                  transition being recovered, not merely occupied now. The
+                  window test below validates when CPAP started, but the
+                  occupancy check above is still evaluated at now(), so CPAP
+                  started inside the window against an empty bed — correctly
+                  rejected by the live path — stays eligible for the whole
+                  run: once the bed is occupied again much later (an
+                  afternoon nap, say), a periodic tick accepts that stale
+                  transition and the fallback records bed_in at it too,
+                  inventing a session spanning hours when the bed was empty
+                  (Codex P2 follow-up on #373). The bed sensor's own
+                  last_changed is when its current occupancy began, so
+                  requiring it at or before the CPAP crossing proves the
+                  overlap. The minute of slack absorbs restart load-order
+                  jitter — on a restart both entities' last_changed reset to
+                  roughly the same restore moment, and their order is not
+                  guaranteed — while staying far below the multi-hour
+                  mismatch this exists to reject.
+                condition: template
+                value_template: >-
+                  {{ (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int)
+                     <= ((as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed) - 10) | int) + 60 }}
+              - condition: or
+                conditions:
+                  - condition: state
+                    entity_id: input_boolean.sleep_session_bed_entry_pending
+                    state: "on"
+                  - alias: >-
+                      Test the nightly window against the CPAP transition
+                      being recovered, not against now(). Unlike the live
+                      cpap_start branch — where the guard runs ~10 seconds
+                      after the crossing, so now() is the transition — this
+                      branch re-evaluates on every 5-minute periodic tick.
+                      A daytime CPAP run the live path correctly rejected
+                      leaves a persistent state (helper on, bed occupied,
+                      no session) that a now()-based check starts accepting
+                      the moment the wall clock enters the window, so an
+                      afternoon test would be recovered at 18:00 and
+                      published as overnight analytics using its own much
+                      earlier transition timestamp (Codex P2 follow-up on
+                      #373). Backing the helper's delay_on out of its
+                      last_changed gives the real crossing, and matches
+                      the wrapping 18:00-12:00 window a condition: time
+                      would apply to it.
+                    condition: template
+                    value_template: >-
+                      {% set started = as_local(
+                           states.binary_sensor.owner_suite_cpap_running.last_changed
+                           - timedelta(seconds=10)) %}
+                      {{ started.hour >= 18 or started.hour < 12 }}
+        then:
+          - if:
+              - condition: state
+                entity_id: input_boolean.sleep_session_bed_entry_pending
+                state: "off"
+            then:
+              - alias: >-
+                  Use the same CPAP transition timestamp as cpap_on below
+                  for this fallback bed-in, not now() — the finalizer
+                  requires cpap_on_ts >= bed_in_ts, and now() (the
+                  reconciliation tick) can run long after the actual
+                  transition, making a recovered session's bed_in read
+                  later than its cpap_on and get discarded (Codex P2
+                  follow-up on #373). owner_suite_cpap_running's own
+                  last_changed is when its delay_on completed, 10 seconds
+                  after the real crossing, so back that delay out to
+                  recover the actual transition time.
+                action: input_number.set_value
+                target:
+                  entity_id: input_number.sleep_session_bed_in_ts
+                data:
+                  value: >-
+                    {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                       - timedelta(seconds=10)) }}
+          - alias: >-
+              Same clamp as the live cpap_start branch (Codex P2 follow-up
+              on #373): when CPAP was already running before a pending bed
+              entry existed (so the fallback bed_in write above was
+              skipped), writing cpap_on from the CPAP helper's own
+              transition unconditionally could read cpap_on_ts < bed_in_ts
+              if that pending entry's bed_in is later, failing the
+              finalizer's ordering check and discarding an otherwise
+              complete session. Never record a cpap_on earlier than the
+              current bed_in.
+            action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_on_ts
+            data:
+              value: >-
+                {{ [as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                       - timedelta(seconds=10)),
+                    states('input_number.sleep_session_bed_in_ts') | float(0)]
+                   | max }}
+          - action: counter.reset
+            target:
+              entity_id: counter.sleep_restlessness_events
+          - alias: >-
+              Fresh session, fresh accumulated-active-time total — same
+              reasoning as the live cpap_start branch's own reset (Codex
+              P2 follow-up on #373).
+            action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_active_seconds
+            data:
+              value: 0
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.sleep_session_cpap_stopped
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sleep_session_active
+      - alias: >-
+          Re-arm the CPAP-stop latch once CPAP resumes for its own 10-second
+          debounce during an active session. Without this, a mid-session
+          interruption long enough to latch sleep_session_cpap_stopped on
+          leaves it stuck on for the rest of the session even after CPAP
+          resumes — a later periodic reconciliation tick could then finalize
+          using that stale interruption's cpap_off the moment the bed
+          happens to be empty, rather than requiring a fresh stop (Codex P2
+          follow-up on #373). Also bank the ended interruption into the
+          accumulated active time and start a fresh segment here, same as
+          the real-time cpap_resume re-arm — otherwise finalize's single
+          cpap_off - cpap_on span would count this stopped interval as
+          active CPAP use too (Codex P2 follow-up on #373). Routed through
+          the shared sleep_quality_rearm_cpap_resume script (mode: single)
+          rather than banking inline, so this periodic tick and the live
+          cpap_resume trigger above can't both observe the latch "on" and
+          double-bank the same interruption if this tick lands inside that
+          trigger's own 10-second debounce window (Codex P2 follow-up on
+          #373: serialize concurrent CPAP resume recovery).
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.sleep_session_cpap_stopped
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.owner_suite_cpap_running
+            state: "on"
+        then:
+          - action: script.sleep_quality_rearm_cpap_resume
+            data:
+              resume_timestamp: >-
+                {{ as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                   - timedelta(seconds=10)) }}
+      - alias: >-
+          Reconcile a lost cpap_stop debounce. Exact power-drop time is
+          unknown (the debounce that would have recorded it was
+          discarded) — restart/reload time is the best available
+          approximation. Requires CPAP to have genuinely read below
+          threshold for its own full 5-minute debounce, not just its
+          instantaneous state (Codex P2 follow-up on #373).
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.sleep_session_cpap_stopped
+            state: "off"
+          - alias: >-
+              Same reasoning as the cpap_start branch above: check the
+              debounced helper, not the raw sensor's own last_changed,
+              and require it genuinely "off" rather than treating an
+              unavailable/unknown reading as a false stop via float(0)
+              (Codex P2 follow-up on #373 — a "for:" is also unsupported
+              on a numeric_state condition).
+            condition: state
+            entity_id: binary_sensor.owner_suite_cpap_running
+            state: "off"
+        then:
+          - alias: >-
+              Clamp the recovered cpap_off to never precede cpap_on. On a
+              real restart HA resets the restored helper's last_changed to
+              the restore moment, so backing the 5-minute delay_off out of
+              it lands ~5 minutes BEFORE the restart — which is earlier
+              than cpap_on whenever the session started less than 5
+              minutes before that restart. An inverted cpap_off is doubly
+              damaging: finalize's cpap_off_ts >= cpap_on_ts check
+              discards the session, and the re-arm script's
+              cpap_off - cpap_on bank goes negative, which violates
+              sleep_session_cpap_active_seconds' own min: 0 and aborts
+              that script mid-sequence, stranding
+              sleep_session_cpap_stopped on for the rest of the session
+              (Codex P2 follow-up on #373, same class as the cpap_on and
+              bed_in clamps above).
+            action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_cpap_off_ts
+            data:
+              value: >-
+                {{ [as_timestamp(states.binary_sensor.owner_suite_cpap_running.last_changed
+                       - timedelta(minutes=5)),
+                    states('input_number.sleep_session_cpap_on_ts') | float(0)]
+                   | max }}
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.sleep_session_cpap_stopped
+      - alias: >-
+          Reconcile a lost bed_exit debounce: cpap_stopped may already be
+          on (either from before the gap, or just reconciled above) while
+          the bed has genuinely been empty for its own full 5-minute
+          debounce (same reasoning as the cpap_stop branch above), but
+          sleep_session_bed_out is older than the bed sensor's own most
+          recent off-transition. Comparing against the sensor's own
+          last_changed (rather than sleep_session_bed_in) also catches a
+          later exit within the SAME session whose debounce was lost after
+          an earlier, already-recorded exit-then-reentry — bed_out from
+          that earlier exit is still newer than bed_in and so was missed
+          by a prior-session-only staleness check (Codex P2 follow-up on
+          #373). Exact bed-exit time is unknown for the same reason as
+          cpap_off above — restart/reload time is the best available
+          approximation.
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "off"
+            for:
+              minutes: 5
+          - condition: state
+            entity_id: input_boolean.sleep_session_cpap_stopped
+            state: "on"
+          - condition: template
+            value_template: >-
+              {{ (states('input_number.sleep_session_bed_out_ts') | float(0))
+                 < as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.sleep_session_bed_out_ts
+            data:
+              value: >-
+                {{ as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) }}
+      - alias: >-
+          Require the bed's own 5-minute debounce and a bed-out timestamp
+          already current for this exit — otherwise the CPAP-stop branch
+          just above can flip cpap_stopped on while the bed has been empty
+          less than 5 minutes, and this raw instantaneous bed-off check
+          would finalize before the bed_exit reconcile branch (or the
+          normal automation) has written the current bed_out, discarding
+          the session against a stale timestamp (Codex P2 follow-up on
+          #373). Also require CPAP to currently read below threshold,
+          matching the normal bed_exit branch's own guard, so a latch left
+          on by an earlier mid-session interruption can't finalize using a
+          stale cpap_off while CPAP has since resumed (Codex P2 follow-up
+          on #373).
+        if:
+          - condition: state
+            entity_id: input_boolean.sleep_session_active
+            state: "on"
+          - condition: state
+            entity_id: binary_sensor.bed_presence_2d0670_bed_occupied_either
+            state: "off"
+            for:
+              minutes: 5
+          - condition: state
+            entity_id: input_boolean.sleep_session_cpap_stopped
+            state: "on"
+          - alias: >-
+              Check the debounced helper, not a raw numeric threshold
+              condition on the power sensor — the "above" and "below"
+              numeric comparisons are both strict, leaving a reading
+              sitting exactly at the cutoff classified as neither, which
+              could let the cpap_stop reconcile branch above latch
+              sleep_session_cpap_stopped via the helper while this raw
+              check never agreed the session was stopped, stuck waiting
+              forever (Codex P2 follow-up on #373). Using the same single
+              source of truth everywhere removes the possibility of
+              disagreement.
+            condition: state
+            entity_id: binary_sensor.owner_suite_cpap_running
+            state: "off"
+          - condition: template
+            value_template: >-
+              {{ (states('input_number.sleep_session_bed_out_ts') | float(0)) | int
+                 >= (as_timestamp(states.binary_sensor.bed_presence_2d0670_bed_occupied_either.last_changed) | int) }}
+        then:
+          - action: script.finalize_sleep_quality_session
