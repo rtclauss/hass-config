@@ -92,31 +92,31 @@ automation:
         id: mark_still_outside
       - trigger: state
         entity_id:
-          - sensor.mail_usps_mail
-          - sensor.mail_usps_packages
-          - sensor.mail_ups_packages
-          - sensor.mail_fedex_packages
-          - sensor.mail_amazon_packages
+          - sensor.imap_gmail_com_mail_usps_mail
+          - sensor.imap_gmail_com_mail_usps_packages
+          - sensor.imap_gmail_com_mail_ups_packages
+          - sensor.imap_gmail_com_mail_fedex_packages
+          - sensor.imap_gmail_com_mail_amazon_packages
         id: expected_update
       - trigger: state
         entity_id:
-          - sensor.mail_usps_delivered
-          - sensor.mail_ups_delivered
-          - sensor.mail_fedex_delivered
-          - sensor.mail_amazon_packages_delivered
+          - sensor.imap_gmail_com_mail_usps_delivered
+          - sensor.imap_gmail_com_mail_ups_delivered
+          - sensor.imap_gmail_com_mail_fedex_delivered
+          - sensor.imap_gmail_com_mail_amazon_packages_delivered
         id: delivered_update
     variables:
       expected_entities:
-        - sensor.mail_usps_mail
-        - sensor.mail_usps_packages
-        - sensor.mail_ups_packages
-        - sensor.mail_fedex_packages
-        - sensor.mail_amazon_packages
+        - sensor.imap_gmail_com_mail_usps_mail
+        - sensor.imap_gmail_com_mail_usps_packages
+        - sensor.imap_gmail_com_mail_ups_packages
+        - sensor.imap_gmail_com_mail_fedex_packages
+        - sensor.imap_gmail_com_mail_amazon_packages
       delivered_entities:
-        - sensor.mail_usps_delivered
-        - sensor.mail_ups_delivered
-        - sensor.mail_fedex_delivered
-        - sensor.mail_amazon_packages_delivered
+        - sensor.imap_gmail_com_mail_usps_delivered
+        - sensor.imap_gmail_com_mail_ups_delivered
+        - sensor.imap_gmail_com_mail_fedex_delivered
+        - sensor.imap_gmail_com_mail_amazon_packages_delivered
       expected_count: >-
         {% set ns = namespace(total=0) %}
         {% for entity_id in expected_entities %}
@@ -138,9 +138,9 @@ automation:
       current_delivery_state: >-
         {{ states('input_select.mail_package_delivery_state') }}
       camera_candidates:
-        - camera.mail_generic_delivery_camera
-        - camera.mail_amazon_delivery_camera
-        - camera.mail_usps_camera
+        - camera.imap_gmail_com_mail_generic_delivery_camera
+        - camera.imap_gmail_com_mail_amazon_delivery_camera
+        - camera.imap_gmail_com_mail_usps_camera
       camera_entity: >-
         {{ expand(camera_candidates)
           | rejectattr('state', 'in', ['unknown', 'unavailable'])
