@@ -50,15 +50,16 @@ def test_mail_package_delivery_uses_mailbox_and_carrier_sensors_without_duplicat
     assert "at: \"01:00:00\"" in block
     assert "id: daily_reset" in block
     assert "entity_id: binary_sensor.mailbox_contact" in block
-    assert "sensor.mail_usps_mail" in block
-    assert "sensor.mail_usps_packages" in block
-    assert "sensor.mail_ups_packages" in block
-    assert "sensor.mail_fedex_packages" in block
-    assert "sensor.mail_amazon_packages" in block
-    assert "sensor.mail_usps_delivered" in block
-    assert "sensor.mail_ups_delivered" in block
-    assert "sensor.mail_fedex_delivered" in block
-    assert "sensor.mail_amazon_packages_delivered" in block
+    assert "sensor.imap_gmail_com_mail_usps_mail" in block
+    assert "sensor.imap_gmail_com_mail_usps_packages" in block
+    assert "sensor.imap_gmail_com_mail_ups_packages" in block
+    assert "sensor.imap_gmail_com_mail_fedex_packages" in block
+    assert "sensor.imap_gmail_com_mail_amazon_packages" in block
+    assert "sensor.imap_gmail_com_mail_usps_delivered" in block
+    assert "sensor.imap_gmail_com_mail_ups_delivered" in block
+    assert "sensor.imap_gmail_com_mail_fedex_delivered" in block
+    assert "sensor.imap_gmail_com_mail_amazon_packages_delivered" in block
+    assert "sensor.mail_" not in block
     assert "condition: state\n                entity_id: input_boolean.mail_delivered\n                state: \"off\"" in block
     assert "action: mail_and_packages.update_image" in block
     assert "continue_on_error: true" in block
@@ -72,9 +73,10 @@ def test_mail_package_notifications_are_actionable_and_camera_optional() -> None
     assert "action: MAIL_PACKAGE_RETRIEVED" in block
     assert "action: MAIL_PACKAGE_STILL_OUTSIDE" in block
     assert "camera_candidates:" in block
-    assert "camera.mail_generic_delivery_camera" in block
-    assert "camera.mail_amazon_delivery_camera" in block
-    assert "camera.mail_usps_camera" in block
+    assert "camera.imap_gmail_com_mail_generic_delivery_camera" in block
+    assert "camera.imap_gmail_com_mail_amazon_delivery_camera" in block
+    assert "camera.imap_gmail_com_mail_usps_camera" in block
+    assert "camera.mail_" not in block
     assert "image: \"{{ '/api/camera_proxy/' ~ camera_entity }}\"" in block
     assert "persistent_notification.create" in block
     assert "message: clear_notification" in block
