@@ -278,12 +278,14 @@ bayesian_device_tracker:
 Restart HA if network down:
   class: restart_ha
   module: reboot
-  # Ping always-on LAN infrastructure, never an external IP. A cycle only
-  # counts as a failure when EVERY target is unreachable, so one host that
-  # drops ICMP can't drive a reboot loop (incident 2026-09-01, was 8.8.8.8).
-  hosts_to_ping:
-    - "10.24.1.253"   # Proxmox host - this VM's hypervisor, same subnet
-    - "10.24.1.252"   # LAN DNS / firewall
+  # TCP-connect probes of always-on LAN infrastructure (the container has no
+  # `ping` binary - relying on it caused reboot loops on 2026-09-01/09-08).
+  # A cycle only fails when EVERY target is unreachable; a refused connection
+  # still counts as reachable (the host answered).
+  probe_targets:
+    - "10.24.1.253:8006"   # Proxmox web UI - this VM's hypervisor, same subnet
+    - "10.24.1.252:53"     # LAN DNS / firewall
+  connect_timeout_seconds: 3
   max_failures: 5
   check_interval_minutes: 33
   min_reboot_interval_hours: 6
