@@ -113,13 +113,32 @@ alarm_control_panel: []
 automation:
   - alias: "Resume vacuum on error (den)"
     id: resume_vacuum_on_error_den
+    description: >-
+      Retry a den run through the pet-safe boundary after the robot drops into
+      `error`. Two startup guards keep this from countermanding the
+      homeassistant-start dock reconcile (vacuum_pet_policy_acclimation_dock):
+      the trigger ignores the unknown/unavailable -> error transition the entity
+      makes while reconnecting after a restart, and the settle condition
+      suppresses retries for two minutes after that dock automation last ran
+      (its start trigger fires on every boot). Steady-state error retries are
+      unaffected.
     mode: single
     trace:
       stored_traces: 10
     trigger:
       - trigger: state
         entity_id: vacuum.valetudo_den
+        not_from:
+          - "unknown"
+          - "unavailable"
         to: "error"
+    condition:
+      - alias: >-
+          Let the homeassistant-start dock reconcile win before any auto-resume
+        condition: template
+        value_template: >-
+          {% set docked_at = state_attr('automation.vacuum_pet_policy_acclimation_dock', 'last_triggered') %}
+          {{ docked_at is none or (now() - docked_at).total_seconds() > 120 }}
     action:
       - delay: "00:00:05"
       - action: script.vacuum_den_pet_safe_start
@@ -171,11 +190,12 @@ automation:
     description: >-
       Fail closed when the pet-safety policy enters Acclimation by stopping
       active cleaning and returning all three robots to their docks. Also
-      reconciles on Home Assistant startup: the helper is re-initialized to
-      Acclimation during entity setup (before this listener is active), so no
-      to:"Acclimation" transition is observed — but the documented fail-closed
-      default after every restart means a robot that was cleaning through the
-      restart must still be docked.
+      reconciles on Home Assistant startup: the helper restores its last
+      selected value during entity setup (before this listener is active), so a
+      restart that comes back up already in Acclimation produces no
+      to:"Acclimation" transition — and robot state through a restart is unknown
+      regardless — so a robot that was cleaning through the restart is still
+      docked as a safety reconcile.
     mode: restart
     trace:
       stored_traces: 10
@@ -371,7 +391,10 @@ input_select:
       - Acclimation
       - Supervised
       - Unattended
-    initial: Acclimation
+    # No `initial:` — the helper restores its last selected value across
+    # restarts/reloads (docs/vacuum_pet_policy.md). Automatic boundaries still
+    # require the exact `Unattended` state, and any unavailable/unknown state
+    # fails closed, so dropping the forced re-init does not weaken the guard.
   vacuum_room:
     name: Choose a room to clean
     options:

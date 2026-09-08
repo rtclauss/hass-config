@@ -66,15 +66,19 @@ def _assert_unattended_gate(block: str) -> None:
     assert 'state: "Unattended"' in block
 
 
-def test_pet_policy_helper_defaults_fail_closed_after_reload() -> None:
+def test_pet_policy_helper_restores_last_value_and_omits_forced_initial() -> None:
     config = VACUUM_PATH.read_text(encoding="utf-8")
-    helper = config.split("  vacuum_pet_policy:", 1)[1].split("\n\n", 1)[0]
+    helper = config.split("  vacuum_pet_policy:", 1)[1].split("\n  vacuum_room:", 1)[0]
 
     assert "name: Vacuum Pet Safety Policy" in helper
     assert "- Acclimation" in helper
     assert "- Supervised" in helper
     assert "- Unattended" in helper
-    assert "initial: Acclimation" in helper
+    # No `initial:` — the helper restores its last selected value across
+    # restarts/reloads instead of being forced back to Acclimation every time.
+    # The fail-closed guarantee lives in the automatic boundaries (exact
+    # "Unattended" gate + unknown-state-fails-closed), not in a forced re-init.
+    assert not any(line.strip().startswith("initial:") for line in helper.splitlines())
 
 
 def test_every_automatic_cleaning_path_routes_through_a_pet_safe_boundary() -> None:
@@ -100,6 +104,21 @@ def test_every_automatic_cleaning_path_routes_through_a_pet_safe_boundary() -> N
     assert "action: script.vacuum_den_pet_safe_start" in departure
 
 
+def test_den_error_retry_does_not_countermand_the_startup_dock_reconcile() -> None:
+    # Removing `initial: Acclimation` means the policy can restore to Unattended
+    # across a restart, so the den error-retry must not fire on the transient
+    # unknown/unavailable -> error transition, and must yield to the
+    # homeassistant-start dock reconcile for a settle window.
+    block = _automation_block(VACUUM_PATH, "resume_vacuum_on_error_den")
+
+    assert "not_from:" in block
+    assert '- "unknown"' in block
+    assert '- "unavailable"' in block
+    assert "automation.vacuum_pet_policy_acclimation_dock" in block
+    assert "last_triggered" in block
+    assert "action: script.vacuum_den_pet_safe_start" in block
+
+
 def test_shared_full_floor_boundaries_fail_closed_for_unknown_or_disabled_policy() -> None:
     for script_id in (
         "vacuum_den_pet_safe_start",
@@ -121,8 +140,9 @@ def test_entering_acclimation_immediately_docks_all_robots() -> None:
     assert "entity_id: input_select.vacuum_pet_policy" in automation
     assert 'to: "Acclimation"' in automation
     assert "action: script.vacuum_dock_all_robots" in automation
-    # HA restart re-initializes the helper to Acclimation before the state
-    # listener is active, so a startup trigger reconciles the fail-closed dock.
+    # The helper restores its last value on restart, so a reboot that comes up
+    # already in Acclimation fires no state transition; the homeassistant start
+    # trigger reconciles the fail-closed dock regardless of robot state.
     assert "trigger: homeassistant" in automation
     assert "event: start" in automation
     assert dock_script.count("action: vacuum.return_to_base") == 2
