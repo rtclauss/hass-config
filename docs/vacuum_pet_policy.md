@@ -6,10 +6,12 @@ mode always vetoes automatic vacuuming regardless of the selected pet policy.
 
 ## Modes
 
-- **Acclimation** is the fail-closed default after every Home Assistant reload
-  or restart. No automatic cleaning may start. Entering this mode immediately
-  calls `script.vacuum_dock_all_robots` for the den, main-level X40, and
-  upstairs Valetudo robot.
+- **Acclimation** is the fail-closed mode: no automatic cleaning may start.
+  Entering this mode immediately calls `script.vacuum_dock_all_robots` for the
+  den, main-level X40, and upstairs Valetudo robot. It is no longer forced on
+  after every restart — the helper restores its last selected value across
+  reloads/restarts — but HA startup still docks all robots as a safety
+  reconcile, and any unavailable/unknown helper state fails closed.
 - **Supervised** reserves room-limited, one-robot, vacuum-only cleaning for an
   owner who has inspected the area and is present to watch both cats. The
   source-controlled foundation does not automatically start a supervised run.
