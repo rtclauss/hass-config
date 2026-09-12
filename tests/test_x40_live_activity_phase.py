@@ -149,10 +149,10 @@ def test_live_activity_completion_branch_suppressed_while_orchestrator_runs() ->
     # for the actual fix (mode: parallel, not another condition patch).
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
-    # Use the actual message key, not the bare phrase: an earlier code
-    # comment on this same branch already mentions "Cleaning complete" in
-    # prose, which would otherwise match first.
-    complete_index = block.index("message: Cleaning complete")
+    # Anchor on the template's literal end, not the bare phrase: several
+    # earlier code comments on this branch also mention "Cleaning complete"
+    # in prose, which would otherwise match first.
+    complete_index = block.index("%}Cleaning complete{% endif %}")
     preceding = block[:complete_index]
 
     guard_index = preceding.rindex("entity_id: script.x40_ultra_main_level_mop_after_vacuum")
@@ -248,11 +248,15 @@ def test_live_activity_finalizes_orchestrator_end_outside_the_script() -> None:
     assert 'entity_id: script.x40_ultra_main_level_mop_after_vacuum\n        to: "off"' in block
     assert "id: orchestrator_end" in block
 
-    # "id: orchestrator_end" appears twice: once defining the trigger, once
-    # referencing it in the choose branch's conditions — use the LATTER
-    # (the branch that actually finalizes the notification).
-    branch_index = block.rindex("id: orchestrator_end")
-    finalize_section = block[branch_index : branch_index + 400]
+    # "id: orchestrator_end" appears three times: the trigger definition,
+    # this finalize branch (requires docked), and the "died mid-run" branch
+    # added in round 7 (requires still cleaning/returning/paused) — anchor
+    # on the exact condition-block text unique to THIS branch.
+    branch_index = block.index(
+        "id: orchestrator_end\n              - condition: state\n"
+        "                entity_id: vacuum.x40_ultra\n                state: docked"
+    )
+    finalize_section = block[branch_index : branch_index + 1400]
     assert "state: docked" in finalize_section
     assert "delay:" in finalize_section
     assert "clear_notification" in finalize_section
@@ -287,3 +291,72 @@ def test_live_activity_message_is_phase_aware() -> None:
     # in this same automation (error/complete/vacuum branches).
     assert "mdi:water" in block
     assert "#00ACC1" in block
+
+
+def test_delayed_clears_recheck_vacuum_state_before_firing() -> None:
+    # Round 7, Codex P2: x40_ultra_main_level_policy_clean is itself
+    # mode: queued, so a follow-up request accumulated during a long run
+    # starts the instant the first one docks (observed in practice: the
+    # daily litter segment starting 13 seconds after a trip's full-floor
+    # pass). Under mode: parallel each completion branch's 2-minute delay
+    # sleeps independently of that next run's own progress notifications, so
+    # a delayed clear_notification must re-check that nothing new has
+    # started before firing — otherwise it wipes the NEW run's Live Activity
+    # instead of the finished one's.
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    delay_positions = [i for i in range(len(block)) if block.startswith('delay: "00:02:00"', i)]
+    assert len(delay_positions) == 2, "expected exactly two 2-minute delays (orchestrator_end + generic completion)"
+
+    for pos in delay_positions:
+        following = block[pos : pos + 1250]
+        assert "condition: not" in following
+        assert "cleaning" in following and "returning" in following and "paused" in following
+        assert "clear_notification" in following
+
+
+def test_orchestrator_interrupted_marker_declared() -> None:
+    text = CLEANING_PATH.read_text(encoding="utf-8")
+    assert "x40_ultra_orchestrator_interrupted:" in text
+    # No `initial:` — unlike the removed phase flag, the fact that a prior
+    # run was left interrupted stays true across a later HA restart.
+    marker_index = text.index("x40_ultra_orchestrator_interrupted:")
+    declaration = text[marker_index : marker_index + 200]
+    assert "initial:" not in declaration
+
+
+def test_live_activity_records_orchestrator_death_before_docking() -> None:
+    # Round 7, Codex P2: if script.reload (packages/media_player.yaml)
+    # cancels the orchestrator mid-vacuum-stage, the robot keeps cleaning
+    # autonomously and docks on its own later. The orchestrator_end trigger
+    # fires immediately (script.reload recreates the script entity as
+    # "off"), but at THAT moment the vacuum is still active, not docked.
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    marker_set_index = block.index("x40_ultra_orchestrator_interrupted")
+    branch_start = block.rindex("- conditions:", 0, marker_set_index)
+    branch = block[branch_start : marker_set_index + 200]
+
+    assert "id: orchestrator_end" in branch
+    assert "cleaning" in branch and "returning" in branch and "paused" in branch
+    assert "action: input_boolean.turn_on" in branch
+
+
+def test_generic_completion_branch_reports_interrupted_outcome() -> None:
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    complete_index = block.index("%}Cleaning complete{% endif %}")
+    # This is a template branch, not the literal skip/incomplete messages
+    # used elsewhere, so anchor on the surrounding message template instead
+    # of a literal string.
+    message_start = block.rindex("message: >-", 0, complete_index)
+    message_template = block[message_start : complete_index + 60]
+
+    assert "x40_ultra_orchestrator_interrupted" in message_template
+    assert "interrupted before completing" in message_template
+
+    # The marker must be cleared once consumed, so a later genuine
+    # single-stage completion isn't also mislabeled as interrupted.
+    turn_off_index = block.index("action: input_boolean.turn_off", complete_index)
+    turn_off_section = block[turn_off_index : turn_off_index + 150]
+    assert "x40_ultra_orchestrator_interrupted" in turn_off_section

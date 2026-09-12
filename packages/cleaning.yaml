@@ -362,11 +362,13 @@ automation:
       that state may have already moved on, defeating the check (Codex found this twice:
       first against a mode-select-based check, then again against the script-state check
       that replaced it). Under parallel, a trigger's instance starts essentially
-      immediately, collapsing that window to ordinary async scheduling latency. The
-      remaining parallel-mode trade-off — an old delayed clear_notification could in
-      principle land after a newer message — is negligible here: completion events are
-      rare (at most once per multi-hour run), so two from DIFFERENT runs are never
-      actually concurrent in practice.
+      immediately, collapsing that window to ordinary async scheduling latency. Consecutive
+      runs ARE possible despite that (x40_ultra_main_level_policy_clean is itself mode:
+      queued, so a request accumulated during a long run starts the instant the first
+      docks — observed in practice: the daily litter segment starting 13 seconds after a
+      trip's full-floor pass docked) — so every delayed clear_notification below
+      re-checks that the vacuum hasn't started cleaning again before firing, rather than
+      assuming completion events never overlap.
     mode: parallel
     max: 10
     trace:
@@ -449,11 +451,53 @@ automation:
                 state: docked
             sequence:
               - delay: "00:02:00"
-              - action: notify.mobile_app_wethop
-                data:
-                  message: clear_notification
-                  data:
-                    tag: x40_vacuum
+              # Codex P2: x40_ultra_main_level_policy_clean is itself mode:
+              # queued, so a request accumulated during a long run starts the
+              # instant the first one docks — e.g. the daily litter segment
+              # queued right behind a trip's full-floor pass, observed
+              # starting 13 seconds after the previous run's dock. Under
+              # mode: parallel this delay sleeps independently of that next
+              # run's own (immediate) progress notifications, so without this
+              # check the clear below would land mid-way through the NEW
+              # run and wipe its Live Activity instead of the finished one.
+              - if:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: vacuum.x40_ultra
+                        state:
+                          - cleaning
+                          - returning
+                          - paused
+                then:
+                  - action: notify.mobile_app_wethop
+                    data:
+                      message: clear_notification
+                      data:
+                        tag: x40_vacuum
+          # Codex P2: if the orchestrator dies WITHOUT ever reaching a dock —
+          # script.reload cancelling it mid-vacuum-stage is the reachable
+          # case — this on->off transition fires while the robot is still
+          # cleaning/returning/paused (rejected by the branch above, which
+          # requires docked). The robot keeps cleaning autonomously and docks
+          # on its own later; record that this run never got a real outcome
+          # so the generic completion branch below reports an accurate
+          # "interrupted" outcome on that later dock instead of a plain
+          # "Cleaning complete" (which the script would have posted itself,
+          # had it lived long enough to reach its own dock).
+          - conditions:
+              - condition: trigger
+                id: orchestrator_end
+              - condition: state
+                entity_id: vacuum.x40_ultra
+                state:
+                  - cleaning
+                  - returning
+                  - paused
+            sequence:
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.x40_ultra_orchestrator_interrupted
           - conditions:
               - condition: trigger
                 id: vac
@@ -483,25 +527,62 @@ automation:
                 entity_id: script.x40_ultra_main_level_mop_after_vacuum
                 state: "off"
             sequence:
+              # If x40_ultra_orchestrator_interrupted is on, this dock is the
+              # LATER, unrelated completion of a run whose orchestrator died
+              # mid-vacuum-stage (see the orchestrator_end branch above) — a
+              # plain "Cleaning complete" would be misleading (the mop, and
+              # possibly more of the vacuum pass itself, never happened).
               - action: notify.mobile_app_wethop
                 data:
                   title: Vacuum
-                  message: Cleaning complete
+                  message: >-
+                    {% if is_state('input_boolean.x40_ultra_orchestrator_interrupted', 'on')
+                    %}Vacuum finished, but the run was interrupted before completing{% else
+                    %}Cleaning complete{% endif %}
                   data:
                     tag: x40_vacuum
                     live_update: true
                     progress: 100
                     progress_max: 100
-                    critical_text: Done
-                    notification_icon: mdi:robot-vacuum
-                    notification_icon_color: "#43A047"
-                    progress_bar_color: "#43A047"
+                    critical_text: >-
+                      {{ 'Interrupted' if
+                      is_state('input_boolean.x40_ultra_orchestrator_interrupted', 'on') else
+                      'Done' }}
+                    notification_icon: >-
+                      {{ 'mdi:robot-vacuum-alert' if
+                      is_state('input_boolean.x40_ultra_orchestrator_interrupted', 'on') else
+                      'mdi:robot-vacuum' }}
+                    notification_icon_color: >-
+                      {{ '#FB8C00' if
+                      is_state('input_boolean.x40_ultra_orchestrator_interrupted', 'on') else
+                      '#43A047' }}
+                    progress_bar_color: >-
+                      {{ '#FB8C00' if
+                      is_state('input_boolean.x40_ultra_orchestrator_interrupted', 'on') else
+                      '#43A047' }}
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: input_boolean.x40_ultra_orchestrator_interrupted
               - delay: "00:02:00"
-              - action: notify.mobile_app_wethop
-                data:
-                  message: clear_notification
-                  data:
-                    tag: x40_vacuum
+              # Same reasoning as the orchestrator_end branch above: a queued
+              # follow-up run (e.g. the daily litter segment right behind a
+              # full-floor pass) can already be under way by the time this
+              # wakes up, so only clear if nothing new has started since.
+              - if:
+                  - condition: not
+                    conditions:
+                      - condition: state
+                        entity_id: vacuum.x40_ultra
+                        state:
+                          - cleaning
+                          - returning
+                          - paused
+                then:
+                  - action: notify.mobile_app_wethop
+                    data:
+                      message: clear_notification
+                      data:
+                        tag: x40_vacuum
           - conditions:
               - condition: state
                 entity_id: vacuum.x40_ultra
@@ -818,6 +899,20 @@ input_boolean:
   washer_reminder_active:
     name: Washer Reminder Active
     icon: mdi:washing-machine-alert
+  # Set by x40_vacuum_live_activity itself (not a script) when
+  # x40_ultra_main_level_mop_after_vacuum's on->off transition is observed
+  # WHILE vacuum.x40_ultra is still cleaning/returning/paused — i.e. the
+  # orchestrator died (script.reload, reachable via packages/media_player.yaml)
+  # before it ever reached its own dock and posted an outcome message. The
+  # robot keeps cleaning autonomously and docks on its own later; consumed
+  # (and cleared) by the generic completion branch on that later dock so it
+  # reports an accurate "interrupted" outcome instead of a plain "Cleaning
+  # complete". No `initial:` — the fact that a prior run was left
+  # interrupted stays true across a later HA restart, unlike the removed
+  # phase-tracking flag.
+  x40_ultra_orchestrator_interrupted:
+    name: X40 Ultra Orchestrator Interrupted
+    icon: mdi:robot-vacuum-alert
 
 ########################
 # Input Datetime
