@@ -107,6 +107,23 @@ def test_input_boolean_helper_removed() -> None:
     assert "x40_ultra_mop_after_current_pass:" not in text
 
 
+def test_live_activity_runs_in_parallel_mode() -> None:
+    # Round 6, Codex P2: mode: queued forces a triggered instance's condition
+    # evaluation to wait behind every earlier queued instance (including a
+    # 2-minute delay branch), which can happen well after the trigger fired
+    # — long enough for OTHER entities' state (the orchestrator script, in
+    # this case) to have already moved on by the time it's finally checked.
+    # This is the second time that exact bug shape has recurred against two
+    # different guards (a mode-select check, then a script-state check), so
+    # the actual fix is structural: mode: parallel starts a triggered
+    # instance essentially immediately, closing the window to ordinary async
+    # scheduling latency instead of an unbounded queue wait.
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    mode_index = block.index("\n    mode:")
+    assert block[mode_index : mode_index + 20] == "\n    mode: parallel\n"
+
+
 def test_live_activity_triggers_on_mode_and_orchestrator_state() -> None:
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
@@ -116,16 +133,20 @@ def test_live_activity_triggers_on_mode_and_orchestrator_state() -> None:
 
 
 def test_live_activity_completion_branch_suppressed_while_orchestrator_runs() -> None:
-    # Round 3 of Codex review: a mode-based ("still sweeping") guard reads
-    # LIVE state at whatever moment this mode: queued automation's instance
-    # happens to dequeue — which can be well after the trigger fired if it
-    # queued behind an earlier room/progress notification, by which point the
-    # mode may have already flipped to "mopping". The fix drops the mode
-    # check entirely: suppress for the WHOLE window the orchestrator script
-    # is "on" (interim AND final dock alike), since the orchestrator now
-    # resolves the notification itself on both of its own outcomes — nothing
-    # here needs to guess which dock this is, so there is no live state left
-    # to go stale.
+    # Round 3 of Codex review: a mode-based ("still sweeping") guard read LIVE
+    # state at whatever moment a queued instance happened to dequeue. The fix
+    # dropped the mode check entirely: suppress for the WHOLE window the
+    # orchestrator script is "on" (interim AND final dock alike), since the
+    # orchestrator now resolves the notification itself on all of its own
+    # outcomes — nothing here needs to guess which dock this is.
+    #
+    # Round 6 found the SAME class of bug recurring even against this
+    # script-state check: under mode: queued, a dock trigger could still
+    # dequeue AFTER the orchestrator had already posted its own outcome and
+    # gone "off", so the generic branch would fire anyway and overwrite an
+    # accurate "Mop pass did not finish cleanly"/"mop skipped" message with a
+    # generic "Cleaning complete". See test_live_activity_runs_in_parallel_mode
+    # for the actual fix (mode: parallel, not another condition patch).
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
     # Use the actual message key, not the bare phrase: an earlier code

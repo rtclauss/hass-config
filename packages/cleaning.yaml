@@ -354,8 +354,20 @@ automation:
     description: >-
       Lock-screen Live Activity on the Wethop iPhone tracking the X40 Ultra while it cleans
       the house. Starts/updates on state, room, and progress changes; shows complete then
-      clears when it docks.
-    mode: queued
+      clears when it docks. mode: parallel (not queued): the terminal dock/completion
+      branches read OTHER entities' live state (e.g. whether the two-stage orchestrator
+      script has finished) to decide what to do, and mode: queued lets a trigger's own
+      condition evaluation happen arbitrarily late — dequeued only once every earlier
+      queued instance (including a 2-minute delay branch) has finished — by which point
+      that state may have already moved on, defeating the check (Codex found this twice:
+      first against a mode-select-based check, then again against the script-state check
+      that replaced it). Under parallel, a trigger's instance starts essentially
+      immediately, collapsing that window to ordinary async scheduling latency. The
+      remaining parallel-mode trade-off — an old delayed clear_notification could in
+      principle land after a newer message — is negligible here: completion events are
+      rare (at most once per multi-hour run), so two from DIFFERENT runs are never
+      actually concurrent in practice.
+    mode: parallel
     max: 10
     trace:
       stored_traces: 10
@@ -457,15 +469,16 @@ automation:
               # orchestrator is running (script.x40_ultra_main_level_mop_after_vacuum
               # 'on') — that covers both the interim dock between stages and
               # the genuine final one, since there is no way to tell them
-              # apart here without reading OTHER mutable state (e.g. the
-              # cleaning-mode select) that can itself go stale by the time a
-              # queued instance of this automation actually executes (Codex
-              # P2: a dock trigger queued behind an earlier room/progress
-              # notification could dequeue after the mode had already flipped
-              # to "mopping", defeating a mode-based check). Instead, the
-              # orchestrator resolves the notification itself on BOTH of its
+              # apart here without reading OTHER mutable state. The
+              # orchestrator resolves the notification itself on all of its
               # own outcomes — see x40_ultra_main_level_mop_after_vacuum — so
-              # nothing here needs to guess which dock this is.
+              # nothing here needs to guess which dock this is; this read
+              # only needs to be reasonably prompt (mode: parallel above, not
+              # queued) rather than perfectly point-in-time, since the
+              # orchestrator's own message-then-cleanup takes real seconds
+              # (CleanGenius restore) after which it goes "off" — plenty of
+              # margin once evaluation is no longer stuck behind an unrelated
+              # queued instance.
               - condition: state
                 entity_id: script.x40_ultra_main_level_mop_after_vacuum
                 state: "off"
