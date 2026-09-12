@@ -256,7 +256,7 @@ def test_live_activity_finalizes_orchestrator_end_outside_the_script() -> None:
         "id: orchestrator_end\n              - condition: state\n"
         "                entity_id: vacuum.x40_ultra\n                state: docked"
     )
-    finalize_section = block[branch_index : branch_index + 1400]
+    finalize_section = block[branch_index : branch_index + 1800]
     assert "state: docked" in finalize_section
     assert "delay:" in finalize_section
     assert "clear_notification" in finalize_section
@@ -293,26 +293,45 @@ def test_live_activity_message_is_phase_aware() -> None:
     assert "#00ACC1" in block
 
 
-def test_delayed_clears_recheck_vacuum_state_before_firing() -> None:
-    # Round 7, Codex P2: x40_ultra_main_level_policy_clean is itself
-    # mode: queued, so a follow-up request accumulated during a long run
-    # starts the instant the first one docks (observed in practice: the
-    # daily litter segment starting 13 seconds after a trip's full-floor
-    # pass). Under mode: parallel each completion branch's 2-minute delay
-    # sleeps independently of that next run's own progress notifications, so
-    # a delayed clear_notification must re-check that nothing new has
-    # started before firing — otherwise it wipes the NEW run's Live Activity
-    # instead of the finished one's.
+def test_notification_token_declared_and_bumped_every_run() -> None:
+    text = CLEANING_PATH.read_text(encoding="utf-8")
+    assert "x40_vacuum_notification_token:" in text
+
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+    # Bumped as the very first action, before `choose:` — i.e. on every run
+    # of this automation, regardless of which (if any) branch matches.
+    action_index = block.index("\n    action:")
+    choose_index = block.index("- choose:")
+    preamble = block[action_index:choose_index]
+    assert "input_text.set_value" in preamble
+    assert "x40_vacuum_notification_token" in preamble
+
+
+def test_delayed_clears_check_notification_token_not_vacuum_state() -> None:
+    # Round 8, Codex P2: checking "vacuum isn't cleaning/returning/paused"
+    # wasn't enough — a queued follow-up run (x40_ultra_main_level_policy_clean
+    # is itself mode: queued; observed in practice starting 13 seconds after
+    # a trip's full-floor pass docked) could already be showing an error, or
+    # have already finished a short segment and posted its OWN terminal
+    # message, by the time an older 2-minute delay wakes up — neither of
+    # which is "vacuum is active", yet clearing in either case would erase a
+    # newer, unrelated update. Generalized to a shared token bumped by every
+    # run of this automation: a delayed clear captures it right before
+    # sleeping and only fires if nothing has touched it since.
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
-    delay_positions = [i for i in range(len(block)) if block.startswith('delay: "00:02:00"', i)]
-    assert len(delay_positions) == 2, "expected exactly two 2-minute delays (orchestrator_end + generic completion)"
+    capture_positions = [
+        i for i in range(len(block)) if block.startswith("our_token:", i)
+    ]
+    assert len(capture_positions) == 2, "expected exactly two captures (orchestrator_end + generic completion)"
 
-    for pos in delay_positions:
-        following = block[pos : pos + 1250]
-        assert "condition: not" in following
-        assert "cleaning" in following and "returning" in following and "paused" in following
+    for pos in capture_positions:
+        following = block[pos : pos + 1300]
+        assert 'delay: "00:02:00"' in following
+        assert "states('input_text.x40_vacuum_notification_token') == our_token" in following
         assert "clear_notification" in following
+        # The old vacuum-state-based check must be gone from this guard.
+        assert "condition: not" not in following
 
 
 def test_orchestrator_interrupted_marker_declared() -> None:
@@ -333,12 +352,21 @@ def test_live_activity_records_orchestrator_death_before_docking() -> None:
     # "off"), but at THAT moment the vacuum is still active, not docked.
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
-    marker_set_index = block.index("x40_ultra_orchestrator_interrupted")
-    branch_start = block.rindex("- conditions:", 0, marker_set_index)
-    branch = block[branch_start : marker_set_index + 200]
+    # x40_ultra_orchestrator_interrupted is set in TWO places now: this
+    # branch (script.reload mid-run) and a round-8 boot-reconciliation branch
+    # (HA restart mid-run) — anchor specifically on the one keyed off the
+    # orchestrator_end trigger with the robot still active.
+    anchor = (
+        "id: orchestrator_end\n              - condition: state\n"
+        "                entity_id: vacuum.x40_ultra\n                state:\n"
+        "                  - cleaning\n                  - returning\n"
+        "                  - paused"
+    )
+    branch_index = block.index(anchor)
+    branch = block[branch_index : branch_index + 400]
 
-    assert "id: orchestrator_end" in branch
-    assert "cleaning" in branch and "returning" in branch and "paused" in branch
+    assert "x40_ultra_orchestrator_interrupted" in branch
+    assert "action: input_boolean.turn_on" in branch
     assert "action: input_boolean.turn_on" in branch
 
 
@@ -360,3 +388,80 @@ def test_generic_completion_branch_reports_interrupted_outcome() -> None:
     turn_off_index = block.index("action: input_boolean.turn_off", complete_index)
     turn_off_section = block[turn_off_index : turn_off_index + 150]
     assert "x40_ultra_orchestrator_interrupted" in turn_off_section
+
+
+def test_orchestrated_run_active_survives_restart_for_boot_reconciliation() -> None:
+    # Round 8, Codex P2: a full HA restart (not just script.reload) during
+    # the vacuum stage leaves NO trace for orchestrator_end to observe — the
+    # automation is gone too, so it never fires, and the script simply
+    # reappears "off" with no memory of having been "on". This marker exists
+    # only to survive that (no `initial:`), set by the orchestrator itself.
+    text = VACUUM_PATH.read_text(encoding="utf-8")
+    assert "x40_ultra_orchestrated_run_active:" in text
+    marker_index = text.index("x40_ultra_orchestrated_run_active:")
+    declaration = text[marker_index : marker_index + 300]
+    assert "initial:" not in declaration
+
+    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+    policy_index = block.index("Mopping requires explicit unattended pet policy")
+    turn_on_index = block.index("action: input_boolean.turn_on", policy_index)
+    assert "x40_ultra_orchestrated_run_active" in block[turn_on_index : turn_on_index + 150]
+
+    # Cleared on every exit: both the success/incomplete path and the
+    # vacuum-skipped path must turn it back off.
+    assert block.count("entity_id: input_boolean.x40_ultra_orchestrated_run_active") >= 3
+
+
+def test_boot_reconciles_orchestrated_run_active_both_ways() -> None:
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    # "id: boot" appears three times: the trigger definition, the
+    # already-docked branch, and the still-active branch (in that order).
+    boot_positions = [i for i in range(len(block)) if block.startswith("id: boot", i)]
+    assert len(boot_positions) == 3
+
+    # Case 1: already docked at boot — clear the now-ambiguous marker
+    # alongside the existing stranded-notification clear (Codex's literal
+    # suggestion), without guessing at an outcome we can't reconstruct.
+    docked_branch = block[boot_positions[1] : boot_positions[1] + 500]
+    assert "state: docked" in docked_branch
+    assert "x40_ultra_orchestrated_run_active" in docked_branch
+
+    # Case 2: still active at boot — mark interrupted now so the later,
+    # genuine dock transition (handled by the existing generic completion
+    # branch) reports it accurately.
+    still_active_branch = block[boot_positions[2] : boot_positions[2] + 700]
+    assert "x40_ultra_orchestrated_run_active" in still_active_branch
+    assert "state: \"on\"" in still_active_branch
+    assert "cleaning" in still_active_branch and "returning" in still_active_branch and "paused" in still_active_branch
+    assert "x40_ultra_orchestrator_interrupted" in still_active_branch
+
+
+def test_active_run_owned_declared_and_reset_in_both_stage_scripts() -> None:
+    # Round 8, Codex P2: x40_ultra_prepare_deterministic_cleaning's
+    # documented up-to-30s wait can be won by an external (manual/app) run;
+    # when that happens the orchestrator scripts don't start anything, they
+    # just wait for that unrelated run to finish, yet the orchestrator script
+    # stays "on" throughout — which would mislabel that external run's
+    # progress as part of our own two-stage sequence.
+    text = VACUUM_PATH.read_text(encoding="utf-8")
+    assert "x40_ultra_active_run_owned:" in text
+
+    for script_id in ("x40_ultra_main_level_vacuum_only", "x40_ultra_main_level_mop_only"):
+        block = _script_block(VACUUM_PATH, script_id)
+        assert "x40_ultra_active_run_owned" in block
+        # Reset off near the top, set on only after wait.completed confirms
+        # OUR OWN start — not merely that the script ran.
+        reset_index = block.index("x40_ultra_active_run_owned")
+        wait_completed_index = block.index("wait.completed")
+        set_on_index = block.index("x40_ultra_active_run_owned", wait_completed_index)
+        assert reset_index < wait_completed_index < set_on_index
+
+
+def test_live_activity_phase_count_requires_owning_the_active_run() -> None:
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    two_stage_index = block.index("set two_stage =")
+    two_stage_definition = block[two_stage_index : two_stage_index + 250]
+    assert "script.x40_ultra_main_level_mop_after_vacuum" in two_stage_definition
+    assert "x40_ultra_active_run_owned" in two_stage_definition

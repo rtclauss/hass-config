@@ -351,6 +351,39 @@ input_boolean:
   x40_ultra_mop_pass_completed:
     name: X40 Ultra Mop Pass Completed
     icon: mdi:robot-vacuum
+  # Codex P2: unlike script.x40_ultra_main_level_mop_after_vacuum's own
+  # on/off state (which the Live Activity otherwise relies on), a full HA
+  # restart — not just script.reload — leaves NO trace that a two-stage run
+  # was active: the automation is gone too, so no on->off transition ever
+  # fires, and the script simply reappears "off" with no memory of having
+  # been "on". This input_boolean exists ONLY to survive that: turned on by
+  # x40_ultra_main_level_mop_after_vacuum right after its policy gate passes,
+  # turned off again at the very end of every one of its exits (success,
+  # mop-incomplete, or vacuum-skipped) — so it is normally a mirror of the
+  # script's own "on" state, EXCEPT that it survives a restart. Reconciled
+  # by x40_vacuum_live_activity's boot handling in packages/cleaning.yaml:
+  # if still "on" after a restart, a two-stage run WAS active when HA went
+  # down. No `initial:` — it must survive the very restart it exists to
+  # detect.
+  x40_ultra_orchestrated_run_active:
+    name: X40 Ultra Orchestrated Run Active
+    icon: mdi:robot-vacuum
+  # Codex P2: x40_ultra_prepare_deterministic_cleaning's documented up-to-30s
+  # wait is a window an EXTERNAL (manual/app) run can win — when that
+  # happens, x40_ultra_main_level_vacuum_only (or _mop_only) does not start
+  # anything itself; it just waits for the external run to finish before
+  # restoring CleanGenius, yet script.x40_ultra_main_level_mop_after_vacuum
+  # stays "on" throughout. Without this, the Live Activity would label that
+  # unrelated external run "Vacuuming (1/2)"/"Mopping (2/2)" as if it were
+  # part of our own sequence. Reset off at the start of every
+  # x40_ultra_main_level_vacuum_only / x40_ultra_main_level_mop_only call,
+  # set on only once THAT call's own vacuum.start is confirmed to have taken
+  # effect (the SAME wait_template result each already uses to decide
+  # whether to proceed) — so it reads "on" only while the CURRENTLY active
+  # cleaning run is genuinely ours.
+  x40_ultra_active_run_owned:
+    name: X40 Ultra Active Run Owned
+    icon: mdi:robot-vacuum
 
 ########################
 # Input Datetime
@@ -640,6 +673,11 @@ script:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.x40_ultra_vacuum_pass_completed
+      # Reset the "do we actually own the active run" flag too — see its own
+      # declaration. Only set back on below once OUR start is confirmed.
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_active_run_owned
       - action: script.x40_ultra_prepare_deterministic_cleaning
       # Recheck rest AFTER preparation and BEFORE changing the mode: the
       # dispatcher's entry gate can go stale during prepare's up-to-30s wait. If
@@ -707,6 +745,11 @@ script:
               - condition: template
                 value_template: "{{ wait.completed }}"
             then:
+              # Our own start is now confirmed — the active run really is
+              # ours, so the Live Activity may show a phase count for it.
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.x40_ultra_active_run_owned
               - action: script.x40_ultra_wait_until_docked
               # Mark THIS run complete only on a real `completed` task status,
               # checked while CleanGenius is still off (before the restore). An
@@ -778,6 +821,10 @@ script:
       script.reload firing mid-delay (packages/media_player.yaml calls it)
       would strand the notification forever with no clear ever firing. A
       delay living in the automation is immune to script.reload entirely.
+      Also sets input_boolean.x40_ultra_orchestrated_run_active for the
+      narrower case a script.reload doesn't cover: a full HA restart, which
+      leaves no on->off transition for the Live Activity to observe at all.
+      See that input_boolean's own declaration for how it's reconciled.
     mode: queued
     trace:
       stored_traces: 10
@@ -786,6 +833,12 @@ script:
         condition: state
         entity_id: input_select.vacuum_pet_policy
         state: "Unattended"
+      # Mirrors this script's own "on" state, except that it survives a full
+      # HA restart (no `initial:`) — see its declaration for why that matters.
+      # Turned off again at the very end of every exit below.
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.x40_ultra_orchestrated_run_active
       - action: script.x40_ultra_main_level_vacuum_only
       # Only mop if THIS vacuum pass genuinely completed. The vacuum-only script
       # resets input_boolean.x40_ultra_vacuum_pass_completed off at its start and
@@ -839,6 +892,9 @@ script:
                     notification_icon: mdi:robot-vacuum-alert
                     notification_icon_color: "#FB8C00"
                     progress_bar_color: "#FB8C00"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.x40_ultra_orchestrated_run_active
         else:
           - action: notify.all
             data:
@@ -865,6 +921,9 @@ script:
                 notification_icon: mdi:robot-vacuum-alert
                 notification_icon_color: "#FB8C00"
                 progress_bar_color: "#FB8C00"
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.x40_ultra_orchestrated_run_active
 
   x40_ultra_main_level_mop_only:
     alias: "X40 Ultra Main Level Mop Only"
@@ -893,6 +952,11 @@ script:
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.x40_ultra_mop_pass_completed
+      # Reset the "do we actually own the active run" flag too, for the same
+      # reason and at the same unconditional point — see its declaration.
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_active_run_owned
       - alias: "Mopping requires explicit unattended pet policy"
         condition: state
         entity_id: input_select.vacuum_pet_policy
@@ -966,6 +1030,11 @@ script:
               - condition: template
                 value_template: "{{ wait.completed }}"
             then:
+              # Our own start is now confirmed — see the identical step in
+              # x40_ultra_main_level_vacuum_only for why this matters.
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.x40_ultra_active_run_owned
               - action: script.x40_ultra_wait_until_docked
               # Success requires a real `completed` task status, not just a dock
               # state. An arrival mid-run fires vacuum_return_home ->
