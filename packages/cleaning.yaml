@@ -373,14 +373,18 @@ automation:
         entity_id: sensor.x40_ultra_error
         id: error
       # Phase changes: which stage (vacuum vs mop) is active, and whether a
-      # mop follows the current vacuum stage. Both always pass through the
-      # condition below so the notification updates the instant the phase
-      # flips, not just on the next room/progress tick.
+      # mop is queued behind the current vacuum stage. Both always pass
+      # through the condition below so the notification updates the instant
+      # the phase flips, not just on the next room/progress tick. The second
+      # is the orchestrator script's OWN entity state (see
+      # x40_ultra_main_level_mop_after_vacuum's description) rather than a
+      # separately-tracked helper, so it is inherently correct across any
+      # interruption with no dedicated cleanup step to keep in sync.
       - trigger: state
         entity_id: select.x40_ultra_cleaning_mode
         id: mode
       - trigger: state
-        entity_id: input_boolean.x40_ultra_mop_after_current_pass
+        entity_id: script.x40_ultra_main_level_mop_after_vacuum
         id: phase
       - trigger: homeassistant
         event: start
@@ -435,7 +439,7 @@ automation:
                   - condition: and
                     conditions:
                       - condition: state
-                        entity_id: input_boolean.x40_ultra_mop_after_current_pass
+                        entity_id: script.x40_ultra_main_level_mop_after_vacuum
                         state: "on"
                       - condition: state
                         entity_id: select.x40_ultra_cleaning_mode
@@ -486,15 +490,19 @@ automation:
                   - paused
             sequence:
               # Phase-aware status: says which stage (vacuum vs mop) is running, and
-              # tags EITHER stage with a phase count only when
-              # input_boolean.x40_ultra_mop_after_current_pass is actually on — it
-              # stays on for the full duration of both stages of an orchestrated
-              # two-stage run (vacuum through mop), so "(2/2)" here does mean the
-              # second half of a real pair. Without that flag, a standalone/manual
-              # mop (called directly, or started from the Dreame app itself) shows
-              # plain "Mopping" instead of falsely implying a vacuum pass preceded
-              # it. A single-stage vacuum (segment clean, maintenance pass, or a
-              # full-floor pass with no mop due) likewise shows no phase count.
+              # tags EITHER stage with a phase count only when the orchestrator
+              # script (x40_ultra_main_level_mop_after_vacuum) is actually running —
+              # its own entity state is 'on' for the full duration of both stages of
+              # an orchestrated two-stage run (vacuum through mop), so "(2/2)" here
+              # does mean the second half of a real pair. Using the script's live
+              # state instead of a separately-tracked helper means it is
+              # automatically correct across any interruption (HA restart,
+              # script.reload, a manual stop) with nothing to reset. Without it, a
+              # standalone/manual mop (called directly, or started from the Dreame
+              # app itself) shows plain "Mopping" instead of falsely implying a
+              # vacuum pass preceded it. A single-stage vacuum (segment clean,
+              # maintenance pass, or a full-floor pass with no mop due) likewise
+              # shows no phase count.
               - action: notify.mobile_app_wethop
                 data:
                   title: Vacuum
@@ -502,7 +510,7 @@ automation:
                     {% set v = states('vacuum.x40_ultra') %}{% set r =
                     states('sensor.x40_ultra_current_room') %}{% set mode =
                     states('select.x40_ultra_cleaning_mode') %}{% set two_stage =
-                    is_state('input_boolean.x40_ultra_mop_after_current_pass', 'on') %}{% set rs =
+                    is_state('script.x40_ultra_main_level_mop_after_vacuum', 'on') %}{% set rs =
                     ' ' ~ r if r not in ['unknown','unavailable','',None] else '' %}{% if v ==
                     'returning' %}Returning to dock{% elif v == 'paused' %}Paused{% elif mode ==
                     'mopping' and two_stage %}Mopping{{ rs }} (2/2){% elif mode == 'mopping'

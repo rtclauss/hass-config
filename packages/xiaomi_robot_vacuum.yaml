@@ -337,21 +337,6 @@ input_boolean:
   x40_ultra_vacuum_pass_completed:
     name: X40 Ultra Vacuum Pass Completed
     icon: mdi:robot-vacuum
-  # Run-scoped phase flag for the Live Activity notification (packages/cleaning.yaml):
-  # on only while the CURRENTLY running vacuum-only pass is stage 1 of a
-  # vacuum-then-mop sequence, so the notification can show "mop next" instead
-  # of implying a single-stage vacuum. Reset at the start of EVERY
-  # x40_ultra_main_level_vacuum_only call (true or false, not just when true)
-  # and at the start of x40_ultra_segment_vacuum_only (always false there — a
-  # segment clean never mops), so a stale value from an interrupted run never
-  # leaks into a later, unrelated pass. `initial: false` additionally forces
-  # it off on every HA restart: no in-flight two-stage sequence survives a
-  # restart (the orchestrating script is gone), so restoring a stale "on"
-  # would misreport a mop as still queued when it will not actually resume.
-  x40_ultra_mop_after_current_pass:
-    name: X40 Ultra Mop After Current Pass
-    icon: mdi:water
-    initial: false
 
 ########################
 # Input Datetime
@@ -631,42 +616,16 @@ script:
       (input_boolean.x40_ultra_vacuum_pass_completed): reset off at the start and
       set on only when THIS pass reaches a real `completed` finish, so the mop
       orchestrator can tell a genuine finish from a no-op/failed/arrival-docked
-      run without trusting the ambient (possibly stale) task_status. Also
-      reflects the `two_stage` flag onto input_boolean.x40_ultra_mop_after_current_pass
-      on every call, so the Live Activity notification (packages/cleaning.yaml)
-      can show "mop next" while stage 1 of a vacuum-then-mop run is active.
+      run without trusting the ambient (possibly stale) task_status.
     mode: queued
     trace:
       stored_traces: 10
-    fields:
-      two_stage:
-        description: >-
-          True when this pass is stage 1 of a vacuum-then-mop sequence
-          (called from x40_ultra_main_level_mop_after_vacuum). Defaults to
-          false for a standalone vacuum-only pass (maintenance, segment, or
-          a full-floor run where a mop isn't due).
-        example: true
     sequence:
       # Reset the run-scoped completion latch: only this pass reaching a real
       # `completed` finish may set it on, so a failed/no-op run leaves it off.
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.x40_ultra_vacuum_pass_completed
-      # Reset the Live Activity phase flag from the caller's declared intent on
-      # EVERY call (not just when true), so a stale "on" from an interrupted
-      # prior two-stage run can never leak "mop next" into an unrelated later
-      # pass (e.g. a segment clean started before the next scheduled mop).
-      - if:
-          - condition: template
-            value_template: "{{ two_stage | default(false) | bool }}"
-        then:
-          - action: input_boolean.turn_on
-            target:
-              entity_id: input_boolean.x40_ultra_mop_after_current_pass
-        else:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: input_boolean.x40_ultra_mop_after_current_pass
       - action: script.x40_ultra_prepare_deterministic_cleaning
       # Recheck rest AFTER preparation and BEFORE changing the mode: the
       # dispatcher's entry gate can go stale during prepare's up-to-30s wait. If
@@ -784,7 +743,13 @@ script:
       is left pending to retry next run — this preserves both the arrival-to-dock
       protection and the vacuum-before-water ordering. Mopping requires the
       Unattended pet policy; x40_ultra_main_level_mop_only owns the persistent
-      mop-schedule bookkeeping.
+      mop-schedule bookkeeping. The Live Activity notification
+      (packages/cleaning.yaml) reads this script's OWN entity state
+      (script.x40_ultra_main_level_mop_after_vacuum, 'on' for the full duration
+      of both stages) to know a mop is queued behind the current vacuum pass,
+      rather than a separately-tracked latch — so it is inherently correct
+      across any kind of interruption (HA restart, script.reload, a manual
+      stop) with no dedicated cleanup step of its own.
     mode: queued
     trace:
       stored_traces: 10
@@ -794,8 +759,6 @@ script:
         entity_id: input_select.vacuum_pet_policy
         state: "Unattended"
       - action: script.x40_ultra_main_level_vacuum_only
-        data:
-          two_stage: true
       # Only mop if THIS vacuum pass genuinely completed. The vacuum-only script
       # resets input_boolean.x40_ultra_vacuum_pass_completed off at its start and
       # sets it on only on a real `completed` finish of this run, so a no-op /
@@ -816,12 +779,6 @@ script:
               message: >-
                 X40 Ultra vacuum pass did not finish cleanly, so the mop was
                 skipped; it remains due and will retry on the next run.
-      # Clear the Live Activity phase flag once the sequence is fully done
-      # (mop launched-and-finished, or skipped above) so "mop next" never
-      # leaks into a later, unrelated pass.
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.x40_ultra_mop_after_current_pass
 
   x40_ultra_main_level_mop_only:
     alias: "X40 Ultra Main Level Mop Only"
@@ -1233,14 +1190,6 @@ script:
         description: "Cleaning passes over the segment (1-3). Defaults to 1."
         example: 1
     sequence:
-      # A segment clean never mops, so unconditionally clear the Live Activity
-      # phase flag on every call — otherwise a stale "on" left behind by an
-      # interrupted two-stage main-level run (x40_ultra_main_level_vacuum_only
-      # is the only other place that touches this flag) would mislabel this
-      # unrelated segment pass as "Vacuuming (1/2)".
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.x40_ultra_mop_after_current_pass
       # Do not disable CleanGenius or touch the cleaning mode unless the X40 is
       # at rest: an external (manual/app) run must gate us out BEFORE any config
       # mutation, so we never change controls on a robot that is mid-run. Only

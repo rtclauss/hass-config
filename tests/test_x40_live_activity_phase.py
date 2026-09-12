@@ -58,82 +58,68 @@ def _automation_block(path: Path, automation_id: str) -> str:
     return "\n".join(lines[start:end])
 
 
-def test_mop_after_current_pass_helper_declared() -> None:
-    text = VACUUM_PATH.read_text(encoding="utf-8")
-    assert "x40_ultra_mop_after_current_pass:" in text
+# Design note (post-Codex-review revision): the phase-tracking signal is the
+# orchestrator script's OWN entity state (script.x40_ultra_main_level_mop_after_vacuum,
+# 'on' for the full duration of both stages), not a separately-tracked
+# input_boolean. Two rounds of Codex review found real gaps in the
+# hand-maintained-latch approach (a false "Cleaning complete" on the interim
+# dock; a stale "on" surviving script.reload since it cancels the parent
+# script without recreating input_booleans; a reset-ordering race in
+# x40_ultra_segment_vacuum_only). Reading the script entity's live state
+# instead eliminates the whole class of staleness bugs: it needs no
+# `initial:`, no reset-on-every-call plumbing, and no segment-script special
+# case, because a script entity's on/off state is inherently correct across
+# ANY interruption (HA restart, script.reload, a manual stop) with nothing to
+# keep in sync.
 
 
-def test_vacuum_only_resets_phase_flag_from_two_stage_field_every_call() -> None:
-    # The flag must be re-derived from the caller's declared intent on EVERY
-    # call (true or false), not only set when true — otherwise a stale "on"
-    # from an interrupted two-stage run could leak "mop next" into a later,
-    # unrelated single-stage pass (e.g. a segment clean).
+def test_vacuum_only_has_no_phase_tracking_of_its_own() -> None:
+    # The phase signal now lives entirely in the orchestrator
+    # (x40_ultra_main_level_mop_after_vacuum)'s own entity state, so the
+    # child vacuum-only script needs no two_stage field or flag plumbing.
     block = _script_block(VACUUM_PATH, "x40_ultra_main_level_vacuum_only")
 
-    assert "two_stage" in block
-    assert "input_boolean.x40_ultra_mop_after_current_pass" in block
-
-    two_stage_guard_index = block.index("two_stage | default")
-    guarded_block = block[two_stage_guard_index:]
-
-    turn_on_index = guarded_block.index("action: input_boolean.turn_on")
-    turn_off_index = guarded_block.index("action: input_boolean.turn_off")
-    # Both branches of the if/else must target the phase flag, not just one.
-    assert "x40_ultra_mop_after_current_pass" in guarded_block[turn_on_index : turn_on_index + 150]
-    assert "x40_ultra_mop_after_current_pass" in guarded_block[turn_off_index : turn_off_index + 150]
+    assert "two_stage" not in block
+    assert "x40_ultra_mop_after_current_pass" not in block
 
 
-def test_mop_after_vacuum_passes_two_stage_and_clears_flag_on_every_exit() -> None:
-    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
-
-    vacuum_call_index = block.index("action: script.x40_ultra_main_level_vacuum_only")
-    call_and_data = block[vacuum_call_index : vacuum_call_index + 100]
-    assert "two_stage: true" in call_and_data
-
-    # The flag must be cleared after the if/else that decides mop-or-skip, so
-    # it is cleared regardless of which branch ran (mop launched, or skipped
-    # because the vacuum pass did not complete cleanly).
-    else_index = block.index("else:")
-    final_turnoff_index = block.rindex("action: input_boolean.turn_off")
-    final_turnoff_block = block[final_turnoff_index : final_turnoff_index + 150]
-
-    assert final_turnoff_index > else_index, (
-        "the phase-flag cleanup must come after the mop-or-skip branch, not before it"
-    )
-    assert "x40_ultra_mop_after_current_pass" in final_turnoff_block
-
-
-def test_segment_vacuum_only_resets_phase_flag_unconditionally() -> None:
-    # A segment clean never mops. Codex P2: this script never touched the
-    # flag, so a stale "on" left behind by an interrupted two-stage
-    # main-level run would mislabel an unrelated segment pass as
-    # "Vacuuming (1/2)".
+def test_segment_vacuum_only_has_no_phase_tracking_of_its_own() -> None:
+    # A segment clean is a different script entity entirely, so it is
+    # automatically unaffected by the orchestrator's state — no explicit
+    # reset needed (unlike the old input_boolean design, which required one).
     block = _script_block(VACUUM_PATH, "x40_ultra_segment_vacuum_only")
 
-    turnoff_index = block.index("action: input_boolean.turn_off")
-    assert "x40_ultra_mop_after_current_pass" in block[turnoff_index : turnoff_index + 150]
-
-    # Must reset before the at-rest gate, i.e. on every call, not only when
-    # the robot happens to be at rest.
-    gate_index = block.index("X40 must be at rest before any deterministic mutation")
-    assert turnoff_index < gate_index
+    assert "x40_ultra_mop_after_current_pass" not in block
 
 
-def test_phase_flag_forced_off_on_every_restart() -> None:
-    # Codex P2: no in-flight two-stage sequence survives an HA restart (the
-    # orchestrating script is gone), so restoring a stale "on" would
-    # misreport a mop as still queued when it will not actually resume.
+def test_mop_after_vacuum_has_no_leftover_flag_plumbing() -> None:
+    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+
+    assert "x40_ultra_mop_after_current_pass" not in block
+    # No `data: {two_stage: true}` needed on the vacuum-only call either.
+    vacuum_call_index = block.index("action: script.x40_ultra_main_level_vacuum_only")
+    next_line = block[vacuum_call_index : vacuum_call_index + 120].splitlines()[1]
+    assert "data:" not in next_line
+
+
+def test_input_boolean_helper_removed() -> None:
     text = VACUUM_PATH.read_text(encoding="utf-8")
-    flag_index = text.index("x40_ultra_mop_after_current_pass:")
-    declaration = text[flag_index : flag_index + 400]
-    assert "initial: false" in declaration
+    assert "x40_ultra_mop_after_current_pass:" not in text
+
+
+def test_live_activity_triggers_on_mode_and_orchestrator_state() -> None:
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    assert "entity_id: select.x40_ultra_cleaning_mode" in block
+    assert "entity_id: script.x40_ultra_main_level_mop_after_vacuum" in block
+    assert "input_boolean.x40_ultra_mop_after_current_pass" not in block
 
 
 def test_live_activity_completion_branch_skips_interim_dock() -> None:
-    # Codex P2: without this guard, the interim dock between the two stages
-    # of a vacuum-then-mop run posted a false "Cleaning complete" and (since
-    # this automation is mode: queued) its 2-minute delay blocked the
-    # subsequent "Mopping (2/2)" update behind it.
+    # Skip the false "Cleaning complete" on the interim dock between the two
+    # stages of a vacuum-then-mop run (orchestrator still running + mode
+    # still "sweeping") — the genuine final dock (mode already "mopping")
+    # still reaches this branch normally.
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
     # Use the actual message key, not the bare phrase: an earlier code
@@ -148,28 +134,22 @@ def test_live_activity_completion_branch_skips_interim_dock() -> None:
     # two-clause AND requires nesting an explicit `and`, not two bare
     # siblings under `not` (which would require BOTH to be false to pass).
     assert "condition: and" in guarded
-    assert "input_boolean.x40_ultra_mop_after_current_pass" in guarded
+    assert "script.x40_ultra_main_level_mop_after_vacuum" in guarded
     assert "select.x40_ultra_cleaning_mode" in guarded
     assert 'state: "on"' in guarded
     assert 'state: "sweeping"' in guarded
 
 
-def test_live_activity_mopping_label_gated_on_two_stage_flag() -> None:
-    # Codex P2: a standalone/manual mop (started directly, or from the
-    # Dreame app) is not part of an orchestrated two-stage run, so it must
-    # not be labeled "(2/2)" — only a genuine two-stage run (flag on) earns
-    # the phase count; otherwise it's plain "Mopping".
+def test_live_activity_mopping_label_gated_on_orchestrator_state() -> None:
+    # A standalone/manual mop (started directly, or from the Dreame app) is
+    # not part of an orchestrated two-stage run, so it must not be labeled
+    # "(2/2)" — only a genuine two-stage run (orchestrator script running)
+    # earns the phase count; otherwise it's plain "Mopping".
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
+    assert "is_state('script.x40_ultra_main_level_mop_after_vacuum', 'on')" in block
     assert "'mopping' and two_stage %}Mopping{{ rs }} (2/2)" in block
     assert "elif mode == 'mopping'\n" in block
-
-
-def test_live_activity_triggers_on_mode_and_phase_changes() -> None:
-    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
-
-    assert "entity_id: select.x40_ultra_cleaning_mode" in block
-    assert "entity_id: input_boolean.x40_ultra_mop_after_current_pass" in block
 
 
 def test_live_activity_message_is_phase_aware() -> None:
@@ -179,7 +159,7 @@ def test_live_activity_message_is_phase_aware() -> None:
     assert "Mopping" in block
     assert "Vacuuming" in block
 
-    # A phase count is only shown while the two-stage flag is actually on;
+    # A phase count is only shown while the orchestrator is actually running;
     # a single-stage run (vacuum or mop) gets no phase count at all.
     assert "(1/2)" in block
     assert "(2/2)" in block
