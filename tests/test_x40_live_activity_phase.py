@@ -165,6 +165,16 @@ def test_mop_only_has_its_own_run_scoped_completion_latch() -> None:
     # clearing the pending debt, i.e. inside the genuine `completed` branch.
     assert "input_datetime.x40_ultra_last_mopped_at" in block[: set_on_index][-400:]
 
+    # Round 5, Codex P2: the reset must come BEFORE the bare pet-policy
+    # condition, which STOPS the script outright when it fails (e.g. the
+    # policy changed away from Unattended during the preceding vacuum pass).
+    # A reset placed after that gate would be skipped entirely whenever the
+    # gate halts the script, leaving a stale "on" from a PREVIOUS successful
+    # mop in place — which x40_ultra_main_level_mop_after_vacuum's completion
+    # check would then misread as this run having succeeded.
+    policy_condition_index = block.index("Mopping requires explicit unattended pet policy")
+    assert reset_index < policy_condition_index
+
 
 def test_mop_after_vacuum_checks_mop_completion_latch_not_pending_flag() -> None:
     block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")

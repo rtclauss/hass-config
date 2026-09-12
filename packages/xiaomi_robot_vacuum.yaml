@@ -880,6 +880,19 @@ script:
     trace:
       stored_traces: 10
     sequence:
+      # Reset the run-scoped completion latch FIRST, unconditionally, before
+      # the bare policy condition below: that condition STOPS the script
+      # outright when it fails (e.g. the policy changed away from Unattended
+      # during the preceding vacuum pass), which would otherwise skip this
+      # reset entirely and leave a stale "on" from a PREVIOUS successful mop
+      # in place. x40_ultra_main_level_mop_after_vacuum's completion check
+      # would then read that stale value and report "Cleaning complete" even
+      # though this mop never started. Only THIS pass reaching a real
+      # `completed` finish may set it on again, regardless of what
+      # x40_ultra_mop_pass_pending happened to read on entry.
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_mop_pass_completed
       - alias: "Mopping requires explicit unattended pet policy"
         condition: state
         entity_id: input_select.vacuum_pet_policy
@@ -887,12 +900,6 @@ script:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.x40_ultra_mop_pass_pending
-      # Reset the run-scoped completion latch: only THIS pass reaching a real
-      # `completed` finish may set it on, so a failed/no-op run leaves it off
-      # regardless of what x40_ultra_mop_pass_pending happened to read on entry.
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.x40_ultra_mop_pass_completed
       - action: script.x40_ultra_prepare_deterministic_cleaning
       # Recheck rest AFTER preparation and BEFORE changing the mode: the
       # dispatcher's entry gate can go stale during prepare's up-to-30s wait. If
