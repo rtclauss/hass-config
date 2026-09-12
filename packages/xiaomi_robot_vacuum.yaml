@@ -337,6 +337,16 @@ input_boolean:
   x40_ultra_vacuum_pass_completed:
     name: X40 Ultra Vacuum Pass Completed
     icon: mdi:robot-vacuum
+  # Run-scoped phase flag for the Live Activity notification (packages/cleaning.yaml):
+  # on only while the CURRENTLY running vacuum-only pass is stage 1 of a
+  # vacuum-then-mop sequence, so the notification can show "mop next" instead
+  # of implying a single-stage vacuum. Reset at the start of EVERY
+  # x40_ultra_main_level_vacuum_only call (true or false, not just when true)
+  # so a stale value from an interrupted run never leaks into a later,
+  # unrelated pass (e.g. a segment clean or a single-stage maintenance run).
+  x40_ultra_mop_after_current_pass:
+    name: X40 Ultra Mop After Current Pass
+    icon: mdi:water
 
 ########################
 # Input Datetime
@@ -616,16 +626,42 @@ script:
       (input_boolean.x40_ultra_vacuum_pass_completed): reset off at the start and
       set on only when THIS pass reaches a real `completed` finish, so the mop
       orchestrator can tell a genuine finish from a no-op/failed/arrival-docked
-      run without trusting the ambient (possibly stale) task_status.
+      run without trusting the ambient (possibly stale) task_status. Also
+      reflects the `two_stage` flag onto input_boolean.x40_ultra_mop_after_current_pass
+      on every call, so the Live Activity notification (packages/cleaning.yaml)
+      can show "mop next" while stage 1 of a vacuum-then-mop run is active.
     mode: queued
     trace:
       stored_traces: 10
+    fields:
+      two_stage:
+        description: >-
+          True when this pass is stage 1 of a vacuum-then-mop sequence
+          (called from x40_ultra_main_level_mop_after_vacuum). Defaults to
+          false for a standalone vacuum-only pass (maintenance, segment, or
+          a full-floor run where a mop isn't due).
+        example: true
     sequence:
       # Reset the run-scoped completion latch: only this pass reaching a real
       # `completed` finish may set it on, so a failed/no-op run leaves it off.
       - action: input_boolean.turn_off
         target:
           entity_id: input_boolean.x40_ultra_vacuum_pass_completed
+      # Reset the Live Activity phase flag from the caller's declared intent on
+      # EVERY call (not just when true), so a stale "on" from an interrupted
+      # prior two-stage run can never leak "mop next" into an unrelated later
+      # pass (e.g. a segment clean started before the next scheduled mop).
+      - if:
+          - condition: template
+            value_template: "{{ two_stage | default(false) | bool }}"
+        then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.x40_ultra_mop_after_current_pass
+        else:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.x40_ultra_mop_after_current_pass
       - action: script.x40_ultra_prepare_deterministic_cleaning
       # Recheck rest AFTER preparation and BEFORE changing the mode: the
       # dispatcher's entry gate can go stale during prepare's up-to-30s wait. If
@@ -753,6 +789,8 @@ script:
         entity_id: input_select.vacuum_pet_policy
         state: "Unattended"
       - action: script.x40_ultra_main_level_vacuum_only
+        data:
+          two_stage: true
       # Only mop if THIS vacuum pass genuinely completed. The vacuum-only script
       # resets input_boolean.x40_ultra_vacuum_pass_completed off at its start and
       # sets it on only on a real `completed` finish of this run, so a no-op /
@@ -773,6 +811,12 @@ script:
               message: >-
                 X40 Ultra vacuum pass did not finish cleanly, so the mop was
                 skipped; it remains due and will retry on the next run.
+      # Clear the Live Activity phase flag once the sequence is fully done
+      # (mop launched-and-finished, or skipped above) so "mop next" never
+      # leaks into a later, unrelated pass.
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_mop_after_current_pass
 
   x40_ultra_main_level_mop_only:
     alias: "X40 Ultra Main Level Mop Only"

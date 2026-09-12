@@ -372,6 +372,16 @@ automation:
       - trigger: state
         entity_id: sensor.x40_ultra_error
         id: error
+      # Phase changes: which stage (vacuum vs mop) is active, and whether a
+      # mop follows the current vacuum stage. Both always pass through the
+      # condition below so the notification updates the instant the phase
+      # flips, not just on the next room/progress tick.
+      - trigger: state
+        entity_id: select.x40_ultra_cleaning_mode
+        id: mode
+      - trigger: state
+        entity_id: input_boolean.x40_ultra_mop_after_current_pass
+        id: phase
       - trigger: homeassistant
         event: start
         id: boot
@@ -381,7 +391,7 @@ automation:
       # an exact multiple of 5), and a `vac` trigger only passes on a real
       # state-VALUE change — not attribute-only updates (battery, cleaning_time,
       # status), which would otherwise flood the activity while cleaning and, while
-      # docked, repeat the completion branch. room and boot always pass.
+      # docked, repeat the completion branch. room, mode, phase, and boot always pass.
       - condition: template
         value_template: >-
           {% if trigger.id == 'progress' %}{{ trigger.from_state is not none and trigger.to_state is not none and (trigger.to_state.state | int(0)) // 5 != (trigger.from_state.state | int(0)) // 5 }}{% elif trigger.id == 'vac' %}{{ trigger.from_state is not none and trigger.to_state is not none and trigger.from_state.state != trigger.to_state.state }}{% else %}true{% endif %}
@@ -458,23 +468,43 @@ automation:
                   - returning
                   - paused
             sequence:
+              # Phase-aware status: says which stage (vacuum vs mop) is running, and
+              # tags the vacuum stage "(1/2)" only when a mop is actually queued
+              # right behind it (input_boolean.x40_ultra_mop_after_current_pass).
+              # x40_ultra_main_level_mop_only is invoked ONLY from
+              # x40_ultra_main_level_mop_after_vacuum (never standalone), so an
+              # observed "mopping" mode always means stage 2 of 2 with nothing further
+              # coming up — no flag needed to label that side. A single-stage run
+              # (segment clean, maintenance pass, or a full-floor pass with no mop
+              # due) shows no phase count at all, per its actual single-stage nature.
               - action: notify.mobile_app_wethop
                 data:
                   title: Vacuum
                   message: >-
                     {% set v = states('vacuum.x40_ultra') %}{% set r =
-                    states('sensor.x40_ultra_current_room') %}{% if v == 'returning' %}Returning
-                    to dock{% elif v == 'paused' %}Paused{% elif r not in
-                    ['unknown','unavailable','',None] %}Cleaning {{ r }}{% else %}Cleaning{% endif %}
+                    states('sensor.x40_ultra_current_room') %}{% set mode =
+                    states('select.x40_ultra_cleaning_mode') %}{% set two_stage =
+                    is_state('input_boolean.x40_ultra_mop_after_current_pass', 'on') %}{% set rs =
+                    ' ' ~ r if r not in ['unknown','unavailable','',None] else '' %}{% if v ==
+                    'returning' %}Returning to dock{% elif v == 'paused' %}Paused{% elif mode ==
+                    'mopping' %}Mopping{{ rs }} (2/2){% elif mode == 'sweeping' and two_stage
+                    %}Vacuuming{{ rs }} (1/2){% elif mode == 'sweeping' %}Vacuuming{{ rs }}{% elif
+                    rs %}Cleaning{{ rs }}{% else %}Cleaning{% endif %}
                   data:
                     tag: x40_vacuum
                     live_update: true
                     progress: "{{ states('sensor.x40_ultra_cleaning_progress') | int(0) }}"
                     progress_max: 100
                     critical_text: "{{ states('sensor.x40_ultra_cleaning_progress') | int(0) }}%"
-                    notification_icon: mdi:robot-vacuum
-                    notification_icon_color: "#1E88E5"
-                    progress_bar_color: "#1E88E5"
+                    notification_icon: >-
+                      {{ 'mdi:water' if is_state('select.x40_ultra_cleaning_mode', 'mopping') else
+                      'mdi:robot-vacuum' }}
+                    notification_icon_color: >-
+                      {{ '#00ACC1' if is_state('select.x40_ultra_cleaning_mode', 'mopping') else
+                      '#1E88E5' }}
+                    progress_bar_color: >-
+                      {{ '#00ACC1' if is_state('select.x40_ultra_cleaning_mode', 'mopping') else
+                      '#1E88E5' }}
                     url: /lovelace/0
 
   - id: washer_live_activity
