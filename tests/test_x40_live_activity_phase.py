@@ -115,11 +115,17 @@ def test_live_activity_triggers_on_mode_and_orchestrator_state() -> None:
     assert "input_boolean.x40_ultra_mop_after_current_pass" not in block
 
 
-def test_live_activity_completion_branch_skips_interim_dock() -> None:
-    # Skip the false "Cleaning complete" on the interim dock between the two
-    # stages of a vacuum-then-mop run (orchestrator still running + mode
-    # still "sweeping") — the genuine final dock (mode already "mopping")
-    # still reaches this branch normally.
+def test_live_activity_completion_branch_suppressed_while_orchestrator_runs() -> None:
+    # Round 3 of Codex review: a mode-based ("still sweeping") guard reads
+    # LIVE state at whatever moment this mode: queued automation's instance
+    # happens to dequeue — which can be well after the trigger fired if it
+    # queued behind an earlier room/progress notification, by which point the
+    # mode may have already flipped to "mopping". The fix drops the mode
+    # check entirely: suppress for the WHOLE window the orchestrator script
+    # is "on" (interim AND final dock alike), since the orchestrator now
+    # resolves the notification itself on both of its own outcomes — nothing
+    # here needs to guess which dock this is, so there is no live state left
+    # to go stale.
     block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
 
     # Use the actual message key, not the bare phrase: an earlier code
@@ -127,17 +133,51 @@ def test_live_activity_completion_branch_skips_interim_dock() -> None:
     # prose, which would otherwise match first.
     complete_index = block.index("message: Cleaning complete")
     preceding = block[:complete_index]
-    not_index = preceding.rindex("condition: not")
-    guarded = preceding[not_index:]
 
-    # HA's `not` condition is a logical NOR across its list, so negating a
-    # two-clause AND requires nesting an explicit `and`, not two bare
-    # siblings under `not` (which would require BOTH to be false to pass).
-    assert "condition: and" in guarded
-    assert "script.x40_ultra_main_level_mop_after_vacuum" in guarded
-    assert "select.x40_ultra_cleaning_mode" in guarded
-    assert 'state: "on"' in guarded
-    assert 'state: "sweeping"' in guarded
+    guard_index = preceding.rindex("entity_id: script.x40_ultra_main_level_mop_after_vacuum")
+    guard = preceding[guard_index : guard_index + 120]
+
+    assert 'state: "off"' in guard
+    # No mode-based condition should remain on this branch at all.
+    assert "select.x40_ultra_cleaning_mode" not in preceding[preceding.rindex("- conditions:") :]
+
+
+def test_mop_after_vacuum_resolves_notification_on_success() -> None:
+    # Since the generic branch above now suppresses for the entire time this
+    # script is "on" (including its own final dock), this script must
+    # explicitly post the "Cleaning complete" equivalent itself once the mop
+    # stage finishes — otherwise a genuine two-stage completion would never
+    # get a completion notification at all.
+    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+
+    mop_only_index = block.index("action: script.x40_ultra_main_level_mop_only")
+    then_index = block.index("then:")
+    else_index = block.index("else:")
+    assert then_index < mop_only_index < else_index
+
+    success_section = block[mop_only_index:else_index]
+    assert "message: Cleaning complete" in success_section
+    assert "clear_notification" in success_section
+    assert "delay:" in success_section
+
+
+def test_mop_after_vacuum_resolves_notification_on_skip() -> None:
+    # Codex P2: an arrival-triggered return-to-base (vacuum_return_home in
+    # packages/zone.yaml) can dock the robot before it finishes, skipping the
+    # mop. Because the generic Live Activity branch suppresses that dock too
+    # (this script was still "on"), the Live Activity was left stuck on
+    # whatever it last said (e.g. "Returning to dock") with nothing to ever
+    # resolve it. This script must explicitly clear/finalize its own
+    # notification on the skip path too.
+    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
+
+    else_index = block.index("else:")
+    skip_section = block[else_index:]
+
+    assert "mop was" in skip_section  # the existing notify.all skip message
+    assert "tag: x40_vacuum" in skip_section
+    assert "live_update: true" in skip_section
+    assert "clear_notification" in skip_section
 
 
 def test_live_activity_mopping_label_gated_on_orchestrator_state() -> None:

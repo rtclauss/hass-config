@@ -427,23 +427,22 @@ automation:
               # "Cleaning complete".
               - condition: template
                 value_template: "{{ trigger.from_state.state in ['cleaning', 'returning', 'paused'] }}"
-              # Skip this branch for the INTERIM dock between the two stages of a
-              # vacuum-then-mop run (cleaning_mode still "sweeping" while the mop
-              # is queued right behind it) — otherwise this posts a false
-              # "Cleaning complete", and because this automation is mode: queued,
-              # the 2-minute delay below blocks the subsequent "Mopping (2/2)"
-              # update behind it. The genuine FINAL dock (mode already flipped to
-              # "mopping") still reaches this branch normally.
-              - condition: not
-                conditions:
-                  - condition: and
-                    conditions:
-                      - condition: state
-                        entity_id: script.x40_ultra_main_level_mop_after_vacuum
-                        state: "on"
-                      - condition: state
-                        entity_id: select.x40_ultra_cleaning_mode
-                        state: "sweeping"
+              # Suppress this branch for EVERY dock while the two-stage
+              # orchestrator is running (script.x40_ultra_main_level_mop_after_vacuum
+              # 'on') — that covers both the interim dock between stages and
+              # the genuine final one, since there is no way to tell them
+              # apart here without reading OTHER mutable state (e.g. the
+              # cleaning-mode select) that can itself go stale by the time a
+              # queued instance of this automation actually executes (Codex
+              # P2: a dock trigger queued behind an earlier room/progress
+              # notification could dequeue after the mode had already flipped
+              # to "mopping", defeating a mode-based check). Instead, the
+              # orchestrator resolves the notification itself on BOTH of its
+              # own outcomes — see x40_ultra_main_level_mop_after_vacuum — so
+              # nothing here needs to guess which dock this is.
+              - condition: state
+                entity_id: script.x40_ultra_main_level_mop_after_vacuum
+                state: "off"
             sequence:
               - action: notify.mobile_app_wethop
                 data:
