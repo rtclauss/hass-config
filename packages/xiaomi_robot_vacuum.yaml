@@ -342,11 +342,16 @@ input_boolean:
   # vacuum-then-mop sequence, so the notification can show "mop next" instead
   # of implying a single-stage vacuum. Reset at the start of EVERY
   # x40_ultra_main_level_vacuum_only call (true or false, not just when true)
-  # so a stale value from an interrupted run never leaks into a later,
-  # unrelated pass (e.g. a segment clean or a single-stage maintenance run).
+  # and at the start of x40_ultra_segment_vacuum_only (always false there — a
+  # segment clean never mops), so a stale value from an interrupted run never
+  # leaks into a later, unrelated pass. `initial: false` additionally forces
+  # it off on every HA restart: no in-flight two-stage sequence survives a
+  # restart (the orchestrating script is gone), so restoring a stale "on"
+  # would misreport a mop as still queued when it will not actually resume.
   x40_ultra_mop_after_current_pass:
     name: X40 Ultra Mop After Current Pass
     icon: mdi:water
+    initial: false
 
 ########################
 # Input Datetime
@@ -1228,6 +1233,14 @@ script:
         description: "Cleaning passes over the segment (1-3). Defaults to 1."
         example: 1
     sequence:
+      # A segment clean never mops, so unconditionally clear the Live Activity
+      # phase flag on every call — otherwise a stale "on" left behind by an
+      # interrupted two-stage main-level run (x40_ultra_main_level_vacuum_only
+      # is the only other place that touches this flag) would mislabel this
+      # unrelated segment pass as "Vacuuming (1/2)".
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_mop_after_current_pass
       # Do not disable CleanGenius or touch the cleaning mode unless the X40 is
       # at rest: an external (manual/app) run must gate us out BEFORE any config
       # mutation, so we never change controls on a robot that is mid-run. Only

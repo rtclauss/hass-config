@@ -423,6 +423,23 @@ automation:
               # "Cleaning complete".
               - condition: template
                 value_template: "{{ trigger.from_state.state in ['cleaning', 'returning', 'paused'] }}"
+              # Skip this branch for the INTERIM dock between the two stages of a
+              # vacuum-then-mop run (cleaning_mode still "sweeping" while the mop
+              # is queued right behind it) — otherwise this posts a false
+              # "Cleaning complete", and because this automation is mode: queued,
+              # the 2-minute delay below blocks the subsequent "Mopping (2/2)"
+              # update behind it. The genuine FINAL dock (mode already flipped to
+              # "mopping") still reaches this branch normally.
+              - condition: not
+                conditions:
+                  - condition: and
+                    conditions:
+                      - condition: state
+                        entity_id: input_boolean.x40_ultra_mop_after_current_pass
+                        state: "on"
+                      - condition: state
+                        entity_id: select.x40_ultra_cleaning_mode
+                        state: "sweeping"
             sequence:
               - action: notify.mobile_app_wethop
                 data:
@@ -469,14 +486,15 @@ automation:
                   - paused
             sequence:
               # Phase-aware status: says which stage (vacuum vs mop) is running, and
-              # tags the vacuum stage "(1/2)" only when a mop is actually queued
-              # right behind it (input_boolean.x40_ultra_mop_after_current_pass).
-              # x40_ultra_main_level_mop_only is invoked ONLY from
-              # x40_ultra_main_level_mop_after_vacuum (never standalone), so an
-              # observed "mopping" mode always means stage 2 of 2 with nothing further
-              # coming up — no flag needed to label that side. A single-stage run
-              # (segment clean, maintenance pass, or a full-floor pass with no mop
-              # due) shows no phase count at all, per its actual single-stage nature.
+              # tags EITHER stage with a phase count only when
+              # input_boolean.x40_ultra_mop_after_current_pass is actually on — it
+              # stays on for the full duration of both stages of an orchestrated
+              # two-stage run (vacuum through mop), so "(2/2)" here does mean the
+              # second half of a real pair. Without that flag, a standalone/manual
+              # mop (called directly, or started from the Dreame app itself) shows
+              # plain "Mopping" instead of falsely implying a vacuum pass preceded
+              # it. A single-stage vacuum (segment clean, maintenance pass, or a
+              # full-floor pass with no mop due) likewise shows no phase count.
               - action: notify.mobile_app_wethop
                 data:
                   title: Vacuum
@@ -487,9 +505,10 @@ automation:
                     is_state('input_boolean.x40_ultra_mop_after_current_pass', 'on') %}{% set rs =
                     ' ' ~ r if r not in ['unknown','unavailable','',None] else '' %}{% if v ==
                     'returning' %}Returning to dock{% elif v == 'paused' %}Paused{% elif mode ==
-                    'mopping' %}Mopping{{ rs }} (2/2){% elif mode == 'sweeping' and two_stage
-                    %}Vacuuming{{ rs }} (1/2){% elif mode == 'sweeping' %}Vacuuming{{ rs }}{% elif
-                    rs %}Cleaning{{ rs }}{% else %}Cleaning{% endif %}
+                    'mopping' and two_stage %}Mopping{{ rs }} (2/2){% elif mode == 'mopping'
+                    %}Mopping{{ rs }}{% elif mode == 'sweeping' and two_stage %}Vacuuming{{ rs }}
+                    (1/2){% elif mode == 'sweeping' %}Vacuuming{{ rs }}{% elif rs %}Cleaning{{ rs
+                    }}{% else %}Cleaning{% endif %}
                   data:
                     tag: x40_vacuum
                     live_update: true
