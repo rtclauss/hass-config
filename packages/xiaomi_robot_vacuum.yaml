@@ -337,6 +337,20 @@ input_boolean:
   x40_ultra_vacuum_pass_completed:
     name: X40 Ultra Vacuum Pass Completed
     icon: mdi:robot-vacuum
+  # Same run-scoped-latch pattern as x40_ultra_vacuum_pass_completed, for the
+  # mop stage: reset off at the start of every x40_ultra_main_level_mop_only
+  # pass, set on only on a real `completed` finish. x40_ultra_mop_pass_pending
+  # cannot serve this purpose — it is a cross-run "mop owed" debt flag that
+  # can already read "off" on ENTRY (time-based due, not a forced retry), so
+  # a failed mop that started already-off would leave it off and look like a
+  # success. This latch is consumed synchronously by the same calling script
+  # (x40_ultra_main_level_mop_after_vacuum) immediately after the call
+  # returns — not by a separate asynchronous automation — so, like its vacuum
+  # counterpart, it carries none of the cross-automation staleness risk that
+  # affected the removed phase-tracking flag.
+  x40_ultra_mop_pass_completed:
+    name: X40 Ultra Mop Pass Completed
+    icon: mdi:robot-vacuum
 
 ########################
 # Input Datetime
@@ -753,9 +767,17 @@ script:
       Live Activity completion branch therefore suppresses EVERY dock while
       this script is "on" (it cannot tell an interim dock from the final one
       without re-introducing the same staleness problem), THIS script is
-      responsible for explicitly resolving the notification on both of its
-      own outcomes below — the interim dock in between gets no notification
-      of its own, which is correct: nothing is actually finished yet.
+      responsible for explicitly posting the outcome message on all three of
+      its endings below (vacuum skipped, mop skipped/incomplete, or genuine
+      success) the instant each is known — the interim dock in between gets
+      no message of its own, which is correct: nothing is actually finished
+      yet. The 2-minute wait-then-clear that used to follow each message
+      here now lives in packages/cleaning.yaml instead, keyed off this
+      script's own on->off transition: a delay INSIDE this script is exactly
+      as reload-cancellable as the phase flag this script replaced, so
+      script.reload firing mid-delay (packages/media_player.yaml calls it)
+      would strand the notification forever with no clear ever firing. A
+      delay living in the automation is immune to script.reload entirely.
     mode: queued
     trace:
       stored_traces: 10
@@ -777,31 +799,46 @@ script:
             state: "on"
         then:
           - action: script.x40_ultra_main_level_mop_only
-          # The generic Live Activity branch suppresses ANY dock while this
-          # script is "on" (see packages/cleaning.yaml), since a dock partway
-          # through could be the interim one between stages rather than a
-          # real finish. Explicitly resolve the notification here so it
-          # matches the generic branch's own payload exactly instead of
-          # leaving whatever progress message was last shown.
-          - action: notify.mobile_app_wethop
-            data:
-              title: Vacuum
-              message: Cleaning complete
-              data:
-                tag: x40_vacuum
-                live_update: true
-                progress: 100
-                progress_max: 100
-                critical_text: Done
-                notification_icon: mdi:robot-vacuum
-                notification_icon_color: "#43A047"
-                progress_bar_color: "#43A047"
-          - delay: "00:02:00"
-          - action: notify.mobile_app_wethop
-            data:
-              message: clear_notification
-              data:
-                tag: x40_vacuum
+          # x40_ultra_main_level_mop_only can itself fail to complete (mode
+          # select rejected, a no-op start, or a real run that never reached
+          # `completed`) WITHOUT erroring — it just returns normally, having
+          # left its own run-scoped x40_ultra_mop_pass_completed latch off.
+          # Check THAT (not the cross-run x40_ultra_mop_pass_pending debt
+          # flag, which can already read "off" on entry for a time-based-due
+          # mop, making a failure indistinguishable from success) rather than
+          # assuming the call returning means the mop succeeded.
+          - if:
+              - condition: state
+                entity_id: input_boolean.x40_ultra_mop_pass_completed
+                state: "on"
+            then:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Vacuum
+                  message: Cleaning complete
+                  data:
+                    tag: x40_vacuum
+                    live_update: true
+                    progress: 100
+                    progress_max: 100
+                    critical_text: Done
+                    notification_icon: mdi:robot-vacuum
+                    notification_icon_color: "#43A047"
+                    progress_bar_color: "#43A047"
+            else:
+              - action: notify.mobile_app_wethop
+                data:
+                  title: Vacuum
+                  message: "Mop pass did not finish cleanly"
+                  data:
+                    tag: x40_vacuum
+                    live_update: true
+                    progress: 100
+                    progress_max: 100
+                    critical_text: Incomplete
+                    notification_icon: mdi:robot-vacuum-alert
+                    notification_icon_color: "#FB8C00"
+                    progress_bar_color: "#FB8C00"
         else:
           - action: notify.all
             data:
@@ -828,12 +865,6 @@ script:
                 notification_icon: mdi:robot-vacuum-alert
                 notification_icon_color: "#FB8C00"
                 progress_bar_color: "#FB8C00"
-          - delay: "00:02:00"
-          - action: notify.mobile_app_wethop
-            data:
-              message: clear_notification
-              data:
-                tag: x40_vacuum
 
   x40_ultra_main_level_mop_only:
     alias: "X40 Ultra Main Level Mop Only"
@@ -856,6 +887,12 @@ script:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.x40_ultra_mop_pass_pending
+      # Reset the run-scoped completion latch: only THIS pass reaching a real
+      # `completed` finish may set it on, so a failed/no-op run leaves it off
+      # regardless of what x40_ultra_mop_pass_pending happened to read on entry.
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.x40_ultra_mop_pass_completed
       - action: script.x40_ultra_prepare_deterministic_cleaning
       # Recheck rest AFTER preparation and BEFORE changing the mode: the
       # dispatcher's entry gate can go stale during prepare's up-to-30s wait. If
@@ -943,6 +980,9 @@ script:
                   - action: input_boolean.turn_off
                     target:
                       entity_id: input_boolean.x40_ultra_mop_pass_pending
+                  - action: input_boolean.turn_on
+                    target:
+                      entity_id: input_boolean.x40_ultra_mop_pass_completed
                 else:
                   - action: notify.all
                     data:

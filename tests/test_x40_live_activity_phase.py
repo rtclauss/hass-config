@@ -142,42 +142,89 @@ def test_live_activity_completion_branch_suppressed_while_orchestrator_runs() ->
     assert "select.x40_ultra_cleaning_mode" not in preceding[preceding.rindex("- conditions:") :]
 
 
-def test_mop_after_vacuum_resolves_notification_on_success() -> None:
-    # Since the generic branch above now suppresses for the entire time this
-    # script is "on" (including its own final dock), this script must
-    # explicitly post the "Cleaning complete" equivalent itself once the mop
-    # stage finishes — otherwise a genuine two-stage completion would never
-    # get a completion notification at all.
+def test_mop_only_has_its_own_run_scoped_completion_latch() -> None:
+    # Codex P2: x40_ultra_main_level_mop_only can fail to complete (rejected
+    # mode, no-op start, or a real run that never reached `completed`)
+    # WITHOUT erroring — it just returns normally. x40_ultra_mop_pass_pending
+    # cannot signal that failure on its own: it is a cross-run "mop owed"
+    # debt flag that can already read "off" on entry (time-based due, not a
+    # forced retry), so a failure that started already-off would look
+    # identical to a success. A dedicated run-scoped latch (reset off at
+    # start, set on only on a real `completed` finish — the same pattern as
+    # x40_ultra_vacuum_pass_completed) is needed to tell them apart.
+    text = VACUUM_PATH.read_text(encoding="utf-8")
+    assert "x40_ultra_mop_pass_completed:" in text
+
+    block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_only")
+    reset_index = block.index("action: input_boolean.turn_off")
+    assert "x40_ultra_mop_pass_completed" in block[reset_index : reset_index + 150]
+
+    set_on_index = block.rindex("action: input_boolean.turn_on")
+    assert "x40_ultra_mop_pass_completed" in block[set_on_index : set_on_index + 150]
+    # The set-on-success step must sit alongside setting last_mopped_at /
+    # clearing the pending debt, i.e. inside the genuine `completed` branch.
+    assert "input_datetime.x40_ultra_last_mopped_at" in block[: set_on_index][-400:]
+
+
+def test_mop_after_vacuum_checks_mop_completion_latch_not_pending_flag() -> None:
     block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
 
     mop_only_index = block.index("action: script.x40_ultra_main_level_mop_only")
     then_index = block.index("then:")
-    else_index = block.index("else:")
-    assert then_index < mop_only_index < else_index
+    # The OUTER else (vacuum-skip branch) starts with its distinctive
+    # notify.all action; a bare "else:" would instead match the NEW inner
+    # if/else this fix adds (Cleaning complete vs. Mop pass did not finish
+    # cleanly), which sits between here and the outer else.
+    outer_else_marker = block.index("action: notify.all")
+    assert then_index < mop_only_index < outer_else_marker
 
-    success_section = block[mop_only_index:else_index]
+    success_section = block[mop_only_index:outer_else_marker]
+    assert "x40_ultra_mop_pass_completed" in success_section
     assert "message: Cleaning complete" in success_section
-    assert "clear_notification" in success_section
-    assert "delay:" in success_section
+    assert "Mop pass did not finish cleanly" in success_section
+
+    # The 2-minute wait-then-clear moved OUT of this script entirely (Codex
+    # P2: a delay inside this script is cancelled outright by script.reload,
+    # stranding the notification with nothing left to run the clear); it now
+    # lives in packages/cleaning.yaml, keyed off this script's own end.
+    assert "delay:" not in success_section
+    assert "clear_notification" not in success_section
 
 
-def test_mop_after_vacuum_resolves_notification_on_skip() -> None:
-    # Codex P2: an arrival-triggered return-to-base (vacuum_return_home in
-    # packages/zone.yaml) can dock the robot before it finishes, skipping the
-    # mop. Because the generic Live Activity branch suppresses that dock too
-    # (this script was still "on"), the Live Activity was left stuck on
-    # whatever it last said (e.g. "Returning to dock") with nothing to ever
-    # resolve it. This script must explicitly clear/finalize its own
-    # notification on the skip path too.
+def test_mop_after_vacuum_skip_branch_has_no_in_script_delay() -> None:
     block = _script_block(VACUUM_PATH, "x40_ultra_main_level_mop_after_vacuum")
 
-    else_index = block.index("else:")
-    skip_section = block[else_index:]
+    # A bare "else:" would match the NEW inner if/else added to the success
+    # branch first; the outer else (this skip branch) starts with its
+    # distinctive notify.all action instead.
+    outer_else_marker = block.index("action: notify.all")
+    skip_section = block[outer_else_marker:]
 
     assert "mop was" in skip_section  # the existing notify.all skip message
     assert "tag: x40_vacuum" in skip_section
     assert "live_update: true" in skip_section
-    assert "clear_notification" in skip_section
+    # Same reasoning as the success branch: no delay/clear left in the script.
+    assert "delay:" not in skip_section
+    assert "clear_notification" not in skip_section
+
+
+def test_live_activity_finalizes_orchestrator_end_outside_the_script() -> None:
+    # The wait-then-clear for ALL of the orchestrator's outcomes now lives
+    # here, keyed off its on->off transition, specifically because an
+    # automation (unlike a script) is immune to script.reload.
+    block = _automation_block(CLEANING_PATH, "x40_vacuum_live_activity")
+
+    assert 'entity_id: script.x40_ultra_main_level_mop_after_vacuum\n        to: "off"' in block
+    assert "id: orchestrator_end" in block
+
+    # "id: orchestrator_end" appears twice: once defining the trigger, once
+    # referencing it in the choose branch's conditions — use the LATTER
+    # (the branch that actually finalizes the notification).
+    branch_index = block.rindex("id: orchestrator_end")
+    finalize_section = block[branch_index : branch_index + 400]
+    assert "state: docked" in finalize_section
+    assert "delay:" in finalize_section
+    assert "clear_notification" in finalize_section
 
 
 def test_live_activity_mopping_label_gated_on_orchestrator_state() -> None:
