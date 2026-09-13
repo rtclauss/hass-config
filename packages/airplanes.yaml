@@ -290,7 +290,8 @@ sensor:
     headers:
       User-Agent: "HomeAssistant/1.0 (aircraft display)"
     value_template: >-
-      {{ (value_json.photos | length) if value_json.photos is defined else 0 }}
+      {% set payload = value_json if value_json is defined and value_json is mapping else {} %}
+      {{ payload.get('photos', []) | length }}
     json_attributes:
       - photos
 
@@ -306,7 +307,8 @@ sensor:
       {% endif %}
     scan_interval: 20
     value_template: >-
-      {{ value_json.response is defined }}
+      {% set payload = value_json if value_json is defined and value_json is mapping else {} %}
+      {{ 'response' in payload }}
     json_attributes:
       - response
 
