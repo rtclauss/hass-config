@@ -1,0 +1,27 @@
+services:
+  loki:
+    image: grafana/loki:2.9.10
+    container_name: loki
+    restart: unless-stopped
+    # data/ is owned by root (no sudo available to chown to uid 10001)
+    user: "0:0"
+    ports:
+      # loki-config.yaml sets auth_enabled: false, so this API is unauthenticated:
+      # anyone who can reach it can read HA logs or inject streams. Publishing
+      # "3100:3100" would bind every interface on a multi-homed host. Bind the
+      # two interfaces that are actually needed instead, and nothing else.
+      #
+      # Loopback: Grafana runs natively on this host and its provisioned
+      # datasource points at http://localhost:3100. Publishing only the LAN
+      # address leaves 127.0.0.1 unbound, which fails Grafana with a connection
+      # refused — an all-interfaces bind is what previously made it work by
+      # accident.
+      - "127.0.0.1:3100:3100"
+      # LAN: Promtail pushes from the Home Assistant host. LOKI_BIND_ADDR comes
+      # from ~/loki/.env (see .env.example) and is deliberately not committed;
+      # compose fails fast rather than falling back to an all-interfaces bind.
+      - "${LOKI_BIND_ADDR:?set LOKI_BIND_ADDR in ~/loki/.env — see .env.example}:3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/local-config.yaml
+      - ./data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
