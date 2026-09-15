@@ -71,21 +71,69 @@ def test_diy_store_sensor_watches_both_trackers() -> None:
     assert "for tracker in ['zeke', 'tesla']" in block
 
 
-def test_diy_store_sensor_matches_names_loosely() -> None:
+def test_diy_store_sensor_prefers_structured_osm_tagging() -> None:
+    block = _diy_store_sensor_block()
+
+    # The OSM key/value pair is the real category data. Read it from the
+    # extended-data attributes rather than trusting a display name.
+    assert "state_attr(extended, 'osm_dict')" in block
+    assert "osm.get('class') == 'shop'" in block
+    for shop_type in ("doityourself", "hardware", "trade", "paint", "garden_centre"):
+        assert shop_type in block, f"missing shop type {shop_type!r}"
+
+
+def test_diy_store_sensor_does_not_use_the_dead_category_sensor() -> None:
+    block = _diy_store_sensor_block()
+
+    # sensor.<tracker>_place_place_category reads osm_dict["category"], but
+    # Nominatim's reverse endpoint returns that key as "class". The sensor has
+    # been `unknown` on both trackers for the whole recorder window.
+    assert "_place_place_category" not in block
+
+
+def test_diy_store_sensor_excludes_department_stores_structurally() -> None:
+    block = _diy_store_sensor_block()
+
+    # shop=department_store is Target and Walmart as well as Fleet Farm, so it
+    # must not be a structural match. Fleet Farm comes in via its brand tag.
+    assert "department_store" not in block
+
+
+def test_diy_store_sensor_reads_brand_tags() -> None:
+    block = _diy_store_sensor_block()
+
+    # brand/operator are curated OSM tags, not display names, so they are a
+    # better fallback than place_name for stores tagged as something generic.
+    assert "extratags.get('brand', '')" in block
+    assert "extratags.get('operator', '')" in block
+
+
+def test_diy_store_sensor_keeps_a_name_fallback() -> None:
     block = _diy_store_sensor_block()
 
     # Substring search, not equality, so "The Home Depot #2812" still matches.
-    assert "select('search', store_names | join('|'))" in block
+    assert "labels | select('search', brand_pattern)" in block
     assert "| lower" in block
     for brand in ("home depot", "menards", "lowe's", "fleet farm", "ace hardware"):
         assert brand in block, f"missing store keyword {brand!r}"
 
 
-def test_diy_store_sensor_matches_more_than_doityourself() -> None:
+def test_diy_store_sensor_name_fallback_has_no_generic_tokens() -> None:
     block = _diy_store_sensor_block()
 
-    for place_type in ("doityourself", "hardware", "trade", "paint", "garden_centre"):
-        assert place_type in block, f"missing place type {place_type!r}"
+    brand_list = block[block.index("set diy_brands") : block.index("brand_pattern =")]
+    # A bare "hardware" substring would match on name alone; shop=hardware
+    # already covers it structurally.
+    assert "'hardware'" not in brand_list
+
+
+def test_diy_store_sensor_degrades_without_extended_attributes() -> None:
+    block = _diy_store_sensor_block()
+
+    # If the integration's extended attributes are ever turned off, osm_dict is
+    # empty and the plain place_type sensor has to carry the structured check.
+    assert "states('sensor.' ~ tracker ~ '_place_place_type')" in block
+    assert "osm.get('class') is none" in block
 
 
 def test_diy_store_sensor_also_reads_zone_names() -> None:
@@ -284,4 +332,94 @@ def test_arrival_backstop_allowed_when_never_prompted() -> None:
         departed="2026-09-13 13:41:31",
         returned="2026-09-13 16:52:07",
         last_prompt=None,
+    )
+
+
+def _matches_diy_store(
+    *,
+    osm_class: str | None,
+    osm_type: str,
+    extratags: dict[str, str] | None = None,
+    place_name: str = "unknown",
+) -> bool:
+    """Mirror of the three-layer match in binary_sensor.diy_store_visit."""
+    diy_shop_types = {"doityourself", "hardware", "trade", "paint", "garden_centre"}
+    diy_brands = [
+        "home depot",
+        "menards",
+        "lowe's",
+        "lowes",
+        "fleet farm",
+        "ace hardware",
+        "harbor freight",
+        "true value",
+    ]
+    extratags = extratags or {}
+
+    is_shop = osm_class is None or osm_class == "shop"
+    structured = is_shop and osm_type.lower() in diy_shop_types
+
+    def _brand_hit(values: list[str]) -> bool:
+        return any(brand in value.lower() for value in values for brand in diy_brands)
+
+    brand = _brand_hit([extratags.get("brand", ""), extratags.get("operator", "")])
+    name = _brand_hit([place_name])
+    return structured or brand or name
+
+
+def test_structured_tagging_matches_real_diy_stores() -> None:
+    assert _matches_diy_store(osm_class="shop", osm_type="doityourself")
+    assert _matches_diy_store(osm_class="shop", osm_type="hardware")
+    assert _matches_diy_store(osm_class="shop", osm_type="paint")
+
+
+def test_brand_tag_rescues_a_store_tagged_as_a_department_store() -> None:
+    # Fleet Farm is shop=department_store, so only the brand tag can catch it.
+    assert _matches_diy_store(
+        osm_class="shop",
+        osm_type="department_store",
+        extratags={"brand": "Fleet Farm"},
+    )
+
+
+def test_department_stores_alone_do_not_match() -> None:
+    # The same OSM type as Fleet Farm, but no DIY brand: must stay quiet.
+    assert not _matches_diy_store(
+        osm_class="shop",
+        osm_type="department_store",
+        extratags={"brand": "Target"},
+        place_name="Target",
+    )
+
+
+def test_name_fallback_tolerates_store_numbers_and_suffixes() -> None:
+    assert _matches_diy_store(
+        osm_class="building",
+        osm_type="retail",
+        place_name="The Home Depot #2812",
+    )
+    assert _matches_diy_store(
+        osm_class="building",
+        osm_type="retail",
+        place_name="Lowe's Home Improvement",
+    )
+
+
+def test_the_missed_sunday_geocode_still_does_not_match() -> None:
+    # This is what the parking lot actually looked like. Nothing can rescue it,
+    # which is why the arrive-home backstop exists.
+    assert not _matches_diy_store(
+        osm_class="amenity",
+        osm_type="parking",
+        place_name="unknown",
+    )
+
+
+def test_ordinary_places_do_not_match() -> None:
+    assert not _matches_diy_store(osm_class="building", osm_type="house")
+    assert not _matches_diy_store(
+        osm_class="highway", osm_type="primary", place_name="State Highway 4"
+    )
+    assert not _matches_diy_store(
+        osm_class="amenity", osm_type="restaurant", place_name="El Azteca Mexican Restaurant"
     )

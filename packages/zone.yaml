@@ -1446,33 +1446,61 @@ template:
       #   * Real OSM names are not the bare brand ("The Home Depot #2812",
       #     "Lowe's Home Improvement"), so `to:` equality never matched.
       #   * Only the phone was watched, never the car.
-      # Match loosely on every place field both trackers expose, and hold the
-      # sensor on long enough that a single passing fix is still actionable.
+      #
+      # Prefer OSM's structured tagging over the display name. Note that
+      # sensor.<tracker>_place_place_category is NOT that data: it has been
+      # `unknown` on both trackers for the whole recorder window, because the
+      # integration reads osm_dict["category"] while Nominatim's reverse
+      # endpoint returns the key as "class". The real category lives in the
+      # extended-data attributes, so read those directly.
+      #
+      # Three layers, cheapest and most reliable first:
+      #   1. class/type — `shop=doityourself`, `shop=hardware` and friends.
+      #      Deliberately excludes shop=department_store, which would drag in
+      #      every Target and Walmart.
+      #   2. brand/operator from extratags — a curated OSM tag, not a display
+      #      name. This is what catches Fleet Farm, tagged department_store.
+      #   3. place_name / zone_name substring — last resort for a store the
+      #      geocoder named but never tagged. Matching zone_name also means
+      #      store zones, if ever added, need no further wiring here.
       - name: diy_store_visit
         unique_id: diy_store_visit
         default_entity_id: binary_sensor.diy_store_visit
         icon: mdi:store-marker
         delay_off: "00:30:00"
         state: >-
-          {% set store_names = [
-               'home depot', 'menards', "lowe's", 'lowes', 'fleet farm',
-               'ace hardware', 'harbor freight', 'true value', 'hardware'
-             ] %}
-          {% set store_types = [
+          {%- set diy_shop_types = [
                'doityourself', 'hardware', 'trade', 'paint', 'garden_centre'
-             ] %}
-          {% set ns = namespace(at_store=false) %}
-          {% for tracker in ['zeke', 'tesla'] %}
-            {% set place_type = states('sensor.' ~ tracker ~ '_place_place_type') | lower %}
-            {% set labels = [
+             ] -%}
+          {%- set diy_brands = [
+               'home depot', 'menards', "lowe's", 'lowes', 'fleet farm',
+               'ace hardware', 'harbor freight', 'true value'
+             ] -%}
+          {%- set brand_pattern = diy_brands | join('|') -%}
+          {%- set ns = namespace(at_store=false) -%}
+          {%- for tracker in ['zeke', 'tesla'] -%}
+            {%- set extended = 'sensor.' ~ tracker ~ '_place_extended_data' -%}
+            {%- set osm = state_attr(extended, 'osm_dict') or {} -%}
+            {%- set details = state_attr(extended, 'osm_details_dict') or {} -%}
+            {%- set extratags = details.get('extratags') or {} -%}
+            {#- Fall back to the plain sensor if extended attributes are off. -#}
+            {%- set place_type = (
+                 osm.get('type') or states('sensor.' ~ tracker ~ '_place_place_type')
+               ) | lower -%}
+            {%- set is_shop = osm.get('class') is none or osm.get('class') == 'shop' -%}
+            {%- set brand_tags = [
+                 extratags.get('brand', ''), extratags.get('operator', '')
+               ] | map('lower') | list -%}
+            {%- set labels = [
                  states('sensor.' ~ tracker ~ '_place_place_name'),
                  states('sensor.' ~ tracker ~ '_place_zone_name')
-               ] | map('lower') | list %}
-            {% if place_type in store_types
-                  or labels | select('search', store_names | join('|')) | list | count > 0 %}
-              {% set ns.at_store = true %}
-            {% endif %}
-          {% endfor %}
+               ] | map('lower') | list -%}
+            {%- if (is_shop and place_type in diy_shop_types)
+                   or brand_tags | select('search', brand_pattern) | list | count > 0
+                   or labels | select('search', brand_pattern) | list | count > 0 -%}
+              {%- set ns.at_store = true -%}
+            {%- endif -%}
+          {%- endfor -%}
           {{ ns.at_store }}
 
       - name: test_homeward
