@@ -17,7 +17,7 @@ def test_write_config_uses_defaults_when_no_existing_file(tmp_path: Path) -> Non
 
     assert config.decimal_places == 0
     assert config.low_confidence_ok_indexes == ()
-    assert config.nominal_interval_seconds == 600.0
+    assert config.nominal_interval_seconds == 3600.0
 
 
 def test_write_config_preserves_every_existing_field_on_recalibration(tmp_path: Path) -> None:
