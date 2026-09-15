@@ -337,7 +337,20 @@ def read_digits(
     the two answers.
     """
     try:
-        return run_ssocr(image_path, ssocr_args=calibration.ssocr_args)
+        digits = run_ssocr(image_path, ssocr_args=calibration.ssocr_args)
+        if not digits.isdigit() or len(digits) != calibration.digit_count:
+            # ssocr exited 0 but produced something unusable (a partial
+            # read, stray characters) - sanity.validate_reading would reject
+            # this anyway, but only *after* it's already been given the
+            # final answer. Treating it as a failure here instead gives the
+            # VLM/template-match tiers below a chance to actually read the
+            # crop correctly, rather than every malformed-but-nonempty ssocr
+            # hiccup permanently skipping straight to a rejected run.
+            raise OcrError(
+                f"ssocr returned unusable output {digits!r} "
+                f"(expected {calibration.digit_count} numeric digits)"
+            )
+        return digits
     except OcrError as ssocr_error:
         LOG.warning("ssocr failed (%s)", ssocr_error)
 

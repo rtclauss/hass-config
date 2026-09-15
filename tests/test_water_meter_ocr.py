@@ -305,6 +305,47 @@ def _fail(error: Exception):
     return _raise
 
 
+def test_read_digits_falls_through_when_ssocr_returns_unusable_output(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    # Regression test: ssocr can exit 0 but still emit something unusable
+    # (a partial read, stray characters) - previously read_digits trusted
+    # that output outright, so sanity.validate_reading was the only thing
+    # that ever caught it, and only after the VLM/template-match tiers had
+    # already been skipped entirely.
+    monkeypatch.setattr(ocr, "run_ssocr", lambda *a, **k: "1a")  # non-numeric, wrong length too
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda *a, **k: "7")
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(digit_count=1),
+        templates_dir=tmp_path / "templates",  # type: ignore[operator]
+        vlm_host="truenas.local:30068",
+    )
+
+    assert result == "7"
+
+
+def test_read_digits_trusts_ssocr_output_matching_the_configured_digit_count(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    monkeypatch.setattr(ocr, "run_ssocr", lambda *a, **k: "5")
+    monkeypatch.setattr(
+        ocr, "read_digits_vlm", _fail(AssertionError("should not reach the VLM tier"))
+    )
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(digit_count=1),
+        templates_dir=tmp_path / "templates",  # type: ignore[operator]
+        vlm_host="truenas.local:30068",
+    )
+
+    assert result == "5"
+
+
 def test_read_digits_tries_the_vision_llm_after_ssocr_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
