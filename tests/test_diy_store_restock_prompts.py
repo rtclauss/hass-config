@@ -77,7 +77,10 @@ def test_diy_store_sensor_prefers_structured_osm_tagging() -> None:
     # The OSM key/value pair is the real category data. Read it from the
     # extended-data attributes rather than trusting a display name.
     assert "state_attr(extended, 'osm_dict')" in block
-    assert "osm.get('class') == 'shop'" in block
+    assert "osm_class == 'shop'" in block
+    # Nominatim spells the key `class` in `json` and `category` in `jsonv2`.
+    # Accepting both is what keeps this working if upstream switches format.
+    assert "osm.get('class') or osm.get('category')" in block
     for shop_type in ("doityourself", "hardware", "trade", "paint", "garden_centre"):
         assert shop_type in block, f"missing shop type {shop_type!r}"
 
@@ -133,7 +136,7 @@ def test_diy_store_sensor_degrades_without_extended_attributes() -> None:
     # If the integration's extended attributes are ever turned off, osm_dict is
     # empty and the plain place_type sensor has to carry the structured check.
     assert "states('sensor.' ~ tracker ~ '_place_place_type')" in block
-    assert "osm.get('class') is none" in block
+    assert "osm_class is none" in block
 
 
 def test_diy_store_sensor_also_reads_zone_names() -> None:

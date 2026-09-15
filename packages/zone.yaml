@@ -1457,7 +1457,11 @@ template:
       # Three layers, cheapest and most reliable first:
       #   1. class/type — `shop=doityourself`, `shop=hardware` and friends.
       #      Deliberately excludes shop=department_store, which would drag in
-      #      every Target and Walmart.
+      #      every Target and Walmart. Accept either spelling of the key:
+      #      Nominatim's `json` format calls it `class` and `jsonv2` calls it
+      #      `category`, and that difference is the whole reason the dedicated
+      #      category sensor is empty. If upstream switches formats, this keeps
+      #      working.
       #   2. brand/operator from extratags — a curated OSM tag, not a display
       #      name. This is what catches Fleet Farm, tagged department_store.
       #   3. place_name / zone_name substring — last resort for a store the
@@ -1487,7 +1491,8 @@ template:
             {%- set place_type = (
                  osm.get('type') or states('sensor.' ~ tracker ~ '_place_place_type')
                ) | lower -%}
-            {%- set is_shop = osm.get('class') is none or osm.get('class') == 'shop' -%}
+            {%- set osm_class = osm.get('class') or osm.get('category') -%}
+            {%- set is_shop = osm_class is none or osm_class == 'shop' -%}
             {%- set brand_tags = [
                  extratags.get('brand', ''), extratags.get('operator', '')
                ] | map('lower') | list -%}
