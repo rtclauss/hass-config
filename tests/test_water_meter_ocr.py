@@ -125,6 +125,22 @@ def test_bootstrap_disables_low_confidence_exemptions(monkeypatch: pytest.Monkey
         )
 
 
+def test_bootstrap_enforces_confidence_even_with_a_complete_template_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Regression test: a complete 0-9 template set used to disable the
+    # confidence gate unconditionally, including for bootstrap reads - a
+    # blurred/unrelated crop scoring low against every template could seed
+    # last_good_reading.json with a wrong value, with no sanity check able
+    # to catch it after the fact. Bootstrap must still gate on confidence
+    # even once every label has a template on file.
+    templates = {label: object() for label in ocr.DIGIT_LABELS}  # complete
+    monkeypatch.setattr(ocr, "match_digit", lambda crop, templates: ("4", 0.2))
+
+    with pytest.raises(ocr.OcrError, match="low confidence"):
+        ocr.match_digits(["crop"], templates, min_confidence=0.5, bootstrap=True)
+
+
 def test_bootstrap_still_trusts_a_genuinely_high_confidence_match(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

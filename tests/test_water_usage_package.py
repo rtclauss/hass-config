@@ -33,6 +33,7 @@ def test_package_tags_new_entities_with_water_usage_package() -> None:
         "sensor.owner_suite_bathroom_humidity_events_today",
         "sensor.basement_bathroom_humidity_events_today",
         "sensor.guest_bathroom_humidity_events_today",
+        "input_number.water_meter_reading_at_arm",
     ):
         assert f"{entity_id}:" in text
 
@@ -91,6 +92,33 @@ def test_leak_automation_requires_sustained_armed_state_and_gates_repeat_alerts(
     # Must not re-notify every 10-minute reading for the whole armed episode.
     assert "input_boolean.water_leak_alert_sent" in block
     assert "notify.all" in block
+
+
+def test_leak_check_compares_against_arm_time_baseline_not_the_previous_poll() -> None:
+    # Regression test: comparing only trigger.from_state vs trigger.to_state
+    # misses a slow leak that adds less than the threshold on every single
+    # 10-minute poll (e.g. 0.9 gal/poll against a 1 gal threshold - never
+    # trips, despite 40+ gal overnight). The fix compares against a baseline
+    # captured once per armed episode instead.
+    block = _automation_block("water_leak_while_armed")
+
+    assert "input_number.water_meter_reading_at_arm" in block
+    assert "trigger.from_state.state | float" not in block
+
+
+def test_arm_baseline_automation_captures_the_reading_when_armed() -> None:
+    block = _automation_block("water_meter_capture_arm_baseline")
+
+    assert "entity_id: alarm_control_panel.home_alarm" in block
+    assert "armed_away" in block
+    assert "armed_night" in block
+    # Must also backfill on an HA restart while already armed, not only on
+    # the armed transition itself - otherwise a restart mid-armed-episode
+    # leaves a stale (or nonexistent) baseline.
+    assert "event: start" in block
+    assert "input_number.set_value" in block
+    assert "input_number.water_meter_reading_at_arm" in block
+    assert "states('sensor.water_meter')" in block
 
 
 def test_leak_alert_reset_clears_flag_on_disarm() -> None:

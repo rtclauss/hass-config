@@ -12,6 +12,13 @@ DEFAULT_FRAMES_TO_DISCARD = 2
 DEFAULT_FRAMES_TO_GRAB = 4
 DEFAULT_HISTORY_LIMIT = 200
 DEFAULT_MAX_GALLONS_PER_INTERVAL = 500.0
+# Matches the systemd timer's OnUnitActiveSec (deploy/systemd/water-meter-
+# reader.timer). sanity.validate_reading scales max_gallons_per_interval by
+# elapsed-time-since-last-good-reading / this value, so a run that's late
+# (skipped/rejected polls, a watchdog reboot) gets a proportionally larger
+# allowance instead of comparing accumulated usage against a limit sized for
+# a single interval - see sanity.py for the incident that motivated this.
+DEFAULT_NOMINAL_INTERVAL_SECONDS = 600.0
 DEFAULT_STUCK_AFTER_HOURS = 24.0
 # 204/254 (~80%): bench-tested against the real jig. 100% blows out the LCD
 # with direct glare (unreadable); 60-80% both read cleanly, so 80% gives the
@@ -154,6 +161,10 @@ class CalibrationConfig:
     # reject, so the confidence gate protects nothing here and only blocks
     # every other, genuinely reliable digit from ever being accepted.
     low_confidence_ok_indexes: tuple[int, ...] = ()
+    # See DEFAULT_NOMINAL_INTERVAL_SECONDS - must match the deployed timer's
+    # OnUnitActiveSec for the elapsed-interval scaling in
+    # sanity.validate_reading to mean what its name says.
+    nominal_interval_seconds: float = DEFAULT_NOMINAL_INTERVAL_SECONDS
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -170,6 +181,7 @@ class CalibrationConfig:
             "ssocr_args": list(self.ssocr_args),
             "decimal_places": self.decimal_places,
             "low_confidence_ok_indexes": list(self.low_confidence_ok_indexes),
+            "nominal_interval_seconds": self.nominal_interval_seconds,
         }
 
 
@@ -196,6 +208,9 @@ def calibration_config_from_dict(data: dict[str, Any]) -> CalibrationConfig:
         decimal_places=int(data.get("decimal_places", 0)),
         low_confidence_ok_indexes=tuple(
             int(v) for v in data.get("low_confidence_ok_indexes", [])
+        ),
+        nominal_interval_seconds=float(
+            data.get("nominal_interval_seconds", DEFAULT_NOMINAL_INTERVAL_SECONDS)
         ),
     )
 

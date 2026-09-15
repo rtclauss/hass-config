@@ -61,13 +61,14 @@ def validate_reading(
     now: datetime | None = None,
     history_limit: int = 20,
     decimal_places: int = 0,
+    nominal_interval_seconds: float = 600.0,
 ) -> ValidationResult:
     """Gate a freshly-OCR'd reading before it is ever published to HA.
 
     Rejects anything that isn't a clean numeric read of the expected digit
     count, that runs backward, or that jumps further than physically
-    plausible for one polling interval. A bad read must never reach HA's
-    long-term (total_increasing) statistics.
+    plausible given how long it's actually been since the last good reading.
+    A bad read must never reach HA's long-term (total_increasing) statistics.
 
     decimal_places treats the LAST N OCR'd digits as fractional - this
     meter's display has a fixed decimal point before its final digit (e.g.
@@ -76,6 +77,20 @@ def validate_reading(
     in these same real-gallons units regardless of decimal_places, so its
     meaning (max plausible flow per polling interval) doesn't shift when
     this changes.
+
+    max_gallons_per_interval is a *rate* cap (plausible usage per
+    nominal_interval_seconds), not a flat ceiling on the delta since
+    last_good - it's scaled by how many nominal intervals have actually
+    elapsed since last_good.timestamp. Comparing accumulated usage against a
+    limit sized for a single interval was a real bug: if one or more polls
+    are skipped or rejected (a watchdog reboot, a run of OCR failures), the
+    real delta since the last *accepted* reading keeps growing across every
+    missed interval, but a flat per-interval cap would reject it forever -
+    last_good never advances, so the next real reading looks like an even
+    bigger "jump," permanently blocking a meter that's actually just fine.
+    Elapsed time below one nominal interval still gets the full single-
+    interval allowance (the floor of 1.0 below), matching the original
+    single-interval-apart behavior for the common on-time case.
     """
     now = now or datetime.now(timezone.utc)
 
@@ -98,11 +113,19 @@ def validate_reading(
         )
 
     delta = value - last_good.value
-    if delta > max_gallons_per_interval:
+    last_good_time = datetime.fromisoformat(last_good.timestamp)
+    if last_good_time.tzinfo is None:
+        last_good_time = last_good_time.replace(tzinfo=timezone.utc)
+    elapsed_seconds = max(0.0, (now - last_good_time).total_seconds())
+    intervals_elapsed = max(1.0, elapsed_seconds / nominal_interval_seconds)
+    allowance = max_gallons_per_interval * intervals_elapsed
+    if delta > allowance:
         return ValidationResult(
             False,
             None,
-            f"implausible jump: +{delta} exceeds max {max_gallons_per_interval}",
+            f"implausible jump: +{delta} exceeds max {allowance} "
+            f"({intervals_elapsed:.1f}x the {max_gallons_per_interval}/interval allowance "
+            f"over {elapsed_seconds:.0f}s since the last good reading)",
         )
 
     history = (*last_good.history, value)[-history_limit:]

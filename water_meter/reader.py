@@ -121,6 +121,7 @@ def run_once(
         now=now,
         history_limit=calibration.history_limit,
         decimal_places=calibration.decimal_places,
+        nominal_interval_seconds=calibration.nominal_interval_seconds,
     )
 
     if not validation.accepted and connection.vlm_host and last_good is not None:
@@ -149,10 +150,20 @@ def default_publisher(connection: ConnectionConfig) -> Publisher:
     def publish(result: RunResult, now: datetime) -> None:
         from paho.mqtt import publish as mqtt_publish
 
+        # A stuck reading is still `accepted` (the value itself is legitimate
+        # and unchanged - see sanity.validate_reading's `stuck` flag), but
+        # publishing "ok" here would make a frozen camera/OCR pipeline look
+        # perfectly healthy forever: packages/water_meter.yaml's staleness
+        # automation only alerts on reading_age or a status starting with
+        # "error", and last_reading_time keeps advancing on every accepted
+        # run (stuck or not), so reading_age never grows either. Reusing the
+        # existing "error:" prefix for a stuck status is what actually makes
+        # the advertised stuck-reading detection reach that automation.
+        healthy = result.accepted and not result.stuck
         messages = [
             {
                 "topic": connection.status_topic,
-                "payload": "ok" if result.accepted else f"error:{result.reason}",
+                "payload": "ok" if healthy else f"error:{result.reason}",
                 "retain": True,
             },
             {
@@ -309,6 +320,7 @@ def _requery_vlm_on_suspect_value(
         now=now,
         history_limit=calibration.history_limit,
         decimal_places=calibration.decimal_places,
+        nominal_interval_seconds=calibration.nominal_interval_seconds,
     )
     if requery_validation.accepted:
         LOG.info("Vision-LLM requery succeeded: %s -> %s", raw_digits, requery_digits)

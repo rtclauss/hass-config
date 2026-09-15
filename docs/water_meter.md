@@ -98,6 +98,22 @@ point before its final digit - the raw OCR read `02138978` is actually
 integer by `10 ** decimal_places` before any gating or publishing; a meter
 with no decimal point should leave this at its default of `0`.
 
+### The implausible-jump gate scales with elapsed time
+
+`max_gallons_per_interval` is a *rate* cap (plausible usage per
+`nominal_interval_seconds`, default `600` to match the timer's
+`OnUnitActiveSec`), not a flat ceiling on the delta since the last accepted
+reading. `sanity.validate_reading` scales the allowance by how many nominal
+intervals have actually elapsed since `last_good.timestamp`. This matters
+whenever a poll is skipped or rejected (a watchdog reboot, a run of OCR
+failures): the real delta since the last *accepted* reading keeps growing
+across every missed interval, and comparing it against a limit sized for a
+single interval would reject it forever, since `last_good` never advances -
+every subsequent reading looks like an even bigger "jump" against an
+increasingly stale baseline. Elapsed time under one nominal interval still
+gets the full single-interval allowance (never scaled down), matching the
+original behavior for the common on-time case.
+
 ## Vision-LLM fallback (optional)
 
 `ssocr` and the OpenCV template matcher both classify one digit at a time -
@@ -198,6 +214,18 @@ are what group the entity under a real device in HA's registry and MQTT
 integration page instead of it showing as an orphan entity. No `icon` field
 is needed: `device_class: water` already gives the frontend a water-drop
 icon automatically.
+
+**A stuck reading publishes `error:<reason>`, not `ok`.** A frozen camera or
+OCR pipeline that keeps returning the same value is technically `accepted`
+(the value itself is real and hasn't decreased or jumped implausibly), but
+`packages/water_meter.yaml`'s staleness automation only alerts on
+`sensor.water_meter_reading_age` or a status starting with `error` - and
+`last_reading_time` keeps advancing on every accepted run, stuck or not, so
+`reading_age` never grows either. Reusing the `error:` prefix for a stuck
+status is what makes `sanity.validate_reading`'s stuck-reading detection
+(the `stuck` field on its result, driven by `stuck_after_hours`/
+`history_limit`) actually reach that automation instead of looking
+perfectly healthy indefinitely.
 
 ## Known hardware issue: webcam USB lockups
 
