@@ -324,6 +324,17 @@ def read_digits(
     common case never needs them. bootstrap is forwarded to match_digits -
     see there for why the reading that establishes the baseline can't use
     the same confidence exemptions as every reading after it.
+
+    The VLM path has no numeric confidence signal to gate on the way
+    match_digits does, and it has been confirmed (live) to occasionally
+    misread the same glare-affected digit a template-match confidence floor
+    would have caught. A single VLM read is fine for an ordinary run - the
+    decrease/implausible-jump sanity checks are the backstop - but bootstrap
+    has no such backstop, so a bootstrap read requires a second, independent
+    VLM call on the same image to agree exactly before it's trusted;
+    disagreement falls through to template match (which does enforce full
+    confidence on bootstrap - see match_digits) rather than guessing between
+    the two answers.
     """
     try:
         return run_ssocr(image_path, ssocr_args=calibration.ssocr_args)
@@ -332,13 +343,29 @@ def read_digits(
 
     if vlm_host:
         try:
-            return read_digits_vlm(
+            digits = read_digits_vlm(
                 image_path,
                 host=vlm_host,
                 digit_count=calibration.digit_count,
                 model=vlm_model,
                 timeout=vlm_timeout,
             )
+            if bootstrap:
+                confirmation = read_digits_vlm(
+                    image_path,
+                    host=vlm_host,
+                    digit_count=calibration.digit_count,
+                    model=vlm_model,
+                    timeout=vlm_timeout,
+                )
+                if confirmation != digits:
+                    raise OcrError(
+                        f"vision-LLM bootstrap read is unconfirmed: first call got "
+                        f"{digits!r}, a second independent call on the same image got "
+                        f"{confirmation!r} - refusing to seed a baseline from a single "
+                        f"unconfirmed VLM read"
+                    )
+            return digits
         except OcrError as vlm_error:
             LOG.warning("vision-LLM fallback failed (%s); falling back to template match", vlm_error)
 

@@ -166,6 +166,9 @@ def test_stuck_flag_set_once_history_window_is_full_and_unchanged() -> None:
     history = tuple([1000.0] * 4)
     last_good = sanity.LastGoodReading(value=1000.0, timestamp=UTC_NOW.isoformat(), history=history)
 
+    # nominal_interval_seconds=720/stuck_after_hours=1.0 -> a 5-sample stuck
+    # window (3600/720), matching history_limit so this test isolates the
+    # "history window full and unchanged" case on its own.
     result = sanity.validate_reading(
         "0001000",
         digit_count=7,
@@ -173,6 +176,8 @@ def test_stuck_flag_set_once_history_window_is_full_and_unchanged() -> None:
         last_good=last_good,
         now=UTC_NOW,
         history_limit=5,
+        nominal_interval_seconds=720.0,
+        stuck_after_hours=1.0,
     )
 
     assert result.accepted is True
@@ -190,10 +195,50 @@ def test_stuck_flag_clears_once_value_changes() -> None:
         last_good=last_good,
         now=UTC_NOW,
         history_limit=5,
+        nominal_interval_seconds=720.0,
+        stuck_after_hours=1.0,
     )
 
     assert result.accepted is True
     assert result.stuck is False
+
+
+def test_stuck_after_hours_controls_the_window_independent_of_history_limit() -> None:
+    # Regression test: stuck detection used to be solely a function of
+    # history_limit (a sample count) - with the documented defaults (200
+    # samples at a 10-minute cadence) that's really ~33.3 hours, not the
+    # configured 24. stuck_after_hours must control the window directly, not
+    # just decorate the config file.
+    # last_good.history plus this call's own value make up the window, so
+    # 1 prior entry + this reading = 2 total (not yet a 3-sample match).
+    not_yet_stuck = sanity.validate_reading(
+        "0001000",
+        digit_count=7,
+        max_gallons_per_interval=500.0,
+        last_good=sanity.LastGoodReading(
+            value=1000.0, timestamp=UTC_NOW.isoformat(), history=(1000.0,)
+        ),
+        now=UTC_NOW,
+        history_limit=200,  # large - must not be what drives "stuck" here
+        nominal_interval_seconds=600.0,
+        stuck_after_hours=0.5,  # 1800s / 600s = 3-sample window
+    )
+    assert not_yet_stuck.stuck is False
+
+    # 2 prior entries + this reading = 3 total, completing the window.
+    now_stuck = sanity.validate_reading(
+        "0001000",
+        digit_count=7,
+        max_gallons_per_interval=500.0,
+        last_good=sanity.LastGoodReading(
+            value=1000.0, timestamp=UTC_NOW.isoformat(), history=(1000.0, 1000.0)
+        ),
+        now=UTC_NOW,
+        history_limit=200,
+        nominal_interval_seconds=600.0,
+        stuck_after_hours=0.5,
+    )
+    assert now_stuck.stuck is True
 
 
 def test_last_good_round_trips_through_state_dir(tmp_path: Path) -> None:

@@ -122,6 +122,7 @@ def run_once(
         history_limit=calibration.history_limit,
         decimal_places=calibration.decimal_places,
         nominal_interval_seconds=calibration.nominal_interval_seconds,
+        stuck_after_hours=calibration.stuck_after_hours,
     )
 
     if not validation.accepted and connection.vlm_host and last_good is not None:
@@ -321,6 +322,7 @@ def _requery_vlm_on_suspect_value(
         history_limit=calibration.history_limit,
         decimal_places=calibration.decimal_places,
         nominal_interval_seconds=calibration.nominal_interval_seconds,
+        stuck_after_hours=calibration.stuck_after_hours,
     )
     if requery_validation.accepted:
         LOG.info("Vision-LLM requery succeeded: %s -> %s", raw_digits, requery_digits)

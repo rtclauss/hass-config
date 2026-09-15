@@ -114,6 +114,19 @@ increasingly stale baseline. Elapsed time under one nominal interval still
 gets the full single-interval allowance (never scaled down), matching the
 original behavior for the common on-time case.
 
+### `stuck_after_hours` actually controls the stuck window
+
+`stuck_after_hours` is converted to a sample count via
+`nominal_interval_seconds` and used directly as the "same value for this
+many consecutive readings" window `sanity.validate_reading` checks before
+setting `stuck=True`. It's independent of `history_limit`, which separately
+just bounds how much history is *stored* (shared with `reader.py`'s
+image-history rotation) - so `stuck_after_hours` can only be honored up to
+whatever `history_limit` allows to be retained. Configure `history_limit`
+generously enough to cover the stuck window you actually want (the
+defaults, 200 samples at the default 600s interval, comfortably cover the
+default 24-hour window).
+
 ## Vision-LLM fallback (optional)
 
 `ssocr` and the OpenCV template matcher both classify one digit at a time -
@@ -170,6 +183,18 @@ plus capture/ssocr/publish overhead. If a run genuinely takes that long,
 systemd simply won't start a second overlapping instance of the still-active
 oneshot unit when the next 10-minute tick fires - that tick is a no-op, not
 an overlap or a crash.
+
+**Bootstrap reads require the VLM to agree with itself.** The VLM has no
+numeric confidence signal to gate on the way the template matcher does, and
+has been confirmed live to occasionally misread the same glare-affected
+digit. That's an acceptable risk on an ordinary run (the decrease/
+implausible-jump sanity checks are the backstop), but the read that
+*establishes* `last_good_reading.json` has no backstop - a wrong bootstrap
+seed silently blocks every correct reading after it as an "implausible
+jump" forever. So while bootstrapping, `read_digits` calls the VLM twice on
+the same image and only trusts it if both calls return the identical digit
+string; a disagreement falls through to template matching instead (which
+does enforce full confidence on bootstrap - see `match_digits`).
 
 **To enable**, add to `deploy/systemd/water-meter-reader.service` (or any
 `EnvironmentFile`):

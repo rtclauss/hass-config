@@ -5,11 +5,16 @@
 # What's here today:
 #   - Detecting the dishwasher and washing machine running at the same time,
 #     reusing their existing power/vibration-derived binary sensors.
-#   - Per-bathroom "humidity event" duration/count tracking, reusing the
-#     humidity-high binary sensors that already drive the bathroom exhaust
-#     fan automation (packages/climate.yaml). This tracks any hot-water
-#     humidity spike (shower or bath fill) - there's no fixture-level sensor
-#     to tell those apart yet.
+#   - Per-bathroom "humidity event" duration/count tracking for the
+#     owner-suite and basement bathrooms, reusing the humidity-high binary
+#     sensors that already drive the bathroom exhaust fan automation
+#     (packages/climate.yaml). This tracks any hot-water humidity spike
+#     (shower or bath fill) - there's no fixture-level sensor to tell those
+#     apart yet. Deliberately excludes the guest bathroom: docs/room_intent.yaml
+#     marks it always guest-private and lists humidity-driven exhaust control
+#     as its only sanctioned automation use, not persistent usage analytics -
+#     a count/duration history is exactly the kind of "managed item" the
+#     guest_privacy_first policy says must not intrude on guest privacy.
 #   - An armed-away/armed-night leak check against the whole-house meter:
 #     if the reading keeps climbing while nobody should be using water, it
 #     alerts once per armed episode.
@@ -57,15 +62,6 @@ homeassistant:
       friendly_name: "Basement Bathroom Humid Time Today"
       icon: mdi:timer-water-outline
 
-    sensor.guest_bathroom_humidity_events_today:
-      <<: *customize
-      friendly_name: "Guest Bathroom Humidity Events Today"
-      icon: mdi:shower-head
-    sensor.guest_bathroom_humid_time_today:
-      <<: *customize
-      friendly_name: "Guest Bathroom Humid Time Today"
-      icon: mdi:timer-water-outline
-
     input_number.water_meter_reading_at_arm:
       <<: *customize
       friendly_name: "Water Meter Reading At Arm"
@@ -85,10 +81,28 @@ automation:
         to:
           - armed_away
           - armed_night
-      # Also backfill on HA restart while already armed - otherwise a
-      # restart mid-armed-episode leaves the baseline stale from whenever
-      # arming last happened, which could be long before this automation
-      # existed.
+    condition:
+      - condition: template
+        value_template: "{{ states('sensor.water_meter') not in ['unknown', 'unavailable'] }}"
+    action:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.water_meter_reading_at_arm
+        data:
+          value: "{{ states('sensor.water_meter') | float }}"
+
+  - id: water_meter_backfill_arm_baseline_on_restart
+    alias: water_meter_backfill_arm_baseline_on_restart
+    trace:
+      stored_traces: 10
+    # input_number restores its own value across a normal HA restart, so
+    # this only needs to cover the narrow case of a restart while armed with
+    # no baseline ever captured (e.g. this automation was just added, or the
+    # helper's state was lost) - it must NOT unconditionally recapture on
+    # every restart, which would erase legitimate accumulated leak progress
+    # from before the restart by resetting the baseline to the current
+    # (already-risen) reading.
+    trigger:
       - trigger: homeassistant
         event: start
     condition:
@@ -99,6 +113,9 @@ automation:
           - armed_night
       - condition: template
         value_template: "{{ states('sensor.water_meter') not in ['unknown', 'unavailable'] }}"
+      - alias: "No baseline has ever been captured for the current armed episode"
+        condition: template
+        value_template: "{{ states('input_number.water_meter_reading_at_arm') | float(0) == 0 }}"
     action:
       - action: input_number.set_value
         target:
@@ -251,24 +268,6 @@ sensor:
     name: Basement Bathroom Humid Time Today
     unique_id: basement_bathroom_humid_time_today
     entity_id: binary_sensor.basement_bathroom_humidity_high
-    state: "on"
-    type: time
-    start: "{{ today_at() }}"
-    end: "{{ now() }}"
-
-  - platform: history_stats
-    name: Guest Bathroom Humidity Events Today
-    unique_id: guest_bathroom_humidity_events_today
-    entity_id: binary_sensor.guest_bathroom_humidity_high
-    state: "on"
-    type: count
-    start: "{{ today_at() }}"
-    end: "{{ now() }}"
-
-  - platform: history_stats
-    name: Guest Bathroom Humid Time Today
-    unique_id: guest_bathroom_humid_time_today
-    entity_id: binary_sensor.guest_bathroom_humidity_high
     state: "on"
     type: time
     start: "{{ today_at() }}"
