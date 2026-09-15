@@ -1,18 +1,20 @@
 [Unit]
-Description=Run the water meter reader every hour
+Description=Run the water meter reader every 20 minutes
 
 [Timer]
 OnBootSec=2min
-# Was 10min. ssocr fails almost every cycle on this meter, so nearly every
-# run was hitting the vision-LLM tier on TrueNAS (water_meter/ocr.py's
-# read_digits_vlm) - each call pins that CPU-only box for 1-8+ minutes, so a
-# 10-minute cadence kept it close to continuously loaded and tripped its
-# thermal alarm (2026-09-14). This is still fine for the meter's actual use
-# (sustained whole-house leak detection, packages/water_usage.yaml) - the
-# 10-minute cadence was already documented as too coarse to disaggregate a
-# single short fixture event anyway, so an hourly cadence loses nothing
-# there while cutting TrueNAS's average VLM duty cycle roughly 6x.
-OnUnitActiveSec=60min
+# Was 10min, briefly 60min. ssocr fails almost every cycle on this meter, so
+# nearly every run was hitting the vision-LLM tier on TrueNAS (water_meter/
+# ocr.py's read_digits_vlm) - each call pins that CPU-only box for 1-8+
+# minutes, so a 10-minute cadence kept it close to continuously loaded and
+# tripped its thermal alarm (2026-09-14). 60min gave the most thermal
+# headroom but was more than needed; 20min still cuts TrueNAS's average VLM
+# duty cycle ~2x versus the original 10min while staying well within what
+# the meter's actual use (sustained whole-house leak detection, packages/
+# water_usage.yaml) needs - the original 10-minute cadence was already
+# documented as too coarse to disaggregate a single short fixture event, so
+# nothing is lost going coarser still.
+OnUnitActiveSec=20min
 Persistent=true
 
 [Install]
