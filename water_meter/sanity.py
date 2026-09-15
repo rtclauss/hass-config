@@ -62,6 +62,7 @@ def validate_reading(
     history_limit: int = 20,
     decimal_places: int = 0,
     nominal_interval_seconds: float = 600.0,
+    stuck_after_hours: float = 24.0,
 ) -> ValidationResult:
     """Gate a freshly-OCR'd reading before it is ever published to HA.
 
@@ -91,6 +92,17 @@ def validate_reading(
     Elapsed time below one nominal interval still gets the full single-
     interval allowance (the floor of 1.0 below), matching the original
     single-interval-apart behavior for the common on-time case.
+
+    stuck_after_hours was previously accepted as calibration but never
+    actually used - "stuck" detection was solely a function of history_limit
+    (default 200 samples), which at the default 10-minute cadence is really
+    ~33.3 hours, not the documented/configurable 24. It's now converted to a
+    sample count via nominal_interval_seconds and used as the stuck-window
+    size directly; history_limit still separately bounds how much history is
+    *stored* (shared with reader.py's image-history rotation), so
+    stuck_after_hours can only be honored up to whatever history_limit
+    allows to be retained - configure history_limit generously enough to
+    cover the stuck window you actually want.
     """
     now = now or datetime.now(timezone.utc)
 
@@ -129,7 +141,9 @@ def validate_reading(
         )
 
     history = (*last_good.history, value)[-history_limit:]
-    stuck = len(history) >= history_limit and len(set(history)) == 1
+    stuck_window_size = max(1, round((stuck_after_hours * 3600.0) / nominal_interval_seconds))
+    stuck_window = history[-stuck_window_size:]
+    stuck = len(stuck_window) >= stuck_window_size and len(set(stuck_window)) == 1
     return ValidationResult(True, value, "ok", stuck=stuck)
 
 

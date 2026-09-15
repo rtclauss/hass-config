@@ -32,10 +32,21 @@ def test_package_tags_new_entities_with_water_usage_package() -> None:
         "binary_sensor.dishwasher_and_washer_running",
         "sensor.owner_suite_bathroom_humidity_events_today",
         "sensor.basement_bathroom_humidity_events_today",
-        "sensor.guest_bathroom_humidity_events_today",
         "input_number.water_meter_reading_at_arm",
     ):
         assert f"{entity_id}:" in text
+
+
+def test_guest_bathroom_has_no_usage_tracking_per_room_intent_privacy_policy() -> None:
+    # docs/room_intent.yaml marks the guest bathroom always guest-private and
+    # lists humidity-driven exhaust control as its only sanctioned automation
+    # use - not persistent count/duration usage analytics, which is exactly
+    # the kind of "managed item" the guest_privacy_first policy says must not
+    # intrude on guest privacy. This package must not stand up guest-bathroom
+    # equivalents of the owner-suite/basement humidity-event sensors.
+    text = _package_text()
+
+    assert "guest_bathroom" not in text
 
 
 def test_dishwasher_and_washer_template_reuses_existing_binary_sensors() -> None:
@@ -49,7 +60,9 @@ def test_dishwasher_and_washer_template_reuses_existing_binary_sensors() -> None
     assert "is_state('binary_sensor.washing_machine_running', 'on')" in text
 
 
-def test_bathroom_humidity_history_stats_cover_all_three_bathrooms() -> None:
+def test_bathroom_humidity_history_stats_cover_owner_suite_and_basement_only() -> None:
+    # Deliberately not the guest bathroom - see
+    # test_guest_bathroom_has_no_usage_tracking_per_room_intent_privacy_policy.
     text = _package_text()
 
     for source_entity, count_id, time_id in (
@@ -62,11 +75,6 @@ def test_bathroom_humidity_history_stats_cover_all_three_bathrooms() -> None:
             "binary_sensor.basement_bathroom_humidity_high",
             "basement_bathroom_humidity_events_today",
             "basement_bathroom_humid_time_today",
-        ),
-        (
-            "binary_sensor.guest_bathroom_humidity_high",
-            "guest_bathroom_humidity_events_today",
-            "guest_bathroom_humid_time_today",
         ),
     ):
         for unique_id in (count_id, time_id):
@@ -112,13 +120,30 @@ def test_arm_baseline_automation_captures_the_reading_when_armed() -> None:
     assert "entity_id: alarm_control_panel.home_alarm" in block
     assert "armed_away" in block
     assert "armed_night" in block
-    # Must also backfill on an HA restart while already armed, not only on
-    # the armed transition itself - otherwise a restart mid-armed-episode
-    # leaves a stale (or nonexistent) baseline.
-    assert "event: start" in block
     assert "input_number.set_value" in block
     assert "input_number.water_meter_reading_at_arm" in block
     assert "states('sensor.water_meter')" in block
+    # This automation must NOT also handle the restart case - see
+    # test_restart_backfill_only_fires_when_no_baseline_was_ever_captured for
+    # why unconditionally recapturing on every restart is wrong.
+    assert "event: start" not in block
+
+
+def test_restart_backfill_only_fires_when_no_baseline_was_ever_captured() -> None:
+    # Regression test: input_number restores its own value across a normal
+    # HA restart, so unconditionally recapturing the baseline on every
+    # restart while armed would erase legitimate accumulated leak progress
+    # from before the restart (by resetting the baseline to the
+    # already-risen current reading). This must only backfill when no
+    # baseline exists yet for the current armed episode.
+    block = _automation_block("water_meter_backfill_arm_baseline_on_restart")
+
+    assert "event: start" in block
+    assert "entity_id: alarm_control_panel.home_alarm" in block
+    assert "armed_away" in block
+    assert "armed_night" in block
+    assert "input_number.water_meter_reading_at_arm" in block
+    assert "input_number.set_value" in block
 
 
 def test_leak_alert_reset_clears_flag_on_disarm() -> None:

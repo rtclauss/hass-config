@@ -323,6 +323,73 @@ def test_read_digits_tries_the_vision_llm_after_ssocr_fails(
     assert result == "7"
 
 
+def test_read_digits_calls_the_vision_llm_only_once_on_an_ordinary_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    # An ordinary (non-bootstrap) run is protected by the decrease/
+    # implausible-jump sanity checks downstream, so it must not pay the cost
+    # of a second VLM call - only bootstrap needs corroboration.
+    monkeypatch.setattr(ocr, "run_ssocr", _fail(ocr.OcrError("boom")))
+    calls = []
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda *a, **k: calls.append(1) or "7")
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(),
+        templates_dir=tmp_path / "templates",  # type: ignore[operator]
+        vlm_host="truenas.local:30068",
+        bootstrap=False,
+    )
+
+    assert result == "7"
+    assert len(calls) == 1
+
+
+def test_read_digits_bootstrap_trusts_the_vision_llm_when_two_calls_agree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    monkeypatch.setattr(ocr, "run_ssocr", _fail(ocr.OcrError("boom")))
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda *a, **k: "02139879")
+    monkeypatch.setattr(ocr, "match_digits", _fail(AssertionError("should not reach template match")))
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(digit_count=8),
+        templates_dir=tmp_path / "templates",  # type: ignore[operator]
+        vlm_host="truenas.local:30068",
+        bootstrap=True,
+    )
+
+    assert result == "02139879"
+
+
+def test_read_digits_bootstrap_falls_back_to_template_match_when_vision_llm_calls_disagree(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    # Regression test: the VLM has no numeric confidence signal to gate on,
+    # and has been confirmed live to occasionally misread the same
+    # glare-affected digit. A single unconfirmed VLM read must never be
+    # allowed to seed last_good_reading.json.
+    monkeypatch.setattr(ocr, "run_ssocr", _fail(ocr.OcrError("boom")))
+    responses = iter(["02139879", "82139879"])  # disagree on the leading digit
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda *a, **k: next(responses))
+    monkeypatch.setattr(ocr, "load_digit_templates", lambda directory: {"9": [object()]})
+    monkeypatch.setattr(ocr, "match_digits", lambda *a, **k: "00000000")
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(digit_count=8),
+        templates_dir=tmp_path / "templates",  # type: ignore[operator]
+        vlm_host="truenas.local:30068",
+        bootstrap=True,
+    )
+
+    assert result == "00000000"  # fell through to template match, not either VLM answer
+
+
 def test_read_digits_falls_back_to_template_match_when_the_vision_llm_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
