@@ -152,6 +152,16 @@ automation:
         for:
           minutes: 20
       - alias: >-
+          This episode's baseline has actually been captured - both this
+          automation and water_meter_capture_arm_baseline trigger on the
+          same sensor.water_meter update (e.g. the meter recovering from
+          unavailable), with no guaranteed ordering between them. Without
+          this, a leak check could race ahead of its own baseline capture
+          and compare against a stale/never-set value.
+        condition: state
+        entity_id: input_boolean.water_meter_arm_baseline_captured
+        state: "on"
+      - alias: >-
           Cumulative rise since arming exceeds normal meter jitter - not just
           the rise since the previous poll, so a slow leak that adds less
           than the threshold on every single 10-minute poll (e.g. 0.9 gal/poll

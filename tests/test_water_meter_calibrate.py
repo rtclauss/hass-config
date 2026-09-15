@@ -83,12 +83,17 @@ def test_test_read_forwards_the_configured_fallback_chain(
     # fallback chain the real deployed reader actually uses.
     _install_fake_cv2(monkeypatch)
     monkeypatch.setattr(capture, "crop_boxes", lambda image, boxes: ["crop"])
+    monkeypatch.setattr(capture, "crop_roi", lambda image, roi: "fake-roi-crop")
+    saved_images: list[tuple[object, Path]] = []
+    monkeypatch.setattr(capture, "save_image", lambda image, path: saved_images.append((image, path)))
     captured: dict = {}
-    monkeypatch.setattr(
-        ocr,
-        "read_digits",
-        lambda image_path, digit_crops, config, **kwargs: captured.update(kwargs) or "12345678",
-    )
+
+    def _fake_read_digits(image_path: Path, digit_crops: object, config: object, **kwargs: object) -> str:
+        captured["image_path"] = image_path
+        captured.update(kwargs)
+        return "12345678"
+
+    monkeypatch.setattr(ocr, "read_digits", _fake_read_digits)
     config = CalibrationConfig(
         roi=(0, 0, 10, 10),
         digit_boxes=((0, 0, 5, 5),),
@@ -117,3 +122,9 @@ def test_test_read_forwards_the_configured_fallback_chain(
     assert captured["vlm_host"] == "truenas.local:30068"
     assert captured["vlm_model"] == "qwen3-vl:4b"
     assert captured["vlm_timeout"] == 480.0
+    # Regression: must pass the ROI-cropped image to OCR, not the raw
+    # reference frame - that's what reader.run_once actually feeds ssocr/the
+    # VLM in production (latest_crop.jpg, not the full frame).
+    expected_crop_path = tmp_path / "reference_roi_crop.jpg"
+    assert captured["image_path"] == expected_crop_path
+    assert saved_images == [("fake-roi-crop", expected_crop_path)]

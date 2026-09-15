@@ -130,19 +130,30 @@ def test_read(
 ) -> str:
     """Run --test through the same fallback chain the real reader uses.
 
-    Without these, a --test run against a meter that actually needs the
-    VLM/template-match fallbacks (like the documented glare-affected meter)
-    fails immediately on any ssocr hiccup instead of exercising the pipeline
-    that will really be deployed - the calibrate subcommand runs on a
-    workstation, not the Pi, so it has no deployment env vars to fall back
+    Without templates_dir/vlm_host, a --test run against a meter that
+    actually needs those fallbacks (like the documented glare-affected
+    meter) fails immediately on any ssocr hiccup instead of exercising the
+    pipeline that will really be deployed - the calibrate subcommand runs on
+    a workstation, not the Pi, so it has no deployment env vars to fall back
     on the way reader.py does; these must be passed explicitly.
+
+    Also crops to config.roi before handing off to OCR, saving the crop
+    alongside image_path - reader.run_once never runs ssocr/the VLM against
+    the raw full frame, only against the ROI crop it saves to
+    latest_crop.jpg; ssocr in particular expects a tight digit strip, not a
+    full photo with background clutter, and a --test run against the wrong
+    image proves nothing about the pipeline that's actually deployed.
     """
     import cv2
 
     image = cv2.imread(str(image_path))
     digit_crops = capture.crop_boxes(image, config.digit_boxes)
+    cropped = capture.crop_roi(image, config.roi)
+    crop_path = image_path.with_name(f"{image_path.stem}_roi_crop{image_path.suffix}")
+    capture.save_image(cropped, crop_path)
+    LOG.info("Saved ROI crop to %s - this is what OCR actually sees, same as reader.py", crop_path)
     return ocr.read_digits(
-        image_path,
+        crop_path,
         digit_crops,
         config,
         templates_dir=templates_dir,

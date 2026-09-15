@@ -284,7 +284,13 @@ the Pi's own power supply is a genuine 2.5A+ rated unit.
     (`read_digits_vlm`, via an Ollama HTTP API - see "Vision-LLM fallback"
     above) for the digits ssocr can't read; OpenCV template-match last
     resort (`load_digit_templates`/`match_digits`) for non-clean-7-segment
-    digits or whenever the LLM is unavailable/unconfigured.
+    digits or whenever the LLM is unavailable/unconfigured. `read_digits`
+    validates ssocr's output (right digit count, all-numeric) before
+    trusting it - an exit-0-but-malformed result (a partial read, stray
+    characters) falls through to the VLM/template-match tiers just like an
+    outright ssocr failure would, instead of skipping them and letting
+    `sanity.validate_reading` reject a case the fallbacks could have
+    actually read.
   - `sanity.py` - the validation gate: numeric/digit-count/non-decreasing/
     max-delta checks, last-good-value persistence, stuck-reading detection.
   - `reader.py` - orchestrates one run (including the vision-LLM requery on

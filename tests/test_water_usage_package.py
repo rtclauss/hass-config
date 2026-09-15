@@ -102,6 +102,18 @@ def test_leak_automation_requires_sustained_armed_state_and_gates_repeat_alerts(
     assert "notify.all" in block
 
 
+def test_leak_check_requires_the_baseline_capture_flag_to_avoid_a_race() -> None:
+    # Regression test: this automation and water_meter_capture_arm_baseline
+    # both trigger on the same sensor.water_meter update (e.g. the meter
+    # recovering from unavailable) with no guaranteed ordering between them -
+    # without gating on the capture flag, a leak check could race ahead of
+    # its own baseline capture and compare against a stale/never-set value.
+    block = _automation_block("water_leak_while_armed")
+
+    assert "input_boolean.water_meter_arm_baseline_captured" in block
+    assert 'state: "on"' in block
+
+
 def test_leak_check_compares_against_arm_time_baseline_not_the_previous_poll() -> None:
     # Regression test: comparing only trigger.from_state vs trigger.to_state
     # misses a slow leak that adds less than the threshold on every single
