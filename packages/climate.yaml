@@ -198,32 +198,63 @@ homeassistant:
 automation:
   - id: buy_more_air_filters
     alias: buy_more_air_filters
+    description: >-
+      Prompt for a filter count when the inventory is empty and we are either
+      standing in a DIY store or just back from an errand.
+
+      The store path leans on binary_sensor.diy_store_visit rather than matching
+      place-name strings directly; see packages/zone.yaml for why exact matching
+      kept missing. The arrival path exists because that store signal can miss
+      entirely: Places only re-geocodes on a new GPS fix, so parking in a big-box
+      lot resolves to the lot and the phone then reports nothing for the whole
+      visit. Asking on the way home is the backstop for that case.
+    mode: single
+    max_exceeded: silent
     trace:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: sensor.zeke_place_place_name
-        to:
-          - "Home Depot"
-          - "The Home Depot"
-          - "Menards"
-          - "Lowe's"
-          - "Fleet Farm"
-          - "Ace Hardware"
+        id: at_diy_store
+        entity_id: binary_sensor.diy_store_visit
+        from: "off"
+        to: "on"
       - trigger: state
-        entity_id: sensor.zeke_place_place_type
-        to: "doityourself"
+        id: home_from_errand
+        entity_id: binary_sensor.bayesian_zeke_home
+        from: "off"
+        to: "on"
     condition:
       - alias: "Air Filter Inventory Low"
         condition: numeric_state
         entity_id: input_number.air_filters_at_home
         below: 1
+      - alias: "Arrival backstop only after a long enough trip to have shopped"
+        condition: template
+        value_template: >-
+          {{ trigger.id != 'home_from_errand'
+             or (now() - trigger.from_state.last_changed).total_seconds() >= 2700 }}
+      - alias: "Arrival backstop stays quiet if the store path already asked"
+        condition: template
+        # last_triggered is still the previous run while conditions are being
+        # evaluated, so this compares the last prompt against the moment this
+        # trip started. Without it a store prompt plus a long drive home asks
+        # the same question twice.
+        value_template: >-
+          {% set asked_at = state_attr('automation.buy_more_air_filters', 'last_triggered') %}
+          {{ trigger.id != 'home_from_errand'
+             or asked_at is none
+             or asked_at < trigger.from_state.last_changed }}
     action:
       - action: notify.mobile_app_wethop
         data:
           title: "Buy Air Filters"
           message: >-
-            "You only have {{states("input_number.air_filters_at_home")| int}} 16x25x1 air filters at home. How many did you buy?"
+            {%- set on_hand = states("input_number.air_filters_at_home") | int(default=0) -%}
+            {%- if trigger.id == 'home_from_errand' -%}
+              You still have {{ on_hand }} 16x25x1 air filters at home. Did you pick any up?
+            {%- else -%}
+              You only have {{ on_hand }} 16x25x1 air filters at home. How many did you buy?
+            {%- endif %}
           data:
             actions:
               - action: "BOUGHT_AIR_FILTERS"
@@ -247,12 +278,23 @@ automation:
           action: BOUGHT_AIR_FILTERS
     condition: []
     action:
-      - alias: Increase Number of air filters in inventory
-        action: input_number.set_value
-        entity_id: input_number.air_filters_at_home
-        data:
-          value: >-
-            {{(states("input_number.air_filters_at_home")|int) + (trigger.event.data.reply_text | int)}}
+      - variables:
+          current_filters: >-
+            {{ states("input_number.air_filters_at_home") | int(default=0) }}
+          purchased_text: >-
+            {{ trigger.event.data.reply_text | default("", true) | trim }}
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ purchased_text | regex_match('^\d+$') }}
+            sequence:
+              - alias: Increase Number of air filters in inventory
+                action: input_number.set_value
+                entity_id: input_number.air_filters_at_home
+                data:
+                  value: >-
+                    {{ current_filters + (purchased_text | int(default=0)) }}
 
     # TODO - make this work for all three bathrooms with showers
   - id: toggle_bathroom_fan_when_showering

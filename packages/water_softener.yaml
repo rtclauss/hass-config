@@ -294,25 +294,24 @@ automation:
 
   - id: buy_more_salt
     alias: buy_more_salt
+    description: >-
+      Prompt for a bag count when we are standing in a DIY store with the salt
+      inventory low. Detection lives in binary_sensor.diy_store_visit (see
+      packages/zone.yaml) because exact place-name matching missed real OSM
+      names and parking-lot geocodes.
+
+      There is deliberately no arrive-home backstop here, unlike the air-filter
+      prompt in climate.yaml: two restock questions on a single arrival is worse
+      than one missed bag of salt.
+    mode: single
+    max_exceeded: silent
     trace:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id:
-          - sensor.zeke_place_place_name
-          - sensor.tesla_place_place_name
-        to:
-          - "Home Depot"
-          - "The Home Depot"
-          - "Menards"
-          - "Lowe's"
-          - "Fleet Farm"
-          - "Ace Hardware"
-      - trigger: state
-        entity_id:
-          - sensor.zeke_place_place_type
-          - sensor.tesla_place_place_type
-        to: "doityourself"
+        entity_id: binary_sensor.diy_store_visit
+        from: "off"
+        to: "on"
     condition:
       - alias: "Salt Bag Inventory Low"
         condition: numeric_state
