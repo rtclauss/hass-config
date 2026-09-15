@@ -119,12 +119,37 @@ def write_config(
     return config
 
 
-def test_read(image_path: Path, config: CalibrationConfig) -> str:
+def test_read(
+    image_path: Path,
+    config: CalibrationConfig,
+    *,
+    templates_dir: Path | None = None,
+    vlm_host: str | None = None,
+    vlm_model: str = ocr.DEFAULT_VLM_MODEL,
+    vlm_timeout: float = ocr.DEFAULT_VLM_TIMEOUT,
+) -> str:
+    """Run --test through the same fallback chain the real reader uses.
+
+    Without these, a --test run against a meter that actually needs the
+    VLM/template-match fallbacks (like the documented glare-affected meter)
+    fails immediately on any ssocr hiccup instead of exercising the pipeline
+    that will really be deployed - the calibrate subcommand runs on a
+    workstation, not the Pi, so it has no deployment env vars to fall back
+    on the way reader.py does; these must be passed explicitly.
+    """
     import cv2
 
     image = cv2.imread(str(image_path))
     digit_crops = capture.crop_boxes(image, config.digit_boxes)
-    return ocr.read_digits(image_path, digit_crops, config)
+    return ocr.read_digits(
+        image_path,
+        digit_crops,
+        config,
+        templates_dir=templates_dir,
+        vlm_host=vlm_host,
+        vlm_model=vlm_model,
+        vlm_timeout=vlm_timeout,
+    )
 
 
 def main() -> None:
@@ -144,6 +169,23 @@ def main() -> None:
     calibrate_parser.add_argument(
         "--test", action="store_true", help="Run a test OCR pass against --image after writing config."
     )
+    calibrate_parser.add_argument(
+        "--templates-dir",
+        type=Path,
+        default=None,
+        help="Digit-template directory for --test (e.g. a local copy of the Pi's "
+        "/opt/water-meter/digit_templates) - exercises the same template-match "
+        "fallback the real reader uses instead of ssocr alone.",
+    )
+    calibrate_parser.add_argument(
+        "--vlm-host",
+        type=str,
+        default=None,
+        help="Ollama host:port for --test (e.g. truenas.local:30068) - exercises the "
+        "same vision-LLM fallback the real reader uses instead of ssocr alone.",
+    )
+    calibrate_parser.add_argument("--vlm-model", type=str, default=ocr.DEFAULT_VLM_MODEL)
+    calibrate_parser.add_argument("--vlm-timeout", type=float, default=ocr.DEFAULT_VLM_TIMEOUT)
 
     args = parser.parse_args()
     logging.basicConfig(level="INFO")
@@ -157,7 +199,14 @@ def main() -> None:
     LOG.info("Wrote calibration to %s: roi=%s digits=%d", args.write_config, config.roi, config.digit_count)
 
     if args.test:
-        digits = test_read(args.image, config)
+        digits = test_read(
+            args.image,
+            config,
+            templates_dir=args.templates_dir,
+            vlm_host=args.vlm_host,
+            vlm_model=args.vlm_model,
+            vlm_timeout=args.vlm_timeout,
+        )
         print(f"Test read: {digits!r} - confirm this matches the physical meter.")
 
 

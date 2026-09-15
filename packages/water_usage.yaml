@@ -67,6 +67,11 @@ homeassistant:
       friendly_name: "Water Meter Reading At Arm"
       icon: mdi:counter
 
+    input_boolean.water_meter_arm_baseline_captured:
+      <<: *customize
+      friendly_name: "Water Meter Arm Baseline Captured"
+      icon: mdi:counter-check
+
 ########################
 ## Automation
 ########################
@@ -75,34 +80,31 @@ automation:
     alias: water_meter_capture_arm_baseline
     trace:
       stored_traces: 10
+    # A single capture-flag (input_boolean.water_meter_arm_baseline_captured,
+    # reset on disarm - see water_leak_alert_reset) drives all three cases
+    # this needs to handle, instead of three separate ad-hoc heuristics:
+    #   - normal arm with the meter available: captures immediately.
+    #   - arm while sensor.water_meter happens to be unavailable/unknown: the
+    #     arm-transition trigger's condition fails, but the flag stays off,
+    #     so the very next sensor.water_meter update while still armed
+    #     retries the capture instead of leaving the episode with no
+    #     baseline (or a stale one from a previous episode).
+    #   - HA restart mid-armed-episode: input_number/input_boolean both
+    #     restore their prior state across a normal restart (this package
+    #     must not set `initial:` on either - see their helper definitions -
+    #     doing so would force them back to a fixed value on every restart
+    #     and defeat this entirely), so if the flag already restored "on"
+    #     nothing recaptures and the real baseline survives; the
+    #     homeassistant-start trigger below only matters for the case where
+    #     the flag was somehow never set for the current episode.
     trigger:
       - trigger: state
         entity_id: alarm_control_panel.home_alarm
         to:
           - armed_away
           - armed_night
-    condition:
-      - condition: template
-        value_template: "{{ states('sensor.water_meter') not in ['unknown', 'unavailable'] }}"
-    action:
-      - action: input_number.set_value
-        target:
-          entity_id: input_number.water_meter_reading_at_arm
-        data:
-          value: "{{ states('sensor.water_meter') | float }}"
-
-  - id: water_meter_backfill_arm_baseline_on_restart
-    alias: water_meter_backfill_arm_baseline_on_restart
-    trace:
-      stored_traces: 10
-    # input_number restores its own value across a normal HA restart, so
-    # this only needs to cover the narrow case of a restart while armed with
-    # no baseline ever captured (e.g. this automation was just added, or the
-    # helper's state was lost) - it must NOT unconditionally recapture on
-    # every restart, which would erase legitimate accumulated leak progress
-    # from before the restart by resetting the baseline to the current
-    # (already-risen) reading.
-    trigger:
+      - trigger: state
+        entity_id: sensor.water_meter
       - trigger: homeassistant
         event: start
     condition:
@@ -113,15 +115,19 @@ automation:
           - armed_night
       - condition: template
         value_template: "{{ states('sensor.water_meter') not in ['unknown', 'unavailable'] }}"
-      - alias: "No baseline has ever been captured for the current armed episode"
-        condition: template
-        value_template: "{{ states('input_number.water_meter_reading_at_arm') | float(0) == 0 }}"
+      - alias: "No baseline captured yet for the current armed episode"
+        condition: state
+        entity_id: input_boolean.water_meter_arm_baseline_captured
+        state: "off"
     action:
       - action: input_number.set_value
         target:
           entity_id: input_number.water_meter_reading_at_arm
         data:
           value: "{{ states('sensor.water_meter') | float }}"
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.water_meter_arm_baseline_captured
 
   - id: water_leak_while_armed
     alias: water_leak_while_armed
@@ -187,13 +193,23 @@ automation:
         entity_id: alarm_control_panel.home_alarm
         to: disarmed
     condition:
-      - condition: state
-        entity_id: input_boolean.water_leak_alert_sent
-        state: "on"
+      - condition: or
+        conditions:
+          - condition: state
+            entity_id: input_boolean.water_leak_alert_sent
+            state: "on"
+          - condition: state
+            entity_id: input_boolean.water_meter_arm_baseline_captured
+            state: "on"
     action:
       - action: input_boolean.turn_off
         target:
-          entity_id: input_boolean.water_leak_alert_sent
+          entity_id:
+            - input_boolean.water_leak_alert_sent
+            # Reset so the next arm episode requires a fresh capture
+            # (see water_meter_capture_arm_baseline) instead of reusing
+            # this episode's now-stale baseline.
+            - input_boolean.water_meter_arm_baseline_captured
 
 ########################
 # Input Boolean
@@ -202,6 +218,15 @@ input_boolean:
   water_leak_alert_sent:
     name: Water Leak Alert Sent
     icon: mdi:bell-check
+
+  water_meter_arm_baseline_captured:
+    name: Water Meter Arm Baseline Captured
+    icon: mdi:counter-check
+    # Tracks whether input_number.water_meter_reading_at_arm has been
+    # captured yet for the *current* armed episode - see
+    # water_meter_capture_arm_baseline for why this (not the input_number's
+    # own value) is the source of truth for "has this episode's baseline
+    # been set".
 
 ########################
 # Input Number
@@ -226,12 +251,18 @@ input_number:
     # that adds less than the alert threshold on every single poll still
     # accumulates to a real alert over the length of the armed episode.
     # Bounds are generous relative to this meter's 8-digit/1-decimal range.
+    # Deliberately no `initial:` - input_number.water_meter_reading_at_arm
+    # must restore its real prior value across a normal HA restart (an
+    # explicit `initial:` would instead force it back to that fixed value on
+    # every restart, defeating the whole point of the restart-survival
+    # design in water_meter_capture_arm_baseline above). With no `initial:`
+    # and nothing yet restored, HA falls back to `min` (0), which is also
+    # exactly what a genuinely-never-captured episode should show.
     min: 0
     max: 99999999
     mode: box
     step: 0.1
     unit_of_measurement: gal
-    initial: 0
 
 ########################
 ## Sensor

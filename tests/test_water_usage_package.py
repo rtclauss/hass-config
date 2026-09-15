@@ -114,7 +114,7 @@ def test_leak_check_compares_against_arm_time_baseline_not_the_previous_poll() -
     assert "trigger.from_state.state | float" not in block
 
 
-def test_arm_baseline_automation_captures_the_reading_when_armed() -> None:
+def test_arm_baseline_automation_captures_on_arm_and_retries_until_flagged_captured() -> None:
     block = _automation_block("water_meter_capture_arm_baseline")
 
     assert "entity_id: alarm_control_panel.home_alarm" in block
@@ -123,27 +123,29 @@ def test_arm_baseline_automation_captures_the_reading_when_armed() -> None:
     assert "input_number.set_value" in block
     assert "input_number.water_meter_reading_at_arm" in block
     assert "states('sensor.water_meter')" in block
-    # This automation must NOT also handle the restart case - see
-    # test_restart_backfill_only_fires_when_no_baseline_was_ever_captured for
-    # why unconditionally recapturing on every restart is wrong.
-    assert "event: start" not in block
-
-
-def test_restart_backfill_only_fires_when_no_baseline_was_ever_captured() -> None:
-    # Regression test: input_number restores its own value across a normal
-    # HA restart, so unconditionally recapturing the baseline on every
-    # restart while armed would erase legitimate accumulated leak progress
-    # from before the restart (by resetting the baseline to the
-    # already-risen current reading). This must only backfill when no
-    # baseline exists yet for the current armed episode.
-    block = _automation_block("water_meter_backfill_arm_baseline_on_restart")
-
+    # Must retry when the meter was unavailable at the moment of arming
+    # (trigger on sensor.water_meter too, not just the arm transition)...
+    assert "entity_id: sensor.water_meter" in block
+    # ...and must survive an HA restart mid-episode without recapturing an
+    # already-captured baseline (input_number/input_boolean both restore
+    # their own value - no `initial:` on either, see their helper
+    # definitions - so this trigger only matters when the flag was never
+    # set for the current episode).
     assert "event: start" in block
-    assert "entity_id: alarm_control_panel.home_alarm" in block
-    assert "armed_away" in block
-    assert "armed_night" in block
-    assert "input_number.water_meter_reading_at_arm" in block
-    assert "input_number.set_value" in block
+    # The capture-flag, not the input_number's own value, is what gates a
+    # recapture - this must not regress to a fragile "== 0" style check.
+    assert "input_boolean.water_meter_arm_baseline_captured" in block
+    assert "input_boolean.turn_on" in block
+    assert "== 0" not in block
+
+
+def test_leak_alert_reset_also_clears_the_arm_baseline_capture_flag() -> None:
+    # The capture-flag must reset on disarm so the next arm episode requires
+    # a fresh capture instead of reusing this episode's now-stale baseline.
+    block = _automation_block("water_leak_alert_reset")
+
+    assert "input_boolean.water_meter_arm_baseline_captured" in block
+    assert "input_boolean.turn_off" in block
 
 
 def test_leak_alert_reset_clears_flag_on_disarm() -> None:
