@@ -66,10 +66,46 @@ homeassistant:
       friendly_name: "Guest Bathroom Humid Time Today"
       icon: mdi:timer-water-outline
 
+    input_number.water_meter_reading_at_arm:
+      <<: *customize
+      friendly_name: "Water Meter Reading At Arm"
+      icon: mdi:counter
+
 ########################
 ## Automation
 ########################
 automation:
+  - id: water_meter_capture_arm_baseline
+    alias: water_meter_capture_arm_baseline
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: alarm_control_panel.home_alarm
+        to:
+          - armed_away
+          - armed_night
+      # Also backfill on HA restart while already armed - otherwise a
+      # restart mid-armed-episode leaves the baseline stale from whenever
+      # arming last happened, which could be long before this automation
+      # existed.
+      - trigger: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: alarm_control_panel.home_alarm
+        state:
+          - armed_away
+          - armed_night
+      - condition: template
+        value_template: "{{ states('sensor.water_meter') not in ['unknown', 'unavailable'] }}"
+    action:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.water_meter_reading_at_arm
+        data:
+          value: "{{ states('sensor.water_meter') | float }}"
+
   - id: water_leak_while_armed
     alias: water_leak_while_armed
     trace:
@@ -92,10 +128,14 @@ automation:
           - armed_night
         for:
           minutes: 20
-      - alias: "Rise is bigger than normal meter jitter"
+      - alias: >-
+          Cumulative rise since arming exceeds normal meter jitter - not just
+          the rise since the previous poll, so a slow leak that adds less
+          than the threshold on every single 10-minute poll (e.g. 0.9 gal/poll
+          against a 1 gal threshold, still 40+ gal overnight) still trips this.
         condition: template
         value_template: >-
-          {{ (trigger.to_state.state | float(0)) - (trigger.from_state.state | float(0))
+          {{ (trigger.to_state.state | float(0)) - (states('input_number.water_meter_reading_at_arm') | float(trigger.to_state.state | float(0)))
              > (states('input_number.water_leak_threshold_gallons') | float(1)) }}
       - alias: "Haven't already alerted for this armed episode"
         condition: state
@@ -109,11 +149,12 @@ automation:
         data:
           title: Possible water leak
           message: >-
-            The water meter rose from {{ trigger.from_state.state }} to
-            {{ trigger.to_state.state }} gallons while the house has been
-            {{ states('alarm_control_panel.home_alarm') }} for at least 20
-            minutes - nothing should be drawing water right now. Check for a
-            running toilet, dripping fixture, or irrigation leak.
+            The water meter has risen from {{ states('input_number.water_meter_reading_at_arm') }}
+            (when the house was armed) to {{ trigger.to_state.state }} gallons
+            while the house has been {{ states('alarm_control_panel.home_alarm') }}
+            for at least 20 minutes - nothing should be drawing water right
+            now. Check for a running toilet, dripping fixture, or irrigation
+            leak.
       - action: notify.all
         data:
           title: Possible water leak
@@ -158,6 +199,22 @@ input_number:
     step: 0.1
     unit_of_measurement: gal
     initial: 1.0
+
+  water_meter_reading_at_arm:
+    name: Water Meter Reading At Arm
+    icon: mdi:counter
+    # Snapshot of sensor.water_meter taken when the house arms (see
+    # water_meter_capture_arm_baseline) - the armed-leak check compares
+    # against this instead of the immediately-previous poll, so a slow leak
+    # that adds less than the alert threshold on every single poll still
+    # accumulates to a real alert over the length of the armed episode.
+    # Bounds are generous relative to this meter's 8-digit/1-decimal range.
+    min: 0
+    max: 99999999
+    mode: box
+    step: 0.1
+    unit_of_measurement: gal
+    initial: 0
 
 ########################
 ## Sensor

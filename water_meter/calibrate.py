@@ -9,6 +9,7 @@ from .config import (
     DEFAULT_FRAMES_TO_DISCARD,
     DEFAULT_FRAMES_TO_GRAB,
     DEFAULT_LIGHT_WARMUP_SECONDS,
+    DEFAULT_NOMINAL_INTERVAL_SECONDS,
     CalibrationConfig,
     connection_config_from_env,
     load_calibration_config,
@@ -103,6 +104,16 @@ def write_config(
         stuck_after_hours=existing.stuck_after_hours if existing else 24.0,
         history_limit=existing.history_limit if existing else 200,
         ssocr_args=existing.ssocr_args if existing else (),
+        # Every field here must be preserved from `existing`, not left to
+        # CalibrationConfig's dataclass defaults - a rerun against this
+        # documented meter's config would otherwise silently drop
+        # decimal_places (1), making every raw reading 10x too large and
+        # leaving the reader permanently rejecting against its own baseline.
+        decimal_places=existing.decimal_places if existing else 0,
+        low_confidence_ok_indexes=existing.low_confidence_ok_indexes if existing else (),
+        nominal_interval_seconds=(
+            existing.nominal_interval_seconds if existing else DEFAULT_NOMINAL_INTERVAL_SECONDS
+        ),
     )
     save_calibration_config(config_path, config)
     return config

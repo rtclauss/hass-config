@@ -82,6 +82,71 @@ def test_implausible_jump_is_rejected() -> None:
     assert "implausible jump" in result.reason
 
 
+def test_implausible_jump_allowance_scales_with_elapsed_intervals() -> None:
+    # Regression test: comparing accumulated usage against a limit sized for
+    # a single interval meant that skipped/rejected polls (a watchdog
+    # reboot, a run of OCR failures) made every subsequent real delta look
+    # like a bigger "jump" than the one before it, permanently blocking a
+    # meter that was actually fine. A jump that's implausible for one
+    # 10-minute interval is entirely plausible spread over 5 of them.
+    last_good = sanity.LastGoodReading(
+        value=1000.0, timestamp=datetime(2026, 8, 28, 11, 10, 0, tzinfo=timezone.utc).isoformat()
+    )
+    now = datetime(2026, 8, 28, 12, 0, 0, tzinfo=timezone.utc)  # 50 minutes later = 5 intervals
+
+    result = sanity.validate_reading(
+        "0002000",  # +1000, implausible for 1 interval (max 500) but not 5 (max 2500)
+        digit_count=7,
+        max_gallons_per_interval=500.0,
+        last_good=last_good,
+        now=now,
+        nominal_interval_seconds=600.0,
+    )
+
+    assert result.accepted is True
+    assert result.value == 2000.0
+
+
+def test_implausible_jump_still_rejected_when_it_exceeds_the_scaled_allowance() -> None:
+    last_good = sanity.LastGoodReading(
+        value=1000.0, timestamp=datetime(2026, 8, 28, 11, 10, 0, tzinfo=timezone.utc).isoformat()
+    )
+    now = datetime(2026, 8, 28, 12, 0, 0, tzinfo=timezone.utc)  # 50 minutes later = 5 intervals
+
+    result = sanity.validate_reading(
+        "0010000",  # +9000, exceeds even the 5-interval allowance of 2500
+        digit_count=7,
+        max_gallons_per_interval=500.0,
+        last_good=last_good,
+        now=now,
+        nominal_interval_seconds=600.0,
+    )
+
+    assert result.accepted is False
+    assert "implausible jump" in result.reason
+
+
+def test_elapsed_interval_allowance_never_shrinks_below_one_interval() -> None:
+    # A reading that arrives *before* a full nominal interval has passed
+    # (e.g. a manual retry seconds after the last accepted run) must not get
+    # a smaller allowance than the normal single-interval case.
+    last_good = sanity.LastGoodReading(
+        value=1000.0, timestamp=datetime(2026, 8, 28, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    )
+    now = datetime(2026, 8, 28, 12, 0, 5, tzinfo=timezone.utc)  # 5 seconds later
+
+    result = sanity.validate_reading(
+        "0001400",  # +400, within the normal single-interval allowance of 500
+        digit_count=7,
+        max_gallons_per_interval=500.0,
+        last_good=last_good,
+        now=now,
+        nominal_interval_seconds=600.0,
+    )
+
+    assert result.accepted is True
+
+
 def test_plausible_increase_is_accepted() -> None:
     last_good = sanity.LastGoodReading(value=1000.0, timestamp=UTC_NOW.isoformat())
 

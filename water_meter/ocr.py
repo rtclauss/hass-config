@@ -263,24 +263,43 @@ def match_digits(
     silently blocking every subsequent correct reading as an "implausible
     jump" against it - there is no sanity check protecting this one read, so
     it must clear full confidence on every position instead.
+
+    The confidence gate itself must stay active for a bootstrap read even
+    once every label 0-9 has a template on file. `complete` only says a
+    *correctly-scoring* match won't be misclassified as some other digit for
+    lack of an alternative - it says nothing about whether an unrelated or
+    blurred crop can still score arbitrarily low against every template.
+    Skipping the gate once complete is a fine trade for an ordinary run (the
+    sanity checks are the backstop there), but a bootstrap run has no such
+    backstop: gating only `not complete and ...` here (an earlier version of
+    this function) let a bootstrap run seed a wrong baseline from a
+    low-confidence match the instant the template set became complete,
+    silently reopening the exact corruption this whole bootstrap/exempt
+    scheme exists to prevent.
     """
     excluded = set(excluded_indexes)
     exempt = set() if bootstrap else set(low_confidence_ok_indexes)
     effective_min_confidence = MIN_BOOTSTRAP_CONFIDENCE if bootstrap else min_confidence
     complete = all(label in templates for label in DIGIT_LABELS)
+    gate_active = bootstrap or not complete
     digits = []
     for index, crop in enumerate(crops):
         if index in excluded:
             digits.append("0")
             continue
         label, score = match_digit(crop, templates)
-        if not complete and index not in exempt and score < effective_min_confidence:
-            missing = [label for label in DIGIT_LABELS if label not in templates]
-            raise OcrError(
+        if gate_active and index not in exempt and score < effective_min_confidence:
+            reason = (
                 f"digit at position {index} best-matched {label!r} with low confidence "
-                f"({score:.2f} < {effective_min_confidence}) while the template set is still "
-                f"missing {''.join(missing)} - likely one of those digits, not {label!r}"
+                f"({score:.2f} < {effective_min_confidence})"
             )
+            if not complete:
+                missing = [label for label in DIGIT_LABELS if label not in templates]
+                reason += (
+                    f" while the template set is still missing {''.join(missing)} - "
+                    f"likely one of those digits, not {label!r}"
+                )
+            raise OcrError(reason)
         digits.append(label)
     return "".join(digits)
 

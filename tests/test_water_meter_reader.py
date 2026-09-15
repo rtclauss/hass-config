@@ -2,11 +2,37 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
+import types
 
 import pytest
 
 from water_meter import capture, ocr, reader, sanity, watchdog
 from water_meter.config import CalibrationConfig, ConnectionConfig
+
+
+def _install_fake_paho(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
+    """Stand in for paho-mqtt, which isn't installed in the test environment
+    (see the module docstring on _stub_image_io for the same reasoning re:
+    cv2/numpy). Returns the list default_publisher's messages get appended
+    to, so a test can assert on exactly what would have gone to MQTT.
+    """
+    published: list[dict] = []
+
+    def _multiple(messages: list[dict], **kwargs: object) -> None:
+        published.extend(messages)
+
+    fake_publish = types.ModuleType("paho.mqtt.publish")
+    fake_publish.multiple = _multiple  # type: ignore[attr-defined]
+    fake_mqtt = types.ModuleType("paho.mqtt")
+    fake_mqtt.publish = fake_publish  # type: ignore[attr-defined]
+    fake_paho = types.ModuleType("paho")
+    fake_paho.mqtt = fake_mqtt  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "paho", fake_paho)
+    monkeypatch.setitem(sys.modules, "paho.mqtt", fake_mqtt)
+    monkeypatch.setitem(sys.modules, "paho.mqtt.publish", fake_publish)
+    return published
 
 
 NOW = datetime(2026, 8, 28, 12, 0, 0, tzinfo=timezone.utc)
@@ -560,3 +586,39 @@ def test_requery_is_skipped_for_rejection_reasons_a_second_look_cannot_fix(
 
     assert result.accepted is False
     assert "expected 2 digits" in result.reason
+
+
+def test_default_publisher_reports_error_status_for_a_stuck_reading(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Regression test: a stuck reading is `accepted` (the value is real and
+    # unchanged), but publishing "ok" would make a frozen camera/OCR
+    # pipeline look perfectly healthy forever - packages/water_meter.yaml's
+    # staleness automation only alerts on sensor.water_meter_reading_age or
+    # a status starting with "error".
+    published = _install_fake_paho(monkeypatch)
+    connection = _connection(tmp_path)
+    publisher = reader.default_publisher(connection)
+
+    publisher(
+        reader.RunResult(True, 12.0, "stuck: unchanged for the full history window", stuck=True),
+        NOW,
+    )
+
+    status_message = next(m for m in published if m["topic"] == connection.status_topic)
+    assert status_message["payload"] == "error:stuck: unchanged for the full history window"
+
+
+def test_default_publisher_reports_ok_status_for_a_healthy_accepted_reading(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    published = _install_fake_paho(monkeypatch)
+    connection = _connection(tmp_path)
+    publisher = reader.default_publisher(connection)
+
+    publisher(reader.RunResult(True, 12.0, "ok", stuck=False), NOW)
+
+    status_message = next(m for m in published if m["topic"] == connection.status_topic)
+    assert status_message["payload"] == "ok"
+    reading_message = next(m for m in published if m["topic"] == connection.reading_topic)
+    assert reading_message["payload"] == "12.0"
