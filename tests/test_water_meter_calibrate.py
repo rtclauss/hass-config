@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+import types
 
-from water_meter import calibrate
+import pytest
+
+from water_meter import calibrate, capture, ocr
 from water_meter.config import CalibrationConfig, save_calibration_config
 
 
@@ -61,3 +65,55 @@ def test_write_config_preserves_every_existing_field_on_recalibration(tmp_path: 
     assert config.stuck_after_hours == 12.0
     assert config.history_limit == 100
     assert config.ssocr_args == ("-d", "8")
+
+
+def _install_fake_cv2(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_cv2 = types.ModuleType("cv2")
+    fake_cv2.imread = lambda path: "fake-image"  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "cv2", fake_cv2)
+
+
+def test_test_read_forwards_the_configured_fallback_chain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Regression test: --test used to only ever exercise ssocr, since
+    # test_read never passed templates_dir/vlm_host through to
+    # ocr.read_digits - on the documented glare-affected meter, any ssocr
+    # hiccup during --test failed immediately instead of exercising the
+    # fallback chain the real deployed reader actually uses.
+    _install_fake_cv2(monkeypatch)
+    monkeypatch.setattr(capture, "crop_boxes", lambda image, boxes: ["crop"])
+    captured: dict = {}
+    monkeypatch.setattr(
+        ocr,
+        "read_digits",
+        lambda image_path, digit_crops, config, **kwargs: captured.update(kwargs) or "12345678",
+    )
+    config = CalibrationConfig(
+        roi=(0, 0, 10, 10),
+        digit_boxes=((0, 0, 5, 5),),
+        digit_count=1,
+        excluded_digit_indexes=(),
+        warmup_seconds=0.0,
+        frames_to_grab=1,
+        frames_to_discard=0,
+        max_gallons_per_interval=500.0,
+        stuck_after_hours=24.0,
+        history_limit=200,
+        ssocr_args=(),
+    )
+
+    result = calibrate.test_read(
+        tmp_path / "reference.jpg",
+        config,
+        templates_dir=tmp_path / "templates",
+        vlm_host="truenas.local:30068",
+        vlm_model="qwen3-vl:4b",
+        vlm_timeout=480.0,
+    )
+
+    assert result == "12345678"
+    assert captured["templates_dir"] == tmp_path / "templates"
+    assert captured["vlm_host"] == "truenas.local:30068"
+    assert captured["vlm_model"] == "qwen3-vl:4b"
+    assert captured["vlm_timeout"] == 480.0

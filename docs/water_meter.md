@@ -398,6 +398,20 @@ rotating/sweep indicator (common on encoder registers) - if so, add its index
 to `excluded_digit_indexes` in `calibration.json` so it's rounded down instead
 of fought with OCR.
 
+`--test` alone only exercises `ssocr`, since it runs on a workstation with
+none of the Pi's deployment env vars - on a meter that actually needs the
+fallback tiers (like this documented one, under a fixed glare streak), any
+ssocr hiccup during `--test` fails immediately instead of proving out the
+pipeline that will really be deployed. Pass `--templates-dir` (a local copy
+of the Pi's `digit_templates/`) and/or `--vlm-host`/`--vlm-model`/
+`--vlm-timeout` to exercise the same fallback chain `reader.py` uses:
+
+```bash
+python3 -m water_meter.calibrate calibrate --image reference_frame.jpg \
+    --write-config calibration.json --test \
+    --templates-dir ./digit_templates --vlm-host truenas.local:30068
+```
+
 ### 9. Test, then install the timer
 
 ```bash
