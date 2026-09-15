@@ -70,6 +70,11 @@ homeassistant:
       friendly_name: "Home"
       device_class: presence
 
+    binary_sensor.diy_store_visit:
+      <<: *customize
+      friendly_name: "At a DIY store"
+      icon: mdi:store-marker
+
     binary_sensor.test_homeward:
       <<: *customize
       friendly_name: "Returning from long road trip (95 minutes)"
@@ -1431,6 +1436,45 @@ sensor:
 ########################
 template:
   - binary_sensor:
+      # Shared "is somebody standing in a DIY store right now" signal for the
+      # restock prompts in climate.yaml (air filters) and water_softener.yaml
+      # (salt). Both used to trigger on an exact place-name string match against
+      # one tracker, which misses in three separate ways:
+      #   * Places re-geocodes only when the tracker reports a new GPS fix, and
+      #     the arrival fix usually lands in the parking lot, so place_name is
+      #     "unknown" and place_type is "parking" for the whole visit.
+      #   * Real OSM names are not the bare brand ("The Home Depot #2812",
+      #     "Lowe's Home Improvement"), so `to:` equality never matched.
+      #   * Only the phone was watched, never the car.
+      # Match loosely on every place field both trackers expose, and hold the
+      # sensor on long enough that a single passing fix is still actionable.
+      - name: diy_store_visit
+        unique_id: diy_store_visit
+        default_entity_id: binary_sensor.diy_store_visit
+        icon: mdi:store-marker
+        delay_off: "00:30:00"
+        state: >-
+          {% set store_names = [
+               'home depot', 'menards', "lowe's", 'lowes', 'fleet farm',
+               'ace hardware', 'harbor freight', 'true value', 'hardware'
+             ] %}
+          {% set store_types = [
+               'doityourself', 'hardware', 'trade', 'paint', 'garden_centre'
+             ] %}
+          {% set ns = namespace(at_store=false) %}
+          {% for tracker in ['zeke', 'tesla'] %}
+            {% set place_type = states('sensor.' ~ tracker ~ '_place_place_type') | lower %}
+            {% set labels = [
+                 states('sensor.' ~ tracker ~ '_place_place_name'),
+                 states('sensor.' ~ tracker ~ '_place_zone_name')
+               ] | map('lower') | list %}
+            {% if place_type in store_types
+                  or labels | select('search', store_names | join('|')) | list | count > 0 %}
+              {% set ns.at_store = true %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.at_store }}
+
       - name: test_homeward
         unique_id: test_homeward
         availability: >-
