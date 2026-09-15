@@ -13,12 +13,17 @@ DEFAULT_FRAMES_TO_GRAB = 4
 DEFAULT_HISTORY_LIMIT = 200
 DEFAULT_MAX_GALLONS_PER_INTERVAL = 500.0
 # Matches the systemd timer's OnUnitActiveSec (deploy/systemd/water-meter-
-# reader.timer). sanity.validate_reading scales max_gallons_per_interval by
-# elapsed-time-since-last-good-reading / this value, so a run that's late
-# (skipped/rejected polls, a watchdog reboot) gets a proportionally larger
-# allowance instead of comparing accumulated usage against a limit sized for
-# a single interval - see sanity.py for the incident that motivated this.
-DEFAULT_NOMINAL_INTERVAL_SECONDS = 600.0
+# reader.timer - 60min, raised from 10min on 2026-09-14 after the near-
+# continuous vision-LLM load from a 10-minute cadence tripped the TrueNAS
+# Ollama host's thermal alarm; see that file's comment). sanity.
+# validate_reading scales max_gallons_per_interval by elapsed-time-since-
+# last-good-reading / this value, so a run that's late (skipped/rejected
+# polls, a watchdog reboot) gets a proportionally larger allowance instead
+# of comparing accumulated usage against a limit sized for a single
+# interval - see sanity.py for the incident that motivated this. Keep this
+# in sync with the timer: if it drifts, the implausible-jump/stuck-detection
+# windows silently stop meaning real wall-clock hours.
+DEFAULT_NOMINAL_INTERVAL_SECONDS = 3600.0
 DEFAULT_STUCK_AFTER_HOURS = 24.0
 # 204/254 (~80%): bench-tested against the real jig. 100% blows out the LCD
 # with direct glare (unreadable); 60-80% both read cleanly, so 80% gives the
