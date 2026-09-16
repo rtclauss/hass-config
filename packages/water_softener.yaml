@@ -531,9 +531,22 @@ script: {}
 ########################
 sensor:
   - platform: filter
-    entity_id: sensor.my_water_softener_vl53l1x_sensor
+    # Consumes the normalized-to-mm template sensor (below in the `template:`
+    # section) rather than the raw ESPHome entity directly. The raw entity's
+    # unit_of_measurement depends on HA's unit-system settings (a live
+    # registry setting, not version-controlled), so every mm-scaled
+    # threshold in this file would silently misinterpret its value if HA's
+    # unit system ever reports it in `in` (as observed after the
+    # VL53L0X -> VL53L1X hardware migration re-registered this entity).
+    entity_id: sensor.water_softener_distance_normalized_mm
     name: "Water Softener Salt Level"
     filters:
+      # Drop values that are implausibly far from the recent window (e.g. a
+      # residual specular bounce the firmware-side median filter didn't
+      # catch) before they can bias the long-term average below.
+      - filter: outlier
+        radius: 50
+        window_size: 5
       - filter: lowpass
         time_constant: 10
         precision: 3
@@ -582,6 +595,42 @@ sensor:
 ########################
 template:
   - sensor:
+      - name: Water Softener Distance Normalized MM
+        unique_id: water_softener_distance_normalized_mm
+        icon: mdi:ruler
+        device_class: distance
+        state_class: measurement
+        unit_of_measurement: "mm"
+        # Normalizes the raw ESPHome VL53L1X entity to true millimeters
+        # regardless of HA's unit-system display setting, so the
+        # low-salt/refill thresholds elsewhere in this file (which are bare
+        # numbers, not unit-aware) always compare like-for-like. Fixes the
+        # entity reporting in `in` after the VL53L0X -> VL53L1X hardware
+        # migration re-registered it without the old entity's manual mm
+        # unit override.
+        availability: >-
+          {{ states('sensor.watersoftener_my_water_softener_vl53l1x_sensor')
+             not in ['unknown', 'unavailable'] }}
+        state: >-
+          {% set src = 'sensor.watersoftener_my_water_softener_vl53l1x_sensor' %}
+          {% set value = states(src) | float(default=none) %}
+          {% set unit = state_attr(src, 'unit_of_measurement') %}
+          {% if value is none %}
+            {{ none }}
+          {% elif unit == 'mm' or unit is none %}
+            {{ value | round(0) }}
+          {% elif unit == 'cm' %}
+            {{ (value * 10) | round(0) }}
+          {% elif unit == 'm' %}
+            {{ (value * 1000) | round(0) }}
+          {% elif unit == 'in' %}
+            {{ (value * 25.4) | round(0) }}
+          {% elif unit == 'ft' %}
+            {{ (value * 304.8) | round(0) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+
       - name: Water Softener Forecast Rate
         unique_id: water_softener_forecast_rate
         icon: mdi:chart-line
