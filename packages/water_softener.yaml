@@ -538,6 +538,13 @@ sensor:
     entity_id: sensor.watersoftener_my_water_softener_vl53l1x_sensor
     name: "Water Softener Salt Level"
     filters:
+      # Drop values that are implausibly far from the recent window (e.g. a
+      # residual specular bounce the firmware-side median filter didn't
+      # catch) before they can bias the long-term average below. Radius is
+      # in mm, once the source entity's unit override is set back to mm.
+      - filter: outlier
+        radius: 50
+        window_size: 5
       - filter: lowpass
         time_constant: 10
         precision: 3
