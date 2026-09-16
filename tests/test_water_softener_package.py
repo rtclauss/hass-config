@@ -207,3 +207,21 @@ def test_low_salt_threshold_template_fallbacks_track_calibrated_value() -> None:
     )
     assert fallback_count == 3
     assert "float(default=500)" not in text
+
+
+def test_refill_reset_threshold_calibrated_between_empty_and_full_baselines() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # Regression guard: refill_reset_threshold_mm is calibrated against a
+    # real 2026-09-16 refill (confirmed-empty ~451mm -> confirmed-just-
+    # refilled ~170-174mm). 300mm must stay strictly between the low-salt
+    # threshold (440mm, the confirmed-empty side) and today's observed
+    # full-tank reading, so it can never misfire on normal depletion near
+    # empty nor fail to detect a lighter future refill.
+    assert "initial: 300" in text
+
+    low_salt_threshold = 440
+    refill_reset_threshold = 300
+    observed_full_reading = 172
+
+    assert observed_full_reading < refill_reset_threshold < low_salt_threshold

@@ -487,13 +487,21 @@ input_number:
     mode: box
     step: 10
     unit_of_measurement: mm
-    # NOT yet recalibrated against this sensor's real full-tank
-    # ("just refilled") distance -- that number isn't known yet as of
-    # 2026-09-16 (see water_softener_low_salt_threshold_mm's comment for
-    # the confirmed-empty side of this calibration). Revisit once a
-    # refill has actually happened and the post-refill sensor reading is
-    # observed.
-    initial: 350
+    # Calibrated against the real sensor: a 2026-09-16 refill (4 bags)
+    # brought the raw reading down from the confirmed-empty baseline
+    # (~451mm, see water_softener_low_salt_threshold_mm's comment) to a
+    # stable ~170-174mm within ~5 minutes of pouring, holding flat there
+    # afterward -- no further settling observed. 300mm sits with generous
+    # margin on both sides: ~150mm below the empty baseline (so normal
+    # depletion or sensor jitter near-empty can never misfire this), and
+    # ~128mm above today's specific fill level (so a lighter future
+    # refill -- fewer bags, less full -- still gets correctly detected
+    # rather than requiring this exact fill level again).
+    #
+    # NOTE: this `initial:` only seeds a brand-new helper -- it does NOT
+    # retroactively update the live entity in an existing HA install (see
+    # the matching note on water_softener_low_salt_threshold_mm).
+    initial: 300
   water_softener_refill_reminder_days:
     name: Water Softener Refill Reminder Days
     icon: mdi:calendar-alert
