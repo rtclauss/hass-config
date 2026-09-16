@@ -151,7 +151,8 @@ automation:
         attribute: all_day
         id: trip_details_change
       - trigger: state
-        entity_id: sensor.waze_next_trip_distance
+        entity_id: binary_sensor.upcoming_trip_charging
+        attribute: distance_mi
         id: trip_details_change
       - trigger: state
         entity_id:
@@ -219,8 +220,9 @@ automation:
             {% set outside_temp_known = states('sensor.outside_temperature') not in ['unknown', 'unavailable'] %}
             {% set cold_weather = outside_temp_f <= 20 %}
             {% set trip_entry = state_attr('binary_sensor.upcoming_trip_charging', 'entry') | default('', true) %}
-            {% set trip_distance_mi = state_attr('sensor.waze_next_trip_distance', 'distance') | float(default=0) %}
-            {% set trip_duration_raw = state_attr('sensor.waze_next_trip_distance', 'duration') %}
+            {% set trip_furthest_entry = state_attr('binary_sensor.upcoming_trip_charging', 'furthest_entry') | default('', true) %}
+            {% set trip_distance_mi = state_attr('binary_sensor.upcoming_trip_charging', 'distance_mi') | float(default=0) %}
+            {% set trip_duration_raw = state_attr('binary_sensor.upcoming_trip_charging', 'duration_min') %}
             {% if trip_duration_raw is number %}
               {% set trip_duration = timedelta(minutes=trip_duration_raw) %}
             {% elif trip_duration_raw is string and trip_duration_raw | trim not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
@@ -345,6 +347,9 @@ automation:
             {% endif %}
             {% if preserve_default_charging_schedule and not manage_tesla_schedule and departure_time != '' %}
               {% set summary = summary ~ ' No extra home charging override is needed.' %}
+            {% endif %}
+            {% if has_calendar_departure and trip_furthest_entry and trip_furthest_entry != trip_entry %}
+              {% set summary = summary ~ " Charge target reflects today's furthest stop: " ~ trip_furthest_entry ~ '.' %}
             {% endif %}
             {% if has_calendar_departure and not resident_home %}
               {% set summary = summary ~ ' Cabin preconditioning is suppressed because Ryan is away.' %}
@@ -860,6 +865,15 @@ input_number:
     mode: slider
     unit_of_measurement: psi
     icon: mdi:gauge-low
+  tesla_local_trip_threshold_mi:
+    name: Tesla Local Trip Threshold
+    initial: 10
+    min: 0
+    max: 50
+    step: 1
+    mode: slider
+    unit_of_measurement: mi
+    icon: mdi:home-map-marker
   # nigori_charge_limit:
   #   name: Nigori Charge Limit
   #   min: 0
@@ -943,7 +957,7 @@ script:
               {{ (requested_departure_text | as_datetime | as_local).isoformat() }}
             {% elif state_attr('binary_sensor.upcoming_trip_charging', 'start_time') not in [none, '', 'None'] %}
               {% set upcoming_start = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') | as_datetime | as_local %}
-              {% set travel_duration_raw = state_attr('sensor.waze_next_trip_distance', 'duration') %}
+              {% set travel_duration_raw = state_attr('binary_sensor.upcoming_trip_charging', 'duration_min') %}
               {% if travel_duration_raw is number %}
                 {% set travel_duration = timedelta(minutes=travel_duration_raw) %}
               {% elif travel_duration_raw is string and travel_duration_raw | trim not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
@@ -1094,146 +1108,188 @@ sensor: []
 # Template
 ########################
 template:
-  - binary_sensor:
+  # Enumerates every candidate event across the personal, curling, and work
+  # calendars (via calendar.get_events, not each calendar entity's own single
+  # pinned "current event" attribute) so a same-day all-day entry (e.g. a
+  # recurring "Replace Contacts" reminder) can never shadow a real timed event
+  # for the rest of the day (#see docs/tesla_departure_planner.md). Every
+  # candidate beyond the "local trip" threshold gets a live Waze distance via
+  # waze_travel_time.get_travel_times; charge limit is sized off the FURTHEST
+  # qualifying event in the next 24h, while departure/preconditioning timing
+  # follows whichever qualifying event is soonest.
+  - trigger:
+      - trigger: homeassistant
+        event: start
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: state
+        entity_id:
+          - calendar.ryan_claussen
+          - calendar.curling
+          - binary_sensor.work_trip_today
+    action:
+      - variables:
+          lookahead_start: >-
+            {{ now().isoformat() }}
+          lookahead_end: >-
+            {{ (now() + timedelta(hours=24)).isoformat() }}
+          local_trip_threshold_mi: >-
+            {{ states('input_number.tesla_local_trip_threshold_mi') | float(default=10) }}
+          planner_home_address: >-
+            {{ states('input_text.home_address') }}
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.ryan_claussen
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: personal_event_window
+      - action: calendar.get_events
+        target:
+          entity_id: calendar.curling
+        data:
+          start_date_time: "{{ lookahead_start }}"
+          end_date_time: "{{ lookahead_end }}"
+        response_variable: curling_event_window
+      - variables:
+          personal_events: >-
+            {% if personal_event_window is mapping and personal_event_window.events is defined %}
+              {{ personal_event_window.events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.ryan_claussen'] is defined and personal_event_window['calendar.ryan_claussen'].events is defined %}
+              {{ personal_event_window['calendar.ryan_claussen'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+          curling_events: >-
+            {% if curling_event_window is mapping and curling_event_window.events is defined %}
+              {{ curling_event_window.events | to_json }}
+            {% elif curling_event_window is mapping and curling_event_window['calendar.curling'] is defined and curling_event_window['calendar.curling'].events is defined %}
+              {{ curling_event_window['calendar.curling'].events | to_json }}
+            {% else %}
+              {{ [] | to_json }}
+            {% endif %}
+      - variables:
+          personal_events_list: "{{ (personal_events | default('[]', true) | string | trim | from_json) }}"
+          curling_events_list: "{{ (curling_events | default('[]', true) | string | trim | from_json) }}"
+      - variables:
+          candidates_json: >-
+            {% from 'flight.jinja' import skip_charging_event %}
+            {% set should_skip_charging_event = skip_charging_event | as_function %}
+            {% set now_local = now() %}
+            {% set horizon = now_local + timedelta(hours=24) %}
+            {% set ns = namespace(items=[]) %}
+            {% for event in personal_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set all_day = ('T' not in (start_raw | string)) %}
+              {% set start_dt = (start_raw | as_datetime | as_local) if start_raw not in [none, ''] else none %}
+              {% if start_dt is not none and start_dt > now_local and start_dt < horizon and not all_day and not should_skip_charging_event(summary, description, location) %}
+                {% set ns.items = ns.items + [{'source': 'Personal', 'message': summary, 'start': start_dt.isoformat(), 'location': location}] %}
+              {% endif %}
+            {% endfor %}
+            {% for event in curling_events_list %}
+              {% set summary = event.summary | default('', true) | string %}
+              {% set description = event.description | default('', true) | string %}
+              {% set location = event.location | default('', true) | string %}
+              {% set start_raw = event.start.dateTime | default(event.start.date, true) | default(event.start, true) %}
+              {% set all_day = ('T' not in (start_raw | string)) %}
+              {% set start_dt = (start_raw | as_datetime | as_local) if start_raw not in [none, ''] else none %}
+              {% if start_dt is not none and start_dt > now_local and start_dt < horizon and not all_day and not should_skip_charging_event(summary, description, location) %}
+                {% set ns.items = ns.items + [{'source': 'Curling', 'message': summary, 'start': start_dt.isoformat(), 'location': location}] %}
+              {% endif %}
+            {% endfor %}
+            {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
+            {% set work_message = state_attr('binary_sensor.work_trip_today', 'message') | default('', true) %}
+            {% set work_location = state_attr('binary_sensor.work_trip_today', 'location') | default('', true) %}
+            {% set work_description = state_attr('binary_sensor.work_trip_today', 'description') | default('', true) %}
+            {% set work_all_day = state_attr('binary_sensor.work_trip_today', 'all_day') in [true, 'true', 'True', 'on'] %}
+            {% if work_start_raw not in [none, '', 'None'] and not work_all_day and not should_skip_charging_event(work_message, work_description, work_location) %}
+              {% set work_start = work_start_raw | as_datetime | as_local %}
+              {% if work_start is not none and work_start > now_local and work_start < horizon %}
+                {% set ns.items = ns.items + [{'source': 'Work', 'message': work_message, 'start': work_start.isoformat(), 'location': work_location}] %}
+              {% endif %}
+            {% endif %}
+            {{ ns.items | to_json }}
+      - variables:
+          candidates: "{{ (candidates_json | default('[]', true) | string | trim | from_json) }}"
+          scored_candidates: []
+      - repeat:
+          for_each: "{{ candidates }}"
+          sequence:
+            - variables:
+                candidate_waze_result: null
+                candidate_distance_mi: 0
+                candidate_duration_min: 0
+            - if:
+                - condition: template
+                  value_template: "{{ (repeat.item.location | default('', true) | string | trim) != '' }}"
+              then:
+                - action: waze_travel_time.get_travel_times
+                  continue_on_error: true
+                  data:
+                    origin: "{{ planner_home_address }}"
+                    destination: "{{ repeat.item.location }}"
+                    region: us
+                    units: imperial
+                  response_variable: candidate_waze_result
+                - variables:
+                    candidate_distance_mi: >-
+                      {{ (candidate_waze_result.routes[0].distance | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
+                    candidate_duration_min: >-
+                      {{ (candidate_waze_result.routes[0].duration | float(0)) if (candidate_waze_result is mapping and (candidate_waze_result.routes | default([]) | count) > 0) else 0 }}
+            - variables:
+                scored_candidates: >-
+                  {{ scored_candidates + [ dict(repeat.item, distance_mi=candidate_distance_mi, duration_min=candidate_duration_min) ] }}
+      - variables:
+          trip_plan_json: >-
+            {% set ns2 = namespace(next=none, furthest=none) %}
+            {% for c in scored_candidates %}
+              {% if c.distance_mi >= local_trip_threshold_mi %}
+                {% if ns2.next is none or (c.start | as_datetime) < (ns2.next.start | as_datetime) %}
+                  {% set ns2.next = c %}
+                {% endif %}
+                {% if ns2.furthest is none or c.distance_mi > ns2.furthest.distance_mi %}
+                  {% set ns2.furthest = c %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns2.next is none %}
+              {{ {'entry': '', 'start_time': '', 'all_day': false, 'location': '', 'distance_mi': 0, 'duration_min': 0, 'furthest_entry': '', 'active': false} | to_json }}
+            {% else %}
+              {{ {
+                'entry': ns2.next.source ~ ': ' ~ ns2.next.message,
+                'start_time': ns2.next.start,
+                'all_day': false,
+                'location': ns2.next.location,
+                'distance_mi': ns2.furthest.distance_mi,
+                'duration_min': ns2.next.duration_min,
+                'furthest_entry': ns2.furthest.source ~ ': ' ~ ns2.furthest.message,
+                'active': true
+              } | to_json }}
+            {% endif %}
+    binary_sensor:
       - name: upcoming_trip_charging
         unique_id: upcoming_trip_charging
+        state: >-
+          {{ (trip_plan_json | from_json).active | default(false) }}
         attributes:
           entry: >-
-            {% from 'flight.jinja' import skip_charging_event %}
-            {% set should_skip_charging_event = skip_charging_event | as_function %}
-            {% set now_local = now() %}
-            {% set horizon = now_local + timedelta(hours=24) %}
-            {% set ns = namespace(start=none, entry='None') %}
-            {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
-            {% if personal_start_raw not in [none, ''] and not personal_skip %}
-              {% set personal_start = personal_start_raw | as_datetime | as_local %}
-              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
-                {% set ns.start = personal_start %}
-                {% set ns.entry = 'Personal: ' ~ (state_attr('calendar.ryan_claussen', 'message') | default('', true)) %}
-              {% endif %}
-            {% endif %}
-            {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
-            {% if work_start_raw not in [none, ''] and not work_skip %}
-              {% set work_start = work_start_raw | as_datetime | as_local %}
-              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
-                {% set ns.start = work_start %}
-                {% set ns.entry = 'Work: ' ~ (state_attr('binary_sensor.work_trip_today', 'message') | default('', true)) %}
-              {% endif %}
-            {% endif %}
-            {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
-            {% if curling_start_raw not in [none, ''] and not curling_skip %}
-              {% set curling_start = curling_start_raw | as_datetime | as_local %}
-              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
-                {% set ns.start = curling_start %}
-                {% set ns.entry = 'Curling: ' ~ (state_attr('calendar.curling', 'message') | default('', true)) %}
-              {% endif %}
-            {% endif %}
-            {{ ns.entry }}
+            {{ (trip_plan_json | from_json).entry | default('', true) }}
           start_time: >-
-            {% from 'flight.jinja' import skip_charging_event %}
-            {% set should_skip_charging_event = skip_charging_event | as_function %}
-            {% set now_local = now() %}
-            {% set horizon = now_local + timedelta(hours=24) %}
-            {% set ns = namespace(start=none, value='None') %}
-            {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
-            {% if personal_start_raw not in [none, ''] and not personal_skip %}
-              {% set personal_start = personal_start_raw | as_datetime | as_local %}
-              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
-                {% set ns.start = personal_start %}
-                {% set ns.value = personal_start_raw %}
-              {% endif %}
-            {% endif %}
-            {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
-            {% if work_start_raw not in [none, ''] and not work_skip %}
-              {% set work_start = work_start_raw | as_datetime | as_local %}
-              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
-                {% set ns.start = work_start %}
-                {% set ns.value = work_start_raw %}
-              {% endif %}
-            {% endif %}
-            {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
-            {% if curling_start_raw not in [none, ''] and not curling_skip %}
-              {% set curling_start = curling_start_raw | as_datetime | as_local %}
-              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
-                {% set ns.start = curling_start %}
-                {% set ns.value = curling_start_raw %}
-              {% endif %}
-            {% endif %}
-            {{ ns.value }}
+            {{ (trip_plan_json | from_json).start_time | default('', true) }}
           all_day: >-
-            {% from 'flight.jinja' import skip_charging_event %}
-            {% set should_skip_charging_event = skip_charging_event | as_function %}
-            {% set now_local = now() %}
-            {% set horizon = now_local + timedelta(hours=24) %}
-            {% set ns = namespace(start=none, value='None') %}
-            {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-            {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
-            {% if personal_start_raw not in [none, ''] and not personal_skip %}
-              {% set personal_start = personal_start_raw | as_datetime | as_local %}
-              {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
-                {% set ns.start = personal_start %}
-                {% set ns.value = state_attr('calendar.ryan_claussen', 'all_day') %}
-              {% endif %}
-            {% endif %}
-            {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-            {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
-            {% if work_start_raw not in [none, ''] and not work_skip %}
-              {% set work_start = work_start_raw | as_datetime | as_local %}
-              {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
-                {% set ns.start = work_start %}
-                {% set ns.value = state_attr('binary_sensor.work_trip_today', 'all_day') %}
-              {% endif %}
-            {% endif %}
-            {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-            {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
-            {% if curling_start_raw not in [none, ''] and not curling_skip %}
-              {% set curling_start = curling_start_raw | as_datetime | as_local %}
-              {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
-                {% set ns.start = curling_start %}
-                {% set ns.value = state_attr('calendar.curling', 'all_day') %}
-              {% endif %}
-            {% endif %}
-            {{ ns.value }}
-        state: >-
-          {% from 'flight.jinja' import skip_charging_event %}
-          {% set should_skip_charging_event = skip_charging_event | as_function %}
-          {% set now_local = now() %}
-          {% set horizon = now_local + timedelta(hours=24) %}
-          {% set ns = namespace(start=none, eligible=false) %}
-          {% set personal_start_raw = state_attr('calendar.ryan_claussen', 'start_time') %}
-          {% set personal_skip = should_skip_charging_event(state_attr('calendar.ryan_claussen', 'message'), state_attr('calendar.ryan_claussen', 'description'), state_attr('calendar.ryan_claussen', 'location')) %}
-          {% if personal_start_raw not in [none, ''] and not personal_skip %}
-            {% set personal_start = personal_start_raw | as_datetime | as_local %}
-            {% if personal_start is not none and personal_start > now_local and personal_start < horizon %}
-              {% set ns.start = personal_start %}
-              {% set ns.eligible = true %}
-            {% endif %}
-          {% endif %}
-          {% set work_start_raw = state_attr('binary_sensor.work_trip_today', 'start_time') %}
-          {% set work_skip = should_skip_charging_event(state_attr('binary_sensor.work_trip_today', 'message'), state_attr('binary_sensor.work_trip_today', 'description'), state_attr('binary_sensor.work_trip_today', 'location')) %}
-          {% if work_start_raw not in [none, ''] and not work_skip %}
-            {% set work_start = work_start_raw | as_datetime | as_local %}
-            {% if work_start is not none and work_start > now_local and work_start < horizon and (ns.start is none or work_start < ns.start) %}
-              {% set ns.start = work_start %}
-              {% set ns.eligible = true %}
-            {% endif %}
-          {% endif %}
-          {% set curling_start_raw = state_attr('calendar.curling', 'start_time') %}
-          {% set curling_skip = should_skip_charging_event(state_attr('calendar.curling', 'message'), state_attr('calendar.curling', 'description'), state_attr('calendar.curling', 'location')) %}
-          {% if curling_start_raw not in [none, ''] and not curling_skip %}
-            {% set curling_start = curling_start_raw | as_datetime | as_local %}
-            {% if curling_start is not none and curling_start > now_local and curling_start < horizon and (ns.start is none or curling_start < ns.start) %}
-              {% set ns.start = curling_start %}
-              {% set ns.eligible = true %}
-            {% endif %}
-          {% endif %}
-          {{ ns.eligible and (state_attr("sensor.waze_next_trip_distance", "distance") | int(0) > 45) }}
+            {{ (trip_plan_json | from_json).all_day | default(false) }}
+          location: >-
+            {{ (trip_plan_json | from_json).location | default('', true) }}
+          distance_mi: >-
+            {{ (trip_plan_json | from_json).distance_mi | default(0) }}
+          duration_min: >-
+            {{ (trip_plan_json | from_json).duration_min | default(0) }}
+          furthest_entry: >-
+            {{ (trip_plan_json | from_json).furthest_entry | default('', true) }}
+  - binary_sensor:
       - default_entity_id: binary_sensor.tesla_daily_plan_active
         unique_id: tesla_daily_plan_active
         name: Tesla Daily Plan Active
@@ -1269,49 +1325,8 @@ template:
         unique_id: calendar_destination
         name: Next Calendar Destination
         state: >-
-          {% if state_attr("calendar.ryan_claussen", "start_time")  != None %}
-            {% set personal_meeting_time = (state_attr("calendar.ryan_claussen", "start_time") | as_datetime|as_local) %}
-          {% else %}
-            {% set personal_meeting_time = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if state_attr("binary_sensor.work_trip_today", "start_time") not in [none, ''] %}
-            {% set work_meeting_upcoming = state_attr("binary_sensor.work_trip_today", "start_time")| as_datetime|as_local %}
-          {% else %}
-            {% set work_meeting_upcoming = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if state_attr("calendar.curling", "start_time")  != None %}
-            {% set curling_upcoming = (state_attr("calendar.curling", "start_time")| as_datetime|as_local) %}
-          {% else %}
-            {% set curling_upcoming = as_datetime(13596565062) %}
-          {% endif %}
-
-          {% if (personal_meeting_time < curling_upcoming) %}
-            {% if (personal_meeting_time < work_meeting_upcoming) %}
-              {% if (personal_meeting_time - now())< timedelta(hours=24) and state_attr('calendar.ryan_claussen', 'location') != "" %}
-                {{ state_attr('calendar.ryan_claussen', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% else %}
-                {{ state_attr('binary_sensor.work_trip_today', 'location') }}
-            {% endif %}
-          {% else %}
-            {% if (curling_upcoming < work_meeting_upcoming) %}
-              {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('calendar.curling', 'location') != "" %}
-                {{ state_attr('calendar.curling', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% else %}
-            {% if (curling_upcoming - now())< timedelta(hours=24) and state_attr('binary_sensor.work_trip_today', 'location') not in [none, ''] %}
-                {{ state_attr('binary_sensor.work_trip_today', 'location') }}
-              {% else %}
-                {{states("input_text.home_address")}}
-              {% endif %}
-            {% endif %}
-          {% endif %}
+          {% set loc = state_attr('binary_sensor.upcoming_trip_charging', 'location') | default('', true) | string | trim %}
+          {{ loc if loc != '' else states('input_text.home_address') }}
 ########################
 # Zone
 ########################

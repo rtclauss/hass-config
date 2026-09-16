@@ -19,19 +19,25 @@ The planner sets the Tesla charge limit and scheduled departure behavior based o
 ### Trip inputs
 
 - `binary_sensor.upcoming_trip_charging`
-- `sensor.waze_next_trip_distance`
+- `input_number.tesla_local_trip_threshold_mi`
 
-If an upcoming calendar departure exists, the planner uses trip start time plus Waze duration to determine a departure window.
+`binary_sensor.upcoming_trip_charging` is a **trigger-based** template sensor. On a schedule (HA start, every 15 minutes, and whenever `calendar.ryan_claussen`, `calendar.curling`, or `binary_sensor.work_trip_today` changes) it:
 
-The `binary_sensor.upcoming_trip_charging` state still represents the longer-distance charging case. The planner also uses that sensor's `start_time` attribute for shorter calendar departures that should precondition but do not need a higher charge limit.
+1. Fetches every event in the next 24 hours from `calendar.ryan_claussen` and `calendar.curling` via the `calendar.get_events` action (not each calendar entity's own single pinned "current event" attribute — see below), plus `binary_sensor.work_trip_today`'s own event.
+2. Drops any event that is all-day, in the past, outside the 24-hour horizon, or a flight/`nocharge` event (via the shared `skip_charging_event` macro, unchanged).
+3. Calls `waze_travel_time.get_travel_times` once per remaining candidate that has a location, scoring it with a real drive distance/duration from home.
+4. Excludes any candidate closer than `input_number.tesla_local_trip_threshold_mi` (default 10 mi, adjustable on the dashboard) — a nearby errand is never treated as a "trip" worth preconditioning for.
+5. Of what's left ("qualifying" candidates), the **soonest** one drives departure timing/preconditioning (`entry`, `start_time`, `duration_min`), and the **furthest** one drives the charge limit (`distance_mi`, `furthest_entry`). If your day has a nearby dentist visit at 10am and a 100 mi loan closing at 1pm, the car preconditions for the 10am departure but charges to whatever the 100 mi trip needs.
 
-The planner now normalizes Waze/Tesla duration inputs with Home Assistant's `as_timedelta` helper, so legacy numeric values still work and string durations such as `00:35:00` or `PT35M` are accepted as well.
+This replaced an older design that read each calendar entity's own single "current event" attribute (`state_attr(calendar, 'start_time'/'message')`). HA calendar entities only ever expose *one* such event, and while a same-day **all-day** event is active (for example a recurring "Replace Contacts" reminder) it pins that attribute for the entire day — so a real timed event later that day (a 10am dentist appointment) was invisible to the planner. All-day events are now excluded from candidacy outright, and the full event list is enumerated instead of trusting that single pinned attribute.
 
-If Waze is temporarily unavailable, `binary_sensor.upcoming_trip_charging` remains available and keeps exposing the next calendar departure metadata. Its long-trip charging state falls back to `off` until Waze publishes a distance again, and the planner recomputes when `sensor.waze_next_trip_distance` refreshes.
+The planner now normalizes Waze duration with Home Assistant's `as_timedelta` helper where needed, so legacy numeric values still work.
 
-The trip-selection template now only considers future departures inside the next 24 hours. Once a calendar departure is in the past, its `start_time` drops out of the planner inputs and the next planner recompute clears Tesla scheduled departure instead of leaving stale preconditioning or off-peak charging events behind.
+If a Waze lookup fails for one candidate (`continue_on_error: true`), that candidate degrades to 0 mi/0 min rather than crashing the whole sensor recompute — the same as if it were a local trip. `sensor.waze_next_trip_distance` and `sensor.calendar_destination` still exist as passive display-only entities (the "Next Calendar Destination" dashboard tile mirrors `binary_sensor.upcoming_trip_charging`'s `location` attribute, falling back to home), but neither is read by the planning logic anymore.
 
-Flight events are excluded from charge planning entirely. `binary_sensor.upcoming_trip_charging` runs every candidate calendar event through the shared `skip_charging_event` macro in `custom_templates/flight.jinja`, which reuses the same flight-recognition rules as travel detection in `packages/trips.yaml` (route-arrow itineraries such as `✈ MSP→ATL`, `flight to …` / `flight: … to …` titles, and itinerary markers like "Synced by Flighty", "Created from an email you received in Gmail", booking codes, and flight-time lines). The macro is applied in all four template blocks (`state`, `entry`, `start_time`, `all_day`) so a flight never sets a trip distance, departure time, or preconditioning plan. This is intentionally origin-agnostic: unlike trip-mode detection, the charge planner ignores a flight regardless of whether it departs MSP, because the car never makes the long drive to the arrival city. Previously a far-destination flight (for example "Flight to Atlanta") fed the Waze drive distance to the arrival city, tripped the `>= 90 mi -> 100%` rule, and pinned the home Tesla to a 100% charge. The same macro still honors the manual `nocharge` description tag as an explicit opt-out.
+The trip-selection template only considers future departures inside the next 24 hours. Once a calendar departure is in the past, its `start_time` drops out of the planner inputs and the next planner recompute clears Tesla scheduled departure instead of leaving stale preconditioning or off-peak charging events behind.
+
+Flight events are excluded from charge planning entirely. Candidate-building runs every calendar event through the shared `skip_charging_event` macro in `custom_templates/flight.jinja`, which reuses the same flight-recognition rules as travel detection in `packages/trips.yaml` (route-arrow itineraries such as `✈ MSP→ATL`, `flight to …` / `flight: … to …` titles, and itinerary markers like "Synced by Flighty", "Created from an email you received in Gmail", booking codes, and flight-time lines). This is intentionally origin-agnostic: unlike trip-mode detection, the charge planner ignores a flight regardless of whether it departs MSP, because the car never makes the long drive to the arrival city. Previously a far-destination flight (for example "Flight to Atlanta") fed the Waze drive distance to the arrival city, tripped the `>= 90 mi -> 100%` rule, and pinned the home Tesla to a 100% charge. The same macro still honors the manual `nocharge` description tag as an explicit opt-out.
 
 ### Alarm inputs
 
@@ -112,11 +118,11 @@ When it is on, the planner pins the charge limit to `100%`.
 
 - `number.nigori_charge_limit`
 
-Decision summary:
+Decision summary (`distance_mi` below is always the **furthest** qualifying event in the next 24 hours, not necessarily the next one to depart):
 
+- inside the local trip threshold (`< input_number.tesla_local_trip_threshold_mi`, default 10 mi): not a trip at all — falls through to the alarm/no-plan tiers below
 - long trip (`>= 90 mi`): `100%`
-- other trip: `90%`
-- shorter calendar departure: keep the default `80%`
+- other qualifying trip (`>= threshold` and `< 90 mi`): `90%`
 - alarm + cold weather: `90%`
 - alarm + lower EV tariff: `85%`
 - alarm + higher EV tariff: `80%`
@@ -199,6 +205,10 @@ Manual regression cases worth checking in Template Developer Tools or against li
 - Tesla `sensor.nigori_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
 - A just-finished calendar departure disappears from `binary_sensor.upcoming_trip_charging` and clears Tesla scheduled departure on the next planner recompute.
 - A calendar event that is still upcoming but already inside the departure buffer skips scheduled preconditioning instead of creating a stale past-due Tesla schedule.
+- A same-day all-day event (for example a recurring "Replace Contacts" reminder) never becomes the planner's selected `entry`/`start_time`, even while it is the only event calendar.ryan_claussen's own native attributes would otherwise expose; a real timed event later that day (for example a 10am dentist appointment) is still picked up via `calendar.get_events`.
+- With three same-day qualifying events — two inside the local trip threshold and one 100 mi away — the charge limit reflects the 100 mi trip (`distance_mi` = furthest), while `entry`/`start_time`/preconditioning still follow whichever qualifying event departs soonest.
+- Raising or lowering `input_number.tesla_local_trip_threshold_mi` changes which events count as a "trip" at all; an event just inside the radius produces no plan, and the same event just outside it produces one.
+- If the Waze lookup for one candidate's location fails, that candidate scores 0 mi/0 min (treated like a local trip) instead of leaving a stale distance from a previous recompute or erroring the whole sensor.
 - At `home`, a real calendar departure schedules cabin preconditioning at `80%`, `90%`, or `100%` without changing Tesla-app charging defaults.
 - Alarm-only plans adjust charge limit and planner messaging but do not create Tesla scheduled departure or cabin-preconditioning overrides.
 - When either `person.ryan` or `device_tracker.nigori_location_tracker` leaves `home`, any active Home Assistant-managed departure is disabled and its tracking helpers are cleared.
