@@ -74,3 +74,17 @@ def test_salt_level_source_normalizes_units_to_mm() -> None:
     assert 'unique_id: water_softener_distance_normalized_mm' in text
     assert 'unit_of_measurement: "mm"' in text
     assert "value * 25.4" in text
+
+    # Regression guard: an actual (non-comment) "device_class: distance"
+    # key on this template sensor would make HA's own unit-system
+    # conversion apply to *it* too, silently re-converting its mm state
+    # back to inches under an imperial unit system and reintroducing the
+    # exact bug this sensor exists to fix, one level downstream (caught in
+    # review). Checked line-by-line so this assertion survives explaining
+    # itself in a comment, same as this one does.
+    live_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert not any(line == "device_class: distance" for line in live_lines)

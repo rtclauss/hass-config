@@ -598,7 +598,13 @@ template:
       - name: Water Softener Distance Normalized MM
         unique_id: water_softener_distance_normalized_mm
         icon: mdi:ruler
-        device_class: distance
+        # Deliberately NOT device_class: distance. HA's unit-system
+        # conversion is keyed off device_class, not unit_of_measurement --
+        # declaring "distance" here would make HA treat this sensor's own
+        # native unit as convertible and silently re-convert its mm state
+        # back to inches under an imperial unit system, reintroducing the
+        # exact bug this sensor exists to fix one level downstream (caught
+        # in review of the first version of this normalization sensor).
         state_class: measurement
         unit_of_measurement: "mm"
         # Normalizes the raw ESPHome VL53L1X entity to true millimeters
