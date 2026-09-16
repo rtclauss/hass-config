@@ -71,6 +71,15 @@ sensor:
       # The component reports meters; retain the millimeter scale expected by
       # the Home Assistant water softener package and its existing thresholds.
       - lambda: return x * 1000;
+      # Reject single-sample spikes (e.g. a specular bounce off the brine
+      # surface) before they reach the EMA below. window_size looks back
+      # across the last 5 raw (2s) readings; send_every: 1 keeps the same
+      # ~2s cadence feeding the EMA, so this only adds spike rejection
+      # without slowing down the final publish rate.
+      - median:
+          window_size: 5
+          send_every: 1
+          send_first_at: 1
       - exponential_moving_average:
           alpha: 0.1
           send_every: 15
