@@ -462,7 +462,23 @@ input_number:
     mode: box
     step: 10
     unit_of_measurement: mm
-    initial: 500
+    # Calibrated against the real sensor: confirmed empty (visually
+    # verified brine with no salt pile at install, then reconfirmed via a
+    # stable overnight baseline of ~451-452mm, stdev ~1.1-1.3mm) before a
+    # 2026-09-16 refill. The prior default of 500 was never reachable on
+    # this tank's actual mounting geometry -- above: 500 could never fire,
+    # so the low-salt alert was silently dead from install. 440 sits ~10mm
+    # below the confirmed-empty baseline as margin against residual
+    # sensor jitter, so a single noisy sample at the once-daily 16:00
+    # check can't skip a real low-salt day.
+    #
+    # NOTE: this `initial:` only seeds a brand-new helper -- it does NOT
+    # retroactively update the live entity in an existing HA install. The
+    # live value was set directly via input_number.set_value when this
+    # was calibrated; keep this YAML value in sync with the live one if
+    # it's ever recalibrated again (e.g. after seeing real full-tank
+    # numbers), so a fresh deploy doesn't regress to a stale default.
+    initial: 440
   water_softener_refill_reset_threshold_mm:
     name: Water Softener Refill Reset Threshold
     icon: mdi:arrow-expand-up
@@ -471,6 +487,12 @@ input_number:
     mode: box
     step: 10
     unit_of_measurement: mm
+    # NOT yet recalibrated against this sensor's real full-tank
+    # ("just refilled") distance -- that number isn't known yet as of
+    # 2026-09-16 (see water_softener_low_salt_threshold_mm's comment for
+    # the confirmed-empty side of this calibration). Revisit once a
+    # refill has actually happened and the post-refill sensor reading is
+    # observed.
     initial: 350
   water_softener_refill_reminder_days:
     name: Water Softener Refill Reminder Days
@@ -686,18 +708,24 @@ template:
           {% else %}
             {{ ((rates[middle - 1] + rates[middle]) / 2) | round(3) }}
           {% endif %}
+      # The float(default=...) fallbacks below only apply while
+      # input_number.water_softener_low_salt_threshold_mm is transiently
+      # unknown/unavailable (e.g. during HA startup before helpers load).
+      # Keep them in sync with that input_number's calibrated value
+      # (currently 440mm) -- a stale fallback here would silently mask a
+      # real low-salt state during that window (caught in review).
       - name: Water Softener Days Until Low Salt
         unique_id: water_softener_days_until_low_salt
         icon: mdi:calendar-clock
         state_class: measurement
         unit_of_measurement: d
         availability: >-
-          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=440) %}
           {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
           {% set rate = states('sensor.water_softener_forecast_rate_median_24h') | float(default=none) %}
           {{ level is not none and (level >= threshold or (rate is not none and rate > 0)) }}
         state: >-
-          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=440) %}
           {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
           {% set rate = states('sensor.water_softener_forecast_rate_median_24h') | float(default=none) %}
           {% if level is none %}
@@ -718,13 +746,16 @@ template:
         state: >-
           {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
           {{ (now() + timedelta(days=days)).isoformat() }}
+      # Same float(default=...) note as Water Softener Days Until Low Salt
+      # above -- keep in sync with the calibrated threshold (currently
+      # 440mm).
       - name: Water Softener Forecast Status
         unique_id: water_softener_forecast_status
         icon: mdi:shaker-outline
         availability: >-
           {{ states('sensor.water_softener_salt_level') | float(default=none) is not none }}
         state: >-
-          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=500) %}
+          {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=440) %}
           {% set reminder_days = states('input_number.water_softener_refill_reminder_days') | float(default=14) %}
           {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
           {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
