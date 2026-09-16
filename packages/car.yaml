@@ -1127,6 +1127,7 @@ template:
           - calendar.ryan_claussen
           - calendar.curling
           - binary_sensor.work_trip_today
+          - input_number.tesla_local_trip_threshold_mi
     action:
       - variables:
           lookahead_start: >-
@@ -1137,7 +1138,10 @@ template:
             {{ states('input_number.tesla_local_trip_threshold_mi') | float(default=10) }}
           planner_home_address: >-
             {{ states('input_text.home_address') }}
+          personal_event_window: null
+          curling_event_window: null
       - action: calendar.get_events
+        continue_on_error: true
         target:
           entity_id: calendar.ryan_claussen
         data:
@@ -1145,6 +1149,7 @@ template:
           end_date_time: "{{ lookahead_end }}"
         response_variable: personal_event_window
       - action: calendar.get_events
+        continue_on_error: true
         target:
           entity_id: calendar.curling
         data:

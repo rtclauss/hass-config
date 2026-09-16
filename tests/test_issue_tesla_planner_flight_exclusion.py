@@ -405,3 +405,46 @@ def test_no_location_event_is_treated_as_local_not_a_trip() -> None:
 
     assert plan["entry"] == "Personal: Dentist"
     assert plan["distance_mi"] == 69.6
+
+
+def test_calendar_lookup_failure_does_not_abort_the_whole_recompute() -> None:
+    # A transient error fetching one calendar's events must not stop the
+    # other calendar's lookup or the final trip_plan_json computation from
+    # running, or the sensor would keep serving a stale plan indefinitely.
+    text = CAR_PATH.read_text(encoding="utf-8")
+    trip_sensor_block = re.search(
+        r"  - trigger:\n(.*?)\n    binary_sensor:\n      - name: upcoming_trip_charging",
+        text,
+        re.DOTALL,
+    )
+    assert trip_sensor_block is not None
+    block = trip_sensor_block.group(1)
+
+    assert block.count("action: calendar.get_events") == 2
+    # Each calendar.get_events call must tolerate its own failure...
+    get_events_calls = re.findall(
+        r"- action: calendar\.get_events\n(.*?)response_variable: \w+",
+        block,
+        re.DOTALL,
+    )
+    assert len(get_events_calls) == 2
+    for call in get_events_calls:
+        assert "continue_on_error: true" in call
+    # ...and each response variable is reset to a safe default beforehand, so
+    # a failed call leaves a falsy value instead of an undefined one.
+    assert "personal_event_window: null" in block
+    assert "curling_event_window: null" in block
+
+
+def test_local_trip_threshold_change_recomputes_immediately() -> None:
+    # Without watching the threshold helper, adjusting the dashboard slider
+    # would silently wait up to 15 minutes (the time_pattern trigger) before
+    # taking effect.
+    text = CAR_PATH.read_text(encoding="utf-8")
+    trip_sensor_block = re.search(
+        r"  - trigger:\n(.*?)\n    action:",
+        text,
+        re.DOTALL,
+    )
+    assert trip_sensor_block is not None
+    assert "input_number.tesla_local_trip_threshold_mi" in trip_sensor_block.group(1)
