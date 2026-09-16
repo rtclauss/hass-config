@@ -186,3 +186,24 @@ def test_water_softener_forecast_status_is_visible_on_home_dashboard_tile() -> N
     assert "entity: sensor.water_softener_forecast_low_salt_at" in text
     assert "entity: sensor.water_softener_salt_level" in text
     assert "entity: input_number.bags_of_salt_at_home" in text
+
+
+def test_low_salt_threshold_template_fallbacks_track_calibrated_value() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # Regression guard: the low-salt threshold input_number is calibrated
+    # to this sensor's confirmed-empty baseline (~451mm), set to 440mm.
+    # The three template sensors that read it also carry a
+    # float(default=...) fallback for the brief window where the
+    # input_number is transiently unknown/unavailable (e.g. HA startup
+    # before helpers load) -- a stale fallback there would silently mask
+    # a real low-salt state during that window (caught in review). All
+    # three fallbacks must track the same calibrated value, not an old
+    # or ad-hoc one.
+    assert "initial: 440" in text
+    fallback_count = text.count(
+        "states('input_number.water_softener_low_salt_threshold_mm') "
+        "| float(default=440)"
+    )
+    assert fallback_count == 3
+    assert "float(default=500)" not in text
