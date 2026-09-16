@@ -531,7 +531,11 @@ script: {}
 ########################
 sensor:
   - platform: filter
-    entity_id: sensor.my_water_softener_vl53l1x_sensor
+    # HA registers this ESPHome node's entity with a "watersoftener_" device-name
+    # prefix (confirmed via the live entity registry after the VL53L0X -> VL53L1X
+    # hardware migration and ESPHome integration reconfigure); the un-prefixed id
+    # never existed post-migration and left this filter sensor stuck on "unknown".
+    entity_id: sensor.watersoftener_my_water_softener_vl53l1x_sensor
     name: "Water Softener Salt Level"
     filters:
       - filter: lowpass
