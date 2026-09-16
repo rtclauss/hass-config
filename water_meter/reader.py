@@ -125,6 +125,11 @@ def run_once(
         stuck_after_hours=calibration.stuck_after_hours,
     )
 
+    if not validation.accepted and last_good is not None:
+        raw_digits, validation = _correct_glare_positions_from_last_good(
+            calibration, raw_digits, validation, last_good, now
+        )
+
     if not validation.accepted and connection.vlm_host and last_good is not None:
         raw_digits, validation = _requery_vlm_on_suspect_value(
             connection, calibration, crop_path, raw_digits, validation, last_good, now
@@ -263,6 +268,81 @@ def _handle_capture_failure(
         return RunResult(False, None, reboot_reason)
 
     return RunResult(False, None, reason)
+
+
+def _correct_glare_positions_from_last_good(
+    calibration: CalibrationConfig,
+    raw_digits: str,
+    validation: "sanity.ValidationResult",
+    last_good: "sanity.LastGoodReading",
+    now: datetime,
+) -> tuple[str, "sanity.ValidationResult"]:
+    """Splice last_good's own digits into the glare-affected positions
+    before ever paying for a VLM requery - often resolves the single most
+    common rejection outright, for free.
+
+    calibration.low_confidence_ok_indexes marks the meter's highest-place-
+    value digits (millions/hundred-thousands): positions under a fixed
+    glare streak that no OCR method here has ever read reliably. Those
+    positions physically cannot change except once every tens of thousands
+    of gallons - far slower than any realistic per-poll delta - so
+    last_good's own digits there are a strictly better source of truth than
+    a fresh read of a spot the glare genuinely destroys the pixel data for.
+
+    This only ever fires after the raw reading has already failed
+    validation (a decrease or an implausible jump - the exact signature of
+    one misread digit), and the corrected candidate is re-validated through
+    the same sanity gate before being trusted - so the worst case is a
+    missed rescue (falls through to the VLM requery or a plain rejection),
+    never a wrongly-accepted value. In the one scenario this could get
+    wrong - a genuine rollover into a new highest-place-value digit that
+    also happened to look implausible on first read - the corrected
+    candidate still has to pass the same gate, so it fails safely rather
+    than smuggling through a bad value.
+    """
+    if not calibration.low_confidence_ok_indexes:
+        return raw_digits, validation
+    if not (validation.reason.startswith("value decreased") or validation.reason.startswith("implausible jump")):
+        return raw_digits, validation
+
+    scaled = int(round(last_good.value * (10**calibration.decimal_places)))
+    last_good_digits = f"{scaled:0{calibration.digit_count}d}"
+    if len(last_good_digits) != calibration.digit_count:
+        # last_good has more digits than the display can show (a real
+        # rollover past the meter's own max) - nothing sane to splice in.
+        return raw_digits, validation
+
+    corrected = list(raw_digits)
+    for pos in calibration.low_confidence_ok_indexes:
+        if 0 <= pos < calibration.digit_count:
+            corrected[pos] = last_good_digits[pos]
+    corrected_digits = "".join(corrected)
+
+    if corrected_digits == raw_digits:
+        return raw_digits, validation
+
+    corrected_validation = sanity.validate_reading(
+        corrected_digits,
+        digit_count=calibration.digit_count,
+        max_gallons_per_interval=calibration.max_gallons_per_interval,
+        last_good=last_good,
+        now=now,
+        history_limit=calibration.history_limit,
+        decimal_places=calibration.decimal_places,
+        nominal_interval_seconds=calibration.nominal_interval_seconds,
+        stuck_after_hours=calibration.stuck_after_hours,
+    )
+    if corrected_validation.accepted:
+        LOG.info("Leading-digit self-heal succeeded: %s -> %s", raw_digits, corrected_digits)
+        return corrected_digits, corrected_validation
+
+    LOG.info(
+        "Leading-digit self-heal did not resolve it (%s -> %s still %s)",
+        raw_digits,
+        corrected_digits,
+        corrected_validation.reason,
+    )
+    return raw_digits, validation
 
 
 def _requery_vlm_on_suspect_value(

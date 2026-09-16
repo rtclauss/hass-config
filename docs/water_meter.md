@@ -163,8 +163,26 @@ shorter (240s) timeout, then the same generation was observed (via
 `/api/ps`) to keep running server-side and complete anyway - a timeout that
 short was silently throwing away calls that would have succeeded.
 
+**Leading-digit self-heal, tried first, before ever paying for a VLM call**
+(`water_meter/reader.py`, `_correct_glare_positions_from_last_good`):
+`calibration.low_confidence_ok_indexes` marks the meter's highest-place-
+value digits (millions/hundred-thousands) - positions under a fixed glare
+streak no OCR method here has ever read reliably. Those positions physically
+can't change except once every tens of thousands of gallons, far slower than
+any realistic per-poll delta, so `last_good`'s own digits there are a
+strictly better source of truth than a fresh read of a spot the glare
+genuinely destroys. On a "value decreased"/"implausible jump" rejection,
+this splices `last_good`'s digits into just those positions and re-validates
+before ever trying the (slow, network-dependent) VLM requery below - often
+resolving the single most common rejection outright, for free. The
+corrected candidate still has to pass the same sanity gate, so a genuine
+rollover into a new highest-place-value digit that also happened to look
+implausible fails safely (falls through to the VLM requery) rather than
+smuggling through a bad value.
+
 **Automatic requery on a suspicious value** (`water_meter/reader.py`,
-`_requery_vlm_on_suspect_value`): the sanity gate's "value decreased" and
+`_requery_vlm_on_suspect_value`): tried next, if self-heal didn't resolve
+it or no glare positions are configured. The sanity gate's "value decreased" and
 "implausible jump" rejections mean the digits parsed cleanly but the
 resulting value looks wrong - the signature of a single misread digit
 (confirmed live: even the VLM occasionally flips the glare-affected leading
