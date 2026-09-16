@@ -588,6 +588,87 @@ def test_requery_is_skipped_for_rejection_reasons_a_second_look_cannot_fix(
     assert "expected 2 digits" in result.reason
 
 
+def test_implausible_jump_is_self_healed_from_last_good_before_any_vlm_call(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Position 0 is the documented glare-affected digit - last_good's own
+    # digit there ('1', from "10") is a better source of truth than a fresh
+    # misread ('9'). The trailing digit genuinely changed (0 -> 1), so the
+    # corrected candidate is a plausible +1 increase, not just a no-op.
+    connection = _connection(tmp_path, vlm_host="truenas.local:30068")
+    calibration = _calibration(max_gallons_per_interval=5.0, low_confidence_ok_indexes=(0,))
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+
+    def _unexpected(image_path: object, **kwargs: object) -> str:
+        raise AssertionError("self-heal should have resolved this for free")
+
+    monkeypatch.setattr(ocr, "read_digits_vlm", _unexpected)
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "91",  # true "11": +1, plausible
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result == reader.RunResult(True, 11.0, "ok", stuck=False)
+
+
+def test_self_heal_is_skipped_when_no_glare_positions_are_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(tmp_path, vlm_host="truenas.local:30068")
+    calibration = _calibration(max_gallons_per_interval=5.0)  # low_confidence_ok_indexes=() default
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda image_path, **kwargs: "11")
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "91",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    # No glare positions configured -> self-heal can't apply -> falls through
+    # to the VLM requery, which is what actually rescues it here.
+    assert result == reader.RunResult(True, 11.0, "ok", stuck=False)
+
+
+def test_self_heal_falls_through_to_vlm_requery_when_it_cannot_resolve_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The misread isn't at a glare position, so splicing in last_good's
+    # digit there doesn't fix anything - must still fall through to the VLM.
+    connection = _connection(tmp_path, vlm_host="truenas.local:30068")
+    calibration = _calibration(max_gallons_per_interval=5.0, low_confidence_ok_indexes=(0,))
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda image_path, **kwargs: "11")
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "99",  # position 1 (not glare) is the bad digit
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result == reader.RunResult(True, 11.0, "ok", stuck=False)
+
+
 def test_default_publisher_reports_error_status_for_a_stuck_reading(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
