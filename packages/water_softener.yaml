@@ -554,8 +554,16 @@ sensor:
       # recomputes over the latest raw samples every cycle, so it reflects
       # a real step change (like a refill) within seconds rather than
       # never (caught in review).
+      # HA's lowpass weights each new sample by time_diff / (time_constant +
+      # time_diff). The upstream publish cadence here is actually ~30-60s
+      # (firmware median -> EMA send_every: 15 @ 2s), so the previous
+      # time_constant: 10 gave new samples ~75-86% weight each update --
+      # barely any smoothing before values reached the 6h moving average
+      # below. Raised to 120s (roughly 2-4x the real interval) so a lone
+      # outlier is meaningfully damped (~20-33% weight) rather than passing
+      # through nearly unchanged.
       - filter: lowpass
-        time_constant: 10
+        time_constant: 120
         precision: 3
       - filter: time_simple_moving_average
         window_size: "6:00"
