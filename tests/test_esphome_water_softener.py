@@ -50,5 +50,27 @@ def test_vl53l1x_wiring_and_measurement_contract_are_explicit() -> None:
 def test_home_assistant_package_consumes_new_sensor_entity() -> None:
     text = HA_PACKAGE.read_text(encoding="utf-8")
 
-    assert "entity_id: sensor.my_water_softener_vl53l1x_sensor" in text
+    # The salt-level filter sensor consumes the normalized-to-mm template
+    # sensor, not the raw ESPHome entity directly -- see
+    # test_salt_level_source_normalizes_units_to_mm below for why.
+    assert "entity_id: sensor.water_softener_distance_normalized_mm" in text
     assert "entity_id: sensor.my_water_softener_vl53l0x_sensor" not in text
+    assert "entity_id: sensor.my_water_softener_vl53l1x_sensor" not in text
+
+
+def test_salt_level_source_normalizes_units_to_mm() -> None:
+    text = HA_PACKAGE.read_text(encoding="utf-8")
+
+    # HA registers this ESPHome node's entity with a "watersoftener_"
+    # device-name prefix (confirmed via the live entity registry after the
+    # VL53L0X -> VL53L1X hardware migration and ESPHome integration
+    # reconfigure); the un-prefixed id never existed post-migration.
+    assert "sensor.watersoftener_my_water_softener_vl53l1x_sensor" in text
+
+    # The normalizing template sensor must actually declare mm and handle
+    # the unit HA was observed reporting post-migration (in), not just the
+    # expected one (mm) -- a raw registry override is not version-controlled
+    # and was flagged as fragile in review.
+    assert 'unique_id: water_softener_distance_normalized_mm' in text
+    assert 'unit_of_measurement: "mm"' in text
+    assert "value * 25.4" in text
