@@ -541,12 +541,19 @@ sensor:
     entity_id: sensor.water_softener_distance_normalized_mm
     name: "Water Softener Salt Level"
     filters:
-      # Drop values that are implausibly far from the recent window (e.g. a
-      # residual specular bounce the firmware-side median filter didn't
-      # catch) before they can bias the long-term average below.
-      - filter: outlier
-        radius: 50
-        window_size: 5
+      # No HA-side `outlier` filter here (deliberately -- see git history
+      # for the version that had one): HA's outlier filter only expands its
+      # comparison window with values it *accepts*, so a genuine step
+      # change bigger than its radius -- exactly what a real salt refill
+      # produces -- gets permanently rejected forever afterward, since
+      # every subsequent (correct) reading keeps comparing against the
+      # same stale pre-refill window. That would silently break refill
+      # detection, the whole point of this sensor. Spike rejection lives
+      # entirely in the firmware-side median filter instead (see
+      # esphome/watersoftener.yaml), which has no such lockout: it just
+      # recomputes over the latest raw samples every cycle, so it reflects
+      # a real step change (like a refill) within seconds rather than
+      # never (caught in review).
       - filter: lowpass
         time_constant: 10
         precision: 3
