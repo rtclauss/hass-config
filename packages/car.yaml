@@ -456,11 +456,18 @@ automation:
                   # every 15-minute tick while a trip stays active all night.
                   # Only notify here when the on/off value itself changed;
                   # trip_details_change already covers metadata refinement
-                  # without re-notifying.
+                  # without re-notifying. Require both sides to be a real
+                  # on/off value (not unknown/unavailable) so recovering from
+                  # a transient unavailability (HA restart, template reload)
+                  # back to the same "on" state doesn't read as a fresh
+                  # activation and restart the notification storm.
                   - condition: template
                     value_template: >-
                       {{ trigger.id == 'trip_change' and tesla_plan.active and
                          trigger.from_state is not none and
+                         trigger.to_state is not none and
+                         trigger.from_state.state in ['on', 'off'] and
+                         trigger.to_state.state in ['on', 'off'] and
                          trigger.from_state.state != trigger.to_state.state }}
                   - condition: template
                     value_template: "{{ trigger.id == 'early_morning' and tesla_plan.precondition and tesla_plan.low_tpms }}"

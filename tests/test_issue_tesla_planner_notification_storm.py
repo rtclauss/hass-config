@@ -61,6 +61,9 @@ def test_trip_change_notification_requires_a_genuine_state_transition() -> None:
     trip_change_condition = re.search(
         r"trigger\.id == 'trip_change' and tesla_plan\.active and\n\s*"
         r"trigger\.from_state is not none and\n\s*"
+        r"trigger\.to_state is not none and\n\s*"
+        r"trigger\.from_state\.state in \['on', 'off'\] and\n\s*"
+        r"trigger\.to_state\.state in \['on', 'off'\] and\n\s*"
         r"trigger\.from_state\.state != trigger\.to_state\.state",
         block,
     )
@@ -68,6 +71,17 @@ def test_trip_change_notification_requires_a_genuine_state_transition() -> None:
         "trip_change notification must gate on a real on/off transition, "
         "not just any recompute of the sensor"
     )
+
+
+def test_trip_change_notification_ignores_unavailable_recovery() -> None:
+    # A transient unavailable/unknown blip (HA restart, template reload) that
+    # recovers straight to "on" must not read as a fresh activation just
+    # because from_state.state != to_state.state — both sides must be a real
+    # on/off value.
+    block = _automation_block("tesla_departure_planner_apply")
+
+    assert "trigger.from_state.state in ['on', 'off']" in block
+    assert "trigger.to_state.state in ['on', 'off']" in block
 
 
 def test_trip_change_trigger_itself_stays_unscoped() -> None:
