@@ -6,6 +6,12 @@ from pathlib import Path
 
 MEDIA_PLAYER_PATH = Path(__file__).resolve().parents[1] / "packages" / "media_player.yaml"
 DASHBOARD_PATH = Path(__file__).resolve().parents[1] / ".storage" / "lovelace.ryan_new_mushroom"
+PERSONALIZED_SPOTIFY_PLAYLIST_MARKERS = (
+    "37i9dQZF1E",
+    "37i9dQZF1CA",  # Summer Rewind family (Codex P2 follow-up on #679)
+    "37i9dQZEVXc",  # Discover Weekly family
+    "37i9dQZEVXb",  # Release Radar family (Codex P2 follow-up on #679)
+)
 
 
 def _script_block(script_id: str) -> str:
@@ -52,6 +58,14 @@ def _automation_block(automation_id: str) -> str:
             break
 
     return "\n".join(lines[start:end])
+
+
+def _active_playlist_items(script_id: str) -> list[str]:
+    block = _script_block(script_id)
+    match = re.search(r"\{%- set plists = \[(?P<items>.*?)\]\s*-%\}", block, re.DOTALL)
+    if match is None:
+        raise AssertionError(f"Could not find active plists block for {script_id!r}")
+    return re.findall(r'"([^"\n]+)"', match.group("items"))
 
 
 def test_music_assistant_item_helper_normalizes_spotify_uris() -> None:
@@ -616,6 +630,29 @@ def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
     assert 'media_item: "{{ playlist }}"' in block
     assert 'media_type: "{{ bedtime_media_type }}"' in block
     assert "'somafm.com' in playlist" in block
+
+
+def test_active_music_assistant_playlist_pools_exclude_personalized_spotify_ids() -> None:
+    # bedroom_playlist_0 and _5 are delegating aliases (0 -> this LoFi helper,
+    # 5 -> 0), so the pool they share is guarded once at its real home here
+    # rather than inline in either script.
+    for script_id in (
+        "music_assistant_play_random_lofi_playlist",
+        "bedroom_playlist_1",
+        "bedroom_playlist_2",
+        "bedroom_playlist_3",
+        "bedroom_playlist_4",
+        "spotify_arrival",
+        "spotify_bedtime",
+        "spotify_wake_up",
+    ):
+        active_items = _active_playlist_items(script_id)
+        blocked_items = [
+            item
+            for item in active_items
+            if any(marker in item for marker in PERSONALIZED_SPOTIFY_PLAYLIST_MARKERS)
+        ]
+        assert blocked_items == [], f"{script_id} has unresolvable Spotify items: {blocked_items}"
 
 
 def test_bedtime_verifies_primary_playback_and_falls_back_through_non_spotify_sources() -> None:
