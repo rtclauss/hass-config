@@ -155,6 +155,10 @@ The planner sends Tesla status notifications with a deep link to the storage das
 
 - `/ryan-new-mushroom/tesla-v2`
 
+Notifications fire on: the nightly 21:35 digest (if a plan is active), `binary_sensor.upcoming_trip_charging` transitioning off → on while `tesla_plan.active` is true (a new qualifying trip appears), and the 04:30 early-morning check when preconditioning is active with low tire pressure. The reverse on → off transition does **not** notify on its own — once the trip sensor turns off there is usually no active plan left to report (`tesla_plan.active` also depends on `has_calendar_departure`, which goes false at the same time), so a deactivation only notifies in the separate case where a weekday/weekend alarm or the manual max-range override keeps `tesla_plan.active` true regardless.
+
+The `trip_change` trigger itself has no attribute filter — it exists so the automation recomputes on every sensor update — but the notify condition only fires it when `trigger.from_state.state` and `trigger.to_state.state` are both a real `on`/`off` value and differ from each other. Without that guard, `distance_mi`/`duration_min` drifting a little with live Waze traffic on every 15-minute recompute (while a trip stays active for hours, e.g. overnight) would re-notify on every tick instead of once when the plan actually changed. Requiring both sides to be `on`/`off` specifically (not just "different") also keeps a transient `unavailable`/`unknown` blip — an HA restart or template reload recovering straight back to `on` — from reading as a fresh activation.
+
 ## UI locations
 
 ### Tesla dashboard
