@@ -1,0 +1,68 @@
+[Unit]
+Description=Water meter capture, OCR, and MQTT publish (one-shot run)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# systemd's DefaultTimeoutStartSec is 90s, which would kill this unit mid
+# vision-LLM call (see WATER_METER_VLM_TIMEOUT_SECONDS below). A rejected
+# reading (value decreased / implausible jump) triggers one VLM requery on
+# the same image (reader.py's _requery_vlm_on_suspect_value) - worst case is
+# two full VLM calls in a single run, so this must cover 2x the VLM timeout
+# plus capture/ssocr/publish overhead, not just one. A run that genuinely
+# takes this long makes the *next* 10-minute timer tick a no-op (systemd
+# won't start a second concurrent instance of a still-running oneshot unit -
+# safe, just a skipped cycle, not an overlap).
+TimeoutStartSec=1080
+WorkingDirectory=/opt/hass-config
+# MQTT credentials live outside git - see docs/water_meter.md. This file must
+# define WATER_METER_MQTT_USERNAME and WATER_METER_MQTT_PASSWORD.
+EnvironmentFile=/etc/water-meter/credentials.env
+# Static IP, not homeassistant.local: mDNS resolution from this short-lived
+# systemd-timer process was observed to fail intermittently (avahi/mDNS over
+# wlan0 is lossier than a plain Ethernet link), which is not acceptable for
+# a service that must run unattended every 10 minutes.
+Environment=WATER_METER_MQTT_HOST=10.24.1.11
+Environment=WATER_METER_MQTT_PORT=1883
+# Quoted: the friendly_name contains spaces, which Environment= would
+# otherwise split into multiple bogus assignments.
+Environment="WATER_METER_LIGHT_TOPIC=zigbee2mqtt/Basement/Water Meter Hue/set"
+# 204/254 (~80%): bench-tested against the real jig - 100% glares off the
+# LCD and blows out the digits, 60-80% both read cleanly. See
+# water_meter/config.py's DEFAULT_LIGHT_BRIGHTNESS for details.
+Environment=WATER_METER_LIGHT_BRIGHTNESS=204
+Environment=WATER_METER_READING_TOPIC=waterreader/sensor/water_meter/state
+Environment=WATER_METER_LAST_READING_TIME_TOPIC=waterreader/sensor/water_meter/last_reading_time
+Environment=WATER_METER_STATUS_TOPIC=waterreader/sensor/water_meter/status
+Environment=WATER_METER_DISCOVERY_TOPIC=homeassistant/sensor/water_meter/config
+Environment=WATER_METER_CAMERA_DEVICE=/dev/v4l/by-id/usb-046d_0825_6C51AA00-video-index0
+Environment=WATER_METER_CALIBRATION_PATH=/opt/water-meter/calibration.json
+Environment=WATER_METER_TEMPLATES_DIR=/opt/water-meter/digit_templates
+Environment=WATER_METER_STATE_DIR=/var/lib/water-meter/state
+Environment=WATER_METER_IMAGE_DIR=/var/lib/water-meter/images
+# See water_meter/watchdog.py: the webcam's V4L2/GStreamer backend has been
+# observed to wedge in a way that only a host reboot clears. This many
+# consecutive capture failures (each run is its own systemd-timer-triggered
+# process, ~10 minutes apart) is treated as genuinely stuck rather than a
+# one-off USB hiccup, and triggers reader.py to reboot the host itself.
+Environment=WATER_METER_CAPTURE_FAILURE_REBOOT_THRESHOLD=2
+# Vision-LLM fallback for the digits ssocr can't read (see water_meter/ocr.py
+# read_digits_vlm and issue #1049) - qwen3-vl:4b on the TrueNAS Ollama box is
+# the only method that has correctly read the glare-obscured leading digits.
+# No num_predict cap; a generous timeout instead (see DEFAULT_VLM_TIMEOUT).
+# 480s, not 240s: a live run on 2026-09-14 hit the 240s cutoff, then /api/ps
+# showed the same generation had kept running and completed server-side
+# past that cutoff - the latency variance on this CPU-only box is real and
+# can exceed 240s, so the timeout needs to be generous enough to actually
+# get an answer back rather than truncate a call that would have succeeded.
+# Static IP, not truenas.local: mDNS from this Pi failed 1 of 3 lookups in
+# testing - the same flakiness that forced WATER_METER_MQTT_HOST to a static
+# IP above.
+Environment=WATER_METER_VLM_HOST=10.24.1.182:30068
+Environment=WATER_METER_VLM_MODEL=qwen3-vl:4b
+Environment=WATER_METER_VLM_TIMEOUT_SECONDS=480
+ExecStart=/opt/hass-config/venv/bin/python3 -m water_meter.reader
+
+[Install]
+WantedBy=multi-user.target

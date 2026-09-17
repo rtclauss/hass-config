@@ -1,0 +1,95 @@
+# Home Assistant package for the Raspberry Pi water meter reader.
+# The Pi (see water_meter/ and docs/water_meter.md) owns capture, OCR, and
+# validation, and publishes straight to MQTT - including its own discovery
+# config for sensor.water_meter (device_class: water, state_class:
+# total_increasing). This package only owns what discovery can't express:
+# raw status/timestamp visibility, a staleness sensor, and an alert
+# automation for the "silently stops working" failure mode.
+
+################################################################
+## Packages / Water Meter
+################################################################
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "water_meter"
+
+    sensor.water_meter_status:
+      <<: *customize
+      friendly_name: "Water Meter Reader Status"
+      icon: mdi:water-alert
+
+    sensor.water_meter_last_reading_time:
+      <<: *customize
+      friendly_name: "Water Meter Last Reading Time"
+
+    sensor.water_meter_reading_age:
+      <<: *customize
+      friendly_name: "Water Meter Reading Age"
+      icon: mdi:clock-alert-outline
+
+########################
+## Automation
+########################
+automation:
+  - id: water_meter_reading_stale
+    alias: water_meter_reading_stale
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: numeric_state
+        entity_id: sensor.water_meter_reading_age
+        above: 90
+        for:
+          minutes: 15
+      - trigger: template
+        value_template: >-
+          {{ (states('sensor.water_meter_status') | string).startswith('error') }}
+        for:
+          minutes: 30
+    action:
+      - action: persistent_notification.create
+        data:
+          title: Water meter reader needs attention
+          message: >-
+            Water meter status is "{{ states('sensor.water_meter_status') }}" and the
+            last accepted reading is {{ states('sensor.water_meter_reading_age') }}
+            minutes old. Check the Raspberry Pi (journalctl -u water-meter-reader).
+          notification_id: water-meter-stale
+      - action: notify.all
+        data:
+          message: >-
+            Water meter reader hasn't reported a good reading recently - check the
+            Raspberry Pi.
+
+########################
+# MQTT
+########################
+mqtt:
+  sensor:
+    # sensor.water_meter itself arrives via MQTT discovery published by the
+    # Pi (homeassistant/sensor/water_meter/config) - not defined here.
+    - name: "Water Meter Reader Status"
+      unique_id: water_meter_status
+      state_topic: "waterreader/sensor/water_meter/status"
+      icon: mdi:water-alert
+
+    - name: "Water Meter Last Reading Time"
+      unique_id: water_meter_last_reading_time
+      state_topic: "waterreader/sensor/water_meter/last_reading_time"
+      device_class: timestamp
+
+########################
+# Template
+########################
+template:
+  - sensor:
+      - name: water_meter_reading_age
+        unique_id: water_meter_reading_age
+        unit_of_measurement: min
+        availability: >-
+          {{ states('sensor.water_meter_last_reading_time') not in ['unknown', 'unavailable', 'none', '', None] }}
+        state: >-
+          {{ ((as_timestamp(now()) - as_timestamp(states('sensor.water_meter_last_reading_time'), default=0)) / 60) | round(1) }}
