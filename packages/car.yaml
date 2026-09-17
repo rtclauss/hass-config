@@ -448,7 +448,20 @@ automation:
               - condition: or
                 conditions:
                   - condition: template
-                    value_template: "{{ trigger.id in ['nightly', 'trip_change'] and tesla_plan.active }}"
+                    value_template: "{{ trigger.id == 'nightly' and tesla_plan.active }}"
+                  # trip_change has no attribute filter (it exists to catch
+                  # the sensor flipping on/off at all), so it also fires on
+                  # every attribute-only recompute — e.g. distance_mi/
+                  # duration_min drifting a little with live Waze traffic on
+                  # every 15-minute tick while a trip stays active all night.
+                  # Only notify here when the on/off value itself changed;
+                  # trip_details_change already covers metadata refinement
+                  # without re-notifying.
+                  - condition: template
+                    value_template: >-
+                      {{ trigger.id == 'trip_change' and tesla_plan.active and
+                         trigger.from_state is not none and
+                         trigger.from_state.state != trigger.to_state.state }}
                   - condition: template
                     value_template: "{{ trigger.id == 'early_morning' and tesla_plan.precondition and tesla_plan.low_tpms }}"
             sequence:
