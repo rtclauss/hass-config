@@ -258,6 +258,18 @@ integration page instead of it showing as an orphan entity. No `icon` field
 is needed: `device_class: water` already gives the frontend a water-drop
 icon automatically.
 
+**Deliberately no `availability_topic`.** An earlier version of the
+discovery payload set `availability_topic` to the status topic with
+`payload_available: "ok"`, meaning HA marked `sensor.water_meter` fully
+"Unavailable" on every routine OCR rejection - even though the last
+accepted value in `state_topic` was still valid and unchanged. This reader
+is a one-shot systemd timer job, not a persistent MQTT client, so there's
+no real connection to back a Last Will/Testament-style availability signal
+in the first place. Staleness is already surfaced by the dedicated
+`sensor.water_meter_status` and `sensor.water_meter_reading_age` entities
+(see the stuck-reading note below), so the main sensor just keeps showing
+its last retained value.
+
 **A stuck reading publishes `error:<reason>`, not `ok`.** A frozen camera or
 OCR pipeline that keeps returning the same value is technically `accepted`
 (the value itself is real and hasn't decreased or jumped implausibly), but

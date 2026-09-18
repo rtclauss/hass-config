@@ -436,8 +436,14 @@ def test_discovery_payload_matches_documented_mqtt_contract(tmp_path: Path) -> N
     assert payload["device_class"] == "water"
     assert payload["state_class"] == "total_increasing"
     assert payload["state_topic"] == connection.reading_topic
-    assert payload["availability_topic"] == connection.status_topic
-    assert payload["payload_available"] == "ok"
+
+    # No availability_topic: this is a one-shot systemd timer job, not a
+    # persistent MQTT client, so there's no real connection to back a
+    # Last Will/Testament-style availability signal. Wiring it to
+    # status_topic used to mark the entity "Unavailable" on every routine
+    # OCR rejection even though the last accepted value was still valid.
+    assert "availability_topic" not in payload
+    assert "payload_available" not in payload
 
     # Confirmed against the current MQTT discovery docs: these are what
     # actually make the entity show up grouped under a real device (not an
