@@ -214,13 +214,20 @@ def discovery_payload(connection: ConnectionConfig) -> dict:
     orphan entity) rather than cosmetic extras - confirmed against the
     current MQTT discovery docs. No icon needed: device_class "water"
     already gives the frontend a water-drop icon automatically.
+
+    Deliberately no availability_topic: this reader is a one-shot systemd
+    timer job, not a persistent MQTT client, so there is no real connection
+    to back a Last Will/Testament-style availability signal. Wiring
+    availability to status_topic (as an earlier version of this did) made
+    HA mark the entity fully "Unavailable" on every routine OCR rejection,
+    even though the last accepted value in state_topic was still valid -
+    staleness is already surfaced by the dedicated
+    sensor.water_meter_status/sensor.water_meter_reading_age entities.
     """
     return {
         "name": "Water Meter",
         "unique_id": "water_meter",
         "state_topic": connection.reading_topic,
-        "availability_topic": connection.status_topic,
-        "payload_available": "ok",
         "device_class": "water",
         "state_class": "total_increasing",
         "unit_of_measurement": "gal",
