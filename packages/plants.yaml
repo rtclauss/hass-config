@@ -218,6 +218,30 @@ automation:
         target:
           entity_id: switch.basement_grow_light
 
+  - id: catnip_grow_light_reconcile
+    alias: catnip_grow_light_reconcile
+    description: >
+      Restore the intended 06:00-24:00 catnip grow light schedule on startup, in
+      case Home Assistant was down when the on/off time triggers were due to fire.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: homeassistant
+        event: start
+    action:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ now().hour >= 6 }}"
+            sequence:
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.basement_grow_light
+        default:
+          - action: switch.turn_off
+            target:
+              entity_id: switch.basement_grow_light
+
   - id: carnivorous_plants_off
     alias: carnivorous_plants_off
     trace:
