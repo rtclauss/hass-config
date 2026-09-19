@@ -196,11 +196,19 @@ alarm_control_panel: []
 automation:
   - id: catnip_grow_light_on
     alias: catnip_grow_light_on
+    description: >
+      Basement/Grow Light lives in the basement great room, a guest-capable
+      sleeping space (docs/room_intent.yaml). Skip turning it on while guest
+      mode is active so a 260W fixture doesn't intrude on a sleeping guest.
     trace:
       stored_traces: 10
     trigger:
       - trigger: time
         at: "06:00:00"
+    condition:
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
     action:
       - action: switch.turn_on
         target:
@@ -225,7 +233,11 @@ automation:
       self-healing whenever Home Assistant, the switch's integration, or the
       entity itself was unavailable/nonexistent when the on/off time triggers
       were due to fire. A periodic sweep covers every such gap without needing
-      a dedicated trigger for each way the switch can miss a transition.
+      a dedicated trigger for each way the switch can miss a transition. Also
+      reacts immediately to guest_mode changes: Basement/Grow Light sits in
+      the guest-capable basement great room (docs/room_intent.yaml), so this
+      treats guest mode as an override on the desired state, not just the
+      scheduled on/off automations.
     trace:
       stored_traces: 10
     trigger:
@@ -233,9 +245,12 @@ automation:
         event: start
       - trigger: time_pattern
         minutes: "/15"
+      - trigger: state
+        entity_id: input_boolean.guest_mode
     action:
       - variables:
-          should_be_on: "{{ now().hour >= 6 }}"
+          should_be_on: >-
+            {{ now().hour >= 6 and is_state('input_boolean.guest_mode', 'off') }}
       - choose:
           - conditions:
               - condition: template
