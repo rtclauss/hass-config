@@ -234,10 +234,12 @@ automation:
       entity itself was unavailable/nonexistent when the on/off time triggers
       were due to fire. A periodic sweep covers every such gap without needing
       a dedicated trigger for each way the switch can miss a transition. Also
-      reacts immediately to guest_mode changes: Basement/Grow Light sits in
-      the guest-capable basement great room (docs/room_intent.yaml), so this
-      treats guest mode as an override on the desired state, not just the
-      scheduled on/off automations.
+      reacts immediately to guest_mode changes and to any state report from
+      the switch itself (recovering from unavailable, first registration, or
+      a manual toggle): Basement/Grow Light sits in the guest-capable
+      basement great room (docs/room_intent.yaml), so this treats guest mode
+      as an override on the desired state, not just the scheduled on/off
+      automations.
     trace:
       stored_traces: 10
     trigger:
@@ -247,6 +249,8 @@ automation:
         minutes: "/15"
       - trigger: state
         entity_id: input_boolean.guest_mode
+      - trigger: state
+        entity_id: switch.basement_grow_light
     action:
       - variables:
           should_be_on: >-
