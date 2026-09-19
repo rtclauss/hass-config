@@ -221,33 +221,36 @@ automation:
   - id: catnip_grow_light_reconcile
     alias: catnip_grow_light_reconcile
     description: >
-      Restore the intended 06:00-24:00 catnip grow light schedule on startup and
-      whenever the switch recovers from unavailable/unknown, in case Home
-      Assistant (or the switch's integration) was down when the on/off time
-      triggers were due to fire.
+      Periodically restore the intended 06:00-24:00 catnip grow light schedule,
+      self-healing whenever Home Assistant, the switch's integration, or the
+      entity itself was unavailable/nonexistent when the on/off time triggers
+      were due to fire. A periodic sweep covers every such gap without needing
+      a dedicated trigger for each way the switch can miss a transition.
     trace:
       stored_traces: 10
     trigger:
       - trigger: homeassistant
         event: start
-      - trigger: state
-        entity_id: switch.basement_grow_light
-        from:
-          - "unavailable"
-          - "unknown"
+      - trigger: time_pattern
+        minutes: "/15"
     action:
+      - variables:
+          should_be_on: "{{ now().hour >= 6 }}"
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ now().hour >= 6 }}"
+                value_template: "{{ should_be_on and is_state('switch.basement_grow_light', 'off') }}"
             sequence:
               - action: switch.turn_on
                 target:
                   entity_id: switch.basement_grow_light
-        default:
-          - action: switch.turn_off
-            target:
-              entity_id: switch.basement_grow_light
+          - conditions:
+              - condition: template
+                value_template: "{{ not should_be_on and is_state('switch.basement_grow_light', 'on') }}"
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.basement_grow_light
 
   - id: carnivorous_plants_off
     alias: carnivorous_plants_off
