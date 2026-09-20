@@ -79,10 +79,12 @@ def test_cleaning_package_uses_smart_plug_power_for_laundry_running_detection() 
     assert "is_state('binary_sensor.dryer'" not in dryer_block
 
 
-def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
+def test_laundry_completion_waits_for_room_entry_before_notifying() -> None:
     washer_started = _automation_block(CLEANING_PATH, "washer_started")
     wash_finished = _automation_block(CLEANING_PATH, "wash_finished")
+    dryer_started = _automation_block(CLEANING_PATH, "dryer_started")
     dryer_finished = _automation_block(CLEANING_PATH, "dryer_finished")
+    room_entry_reminder = _automation_block(CLEANING_PATH, "laundry_room_entry_reminder")
     washer_reminder = _automation_block(CLEANING_PATH, "washer_reminder")
     washer_cleared = _automation_block(CLEANING_PATH, "washer_cleared")
 
@@ -103,11 +105,34 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert "input_boolean.turn_on" in wash_finished
     assert "option: CLEAN" in wash_finished
     assert "binary_sensor.front_load_washer_wash_completed" not in wash_finished
+    assert "notify.all" not in wash_finished
 
+    assert "entity_id: binary_sensor.dryer_running" in dryer_started
+    assert 'to: "on"' in dryer_started
+    assert 'from: "off"' not in dryer_started
+    assert "entity_id: input_select.dryer_state" in dryer_started
+    assert "option: DRYING" in dryer_started
     assert "entity_id: binary_sensor.dryer_running" in dryer_finished
     assert 'from: "on"' in dryer_finished
     assert 'to: "off"' in dryer_finished
-    assert 'message: "Dryer finished!' in dryer_finished
+    assert "entity_id: input_select.dryer_state" in dryer_finished
+    assert "option: CLEAN" in dryer_finished
+    assert "notify.all" not in dryer_finished
+
+    assert "entity_id: sensor.laundry_wall_switch_action" in room_entry_reminder
+    assert 'to: "up_single"' in room_entry_reminder
+    assert "input_boolean.washer_reminder_active" in room_entry_reminder
+    assert "entity_id: input_select.washer_state" in room_entry_reminder
+    assert "entity_id: input_select.dryer_state" in room_entry_reminder
+    assert room_entry_reminder.count('state: "CLEAN"') >= 2
+    assert "binary_sensor.laundry_room_motion" not in room_entry_reminder
+    assert "binary_sensor.laundry_room_occupancy" not in room_entry_reminder
+    assert "action: light.turn_on" in room_entry_reminder
+    assert "entity_id: light.laundry_room" in room_entry_reminder
+    assert "flash: short" in room_entry_reminder
+    assert room_entry_reminder.count("option: REMINDED") == 2
+    assert "action: notify.all" in room_entry_reminder
+    assert "Washer and dryer loads are waiting" in room_entry_reminder
 
     assert 'trigger: time_pattern' in washer_reminder
     assert 'minutes: "/5"' in washer_reminder
@@ -118,12 +143,10 @@ def test_cleaning_package_notifies_from_power_based_running_sensors() -> None:
     assert 'state: "REMINDED"' in washer_reminder
     assert "binary_sensor.laundry_room_washing_machine_door_contact" in washer_reminder
     assert "input_datetime.washer_finished_at" in washer_reminder
-    assert "30 * 60" in washer_reminder
     assert "60 * 60" in washer_reminder
-    assert "action: light.turn_on" in washer_reminder
-    assert "entity_id: light.laundry_room" in washer_reminder
-    assert "flash: short" in washer_reminder
-    assert "option: REMINDED" in washer_reminder
+    assert "30 * 60" not in washer_reminder
+    assert "action: light.turn_on" not in washer_reminder
+    assert "option: REMINDED" not in washer_reminder
     assert "option: MUSTY" in washer_reminder
     assert "message: \"Laundry has been sitting in the washer for an hour." in washer_reminder
     assert "input_boolean.guest_mode" in washer_reminder
@@ -159,6 +182,8 @@ def test_cleaning_package_tracks_wet_load_helpers() -> None:
     assert "binary_sensor.laundry_room_washing_machine_door_contact:" in config
     assert "input_select.washer_state:" in config
     assert "      - REMINDED" in config
+    assert "  dryer_state:" in config
+    assert "      - DRYING" in config
 
 
 def test_utilities_package_keeps_laundry_plugs_powered() -> None:
