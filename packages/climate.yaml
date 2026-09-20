@@ -202,9 +202,11 @@ automation:
       Prompt for a filter count when the inventory is empty and we are either
       standing in a DIY store or just back from an errand.
 
-      The store path leans on binary_sensor.diy_store_visit rather than matching
-      place-name strings directly; see packages/zone.yaml for why exact matching
-      kept missing. The arrival path exists because that store signal can miss
+      The store path leans on sensor.diy_store_current, whose state is which
+      store we are at, rather than matching place-name strings directly; see
+      packages/zone.yaml for why exact matching kept missing. Triggering on the
+      identity rather than a boolean is what lets a second store in one trip
+      prompt while a second fix for the same store does not. The arrival path exists because that store signal can miss
       entirely: Places only re-geocodes on a new GPS fix, so parking in a big-box
       lot resolves to the lot and the phone then reports nothing for the whole
       visit. Asking on the way home is the backstop for that case.
@@ -215,9 +217,7 @@ automation:
     trigger:
       - trigger: state
         id: at_diy_store
-        entity_id: binary_sensor.diy_store_visit
-        from: "off"
-        to: "on"
+        entity_id: sensor.diy_store_current
       - trigger: state
         id: home_from_errand
         entity_id: binary_sensor.bayesian_zeke_home
@@ -228,6 +228,12 @@ automation:
         condition: numeric_state
         entity_id: input_number.air_filters_at_home
         below: 1
+      - alias: "Store path only on a genuinely new store"
+        condition: template
+        value_template: >-
+          {{ trigger.id != 'at_diy_store'
+             or (trigger.to_state.state not in ['none', 'unknown', 'unavailable']
+                 and trigger.to_state.state != trigger.from_state.state) }}
       - alias: "Arrival backstop only after a long enough trip to have shopped"
         condition: template
         value_template: >-

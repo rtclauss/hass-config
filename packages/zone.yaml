@@ -1435,17 +1435,17 @@ sensor:
 # Template
 ########################
 template:
-  - binary_sensor:
-      # Shared "is somebody standing in a DIY store right now" signal for the
-      # restock prompts in climate.yaml (air filters) and water_softener.yaml
-      # (salt). Both used to trigger on an exact place-name string match against
-      # one tracker, which misses in three separate ways:
-      #   * Places re-geocodes only when the tracker reports a new GPS fix, and
-      #     the arrival fix usually lands in the parking lot, so place_name is
-      #     "unknown" and place_type is "parking" for the whole visit.
-      #   * Real OSM names are not the bare brand ("The Home Depot #2812",
-      #     "Lowe's Home Improvement"), so `to:` equality never matched.
-      #   * Only the phone was watched, never the car.
+  - sensor:
+      # Which DIY store we are at right now, or "none". The restock prompts in
+      # climate.yaml (air filters) and water_softener.yaml (salt) trigger on
+      # this changing to a store, so the state has to be the store's identity
+      # rather than a boolean: a boolean cannot tell "another fix for the store
+      # I am already in" from "a different store".
+      #
+      # Detection used to be exact place-name equality on one tracker, which
+      # missed three ways: the arrival fix lands in the parking lot so
+      # place_name reads "unknown"; real OSM names carry suffixes ("The Home
+      # Depot #2812"); and the car was never watched.
       #
       # Prefer OSM's structured tagging over the display name. Note that
       # sensor.<tracker>_place_place_category is NOT that data: it has been
@@ -1454,55 +1454,51 @@ template:
       # endpoint returns the key as "class". The real category lives in the
       # extended-data attributes, so read those directly.
       #
-      # Three layers, cheapest and most reliable first:
+      # Matching, cheapest and most reliable first:
       #   1. class/type — `shop=doityourself`, `shop=hardware`, `shop=trade`.
       #      Keep this list to shops that actually stock furnace filters and
       #      softener salt. It must NOT include shop=department_store (every
       #      Target), nor shop=garden_centre or shop=paint: a garden centre
-      #      prompted for air filters at Bachman's on 2026-09-20, and then the
-      #      hold below swallowed the real Home Depot arrival 25 minutes later.
-      #      Accept either spelling of the key: Nominatim's `json` format calls
-      #      it `class` and `jsonv2` calls it `category`, and that difference is
-      #      the whole reason the dedicated category sensor is empty. If
-      #      upstream switches formats, this keeps working.
+      #      prompted for air filters at Bachman's on 2026-09-20. Accept either
+      #      spelling of the key: Nominatim's `json` format calls it `class`
+      #      and `jsonv2` calls it `category`, and that difference is the whole
+      #      reason the dedicated category sensor is empty.
       #   2. brand/operator from extratags — a curated OSM tag, not a display
       #      name. This is what catches Fleet Farm, tagged department_store.
       #   3. place_name / zone_name substring — last resort for a store the
       #      geocoder named but never tagged. Matching zone_name also means
       #      store zones, if ever added, need no further wiring here.
       #
-      # Staying on for a whole visit is NOT done with delay_off. A timed hold
-      # cannot tell "still in this store" from "now at the next store": the
-      # prompts trigger on the off->on edge, so a hold long enough to cover one
-      # visit swallows the next store (30 minutes ate a Home Depot arrival 25
-      # minutes after the previous match), and a hold short enough to re-arm
-      # re-fires for the SAME store when a visit outlasts it.
-      #
-      # Key off information instead of time. A parking/unknown fix is not
-      # evidence of leaving — it is the lot, and it is what the phone reports
-      # from a big-box store right before it goes silent. So:
-      #   matched a store        -> on
-      #   informative non-store  -> off   (a road, a house, another named POI)
-      #   uninformative          -> hold the previous state
-      # Leaving always produces informative fixes (roads), so this clears on
-      # departure and re-arms for the next store however long the visit was.
-      # `this` is the sensor's own previous state; it creates no dependency, and
-      # every transition above is driven by an input change, so there is nothing
-      # to re-render on a timer. It resolves to `unknown` before the first
-      # render, which fails closed.
-      - name: diy_store_visit
-        unique_id: diy_store_visit
-        default_entity_id: binary_sensor.diy_store_visit
+      # Staying put for a whole visit is NOT done with a timed hold. Any timer
+      # conflates two questions: long enough to cover a visit swallows the next
+      # store (30 minutes ate a Home Depot arrival 25 minutes after the
+      # previous match), short enough to re-arm re-fires for the same store
+      # when a visit outlasts it. Key off information instead:
+      #   a tracker matched a store          -> that store's identity
+      #   EVERY tracker says informative     -> none
+      #   otherwise                          -> hold the previous identity
+      # A parking/unknown fix is not evidence of leaving; it is the lot, and it
+      # is what the phone reports right before it goes silent inside a store.
+      # The clear requires EVERY tracker to agree, because they move
+      # independently: a Tesla parked at home reports `house` forever, and
+      # letting one tracker's stale evidence clear a visit another tracker
+      # established would drop the hold and re-prompt on the next fix.
+      # `this` creates no dependency and every transition is driven by an input
+      # change, so nothing needs re-rendering on a timer; before the first
+      # render it reads `unknown`, which falls through to "none".
+      - name: diy_store_current
+        unique_id: diy_store_current
+        default_entity_id: sensor.diy_store_current
         icon: mdi:store-marker
         state: >-
           {%- set diy_shop_types = ['doityourself', 'hardware', 'trade'] -%}
-          {%- set vague = ['', 'unknown', 'unavailable', 'none', 'parking'] -%}
+          {%- set vague = ['', 'none', 'unknown', 'unavailable', 'parking'] -%}
           {%- set diy_brands = [
                'home depot', 'menards', "lowe's", 'lowes', 'fleet farm',
                'ace hardware', 'harbor freight', 'true value'
              ] -%}
           {%- set brand_pattern = diy_brands | join('|') -%}
-          {%- set ns = namespace(at_store=false, elsewhere=false) -%}
+          {%- set ns = namespace(store='', all_informative=true) -%}
           {%- for tracker in ['zeke', 'tesla'] -%}
             {%- set extended = 'sensor.' ~ tracker ~ '_place_extended_data' -%}
             {%- set osm = state_attr(extended, 'osm_dict') or {} -%}
@@ -1514,30 +1510,49 @@ template:
                ) | lower -%}
             {%- set osm_class = osm.get('class') or osm.get('category') -%}
             {%- set is_shop = osm_class is none or osm_class == 'shop' -%}
-            {%- set brand_tags = [
-                 extratags.get('brand', ''), extratags.get('operator', '')
-               ] | map('lower') | list -%}
             {%- set place_name = states('sensor.' ~ tracker ~ '_place_place_name') | lower -%}
             {#- zone_name matches store zones, but it is never vague (it reads
-                "not_home" when away), so it must not decide "elsewhere". -#}
+                "not_home" when away), so it must not count as evidence. -#}
             {%- set labels = [
                  place_name, states('sensor.' ~ tracker ~ '_place_zone_name') | lower
                ] -%}
-            {%- if (is_shop and place_type in diy_shop_types)
-                   or brand_tags | select('search', brand_pattern) | list | count > 0
-                   or labels | select('search', brand_pattern) | list | count > 0 -%}
-              {%- set ns.at_store = true -%}
-            {%- elif place_type not in vague or place_name not in vague -%}
-              {%- set ns.elsewhere = true -%}
+            {%- set brand_hit = [
+                 extratags.get('brand', ''), extratags.get('operator', '')
+               ] | map('lower') | select('search', brand_pattern) | list -%}
+            {%- set name_hit = labels | select('search', brand_pattern) | list -%}
+            {%- set matched = (is_shop and place_type in diy_shop_types)
+                              or brand_hit | count > 0 or name_hit | count > 0 -%}
+            {%- if matched and not ns.store -%}
+              {%- if brand_hit | count > 0 -%}
+                {%- set ns.store = brand_hit[0] -%}
+              {%- elif place_name not in vague -%}
+                {%- set ns.store = place_name -%}
+              {%- else -%}
+                {%- set ns.store = 'shop:' ~ place_type -%}
+              {%- endif -%}
+            {%- elif place_type in vague and place_name in vague -%}
+              {%- set ns.all_informative = false -%}
             {%- endif -%}
           {%- endfor -%}
-          {%- if ns.at_store -%}
-            true
-          {%- elif ns.elsewhere -%}
-            false
+          {%- if ns.store -%}
+            {{ ns.store }}
+          {%- elif ns.all_informative -%}
+            none
           {%- else -%}
-            {{ (this.state if this is defined else 'off') == 'on' }}
+            {{ this.state if this is defined and this.state not in ['unknown', 'unavailable'] else 'none' }}
           {%- endif -%}
+
+  - binary_sensor:
+      # Human-readable companion to sensor.diy_store_current. Nothing triggers
+      # off this; the prompts key on the identity so they can tell one store
+      # from the next.
+      - name: diy_store_visit
+        unique_id: diy_store_visit
+        default_entity_id: binary_sensor.diy_store_visit
+        icon: mdi:store-marker
+        state: >-
+          {{ states('sensor.diy_store_current') not in
+             ['none', 'unknown', 'unavailable'] }}
 
       - name: test_homeward
         unique_id: test_homeward
