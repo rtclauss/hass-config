@@ -1471,26 +1471,38 @@ template:
       #      geocoder named but never tagged. Matching zone_name also means
       #      store zones, if ever added, need no further wiring here.
       #
-      # delay_off only exists to absorb a bad fix landing between two good ones
-      # on arrival or departure, which is a matter of a minute or two. Keep it
-      # short. The prompts trigger on the off->on edge, so any hold longer than
-      # the gap between two stores in one trip silently swallows the second
-      # store: at 30 minutes it ate a Home Depot arrival 25 minutes after a
-      # false-positive match at a garden centre. Real store visits are always
-      # separated by drive time, during which the place resolves to roads.
+      # Staying on for a whole visit is NOT done with delay_off. A timed hold
+      # cannot tell "still in this store" from "now at the next store": the
+      # prompts trigger on the off->on edge, so a hold long enough to cover one
+      # visit swallows the next store (30 minutes ate a Home Depot arrival 25
+      # minutes after the previous match), and a hold short enough to re-arm
+      # re-fires for the SAME store when a visit outlasts it.
+      #
+      # Key off information instead of time. A parking/unknown fix is not
+      # evidence of leaving — it is the lot, and it is what the phone reports
+      # from a big-box store right before it goes silent. So:
+      #   matched a store        -> on
+      #   informative non-store  -> off   (a road, a house, another named POI)
+      #   uninformative          -> hold the previous state
+      # Leaving always produces informative fixes (roads), so this clears on
+      # departure and re-arms for the next store however long the visit was.
+      # `this` is the sensor's own previous state; it creates no dependency, and
+      # every transition above is driven by an input change, so there is nothing
+      # to re-render on a timer. It resolves to `unknown` before the first
+      # render, which fails closed.
       - name: diy_store_visit
         unique_id: diy_store_visit
         default_entity_id: binary_sensor.diy_store_visit
         icon: mdi:store-marker
-        delay_off: "00:05:00"
         state: >-
           {%- set diy_shop_types = ['doityourself', 'hardware', 'trade'] -%}
+          {%- set vague = ['', 'unknown', 'unavailable', 'none', 'parking'] -%}
           {%- set diy_brands = [
                'home depot', 'menards', "lowe's", 'lowes', 'fleet farm',
                'ace hardware', 'harbor freight', 'true value'
              ] -%}
           {%- set brand_pattern = diy_brands | join('|') -%}
-          {%- set ns = namespace(at_store=false) -%}
+          {%- set ns = namespace(at_store=false, elsewhere=false) -%}
           {%- for tracker in ['zeke', 'tesla'] -%}
             {%- set extended = 'sensor.' ~ tracker ~ '_place_extended_data' -%}
             {%- set osm = state_attr(extended, 'osm_dict') or {} -%}
@@ -1505,17 +1517,27 @@ template:
             {%- set brand_tags = [
                  extratags.get('brand', ''), extratags.get('operator', '')
                ] | map('lower') | list -%}
+            {%- set place_name = states('sensor.' ~ tracker ~ '_place_place_name') | lower -%}
+            {#- zone_name matches store zones, but it is never vague (it reads
+                "not_home" when away), so it must not decide "elsewhere". -#}
             {%- set labels = [
-                 states('sensor.' ~ tracker ~ '_place_place_name'),
-                 states('sensor.' ~ tracker ~ '_place_zone_name')
-               ] | map('lower') | list -%}
+                 place_name, states('sensor.' ~ tracker ~ '_place_zone_name') | lower
+               ] -%}
             {%- if (is_shop and place_type in diy_shop_types)
                    or brand_tags | select('search', brand_pattern) | list | count > 0
                    or labels | select('search', brand_pattern) | list | count > 0 -%}
               {%- set ns.at_store = true -%}
+            {%- elif place_type not in vague or place_name not in vague -%}
+              {%- set ns.elsewhere = true -%}
             {%- endif -%}
           {%- endfor -%}
-          {{ ns.at_store }}
+          {%- if ns.at_store -%}
+            true
+          {%- elif ns.elsewhere -%}
+            false
+          {%- else -%}
+            {{ (this.state if this is defined else 'off') == 'on' }}
+          {%- endif -%}
 
       - name: test_homeward
         unique_id: test_homeward

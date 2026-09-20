@@ -108,20 +108,33 @@ def test_diy_store_sensor_structural_types_stock_filters_and_salt() -> None:
         assert shop_type not in types_line, f"{shop_type!r} must not match structurally"
 
 
-def test_diy_store_hold_is_short_enough_for_two_stores_in_one_trip() -> None:
+def test_diy_store_sensor_does_not_use_a_timed_hold() -> None:
     block = _diy_store_sensor_block()
-    match = re.search(r'delay_off:\s*"(\d{2}):(\d{2}):(\d{2})"', block)
-    assert match is not None, "diy_store_visit must declare delay_off"
 
-    hours, minutes, seconds = (int(part) for part in match.groups())
-    hold_seconds = hours * 3600 + minutes * 60 + seconds
+    # A timed hold cannot tell "still in this store" from "now at the next
+    # store". Long enough to cover a visit swallows the next store; short
+    # enough to re-arm re-fires for the same one. Both were observed.
+    assert "delay_off" not in block
 
-    # The prompts trigger on the off->on edge. A hold longer than the gap
-    # between two stores in one trip swallows the second store entirely: at 30
-    # minutes it ate a Home Depot arrival 25 minutes after the previous match.
-    assert hold_seconds <= 600, "hold must stay well under a between-stores gap"
-    # But long enough to absorb a single bad fix between two good ones.
-    assert hold_seconds >= 120
+
+def test_diy_store_sensor_holds_through_uninformative_fixes() -> None:
+    block = _diy_store_sensor_block()
+
+    # parking/unknown is the lot, not evidence of having left.
+    assert "'parking'" in block
+    assert "ns.elsewhere" in block
+    assert "this.state if this is defined else 'off'" in block
+
+
+def test_diy_store_sensor_does_not_let_zone_name_decide_elsewhere() -> None:
+    block = _diy_store_sensor_block()
+
+    # zone_name reads "not_home" when away, so it is never vague. Letting it
+    # vote on "elsewhere" would make the hold unreachable.
+    elsewhere = block[block.index("elif place_type not in vague") :]
+    elsewhere = elsewhere[: elsewhere.index("endif")]
+    assert "zone_name" not in elsewhere
+    assert "place_name not in vague" in elsewhere
 
 
 def test_diy_store_sensor_reads_brand_tags() -> None:
@@ -167,14 +180,6 @@ def test_diy_store_sensor_also_reads_zone_names() -> None:
     # Reading zone_name means store zones, if any are ever added, are picked up
     # by the same keyword list with no further wiring.
     assert "_place_zone_name" in block
-
-
-def test_diy_store_sensor_holds_through_geocode_flicker() -> None:
-    block = _diy_store_sensor_block()
-
-    # A store fix can be a single sample between two parking-lot fixes. Holding
-    # the sensor on keeps one visit to one prompt instead of several.
-    assert "delay_off:" in block
 
 
 ########################
@@ -491,3 +496,99 @@ def test_other_errands_from_that_trip_do_not_match() -> None:
         assert not _matches_diy_store(
             osm_class=osm_class, osm_type=osm_type, place_name=place_name
         ), f"{place_name} ({osm_class}={osm_type}) must not match"
+
+
+########################
+# The hold, replayed against real fixes
+########################
+
+VAGUE = {"", "unknown", "unavailable", "none", "parking"}
+
+
+def _replay(fixes: list[tuple[str, str]]) -> tuple[list[str], int]:
+    """Mirror of the sensor's three-state logic over a sequence of fixes.
+
+    Each fix is (place_name, place_type). Returns the state after each fix and
+    the number of off->on edges, which is the number of prompts sent.
+    """
+    states: list[str] = []
+    prev = "off"
+    prompts = 0
+    for place_name, place_type in fixes:
+        matched = _matches_diy_store(
+            osm_class="shop" if place_type not in VAGUE else None,
+            osm_type=place_type,
+            place_name=place_name,
+        )
+        elsewhere = place_type not in VAGUE or place_name.lower() not in VAGUE
+        new = "on" if matched else ("off" if elsewhere else prev)
+        if prev == "off" and new == "on":
+            prompts += 1
+        states.append(new)
+        prev = new
+    return states, prompts
+
+
+def test_replay_of_the_2026_09_20_trip_prompts_exactly_once() -> None:
+    trip = [
+        ("unknown", "secondary"),
+        ("Valley Foods", "supermarket"),
+        ("Crestridge Dental", "dentist"),
+        ("Michaels", "craft"),
+        ("unknown", "parking"),
+        ("unknown", "house"),
+        ("Games by James", "games"),
+        ("County Road 42 West", "trunk"),
+        ("Bachman's", "garden_centre"),
+        ("Pennock Lane", "tertiary"),
+        ("Bodega 42 Fresh Market", "supermarket"),
+        ("unknown", "parking"),
+        ("The Home Depot", "doityourself"),
+        ("unknown", "parking"),
+        ("unknown", "parking"),
+        ("unknown", "house"),
+    ]
+    states, prompts = _replay(trip)
+
+    assert prompts == 1, "the Home Depot arrival, and nothing else"
+    assert states[trip.index(("The Home Depot", "doityourself"))] == "on"
+    assert states[trip.index(("Bachman's", "garden_centre"))] == "off"
+    assert states[-1] == "off", "driving home must re-arm for next time"
+
+
+def test_a_long_visit_does_not_reprompt() -> None:
+    # The failure a short timed hold would reintroduce: arrive, sit in the lot
+    # for far longer than any hold, then a second store fix on the way out.
+    states, prompts = _replay(
+        [("unknown", "parking")]
+        + [("The Home Depot", "doityourself")]
+        + [("unknown", "parking")] * 20
+        + [("The Home Depot", "doityourself")]
+        + [("County Road 42", "trunk")]
+    )
+
+    assert prompts == 1
+    assert states[-1] == "off"
+
+
+def test_two_stores_in_one_trip_prompt_twice() -> None:
+    # The failure a long timed hold caused. Driving between them produces
+    # informative road fixes, which clear the sensor and re-arm it.
+    _, prompts = _replay(
+        [
+            ("Ace Hardware", "hardware"),
+            ("unknown", "parking"),
+            ("County Road 42", "trunk"),
+            ("Cedar Avenue", "motorway"),
+            ("unknown", "parking"),
+            ("The Home Depot", "doityourself"),
+        ]
+    )
+
+    assert prompts == 2
+
+
+def test_hold_does_not_survive_arriving_home() -> None:
+    states, _ = _replay([("The Home Depot", "doityourself"), ("unknown", "house")])
+
+    assert states == ["on", "off"]
