@@ -75,7 +75,7 @@ class ConnectionConfig:
     # behavior unchanged. See ocr.py's read_digits_vlm/DEFAULT_VLM_TIMEOUT
     # for why the timeout default is so much larger than a typical HTTP call.
     vlm_host: str = ""
-    vlm_model: str = "qwen3-vl:4b"
+    vlm_model: str = "qwen2.5vl:7b"
     vlm_timeout_seconds: float = 480.0
 
 
@@ -122,7 +122,7 @@ def connection_config_from_env() -> ConnectionConfig:
             )
         ),
         vlm_host=os.environ.get("WATER_METER_VLM_HOST", ""),
-        vlm_model=os.environ.get("WATER_METER_VLM_MODEL", "qwen3-vl:4b"),
+        vlm_model=os.environ.get("WATER_METER_VLM_MODEL", "qwen2.5vl:7b"),
         vlm_timeout_seconds=float(
             os.environ.get("WATER_METER_VLM_TIMEOUT_SECONDS", "480.0")
         ),
