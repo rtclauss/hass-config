@@ -197,13 +197,26 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.washer_reminder_active
-      - action: notify.all
+
+  - id: dryer_started
+    alias: dryer_started
+    description: Clear any prior dryer reminder when a new cycle starts.
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.dryer_running
+        to: "on"
+    action:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.dryer_state
         data:
-          message: "Washing machine finished! \U0001F9FA"
+          option: DRYING
 
   - id: dryer_finished
     alias: dryer_finished
-    description: Notify when dryer power drops back to standby long enough to count as a completed cycle.
+    description: Mark a dryer load ready for the next laundry-room entry.
     trace:
       stored_traces: 10
     trigger:
@@ -212,13 +225,103 @@ automation:
         from: "on"
         to: "off"
     action:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.dryer_state
+        data:
+          option: CLEAN
+
+  - id: laundry_room_entry_reminder
+    alias: laundry_room_entry_reminder
+    description: >-
+      Surface completed washer and dryer loads once when someone enters and
+      turns on the laundry-room lights. The physical switch is the entry proxy
+      because the room has no motion or occupancy entity.
+    mode: single
+    trace:
+      stored_traces: 10
+    variables:
+      pending_loads: >-
+        {% set washer = is_state('input_boolean.washer_reminder_active', 'on')
+           and is_state('input_select.washer_state', 'CLEAN')
+           and is_state('binary_sensor.washing_machine_running', 'off')
+           and is_state('binary_sensor.laundry_room_washing_machine_door_contact', 'off') %}
+        {% set dryer = is_state('input_select.dryer_state', 'CLEAN') %}
+        {{ 'both' if washer and dryer else 'washer' if washer else 'dryer' }}
+    trigger:
+      - trigger: state
+        entity_id: sensor.laundry_wall_switch_action
+        to: "up_single"
+    condition:
+      - condition: or
+        conditions:
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_boolean.washer_reminder_active
+                state: "on"
+              - condition: state
+                entity_id: input_select.washer_state
+                state: "CLEAN"
+              - condition: state
+                entity_id: binary_sensor.washing_machine_running
+                state: "off"
+              - condition: state
+                entity_id: binary_sensor.laundry_room_washing_machine_door_contact
+                state: "off"
+          - condition: state
+            entity_id: input_select.dryer_state
+            state: "CLEAN"
+    action:
+      - if:
+          - condition: state
+            entity_id: input_boolean.washer_reminder_active
+            state: "on"
+          - condition: state
+            entity_id: input_select.washer_state
+            state: "CLEAN"
+          - condition: state
+            entity_id: binary_sensor.washing_machine_running
+            state: "off"
+          - condition: state
+            entity_id: binary_sensor.laundry_room_washing_machine_door_contact
+            state: "off"
+        then:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.washer_state
+            data:
+              option: REMINDED
+      - if:
+          - condition: state
+            entity_id: input_select.dryer_state
+            state: "CLEAN"
+        then:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.dryer_state
+            data:
+              option: REMINDED
+      - action: light.turn_on
+        continue_on_error: true
+        target:
+          entity_id: light.laundry_room
+        data:
+          flash: short
       - action: notify.all
         data:
-          message: "Dryer finished! \U0001F9FA"
+          message: >-
+            {% if pending_loads == 'both' %}
+              Washer and dryer loads are waiting in the laundry room. \U0001F9FA
+            {% elif pending_loads == 'washer' %}
+              Washer load is waiting in the laundry room. \U0001F9FA
+            {% else %}
+              Dryer load is waiting in the laundry room. \U0001F9FA
+            {% endif %}
 
   - id: washer_reminder
     alias: washer_reminder
-    description: Escalate a finished washer load from lights at 30 minutes to audio at 60 minutes.
+    description: Escalate a finished washer load after one hour without acknowledgement.
     trace:
       stored_traces: 10
     trigger:
@@ -248,51 +351,26 @@ automation:
         value_template: >-
           {% set finished = states('input_datetime.washer_finished_at') %}
           {{ finished not in ['unknown', 'unavailable', 'none', '']
-             and as_timestamp(now()) - as_timestamp(finished) >= 30 * 60 }}
+             and as_timestamp(now()) - as_timestamp(finished) >= 60 * 60 }}
     action:
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: >-
-                  {{ as_timestamp(now()) - as_timestamp(states('input_datetime.washer_finished_at')) >= 60 * 60 }}
-            sequence:
-              - action: input_select.select_option
-                target:
-                  entity_id: input_select.washer_state
-                data:
-                  option: MUSTY
-              - action: notify.all
-                data:
-                  message: "Laundry has been sitting in the washer for an hour. \U0001F9FA"
-              - if:
-                  - condition: state
-                    entity_id: input_boolean.guest_mode
-                    state: "off"
-                then:
-                  - action: tts.google_say
-                    continue_on_error: true
-                    data:
-                      entity_id: media_player.ma_group_everywhere
-                      message: "Laundry has been sitting in the washer for an hour."
-          - conditions:
-              - condition: state
-                entity_id: input_select.washer_state
-                state: "CLEAN"
-            sequence:
-              - action: light.turn_on
-                continue_on_error: true
-                target:
-                  entity_id: light.laundry_room
-                data:
-                  flash: short
-              - action: input_select.select_option
-                target:
-                  entity_id: input_select.washer_state
-                data:
-                  option: REMINDED
-              - action: notify.all
-                data:
-                  message: "Washer load is still waiting; flashing the laundry room lights. \U0001F9FA"
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.washer_state
+        data:
+          option: MUSTY
+      - action: notify.all
+        data:
+          message: "Laundry has been sitting in the washer for an hour. \U0001F9FA"
+      - if:
+          - condition: state
+            entity_id: input_boolean.guest_mode
+            state: "off"
+        then:
+          - action: tts.google_say
+            continue_on_error: true
+            data:
+              entity_id: media_player.ma_group_everywhere
+              message: "Laundry has been sitting in the washer for an hour."
 
   - id: washer_cleared
     alias: washer_cleared
@@ -984,6 +1062,14 @@ input_number: {}
 # Input Select
 ########################
 input_select:
+  dryer_state:
+    name: Dryer State
+    options:
+      - IDLE
+      - DRYING
+      - CLEAN
+      - REMINDED
+    icon: mdi:tumble-dryer
   washer_state:
     name: Washer State
     options:
