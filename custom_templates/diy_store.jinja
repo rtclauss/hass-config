@@ -1,0 +1,75 @@
+{% macro diy_store_identity(tracker) %}
+  {# Canonical identity of the DIY store this tracker is at, or empty.
+
+     Canonical matters: the restock prompts in packages/climate.yaml and
+     packages/water_softener.yaml treat any change of identity as a new store,
+     so the same store must always produce the same string. Raw place names do
+     not ("The Home Depot" one fix, "The Home Depot #2812" the next, an
+     operator tag the one after), which is why a known brand always collapses
+     to its own token and everything else collapses to shop:<type>.
+
+     Matching, cheapest and most reliable first:
+       1. class/type - shop=doityourself, shop=hardware, shop=trade. Keep this
+          to shops that stock furnace filters and softener salt. NOT
+          shop=department_store (every Target), and NOT shop=garden_centre or
+          shop=paint: a garden centre prompted for air filters on 2026-09-20.
+       2. brand/operator from extratags - a curated OSM tag, not a display
+          name. This is what catches Fleet Farm, tagged department_store.
+       3. place_name / zone_name substring - last resort for a store the
+          geocoder named but never tagged. Matching zone_name also means store
+          zones, if ever added, need no further wiring.
+
+     Read class/type from the extended-data attributes, NOT from
+     sensor.<tracker>_place_place_category: that sensor has been `unknown` on
+     both trackers for the whole recorder window, because the integration reads
+     osm_dict["category"] while Nominatim's reverse endpoint returns the key as
+     "class". Accept either spelling so an upstream format switch is a no-op.
+
+     Returns text, so `| trim` on the other end.
+  #}
+  {%- set diy_shop_types = ['doityourself', 'hardware', 'trade'] -%}
+  {%- set diy_brands = [
+       'home depot', 'menards', "lowe's", 'lowes', 'fleet farm',
+       'ace hardware', 'harbor freight', 'true value'
+     ] -%}
+  {%- set extended = 'sensor.' ~ tracker ~ '_place_extended_data' -%}
+  {%- set osm = state_attr(extended, 'osm_dict') or {} -%}
+  {%- set details = state_attr(extended, 'osm_details_dict') or {} -%}
+  {%- set extratags = details.get('extratags') or {} -%}
+  {%- set osm_class = osm.get('class') or osm.get('category') -%}
+  {%- set is_shop = osm_class is none or osm_class == 'shop' -%}
+  {%- set place_type = (
+       osm.get('type') or states('sensor.' ~ tracker ~ '_place_place_type')
+     ) | lower -%}
+  {%- set haystack = [
+       extratags.get('brand', ''),
+       extratags.get('operator', ''),
+       states('sensor.' ~ tracker ~ '_place_place_name'),
+       states('sensor.' ~ tracker ~ '_place_zone_name')
+     ] | map('lower') | join(' | ') -%}
+  {%- set brands_found = diy_brands | select('in', haystack) | list -%}
+  {%- if brands_found | count > 0 -%}
+    {{- brands_found[0] -}}
+  {%- elif is_shop and place_type in diy_shop_types -%}
+    {{- 'shop:' ~ place_type -}}
+  {%- endif -%}
+{% endmacro %}
+
+{% macro diy_place_is_vague(tracker) %}
+  {# Whether this tracker's current fix carries no information about whether it
+     is at a store. A parking/unknown fix is NOT evidence of having left: it is
+     the lot, and it is what the phone reports from a big-box store right
+     before it goes silent for the rest of the visit.
+
+     Returns the text "true" or "false", so `| trim == 'true'` on the other end.
+  #}
+  {%- set vague = ['', 'none', 'unknown', 'unavailable', 'parking'] -%}
+  {%- set osm = state_attr('sensor.' ~ tracker ~ '_place_extended_data', 'osm_dict') or {} -%}
+  {%- set place_type = (
+       osm.get('type') or states('sensor.' ~ tracker ~ '_place_place_type')
+     ) | lower -%}
+  {#- zone_name reads "not_home" when away, so it is never vague and must not
+      count as evidence here; it only feeds matching. -#}
+  {%- set place_name = states('sensor.' ~ tracker ~ '_place_place_name') | lower -%}
+  {{- 'true' if (place_type in vague and place_name in vague) else 'false' -}}
+{% endmacro %}
