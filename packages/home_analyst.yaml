@@ -1,0 +1,98 @@
+# Read-only, semantic state for the local Ollama Home Analyst.
+# Entity exposure and the Ollama connection are config-entry settings, so they
+# deliberately remain outside this repository. See docs/home_analyst.md.
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "home_analyst"
+
+    sensor.home_analyst_occupancy_summary:
+      <<: *customize
+      friendly_name: Home Analyst Occupancy Summary
+      icon: mdi:home-account
+    sensor.home_analyst_bed_summary:
+      <<: *customize
+      friendly_name: Home Analyst Bed Summary
+      icon: mdi:bed
+    sensor.home_analyst_hvac_summary:
+      <<: *customize
+      friendly_name: Home Analyst HVAC Summary
+      icon: mdi:hvac
+    sensor.home_analyst_openings_summary:
+      <<: *customize
+      friendly_name: Home Analyst Openings Summary
+      icon: mdi:door-open
+    sensor.home_analyst_health_summary:
+      <<: *customize
+      friendly_name: Home Analyst Health Summary
+      icon: mdi:heart-pulse
+    sensor.home_analyst_anomaly_summary:
+      <<: *customize
+      friendly_name: Home Analyst Anomaly Summary
+      icon: mdi:alert-circle-outline
+
+# These YAML templates intentionally combine multiple sources and attributes;
+# a UI Template Helper cannot provide the grouped, compact diagnostic context.
+template:
+  - sensor:
+      - name: Home Analyst Occupancy Summary
+        unique_id: home_analyst_occupancy_summary
+        state: >-
+          Ryan presence is {{ states('person.ryan') }}; fused home-presence signal is {{ states('binary_sensor.bayesian_zeke_home') }}; guest mode is {{ states('input_boolean.guest_mode') }}.
+        attributes:
+          source_states: >-
+            {{ {'person_ryan': states('person.ryan'), 'fused_home_presence': states('binary_sensor.bayesian_zeke_home'), 'guest_mode': states('input_boolean.guest_mode')} | to_json }}
+
+      - name: Home Analyst Bed Summary
+        unique_id: home_analyst_bed_summary
+        state: >-
+          Fused bed occupancy is {{ states('binary_sensor.bayesian_bed_occupancy') }}. Bed-presence sensor reports either side {{ states('binary_sensor.bed_presence_2d0670_bed_occupied_either') }}, left {{ states('binary_sensor.bed_presence_2d0670_bed_occupied_left') }}, right {{ states('binary_sensor.bed_presence_2d0670_bed_occupied_right') }}.
+        attributes:
+          interpretation: >-
+            Bed presence is an inference. Treat disagreement or unavailable sources as uncertainty, not proof of occupancy.
+          source_states: >-
+            {{ {'fused_bed_occupancy': states('binary_sensor.bayesian_bed_occupancy'), 'bed_presence_either': states('binary_sensor.bed_presence_2d0670_bed_occupied_either'), 'bed_presence_left': states('binary_sensor.bed_presence_2d0670_bed_occupied_left'), 'bed_presence_right': states('binary_sensor.bed_presence_2d0670_bed_occupied_right')} | to_json }}
+
+      - name: Home Analyst HVAC Summary
+        unique_id: home_analyst_hvac_summary
+        state: >-
+          Ecobee mode is {{ states('climate.my_ecobee') }}; current HVAC action is {{ states('sensor.hvac_activity') }}; indoor temperature is {{ states('sensor.ecobee_temperature') }} °F; active target is {{ states('sensor.ecobee_active_target_temperature') }} °F.
+        attributes:
+          source_states: >-
+            {{ {'ecobee_mode': states('climate.my_ecobee'), 'hvac_action': states('sensor.hvac_activity'), 'current_temperature_f': states('sensor.ecobee_temperature'), 'active_target_temperature_f': states('sensor.ecobee_active_target_temperature')} | to_json }}
+
+      - name: Home Analyst Openings Summary
+        unique_id: home_analyst_openings_summary
+        state: >-
+          {% set windows_open = states('binary_sensor.any_window_open') %}
+          {% set window_names = state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true) %}
+          Windows open: {{ windows_open }}{% if window_names %} ({{ window_names }}){% endif %}. Front door contact: {{ states('binary_sensor.main_foyer_front_door_contact') }}. Garage door: {{ states('cover.garage_door') }}. Front door lock: {{ states('lock.front_door_lock') }}.
+        attributes:
+          source_states: >-
+            {{ {'windows_open': states('binary_sensor.any_window_open'), 'open_window_names': state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true), 'front_door_contact': states('binary_sensor.main_foyer_front_door_contact'), 'garage_door': states('cover.garage_door'), 'front_door_lock': states('lock.front_door_lock')} | to_json }}
+
+      - name: Home Analyst Health Summary
+        unique_id: home_analyst_health_summary
+        state: >-
+          {% set offline = states('binary_sensor.z2m_devices_offline') %}
+          {% set offline_names = state_attr('binary_sensor.z2m_devices_offline', 'offline_devices') | default([], true) %}
+          Zigbee device availability issue: {{ offline }}{% if offline_names %}; affected devices: {{ offline_names | join(', ') }}{% endif %}.
+        attributes:
+          source_states: >-
+            {{ {'z2m_devices_offline': states('binary_sensor.z2m_devices_offline'), 'offline_devices': state_attr('binary_sensor.z2m_devices_offline', 'offline_devices') | default([], true), 'total_devices': state_attr('binary_sensor.z2m_devices_offline', 'total_devices'), 'online_count': state_attr('binary_sensor.z2m_devices_offline', 'online_count')} | to_json }}
+
+      - name: Home Analyst Anomaly Summary
+        unique_id: home_analyst_anomaly_summary
+        state: >-
+          {% set issues = namespace(items=[]) %}
+          {% if is_state('binary_sensor.any_window_open', 'on') %}{% set issues.items = issues.items + ['one or more windows are open'] %}{% endif %}
+          {% if states('binary_sensor.main_foyer_front_door_contact') == 'on' %}{% set issues.items = issues.items + ['the front door contact is open'] %}{% endif %}
+          {% if states('cover.garage_door') not in ['closed', 'closing', 'unknown', 'unavailable'] %}{% set issues.items = issues.items + ['the garage door is ' ~ states('cover.garage_door')] %}{% endif %}
+          {% if states('lock.front_door_lock') not in ['locked', 'unknown', 'unavailable'] %}{% set issues.items = issues.items + ['the front door lock is ' ~ states('lock.front_door_lock')] %}{% endif %}
+          {% if is_state('binary_sensor.z2m_devices_offline', 'on') %}{% set issues.items = issues.items + ['one or more Zigbee devices are offline'] %}{% endif %}
+          {% if issues.items %}Observed exceptions: {{ issues.items | join('; ') }}.{% else %}No configured opening, lock, garage, or Zigbee availability exceptions are currently observed.{% endif %}
+        attributes:
+          scope: >-
+            This summary is a limited observation list, not a whole-home safety guarantee.
