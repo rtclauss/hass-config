@@ -28,6 +28,60 @@ homeassistant:
       <<: *customize
       friendly_name: Arrival welcome needed
       icon: mdi:home-import-outline
+    binary_sensor.guest_privacy_protection_active:
+      <<: *customize
+      friendly_name: Guest privacy protection active
+      icon: mdi:account-lock-outline
+    binary_sensor.automatic_cleaning_allowed:
+      <<: *customize
+      friendly_name: Automatic cleaning allowed
+      icon: mdi:robot-vacuum-variant
+    binary_sensor.owner_suite_wake_ready:
+      <<: *customize
+      friendly_name: Owner suite wake ready
+      icon: mdi:weather-sunset-up
+    binary_sensor.overnight_path_lighting_allowed:
+      <<: *customize
+      friendly_name: Overnight path lighting allowed
+      icon: mdi:foot-print
+    binary_sensor.house_away_secure:
+      <<: *customize
+      friendly_name: House away secure
+      icon: mdi:shield-home-outline
+    binary_sensor.high_power_appliance_running:
+      <<: *customize
+      friendly_name: High-power appliance running
+      icon: mdi:flash-outline
+    binary_sensor.mail_attention_needed:
+      <<: *customize
+      friendly_name: Mail attention needed
+      icon: mdi:mailbox-up-outline
+    binary_sensor.air_quality_action_needed:
+      <<: *customize
+      friendly_name: Air quality action needed
+      icon: mdi:air-filter
+    binary_sensor.ev_charge_needed_before_departure:
+      <<: *customize
+      friendly_name: EV charge needed before departure
+      icon: mdi:car-electric-outline
+    binary_sensor.inky_display_attention_needed:
+      <<: *customize
+      friendly_name: Inky display attention needed
+      icon: mdi:alert-decagram-outline
+
+    input_number.ev_departure_minimum_battery:
+      <<: *customize
+      friendly_name: EV departure minimum battery
+      icon: mdi:battery-alert-variant-outline
+
+input_number:
+  ev_departure_minimum_battery:
+    min: 10
+    max: 100
+    step: 5
+    mode: slider
+    unit_of_measurement: "%"
+    initial: 50
 
 template:
   - binary_sensor:
@@ -115,3 +169,118 @@ template:
              and is_state('sun.sun', 'below_horizon')
              and is_state('binary_sensor.hall_main_foyer_motion_occupancy', 'off')
              and is_state('light.hall_foyer_switch', 'off') }}
+
+      # Guest mode is the broad override. Dedicated guest-room occupancy also
+      # protects the room when guest mode was not manually enabled yet.
+      - name: guest_privacy_protection_active
+        unique_id: guest_privacy_protection_active
+        state: >-
+          {{ is_state('input_boolean.guest_mode', 'on')
+             or is_state('binary_sensor.guest_room_occupancy_2', 'on') }}
+
+      # This is deliberately stricter than a general cleaning condition. It
+      # can only expose the known HA-verifiable parts of the cat-safety policy;
+      # it never claims that cameras or presence prove a floor is safe.
+      - name: automatic_cleaning_allowed
+        unique_id: automatic_cleaning_allowed
+        state: >-
+          {{ is_state('input_select.vacuum_pet_policy', 'Unattended')
+             and is_state('input_boolean.guest_mode', 'off')
+             and is_state('binary_sensor.bed_occupied_debounced', 'off')
+             and is_state('binary_sensor.den_doors_contact', 'off') }}
+
+      - name: owner_suite_wake_ready
+        unique_id: owner_suite_wake_ready
+        state: >-
+          {% set wake_candidates = [
+            state_attr('input_datetime.weekday_alarm', 'timestamp')
+              if is_state('input_boolean.weekday_alarm_on', 'on') else none,
+            state_attr('input_datetime.next_work_meeting', 'timestamp')
+              if is_state('input_boolean.special_meeting', 'on') else none
+          ] | select('number') | reject('equalto', 0) | list %}
+          {% set earliest = wake_candidates | min if wake_candidates else none %}
+          {% set now_seconds = now().hour * 3600 + now().minute * 60 + now().second %}
+          {% set bathroom_recent = is_state('binary_sensor.owner_suite_bathroom_room_occupancy', 'on')
+            or as_timestamp(now()) - as_timestamp(states.binary_sensor.owner_suite_bathroom_room_occupancy.last_changed) <= 900 %}
+          {% set bedroom_recent = is_state('binary_sensor.bedroom_occupancy', 'on')
+            or as_timestamp(now()) - as_timestamp(states.binary_sensor.bedroom_occupancy.last_changed) <= 900 %}
+          {{ earliest is number
+             and now_seconds >= earliest - 1800 and now_seconds < 43200
+             and is_state('binary_sensor.workday_sensor', 'on')
+             and is_state('binary_sensor.bayesian_zeke_home', 'on')
+             and is_state('binary_sensor.planned_vacation_calendar', 'off')
+             and states('input_select.house_mode') in ['night', 'in_bed', 'asleep']
+             and is_state('binary_sensor.bed_occupied_debounced', 'off')
+             and is_state('input_boolean.wakeup_alarm_firing', 'off')
+             and is_state('light.owner_suite_lamps', 'off')
+             and bathroom_recent and bedroom_recent }}
+
+      # This supports dim circulation lighting only. Guest-capable private
+      # spaces remain excluded; individual room automations still choose their
+      # own scene and timeout.
+      - name: overnight_path_lighting_allowed
+        unique_id: overnight_path_lighting_allowed
+        state: >-
+          {{ is_state('sun.sun', 'below_horizon')
+             and is_state('binary_sensor.sleep_protection_active', 'off')
+             and is_state('input_boolean.guest_mode', 'off')
+             and (is_state('binary_sensor.hall_main_foyer_motion_occupancy', 'on')
+                  or is_state('binary_sensor.hall_upstairs_motion_occupancy', 'on')) }}
+
+      - name: house_away_secure
+        unique_id: house_away_secure
+        state: >-
+          {{ is_state('input_select.house_mode', 'away')
+             and is_state('lock.front_door_lock', 'locked')
+             and is_state('cover.garage_door', 'closed')
+             and is_state('binary_sensor.main_foyer_front_door_contact', 'off') }}
+
+      - name: high_power_appliance_running
+        unique_id: high_power_appliance_running
+        state: >-
+          {{ is_state('binary_sensor.dishwasher_running', 'on')
+             or is_state('binary_sensor.dryer_running', 'on')
+             or is_state('binary_sensor.washing_machine_running', 'on') }}
+
+      - name: mail_attention_needed
+        unique_id: mail_attention_needed
+        state: >-
+          {{ is_state('input_boolean.mail_delivered', 'on')
+             or states('input_select.mail_package_delivery_state') in ['delivered', 'still_outside'] }}
+
+      # This intentionally calls for attention rather than directly switching
+      # HVAC or fans. Bathroom spikes retain their existing room-specific fan
+      # behavior; sustained high whole-house humidity is the extra signal.
+      - name: air_quality_action_needed
+        unique_id: air_quality_action_needed
+        state: >-
+          {{ is_state('binary_sensor.bathroom_humidity_high', 'on')
+             or is_state('binary_sensor.basement_bathroom_humidity_high', 'on')
+             or is_state('binary_sensor.guest_bathroom_humidity_high', 'on')
+             or (has_value('sensor.average_house_humidity')
+                 and states('sensor.average_house_humidity') | float(0) >= 60) }}
+        delay_on: "00:10:00"
+        delay_off: "00:10:00"
+
+      - name: ev_charge_needed_before_departure
+        unique_id: ev_charge_needed_before_departure
+        state: >-
+          {% set departure_ts = states('input_number.tesla_managed_departure_ts') | int(0) %}
+          {% set departure_soon = departure_ts > as_timestamp(now())
+            and departure_ts <= as_timestamp(now()) + 86400 %}
+          {{ is_state('input_boolean.tesla_managed_departure_active', 'on')
+             and departure_soon
+             and is_state('device_tracker.nigori_location_tracker', 'home')
+             and has_value('sensor.nigori_battery')
+             and states('sensor.nigori_battery') | float(100) < states('input_number.ev_departure_minimum_battery') | float(50)
+             and is_state('binary_sensor.nigori_charging', 'off') }}
+
+      # Mirrors only existing, meaningful exception sources already used by
+      # the publisher. The display automation remains event-driven and the Pi
+      # still suppresses duplicate payloads.
+      - name: inky_display_attention_needed
+        unique_id: inky_display_attention_needed
+        state: >-
+          {{ states('sensor.nws_dakota_county_alerts_alerts_are_active') | lower not in ['no', 'off', '0', 'false', 'unknown', 'unavailable']
+             or states('cover.garage_door') not in ['closed', 'closing', 'unknown', 'unavailable']
+             or states('binary_sensor.main_foyer_front_door_contact') == 'on' }}

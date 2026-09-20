@@ -27,6 +27,16 @@ def test_all_guard_entities_have_stable_ids_and_customization() -> None:
         "sleep_protection_active",
         "house_ready_for_bed",
         "arrival_welcome_needed",
+        "guest_privacy_protection_active",
+        "automatic_cleaning_allowed",
+        "owner_suite_wake_ready",
+        "overnight_path_lighting_allowed",
+        "house_away_secure",
+        "high_power_appliance_running",
+        "mail_attention_needed",
+        "air_quality_action_needed",
+        "ev_charge_needed_before_departure",
+        "inky_display_attention_needed",
     ):
         assert f"binary_sensor.{name}:" in text
         assert f"- name: {name}" in text
@@ -86,3 +96,69 @@ def test_arrival_guard_is_a_predicate_not_an_action() -> None:
     assert "binary_sensor.hall_main_foyer_motion_occupancy" in block
     assert "light.hall_foyer_switch" in block
     assert "action:" not in block
+
+
+def test_guest_and_automatic_cleaning_guards_preserve_privacy_and_pet_policy() -> None:
+    guest_block = _guard_block("guest_privacy_protection_active")
+    cleaning_block = _guard_block("automatic_cleaning_allowed")
+
+    assert "input_boolean.guest_mode" in guest_block
+    assert "binary_sensor.guest_room_occupancy_2" in guest_block
+    for entity_id in (
+        "input_select.vacuum_pet_policy",
+        "input_boolean.guest_mode",
+        "binary_sensor.bed_occupied_debounced",
+        "binary_sensor.den_doors_contact",
+    ):
+        assert entity_id in cleaning_block
+    assert "'Unattended'" in cleaning_block
+
+
+def test_wake_and_path_guards_are_tied_to_existing_sleep_policy_inputs() -> None:
+    wake_block = _guard_block("owner_suite_wake_ready")
+    path_block = _guard_block("overnight_path_lighting_allowed")
+
+    for entity_id in (
+        "binary_sensor.workday_sensor",
+        "binary_sensor.planned_vacation_calendar",
+        "binary_sensor.bed_occupied_debounced",
+        "input_boolean.wakeup_alarm_firing",
+    ):
+        assert entity_id in wake_block
+    assert "binary_sensor.sleep_protection_active" in path_block
+    assert "input_boolean.guest_mode" in path_block
+
+
+def test_house_appliance_mail_and_air_guards_use_normalized_entities() -> None:
+    away_block = _guard_block("house_away_secure")
+    appliance_block = _guard_block("high_power_appliance_running")
+    mail_block = _guard_block("mail_attention_needed")
+    air_block = _guard_block("air_quality_action_needed")
+
+    assert "lock.front_door_lock" in away_block
+    assert "cover.garage_door" in away_block
+    for entity_id in (
+        "binary_sensor.dishwasher_running",
+        "binary_sensor.dryer_running",
+        "binary_sensor.washing_machine_running",
+    ):
+        assert entity_id in appliance_block
+    assert "input_select.mail_package_delivery_state" in mail_block
+    assert "sensor.average_house_humidity" in air_block
+    assert 'delay_on: "00:10:00"' in air_block
+
+
+def test_ev_and_inky_guards_are_conservative_and_event_source_based() -> None:
+    ev_block = _guard_block("ev_charge_needed_before_departure")
+    inky_block = _guard_block("inky_display_attention_needed")
+
+    assert "input_number.ev_departure_minimum_battery" in _guards_text()
+    for entity_id in (
+        "input_boolean.tesla_managed_departure_active",
+        "input_number.tesla_managed_departure_ts",
+        "sensor.nigori_battery",
+        "binary_sensor.nigori_charging",
+    ):
+        assert entity_id in ev_block
+    assert "sensor.nws_dakota_county_alerts_alerts_are_active" in inky_block
+    assert "cover.garage_door" in inky_block
