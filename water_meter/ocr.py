@@ -48,23 +48,37 @@ def run_ssocr(image_path: Path, *, ssocr_args: Sequence[str], timeout: float = 1
 DEFAULT_VLM_MODEL = "qwen3-vl:4b"
 
 DEFAULT_VLM_TIMEOUT = 480.0
-"""Latency against truenas.local:30068's qwen3-vl:4b (CPU-only) is highly
-variable, not just slow: one measured call took 123.9s total_duration with
-only 48.4s of that in eval_duration (token generation) plus 0.27s
-prompt_eval - Ollama's own accounting doesn't explain the remaining ~75s gap
-(likely CPU contention on that box, not model-inherent). A 240s timeout was
-tried and confirmed too short in production: a live run hit that cutoff,
-then /api/ps showed the same generation had kept running server-side and
-completed anyway past the client's cutoff - the call would have succeeded
-if given more time. 480s trades a slower worst case for actually getting an
-answer back instead of truncating a call that was going to work; see the
-service's TimeoutStartSec, which must stay above this.
+"""Originally set against truenas.local:30068's qwen3-vl:4b running
+CPU-only, where latency was highly variable, not just slow: one measured
+call took 123.9s total_duration with only 48.4s of that in eval_duration
+(token generation) plus 0.27s prompt_eval - Ollama's own accounting didn't
+explain the remaining ~75s gap. A 240s timeout was tried and confirmed too
+short in production: a live run hit that cutoff, then /api/ps showed the
+same generation had kept running server-side and completed anyway past the
+client's cutoff. An RTX 2000 Ada was later added to that box, and calls
+dropped to single-digit seconds through ~30s in the common case - but 480s
+is kept as the timeout regardless, both as a margin for occasional slow
+calls and because the box has had repeated unrelated Ollama outages
+(service restarts, updates) that make "it's GPU-backed now" not a safe
+excuse to shrink the safety margin. See the service's TimeoutStartSec,
+which must stay above this.
 """
 
 DEFAULT_VLM_PROMPT = (
     "What {digit_count}-digit number is shown on this water meter LCD? "
     "Answer with just the digits, nothing else."
 )
+
+DEFAULT_VLM_NUM_THREAD = 2
+"""Caps the CPU threads Ollama uses per call, even though qwen3-vl:4b now
+runs GPU-resident (an RTX 2000 Ada was added to the TrueNAS box). GPU
+offload doesn't cover everything - image preprocessing/tokenization still
+runs on CPU, and Ollama defaults to using every core for it. That default
+was enough to re-trigger the box's CPU thermal alarm (the same alarm that
+originally motivated widening the timer's OnUnitActiveSec), even with
+inference itself fast and GPU-bound. 2 threads trades a little latency on
+the CPU-side portion for not cooking the box.
+"""
 
 
 def read_digits_vlm(
@@ -74,6 +88,7 @@ def read_digits_vlm(
     digit_count: int,
     model: str = DEFAULT_VLM_MODEL,
     timeout: float = DEFAULT_VLM_TIMEOUT,
+    num_thread: int = DEFAULT_VLM_NUM_THREAD,
     hint: str | None = None,
 ) -> str:
     """Ask a vision LLM (via an Ollama /api/generate endpoint) to read the
@@ -109,6 +124,7 @@ def read_digits_vlm(
         "prompt": prompt,
         "images": [base64.b64encode(image_bytes).decode("ascii")],
         "stream": False,
+        "options": {"num_thread": num_thread},
     }
     request = urllib.request.Request(
         f"http://{host}/api/generate",

@@ -265,6 +265,24 @@ def test_read_digits_vlm_omits_hint_language_when_none_is_given(
     assert captured["body"]["prompt"] == ocr.DEFAULT_VLM_PROMPT.format(digit_count=8)
 
 
+def test_read_digits_vlm_caps_cpu_threads_to_avoid_cooking_the_ollama_host(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    image_path = tmp_path / "crop.jpg"  # type: ignore[operator]
+    image_path.write_bytes(b"fake-jpeg-bytes")
+    captured: dict = {}
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeHttpResponse:
+        captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+        return _FakeHttpResponse({"response": "02139879"})
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    ocr.read_digits_vlm(image_path, host="truenas.local:30068", digit_count=8)
+
+    assert captured["body"]["options"] == {"num_thread": ocr.DEFAULT_VLM_NUM_THREAD}
+
+
 def test_read_digits_vlm_wraps_a_network_failure_as_ocr_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
