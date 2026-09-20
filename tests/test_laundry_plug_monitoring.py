@@ -133,6 +133,8 @@ def test_laundry_completion_waits_for_room_entry_before_notifying() -> None:
     assert room_entry_reminder.count("option: REMINDED") == 2
     assert "action: notify.all" in room_entry_reminder
     assert "Washer and dryer loads are waiting" in room_entry_reminder
+    assert "\\U0001F9FA" not in room_entry_reminder
+    assert "🧺" in room_entry_reminder
 
     assert 'trigger: time_pattern' in washer_reminder
     assert 'minutes: "/5"' in washer_reminder
