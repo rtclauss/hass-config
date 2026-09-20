@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import urllib.error
 
@@ -262,10 +263,10 @@ def test_read_digits_vlm_omits_hint_language_when_none_is_given(
 
     ocr.read_digits_vlm(image_path, host="truenas.local:30068", digit_count=8)
 
-    assert captured["body"]["prompt"] == ocr.DEFAULT_VLM_PROMPT.format(digit_count=8)
+    assert captured["body"]["prompt"] == ocr._build_vlm_fewshot_prompt(8)
 
 
-def test_read_digits_vlm_caps_cpu_threads_to_avoid_cooking_the_ollama_host(
+def test_read_digits_vlm_caps_cpu_threads_and_context_size(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
     image_path = tmp_path / "crop.jpg"  # type: ignore[operator]
@@ -280,7 +281,37 @@ def test_read_digits_vlm_caps_cpu_threads_to_avoid_cooking_the_ollama_host(
 
     ocr.read_digits_vlm(image_path, host="truenas.local:30068", digit_count=8)
 
-    assert captured["body"]["options"] == {"num_thread": ocr.DEFAULT_VLM_NUM_THREAD}
+    assert captured["body"]["options"] == {
+        "num_thread": ocr.DEFAULT_VLM_NUM_THREAD,
+        "num_ctx": ocr.DEFAULT_VLM_NUM_CTX,
+    }
+
+
+def test_read_digits_vlm_sends_fewshot_examples_before_the_query_image(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    image_path = tmp_path / "crop.jpg"  # type: ignore[operator]
+    image_path.write_bytes(b"the-actual-query-crop")
+    captured: dict = {}
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeHttpResponse:
+        captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+        return _FakeHttpResponse({"response": "02139879"})
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    ocr.read_digits_vlm(image_path, host="truenas.local:30068", digit_count=8)
+
+    images = captured["body"]["images"]
+    assert len(images) == len(ocr.VLM_FEWSHOT_EXAMPLES) + 1
+    expected_query_b64 = base64.b64encode(b"the-actual-query-crop").decode("ascii")
+    assert images[-1] == expected_query_b64
+    for i, (filename, reading) in enumerate(ocr.VLM_FEWSHOT_EXAMPLES, 1):
+        assert f"Example {i} reading: {reading}" in captured["body"]["prompt"]
+        expected_example_b64 = base64.b64encode(
+            (ocr.VLM_EXAMPLES_DIR / filename).read_bytes()
+        ).decode("ascii")
+        assert images[i - 1] == expected_example_b64
 
 
 def test_read_digits_vlm_wraps_a_network_failure_as_ocr_error(

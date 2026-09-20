@@ -45,7 +45,38 @@ def run_ssocr(image_path: Path, *, ssocr_args: Sequence[str], timeout: float = 1
     return digits
 
 
-DEFAULT_VLM_MODEL = "qwen3-vl:4b"
+DEFAULT_VLM_MODEL = "qwen2.5vl:7b"
+"""Switched from qwen3-vl:4b 2026-09-20 after a head-to-head comparison
+against real captures (see the "Reading Through Glare" report and
+[[vlm_ocr_experiment]] project memory): with the 6-shot prompt below,
+qwen2.5vl:7b held 100% exact-match across two independent held-out sets
+(6, then 12 real captures never used as examples) and got faster, not
+slower, as more examples were added. qwen3-vl:4b topped out at 40% on the
+same captures; minicpm-v:8b (the next-best alternative) improved with 4
+examples but regressed with 6, producing answers that looked like blends
+of the few-shot examples rather than genuine reads of the query image.
+"""
+
+VLM_EXAMPLES_DIR = Path(__file__).parent / "vlm_examples"
+
+VLM_FEWSHOT_EXAMPLES: tuple[tuple[str, str], ...] = (
+    ("example_1_02138978.jpg", "02138978"),
+    ("example_2_02139768.jpg", "02139768"),
+    ("example_3_02140095.jpg", "02140095"),
+    ("example_4_02140333.jpg", "02140333"),
+    ("example_5_02138978.jpg", "02138978"),
+    ("example_6_02140226.jpg", "02140226"),
+)
+"""Real captures of this exact meter, each with its true reading confirmed
+by direct visual inspection (not by any model's output). Sent as in-context
+examples on every VLM call, ahead of the actual query image, since the
+glare pattern is fixed - same light, same angle, same meter every time -
+so showing the model real examples of how this specific display's glare
+looks worked far better than just wording the zero-shot prompt more
+strictly (which was tried first and made accuracy *worse*, not better -
+see the report). Anchored to the meter's current 02141xxx.x value range;
+will need refreshing once the leading digits roll over past "021".
+"""
 
 DEFAULT_VLM_TIMEOUT = 480.0
 """Originally set against truenas.local:30068's qwen3-vl:4b running
@@ -64,10 +95,26 @@ excuse to shrink the safety margin. See the service's TimeoutStartSec,
 which must stay above this.
 """
 
-DEFAULT_VLM_PROMPT = (
-    "What {digit_count}-digit number is shown on this water meter LCD? "
-    "Answer with just the digits, nothing else."
-)
+def _build_vlm_fewshot_prompt(digit_count: int) -> str:
+    lines = [
+        "You are reading a water meter's LCD digit display. The first "
+        f"{len(VLM_FEWSHOT_EXAMPLES)} images below are examples from this "
+        f"exact same display, each labeled with its correct {digit_count}-digit "
+        "reading, including any leading zeros:",
+        "",
+    ]
+    for i, (_, reading) in enumerate(VLM_FEWSHOT_EXAMPLES, 1):
+        lines.append(f"Example {i} reading: {reading}")
+    lines += [
+        "",
+        "The final image is a new reading from the same display. Using the "
+        "examples above as a guide to this display's digit shapes and "
+        f"lighting, read the {digit_count}-digit number shown in the final "
+        f"image. Respond with exactly {digit_count} digits and nothing else "
+        "- no spaces, punctuation, or extra text.",
+    ]
+    return "\n".join(lines)
+
 
 DEFAULT_VLM_NUM_THREAD = 2
 """Caps the CPU threads Ollama uses per call, even though qwen3-vl:4b now
@@ -80,6 +127,15 @@ inference itself fast and GPU-bound. 2 threads trades a little latency on
 the CPU-side portion for not cooking the box.
 """
 
+DEFAULT_VLM_NUM_CTX = 16384
+"""Ollama defaults every model's context to 4096 tokens regardless of what
+the model itself supports. The 6-shot prompt sends 7 images per call (6
+reference examples + the query crop) and blew straight through that
+default with a hard 400 "exceed_context_size_error" the first time it was
+tried (5 images alone was already 5427 tokens). 16384 gives real headroom
+above the ~7-8k tokens 7 small images plus prompt text actually need.
+"""
+
 
 def read_digits_vlm(
     image_path: Path,
@@ -89,6 +145,7 @@ def read_digits_vlm(
     model: str = DEFAULT_VLM_MODEL,
     timeout: float = DEFAULT_VLM_TIMEOUT,
     num_thread: int = DEFAULT_VLM_NUM_THREAD,
+    num_ctx: int = DEFAULT_VLM_NUM_CTX,
     hint: str | None = None,
 ) -> str:
     """Ask a vision LLM (via an Ollama /api/generate endpoint) to read the
@@ -105,6 +162,11 @@ def read_digits_vlm(
     call is the safer knob than a token budget that can cut off the answer
     itself. See DEFAULT_VLM_TIMEOUT for why 240s and not something shorter.
 
+    Sends VLM_FEWSHOT_EXAMPLES ahead of image_path itself, in order, so the
+    model sees real labeled examples of this exact display before being
+    asked to read a new one - see VLM_FEWSHOT_EXAMPLES for why this beats a
+    more strictly-worded zero-shot prompt.
+
     hint appends extra context to the prompt - used by reader.py's requery
     path to tell the model a first read produced an implausible value and
     ask it to look again, rather than re-asking the identical question and
@@ -115,16 +177,20 @@ def read_digits_vlm(
     import urllib.error
     import urllib.request
 
-    image_bytes = image_path.read_bytes()
-    prompt = DEFAULT_VLM_PROMPT.format(digit_count=digit_count)
+    prompt = _build_vlm_fewshot_prompt(digit_count)
     if hint:
         prompt = f"{prompt} {hint}"
+    example_images = [
+        base64.b64encode((VLM_EXAMPLES_DIR / filename).read_bytes()).decode("ascii")
+        for filename, _ in VLM_FEWSHOT_EXAMPLES
+    ]
+    query_image = base64.b64encode(image_path.read_bytes()).decode("ascii")
     payload = {
         "model": model,
         "prompt": prompt,
-        "images": [base64.b64encode(image_bytes).decode("ascii")],
+        "images": [*example_images, query_image],
         "stream": False,
-        "options": {"num_thread": num_thread},
+        "options": {"num_thread": num_thread, "num_ctx": num_ctx},
     }
     request = urllib.request.Request(
         f"http://{host}/api/generate",

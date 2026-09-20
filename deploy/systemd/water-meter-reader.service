@@ -48,19 +48,24 @@ Environment=WATER_METER_IMAGE_DIR=/var/lib/water-meter/images
 # one-off USB hiccup, and triggers reader.py to reboot the host itself.
 Environment=WATER_METER_CAPTURE_FAILURE_REBOOT_THRESHOLD=2
 # Vision-LLM fallback for the digits ssocr can't read (see water_meter/ocr.py
-# read_digits_vlm and issue #1049) - qwen3-vl:4b on the TrueNAS Ollama box is
-# the only method that has correctly read the glare-obscured leading digits.
+# read_digits_vlm and issue #1049). qwen2.5vl:7b (switched from qwen3-vl:4b
+# 2026-09-20) with a 6-shot prompt (VLM_FEWSHOT_EXAMPLES) held 100%
+# exact-match on real held-out captures in a head-to-head comparison - see
+# the "Reading Through Glare" report and vlm_ocr_experiment project memory.
 # No num_predict cap; a generous timeout instead (see DEFAULT_VLM_TIMEOUT).
 # 480s, not 240s: a live run on 2026-09-14 hit the 240s cutoff, then /api/ps
 # showed the same generation had kept running and completed server-side
-# past that cutoff - the latency variance on this CPU-only box is real and
-# can exceed 240s, so the timeout needs to be generous enough to actually
-# get an answer back rather than truncate a call that would have succeeded.
+# past that cutoff. The box now has a GPU (an RTX 2000 Ada, added
+# 2026-09-19) and typical calls are single-digit seconds, but 480s stays as
+# the timeout regardless - both as margin for occasional slow calls and
+# because this box has had repeated unrelated Ollama outages (service
+# restarts, updates, and once a GPU silently dropping out of the inference
+# path entirely).
 # Static IP, not truenas.local: mDNS from this Pi failed 1 of 3 lookups in
 # testing - the same flakiness that forced WATER_METER_MQTT_HOST to a static
 # IP above.
 Environment=WATER_METER_VLM_HOST=10.24.1.182:30068
-Environment=WATER_METER_VLM_MODEL=qwen3-vl:4b
+Environment=WATER_METER_VLM_MODEL=qwen2.5vl:7b
 Environment=WATER_METER_VLM_TIMEOUT_SECONDS=480
 ExecStart=/opt/hass-config/venv/bin/python3 -m water_meter.reader
 

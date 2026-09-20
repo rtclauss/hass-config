@@ -28,7 +28,7 @@ def test_connection_config_from_env_uses_documented_defaults(monkeypatch: pytest
     # Empty host is what lets ocr.read_digits skip the vision-LLM tier
     # entirely for deployments that haven't configured one.
     assert connection.vlm_host == ""
-    assert connection.vlm_model == "qwen3-vl:4b"
+    assert connection.vlm_model == "qwen2.5vl:7b"
     assert connection.vlm_timeout_seconds == 480.0
 
 

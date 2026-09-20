@@ -29,9 +29,9 @@ systemd timer (every ~10 min; a run can take up to ~18 min in the worst case
        -> publish light ON straight to the zigbee2mqtt broker
        -> capture a frame (webcam), publish light OFF
        -> crop to the calibrated ROI / digit boxes
-       -> OCR: ssocr (primary, fast) -> vision LLM (qwen3-vl via Ollama,
-          optional, slow but reads through glare) -> OpenCV template match
-          (last resort, fully offline)
+       -> OCR: ssocr (primary, fast) -> vision LLM (qwen2.5vl via Ollama,
+          optional, 6-shot prompted, reads through glare) -> OpenCV template
+          match (last resort, fully offline)
        -> sanity gate: numeric, right digit count, non-decreasing, plausible delta
        -> if rejected for "value decreased" / "implausible jump" and the
           vision LLM is configured: one requery of the LLM on the same
@@ -144,13 +144,23 @@ gets the original ssocr-then-template behavior, unchanged.
   `read_digits_vlm()`, then falls back to `match_digits()` (the template
   matcher) if both of those fail or aren't configured.
 - `read_digits_vlm()` POSTs the crop image (base64-encoded JPEG) to an
-  Ollama `/api/generate` endpoint with a tight, single-purpose prompt
-  ("What N-digit number is shown on this water meter LCD? Answer with just
-  the digits, nothing else.") and `stream: false`. It deliberately does
+  Ollama `/api/generate` endpoint with `stream: false`. It deliberately does
   **not** cap `num_predict` - an earlier attempt at bounding the model's
   "thinking" trace with a small token budget risked truncating the answer
   before it was actually emitted. A generous request timeout is the safer
   knob; see below.
+- The prompt is **6-shot, not zero-shot**: `VLM_FEWSHOT_EXAMPLES` bundles 6
+  real captures of this exact display (`water_meter/vlm_examples/*.jpg`),
+  each with its true reading confirmed by direct visual inspection, sent
+  ahead of the actual query image on every call. This was switched from a
+  plain zero-shot prompt on 2026-09-20 after a head-to-head comparison
+  (see the "Reading Through Glare" report) found that just wording the
+  zero-shot prompt more strictly made accuracy *worse*, not better, while
+  showing the model real labeled examples of this exact display's glare
+  pattern took `qwen2.5vl:7b` from 33% to 100% exact-match on captures it
+  had never seen. The 6 example readings are anchored to the meter's
+  current `02141xxx.x` value range and will need refreshing once the
+  leading digits roll over past `021`.
 
 **Latency was real and highly variable**, not just slow, back when the
 Ollama host ran CPU-only: one measured call took 123.9s total, of which only
@@ -168,14 +178,20 @@ unrelated Ollama outages (service restarts, updates).
 
 **`options.num_thread` is capped at `DEFAULT_VLM_NUM_THREAD` (2)** in every
 `read_digits_vlm` call. An RTX 2000 Ada was added to the Ollama host to run
-`qwen3-vl:4b` GPU-resident, which dropped typical call latency from
-100-600s+ down to single-digit seconds - but GPU offload doesn't cover
-image preprocessing/tokenization, and Ollama defaults to using every CPU
-core for that remaining work. That default was enough to re-trigger the
-box's CPU thermal alarm even with inference itself fast and GPU-bound.
-Capping threads trades a little of that CPU-side latency for not cooking
-the box - worth remembering if a future model swap needs re-tuning this
-value.
+the VLM GPU-resident, which dropped typical call latency from 100-600s+
+down to single-digit seconds - but GPU offload doesn't cover image
+preprocessing/tokenization, and Ollama defaults to using every CPU core for
+that remaining work. That default was enough to re-trigger the box's CPU
+thermal alarm even with inference itself fast and GPU-bound. Capping
+threads trades a little of that CPU-side latency for not cooking the box.
+
+**`options.num_ctx` is raised to `DEFAULT_VLM_NUM_CTX` (16384)**. Ollama
+defaults every model's context to 4096 tokens regardless of what the model
+itself supports, and the 6-shot prompt sends 7 images per call (6 examples
++ the query crop) - the first attempt at this hit a hard 400
+`exceed_context_size_error` (5 images alone was already 5427 tokens).
+16384 gives real headroom above what 7 small images plus prompt text
+actually need.
 
 **Leading-digit self-heal, tried first, before ever paying for a VLM call**
 (`water_meter/reader.py`, `_correct_glare_positions_from_last_good`):
@@ -233,7 +249,7 @@ does enforce full confidence on bootstrap - see `match_digits`).
 
 ```ini
 Environment=WATER_METER_VLM_HOST=<ollama-host>:<port>
-Environment=WATER_METER_VLM_MODEL=qwen3-vl:4b
+Environment=WATER_METER_VLM_MODEL=qwen2.5vl:7b
 Environment=WATER_METER_VLM_TIMEOUT_SECONDS=480
 ```
 
