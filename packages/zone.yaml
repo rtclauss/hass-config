@@ -1455,27 +1455,36 @@ template:
       # extended-data attributes, so read those directly.
       #
       # Three layers, cheapest and most reliable first:
-      #   1. class/type — `shop=doityourself`, `shop=hardware` and friends.
-      #      Deliberately excludes shop=department_store, which would drag in
-      #      every Target and Walmart. Accept either spelling of the key:
-      #      Nominatim's `json` format calls it `class` and `jsonv2` calls it
-      #      `category`, and that difference is the whole reason the dedicated
-      #      category sensor is empty. If upstream switches formats, this keeps
-      #      working.
+      #   1. class/type — `shop=doityourself`, `shop=hardware`, `shop=trade`.
+      #      Keep this list to shops that actually stock furnace filters and
+      #      softener salt. It must NOT include shop=department_store (every
+      #      Target), nor shop=garden_centre or shop=paint: a garden centre
+      #      prompted for air filters at Bachman's on 2026-09-20, and then the
+      #      hold below swallowed the real Home Depot arrival 25 minutes later.
+      #      Accept either spelling of the key: Nominatim's `json` format calls
+      #      it `class` and `jsonv2` calls it `category`, and that difference is
+      #      the whole reason the dedicated category sensor is empty. If
+      #      upstream switches formats, this keeps working.
       #   2. brand/operator from extratags — a curated OSM tag, not a display
       #      name. This is what catches Fleet Farm, tagged department_store.
       #   3. place_name / zone_name substring — last resort for a store the
       #      geocoder named but never tagged. Matching zone_name also means
       #      store zones, if ever added, need no further wiring here.
+      #
+      # delay_off only exists to absorb a bad fix landing between two good ones
+      # on arrival or departure, which is a matter of a minute or two. Keep it
+      # short. The prompts trigger on the off->on edge, so any hold longer than
+      # the gap between two stores in one trip silently swallows the second
+      # store: at 30 minutes it ate a Home Depot arrival 25 minutes after a
+      # false-positive match at a garden centre. Real store visits are always
+      # separated by drive time, during which the place resolves to roads.
       - name: diy_store_visit
         unique_id: diy_store_visit
         default_entity_id: binary_sensor.diy_store_visit
         icon: mdi:store-marker
-        delay_off: "00:30:00"
+        delay_off: "00:05:00"
         state: >-
-          {%- set diy_shop_types = [
-               'doityourself', 'hardware', 'trade', 'paint', 'garden_centre'
-             ] -%}
+          {%- set diy_shop_types = ['doityourself', 'hardware', 'trade'] -%}
           {%- set diy_brands = [
                'home depot', 'menards', "lowe's", 'lowes', 'fleet farm',
                'ace hardware', 'harbor freight', 'true value'

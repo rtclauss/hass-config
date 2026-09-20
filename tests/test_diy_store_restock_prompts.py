@@ -81,8 +81,6 @@ def test_diy_store_sensor_prefers_structured_osm_tagging() -> None:
     # Nominatim spells the key `class` in `json` and `category` in `jsonv2`.
     # Accepting both is what keeps this working if upstream switches format.
     assert "osm.get('class') or osm.get('category')" in block
-    for shop_type in ("doityourself", "hardware", "trade", "paint", "garden_centre"):
-        assert shop_type in block, f"missing shop type {shop_type!r}"
 
 
 def test_diy_store_sensor_does_not_use_the_dead_category_sensor() -> None:
@@ -94,12 +92,36 @@ def test_diy_store_sensor_does_not_use_the_dead_category_sensor() -> None:
     assert "_place_place_category" not in block
 
 
-def test_diy_store_sensor_excludes_department_stores_structurally() -> None:
+def test_diy_store_sensor_structural_types_stock_filters_and_salt() -> None:
     block = _diy_store_sensor_block()
+    types_line = block[block.index("set diy_shop_types") : block.index("set diy_brands")]
 
-    # shop=department_store is Target and Walmart as well as Fleet Farm, so it
-    # must not be a structural match. Fleet Farm comes in via its brand tag.
-    assert "department_store" not in block
+    for shop_type in ("doityourself", "hardware", "trade"):
+        assert shop_type in types_line, f"missing shop type {shop_type!r}"
+
+    # shop=department_store is Target as well as Fleet Farm, so it must not be a
+    # structural match; Fleet Farm comes in via its brand tag instead.
+    # shop=garden_centre prompted for furnace filters at a garden centre on
+    # 2026-09-20, and shop=paint has the same problem: neither stocks filters
+    # or softener salt.
+    for shop_type in ("department_store", "garden_centre", "paint"):
+        assert shop_type not in types_line, f"{shop_type!r} must not match structurally"
+
+
+def test_diy_store_hold_is_short_enough_for_two_stores_in_one_trip() -> None:
+    block = _diy_store_sensor_block()
+    match = re.search(r'delay_off:\s*"(\d{2}):(\d{2}):(\d{2})"', block)
+    assert match is not None, "diy_store_visit must declare delay_off"
+
+    hours, minutes, seconds = (int(part) for part in match.groups())
+    hold_seconds = hours * 3600 + minutes * 60 + seconds
+
+    # The prompts trigger on the off->on edge. A hold longer than the gap
+    # between two stores in one trip swallows the second store entirely: at 30
+    # minutes it ate a Home Depot arrival 25 minutes after the previous match.
+    assert hold_seconds <= 600, "hold must stay well under a between-stores gap"
+    # But long enough to absorb a single bad fix between two good ones.
+    assert hold_seconds >= 120
 
 
 def test_diy_store_sensor_reads_brand_tags() -> None:
@@ -346,7 +368,7 @@ def _matches_diy_store(
     place_name: str = "unknown",
 ) -> bool:
     """Mirror of the three-layer match in binary_sensor.diy_store_visit."""
-    diy_shop_types = {"doityourself", "hardware", "trade", "paint", "garden_centre"}
+    diy_shop_types = {"doityourself", "hardware", "trade"}
     diy_brands = [
         "home depot",
         "menards",
@@ -373,7 +395,7 @@ def _matches_diy_store(
 def test_structured_tagging_matches_real_diy_stores() -> None:
     assert _matches_diy_store(osm_class="shop", osm_type="doityourself")
     assert _matches_diy_store(osm_class="shop", osm_type="hardware")
-    assert _matches_diy_store(osm_class="shop", osm_type="paint")
+    assert _matches_diy_store(osm_class="shop", osm_type="trade")
 
 
 def test_brand_tag_rescues_a_store_tagged_as_a_department_store() -> None:
@@ -426,3 +448,46 @@ def test_ordinary_places_do_not_match() -> None:
     assert not _matches_diy_store(
         osm_class="amenity", osm_type="restaurant", place_name="El Azteca Mexican Restaurant"
     )
+
+
+########################
+# The 2026-09-20 double failure
+########################
+
+
+def test_garden_centre_no_longer_prompts_for_air_filters() -> None:
+    # Bachman's: shop=garden_centre, no DIY brand. Prompted at 14:35 that day.
+    assert not _matches_diy_store(
+        osm_class="shop",
+        osm_type="garden_centre",
+        place_name="Bachman's",
+    )
+
+
+def test_paint_shops_no_longer_match() -> None:
+    assert not _matches_diy_store(osm_class="shop", osm_type="paint")
+
+
+def test_the_home_depot_arrival_that_was_swallowed_still_matches() -> None:
+    # The geocode was perfect that day; only the hold from the earlier false
+    # positive stopped the automation seeing an edge.
+    assert _matches_diy_store(
+        osm_class="shop",
+        osm_type="doityourself",
+        place_name="The Home Depot",
+    )
+
+
+def test_other_errands_from_that_trip_do_not_match() -> None:
+    same_trip = [
+        ("shop", "supermarket", "Valley Foods"),
+        ("amenity", "dentist", "Crestridge Dental"),
+        ("shop", "craft", "Michaels"),
+        ("shop", "games", "Games by James"),
+        ("shop", "supermarket", "Bodega 42 Fresh Market"),
+        ("amenity", "parking", "unknown"),
+    ]
+    for osm_class, osm_type, place_name in same_trip:
+        assert not _matches_diy_store(
+            osm_class=osm_class, osm_type=osm_type, place_name=place_name
+        ), f"{place_name} ({osm_class}={osm_type}) must not match"
