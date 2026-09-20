@@ -152,16 +152,30 @@ gets the original ssocr-then-template behavior, unchanged.
   before it was actually emitted. A generous request timeout is the safer
   knob; see below.
 
-**Latency is real and highly variable**, not just slow, on a CPU-only Ollama
-host: one measured call took 123.9s total, of which only 48.4s was actual
-token generation - Ollama's own timing fields (`eval_duration`,
-`prompt_eval_duration`, `load_duration`) don't account for the rest, which
-looks like host-level contention rather than anything about the model
-itself. `DEFAULT_VLM_TIMEOUT` (480s) and the systemd unit's
+**Latency was real and highly variable**, not just slow, back when the
+Ollama host ran CPU-only: one measured call took 123.9s total, of which only
+48.4s was actual token generation - Ollama's own timing fields
+(`eval_duration`, `prompt_eval_duration`, `load_duration`) didn't account
+for the rest, which looked like host-level contention rather than anything
+about the model itself. `DEFAULT_VLM_TIMEOUT` (480s) and the systemd unit's
 `WATER_METER_VLM_TIMEOUT_SECONDS` were both raised after a live run hit a
 shorter (240s) timeout, then the same generation was observed (via
 `/api/ps`) to keep running server-side and complete anyway - a timeout that
-short was silently throwing away calls that would have succeeded.
+short was silently throwing away calls that would have succeeded. The
+timeout stays at 480s even now that the host has a GPU (see below) - both as
+margin for occasional slow calls and because this box has had repeated
+unrelated Ollama outages (service restarts, updates).
+
+**`options.num_thread` is capped at `DEFAULT_VLM_NUM_THREAD` (2)** in every
+`read_digits_vlm` call. An RTX 2000 Ada was added to the Ollama host to run
+`qwen3-vl:4b` GPU-resident, which dropped typical call latency from
+100-600s+ down to single-digit seconds - but GPU offload doesn't cover
+image preprocessing/tokenization, and Ollama defaults to using every CPU
+core for that remaining work. That default was enough to re-trigger the
+box's CPU thermal alarm even with inference itself fast and GPU-bound.
+Capping threads trades a little of that CPU-side latency for not cooking
+the box - worth remembering if a future model swap needs re-tuning this
+value.
 
 **Leading-digit self-heal, tried first, before ever paying for a VLM call**
 (`water_meter/reader.py`, `_correct_glare_positions_from_last_good`):
