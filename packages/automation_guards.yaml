@@ -1,0 +1,117 @@
+# Reusable policy predicates for privacy-aware and context-aware automations.
+# These are deliberately read-only guards: automations consume them as
+# conditions; no guard starts a device action on its own.
+
+homeassistant:
+  customize:
+    package.node_anchors:
+      customize: &customize
+        package: "automation_guards"
+
+    binary_sensor.intrusive_automations_allowed:
+      <<: *customize
+      friendly_name: Intrusive automations allowed
+      icon: mdi:account-check-outline
+    binary_sensor.owner_actively_working:
+      <<: *customize
+      friendly_name: Owner actively working
+      icon: mdi:briefcase-account-outline
+    binary_sensor.sleep_protection_active:
+      <<: *customize
+      friendly_name: Sleep protection active
+      icon: mdi:sleep
+    binary_sensor.house_ready_for_bed:
+      <<: *customize
+      friendly_name: House ready for bed
+      icon: mdi:shield-moon-outline
+    binary_sensor.arrival_welcome_needed:
+      <<: *customize
+      friendly_name: Arrival welcome needed
+      icon: mdi:home-import-outline
+
+template:
+  - binary_sensor:
+      # Privacy-first guard for bright/light, spoken, media, and other
+      # owner-only conveniences. It intentionally does not authorize vacuum
+      # activity: that remains governed by the dedicated pet-safety policy.
+      - name: intrusive_automations_allowed
+        unique_id: intrusive_automations_allowed
+        state: >-
+          {{ is_state('person.ryan', 'home')
+             and is_state('input_select.house_mode', 'home')
+             and is_state('binary_sensor.bed_occupied_debounced', 'off')
+             and is_state('input_boolean.guest_mode', 'off')
+             and is_state('binary_sensor.guest_room_occupancy_2', 'off') }}
+
+      # A conservative opt-in signal for office-only convenience behavior.
+      # Guest mode is a global privacy veto because the office is guest-capable.
+      - name: owner_actively_working
+        unique_id: owner_actively_working
+        state: >-
+          {{ is_state('binary_sensor.workday_sensor', 'on')
+             and is_state('person.ryan', 'home')
+             and is_state('input_select.house_mode', 'home')
+             and is_state('binary_sensor.office_confident_occupancy', 'on')
+             and is_state('input_boolean.guest_mode', 'off') }}
+        delay_on: "00:05:00"
+        delay_off: "00:03:00"
+
+      # One sleep guard for dim overnight paths and notification suppression.
+      # Bed occupancy catches the transition early; house mode holds the guard
+      # through the rest of the intentional sleep routine.
+      - name: sleep_protection_active
+        unique_id: sleep_protection_active
+        state: >-
+          {{ is_state('binary_sensor.bed_occupied_debounced', 'on')
+             or states('input_select.house_mode') in ['in_bed', 'asleep'] }}
+
+      # Mirrors the verifiable postconditions of goodnight_integrity while
+      # allowing permitted exterior and guest-private lighting to remain on.
+      - name: house_ready_for_bed
+        unique_id: house_ready_for_bed
+        state: >-
+          {% set exterior_lights = [
+            'light.outside_front_hue',
+            'light.outside_north_west_garage',
+            'light.outside_south_west_garage',
+            'light.outside_front_door'
+          ] %}
+          {% set guest_mode = is_state('input_boolean.guest_mode', 'on') %}
+          {% set guest_room_occupied = is_state('binary_sensor.guest_room_occupancy_2', 'on') %}
+          {% set preserved_guest_lights =
+            ['light.office_all', 'light.den_all', 'light.guest_room_ceiling']
+            if guest_mode else
+            (['light.guest_room_ceiling'] if guest_room_occupied else []) %}
+          {% set protected_lights = exterior_lights + preserved_guest_lights %}
+          {% set interior_lights_on = states.light
+            | rejectattr('entity_id', 'in', protected_lights)
+            | selectattr('state', 'eq', 'on')
+            | list %}
+          {% set media_active = expand(
+            'media_player.lg_webos_smart_tv',
+            'media_player.basement'
+          ) | selectattr('state', 'in', ['playing', 'paused', 'idle']) | list %}
+          {% set climate_preset = state_attr('climate.my_ecobee', 'preset_mode') %}
+          {% set guest_context = guest_mode or guest_room_occupied %}
+          {% set climate_ready = states('climate.my_ecobee') not in ['unknown', 'unavailable']
+            and ((guest_context and climate_preset == 'Guest Sleep')
+              or (not guest_context
+                  and climate_preset not in ['Away', 'away', 'away_indefinitely'])) %}
+          {{ states('lock.front_door_lock') == 'locked'
+             and states('cover.garage_door') in ['closed', 'closing']
+             and states('cover.owner_suite_blinds_ha') in ['closed', 'closing']
+             and interior_lights_on | count == 0
+             and media_active | count == 0
+             and climate_ready }}
+
+      # A predicate for arrival automations to check immediately after a
+      # confirmed arrival. It does not itself apply a scene, preventing a
+      # later sensor update from replaying a welcome scene.
+      - name: arrival_welcome_needed
+        unique_id: arrival_welcome_needed
+        state: >-
+          {{ is_state('person.ryan', 'home')
+             and is_state('input_select.house_mode', 'home')
+             and is_state('sun.sun', 'below_horizon')
+             and is_state('binary_sensor.hall_main_foyer_motion_occupancy', 'off')
+             and is_state('light.hall_foyer_switch', 'off') }}
