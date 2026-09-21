@@ -231,7 +231,7 @@ def test_diy_store_sensor_keeps_a_name_fallback() -> None:
     # Substring search, not equality, so "The Home Depot #2812" still matches.
     assert "select('in', haystack)" in src
     assert "| map('lower')" in src
-    for brand in ("home depot", "menards", "lowe's", "fleet farm", "ace hardware"):
+    for brand in ("home depot", "menards", "lowes", "fleet farm", "ace hardware"):
         assert brand in src, f"missing store keyword {brand!r}"
 
 
@@ -445,10 +445,10 @@ def test_arrival_backstop_allowed_when_never_prompted() -> None:
 
 
 DIY_SHOP_TYPES = {"doityourself", "hardware", "trade"}
+# Punctuationless, matching the macro: the haystack is stripped to suit.
 DIY_BRANDS = [
     "home depot",
     "menards",
-    "lowe's",
     "lowes",
     "fleet farm",
     "ace hardware",
@@ -475,7 +475,7 @@ def _canonical_identity(
             place_name,
             zone_name,
         )
-    )
+    ).replace("'", "").replace("\u2019", "")
     for brand in DIY_BRANDS:
         if brand in haystack:
             return brand
@@ -660,10 +660,20 @@ def _replay(samples: list[Sample]) -> tuple[list[str], int]:
     combined_prev = "none"
     prompts = 0
     for sample in samples:
+        fresh: list[str] = []
         for tracker, fix in zip(TRACKERS, sample):
+            place_name, place_type = fix
+            matched = _canonical_identity(
+                osm_class="shop" if place_type not in VAGUE else None,
+                osm_type=place_type,
+                place_name=place_name,
+            )
+            if matched:
+                fresh.append(matched)
             per_tracker[tracker] = _tracker_identity(per_tracker[tracker], fix)
-        found = [per_tracker[t] for t in TRACKERS if per_tracker[t] not in VAGUE]
-        combined = found[0] if found else "none"
+        held = [per_tracker[t] for t in TRACKERS if per_tracker[t] not in VAGUE]
+        # A store detected on this fix beats one a tracker is merely holding.
+        combined = fresh[0] if fresh else (held[0] if held else "none")
         if combined not in VAGUE and combined != combined_prev:
             prompts += 1
         states.append(combined)
@@ -825,3 +835,85 @@ def test_a_car_left_in_a_store_lot_still_clears_once_it_moves() -> None:
 
     assert states[2] == "home depot", "the car is still at the store"
     assert states[-1] == "none", "and clears once the car drives off"
+
+
+########################
+# Identity aliasing and stale-vs-fresh selection
+########################
+
+
+def test_lowes_spellings_are_one_identity() -> None:
+    # The geocoder can alternate between a punctuation-bearing brand tag and a
+    # punctuationless place name inside one visit. Two tokens would read as two
+    # stores and prompt twice.
+    spellings = [
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", extratags={"brand": "Lowe's"}
+        ),
+        _canonical_identity(osm_class="shop", osm_type="doityourself", place_name="Lowes"),
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", place_name="Lowe's Home Improvement"
+        ),
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", place_name="Lowe’s Home Improvement"
+        ),
+    ]
+
+    assert set(spellings) == {"lowes"}, spellings
+
+
+def test_brand_tokens_carry_no_punctuation() -> None:
+    src = _macro_code()
+    brand_list = src[src.index("set diy_brands") : src.index("set extended")]
+
+    assert "'" not in brand_list.replace("'home depot'", "").replace("'menards'", "").replace(
+        "'lowes'", ""
+    ).replace("'fleet farm'", "").replace("'ace hardware'", "").replace(
+        "'harbor freight'", ""
+    ).replace("'true value'", ""), "brand tokens must be punctuationless"
+    assert "replace(\"'\", '')" in src, "the haystack must be stripped to match"
+
+
+def test_alternating_lowes_spellings_prompt_once() -> None:
+    _, prompts = _replay(
+        [
+            _both("unknown", "house"),
+            _both("Lowe's Home Improvement", "doityourself"),
+            _both("Lowes", "doityourself"),
+            _both(*LOT),
+            _both("Lowe’s", "doityourself"),
+            _both("Cedar Avenue", "motorway"),
+        ]
+    )
+
+    assert prompts == 1
+
+
+def test_a_new_store_on_one_tracker_beats_a_held_one_on_the_other() -> None:
+    # The phone establishes Ace Hardware, then sits on vague fixes holding it,
+    # while the car resolves to Home Depot. Taking the first non-none in
+    # tracker order would keep reporting the stale Ace and never hand the
+    # prompts their transition.
+    ace: Fix = ("Ace Hardware", "hardware")
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (ace, LOT),
+            (LOT, LOT),
+            (LOT, HOME_DEPOT),
+        ]
+    )
+
+    assert states[1] == "ace hardware"
+    assert states[2] == "ace hardware", "the hold still covers a quiet phone"
+    assert states[3] == "home depot", "a freshly detected store must win"
+    assert prompts == 2
+
+
+def test_a_held_identity_is_still_the_fallback() -> None:
+    # Fresh-beats-held must not undo the hold: with nothing detected on this
+    # fix, the held identity is what keeps one visit to one prompt.
+    states, prompts = _replay([_both(*HOME_DEPOT)] + [_both(*LOT)] * 5)
+
+    assert states == ["home depot"] * 6
+    assert prompts == 1

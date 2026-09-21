@@ -1498,18 +1498,35 @@ template:
             none
           {%- endif -%}
 
-      # What the restock prompts trigger on: the first tracker that is at a
-      # store. Collapsing to one identity here means two trackers arriving
-      # together cannot race into two prompts.
+      # What the restock prompts trigger on. Collapsing the trackers to one
+      # identity here means two arriving together cannot race into two prompts.
+      #
+      # A store detected on THIS fix beats one a tracker is merely holding, so
+      # fixed tracker order cannot strand a new store: the phone can sit on
+      # vague fixes holding `ace hardware` while the car resolves to `home
+      # depot`, and taking the first non-none in tracker order would keep
+      # reporting the stale one and never hand the prompts their transition.
+      # Held identities are still the fallback, which is what keeps one visit
+      # to one prompt while the phone is silent inside the store.
       - name: diy_store_current
         unique_id: diy_store_current
         default_entity_id: sensor.diy_store_current
         icon: mdi:store-marker
         state: >-
-          {%- set found = [
+          {% from 'diy_store.jinja' import diy_store_identity %}
+          {%- set fresh = [
+               diy_store_identity('zeke') | trim, diy_store_identity('tesla') | trim
+             ] | reject('equalto', '') | list -%}
+          {%- set held = [
                states('sensor.diy_store_zeke'), states('sensor.diy_store_tesla')
              ] | reject('in', ['none', 'unknown', 'unavailable']) | list -%}
-          {{ found[0] if found | count > 0 else 'none' }}
+          {%- if fresh | count > 0 -%}
+            {{ fresh[0] }}
+          {%- elif held | count > 0 -%}
+            {{ held[0] }}
+          {%- else -%}
+            none
+          {%- endif -%}
 
   - binary_sensor:
       # Human-readable companion. Nothing triggers off this; the prompts key on
