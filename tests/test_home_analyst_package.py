@@ -32,4 +32,5 @@ def test_home_analyst_bounds_long_state_text_and_surfaces_uncertainty():
     package = PACKAGE.read_text()
     assert "affected device count" in package
     assert "window_names | length" in package
-    assert "uncertain inputs:" in package
+    assert "uncertain input count:" in package
+    assert "uncertain_inputs:" in package

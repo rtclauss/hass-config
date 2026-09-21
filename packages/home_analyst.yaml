@@ -97,8 +97,14 @@ template:
           {% for entity_id in monitored %}
             {% if states(entity_id) in ['unknown', 'unavailable'] %}{% set unavailable.items = unavailable.items + [entity_id ~ ' is ' ~ states(entity_id)] %}{% endif %}
           {% endfor %}
-          {% if unavailable.items %}{% set issues.items = issues.items + ['uncertain inputs: ' ~ unavailable.items | join(', ')] %}{% endif %}
+          {% if unavailable.items %}{% set issues.items = issues.items + ['uncertain input count: ' ~ unavailable.items | length] %}{% endif %}
           {% if issues.items %}Observed exceptions: {{ issues.items | join('; ') }}.{% else %}No configured opening, lock, garage, or Zigbee availability exceptions are currently observed.{% endif %}
         attributes:
           scope: >-
             This summary is a limited observation list, not a whole-home safety guarantee.
+          uncertain_inputs: >-
+            {% set unavailable = namespace(items=[]) %}
+            {% for entity_id in ['binary_sensor.any_window_open', 'binary_sensor.main_foyer_front_door_contact', 'cover.garage_door', 'lock.front_door_lock', 'binary_sensor.z2m_devices_offline'] %}
+              {% if states(entity_id) in ['unknown', 'unavailable'] %}{% set unavailable.items = unavailable.items + [entity_id ~ ' is ' ~ states(entity_id)] %}{% endif %}
+            {% endfor %}
+            {{ unavailable.items | to_json }}
