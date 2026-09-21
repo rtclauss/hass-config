@@ -68,7 +68,7 @@ template:
         state: >-
           {% set windows_open = states('binary_sensor.any_window_open') %}
           {% set window_names = state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true) %}
-          Windows open: {{ windows_open }}{% if window_names %} ({{ window_names }}){% endif %}. Front door contact: {{ states('binary_sensor.main_foyer_front_door_contact') }}. Garage door: {{ states('cover.garage_door') }}. Front door lock: {{ states('lock.front_door_lock') }}.
+          Windows open: {{ windows_open }}{% if window_names %} ({{ window_names | length if window_names is sequence and window_names is not string else 'one or more' }}){% endif %}. Front door contact: {{ states('binary_sensor.main_foyer_front_door_contact') }}. Garage door: {{ states('cover.garage_door') }}. Front door lock: {{ states('lock.front_door_lock') }}.
         attributes:
           source_states: >-
             {{ {'windows_open': states('binary_sensor.any_window_open'), 'open_window_names': state_attr('binary_sensor.any_window_open', 'open_windows') | default('', true), 'front_door_contact': states('binary_sensor.main_foyer_front_door_contact'), 'garage_door': states('cover.garage_door'), 'front_door_lock': states('lock.front_door_lock')} | to_json }}
@@ -78,7 +78,7 @@ template:
         state: >-
           {% set offline = states('binary_sensor.z2m_devices_offline') %}
           {% set offline_names = state_attr('binary_sensor.z2m_devices_offline', 'offline_devices') | default([], true) %}
-          Zigbee device availability issue: {{ offline }}{% if offline_names %}; affected devices: {{ offline_names | join(', ') }}{% endif %}.
+          Zigbee device availability issue: {{ offline }}{% if offline_names %}; affected device count: {{ offline_names | length if offline_names is sequence and offline_names is not string else 'one or more' }}{% endif %}.
         attributes:
           source_states: >-
             {{ {'z2m_devices_offline': states('binary_sensor.z2m_devices_offline'), 'offline_devices': state_attr('binary_sensor.z2m_devices_offline', 'offline_devices') | default([], true), 'total_devices': state_attr('binary_sensor.z2m_devices_offline', 'total_devices'), 'online_count': state_attr('binary_sensor.z2m_devices_offline', 'online_count')} | to_json }}
@@ -92,6 +92,12 @@ template:
           {% if states('cover.garage_door') not in ['closed', 'closing', 'unknown', 'unavailable'] %}{% set issues.items = issues.items + ['the garage door is ' ~ states('cover.garage_door')] %}{% endif %}
           {% if states('lock.front_door_lock') not in ['locked', 'unknown', 'unavailable'] %}{% set issues.items = issues.items + ['the front door lock is ' ~ states('lock.front_door_lock')] %}{% endif %}
           {% if is_state('binary_sensor.z2m_devices_offline', 'on') %}{% set issues.items = issues.items + ['one or more Zigbee devices are offline'] %}{% endif %}
+          {% set monitored = ['binary_sensor.any_window_open', 'binary_sensor.main_foyer_front_door_contact', 'cover.garage_door', 'lock.front_door_lock', 'binary_sensor.z2m_devices_offline'] %}
+          {% set unavailable = namespace(items=[]) %}
+          {% for entity_id in monitored %}
+            {% if states(entity_id) in ['unknown', 'unavailable'] %}{% set unavailable.items = unavailable.items + [entity_id ~ ' is ' ~ states(entity_id)] %}{% endif %}
+          {% endfor %}
+          {% if unavailable.items %}{% set issues.items = issues.items + ['uncertain inputs: ' ~ unavailable.items | join(', ')] %}{% endif %}
           {% if issues.items %}Observed exceptions: {{ issues.items | join('; ') }}.{% else %}No configured opening, lock, garage, or Zigbee availability exceptions are currently observed.{% endif %}
         attributes:
           scope: >-
