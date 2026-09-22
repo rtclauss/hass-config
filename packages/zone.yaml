@@ -1460,6 +1460,21 @@ template:
       # `this` creates no dependency and every transition is driven by an input
       # change, so nothing needs re-rendering on a timer; before the first
       # render it reads `unknown`, which falls through to "none".
+      #
+      # `checked_at` exists to defeat a Home Assistant optimization, not to be
+      # read by anything. HA's state machine skips firing state_changed when a
+      # write's value AND attributes both match the previous state. A tracker
+      # returning to a store it was already holding through vague fixes is
+      # exactly that: same computed identity, no attributes otherwise, so the
+      # write is silently dropped and diy_store_current is never told a fresh
+      # observation happened - the store stays reported as `none` until some
+      # unrelated event happens to wake it. now() in an attribute recomputes on
+      # every render this entity already does for its OWN reasons (it does not
+      # add a time-based trigger of its own) and always differs, so same_attr
+      # is never true and the event always fires. last_changed is unaffected:
+      # HA derives it from same_state alone, so it still advances only when
+      # the identity itself changes, which is what diy_store_current's
+      # recency ranking depends on.
       - name: diy_store_zeke
         unique_id: diy_store_zeke
         default_entity_id: sensor.diy_store_zeke
@@ -1478,6 +1493,8 @@ template:
           {%- else -%}
             none
           {%- endif -%}
+        attributes:
+          checked_at: "{{ now().timestamp() }}"
 
       - name: diy_store_tesla
         unique_id: diy_store_tesla
@@ -1497,6 +1514,8 @@ template:
           {%- else -%}
             none
           {%- endif -%}
+        attributes:
+          checked_at: "{{ now().timestamp() }}"
 
       # What the restock prompts trigger on. Collapsing the trackers to one
       # identity here means two arriving together cannot race into two prompts.

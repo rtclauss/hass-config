@@ -1157,3 +1157,99 @@ def test_losing_backing_to_an_older_hold_still_goes_quiet() -> None:
 
     assert states == ["ace hardware", "home depot", "none"]
     assert prompts == 2
+
+
+########################
+# HA event propagation: a same-state, same-attributes write fires no event
+########################
+
+
+def _ha_write(old: dict | None, new_state: str, new_attrs: dict, *, now: float) -> dict:
+    """Mirror of homeassistant.core.StateMachine.async_set's dedup semantics.
+
+    HA skips firing state_changed when both the state value AND the attributes
+    are unchanged from the previous write. last_changed is derived from the
+    state value alone: it is carried forward when the value is unchanged, and
+    only advances when the value differs, regardless of what happened to the
+    attributes. This is the exact mechanism the `checked_at` attribute exploits
+    to force propagation without disturbing recency semantics.
+    """
+    if old is None:
+        return {"state": new_state, "attrs": new_attrs, "last_changed": now, "fired": True}
+    same_state = old["state"] == new_state
+    same_attr = old["attrs"] == new_attrs
+    last_changed = old["last_changed"] if same_state else now
+    fired = not (same_state and same_attr)
+    return {"state": new_state, "attrs": new_attrs, "last_changed": last_changed, "fired": fired}
+
+
+def test_without_checked_at_a_repeated_identity_fires_no_event() -> None:
+    # This is the bug: diy_store_zeke recomputes "ace hardware" three times in
+    # a row (matched, then held, then a genuine fresh re-match). Without a
+    # changing attribute, only the first write fires; a downstream consumer
+    # watching this entity is never told about the second or third.
+    entity = _ha_write(None, "ace hardware", {}, now=1)
+    assert entity["fired"]
+    entity = _ha_write(entity, "ace hardware", {}, now=2)
+    assert not entity["fired"], "same value, same (empty) attrs: HA drops this write"
+    entity = _ha_write(entity, "ace hardware", {}, now=3)
+    assert not entity["fired"], "the genuine fresh re-match is silently dropped too"
+
+
+def test_checked_at_forces_every_write_to_fire() -> None:
+    # now().timestamp() differs on every render, so attrs are never equal to
+    # the previous write's attrs, so the same_state-and-same_attr skip never
+    # applies — every recomputation propagates, including the fresh re-match
+    # that the bare version above dropped.
+    entity = _ha_write(None, "ace hardware", {"checked_at": 1.0}, now=1)
+    assert entity["fired"]
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 2.0}, now=2)
+    assert entity["fired"], "attrs differ even though the identity did not"
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 3.0}, now=3)
+    assert entity["fired"]
+
+
+def test_checked_at_does_not_disturb_last_changed() -> None:
+    # The point of using an attribute rather than force_update: last_changed
+    # must still advance only when the identity value actually changes, since
+    # that is what diy_store_current's recency ranking depends on.
+    entity = _ha_write(None, "ace hardware", {"checked_at": 1.0}, now=1)
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 2.0}, now=2)
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 3.0}, now=3)
+    assert entity["last_changed"] == 1, "repeated identity: last_changed must not move"
+
+    entity = _ha_write(entity, "home depot", {"checked_at": 4.0}, now=4)
+    assert entity["last_changed"] == 4, "a real identity change: last_changed must move"
+
+
+def test_force_update_would_have_broken_last_changed_instead() -> None:
+    # Documents why force_update: true was rejected in favour of an attribute.
+    # force_update makes HA treat every write as a value change for the
+    # purpose of last_changed, which would make a tracker merely being
+    # re-evaluated look like a fresh arrival even when nothing moved.
+    def _ha_write_with_force_update(old, new_state, *, now):
+        if old is None:
+            return {"state": new_state, "last_changed": now}
+        return {"state": new_state, "last_changed": now}  # same_state forced False
+
+    entity = _ha_write_with_force_update(None, "ace hardware", now=1)
+    entity = _ha_write_with_force_update(entity, "ace hardware", now=2)
+    assert entity["last_changed"] == 2, "force_update would wrongly advance this every time"
+
+
+def test_both_per_tracker_sensors_declare_checked_at() -> None:
+    for tracker in ("zeke", "tesla"):
+        block = _template_block(f"diy_store_{tracker}")
+        assert "checked_at" in block
+        assert "now().timestamp()" in block
+
+
+def test_checked_at_is_the_only_thing_now_is_used_for() -> None:
+    # now() elsewhere in these entities would be the classic HA anti-pattern
+    # (a state template that silently goes stale between renders, or a
+    # surprise periodic re-render). It belongs only in the attribute whose
+    # entire purpose is to differ on every render.
+    for tracker in ("zeke", "tesla"):
+        block = _template_block(f"diy_store_{tracker}")
+        state_part = block[: block.index("attributes:")]
+        assert "now()" not in state_part
