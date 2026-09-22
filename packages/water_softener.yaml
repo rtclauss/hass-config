@@ -296,9 +296,9 @@ automation:
     alias: buy_more_salt
     description: >-
       Prompt for a bag count when we are standing in a DIY store with the salt
-      inventory low. Detection lives in binary_sensor.diy_store_visit (see
-      packages/zone.yaml) because exact place-name matching missed real OSM
-      names and parking-lot geocodes.
+      inventory low. Detection lives in sensor.diy_store_current (see
+      packages/zone.yaml), whose state is which store we are at, because exact
+      place-name matching missed real OSM names and parking-lot geocodes.
 
       There is deliberately no arrive-home backstop here, unlike the air-filter
       prompt in climate.yaml: two restock questions on a single arrival is worse
@@ -309,14 +309,19 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: binary_sensor.diy_store_visit
-        from: "off"
-        to: "on"
+        id: at_diy_store
+        entity_id: sensor.diy_store_current
     condition:
       - alias: "Salt Bag Inventory Low"
         condition: numeric_state
         entity_id: input_number.bags_of_salt_at_home
         below: 2
+      - alias: "Store path only on a genuinely new store"
+        condition: template
+        value_template: >-
+          {{ trigger.id != 'at_diy_store'
+             or (trigger.to_state.state not in ['none', 'unknown', 'unavailable']
+                 and trigger.to_state.state != trigger.from_state.state) }}
     action:
       - action: notify.mobile_app_wethop
         data:

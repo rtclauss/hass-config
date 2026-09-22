@@ -1,21 +1,22 @@
 """Regression tests for the DIY-store restock prompts.
 
-Background: a Home Depot trip produced no "buy air filters" notification. The
-automation triggered on `sensor.zeke_place_place_name` being exactly one of a
-handful of brand strings, or on `place_type` being exactly `doityourself`.
+Three separate failures shaped this design, all observed in production:
 
-Three things had to line up for that to work, and none of them did:
+1. A Home Depot visit produced no prompt. Detection was exact place-name
+   equality on one tracker. The arrival fix lands in the parking lot, so
+   `place_name` reads `unknown` and `place_type` reads `parking`, and the
+   phone then reports nothing for the rest of the visit. Real OSM names also
+   carry suffixes ("The Home Depot #2812"), and the car was never watched.
+2. A garden centre prompted for furnace filters, and a 30-minute timed hold
+   then swallowed the real Home Depot arrival 25 minutes later.
+3. Shortening that hold traded the swallow for a duplicate: a visit outlasting
+   the hold re-fired for the same store.
 
-* The Places integration only re-geocodes when the tracker reports a new GPS
-  fix. The arrival fix lands in the parking lot, so `place_name` reads
-  `unknown` and `place_type` reads `parking`. The phone then reports nothing
-  for the rest of the visit, so the geocode is never retried.
-* Real OSM names carry store numbers and suffixes, so equality against a bare
-  brand string misses even when the store *is* named.
-* Only the phone was watched; the car's identical sensors were ignored.
-
-The fix moves detection into a shared `binary_sensor.diy_store_visit` and adds
-an arrive-home backstop for the parking-lot case.
+So detection is `sensor.diy_store_current`, whose state is *which* store we are
+at, held across uninformative fixes rather than on a timer. The identity is
+what lets a second store prompt while a second fix for the same store does not.
+An arrive-home backstop covers the case where the geocoder never names the
+store at all.
 """
 
 from __future__ import annotations
@@ -46,16 +47,29 @@ def _automation_block(path: Path, automation_id: str) -> str:
     return match.group(0)
 
 
-def _diy_store_sensor_block() -> str:
+def _template_block(name: str) -> str:
     text = ZONE_PATH.read_text(encoding="utf-8")
     pattern = re.compile(
-        r"^      - name: diy_store_visit\n(.*?)(?=^      - name: |^########################)",
+        rf"^      - name: {re.escape(name)}\n(.*?)"
+        r"(?=^      - name: |^  - \w+:|^########################)",
         re.MULTILINE | re.DOTALL,
     )
     match = pattern.search(text)
     if match is None:
-        raise AssertionError("Could not find template binary sensor 'diy_store_visit'")
+        raise AssertionError(f"Could not find template entity {name!r}")
     return match.group(0)
+
+
+MACRO_PATH = ROOT / "custom_templates" / "diy_store.jinja"
+
+
+def _macro_source() -> str:
+    return MACRO_PATH.read_text(encoding="utf-8")
+
+
+def _diy_store_sensor_block() -> str:
+    """The matching rules, which live in the shared macro."""
+    return _macro_source()
 
 
 ########################
@@ -63,12 +77,11 @@ def _diy_store_sensor_block() -> str:
 ########################
 
 
-def test_diy_store_sensor_watches_both_trackers() -> None:
-    block = _diy_store_sensor_block()
-
-    # The car has the same Places sensors as the phone and was previously
-    # ignored by the air-filter prompt.
-    assert "for tracker in ['zeke', 'tesla']" in block
+def test_both_trackers_are_watched() -> None:
+    # The car has the same Places sensors as the phone and was ignored by the
+    # original air-filter prompt.
+    for tracker in ("zeke", "tesla"):
+        _template_block(f"diy_store_{tracker}")
 
 
 def test_diy_store_sensor_prefers_structured_osm_tagging() -> None:
@@ -81,25 +94,149 @@ def test_diy_store_sensor_prefers_structured_osm_tagging() -> None:
     # Nominatim spells the key `class` in `json` and `category` in `jsonv2`.
     # Accepting both is what keeps this working if upstream switches format.
     assert "osm.get('class') or osm.get('category')" in block
-    for shop_type in ("doityourself", "hardware", "trade", "paint", "garden_centre"):
-        assert shop_type in block, f"missing shop type {shop_type!r}"
+
+
+def _macro_code() -> str:
+    """Macro source with Jinja comments stripped, so prose is not asserted on."""
+    return re.sub(r"\{#.*?#\}", "", _macro_source(), flags=re.DOTALL)
 
 
 def test_diy_store_sensor_does_not_use_the_dead_category_sensor() -> None:
-    block = _diy_store_sensor_block()
+    code = _macro_code()
 
     # sensor.<tracker>_place_place_category reads osm_dict["category"], but
     # Nominatim's reverse endpoint returns that key as "class". The sensor has
-    # been `unknown` on both trackers for the whole recorder window.
-    assert "_place_place_category" not in block
+    # been `unknown` on both trackers for the whole recorder window, so it must
+    # never be read - only explained in the comments.
+    assert "_place_place_category" not in code
+    assert "_place_place_type" in code, "the live type sensor is still the fallback"
 
 
-def test_diy_store_sensor_excludes_department_stores_structurally() -> None:
+def test_diy_store_sensor_structural_types_stock_filters_and_salt() -> None:
+    block = _diy_store_sensor_block()
+    types_line = block[block.index("set diy_shop_types") : block.index("set diy_brands")]
+
+    for shop_type in ("doityourself", "hardware", "trade"):
+        assert shop_type in types_line, f"missing shop type {shop_type!r}"
+
+    # shop=department_store is Target as well as Fleet Farm, so it must not be a
+    # structural match; Fleet Farm comes in via its brand tag instead.
+    # shop=garden_centre prompted for furnace filters at a garden centre on
+    # 2026-09-20, and shop=paint has the same problem: neither stocks filters
+    # or softener salt.
+    for shop_type in ("department_store", "garden_centre", "paint"):
+        assert shop_type not in types_line, f"{shop_type!r} must not match structurally"
+
+
+def test_diy_store_sensor_does_not_use_a_timed_hold() -> None:
     block = _diy_store_sensor_block()
 
-    # shop=department_store is Target and Walmart as well as Fleet Farm, so it
-    # must not be a structural match. Fleet Farm comes in via its brand tag.
-    assert "department_store" not in block
+    # A timed hold cannot tell "still in this store" from "now at the next
+    # store". Long enough to cover a visit swallows the next store; short
+    # enough to re-arm re-fires for the same one. Both were observed.
+    assert "delay_off" not in block
+
+
+def test_store_identity_is_canonical() -> None:
+    src = _macro_source()
+
+    # The same store reached through different metadata must produce the same
+    # string, or the prompts read it as a new store. A known brand collapses to
+    # its own token; everything else collapses to shop:<type>. Raw place names
+    # are never used as the identity.
+    assert "brands_found[0]" in src
+    assert "'shop:' ~ place_type" in src
+    assert "select('in', haystack)" in src
+    haystack = src[src.index("set haystack") : src.index("brands_found")]
+    for field in ("brand", "operator", "_place_place_name", "_place_zone_name"):
+        assert field in haystack, f"{field} must feed canonicalisation"
+
+
+def test_hold_is_per_tracker_not_combined() -> None:
+    zeke = _template_block("diy_store_zeke")
+    tesla = _template_block("diy_store_tesla")
+
+    # Trackers move independently. Deciding the hold from all of them at once
+    # fails both ways: "any clears" lets a car at home cancel the phone's
+    # visit, "every clears" lets a car parked in a lot pin the last store
+    # forever. Each tracker holds only its own state.
+    for block, tracker in ((zeke, "zeke"), (tesla, "tesla")):
+        assert f"diy_store_identity('{tracker}')" in block
+        assert f"diy_place_is_vague('{tracker}')" in block
+        assert "this.state" in block
+        for other in {"zeke", "tesla"} - {tracker}:
+            assert other not in block, f"{tracker} sensor must not read {other}"
+
+
+def test_combined_sensor_collapses_trackers_to_one_identity() -> None:
+    block = _template_block("diy_store_current")
+
+    # Two trackers arriving together must not race into two prompts.
+    assert "states['sensor.diy_store_' ~ tracker]" in block
+    assert "for tracker in ['zeke', 'tesla']" in block
+
+
+def test_freshness_reads_the_per_tracker_sensors_not_raw_places() -> None:
+    block = _template_block("diy_store_current")
+
+    # Places entities are sticky, so a tracker that stops publishing keeps
+    # matching forever. The per-tracker sensors change exactly when their
+    # answer changes, and cover every input the identity derives from.
+    assert "entity.last_changed" in block
+    for raw in ("_place_place_name", "_place_place_type", "diy_store_identity"):
+        assert raw not in block, f"the combined sensor must not read {raw}"
+
+
+def test_combined_sensor_does_not_rank_against_its_own_restore_time() -> None:
+    block = _template_block("diy_store_current")
+
+    # After a restart last_changed records when a state was restored, not when
+    # anything was observed, so ranking candidates against it ranks startup
+    # ordering. It may only be read on the lost-backing branch, which is
+    # unreachable until a value has been adopted post-startup.
+    code = re.sub(r"\{#.*?#\}", "", block, flags=re.DOTALL)
+    before_lost_backing = code[: code.index("elif previous == 'none'")]
+    assert "this.last_changed" not in before_lost_backing
+    assert code.count("this.last_changed") == 1, "read on the lost-backing branch only"
+
+
+def test_holds_through_uninformative_fixes_but_not_on_a_timer() -> None:
+    src = _macro_source()
+
+    # parking/unknown is the lot, not evidence of having left.
+    assert "'parking'" in src
+    assert "diy_place_is_vague" in src
+    for block in (_template_block("diy_store_zeke"), _template_block("diy_store_tesla")):
+        assert "delay_off" not in block
+
+
+def test_vagueness_ignores_zone_name() -> None:
+    src = _macro_source()
+    vague_macro = src[src.index("macro diy_place_is_vague") :]
+
+    # zone_name reads "not_home" when away, so it is never vague. Letting it
+    # count as evidence would make the hold unreachable.
+    assert "place_zone_name" not in vague_macro
+    assert "place_place_name" in vague_macro
+
+
+def test_diy_store_binary_companion_derives_from_the_identity() -> None:
+    block = _template_block("diy_store_visit")
+
+    assert "states('sensor.diy_store_current')" in block
+    assert "'none', 'unknown', 'unavailable'" in block
+
+
+def test_prompts_trigger_on_the_identity_not_the_boolean() -> None:
+    for path, automation_id in (
+        (CLIMATE_PATH, "buy_more_air_filters"),
+        (WATER_SOFTENER_PATH, "buy_more_salt"),
+    ):
+        block = _automation_block(path, automation_id)
+        assert "entity_id: sensor.diy_store_current" in block, automation_id
+        assert "binary_sensor.diy_store_visit" not in block, automation_id
+        assert "trigger.to_state.state != trigger.from_state.state" in block, automation_id
+        assert "'none', 'unknown', 'unavailable'" in block, automation_id
 
 
 def test_diy_store_sensor_reads_brand_tags() -> None:
@@ -112,19 +249,19 @@ def test_diy_store_sensor_reads_brand_tags() -> None:
 
 
 def test_diy_store_sensor_keeps_a_name_fallback() -> None:
-    block = _diy_store_sensor_block()
+    src = _macro_source()
 
     # Substring search, not equality, so "The Home Depot #2812" still matches.
-    assert "labels | select('search', brand_pattern)" in block
-    assert "| lower" in block
-    for brand in ("home depot", "menards", "lowe's", "fleet farm", "ace hardware"):
-        assert brand in block, f"missing store keyword {brand!r}"
+    assert "select('in', haystack)" in src
+    assert "| map('lower')" in src
+    for brand in ("home depot", "menards", "lowes", "fleet farm", "ace hardware"):
+        assert brand in src, f"missing store keyword {brand!r}"
 
 
 def test_diy_store_sensor_name_fallback_has_no_generic_tokens() -> None:
-    block = _diy_store_sensor_block()
+    src = _macro_source()
 
-    brand_list = block[block.index("set diy_brands") : block.index("brand_pattern =")]
+    brand_list = src[src.index("set diy_brands") : src.index("set extended")]
     # A bare "hardware" substring would match on name alone; shop=hardware
     # already covers it structurally.
     assert "'hardware'" not in brand_list
@@ -147,14 +284,6 @@ def test_diy_store_sensor_also_reads_zone_names() -> None:
     assert "_place_zone_name" in block
 
 
-def test_diy_store_sensor_holds_through_geocode_flicker() -> None:
-    block = _diy_store_sensor_block()
-
-    # A store fix can be a single sample between two parking-lot fixes. Holding
-    # the sensor on keeps one visit to one prompt instead of several.
-    assert "delay_off:" in block
-
-
 ########################
 # Air filter prompt
 ########################
@@ -163,7 +292,7 @@ def test_diy_store_sensor_holds_through_geocode_flicker() -> None:
 def test_air_filter_prompt_uses_shared_sensor_not_place_strings() -> None:
     block = _automation_block(CLIMATE_PATH, "buy_more_air_filters")
 
-    assert "binary_sensor.diy_store_visit" in block
+    assert "sensor.diy_store_current" in block
     assert "sensor.zeke_place_place_name" not in block
     assert "sensor.zeke_place_place_type" not in block
 
@@ -229,7 +358,7 @@ def test_restock_prompts_do_not_warn_on_overlapping_triggers() -> None:
 def test_salt_prompt_uses_shared_sensor() -> None:
     block = _automation_block(WATER_SOFTENER_PATH, "buy_more_salt")
 
-    assert "binary_sensor.diy_store_visit" in block
+    assert "sensor.diy_store_current" in block
     assert "sensor.zeke_place_place_name" not in block
     assert "sensor.tesla_place_place_name" not in block
 
@@ -338,42 +467,89 @@ def test_arrival_backstop_allowed_when_never_prompted() -> None:
     )
 
 
-def _matches_diy_store(
+DIY_SHOP_TYPES = {"doityourself", "hardware", "trade"}
+# Punctuationless, matching the macro: the haystack is stripped to suit.
+DIY_BRANDS = [
+    "home depot",
+    "menards",
+    "lowes",
+    "fleet farm",
+    "ace hardware",
+    "harbor freight",
+    "true value",
+]
+
+
+def _canonical_identity(
     *,
     osm_class: str | None,
     osm_type: str,
     extratags: dict[str, str] | None = None,
     place_name: str = "unknown",
-) -> bool:
-    """Mirror of the three-layer match in binary_sensor.diy_store_visit."""
-    diy_shop_types = {"doityourself", "hardware", "trade", "paint", "garden_centre"}
-    diy_brands = [
-        "home depot",
-        "menards",
-        "lowe's",
-        "lowes",
-        "fleet farm",
-        "ace hardware",
-        "harbor freight",
-        "true value",
-    ]
+    zone_name: str = "not_home",
+) -> str:
+    """Mirror of diy_store_identity(): the store's canonical id, or ""."""
     extratags = extratags or {}
-
+    haystack = " | ".join(
+        value.lower()
+        for value in (
+            extratags.get("brand", ""),
+            extratags.get("operator", ""),
+            place_name,
+            zone_name,
+        )
+    ).replace("'", "").replace("\u2019", "")
+    for brand in DIY_BRANDS:
+        if brand in haystack:
+            return brand
     is_shop = osm_class is None or osm_class == "shop"
-    structured = is_shop and osm_type.lower() in diy_shop_types
+    if is_shop and osm_type.lower() in DIY_SHOP_TYPES:
+        return f"shop:{osm_type.lower()}"
+    return ""
 
-    def _brand_hit(values: list[str]) -> bool:
-        return any(brand in value.lower() for value in values for brand in diy_brands)
 
-    brand = _brand_hit([extratags.get("brand", ""), extratags.get("operator", "")])
-    name = _brand_hit([place_name])
-    return structured or brand or name
+def _matches_diy_store(**kwargs: object) -> bool:
+    return bool(_canonical_identity(**kwargs))  # type: ignore[arg-type]
+
+
+def test_same_store_through_different_metadata_has_one_identity() -> None:
+    # The geocoder reaches the same store different ways between fixes. If the
+    # identity changed with it, each variation would read as a new store and
+    # prompt again during a single visit.
+    variations = [
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", extratags={"brand": "The Home Depot"}
+        ),
+        _canonical_identity(osm_class="shop", osm_type="doityourself", place_name="The Home Depot"),
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", place_name="The Home Depot #2812"
+        ),
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", extratags={"operator": "Home Depot USA"}
+        ),
+        _canonical_identity(osm_class="building", osm_type="retail", place_name="THE HOME DEPOT"),
+    ]
+
+    assert set(variations) == {"home depot"}, variations
+
+
+def test_unbranded_store_identity_is_a_stable_type_key() -> None:
+    # No brand to latch onto, so the type carries the identity. It must not be
+    # the raw place name, which varies between fixes.
+    assert (
+        _canonical_identity(osm_class="shop", osm_type="hardware", place_name="Smith Hardware Co")
+        == "shop:hardware"
+    )
+    assert (
+        _canonical_identity(osm_class="shop", osm_type="hardware", place_name="unknown")
+        == "shop:hardware"
+    )
 
 
 def test_structured_tagging_matches_real_diy_stores() -> None:
     assert _matches_diy_store(osm_class="shop", osm_type="doityourself")
     assert _matches_diy_store(osm_class="shop", osm_type="hardware")
-    assert _matches_diy_store(osm_class="shop", osm_type="paint")
+    assert _matches_diy_store(osm_class="shop", osm_type="trade")
 
 
 def test_brand_tag_rescues_a_store_tagged_as_a_department_store() -> None:
@@ -426,3 +602,654 @@ def test_ordinary_places_do_not_match() -> None:
     assert not _matches_diy_store(
         osm_class="amenity", osm_type="restaurant", place_name="El Azteca Mexican Restaurant"
     )
+
+
+########################
+# The 2026-09-20 double failure
+########################
+
+
+def test_garden_centre_no_longer_prompts_for_air_filters() -> None:
+    # Bachman's: shop=garden_centre, no DIY brand. Prompted at 14:35 that day.
+    assert not _matches_diy_store(
+        osm_class="shop",
+        osm_type="garden_centre",
+        place_name="Bachman's",
+    )
+
+
+def test_paint_shops_no_longer_match() -> None:
+    assert not _matches_diy_store(osm_class="shop", osm_type="paint")
+
+
+def test_the_home_depot_arrival_that_was_swallowed_still_matches() -> None:
+    # The geocode was perfect that day; only the hold from the earlier false
+    # positive stopped the automation seeing an edge.
+    assert _matches_diy_store(
+        osm_class="shop",
+        osm_type="doityourself",
+        place_name="The Home Depot",
+    )
+
+
+def test_other_errands_from_that_trip_do_not_match() -> None:
+    same_trip = [
+        ("shop", "supermarket", "Valley Foods"),
+        ("amenity", "dentist", "Crestridge Dental"),
+        ("shop", "craft", "Michaels"),
+        ("shop", "games", "Games by James"),
+        ("shop", "supermarket", "Bodega 42 Fresh Market"),
+        ("amenity", "parking", "unknown"),
+    ]
+    for osm_class, osm_type, place_name in same_trip:
+        assert not _matches_diy_store(
+            osm_class=osm_class, osm_type=osm_type, place_name=place_name
+        ), f"{place_name} ({osm_class}={osm_type}) must not match"
+
+
+########################
+# The hold, replayed against real fixes
+########################
+
+VAGUE = {"", "none", "unknown", "unavailable", "parking"}
+
+TRACKERS = ("zeke", "tesla")
+
+# A fix is (place_name, place_type) for one tracker. A sample is one fix per
+# tracker, in (phone, car) order. Modelling a single tracker is what let the
+# independent-tracker bugs through review twice.
+Fix = tuple[str, str]
+Sample = tuple[Fix, Fix]
+
+
+def _tracker_identity(previous: str, fix: Fix) -> str:
+    """Mirror of one sensor.diy_store_<tracker>."""
+    place_name, place_type = fix
+    matched = _canonical_identity(
+        osm_class="shop" if place_type not in VAGUE else None,
+        osm_type=place_type,
+        place_name=place_name,
+    )
+    if matched:
+        return matched
+    vague = place_type in VAGUE and place_name.lower() in VAGUE
+    return previous if vague else "none"
+
+
+def _replay(samples: list[Sample]) -> tuple[list[str], int]:
+    """Return sensor.diy_store_current after each sample, and prompts sent.
+
+    Freshness comes from the per-tracker sensors' own transitions, never from
+    the raw Places entities (which are sticky) and never from the combined
+    sensor's own last_changed (which after a restart records restore order).
+    """
+    per_tracker = dict.fromkeys(TRACKERS, "none")
+    changed_at = dict.fromkeys(TRACKERS, -1)
+    states: list[str] = []
+    previous = "none"
+    established_at = -1
+    prompts = 0
+    for index, sample in enumerate(samples):
+        for tracker, fix in zip(TRACKERS, sample):
+            identity = _tracker_identity(per_tracker[tracker], fix)
+            if identity != per_tracker[tracker]:
+                per_tracker[tracker] = identity
+                changed_at[tracker] = index
+
+        newest, newest_at = "", -1
+        backing_at, still_backed = -1, False
+        for tracker in TRACKERS:
+            if per_tracker[tracker] in VAGUE:
+                continue
+            if changed_at[tracker] > newest_at:
+                newest, newest_at = per_tracker[tracker], changed_at[tracker]
+            if per_tracker[tracker] == previous:
+                still_backed = True
+                backing_at = max(backing_at, changed_at[tracker])
+
+        if still_backed:
+            # A tracker newer than the one backing our value is an arrival.
+            combined = newest if newest_at > backing_at else previous
+        elif previous == "none":
+            combined = newest or "none"
+        elif newest and newest_at > established_at:
+            # Lost backing to a genuinely newer store: that is a real move.
+            combined = newest
+        else:
+            # Lost backing with only an older hold left: go quiet.
+            combined = "none"
+
+        if combined not in VAGUE and combined != previous:
+            prompts += 1
+        if combined != previous:
+            established_at = index
+        states.append(combined)
+        previous = combined
+    return states, prompts
+
+
+def _both(place_name: str, place_type: str) -> Sample:
+    """Phone and car together, the common case."""
+    return ((place_name, place_type), (place_name, place_type))
+
+
+HOME: Fix = ("unknown", "house")
+LOT: Fix = ("unknown", "parking")
+HOME_DEPOT: Fix = ("The Home Depot", "doityourself")
+ROAD: Fix = ("Cedar Avenue", "motorway")
+
+
+def test_replay_of_the_2026_09_20_trip_prompts_exactly_once() -> None:
+    trip = [
+        _both("unknown", "secondary"),
+        _both("Valley Foods", "supermarket"),
+        _both("Crestridge Dental", "dentist"),
+        _both("Michaels", "craft"),
+        _both(*LOT),
+        _both("unknown", "house"),
+        _both("Games by James", "games"),
+        _both("County Road 42 West", "trunk"),
+        _both("Bachman's", "garden_centre"),
+        _both("Pennock Lane", "tertiary"),
+        _both("Bodega 42 Fresh Market", "supermarket"),
+        _both(*LOT),
+        _both(*HOME_DEPOT),
+        _both(*LOT),
+        _both(*LOT),
+        _both("unknown", "house"),
+    ]
+    states, prompts = _replay(trip)
+
+    assert prompts == 1, "the Home Depot arrival, and nothing else"
+    assert states[12] == "home depot"
+    assert states[8] == "none", "the garden centre must not match"
+    assert states[-1] == "none", "driving home must re-arm for next time"
+
+
+def test_a_long_visit_does_not_reprompt() -> None:
+    # Arrive, sit in the lot far longer than any timed hold would survive, then
+    # a second store fix on the way out.
+    states, prompts = _replay(
+        [_both(*LOT), _both(*HOME_DEPOT)]
+        + [_both(*LOT)] * 20
+        + [_both(*HOME_DEPOT), _both("County Road 42", "trunk")]
+    )
+
+    assert prompts == 1
+    assert states[-1] == "none"
+
+
+def test_two_stores_in_one_trip_prompt_twice() -> None:
+    _, prompts = _replay(
+        [
+            _both("Ace Hardware", "hardware"),
+            _both(*LOT),
+            _both("County Road 42", "trunk"),
+            _both(*LOT),
+            _both(*HOME_DEPOT),
+        ]
+    )
+
+    assert prompts == 2
+
+
+def test_adjacent_stores_prompt_twice_without_an_intervening_road_fix() -> None:
+    # Places can go straight from one store to the next through a single vague
+    # sample. A boolean sensor holds `on` across that and loses the second
+    # store; the identity changes, so the prompt still fires.
+    states, prompts = _replay(
+        [
+            _both("Ace Hardware", "hardware"),
+            _both(*LOT),
+            _both(*HOME_DEPOT),
+        ]
+    )
+
+    assert states == ["ace hardware", "ace hardware", "home depot"]
+    assert prompts == 2
+
+
+def test_a_parked_car_elsewhere_does_not_break_the_hold() -> None:
+    # The trip is made without the Tesla, which sits at home reporting `house`
+    # the whole time. Its stale evidence must not clear a visit the phone
+    # established, or the next phone fix re-prompts for the same store.
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (HOME_DEPOT, HOME),
+            (LOT, HOME),
+            (LOT, HOME),
+            (HOME_DEPOT, HOME),
+            (("Cedar Avenue", "motorway"), HOME),
+        ]
+    )
+
+    assert prompts == 1, "one visit, one prompt, despite the car sitting at home"
+    assert states[2:5] == ["home depot"] * 3, "the hold must survive"
+    assert states[-1] == "none"
+
+
+def test_either_tracker_can_establish_the_visit() -> None:
+    _, prompts = _replay([(HOME, HOME), (HOME, HOME_DEPOT)])
+
+    assert prompts == 1
+
+
+def test_hold_does_not_survive_arriving_home() -> None:
+    states, _ = _replay([_both(*HOME_DEPOT), _both("unknown", "house")])
+
+    assert states == ["home depot", "none"]
+
+
+def test_an_idle_vague_tracker_does_not_block_re_arming() -> None:
+    # The car is left in a generic lot and reports `parking` indefinitely, so
+    # it is never "informative". Requiring every tracker to agree before
+    # clearing pinned the last store forever and a later visit to it could
+    # never trigger. Each tracker holding only its own state fixes that: the
+    # car holds its own "none", and the phone clears on its own road fix.
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (HOME_DEPOT, LOT),
+            (LOT, LOT),
+            (ROAD, LOT),
+            (HOME, LOT),
+            (HOME_DEPOT, LOT),
+        ]
+    )
+
+    assert states[3] == "none", "the phone's road fix must clear the visit"
+    assert prompts == 2, "the second visit to the same store must prompt again"
+
+
+def test_an_unavailable_tracker_does_not_block_re_arming() -> None:
+    dead: Fix = ("unavailable", "unavailable")
+    states, prompts = _replay(
+        [(HOME, dead), (HOME_DEPOT, dead), (LOT, dead), (ROAD, dead), (HOME_DEPOT, dead)]
+    )
+
+    assert states[3] == "none"
+    assert prompts == 2
+
+
+def test_a_car_left_in_a_store_lot_still_clears_once_it_moves() -> None:
+    # The one case the per-tracker hold cannot shortcut: the car is parked at
+    # the store itself, so it legitimately still looks like it is there. It
+    # clears as soon as the car produces a road fix.
+    states, _ = _replay(
+        [(HOME_DEPOT, HOME_DEPOT), (ROAD, LOT), (HOME, LOT), (HOME, ROAD), (HOME, HOME)]
+    )
+
+    assert states[2] == "home depot", "the car is still at the store"
+    assert states[-1] == "none", "and clears once the car drives off"
+
+
+########################
+# Identity aliasing and stale-vs-fresh selection
+########################
+
+
+def test_lowes_spellings_are_one_identity() -> None:
+    # The geocoder can alternate between a punctuation-bearing brand tag and a
+    # punctuationless place name inside one visit. Two tokens would read as two
+    # stores and prompt twice.
+    spellings = [
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", extratags={"brand": "Lowe's"}
+        ),
+        _canonical_identity(osm_class="shop", osm_type="doityourself", place_name="Lowes"),
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", place_name="Lowe's Home Improvement"
+        ),
+        _canonical_identity(
+            osm_class="shop", osm_type="doityourself", place_name="Lowe’s Home Improvement"
+        ),
+    ]
+
+    assert set(spellings) == {"lowes"}, spellings
+
+
+def test_brand_tokens_carry_no_punctuation() -> None:
+    src = _macro_code()
+    brand_list = src[src.index("set diy_brands") : src.index("set extended")]
+
+    assert "'" not in brand_list.replace("'home depot'", "").replace("'menards'", "").replace(
+        "'lowes'", ""
+    ).replace("'fleet farm'", "").replace("'ace hardware'", "").replace(
+        "'harbor freight'", ""
+    ).replace("'true value'", ""), "brand tokens must be punctuationless"
+    assert "replace(\"'\", '')" in src, "the haystack must be stripped to match"
+
+
+def test_alternating_lowes_spellings_prompt_once() -> None:
+    _, prompts = _replay(
+        [
+            _both("unknown", "house"),
+            _both("Lowe's Home Improvement", "doityourself"),
+            _both("Lowes", "doityourself"),
+            _both(*LOT),
+            _both("Lowe’s", "doityourself"),
+            _both("Cedar Avenue", "motorway"),
+        ]
+    )
+
+    assert prompts == 1
+
+
+def test_a_new_store_on_one_tracker_beats_a_held_one_on_the_other() -> None:
+    # The phone establishes Ace Hardware, then sits on vague fixes holding it,
+    # while the car resolves to Home Depot. Taking the first non-none in
+    # tracker order would keep reporting the stale Ace and never hand the
+    # prompts their transition.
+    ace: Fix = ("Ace Hardware", "hardware")
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (ace, LOT),
+            (LOT, LOT),
+            (LOT, HOME_DEPOT),
+        ]
+    )
+
+    assert states[1] == "ace hardware"
+    assert states[2] == "ace hardware", "the hold still covers a quiet phone"
+    assert states[3] == "home depot", "a freshly detected store must win"
+    assert prompts == 2
+
+
+def test_a_held_identity_is_still_the_fallback() -> None:
+    # Fresh-beats-held must not undo the hold: with nothing detected on this
+    # fix, the held identity is what keeps one visit to one prompt.
+    states, prompts = _replay([_both(*HOME_DEPOT)] + [_both(*LOT)] * 5)
+
+    assert states == ["home depot"] * 6
+    assert prompts == 1
+
+
+########################
+# Only a fresh detection may change which store is reported
+########################
+
+
+ACE: Fix = ("Ace Hardware", "hardware")
+
+
+def test_a_held_identity_never_substitutes_for_another() -> None:
+    # The phone holds Ace while the car newly detects Home Depot, then the car
+    # goes vague too. With both trackers holding, picking by tracker order sent
+    # ace -> home depot -> ace and a third prompt for one trip.
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (ACE, LOT),
+            (LOT, HOME_DEPOT),
+            (LOT, LOT),
+            (LOT, LOT),
+        ]
+    )
+
+    assert states == ["none", "ace hardware", "home depot", "home depot", "home depot"]
+    assert prompts == 2, "one per store, not one per flip between holds"
+
+
+def test_losing_support_goes_quiet_rather_than_to_another_hold() -> None:
+    # The car drives off and clears while the phone is still holding Ace.
+    # Adopting the phone's hold would be a store change with no new arrival
+    # behind it, so the sensor goes to none instead.
+    states, prompts = _replay(
+        [
+            (ACE, LOT),
+            (LOT, HOME_DEPOT),
+            (LOT, ("Cedar Avenue", "motorway")),
+        ]
+    )
+
+    assert states == ["ace hardware", "home depot", "none"]
+    assert prompts == 2
+
+
+def test_going_quiet_does_not_strand_a_tracker_still_at_a_store() -> None:
+    # Cheap to fall to none: the next informative fix from a tracker that
+    # really is at the store matches again and prompts.
+    states, prompts = _replay(
+        [(ACE, LOT), (LOT, HOME_DEPOT), (LOT, ROAD), (ACE, ROAD)]
+    )
+
+    assert states[2] == "none"
+    assert states[3] == "ace hardware"
+    assert prompts == 3, "ace, home depot, then ace freshly re-detected"
+
+
+def test_every_prompt_is_backed_by_a_fresh_detection() -> None:
+    # The invariant, checked over a long mixed trip: the identity only ever
+    # changes to a store on a sample where some tracker actually matched.
+    trip: list[Sample] = [
+        (HOME, HOME),
+        (ACE, ACE),
+        (LOT, LOT),
+        (LOT, HOME_DEPOT),
+        (LOT, LOT),
+        (ROAD, LOT),
+        (HOME_DEPOT, LOT),
+        (LOT, LOT),
+        (ROAD, ROAD),
+        (HOME, HOME),
+    ]
+    states, _ = _replay(trip)
+
+    previous = "none"
+    for sample, state in zip(trip, states):
+        if state != previous and state != "none":
+            matched_now = any(
+                _canonical_identity(
+                    osm_class="shop" if place_type not in VAGUE else None,
+                    osm_type=place_type,
+                    place_name=place_name,
+                )
+                for place_name, place_type in sample
+            )
+            assert matched_now, f"{previous} -> {state} with no fresh detection"
+        previous = state
+
+
+########################
+# Freshness is about change, not about matching
+########################
+
+
+def test_a_stale_matching_tracker_does_not_outrank_a_newly_arrived_one() -> None:
+    # The phone stops publishing GPS while its last Places fix still reads Ace,
+    # so it keeps matching indefinitely. Ranking matches by tracker order meant
+    # the car arriving at Home Depot was never reported at all.
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (ACE, LOT),
+            (ACE, LOT),
+            (ACE, LOT),
+            (ACE, HOME_DEPOT),
+            (ACE, LOT),
+        ]
+    )
+
+    assert states[1] == "ace hardware"
+    assert states[4] == "home depot", "the car's genuinely new match must win"
+    assert prompts == 2
+
+
+def test_a_frozen_tracker_alone_still_reports_its_store() -> None:
+    # Staleness only breaks ties. With nothing newer to compare against, a
+    # tracker sitting on a matching fix is still at that store.
+    states, prompts = _replay([(HOME, HOME), (ACE, HOME), (ACE, HOME), (ACE, HOME)])
+
+    assert states[1:] == ["ace hardware"] * 3
+    assert prompts == 1
+
+
+def test_the_newer_tracker_wins_in_either_position() -> None:
+    # Whichever tracker changed last wins, so the outcome cannot depend on the
+    # order the trackers happen to be listed in.
+    phone_newer, _ = _replay([(ACE, ACE), (HOME_DEPOT, ACE)])
+    car_newer, _ = _replay([(ACE, ACE), (ACE, HOME_DEPOT)])
+
+    assert phone_newer[-1] == "home depot"
+    assert car_newer[-1] == "home depot"
+
+
+########################
+# Freshness derived from transitions, not from input or restore timestamps
+########################
+
+
+def test_identity_change_from_structured_data_alone_is_reported() -> None:
+    # A fix can change only the brand/operator tag while place_name and
+    # place_type stay put. Clocking freshness off those two scalars alone made
+    # the new identity visible but unreportable; the per-tracker sensor changes
+    # whatever the identity was derived from.
+    unbranded: Fix = ("unknown", "doityourself")
+    branded: Fix = ("The Home Depot", "doityourself")
+    states, prompts = _replay([(HOME, HOME), _both(*unbranded), _both(*branded)])
+
+    assert states[1] == "shop:doityourself"
+    assert states[2] == "home depot"
+    assert prompts == 2
+
+
+def test_entering_a_named_store_zone_is_reported() -> None:
+    # zone_name feeds the identity too, and is not one of the two scalars the
+    # old freshness clock watched.
+    in_zone: Fix = ("unknown", "parking")
+    states, _ = _replay([(HOME, HOME), _both(*in_zone)])
+
+    # Nothing to match on yet, so the sensor is quiet rather than wrong.
+    assert states == ["none", "none"]
+
+
+def test_a_restart_does_not_rank_candidates_by_restore_order() -> None:
+    # After a restart the combined sensor starts with no value, so it takes
+    # whatever is detected without comparing timestamps at all. The outcome
+    # cannot depend on which entity was restored first.
+    car_first, car_prompts = _replay([(HOME_DEPOT, ACE)])
+    phone_first, phone_prompts = _replay([(ACE, HOME_DEPOT)])
+
+    assert car_prompts == 1 and phone_prompts == 1
+    assert car_first[0] in {"home depot", "ace hardware"}
+    assert phone_first[0] in {"home depot", "ace hardware"}
+
+
+def test_moving_straight_to_the_next_store_is_reported() -> None:
+    # Losing backing because both trackers moved on is an arrival, not a stale
+    # hold, and must not be mistaken for one.
+    states, prompts = _replay(
+        [_both("Ace Hardware", "hardware"), _both(*LOT), _both(*HOME_DEPOT)]
+    )
+
+    assert states == ["ace hardware", "ace hardware", "home depot"]
+    assert prompts == 2
+
+
+def test_losing_backing_to_an_older_hold_still_goes_quiet() -> None:
+    # The counterpart: the car clears while the phone holds an older store.
+    # That candidate predates the current value, so it is a stale hold.
+    states, prompts = _replay(
+        [(ACE, LOT), (LOT, HOME_DEPOT), (LOT, ("Cedar Avenue", "motorway"))]
+    )
+
+    assert states == ["ace hardware", "home depot", "none"]
+    assert prompts == 2
+
+
+########################
+# HA event propagation: a same-state, same-attributes write fires no event
+########################
+
+
+def _ha_write(old: dict | None, new_state: str, new_attrs: dict, *, now: float) -> dict:
+    """Mirror of homeassistant.core.StateMachine.async_set's dedup semantics.
+
+    HA skips firing state_changed when both the state value AND the attributes
+    are unchanged from the previous write. last_changed is derived from the
+    state value alone: it is carried forward when the value is unchanged, and
+    only advances when the value differs, regardless of what happened to the
+    attributes. This is the exact mechanism the `checked_at` attribute exploits
+    to force propagation without disturbing recency semantics.
+    """
+    if old is None:
+        return {"state": new_state, "attrs": new_attrs, "last_changed": now, "fired": True}
+    same_state = old["state"] == new_state
+    same_attr = old["attrs"] == new_attrs
+    last_changed = old["last_changed"] if same_state else now
+    fired = not (same_state and same_attr)
+    return {"state": new_state, "attrs": new_attrs, "last_changed": last_changed, "fired": fired}
+
+
+def test_without_checked_at_a_repeated_identity_fires_no_event() -> None:
+    # This is the bug: diy_store_zeke recomputes "ace hardware" three times in
+    # a row (matched, then held, then a genuine fresh re-match). Without a
+    # changing attribute, only the first write fires; a downstream consumer
+    # watching this entity is never told about the second or third.
+    entity = _ha_write(None, "ace hardware", {}, now=1)
+    assert entity["fired"]
+    entity = _ha_write(entity, "ace hardware", {}, now=2)
+    assert not entity["fired"], "same value, same (empty) attrs: HA drops this write"
+    entity = _ha_write(entity, "ace hardware", {}, now=3)
+    assert not entity["fired"], "the genuine fresh re-match is silently dropped too"
+
+
+def test_checked_at_forces_every_write_to_fire() -> None:
+    # now().timestamp() differs on every render, so attrs are never equal to
+    # the previous write's attrs, so the same_state-and-same_attr skip never
+    # applies — every recomputation propagates, including the fresh re-match
+    # that the bare version above dropped.
+    entity = _ha_write(None, "ace hardware", {"checked_at": 1.0}, now=1)
+    assert entity["fired"]
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 2.0}, now=2)
+    assert entity["fired"], "attrs differ even though the identity did not"
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 3.0}, now=3)
+    assert entity["fired"]
+
+
+def test_checked_at_does_not_disturb_last_changed() -> None:
+    # The point of using an attribute rather than force_update: last_changed
+    # must still advance only when the identity value actually changes, since
+    # that is what diy_store_current's recency ranking depends on.
+    entity = _ha_write(None, "ace hardware", {"checked_at": 1.0}, now=1)
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 2.0}, now=2)
+    entity = _ha_write(entity, "ace hardware", {"checked_at": 3.0}, now=3)
+    assert entity["last_changed"] == 1, "repeated identity: last_changed must not move"
+
+    entity = _ha_write(entity, "home depot", {"checked_at": 4.0}, now=4)
+    assert entity["last_changed"] == 4, "a real identity change: last_changed must move"
+
+
+def test_force_update_would_have_broken_last_changed_instead() -> None:
+    # Documents why force_update: true was rejected in favour of an attribute.
+    # force_update makes HA treat every write as a value change for the
+    # purpose of last_changed, which would make a tracker merely being
+    # re-evaluated look like a fresh arrival even when nothing moved.
+    def _ha_write_with_force_update(old, new_state, *, now):
+        if old is None:
+            return {"state": new_state, "last_changed": now}
+        return {"state": new_state, "last_changed": now}  # same_state forced False
+
+    entity = _ha_write_with_force_update(None, "ace hardware", now=1)
+    entity = _ha_write_with_force_update(entity, "ace hardware", now=2)
+    assert entity["last_changed"] == 2, "force_update would wrongly advance this every time"
+
+
+def test_both_per_tracker_sensors_declare_checked_at() -> None:
+    for tracker in ("zeke", "tesla"):
+        block = _template_block(f"diy_store_{tracker}")
+        assert "checked_at" in block
+        assert "now().timestamp()" in block
+
+
+def test_checked_at_is_the_only_thing_now_is_used_for() -> None:
+    # now() elsewhere in these entities would be the classic HA anti-pattern
+    # (a state template that silently goes stale between renders, or a
+    # surprise periodic re-render). It belongs only in the attribute whose
+    # entire purpose is to differ on every render.
+    for tracker in ("zeke", "tesla"):
+        block = _template_block(f"diy_store_{tracker}")
+        state_part = block[: block.index("attributes:")]
+        assert "now()" not in state_part
