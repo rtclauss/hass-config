@@ -1504,6 +1504,16 @@ template:
       # The invariant: only a FRESH detection may change which store is
       # reported. A hold can sustain the current one, never substitute another.
       #
+      # "Fresh" means the tracker's reading changed SINCE THIS SENSOR LAST
+      # REPORTED, not merely that it matches now. Places entities are sticky, so
+      # a phone that stops publishing GPS keeps matching the last store it saw
+      # forever. Treating that as a match every tick goes wrong twice over:
+      # ranked by tracker order it outranks a car that just arrived somewhere
+      # new, and even ranked by recency it re-wins the moment the car's fix goes
+      # vague, flipping the store back and prompting a third time for one trip.
+      # Requiring the change to postdate our own last report makes a frozen
+      # reading count exactly once, when it actually arrived.
+      #
       # Both halves are load-bearing. Fresh has to win, or the phone sitting on
       # vague fixes holding `ace hardware` while the car resolves to `home
       # depot` would keep reporting the stale one and never hand the prompts
@@ -1522,18 +1532,28 @@ template:
         default_entity_id: sensor.diy_store_current
         icon: mdi:store-marker
         state: >-
-          {% from 'diy_store.jinja' import diy_store_identity %}
-          {%- set fresh = [
-               diy_store_identity('zeke') | trim, diy_store_identity('tesla') | trim
-             ] | reject('equalto', '') | list -%}
+          {% from 'diy_store.jinja' import diy_store_identity, diy_fix_changed_at %}
+          {%- set reported_at = this.last_changed | as_timestamp(0)
+               if this is defined else 0 -%}
+          {%- set ns = namespace(newest='', changed_at=reported_at) -%}
+          {%- for tracker in ['zeke', 'tesla'] -%}
+            {%- set identity = diy_store_identity(tracker) | trim -%}
+            {%- if identity -%}
+              {%- set changed_at = diy_fix_changed_at(tracker) | trim | float(0) -%}
+              {%- if changed_at > ns.changed_at -%}
+                {%- set ns.newest = identity -%}
+                {%- set ns.changed_at = changed_at -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
           {%- set held = [
                states('sensor.diy_store_zeke'), states('sensor.diy_store_tesla')
              ] | reject('in', ['none', 'unknown', 'unavailable']) | list -%}
           {%- set previous = this.state
                if this is defined and this.state not in ['unknown', 'unavailable']
                else 'none' -%}
-          {%- if fresh | count > 0 -%}
-            {{ fresh[0] }}
+          {%- if ns.newest -%}
+            {{ ns.newest }}
           {%- elif previous != 'none' and previous in held -%}
             {{ previous }}
           {%- else -%}

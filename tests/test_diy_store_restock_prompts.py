@@ -656,21 +656,34 @@ def _tracker_identity(previous: str, fix: Fix) -> str:
 def _replay(samples: list[Sample]) -> tuple[list[str], int]:
     """Return sensor.diy_store_current after each sample, and prompts sent."""
     per_tracker = dict.fromkeys(TRACKERS, "none")
+    # Places entities are sticky, so a tracker that stops publishing keeps
+    # matching its last store forever. Freshness is therefore about when a
+    # tracker's reading last CHANGED, not whether it currently matches.
+    last_fix: dict[str, Fix | None] = dict.fromkeys(TRACKERS, None)
+    changed_at = dict.fromkeys(TRACKERS, -1)
     states: list[str] = []
     combined_prev = "none"
     prompts = 0
-    for sample in samples:
-        fresh: list[str] = []
+    reported_at = -1
+    for index, sample in enumerate(samples):
+        # A match only counts as a new arrival if that tracker's reading
+        # changed after this sensor last reported; otherwise a frozen tracker
+        # re-wins forever every time the other one goes vague.
+        newest, newest_at = "", reported_at
         for tracker, fix in zip(TRACKERS, sample):
+            if fix != last_fix[tracker]:
+                changed_at[tracker] = index
+                last_fix[tracker] = fix
             place_name, place_type = fix
             matched = _canonical_identity(
                 osm_class="shop" if place_type not in VAGUE else None,
                 osm_type=place_type,
                 place_name=place_name,
             )
-            if matched:
-                fresh.append(matched)
+            if matched and changed_at[tracker] > newest_at:
+                newest, newest_at = matched, changed_at[tracker]
             per_tracker[tracker] = _tracker_identity(per_tracker[tracker], fix)
+        fresh = [newest] if newest else []
         held = [per_tracker[t] for t in TRACKERS if per_tracker[t] not in VAGUE]
         # Only a fresh detection may change which store is reported. A hold can
         # sustain the current one; it can never substitute another, or a trip
@@ -684,6 +697,8 @@ def _replay(samples: list[Sample]) -> tuple[list[str], int]:
         if combined not in VAGUE and combined != combined_prev:
             prompts += 1
         states.append(combined)
+        if combined != combined_prev:
+            reported_at = index
         combined_prev = combined
     return states, prompts
 
@@ -1010,3 +1025,47 @@ def test_every_prompt_is_backed_by_a_fresh_detection() -> None:
             )
             assert matched_now, f"{previous} -> {state} with no fresh detection"
         previous = state
+
+
+########################
+# Freshness is about change, not about matching
+########################
+
+
+def test_a_stale_matching_tracker_does_not_outrank_a_newly_arrived_one() -> None:
+    # The phone stops publishing GPS while its last Places fix still reads Ace,
+    # so it keeps matching indefinitely. Ranking matches by tracker order meant
+    # the car arriving at Home Depot was never reported at all.
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (ACE, LOT),
+            (ACE, LOT),
+            (ACE, LOT),
+            (ACE, HOME_DEPOT),
+            (ACE, LOT),
+        ]
+    )
+
+    assert states[1] == "ace hardware"
+    assert states[4] == "home depot", "the car's genuinely new match must win"
+    assert prompts == 2
+
+
+def test_a_frozen_tracker_alone_still_reports_its_store() -> None:
+    # Staleness only breaks ties. With nothing newer to compare against, a
+    # tracker sitting on a matching fix is still at that store.
+    states, prompts = _replay([(HOME, HOME), (ACE, HOME), (ACE, HOME), (ACE, HOME)])
+
+    assert states[1:] == ["ace hardware"] * 3
+    assert prompts == 1
+
+
+def test_the_newer_tracker_wins_in_either_position() -> None:
+    # Whichever tracker changed last wins, so the outcome cannot depend on the
+    # order the trackers happen to be listed in.
+    phone_newer, _ = _replay([(ACE, ACE), (HOME_DEPOT, ACE)])
+    car_newer, _ = _replay([(ACE, ACE), (ACE, HOME_DEPOT)])
+
+    assert phone_newer[-1] == "home depot"
+    assert car_newer[-1] == "home depot"
