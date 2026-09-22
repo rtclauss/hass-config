@@ -1501,13 +1501,22 @@ template:
       # What the restock prompts trigger on. Collapsing the trackers to one
       # identity here means two arriving together cannot race into two prompts.
       #
-      # A store detected on THIS fix beats one a tracker is merely holding, so
-      # fixed tracker order cannot strand a new store: the phone can sit on
+      # The invariant: only a FRESH detection may change which store is
+      # reported. A hold can sustain the current one, never substitute another.
+      #
+      # Both halves are load-bearing. Fresh has to win, or the phone sitting on
       # vague fixes holding `ace hardware` while the car resolves to `home
-      # depot`, and taking the first non-none in tracker order would keep
-      # reporting the stale one and never hand the prompts their transition.
-      # Held identities are still the fallback, which is what keeps one visit
-      # to one prompt while the phone is silent inside the store.
+      # depot` would keep reporting the stale one and never hand the prompts
+      # their transition. But a hold must never be promoted either: picking the
+      # first non-none in tracker order meant that as soon as the car went
+      # vague too, both trackers were holding and `ace hardware` won again, so
+      # one trip sent ace -> home depot -> ace and a third restock prompt.
+      #
+      # Falling to `none` when the reported store is no longer held is
+      # deliberate. Adopting some other tracker's hold instead just moves the
+      # oscillation: whatever is adopted is a store change with no new arrival
+      # behind it. Going quiet costs nothing, because a tracker that really is
+      # at a store will match again on its next informative fix.
       - name: diy_store_current
         unique_id: diy_store_current
         default_entity_id: sensor.diy_store_current
@@ -1520,10 +1529,13 @@ template:
           {%- set held = [
                states('sensor.diy_store_zeke'), states('sensor.diy_store_tesla')
              ] | reject('in', ['none', 'unknown', 'unavailable']) | list -%}
+          {%- set previous = this.state
+               if this is defined and this.state not in ['unknown', 'unavailable']
+               else 'none' -%}
           {%- if fresh | count > 0 -%}
             {{ fresh[0] }}
-          {%- elif held | count > 0 -%}
-            {{ held[0] }}
+          {%- elif previous != 'none' and previous in held -%}
+            {{ previous }}
           {%- else -%}
             none
           {%- endif -%}

@@ -672,8 +672,15 @@ def _replay(samples: list[Sample]) -> tuple[list[str], int]:
                 fresh.append(matched)
             per_tracker[tracker] = _tracker_identity(per_tracker[tracker], fix)
         held = [per_tracker[t] for t in TRACKERS if per_tracker[t] not in VAGUE]
-        # A store detected on this fix beats one a tracker is merely holding.
-        combined = fresh[0] if fresh else (held[0] if held else "none")
+        # Only a fresh detection may change which store is reported. A hold can
+        # sustain the current one; it can never substitute another, or a trip
+        # oscillates between two trackers' holds and prompts again each time.
+        if fresh:
+            combined = fresh[0]
+        elif combined_prev != "none" and combined_prev in held:
+            combined = combined_prev
+        else:
+            combined = "none"
         if combined not in VAGUE and combined != combined_prev:
             prompts += 1
         states.append(combined)
@@ -917,3 +924,89 @@ def test_a_held_identity_is_still_the_fallback() -> None:
 
     assert states == ["home depot"] * 6
     assert prompts == 1
+
+
+########################
+# Only a fresh detection may change which store is reported
+########################
+
+
+ACE: Fix = ("Ace Hardware", "hardware")
+
+
+def test_a_held_identity_never_substitutes_for_another() -> None:
+    # The phone holds Ace while the car newly detects Home Depot, then the car
+    # goes vague too. With both trackers holding, picking by tracker order sent
+    # ace -> home depot -> ace and a third prompt for one trip.
+    states, prompts = _replay(
+        [
+            (HOME, HOME),
+            (ACE, LOT),
+            (LOT, HOME_DEPOT),
+            (LOT, LOT),
+            (LOT, LOT),
+        ]
+    )
+
+    assert states == ["none", "ace hardware", "home depot", "home depot", "home depot"]
+    assert prompts == 2, "one per store, not one per flip between holds"
+
+
+def test_losing_support_goes_quiet_rather_than_to_another_hold() -> None:
+    # The car drives off and clears while the phone is still holding Ace.
+    # Adopting the phone's hold would be a store change with no new arrival
+    # behind it, so the sensor goes to none instead.
+    states, prompts = _replay(
+        [
+            (ACE, LOT),
+            (LOT, HOME_DEPOT),
+            (LOT, ("Cedar Avenue", "motorway")),
+        ]
+    )
+
+    assert states == ["ace hardware", "home depot", "none"]
+    assert prompts == 2
+
+
+def test_going_quiet_does_not_strand_a_tracker_still_at_a_store() -> None:
+    # Cheap to fall to none: the next informative fix from a tracker that
+    # really is at the store matches again and prompts.
+    states, prompts = _replay(
+        [(ACE, LOT), (LOT, HOME_DEPOT), (LOT, ROAD), (ACE, ROAD)]
+    )
+
+    assert states[2] == "none"
+    assert states[3] == "ace hardware"
+    assert prompts == 3, "ace, home depot, then ace freshly re-detected"
+
+
+def test_every_prompt_is_backed_by_a_fresh_detection() -> None:
+    # The invariant, checked over a long mixed trip: the identity only ever
+    # changes to a store on a sample where some tracker actually matched.
+    trip: list[Sample] = [
+        (HOME, HOME),
+        (ACE, ACE),
+        (LOT, LOT),
+        (LOT, HOME_DEPOT),
+        (LOT, LOT),
+        (ROAD, LOT),
+        (HOME_DEPOT, LOT),
+        (LOT, LOT),
+        (ROAD, ROAD),
+        (HOME, HOME),
+    ]
+    states, _ = _replay(trip)
+
+    previous = "none"
+    for sample, state in zip(trip, states):
+        if state != previous and state != "none":
+            matched_now = any(
+                _canonical_identity(
+                    osm_class="shop" if place_type not in VAGUE else None,
+                    osm_type=place_type,
+                    place_name=place_name,
+                )
+                for place_name, place_type in sample
+            )
+            assert matched_now, f"{previous} -> {state} with no fresh detection"
+        previous = state
