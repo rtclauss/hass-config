@@ -172,9 +172,32 @@ def test_combined_sensor_collapses_trackers_to_one_identity() -> None:
     block = _template_block("diy_store_current")
 
     # Two trackers arriving together must not race into two prompts.
-    assert "sensor.diy_store_zeke" in block
-    assert "sensor.diy_store_tesla" in block
-    assert "reject('in', ['none', 'unknown', 'unavailable'])" in block
+    assert "states['sensor.diy_store_' ~ tracker]" in block
+    assert "for tracker in ['zeke', 'tesla']" in block
+
+
+def test_freshness_reads_the_per_tracker_sensors_not_raw_places() -> None:
+    block = _template_block("diy_store_current")
+
+    # Places entities are sticky, so a tracker that stops publishing keeps
+    # matching forever. The per-tracker sensors change exactly when their
+    # answer changes, and cover every input the identity derives from.
+    assert "entity.last_changed" in block
+    for raw in ("_place_place_name", "_place_place_type", "diy_store_identity"):
+        assert raw not in block, f"the combined sensor must not read {raw}"
+
+
+def test_combined_sensor_does_not_rank_against_its_own_restore_time() -> None:
+    block = _template_block("diy_store_current")
+
+    # After a restart last_changed records when a state was restored, not when
+    # anything was observed, so ranking candidates against it ranks startup
+    # ordering. It may only be read on the lost-backing branch, which is
+    # unreachable until a value has been adopted post-startup.
+    code = re.sub(r"\{#.*?#\}", "", block, flags=re.DOTALL)
+    before_lost_backing = code[: code.index("elif previous == 'none'")]
+    assert "this.last_changed" not in before_lost_backing
+    assert code.count("this.last_changed") == 1, "read on the lost-backing branch only"
 
 
 def test_holds_through_uninformative_fixes_but_not_on_a_timer() -> None:
@@ -654,52 +677,54 @@ def _tracker_identity(previous: str, fix: Fix) -> str:
 
 
 def _replay(samples: list[Sample]) -> tuple[list[str], int]:
-    """Return sensor.diy_store_current after each sample, and prompts sent."""
+    """Return sensor.diy_store_current after each sample, and prompts sent.
+
+    Freshness comes from the per-tracker sensors' own transitions, never from
+    the raw Places entities (which are sticky) and never from the combined
+    sensor's own last_changed (which after a restart records restore order).
+    """
     per_tracker = dict.fromkeys(TRACKERS, "none")
-    # Places entities are sticky, so a tracker that stops publishing keeps
-    # matching its last store forever. Freshness is therefore about when a
-    # tracker's reading last CHANGED, not whether it currently matches.
-    last_fix: dict[str, Fix | None] = dict.fromkeys(TRACKERS, None)
     changed_at = dict.fromkeys(TRACKERS, -1)
     states: list[str] = []
-    combined_prev = "none"
+    previous = "none"
+    established_at = -1
     prompts = 0
-    reported_at = -1
     for index, sample in enumerate(samples):
-        # A match only counts as a new arrival if that tracker's reading
-        # changed after this sensor last reported; otherwise a frozen tracker
-        # re-wins forever every time the other one goes vague.
-        newest, newest_at = "", reported_at
         for tracker, fix in zip(TRACKERS, sample):
-            if fix != last_fix[tracker]:
+            identity = _tracker_identity(per_tracker[tracker], fix)
+            if identity != per_tracker[tracker]:
+                per_tracker[tracker] = identity
                 changed_at[tracker] = index
-                last_fix[tracker] = fix
-            place_name, place_type = fix
-            matched = _canonical_identity(
-                osm_class="shop" if place_type not in VAGUE else None,
-                osm_type=place_type,
-                place_name=place_name,
-            )
-            if matched and changed_at[tracker] > newest_at:
-                newest, newest_at = matched, changed_at[tracker]
-            per_tracker[tracker] = _tracker_identity(per_tracker[tracker], fix)
-        fresh = [newest] if newest else []
-        held = [per_tracker[t] for t in TRACKERS if per_tracker[t] not in VAGUE]
-        # Only a fresh detection may change which store is reported. A hold can
-        # sustain the current one; it can never substitute another, or a trip
-        # oscillates between two trackers' holds and prompts again each time.
-        if fresh:
-            combined = fresh[0]
-        elif combined_prev != "none" and combined_prev in held:
-            combined = combined_prev
+
+        newest, newest_at = "", -1
+        backing_at, still_backed = -1, False
+        for tracker in TRACKERS:
+            if per_tracker[tracker] in VAGUE:
+                continue
+            if changed_at[tracker] > newest_at:
+                newest, newest_at = per_tracker[tracker], changed_at[tracker]
+            if per_tracker[tracker] == previous:
+                still_backed = True
+                backing_at = max(backing_at, changed_at[tracker])
+
+        if still_backed:
+            # A tracker newer than the one backing our value is an arrival.
+            combined = newest if newest_at > backing_at else previous
+        elif previous == "none":
+            combined = newest or "none"
+        elif newest and newest_at > established_at:
+            # Lost backing to a genuinely newer store: that is a real move.
+            combined = newest
         else:
+            # Lost backing with only an older hold left: go quiet.
             combined = "none"
-        if combined not in VAGUE and combined != combined_prev:
+
+        if combined not in VAGUE and combined != previous:
             prompts += 1
+        if combined != previous:
+            established_at = index
         states.append(combined)
-        if combined != combined_prev:
-            reported_at = index
-        combined_prev = combined
+        previous = combined
     return states, prompts
 
 
@@ -1069,3 +1094,66 @@ def test_the_newer_tracker_wins_in_either_position() -> None:
 
     assert phone_newer[-1] == "home depot"
     assert car_newer[-1] == "home depot"
+
+
+########################
+# Freshness derived from transitions, not from input or restore timestamps
+########################
+
+
+def test_identity_change_from_structured_data_alone_is_reported() -> None:
+    # A fix can change only the brand/operator tag while place_name and
+    # place_type stay put. Clocking freshness off those two scalars alone made
+    # the new identity visible but unreportable; the per-tracker sensor changes
+    # whatever the identity was derived from.
+    unbranded: Fix = ("unknown", "doityourself")
+    branded: Fix = ("The Home Depot", "doityourself")
+    states, prompts = _replay([(HOME, HOME), _both(*unbranded), _both(*branded)])
+
+    assert states[1] == "shop:doityourself"
+    assert states[2] == "home depot"
+    assert prompts == 2
+
+
+def test_entering_a_named_store_zone_is_reported() -> None:
+    # zone_name feeds the identity too, and is not one of the two scalars the
+    # old freshness clock watched.
+    in_zone: Fix = ("unknown", "parking")
+    states, _ = _replay([(HOME, HOME), _both(*in_zone)])
+
+    # Nothing to match on yet, so the sensor is quiet rather than wrong.
+    assert states == ["none", "none"]
+
+
+def test_a_restart_does_not_rank_candidates_by_restore_order() -> None:
+    # After a restart the combined sensor starts with no value, so it takes
+    # whatever is detected without comparing timestamps at all. The outcome
+    # cannot depend on which entity was restored first.
+    car_first, car_prompts = _replay([(HOME_DEPOT, ACE)])
+    phone_first, phone_prompts = _replay([(ACE, HOME_DEPOT)])
+
+    assert car_prompts == 1 and phone_prompts == 1
+    assert car_first[0] in {"home depot", "ace hardware"}
+    assert phone_first[0] in {"home depot", "ace hardware"}
+
+
+def test_moving_straight_to_the_next_store_is_reported() -> None:
+    # Losing backing because both trackers moved on is an arrival, not a stale
+    # hold, and must not be mistaken for one.
+    states, prompts = _replay(
+        [_both("Ace Hardware", "hardware"), _both(*LOT), _both(*HOME_DEPOT)]
+    )
+
+    assert states == ["ace hardware", "ace hardware", "home depot"]
+    assert prompts == 2
+
+
+def test_losing_backing_to_an_older_hold_still_goes_quiet() -> None:
+    # The counterpart: the car clears while the phone holds an older store.
+    # That candidate predates the current value, so it is a stale hold.
+    states, prompts = _replay(
+        [(ACE, LOT), (LOT, HOME_DEPOT), (LOT, ("Cedar Avenue", "motorway"))]
+    )
+
+    assert states == ["ace hardware", "home depot", "none"]
+    assert prompts == 2

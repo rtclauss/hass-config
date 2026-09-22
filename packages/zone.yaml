@@ -1504,15 +1504,27 @@ template:
       # The invariant: only a FRESH detection may change which store is
       # reported. A hold can sustain the current one, never substitute another.
       #
-      # "Fresh" means the tracker's reading changed SINCE THIS SENSOR LAST
-      # REPORTED, not merely that it matches now. Places entities are sticky, so
-      # a phone that stops publishing GPS keeps matching the last store it saw
-      # forever. Treating that as a match every tick goes wrong twice over:
-      # ranked by tracker order it outranks a car that just arrived somewhere
-      # new, and even ranked by recency it re-wins the moment the car's fix goes
-      # vague, flipping the store back and prompting a third time for one trip.
-      # Requiring the change to postdate our own last report makes a frozen
-      # reading count exactly once, when it actually arrived.
+      # "Fresh" means a tracker's own store sensor CHANGED, which is why the
+      # clock read here is those sensors' last_changed and not the raw Places
+      # entities'. Places entities are sticky: a phone that stops publishing GPS
+      # keeps matching the last store it saw forever, so any rule based on "does
+      # it match now" lets a frozen reading win repeatedly. The per-tracker
+      # sensors already collapse that to a state machine — each one changes
+      # exactly when its answer changes — so their last_changed is the arrival
+      # time, and it covers every input the identity derives from (osm_dict,
+      # extratags, zone_name) rather than the two scalar sensors alone.
+      #
+      # Nothing here compares against this sensor's own last_changed. Across a
+      # restart that timestamp records when each state was restored, not when
+      # anything was observed, so ranking against it ranks startup ordering.
+      # Only the two per-tracker sensors' timestamps are compared, and those are
+      # meaningful relative to each other.
+      #
+      # A tracker newer than the one currently backing our value is an arrival
+      # and wins. Equal timestamps mean nothing moved, so the current value is
+      # sustained. Losing backing entirely goes to `none` rather than adopting
+      # the other tracker's older hold, which would be a store change with no
+      # arrival behind it.
       #
       # Both halves are load-bearing. Fresh has to win, or the phone sitting on
       # vague fixes holding `ace hardware` while the car resolves to `home
@@ -1532,32 +1544,43 @@ template:
         default_entity_id: sensor.diy_store_current
         icon: mdi:store-marker
         state: >-
-          {% from 'diy_store.jinja' import diy_store_identity, diy_fix_changed_at %}
-          {%- set reported_at = this.last_changed | as_timestamp(0)
-               if this is defined else 0 -%}
-          {%- set ns = namespace(newest='', changed_at=reported_at) -%}
-          {%- for tracker in ['zeke', 'tesla'] -%}
-            {%- set identity = diy_store_identity(tracker) | trim -%}
-            {%- if identity -%}
-              {%- set changed_at = diy_fix_changed_at(tracker) | trim | float(0) -%}
-              {%- if changed_at > ns.changed_at -%}
-                {%- set ns.newest = identity -%}
-                {%- set ns.changed_at = changed_at -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {%- set held = [
-               states('sensor.diy_store_zeke'), states('sensor.diy_store_tesla')
-             ] | reject('in', ['none', 'unknown', 'unavailable']) | list -%}
           {%- set previous = this.state
                if this is defined and this.state not in ['unknown', 'unavailable']
                else 'none' -%}
-          {%- if ns.newest -%}
-            {{ ns.newest }}
-          {%- elif previous != 'none' and previous in held -%}
-            {{ previous }}
+          {%- set ns = namespace(
+               newest='', newest_at=0, backing_at=0, still_backed=false) -%}
+          {%- for tracker in ['zeke', 'tesla'] -%}
+            {%- set entity = states['sensor.diy_store_' ~ tracker] -%}
+            {%- if entity is not none
+                   and entity.state not in ['none', 'unknown', 'unavailable'] -%}
+              {%- set changed_at = entity.last_changed | as_timestamp(0) -%}
+              {%- if changed_at > ns.newest_at -%}
+                {%- set ns.newest = entity.state -%}
+                {%- set ns.newest_at = changed_at -%}
+              {%- endif -%}
+              {%- if entity.state == previous -%}
+                {%- set ns.still_backed = true -%}
+                {%- if changed_at > ns.backing_at -%}
+                  {%- set ns.backing_at = changed_at -%}
+                {%- endif -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- if ns.still_backed -%}
+            {{ ns.newest if ns.newest_at > ns.backing_at else previous }}
+          {%- elif previous == 'none' -%}
+            {{ ns.newest if ns.newest else 'none' }}
           {%- else -%}
-            none
+            {#- Our store lost its backing. A candidate that arrived after we
+                adopted the current value is a real move to the next store; an
+                older one is just the other tracker's stale hold, so go quiet
+                rather than report a store nobody has just arrived at. Reading
+                this.last_changed is safe here and only here: the branch is
+                unreachable until we have adopted a value post-startup, so the
+                timestamp is an observation rather than a restore time. -#}
+            {%- set established_at = this.last_changed | as_timestamp(0)
+                 if this is defined else 0 -%}
+            {{ ns.newest if ns.newest and ns.newest_at > established_at else 'none' }}
           {%- endif -%}
 
   - binary_sensor:

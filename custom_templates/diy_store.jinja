@@ -81,32 +81,3 @@
   {{- 'true' if (place_type in vague and place_name in vague) else 'false' -}}
 {% endmacro %}
 
-{% macro diy_fix_changed_at(tracker) %}
-  {# When this tracker's Places reading last actually changed, as a unix
-     timestamp (0 if the entities are missing).
-
-     Needed because a match is not the same thing as a fresh match. Places
-     entities are sticky: a phone that stops publishing GPS keeps reporting the
-     last place it saw, so its identity still evaluates, indefinitely. Ranking
-     matches by tracker order let that frozen reading outrank a tracker that had
-     genuinely just arrived somewhere new, and the new store was never reported.
-
-     place_name and place_type are the inputs the identity is derived from, so
-     the newer of their two last_changed values is when this tracker's answer
-     could last have changed. last_reported is deliberately not used: it moves
-     on every duplicate report, and HA does not re-render templates for it.
-
-     Returns text, so `| trim | float(0)` on the other end.
-  #}
-  {%- set ns = namespace(latest=0) -%}
-  {%- for suffix in ['_place_place_name', '_place_place_type'] -%}
-    {%- set entity = states['sensor.' ~ tracker ~ suffix] -%}
-    {%- if entity is not none -%}
-      {%- set stamp = entity.last_changed | as_timestamp(0) -%}
-      {%- if stamp > ns.latest -%}
-        {%- set ns.latest = stamp -%}
-      {%- endif -%}
-    {%- endif -%}
-  {%- endfor -%}
-  {{- ns.latest -}}
-{% endmacro %}
