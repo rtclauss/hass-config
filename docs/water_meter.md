@@ -312,24 +312,42 @@ status is what makes `sanity.validate_reading`'s stuck-reading detection
 `history_limit`) actually reach that automation instead of looking
 perfectly healthy indefinitely.
 
-## Known hardware issue: webcam USB lockups
+## Known hardware issue: webcam USB lockups (Pi 3B+ era; hardware since replaced)
 
 Bench-tested on a **Raspberry Pi 3 Model B Plus**: the webcam has been
 observed to wedge after a handful of captures (every subsequent
 `cv2.VideoCapture` read times out with `V4L2: select() timeout`, even from a
 freshly opened capture in a brand-new process) in a way that only a host
 reboot clears - `water_meter/watchdog.py` (see above) auto-recovers this,
-but the root cause is almost certainly **USB power contention specific to
-this board**: the Pi 3B+ routes its onboard Ethernet through the same
-internal USB hub as the external USB ports, and this webcam (Logitech C270,
-bus-powered, up to 500mA) sits behind that same hub chain, competing with
-network traffic for a shared, limited 5V rail.
+but the root cause was root-caused to a genuine `dwc2` USB-controller
+hardware/driver limitation specific to that board (BCM2837B0 has no separate
+XHCI controller for any USB port).
 
-**Recommended fix** (not yet applied): move the webcam to a **powered USB
-hub** rather than the Pi's own ports. If that's not available, try disabling
-USB autosuspend on the hub chain above the camera
-(`echo on | sudo tee /sys/bus/usb/devices/<hub>/power/control`), and confirm
-the Pi's own power supply is a genuine 2.5A+ rated unit.
+**The Pi was physically replaced with a Raspberry Pi 4 Model B (Ubuntu
+26.04) on 2026-09-20**, which has a proper XHCI controller (via a separate
+VL805 chip) for all USB-A ports, making the dwc2 bug moot. The watchdog
+mitigation is left in place regardless (cheap insurance, and it did still
+fire intermittently for about a day right after the migration before
+settling down - see the daily reboot section below).
+
+## Daily preventive reboot
+
+`deploy/systemd/water-meter-daily-reboot.service` / `.timer` reboots the Pi
+once a day at 3am local (`OnCalendar=*-*-* 03:00:00`, `RandomizedDelaySec=5min`).
+This is not a targeted fix for anything specific - the camera-stuck watchdog
+already self-heals that failure mode on its own - just standard preventive
+hygiene for an always-on embedded box (clears slow memory/fd leaks,
+refreshes the DHCP lease, applies pending kernel/driver updates that need a
+reboot). A one-shot `water-meter-reader.service` run that gets interrupted
+mid-cycle by the reboot just means one skipped/late reading, not corruption.
+
+Enable on the Pi with:
+
+```bash
+sudo cp deploy/systemd/water-meter-daily-reboot.* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now water-meter-daily-reboot.timer
+```
 
 ## Repository layout
 
@@ -363,6 +381,8 @@ the Pi's own power supply is a genuine 2.5A+ rated unit.
     workstation with a display, using `cv2.selectROI`) subcommands.
 - `deploy/systemd/water-meter-reader.service` / `.timer` - the oneshot
   service + timer, mirroring `deploy/systemd/inky-owner-suite.service`.
+- `deploy/systemd/water-meter-daily-reboot.service` / `.timer` - daily 3am
+  preventive reboot, see "Daily preventive reboot" above.
 - `packages/water_meter.yaml` - HA-side staleness sensor + alert automation.
 - `tests/test_water_meter_*.py` - unit tests for the pure logic (sanity gate,
   config parsing, ROI cropping) and the package YAML; hardware/network paths
