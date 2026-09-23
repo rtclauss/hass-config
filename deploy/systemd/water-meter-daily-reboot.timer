@@ -1,0 +1,20 @@
+[Unit]
+Description=Daily preventive reboot for the water meter Pi
+
+[Timer]
+# 3am local: quietest household-usage window, and far from the reader's own
+# 20-minute polling cadence ever lining up with a boot in a way that matters
+# (the reader is a one-shot systemd-timer job, not a long-running process,
+# so a reboot mid-cycle just means one skipped/late reading, not corruption -
+# see water_meter/reader.py's history_limit rotation, which tolerates gaps).
+# Not a fix for anything specific - the camera-stuck watchdog
+# (water_meter/watchdog.py) already self-heals that failure mode without
+# needing a scheduled reboot. This is just cheap preventive hygiene for an
+# always-on embedded box (clears any slow memory/fd leaks, refreshes the
+# DHCP lease, applies any pending kernel/driver updates that need a reboot).
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
