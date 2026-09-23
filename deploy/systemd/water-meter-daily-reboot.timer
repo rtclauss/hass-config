@@ -13,8 +13,18 @@ Description=Daily preventive reboot for the water meter Pi
 # always-on embedded box (clears any slow memory/fd leaks, refreshes the
 # DHCP lease, applies any pending kernel/driver updates that need a reboot).
 OnCalendar=*-*-* 03:00:00
-Persistent=true
 RandomizedDelaySec=5min
+# Deliberately NOT Persistent=true. This Pi has no battery-backed RTC, so
+# every boot starts with a stale pre-NTP clock (observed: defaults to
+# 2026-07-27, the firmware build date) until NTP corrects it. Persistent=true
+# makes systemd fire an immediate "catch-up" run if it thinks a scheduled
+# occurrence was missed - and it always thinks that here, because the stale
+# post-boot clock makes the last-run timestamp look like it's "in the
+# future". That caused a real incident on 2026-09-23: the Pi rebooted every
+# ~50 seconds in a tight loop (reboot -> stale clock -> timer "catches up" ->
+# reboot -> repeat) badly enough that it required a manual power cycle to
+# break. Skipping one day's reboot on the rare occasion the Pi is off at 3am
+# is a fine trade-off for never risking this again.
 
 [Install]
 WantedBy=timers.target
