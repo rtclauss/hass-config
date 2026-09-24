@@ -180,6 +180,12 @@ class RtlSdrWatchdog(hass.Hass):
         self.unhealthy_cycles = 0
         self._last_notice_at = {}
         self.state = self._load_state()
+        # AppDaemon timer handles for a scheduled-but-not-yet-fired
+        # _do_restart/_do_proxmox_shutdown, so a manual reset mid-delay can
+        # actually cancel the queued action instead of just clearing state
+        # out from under it - see _manual_reset.
+        self._pending_restart_handle = None
+        self._pending_shutdown_handle = None
 
         self.log(
             "rtlsdr_watchdog init: dry_run={} addon={} stale_after={} confirm_cycles={} "
@@ -377,10 +383,32 @@ class RtlSdrWatchdog(hass.Hass):
                 self.log("rtlsdr_watchdog: notify via {} failed: {}".format(service, err), level="WARNING")
 
     def _manual_reset(self, event_name, data, kwargs):
+        # Cancel any restart/shutdown already queued via run_in() first: if
+        # the operator resets state (e.g. after fixing the dongle by hand)
+        # while a shutdown notice is counting down, clearing state alone
+        # would not stop the queued callback from still shutting the host
+        # down a moment later - and with no persisted lock afterward (state
+        # was just reset), nothing would block a further automatic shutdown
+        # either.
+        self._cancel_pending_actions()
         self.state = dict(_DEFAULT_STATE)
         self._save_state()
         self.unhealthy_cycles = 0
         self.log("rtlsdr_watchdog: state manually reset via rtlsdr_watchdog_reset event")
+
+    def _cancel_pending_actions(self):
+        for attr in ("_pending_restart_handle", "_pending_shutdown_handle"):
+            handle = getattr(self, attr, None)
+            if handle is None:
+                continue
+            try:
+                self.cancel_timer(handle)
+            except Exception as err:  # noqa: BLE001
+                self.log(
+                    "rtlsdr_watchdog: could not cancel pending action ({}): {}".format(attr, err),
+                    level="WARNING",
+                )
+            setattr(self, attr, None)
 
     # -- decision logic -------------------------------------------------------
 
@@ -482,9 +510,10 @@ class RtlSdrWatchdog(hass.Hass):
                 "; ".join(evidence), self.pre_action_delay
             ),
         )
-        self.run_in(self._do_restart, self.pre_action_delay)
+        self._pending_restart_handle = self.run_in(self._do_restart, self.pre_action_delay)
 
     def _do_restart(self, kwargs):
+        self._pending_restart_handle = None
         if self.dry_run:
             self.log("rtlsdr_watchdog: [DRY RUN] would call hassio/addon_restart addon={}".format(
                 self.addon_slug
@@ -537,25 +566,15 @@ class RtlSdrWatchdog(hass.Hass):
             )
             return
 
-        self.state["last_shutdown_ts"] = self._now().isoformat()
-        self.state["shutdown_pending_verification"] = True
-        if not self._save_state():
-            # Persisting the lock failed - shutting down anyway would mean
-            # a fresh boot loads the OLD state (no cooldown, no pending-
-            # verification flag) and could auto-shutdown again immediately.
-            # Refuse the destructive action instead.
-            self.state["last_shutdown_ts"] = last_shutdown_ts.isoformat() if last_shutdown_ts else None
-            self.state["shutdown_pending_verification"] = False
-            self._notify(
-                "RTL-SDR watchdog: shutdown aborted, safety lock not persisted",
-                "Refusing to shut down Proxmox: the pending-verification/cooldown state "
-                "could not be written to disk, and shutting down without it risks an "
-                "unguarded repeat shutdown after power-on. Check the AppDaemon add-on's "
-                "filesystem.",
-                key="shutdown_state_write_failed",
-            )
-            return
-
+        # Deliberately does NOT touch state.last_shutdown_ts /
+        # shutdown_pending_verification yet - only _do_proxmox_shutdown,
+        # once the shutdown has actually been dispatched, marks it. If
+        # AppDaemon reloads during shutdown_notice_seconds (losing the
+        # scheduled run_in callback) or the service call raises, no shutdown
+        # happens; pre-marking state here would otherwise wedge the whole
+        # safety mechanism permanently "pending verification" for a
+        # shutdown that never occurred, with no way to recover but a manual
+        # reset.
         self._notify(
             "RTL-SDR watchdog: shutting down Proxmox host",
             "USB-level RTL-SDR fault persisted after {} add-on restarts (errors: {}). "
@@ -565,10 +584,45 @@ class RtlSdrWatchdog(hass.Hass):
             ),
             key="shutdown",
         )
-        self.run_in(self._do_proxmox_shutdown, self.shutdown_notice_seconds)
+        self._pending_shutdown_handle = self.run_in(
+            self._do_proxmox_shutdown, self.shutdown_notice_seconds
+        )
 
     def _do_proxmox_shutdown(self, kwargs):
+        self._pending_shutdown_handle = None
         if self.dry_run:
             self.log("rtlsdr_watchdog: [DRY RUN] would call rest_command/proxmox_shutdown")
-            return
-        self.call_service("rest_command/proxmox_shutdown")
+        else:
+            try:
+                self.call_service("rest_command/proxmox_shutdown")
+            except Exception as err:  # noqa: BLE001
+                self.log(
+                    "rtlsdr_watchdog: rest_command/proxmox_shutdown failed, not marking "
+                    "shutdown state: {}".format(err),
+                    level="WARNING",
+                )
+                return
+
+        self.state["last_shutdown_ts"] = self._now().isoformat()
+        self.state["shutdown_pending_verification"] = True
+        if not self._save_state():
+            # The shutdown has already been dispatched (or simulated in
+            # dry-run) - there's no "abort" option left at this point. Log
+            # as loudly as possible and try to notify (may not arrive before
+            # the real host actually powers off) so this doesn't fail
+            # silently; the residual risk is a rare disk failure landing at
+            # exactly this instant, which is far less likely than the
+            # ordinary reload-during-delay race this design avoids above.
+            self.log(
+                "rtlsdr_watchdog: CRITICAL - Proxmox shutdown dispatched but the "
+                "pending-verification/cooldown lock could not be persisted",
+                level="ERROR",
+            )
+            self._notify(
+                "RTL-SDR watchdog: shutdown dispatched but safety lock NOT saved",
+                "The Proxmox shutdown command was sent, but the pending-verification/"
+                "cooldown state failed to write to disk. If the fault repeats after "
+                "power-on, this watchdog may not block a second automatic shutdown as "
+                "designed - verify manually.",
+                key="shutdown_dispatched_unlocked",
+            )

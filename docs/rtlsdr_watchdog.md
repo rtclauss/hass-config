@@ -103,6 +103,17 @@ until a fresh reading is actually seen. A power-cycle that didn't fix the
 fault can never trigger a second automatic shutdown by itself — a human has
 to look at it.
 
+This flag is only set once the shutdown has actually been dispatched — never
+before. Deciding to shut down, notifying, and scheduling the delayed action
+happen first; only the delayed callback itself, after a successful (or
+dry-run-simulated) `rest_command/proxmox_shutdown` call, marks the state. If
+that callback were ever lost (an AppDaemon reload during
+`shutdown_notice_seconds`) or the service call raised, pre-marking state
+would wedge the watchdog permanently "pending verification" for a shutdown
+that never happened — with no fresh reading ever coming (the fault is real)
+and no automatic way out but a manual reset. The same ordering applies to
+counting a restart attempt against `max_restart_attempts`.
+
 ## State and resetting it
 
 Persisted as JSON in `appdaemon/apps/.rtlsdr_watchdog_state.json`
@@ -121,11 +132,20 @@ restart/shutdown counters were saved to disk, the moment you flipped
 action it was just armed to take. Flipping `dry_run: false` always starts the
 real ladder from a clean slate.
 
-If persisting the shutdown-pending-verification lock ever fails (e.g. a
-read-only or full filesystem), the app **aborts the shutdown** rather than
-proceeding — shutting down without that lock durably written would mean a
-fresh boot loads stale state and could trigger a second automatic shutdown
-immediately, defeating the loop-breaker.
+If persisting the shutdown-pending-verification lock ever fails after the
+shutdown has already been dispatched (e.g. a read-only or full filesystem),
+there is no "abort" option left — the app logs at `ERROR` and sends a
+best-effort notification instead, since the residual risk (a disk write
+failing at that exact instant) is far smaller than the risk pre-marking
+state would reintroduce.
+
+Firing `rtlsdr_watchdog_reset` also **cancels any restart or shutdown that's
+already been scheduled but hasn't fired yet** (AppDaemon's `run_in` timer
+handle is tracked and cancelled). Without this, resetting state right after
+fixing the dongle by hand — while a shutdown notice is still counting down —
+would clear the safety lock without stopping the queued shutdown, so the
+host would still go down, and after boot nothing would block a further
+automatic shutdown either.
 
 To clear state by hand after a manual fix, fire the `rtlsdr_watchdog_reset`
 event from Developer Tools → Actions (or delete the state file directly on

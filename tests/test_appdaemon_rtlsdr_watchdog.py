@@ -41,9 +41,10 @@ def _make_app(monkeypatch, tmp_path, args=None, now=None):
     app.args = dict(args or {})
     app.log = Mock()
     app.call_service = Mock()
-    app.run_in = Mock()
+    app.run_in = Mock(side_effect=lambda *a, **k: object())
     app.run_every = Mock()
     app.listen_event = Mock()
+    app.cancel_timer = Mock()
     app.get_state = Mock(return_value=None)
 
     fixed_now = now or datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)
@@ -411,50 +412,58 @@ def test_shutdown_blocked_while_pending_verification_even_after_cooldown(monkeyp
     app.run_in.assert_not_called()
 
 
-def test_shutdown_state_written_before_scheduling_action(monkeypatch, tmp_path):
+def test_shutdown_stage_does_not_mark_state_before_dispatch(monkeypatch, tmp_path):
+    # Codex P2: state must not claim a shutdown happened until it actually
+    # has - _shutdown_stage only notifies and schedules; _do_proxmox_shutdown
+    # marks state, and only after a real (or dry-run-simulated) dispatch.
     module, app = _make_app(monkeypatch, tmp_path)
     app.state["restart_attempts"] = 3
 
-    saved_states = []
-    original_save = app._save_state
-
-    def record_save():
-        saved_states.append(dict(app.state))
-        return original_save()
-
-    app._save_state = record_save
-
     app._escalate(usb_fault=True, evidence=["No supported devices found"])
 
-    assert saved_states, "state should have been saved before scheduling the shutdown"
-    assert saved_states[-1]["shutdown_pending_verification"] is True
+    assert app.state["shutdown_pending_verification"] is False
+    assert app.state["last_shutdown_ts"] is None
     app.run_in.assert_called_once()
     assert app.run_in.call_args[0][0] == app._do_proxmox_shutdown
 
 
-def test_shutdown_aborted_when_state_cannot_be_persisted(monkeypatch, tmp_path):
+def test_lost_shutdown_callback_never_marks_state(monkeypatch, tmp_path):
+    # Simulates an AppDaemon reload losing the scheduled run_in callback
+    # during shutdown_notice_seconds: _shutdown_stage ran, but
+    # _do_proxmox_shutdown never did.
     module, app = _make_app(monkeypatch, tmp_path)
     app.state["restart_attempts"] = 3
-    app._save_state = Mock(return_value=False)
 
-    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    app._shutdown_stage(usb_fault=True, evidence=["No supported devices found"])
 
-    app.run_in.assert_not_called()
     assert app.state["shutdown_pending_verification"] is False
-    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
-    assert any("aborted" in t.lower() for t in titles)
+    assert app.state["last_shutdown_ts"] is None
 
 
-def test_shutdown_aborted_restores_prior_last_shutdown_ts(monkeypatch, tmp_path):
-    module, app = _make_app(monkeypatch, tmp_path)
-    app.state["restart_attempts"] = 3
-    prior = (app._now() - timedelta(days=10)).isoformat()
-    app.state["last_shutdown_ts"] = prior
+def test_failed_shutdown_dispatch_does_not_mark_state(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app.call_service = Mock(side_effect=Exception("proxmox unreachable"))
+
+    app._do_proxmox_shutdown({})
+
+    assert app.state["shutdown_pending_verification"] is False
+    assert app.state["last_shutdown_ts"] is None
+
+
+def test_shutdown_dispatch_failure_to_persist_is_logged_critically(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     app._save_state = Mock(return_value=False)
 
-    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    app._do_proxmox_shutdown({})
 
-    assert app.state["last_shutdown_ts"] == prior
+    # The action already happened - state is still set optimistically in
+    # memory (best effort), but the failure is escalated loudly since there
+    # is no "abort" option left at this point.
+    assert app.state["shutdown_pending_verification"] is True
+    levels = [c.kwargs.get("level") for c in app.log.call_args_list]
+    assert "ERROR" in levels
+    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
+    assert any("not saved" in t.lower() for t in titles)
 
 
 def test_shutdown_notifies_both_services(monkeypatch, tmp_path):
@@ -472,16 +481,20 @@ def test_shutdown_notifies_both_services(monkeypatch, tmp_path):
     assert "notify/mobile_app_faro" in services_called
 
 
-def test_do_proxmox_shutdown_calls_rest_command(monkeypatch, tmp_path):
+def test_do_proxmox_shutdown_calls_rest_command_and_marks_state(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     app._do_proxmox_shutdown({})
     app.call_service.assert_called_once_with("rest_command/proxmox_shutdown")
+    assert app.state["shutdown_pending_verification"] is True
+    assert app.state["last_shutdown_ts"] is not None
 
 
 def test_dry_run_proxmox_shutdown_never_calls_service(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": True})
     app._do_proxmox_shutdown({})
     app.call_service.assert_not_called()
+    # Dry-run still advances the in-memory ladder for observability.
+    assert app.state["shutdown_pending_verification"] is True
 
 
 def test_recovery_resets_restart_and_shutdown_state(monkeypatch, tmp_path):
@@ -589,6 +602,51 @@ def test_notify_failure_does_not_block_restart_scheduling(monkeypatch, tmp_path)
     app._escalate(usb_fault=True, evidence=["No supported devices found"])
 
     app.run_in.assert_called_once()
+
+
+# -- manual reset must cancel a queued action (Codex P1) -------------------------
+
+
+def test_manual_reset_cancels_pending_shutdown(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    handle = app._pending_shutdown_handle
+    assert handle is not None
+
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})
+
+    app.cancel_timer.assert_called_once_with(handle)
+    assert app._pending_shutdown_handle is None
+
+
+def test_manual_reset_cancels_pending_restart(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    handle = app._pending_restart_handle
+    assert handle is not None
+
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})
+
+    app.cancel_timer.assert_called_once_with(handle)
+    assert app._pending_restart_handle is None
+
+
+def test_manual_reset_with_no_pending_action_does_not_call_cancel_timer(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})
+    app.cancel_timer.assert_not_called()
+
+
+def test_manual_reset_cancel_failure_is_logged_not_raised(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    app.cancel_timer = Mock(side_effect=Exception("no such timer"))
+
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})  # must not raise
+
+    assert app._pending_shutdown_handle is None
 
 
 # -- static config checks (no code execution) ------------------------------------
