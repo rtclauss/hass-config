@@ -71,6 +71,12 @@ clean or "can't tell" check in between resets the counter to zero.
    times (default 3). After each attempt, evaluation is suppressed for
    `restart_settle_minutes` (default 25, comfortably above the add-on's own
    read cycle) so the restarted container gets a real chance to read again.
+   An attempt is only counted once `hassio/addon_restart` has actually been
+   dispatched successfully — if the delayed callback is lost (e.g. an
+   AppDaemon reload during `pre_action_delay_seconds`) or the service call
+   raises, nothing is consumed and the next unhealthy cycle retries. This
+   guarantees the host is never eligible for shutdown having had fewer than
+   `max_restart_attempts` *real* restarts tried.
 3. **Shut down Proxmox** (`rest_command/proxmox_shutdown`) only once restart
    attempts are exhausted, and only when **all** of:
    - the evidence includes a USB-fault-tier hit (generic-only errors never

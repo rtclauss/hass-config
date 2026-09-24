@@ -331,7 +331,10 @@ def test_restart_stage_notifies_then_schedules(monkeypatch, tmp_path):
     app._escalate(usb_fault=True, evidence=["No supported devices found"])
 
     app.call_service.assert_called_once()  # only the notify; restart itself is deferred
-    assert app.state["restart_attempts"] == 1
+    # The attempt is not counted until _do_restart actually dispatches the
+    # service call (Codex P1: a lost/failed dispatch must not silently
+    # consume one of max_restart_attempts).
+    assert app.state["restart_attempts"] == 0
     app.run_in.assert_called_once()
     callback = app.run_in.call_args[0][0]
     assert callback == app._do_restart
@@ -341,12 +344,34 @@ def test_do_restart_calls_addon_restart_service(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     app._do_restart({})
     app.call_service.assert_called_once_with("hassio/addon_restart", addon=app.addon_slug)
+    assert app.state["restart_attempts"] == 1
+    assert app.state["last_restart_ts"] is not None
 
 
 def test_dry_run_do_restart_never_calls_service(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": True})
     app._do_restart({})
     app.call_service.assert_not_called()
+    # Dry-run still advances the in-memory ladder for observability.
+    assert app.state["restart_attempts"] == 1
+
+
+def test_failed_dispatch_does_not_consume_restart_attempt(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app.call_service = Mock(side_effect=Exception("supervisor unreachable"))
+
+    app._do_restart({})
+
+    assert app.state["restart_attempts"] == 0
+    assert app.state["last_restart_ts"] is None
+
+
+def test_lost_callback_never_consumes_restart_attempt(monkeypatch, tmp_path):
+    # Simulates an AppDaemon reload losing the scheduled run_in callback
+    # during pre_action_delay: _restart_stage ran, but _do_restart never did.
+    module, app = _make_app(monkeypatch, tmp_path, args={"max_restart_attempts": 3})
+    app._restart_stage(["No supported devices found"])
+    assert app.state["restart_attempts"] == 0
 
 
 def test_ladder_reaches_shutdown_after_attempts_exhausted(monkeypatch, tmp_path):

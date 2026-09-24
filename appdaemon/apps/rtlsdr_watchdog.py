@@ -466,11 +466,14 @@ class RtlSdrWatchdog(hass.Hass):
         self._shutdown_stage(usb_fault, evidence)
 
     def _restart_stage(self, evidence):
+        # Deliberately does NOT touch state.restart_attempts yet - only
+        # _do_restart, once hassio/addon_restart has actually been
+        # dispatched, counts the attempt. If AppDaemon reloads during
+        # pre_action_delay (losing the scheduled run_in callback) or the
+        # service call raises, nothing was ever consumed, so the next
+        # unhealthy cycle simply retries instead of silently burning one of
+        # max_restart_attempts on a restart that never happened.
         attempt = self.state.get("restart_attempts", 0) + 1
-        self.state["restart_attempts"] = attempt
-        self.state["last_restart_ts"] = self._now().isoformat()
-        self._save_state()
-
         self._notify(
             "RTL-SDR watchdog: restarting rtlamr2mqtt (attempt {}/{})".format(
                 attempt, self.max_restart_attempts
@@ -486,8 +489,19 @@ class RtlSdrWatchdog(hass.Hass):
             self.log("rtlsdr_watchdog: [DRY RUN] would call hassio/addon_restart addon={}".format(
                 self.addon_slug
             ))
-            return
-        self.call_service("hassio/addon_restart", addon=self.addon_slug)
+        else:
+            try:
+                self.call_service("hassio/addon_restart", addon=self.addon_slug)
+            except Exception as err:  # noqa: BLE001
+                self.log(
+                    "rtlsdr_watchdog: hassio/addon_restart failed, not counting this attempt: {}".format(err),
+                    level="WARNING",
+                )
+                return
+
+        self.state["restart_attempts"] = self.state.get("restart_attempts", 0) + 1
+        self.state["last_restart_ts"] = self._now().isoformat()
+        self._save_state()
 
     def _shutdown_stage(self, usb_fault, evidence):
         if not usb_fault:
