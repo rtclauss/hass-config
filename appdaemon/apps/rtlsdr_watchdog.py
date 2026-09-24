@@ -439,9 +439,23 @@ class RtlSdrWatchdog(hass.Hass):
             return
 
         self.state = dict(_DEFAULT_STATE)
-        self._save_state()
         self.unhealthy_cycles = 0
-        self.log("rtlsdr_watchdog: state manually reset via rtlsdr_watchdog_reset event")
+        if self._save_state():
+            self.log("rtlsdr_watchdog: state manually reset via rtlsdr_watchdog_reset event")
+        else:
+            # The in-memory reset still happened (harmless/fail-safe on its
+            # own: worst case a reload before this is fixed reloads the OLD,
+            # more-cautious state, not a less-cautious one) but it did not
+            # persist, so it will not survive an AppDaemon reload. Surface
+            # that loudly rather than reporting a clean reset that silently
+            # isn't durable.
+            self._notify(
+                "RTL-SDR watchdog: reset did not persist",
+                "State was cleared in memory but could not be written to disk. It will "
+                "revert to the pre-reset values on the next AppDaemon reload. Check the "
+                "add-on's filesystem.",
+                key="reset_not_persisted",
+            )
 
     def _cancel_pending_actions(self):
         """Cancel any queued restart/shutdown. Returns True only if every
@@ -455,10 +469,21 @@ class RtlSdrWatchdog(hass.Hass):
             if handle is None:
                 continue
             try:
-                self.cancel_timer(handle)
+                cancelled = self.cancel_timer(handle)
             except Exception as err:  # noqa: BLE001
                 self.log(
                     "rtlsdr_watchdog: could not cancel pending action ({}): {}".format(attr, err),
+                    level="WARNING",
+                )
+                all_confirmed = False
+                continue
+            if cancelled is False:
+                # AppDaemon's cancel_timer returns False (no exception) when
+                # it couldn't cancel - e.g. the callback is already running.
+                # That is exactly as unconfirmed as an exception; treating
+                # "didn't raise" as success would miss it.
+                self.log(
+                    "rtlsdr_watchdog: cancel_timer reported failure for pending action ({})".format(attr),
                     level="WARNING",
                 )
                 all_confirmed = False

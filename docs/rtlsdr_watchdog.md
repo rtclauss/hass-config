@@ -170,6 +170,18 @@ would leave it unguarded. Either way, wiping state on an uncertain
 cancellation is unsafe, so `_manual_reset` requires every pending action to
 be confirmed cancelled before it touches state at all. Check whether the
 add-on restarted or the host is shutting down before retrying the reset.
+"Confirmed cancelled" means AppDaemon's `cancel_timer` neither raised nor
+returned `False` — a `False` return (no exception, but the timer couldn't be
+cancelled, e.g. its callback was already running) is treated exactly like a
+raised exception, not silently as success.
+
+If the reset itself is allowed to proceed but the resulting default state
+fails to write to disk (e.g. read-only/full filesystem), the in-memory reset
+still happens — which is fail-safe on its own, since an AppDaemon reload
+before the underlying issue is fixed reverts to the *old*, more-cautious
+state, never a less-cautious one — but the app notifies that the reset did
+not persist, rather than reporting a clean reset that silently isn't
+durable.
 
 To clear state by hand after a manual fix, fire the `rtlsdr_watchdog_reset`
 event from Developer Tools → Actions (or delete the state file directly on

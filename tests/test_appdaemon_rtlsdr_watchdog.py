@@ -733,6 +733,38 @@ def test_manual_reset_succeeds_when_cancellation_confirmed(monkeypatch, tmp_path
     app._manual_reset("rtlsdr_watchdog_reset", {}, {})
 
     assert app.state["restart_attempts"] == 0
+
+
+def test_manual_reset_refused_when_cancel_timer_returns_false(monkeypatch, tmp_path):
+    # AppDaemon's cancel_timer can return False (no exception) when it
+    # couldn't cancel - e.g. the callback is already executing. That must be
+    # treated exactly like a raised exception, not silently as success.
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    app.cancel_timer = Mock(return_value=False)
+
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})
+
+    assert app.state["restart_attempts"] == 3
+    assert app._pending_shutdown_handle is not None
+    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
+    assert any("refused" in t.lower() for t in titles)
+
+
+def test_manual_reset_notifies_when_state_does_not_persist(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app._save_state = Mock(return_value=False)
+
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})
+
+    # The in-memory reset still happens (fail-safe: reverts to the OLD, more
+    # cautious state on reload, never less cautious) but is reported as not
+    # durable rather than silently claimed as a clean reset.
+    assert app.state["restart_attempts"] == 0
+    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
+    assert any("did not persist" in t.lower() for t in titles)
     assert app._pending_shutdown_handle is None
 
 
