@@ -523,7 +523,25 @@ input_number:
     mode: box
     step: 0.1
     unit_of_measurement: mm/d
-    initial: 0.5
+    # Calibrated against real post-2026-09-16-refill data. The original 0.5
+    # default was picked as a generic noise floor before any real
+    # depletion data existed. Once the sensor pipeline settled, genuine
+    # depletion windows clustered at 0.79-1.04mm/day (24h/48h/72h), but the
+    # 7-day window -- the longest, most independent, most trustworthy
+    # estimate once it became time-eligible -- came in at 0.448mm/day,
+    # just under the old 0.5 floor. That silently discarded the best
+    # available evidence for exactly the wrong reason: this household's
+    # real long-run rate legitimately runs close to what the floor assumed
+    # was noise. Lowered to 0.2: comfortably above the pure-settling noise
+    # observed right after a refill (which ran negative, -0.05 to
+    # -0.32mm/day, from the fresh pile still compacting), but low enough
+    # to admit genuinely slow-but-real depletion instead of excluding it.
+    #
+    # NOTE: this `initial:` only seeds a brand-new helper -- it does NOT
+    # retroactively update the live entity in an existing HA install. The
+    # live value was set directly via input_number.set_value when this was
+    # calibrated.
+    initial: 0.2
 
 ########################
 # Input Select
@@ -686,13 +704,21 @@ template:
             {{ none }}
           {% endif %}
 
+      # The float(default=...) fallbacks below only apply while
+      # input_number.water_softener_minimum_depletion_rate_mm_per_day is
+      # transiently unknown/unavailable (e.g. HA startup before helpers
+      # load). Keep in sync with that input_number's calibrated value
+      # (currently 0.2) -- a stale fallback here would silently exclude
+      # genuine low-but-real depletion windows during that window, the
+      # same class of bug caught in review for the low-salt threshold's
+      # fallbacks above.
       - name: Water Softener Forecast Rate
         unique_id: water_softener_forecast_rate
         icon: mdi:chart-line
         state_class: measurement
         unit_of_measurement: mm/d
         availability: >-
-          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.5) %}
+          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.2) %}
           {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
           {% set include_7d = last_refill_at <= 0 or as_timestamp(now()) - last_refill_at >= 7 * 24 * 60 * 60 %}
           {% set candidates = [
@@ -704,7 +730,7 @@ template:
           {% set valid_rates = candidates | select('number') | select('gt', minimum_rate) | list %}
           {{ valid_rates | count >= 2 }}
         state: >-
-          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.5) %}
+          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.2) %}
           {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
           {% set include_7d = last_refill_at <= 0 or as_timestamp(now()) - last_refill_at >= 7 * 24 * 60 * 60 %}
           {% set candidates = [
