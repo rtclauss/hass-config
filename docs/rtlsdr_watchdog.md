@@ -114,6 +114,20 @@ that never happened — with no fresh reading ever coming (the fault is real)
 and no automatic way out but a manual reset. The same ordering applies to
 counting a restart attempt against `max_restart_attempts`.
 
+**Clearing the lock requires a genuine meter reading, not just fresh
+metadata.** When Home Assistant boots after the Proxmox power-cycle, its MQTT
+integration can restore or replay retained state, which bumps the reading/
+last-seen entities' `last_updated` without the meter having actually
+produced anything new — making a still-broken dongle briefly look "fresh" by
+delivery metadata alone. So the general staleness check (used everywhere
+else, including ordinary restart-only recovery) is not trusted here: clearing
+`shutdown_pending_verification` specifically requires the last-seen entity's
+own **state value** (the meter's self-reported reading timestamp, embedded in
+the payload — immune to replay, since a replayed retained message still
+carries its original embedded timestamp) to be strictly newer than
+`last_shutdown_ts`. Until that's true, the watchdog stays "pending
+verification" even if the sensors otherwise look fresh.
+
 ## State and resetting it
 
 Persisted as JSON in `appdaemon/apps/.rtlsdr_watchdog_state.json`
@@ -146,6 +160,16 @@ fixing the dongle by hand — while a shutdown notice is still counting down —
 would clear the safety lock without stopping the queued shutdown, so the
 host would still go down, and after boot nothing would block a further
 automatic shutdown either.
+
+**If that cancellation can't be confirmed, the reset itself is refused** (and
+notified) rather than proceeding anyway. An unconfirmed cancellation means
+the queued action may have already fired — in which case the state it just
+legitimately set (a real dispatched shutdown's cooldown/lock) must not be
+wiped — or may still be about to fire, in which case clearing the lock now
+would leave it unguarded. Either way, wiping state on an uncertain
+cancellation is unsafe, so `_manual_reset` requires every pending action to
+be confirmed cancelled before it touches state at all. Check whether the
+add-on restarted or the host is shutting down before retrying the reset.
 
 To clear state by hand after a manual fix, fire the `rtlsdr_watchdog_reset`
 event from Developer Tools → Actions (or delete the state file directly on

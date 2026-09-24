@@ -501,12 +501,71 @@ def test_recovery_resets_restart_and_shutdown_state(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path)
     app.state["restart_attempts"] = 2
     app.state["shutdown_pending_verification"] = True
+    app.state["last_shutdown_ts"] = (app._now() - timedelta(hours=1)).isoformat()
+    app._verify_recovery = Mock(return_value=True)
     _prep_for_check(app, stale=False, logs=None)
 
     app.check({})
 
     assert app.state["restart_attempts"] == 0
     assert app.state["shutdown_pending_verification"] is False
+
+
+def test_recovery_without_verified_shutdown_still_clears_restart_only_state(monkeypatch, tmp_path):
+    # No shutdown ever happened (restart_attempts only) - _verify_recovery's
+    # stricter check must not block ordinary restart-state recovery.
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 2
+    app.state["shutdown_pending_verification"] = False
+    _prep_for_check(app, stale=False, logs=None)
+
+    app.check({})
+
+    assert app.state["restart_attempts"] == 0
+
+
+# -- shutdown recovery must verify an actual meter reading (Codex P1) -----------
+
+
+def test_verify_recovery_false_when_no_shutdown_on_record(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    assert app._verify_recovery(None) is False
+
+
+def test_verify_recovery_false_when_meter_value_unchanged(monkeypatch, tmp_path):
+    # Simulates MQTT retained-state replay: last_seen's own state value is
+    # still the OLD (pre-shutdown) reading, even though metadata may look
+    # fresh elsewhere - _verify_recovery only looks at the state value.
+    module, app = _make_app(monkeypatch, tmp_path)
+    shutdown_ts = app._now() - timedelta(hours=1)
+    old_reading = shutdown_ts - timedelta(hours=2)
+    app.get_state = Mock(return_value=old_reading.isoformat())
+    assert app._verify_recovery(shutdown_ts) is False
+
+
+def test_verify_recovery_true_when_meter_value_advances_past_shutdown(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    shutdown_ts = app._now() - timedelta(hours=1)
+    new_reading = app._now()
+    app.get_state = Mock(return_value=new_reading.isoformat())
+    assert app._verify_recovery(shutdown_ts) is True
+
+
+def test_check_does_not_clear_pending_verification_on_mqtt_replay(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app.state["shutdown_pending_verification"] = True
+    shutdown_ts = app._now() - timedelta(hours=1)
+    app.state["last_shutdown_ts"] = shutdown_ts.isoformat()
+    # last_updated looks fresh (stale=False from _prep_for_check), but the
+    # meter's own reported reading is still from before the shutdown.
+    app._verify_recovery = Mock(return_value=False)
+    _prep_for_check(app, stale=False, logs=None)
+
+    app.check({})
+
+    assert app.state["shutdown_pending_verification"] is True
+    assert app.state["restart_attempts"] == 3
 
 
 # -- persistence ----------------------------------------------------------------
@@ -646,6 +705,34 @@ def test_manual_reset_cancel_failure_is_logged_not_raised(monkeypatch, tmp_path)
 
     app._manual_reset("rtlsdr_watchdog_reset", {}, {})  # must not raise
 
+    # Cancellation could not be confirmed, so the handle is kept (not
+    # cleared) and the failure is surfaced, not silently swallowed.
+    assert app._pending_shutdown_handle is not None
+
+
+def test_manual_reset_refused_when_cancellation_cannot_be_confirmed(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    app.cancel_timer = Mock(side_effect=Exception("no such timer"))
+
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})
+
+    # State must NOT be wiped when we can't confirm the queued action was
+    # actually stopped - it may already reflect a real dispatched action.
+    assert app.state["restart_attempts"] == 3
+    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
+    assert any("refused" in t.lower() for t in titles)
+
+
+def test_manual_reset_succeeds_when_cancellation_confirmed(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+
+    app._manual_reset("rtlsdr_watchdog_reset", {}, {})
+
+    assert app.state["restart_attempts"] == 0
     assert app._pending_shutdown_handle is None
 
 

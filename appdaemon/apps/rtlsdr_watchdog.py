@@ -297,6 +297,24 @@ class RtlSdrWatchdog(hass.Hass):
         except ValueError:
             return None
 
+    def _meter_reported_reading_at(self):
+        """The meter's own self-reported reading time: the last-seen
+        entity's STATE value (the timestamp embedded in the MQTT payload
+        itself), not `last_updated`/`last_changed` delivery metadata.
+
+        This is the only signal trustworthy enough to verify a shutdown
+        actually fixed the fault (see _verify_recovery) - HA can restore or
+        replay retained MQTT state on boot, which bumps `last_updated`
+        without the meter having produced anything new, but a replayed
+        retained message still carries its ORIGINAL embedded timestamp, so
+        this only ever advances on a genuine new reading.
+        """
+        try:
+            state_value = self.get_state(self.last_seen_entity)
+        except Exception:  # noqa: BLE001
+            state_value = None
+        return self._parse_ts(state_value)
+
     def _last_reading_at(self):
         candidates = []
         for entity, attribute in (
@@ -311,11 +329,7 @@ class RtlSdrWatchdog(hass.Hass):
             if ts is not None:
                 candidates.append(ts)
 
-        try:
-            state_value = self.get_state(self.last_seen_entity)
-        except Exception:  # noqa: BLE001
-            state_value = None
-        ts = self._parse_ts(state_value)
+        ts = self._meter_reported_reading_at()
         if ts is not None:
             candidates.append(ts)
 
@@ -330,6 +344,23 @@ class RtlSdrWatchdog(hass.Hass):
         if last_restart_ts is not None and last <= last_restart_ts:
             return True
         return (now - last) >= self.stale_after
+
+    def _verify_recovery(self, last_shutdown_ts):
+        """True only if the meter itself reported a reading after the shutdown.
+
+        Gates clearing shutdown_pending_verification. The general staleness
+        check above deliberately trusts `last_updated` (delivery metadata) as
+        a *freshness* signal, which is fine for ordinary detection - but it
+        is not trustworthy evidence that a Proxmox power-cycle actually fixed
+        a USB fault, since MQTT retained-state restore/replay on HA boot can
+        make an old, unfixed-fault payload look fresh. Recovery verification
+        needs the stronger signal: the meter's own embedded reading
+        timestamp, strictly newer than when the shutdown was dispatched.
+        """
+        if last_shutdown_ts is None:
+            return False
+        reading_ts = self._meter_reported_reading_at()
+        return reading_ts is not None and reading_ts > last_shutdown_ts
 
     def _load_state(self):
         try:
@@ -390,13 +421,35 @@ class RtlSdrWatchdog(hass.Hass):
         # down a moment later - and with no persisted lock afterward (state
         # was just reset), nothing would block a further automatic shutdown
         # either.
-        self._cancel_pending_actions()
+        #
+        # If cancellation can't be confirmed, the queued callback may have
+        # already fired (and legitimately set real shutdown/cooldown state)
+        # or may still be about to fire - either way, wiping state now would
+        # be unsafe, so the reset itself is refused rather than silently
+        # logging the failure and proceeding anyway.
+        if not self._cancel_pending_actions():
+            self._notify(
+                "RTL-SDR watchdog: reset refused, could not confirm cancellation",
+                "A restart or shutdown was already queued and its cancellation could not "
+                "be confirmed. Refusing to clear state - it may already reflect a real "
+                "action, or the queued action may still fire. Check whether the add-on "
+                "restarted or the host is shutting down before retrying the reset.",
+                key="reset_cancel_failed",
+            )
+            return
+
         self.state = dict(_DEFAULT_STATE)
         self._save_state()
         self.unhealthy_cycles = 0
         self.log("rtlsdr_watchdog: state manually reset via rtlsdr_watchdog_reset event")
 
     def _cancel_pending_actions(self):
+        """Cancel any queued restart/shutdown. Returns True only if every
+        pending action was confirmed cancelled (or none was pending) -
+        callers must not proceed with anything that assumes a queued action
+        won't still fire otherwise.
+        """
+        all_confirmed = True
         for attr in ("_pending_restart_handle", "_pending_shutdown_handle"):
             handle = getattr(self, attr, None)
             if handle is None:
@@ -408,7 +461,10 @@ class RtlSdrWatchdog(hass.Hass):
                     "rtlsdr_watchdog: could not cancel pending action ({}): {}".format(attr, err),
                     level="WARNING",
                 )
+                all_confirmed = False
+                continue
             setattr(self, attr, None)
+        return all_confirmed
 
     # -- decision logic -------------------------------------------------------
 
@@ -439,7 +495,17 @@ class RtlSdrWatchdog(hass.Hass):
             return
 
         if not stale:
-            if self.state.get("restart_attempts") or self.state.get("shutdown_pending_verification"):
+            pending_verification = self.state.get("shutdown_pending_verification")
+            if pending_verification:
+                last_shutdown_ts = self._parse_ts(self.state.get("last_shutdown_ts"))
+                if not self._verify_recovery(last_shutdown_ts):
+                    # "Fresh" per last_updated, but the meter's own
+                    # self-reported reading hasn't actually advanced past the
+                    # shutdown - likely MQTT restore/replay on HA boot, not a
+                    # genuine fix. Stay pending; do NOT clear the lock.
+                    self.unhealthy_cycles = 0
+                    return
+            if self.state.get("restart_attempts") or pending_verification:
                 self._notify(
                     "RTL-SDR watchdog: recovered",
                     "Gas meter readings are fresh again. Clearing restart/shutdown state.",
