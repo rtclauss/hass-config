@@ -225,3 +225,29 @@ def test_refill_reset_threshold_calibrated_between_empty_and_full_baselines() ->
     observed_full_reading = 172
 
     assert observed_full_reading < refill_reset_threshold < low_salt_threshold
+
+
+def test_minimum_depletion_rate_and_forecast_fallbacks_stay_in_sync() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # Regression guard: calibrated against real post-refill depletion data
+    # (2026-09-24 check-in). Genuine depletion windows clustered at
+    # 0.79-1.04mm/day, but the 7-day window -- the longest, most
+    # independent estimate -- came in at 0.448mm/day, just under the old
+    # 0.5 noise floor, silently discarding the best available evidence.
+    # 0.2 admits genuinely slow-but-real depletion while staying above the
+    # pure post-refill settling noise observed (-0.05 to -0.32mm/day).
+    assert "initial: 0.2" in text
+
+    # The forecast_rate template's float(default=...) fallbacks (for the
+    # brief window where the input_number is transiently unknown/
+    # unavailable) must track the same calibrated value -- a stale
+    # fallback here would silently exclude real depletion during that
+    # window, the same class of bug caught in review for the low-salt
+    # threshold's fallbacks.
+    fallback_count = text.count(
+        "states('input_number.water_softener_minimum_depletion_rate_mm_per_day') "
+        "| float(default=0.2)"
+    )
+    assert fallback_count == 2
+    assert "float(default=0.5)" not in text
