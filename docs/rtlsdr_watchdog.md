@@ -1,0 +1,155 @@
+# RTL-SDR / gas meter watchdog
+
+`appdaemon/apps/rtlsdr_watchdog.py` (app `rtlsdr_watchdog`, class
+`RtlSdrWatchdog`) watches the `rtlamr2mqtt` add-on (slug
+`6713e36e_rtlamr2mqtt`), which reads the gas meter over an RTL-SDR USB dongle
+passed through to the Proxmox VM running Home Assistant, and publishes
+`sensor.raw_house_gas_meter_reading` / `sensor.raw_house_gas_meter_last_seen`
+over MQTT.
+
+## Why a power-cycle, not just a restart
+
+A USB/kernel-level fault on the passed-through dongle can't always be cleared
+by restarting the add-on container — sometimes only a full power-cycle of the
+Proxmox host clears it. This watchdog tries the cheap fix first (restarting
+the add-on) and only escalates to shutting down Proxmox
+(`rest_command.proxmox_shutdown`, defined in `packages/zigbee_zwave.yaml`)
+after that's been tried and failed repeatedly.
+
+This mirrors two other watchdogs that can shut the same host down:
+`appdaemon/apps/reboot.py` (reboots the HAOS host on LAN unreachability) and
+`packages/z2m_lifecycle.yaml`'s `shutdown_proxmox_z2m_unavailable` automation
+(restarts Zigbee2MQTT, then shuts down Proxmox). All three are independent,
+with their own cooldowns.
+
+## The two signals, and why both are required
+
+A cycle only counts as "unhealthy" when **both** hold:
+
+1. **Staleness** — no new gas-meter reading for `stale_after_minutes`
+   (default 60; the add-on itself reads every ~10–20 min via
+   `general.sleep_for: 600`). Computed as the *newest* of the reading
+   sensor's `last_updated`, the last-seen sensor's `last_updated`, and the
+   last-seen sensor's *state value* parsed as a timestamp — **not** the
+   last-seen state value alone, which is the meter's own embedded timestamp
+   and can look "stale" even when MQTT delivery is current.
+2. **A known error pattern** in the add-on's own logs (fetched fresh each
+   cycle — see "How logs are read" below).
+
+Either alone is a no-op. So is anything the app can't verify — a missing
+sensor, unreadable logs, no pattern match. This is deliberate: a broken probe
+that always reports failure is exactly what caused `reboot.py`'s two
+reboot-loop incidents (2026-09-01, 2026-09-08). An unhealthy result also has
+to repeat for `confirm_cycles` (default 2) **consecutive** checks — any
+clean or "can't tell" check in between resets the counter to zero.
+
+## Pattern tiers
+
+- **`USB_FAULT_PATTERNS`** — hard libusb/device-level strings
+  (`usb_claim_interface error`, `No supported devices found`, `rtl_tcp:
+  error`, etc.). A single occurrence is immediate USB-fault-tier evidence —
+  this tier is what's allowed to eventually justify a Proxmox shutdown.
+- **Death-loop burst** — the add-on already respawns its own `rtlamr`
+  subprocess internally on death (`WARNING: rtlamr process died (exit code:
+  N), attempting restart` — a real example seen live on 2026-09-24, caused
+  by an i/o timeout talking to its local `rtl_tcp` on 127.0.0.1:1234).
+  Supervisor's own add-on `watchdog: true` never sees this since the add-on
+  container itself stays "started" throughout. A couple of these lines is
+  normal jitter and is ignored entirely; `death_loop_min_count` or more
+  occurrences (default 5) in one fetched log tail is promoted to a
+  USB-fault-tier hit, on the theory that if the add-on's own retries aren't
+  keeping it stable, only a power-cycle will.
+- **`GENERIC_ERROR_PATTERNS`** — `Errno`, tracebacks, "Connection refused".
+  These can justify restarting the add-on but can **never** justify a
+  Proxmox shutdown on their own (e.g. `Errno 111` also fires when EMQX
+  restarts, which has nothing to do with the USB dongle).
+
+## The escalation ladder
+
+1. **Notify** at every stage, before acting.
+2. **Restart the add-on** (`hassio/addon_restart`) up to `max_restart_attempts`
+   times (default 3). After each attempt, evaluation is suppressed for
+   `restart_settle_minutes` (default 25, comfortably above the add-on's own
+   read cycle) so the restarted container gets a real chance to read again.
+3. **Shut down Proxmox** (`rest_command/proxmox_shutdown`) only once restart
+   attempts are exhausted, and only when **all** of:
+   - the evidence includes a USB-fault-tier hit (generic-only errors never
+     shut down the host, they just stop the ladder with a notification);
+   - at least `min_shutdown_interval_hours` (default 24) have passed since
+     the last automatic shutdown;
+   - no prior shutdown is still "pending verification" (see below).
+
+Rough timing with the defaults: ~65 minutes to the first restart attempt (60
+min stale + 2 checks 5 min apart), then up to 3×~25 minute settle windows —
+so roughly 2.3 hours minimum before any shutdown is even possible, and only
+then if the fault is USB-specific.
+
+**Recovery**: any non-stale check clears `restart_attempts` and
+`shutdown_pending_verification` (keeping `last_shutdown_ts` — the cooldown
+still applies) and sends a "recovered" notification.
+
+## The loop-breaker: shutdown-pending-verification
+
+Unlike `reboot.py`, a Proxmox shutdown sets
+`shutdown_pending_verification = true` in the persisted state file. That flag
+blocks **any further automatic shutdown**, even after the cooldown expires,
+until a fresh reading is actually seen. A power-cycle that didn't fix the
+fault can never trigger a second automatic shutdown by itself — a human has
+to look at it.
+
+## State and resetting it
+
+Persisted as JSON in `appdaemon/apps/.rtlsdr_watchdog_state.json`
+(`restart_attempts`, `last_restart_ts`, `last_shutdown_ts`,
+`shutdown_pending_verification`) so counters survive an AppDaemon restart.
+This file is excluded from `scripts/appdaemon_sync.py`'s pull/push (see
+`RSYNC_EXCLUDES`) — it's live-only state, never checked in or copied around.
+
+To clear it by hand after a manual fix, fire the `rtlsdr_watchdog_reset`
+event from Developer Tools → Actions (or delete the state file directly on
+the add-on's filesystem).
+
+## How logs are read
+
+There's no `hassio.addon_stdout`/log-read *service* — Supervisor exposes
+logs only over its REST API. The AppDaemon add-on's own permissions are
+`hassio_api: false` / `hassio_role: default`, so it can't call the raw
+Supervisor API for another add-on's logs directly. Instead it goes through
+Core's hassio proxy (`homeassistant_api: true` gives it that), using the same
+`SUPERVISOR_TOKEN` env var already used for the AppDaemon HASS plugin:
+
+```
+GET http://supervisor/core/api/hassio/addons/6713e36e_rtlamr2mqtt/logs
+Authorization: Bearer $SUPERVISOR_TOKEN
+```
+
+If that route ever gets refused (401/403), set `ha_token` in `apps.yaml` to
+an admin long-lived access token stored in gitignored `secrets.yaml`
+(`rtlsdr_watchdog_ha_token` — never commit the value) and the app will fall
+back to `http://homeassistant:8123/api/hassio/addons/<slug>/logs` with that
+token instead. Any fetch failure (timeout, non-200, network error) is
+treated as "can't tell" — a no-op, never an escalation.
+
+## Tuning
+
+All thresholds are `apps.yaml` args under the `rtlsdr_watchdog:` entry — see
+that file for the full list with current values and inline comments. The
+notable ones: `dry_run`, `stale_after_minutes`, `confirm_cycles`,
+`death_loop_min_count`, `max_restart_attempts`, `restart_settle_minutes`,
+`min_shutdown_interval_hours`.
+
+## Dry-run → live
+
+The app ships with `dry_run: true`. In dry-run it walks the full decision and
+escalation ladder and notifies at every stage (titles prefixed `[DRY RUN]`),
+but never calls `hassio/addon_restart` or `rest_command/proxmox_shutdown`.
+Only flip `dry_run: false` in `apps.yaml` after watching real dry-run
+notifications for a while — ideally through at least one real fault, given
+the gas meter has already shown this failure mode live. Leave
+`min_shutdown_interval_hours` and the pending-verification lock in place
+regardless; they're the safety net once it's live.
+
+Testing: `tests/test_appdaemon_rtlsdr_watchdog.py` covers the pattern
+matching, staleness math, the AND/debounce decision logic, the escalation
+ladder ordering, shutdown gating, dry-run behavior, and state persistence.
+Run with `uv run --with pytest pytest`.
