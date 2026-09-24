@@ -333,13 +333,32 @@ settling down - see the daily reboot section below).
 ## Daily preventive reboot
 
 `deploy/systemd/water-meter-daily-reboot.service` / `.timer` reboots the Pi
-once a day at 3am local (`OnCalendar=*-*-* 03:00:00`, `RandomizedDelaySec=5min`).
-This is not a targeted fix for anything specific - the camera-stuck watchdog
-already self-heals that failure mode on its own - just standard preventive
-hygiene for an always-on embedded box (clears slow memory/fd leaks,
-refreshes the DHCP lease, applies pending kernel/driver updates that need a
-reboot). A one-shot `water-meter-reader.service` run that gets interrupted
-mid-cycle by the reboot just means one skipped/late reading, not corruption.
+roughly once a day (`OnBootSec=24h`, `OnUnitActiveSec=24h` - monotonic,
+**not** `OnCalendar`, see below for why). This is not a targeted fix for
+anything specific - the camera-stuck watchdog already self-heals that
+failure mode on its own - just standard preventive hygiene for an always-on
+embedded box (clears slow memory/fd leaks, refreshes the DHCP lease, applies
+pending kernel/driver updates that need a reboot). A one-shot
+`water-meter-reader.service` run that gets interrupted mid-cycle by the
+reboot just means one skipped/late reading, not corruption.
+
+**Why monotonic, not `OnCalendar=*-*-* 03:00:00`:** this Pi has no
+battery-backed RTC, so every boot starts with a stale pre-NTP clock
+(observed defaulting to `2026-07-27`, the firmware build date) until NTP
+corrects it. An `OnCalendar` timer computes its "next fire" deadline using
+whatever clock is active when it starts - when NTP later jumps the clock
+forward by weeks/months in one step, that deadline is suddenly in the past
+relative to corrected time, so systemd fires it immediately. This caused
+**two separate real incidents** (2026-09-23 and -24), both requiring a
+manual power cycle to break a ~50-second reboot loop: the first with
+`Persistent=true` (explicit "missed run" catch-up), the second showing that
+removing `Persistent=true` alone wasn't sufficient - the same clock-jump
+race fires the timer regardless. `OnBootSec`/`OnUnitActiveSec` are computed
+relative to elapsed monotonic time since boot, never wall-clock time,
+which sidesteps this whole class of bug - the same pattern
+`water-meter-reader.timer` already uses. Trade-off: reboots land at a
+rolling time instead of a fixed 3am, which is a fine price for never
+re-hitting this.
 
 Enable on the Pi with:
 
@@ -381,8 +400,8 @@ sudo systemctl enable --now water-meter-daily-reboot.timer
     workstation with a display, using `cv2.selectROI`) subcommands.
 - `deploy/systemd/water-meter-reader.service` / `.timer` - the oneshot
   service + timer, mirroring `deploy/systemd/inky-owner-suite.service`.
-- `deploy/systemd/water-meter-daily-reboot.service` / `.timer` - daily 3am
-  preventive reboot, see "Daily preventive reboot" above.
+- `deploy/systemd/water-meter-daily-reboot.service` / `.timer` - ~daily
+  monotonic preventive reboot, see "Daily preventive reboot" above.
 - `packages/water_meter.yaml` - HA-side staleness sensor + alert automation.
 - `tests/test_water_meter_*.py` - unit tests for the pure logic (sanity gate,
   config parsing, ROI cropping) and the package YAML; hardware/network paths
