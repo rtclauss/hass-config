@@ -69,10 +69,16 @@ import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import hassapi as hass
 
 ADDON_SLUG_DEFAULT = "6713e36e_rtlamr2mqtt"
+# The add-on's own wrapper-script timestamps (`[2026-09-24 09:38:00,059] ...`)
+# carry no offset; they're the container's local time, which matches HA's
+# configured time_zone (appdaemon/appdaemon.yaml). Used only to time-correlate
+# log evidence with the current stale period - see _match_logs().
+ADDON_LOG_LOCAL_TZ = ZoneInfo("America/Chicago")
 STATE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), ".rtlsdr_watchdog_state.json"
 )
@@ -107,6 +113,13 @@ GENERIC_ERROR_PATTERNS = (
 
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
+# Two timestamp formats appear in the add-on's log, both anchored at line
+# start (after ANSI stripping): the wrapper script's own naive local-time
+# bracket ("[2026-09-24 09:38:00,059] ...") and the rtlamr binary's own
+# tz-aware logfmt line ("time=2026-09-24T09:38:00.058-05:00 level=...").
+LINE_TS_BRACKET_RE = re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+\]")
+LINE_TS_LOGFMT_RE = re.compile(r"^\s*time=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:\d{2})")
+
 _DEFAULT_STATE = {
     "restart_attempts": 0,
     "last_restart_ts": None,
@@ -126,11 +139,18 @@ class RtlSdrWatchdog(hass.Hass):
         self.last_seen_entity = self.args.get(
             "last_seen_entity", "sensor.raw_house_gas_meter_last_seen"
         )
-        self.logs_url = self.args.get(
-            "logs_url",
-            "http://supervisor/core/api/hassio/addons/{}/logs".format(self.addon_slug),
-        )
         self.ha_token = self.args.get("ha_token")
+        # The Supervisor-proxy route only accepts SUPERVISOR_TOKEN. If the
+        # operator has switched to the ha_token fallback (per
+        # docs/rtlsdr_watchdog.md), default to the matching HA Core REST
+        # endpoint too - unless logs_url was set explicitly, which always
+        # wins regardless of which token is in play.
+        default_logs_url = (
+            "http://homeassistant:8123/api/hassio/addons/{}/logs".format(self.addon_slug)
+            if self.ha_token
+            else "http://supervisor/core/api/hassio/addons/{}/logs".format(self.addon_slug)
+        )
+        self.logs_url = self.args.get("logs_url", default_logs_url)
 
         self.check_interval = int(self.args.get("check_interval_minutes", 5)) * 60
         self.stale_after = timedelta(minutes=float(self.args.get("stale_after_minutes", 60)))
@@ -210,7 +230,47 @@ class RtlSdrWatchdog(hass.Hass):
         lines = text.splitlines()[-self.log_tail_lines:]
         return "\n".join(lines)
 
-    def _match_logs(self, text):
+    def _line_timestamp(self, line):
+        """Parse a log line's own timestamp, tz-aware. None if it has none."""
+        match = LINE_TS_LOGFMT_RE.match(line)
+        if match:
+            return self._parse_ts(match.group(1))
+        match = LINE_TS_BRACKET_RE.match(line)
+        if match:
+            try:
+                naive = datetime.strptime(match.group(1), "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                return None
+            return naive.replace(tzinfo=ADDON_LOG_LOCAL_TZ)
+        return None
+
+    def _relevant_log_text(self, text, since):
+        """Drop log lines that predate `since` (the last known-good reading).
+
+        Without this, a USB error that scrolled into view during a past,
+        already-recovered outage can sit in the fetched tail indefinitely and
+        keep matching on every later, unrelated stale period - see the
+        docstring's "temporally correlated" requirement. A line with no
+        timestamp of its own (e.g. an indented traceback continuation)
+        inherits the most recently seen timestamp, so multi-line evidence
+        blocks stay attached to the event that produced them.
+        """
+        if since is None:
+            return text
+        kept = []
+        current_ts = None
+        for line in text.splitlines():
+            ts = self._line_timestamp(line)
+            if ts is not None:
+                current_ts = ts
+            if current_ts is not None and current_ts >= since:
+                kept.append(line)
+        return "\n".join(kept)
+
+    def _match_logs(self, text, since=None):
+        if not text:
+            return [], []
+        text = self._relevant_log_text(text, since)
         if not text:
             return [], []
         lowered = text.lower()
@@ -257,8 +317,7 @@ class RtlSdrWatchdog(hass.Hass):
             return None
         return max(c if c.tzinfo else c.replace(tzinfo=timezone.utc) for c in candidates)
 
-    def _is_stale(self, now):
-        last = self._last_reading_at()
+    def _is_stale(self, now, last):
         if last is None:
             return None
         last_restart_ts = self._parse_ts(self.state.get("last_restart_ts"))
@@ -277,11 +336,28 @@ class RtlSdrWatchdog(hass.Hass):
         return state
 
     def _save_state(self):
+        """Persist self.state to disk. Returns True on success.
+
+        In dry-run, state changes stay in memory only (so the ladder still
+        progresses realistically within one dry-run session) but are never
+        written - otherwise simulated restart/shutdown counters would still
+        be sitting on disk the moment dry_run is flipped to False, making the
+        watchdog think restarts are already exhausted or a shutdown is
+        already pending verification before it has ever taken a real action.
+        """
+        if self.dry_run:
+            self.log(
+                "rtlsdr_watchdog: [DRY RUN] not persisting state: {}".format(self.state),
+                level="DEBUG",
+            )
+            return True
         try:
             with open(STATE_FILE, "w") as handle:
                 json.dump(self.state, handle)
+            return True
         except OSError as err:
             self.log("rtlsdr_watchdog: could not write {}: {}".format(STATE_FILE, err), level="WARNING")
+            return False
 
     def _notify(self, title, message, key=None):
         if key is not None:
@@ -320,7 +396,8 @@ class RtlSdrWatchdog(hass.Hass):
             self.log("rtlsdr_watchdog: in post-restart settle window, skipping", level="DEBUG")
             return
 
-        stale = self._is_stale(now)
+        last_reading_at = self._last_reading_at()
+        stale = self._is_stale(now, last_reading_at)
 
         if stale is None:
             self._notify(
@@ -356,7 +433,7 @@ class RtlSdrWatchdog(hass.Hass):
             self.unhealthy_cycles = 0
             return
 
-        usb_hits, generic_hits = self._match_logs(logs)
+        usb_hits, generic_hits = self._match_logs(logs, since=last_reading_at)
         if not usb_hits and not generic_hits:
             self._notify(
                 "RTL-SDR watchdog: gas meter stale, no known error in logs",
@@ -448,7 +525,22 @@ class RtlSdrWatchdog(hass.Hass):
 
         self.state["last_shutdown_ts"] = self._now().isoformat()
         self.state["shutdown_pending_verification"] = True
-        self._save_state()
+        if not self._save_state():
+            # Persisting the lock failed - shutting down anyway would mean
+            # a fresh boot loads the OLD state (no cooldown, no pending-
+            # verification flag) and could auto-shutdown again immediately.
+            # Refuse the destructive action instead.
+            self.state["last_shutdown_ts"] = last_shutdown_ts.isoformat() if last_shutdown_ts else None
+            self.state["shutdown_pending_verification"] = False
+            self._notify(
+                "RTL-SDR watchdog: shutdown aborted, safety lock not persisted",
+                "Refusing to shut down Proxmox: the pending-verification/cooldown state "
+                "could not be written to disk, and shutting down without it risks an "
+                "unguarded repeat shutdown after power-on. Check the AppDaemon add-on's "
+                "filesystem.",
+                key="shutdown_state_write_failed",
+            )
+            return
 
         self._notify(
             "RTL-SDR watchdog: shutting down Proxmox host",

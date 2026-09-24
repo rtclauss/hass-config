@@ -105,7 +105,23 @@ Persisted as JSON in `appdaemon/apps/.rtlsdr_watchdog_state.json`
 This file is excluded from `scripts/appdaemon_sync.py`'s pull/push (see
 `RSYNC_EXCLUDES`) — it's live-only state, never checked in or copied around.
 
-To clear it by hand after a manual fix, fire the `rtlsdr_watchdog_reset`
+**In dry-run, state changes are never written to this file.** The ladder
+still progresses in memory within a single dry-run session (so you can watch
+a full notify → restart → shutdown sequence play out in the logs/
+notifications), but nothing is persisted. This is deliberate: if simulated
+restart/shutdown counters were saved to disk, the moment you flipped
+`dry_run: false` the app would load state showing restarts already exhausted
+(or a shutdown already "pending verification") and refuse to take the real
+action it was just armed to take. Flipping `dry_run: false` always starts the
+real ladder from a clean slate.
+
+If persisting the shutdown-pending-verification lock ever fails (e.g. a
+read-only or full filesystem), the app **aborts the shutdown** rather than
+proceeding — shutting down without that lock durably written would mean a
+fresh boot loads stale state and could trigger a second automatic shutdown
+immediately, defeating the loop-breaker.
+
+To clear state by hand after a manual fix, fire the `rtlsdr_watchdog_reset`
 event from Developer Tools → Actions (or delete the state file directly on
 the add-on's filesystem).
 
@@ -125,10 +141,21 @@ Authorization: Bearer $SUPERVISOR_TOKEN
 
 If that route ever gets refused (401/403), set `ha_token` in `apps.yaml` to
 an admin long-lived access token stored in gitignored `secrets.yaml`
-(`rtlsdr_watchdog_ha_token` — never commit the value) and the app will fall
-back to `http://homeassistant:8123/api/hassio/addons/<slug>/logs` with that
-token instead. Any fetch failure (timeout, non-200, network error) is
-treated as "can't tell" — a no-op, never an escalation.
+(`rtlsdr_watchdog_ha_token` — never commit the value). Setting `ha_token`
+alone is enough: the app automatically switches `logs_url` to
+`http://homeassistant:8123/api/hassio/addons/<slug>/logs` (the Supervisor
+proxy route only accepts `SUPERVISOR_TOKEN`, not an HA access token) — no
+need to also set `logs_url` by hand, unless you want to override it to
+something else entirely, which always takes precedence. Any fetch failure
+(timeout, non-200, network error) is treated as "can't tell" — a no-op,
+never an escalation.
+
+Log evidence is also time-correlated to the current outage: only lines
+timestamped after the last known-good reading count as evidence (parsing
+both the wrapper script's local-time bracket timestamps and the `rtlamr`
+binary's own tz-aware `time=...` lines). Without this, a USB error line that
+scrolled into view during an earlier, already-recovered outage could sit in
+the fetched tail and keep matching on a later, unrelated stale period.
 
 ## Tuning
 

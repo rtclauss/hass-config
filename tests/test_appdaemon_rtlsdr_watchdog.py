@@ -152,17 +152,75 @@ def test_stale_boundary(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"stale_after_minutes": 60})
     now = datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)
 
-    app._last_reading_at = Mock(return_value=now - timedelta(minutes=59))
-    assert app._is_stale(now) is False
-
-    app._last_reading_at = Mock(return_value=now - timedelta(minutes=60))
-    assert app._is_stale(now) is True
+    assert app._is_stale(now, now - timedelta(minutes=59)) is False
+    assert app._is_stale(now, now - timedelta(minutes=60)) is True
 
 
 def test_is_stale_none_when_no_reading(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path)
-    app._last_reading_at = Mock(return_value=None)
-    assert app._is_stale(datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc)) is None
+    assert app._is_stale(datetime(2026, 9, 24, 12, 0, tzinfo=timezone.utc), None) is None
+
+
+# -- log evidence time-correlation (Codex P1: stale evidence from an earlier,
+# already-recovered outage must not satisfy a later, unrelated stale period) --
+
+
+def test_evidence_before_since_cutoff_is_ignored(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    old_incident = (
+        "[2026-09-20 08:00:00,000] ERROR: No supported devices found\n"
+    )
+    since = datetime(2026, 9, 24, 0, 0, tzinfo=timezone.utc)
+    usb, generic = app._match_logs(old_incident, since=since)
+    assert not usb
+    assert not generic
+
+
+def test_evidence_after_since_cutoff_still_matches(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    text = "[2026-09-24 12:05:00,000] ERROR: No supported devices found\n"
+    since = datetime(2026, 9, 24, 12, 0, tzinfo=module.ADDON_LOG_LOCAL_TZ)
+    usb, _ = app._match_logs(text, since=since)
+    assert usb
+
+
+def test_untimestamped_continuation_lines_inherit_prior_timestamp(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    text = (
+        "[2026-09-24 12:05:00,000] WARNING: rtlamr last output before exit:\n"
+        "  No supported devices found\n"
+    )
+    since = datetime(2026, 9, 24, 12, 0, tzinfo=module.ADDON_LOG_LOCAL_TZ)
+    usb, _ = app._match_logs(text, since=since)
+    assert usb, "continuation line should inherit the preceding line's timestamp"
+
+
+def test_logfmt_timestamp_with_offset_is_time_correlated(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    text = 'time=2026-09-24T09:38:00.058-05:00 level=ERROR msg="No supported devices found"\n'
+    # -05:00 offset means this line is at 14:38 UTC.
+    still_before = datetime(2026, 9, 24, 14, 0, tzinfo=timezone.utc)
+    already_after = datetime(2026, 9, 24, 15, 0, tzinfo=timezone.utc)
+    usb_before, _ = app._match_logs(text, since=still_before)
+    usb_after, _ = app._match_logs(text, since=already_after)
+    assert usb_before
+    assert not usb_after
+
+
+def test_check_passes_last_reading_at_as_since_to_match_logs(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"confirm_cycles": 1})
+    last_reading = app._now() - timedelta(hours=2)
+    app._last_reading_at = Mock(return_value=last_reading)
+    app._is_stale = Mock(return_value=True)
+    app._fetch_logs = Mock(return_value="No supported devices found")
+    app._match_logs = Mock(return_value=([], []))
+    app._escalate = Mock()
+    app.started_at = app._now() - app.startup_grace - timedelta(minutes=1)
+    app.state["last_restart_ts"] = None
+
+    app.check({})
+
+    app._match_logs.assert_called_once_with("No supported devices found", since=last_reading)
 
 
 # -- decision logic: AND gate + debounce ---------------------------------------
@@ -337,7 +395,7 @@ def test_shutdown_state_written_before_scheduling_action(monkeypatch, tmp_path):
 
     def record_save():
         saved_states.append(dict(app.state))
-        original_save()
+        return original_save()
 
     app._save_state = record_save
 
@@ -347,6 +405,31 @@ def test_shutdown_state_written_before_scheduling_action(monkeypatch, tmp_path):
     assert saved_states[-1]["shutdown_pending_verification"] is True
     app.run_in.assert_called_once()
     assert app.run_in.call_args[0][0] == app._do_proxmox_shutdown
+
+
+def test_shutdown_aborted_when_state_cannot_be_persisted(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app._save_state = Mock(return_value=False)
+
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+
+    app.run_in.assert_not_called()
+    assert app.state["shutdown_pending_verification"] is False
+    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
+    assert any("aborted" in t.lower() for t in titles)
+
+
+def test_shutdown_aborted_restores_prior_last_shutdown_ts(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    prior = (app._now() - timedelta(days=10)).isoformat()
+    app.state["last_shutdown_ts"] = prior
+    app._save_state = Mock(return_value=False)
+
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+
+    assert app.state["last_shutdown_ts"] == prior
 
 
 def test_shutdown_notifies_both_services(monkeypatch, tmp_path):
@@ -392,11 +475,11 @@ def test_recovery_resets_restart_and_shutdown_state(monkeypatch, tmp_path):
 
 
 def test_state_persists_across_reinitialization(monkeypatch, tmp_path):
-    module, app = _make_app(monkeypatch, tmp_path)
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     app.state["restart_attempts"] = 2
-    app._save_state()
+    assert app._save_state() is True
 
-    module2, app2 = _make_app(monkeypatch, tmp_path)
+    module2, app2 = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     assert app2.state["restart_attempts"] == 2
 
 
@@ -409,12 +492,66 @@ def test_corrupt_state_file_falls_back_to_defaults(monkeypatch, tmp_path):
 
 
 def test_state_write_failure_is_logged_not_raised(monkeypatch, tmp_path):
-    module, app = _make_app(monkeypatch, tmp_path)
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     monkeypatch.setattr(module, "STATE_FILE", str(tmp_path / "missing_dir" / "state.json"))
     app.log.reset_mock()
-    app._save_state()  # must not raise
+    assert app._save_state() is False  # must not raise
     messages = [c.args[0] for c in app.log.call_args_list]
     assert any("could not write" in m for m in messages)
+
+
+# -- dry-run must never seed live escalation state (Codex P1) -------------------
+
+
+def test_dry_run_save_state_does_not_write_file(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": True})
+    app.state["restart_attempts"] = 3
+    app.state["shutdown_pending_verification"] = True
+    assert app._save_state() is True  # in-memory ladder still "succeeds"
+
+    assert not (tmp_path / "state.json").exists()
+
+
+def test_flipping_dry_run_off_after_dry_run_session_starts_clean(monkeypatch, tmp_path):
+    # Simulate a dry-run session that walked the ladder all the way to a
+    # simulated shutdown (all in memory, never persisted)...
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": True})
+    app.state["restart_attempts"] = 3
+    app.state["shutdown_pending_verification"] = True
+    app._save_state()
+
+    # ...then the operator flips dry_run: false, which reloads the app
+    # (fresh initialize() call) and must start from a clean slate, not the
+    # simulated ladder position.
+    module2, app2 = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    assert app2.state["restart_attempts"] == 0
+    assert app2.state["shutdown_pending_verification"] is False
+
+
+# -- ha_token fallback must also switch the log endpoint (Codex P2) -------------
+
+
+def test_default_logs_url_uses_supervisor_proxy_without_ha_token(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    assert app.logs_url == "http://supervisor/core/api/hassio/addons/{}/logs".format(
+        app.addon_slug
+    )
+
+
+def test_ha_token_switches_default_logs_url_to_core_rest_api(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"ha_token": "sometoken"})
+    assert app.logs_url == "http://homeassistant:8123/api/hassio/addons/{}/logs".format(
+        app.addon_slug
+    )
+
+
+def test_explicit_logs_url_overrides_ha_token_default(monkeypatch, tmp_path):
+    module, app = _make_app(
+        monkeypatch,
+        tmp_path,
+        args={"ha_token": "sometoken", "logs_url": "http://example.invalid/logs"},
+    )
+    assert app.logs_url == "http://example.invalid/logs"
 
 
 # -- notify robustness ----------------------------------------------------------
