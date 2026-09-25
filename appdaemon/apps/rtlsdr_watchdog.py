@@ -531,13 +531,29 @@ class RtlSdrWatchdog(hass.Hass):
                     self.unhealthy_cycles = 0
                     return
             if self.state.get("restart_attempts") or pending_verification:
-                self._notify(
-                    "RTL-SDR watchdog: recovered",
-                    "Gas meter readings are fresh again. Clearing restart/shutdown state.",
-                )
+                prior_state = dict(self.state)
                 self.state["restart_attempts"] = 0
                 self.state["shutdown_pending_verification"] = False
-                self._save_state()
+                if self._save_state():
+                    self._notify(
+                        "RTL-SDR watchdog: recovered",
+                        "Gas meter readings are fresh again. Clearing restart/shutdown state.",
+                    )
+                else:
+                    # Keep the cautious state in memory too, so it can never
+                    # diverge from a stale "exhausted attempts" state still
+                    # sitting on disk - an AppDaemon reload before this is
+                    # fixed must not silently regress to state that skips
+                    # required restarts (or unguards a shutdown lock). The
+                    # clear is simply retried on the next non-stale cycle.
+                    self.state = prior_state
+                    self._notify(
+                        "RTL-SDR watchdog: recovery detected but not persisted",
+                        "Gas meter readings are fresh again, but clearing restart/shutdown "
+                        "state failed to save. Keeping the cautious state until it can be "
+                        "persisted.",
+                        key="recovery_not_persisted",
+                    )
             self.unhealthy_cycles = 0
             return
 
@@ -585,6 +601,17 @@ class RtlSdrWatchdog(hass.Hass):
         self._shutdown_stage(usb_fault, evidence)
 
     def _restart_stage(self, evidence):
+        if self._pending_restart_handle is not None:
+            # A restart is already queued (e.g. confirm_cycles worth of
+            # checks elapsed again before pre_action_delay_seconds finished
+            # with unusually tuned args). Scheduling another would overwrite
+            # the tracked handle, and a later manual reset could then only
+            # cancel the newer timer while the older one still fires.
+            self.log(
+                "rtlsdr_watchdog: a restart is already queued, not scheduling another",
+                level="DEBUG",
+            )
+            return
         # Deliberately does NOT touch state.restart_attempts yet - only
         # _do_restart, once hassio/addon_restart has actually been
         # dispatched, counts the attempt. If AppDaemon reloads during
@@ -624,6 +651,20 @@ class RtlSdrWatchdog(hass.Hass):
         self._save_state()
 
     def _shutdown_stage(self, usb_fault, evidence):
+        if self._pending_shutdown_handle is not None:
+            # A shutdown is already queued (e.g. confirm_cycles worth of
+            # checks elapsed again before shutdown_notice_seconds finished
+            # with unusually tuned args) - shutdown_pending_verification
+            # isn't set until dispatch, so without this guard the "already
+            # pending" check below wouldn't catch it. Scheduling a second
+            # run_in would overwrite the tracked handle, and a later manual
+            # reset could then only cancel the newer timer while the older
+            # one still shuts the host down.
+            self.log(
+                "rtlsdr_watchdog: a shutdown is already queued, not scheduling another",
+                level="DEBUG",
+            )
+            return
         if not usb_fault:
             self._notify(
                 "RTL-SDR watchdog: still failing after {} restarts".format(

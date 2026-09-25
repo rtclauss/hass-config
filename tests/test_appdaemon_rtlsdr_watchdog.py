@@ -663,6 +663,71 @@ def test_notify_failure_does_not_block_restart_scheduling(monkeypatch, tmp_path)
     app.run_in.assert_called_once()
 
 
+# -- a second destructive action must never be queued while one is pending ------
+
+
+def test_second_shutdown_is_not_queued_while_one_is_pending(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    first_handle = app._pending_shutdown_handle
+    assert first_handle is not None
+
+    # A second confirmed-unhealthy cycle arrives before the first shutdown
+    # has fired (shutdown_pending_verification isn't set until dispatch).
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+
+    app.run_in.assert_called_once()  # not called again
+    assert app._pending_shutdown_handle is first_handle  # not overwritten
+
+
+def test_second_restart_is_not_queued_while_one_is_pending(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"max_restart_attempts": 3})
+
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+    first_handle = app._pending_restart_handle
+    assert first_handle is not None
+
+    app._escalate(usb_fault=True, evidence=["No supported devices found"])
+
+    app.run_in.assert_called_once()
+    assert app._pending_restart_handle is first_handle
+
+
+# -- recovery must not clear state that fails to persist (Codex P2) -------------
+
+
+def test_recovery_keeps_cautious_state_when_save_fails(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    app.state["shutdown_pending_verification"] = False
+    app._save_state = Mock(return_value=False)
+    _prep_for_check(app, stale=False, logs=None)
+
+    app.check({})
+
+    # The in-memory state must stay in lockstep with what's actually on
+    # disk - clearing it here despite the failed save would let a later
+    # AppDaemon reload silently regress to the (correctly cautious) exhausted
+    # state while the app itself believes it already recovered.
+    assert app.state["restart_attempts"] == 3
+    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
+    assert any("not persisted" in t.lower() for t in titles)
+
+
+def test_recovery_clears_state_when_save_succeeds(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path)
+    app.state["restart_attempts"] = 3
+    _prep_for_check(app, stale=False, logs=None)
+
+    app.check({})
+
+    assert app.state["restart_attempts"] == 0
+    titles = [c.kwargs.get("title", "") for c in app.call_service.call_args_list]
+    assert any("recovered" in t.lower() for t in titles)
+
+
 # -- manual reset must cancel a queued action (Codex P1) -------------------------
 
 

@@ -85,6 +85,15 @@ clean or "can't tell" check in between resets the counter to zero.
      the last automatic shutdown;
    - no prior shutdown is still "pending verification" (see below).
 
+A restart or shutdown is also refused if one of the same kind is **already
+queued but hasn't fired yet** — tracked via `_pending_restart_handle`/
+`_pending_shutdown_handle`. Without this, unusually short
+`check_interval_minutes`/`confirm_cycles` combined with a long
+`pre_action_delay_seconds`/`shutdown_notice_seconds` could let another
+confirmed-unhealthy cycle land before the first delayed callback fires,
+scheduling a second one and silently losing the ability to cancel the first
+(a later `rtlsdr_watchdog_reset` could only cancel the newer timer).
+
 Rough timing with the defaults: ~65 minutes to the first restart attempt (60
 min stale + 2 checks 5 min apart), then up to 3×~25 minute settle windows —
 so roughly 2.3 hours minimum before any shutdown is even possible, and only
@@ -92,7 +101,13 @@ then if the fault is USB-specific.
 
 **Recovery**: any non-stale check clears `restart_attempts` and
 `shutdown_pending_verification` (keeping `last_shutdown_ts` — the cooldown
-still applies) and sends a "recovered" notification.
+still applies) and sends a "recovered" notification — but only once that
+clear is confirmed **durably saved**. If persisting it fails, the in-memory
+state is kept at its prior (cautious) values too, rather than diverging from
+what's actually on disk: an AppDaemon reload before the underlying issue is
+fixed must not silently regress to a stale "exhausted attempts" state that
+would let a later, unrelated fault skip straight past the required restarts.
+The clear is simply retried on the next non-stale cycle.
 
 ## The loop-breaker: shutdown-pending-verification
 
