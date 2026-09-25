@@ -722,6 +722,24 @@ class RtlSdrWatchdog(hass.Hass):
 
     def _do_proxmox_shutdown(self, kwargs):
         self._pending_shutdown_handle = None
+
+        # Revalidate immediately before dispatch. The fault was confirmed up
+        # to shutdown_notice_seconds ago (default 60s); a genuine recovery
+        # in that window - or the sensor becoming unreadable, which is
+        # "can't tell", never grounds for a destructive action - must not
+        # still trigger an avoidable Home Assistant outage. Staleness alone
+        # is the same signal check()'s own recovery detection relies on.
+        now = self._now()
+        last = self._last_reading_at()
+        if self._is_stale(now, last) is not True:
+            self._notify(
+                "RTL-SDR watchdog: shutdown aborted, fault no longer confirmed",
+                "Gas meter readings recovered (or became unreadable) during the notice "
+                "window before the scheduled Proxmox shutdown. Not shutting down.",
+                key="shutdown_aborted_revalidation",
+            )
+            return
+
         if self.dry_run:
             self.log("rtlsdr_watchdog: [DRY RUN] would call rest_command/proxmox_shutdown")
         else:

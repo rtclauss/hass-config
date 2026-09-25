@@ -443,6 +443,7 @@ def test_lost_shutdown_callback_never_marks_state(monkeypatch, tmp_path):
 def test_failed_shutdown_dispatch_does_not_mark_state(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     app.call_service = Mock(side_effect=Exception("proxmox unreachable"))
+    app._is_stale = Mock(return_value=True)
 
     app._do_proxmox_shutdown({})
 
@@ -453,6 +454,7 @@ def test_failed_shutdown_dispatch_does_not_mark_state(monkeypatch, tmp_path):
 def test_shutdown_dispatch_failure_to_persist_is_logged_critically(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
     app._save_state = Mock(return_value=False)
+    app._is_stale = Mock(return_value=True)
 
     app._do_proxmox_shutdown({})
 
@@ -483,6 +485,7 @@ def test_shutdown_notifies_both_services(monkeypatch, tmp_path):
 
 def test_do_proxmox_shutdown_calls_rest_command_and_marks_state(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app._is_stale = Mock(return_value=True)
     app._do_proxmox_shutdown({})
     app.call_service.assert_called_once_with("rest_command/proxmox_shutdown")
     assert app.state["shutdown_pending_verification"] is True
@@ -491,9 +494,48 @@ def test_do_proxmox_shutdown_calls_rest_command_and_marks_state(monkeypatch, tmp
 
 def test_dry_run_proxmox_shutdown_never_calls_service(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": True})
+    app._is_stale = Mock(return_value=True)
     app._do_proxmox_shutdown({})
     app.call_service.assert_not_called()
     # Dry-run still advances the in-memory ladder for observability.
+    assert app.state["shutdown_pending_verification"] is True
+
+
+# -- shutdown must revalidate immediately before dispatch (Codex P1) ------------
+
+
+def test_shutdown_aborted_if_recovered_before_dispatch(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app._is_stale = Mock(return_value=False)  # genuine reading arrived in the notice window
+
+    app._do_proxmox_shutdown({})
+
+    rest_calls = [c for c in app.call_service.call_args_list if c.args and c.args[0] == "rest_command/proxmox_shutdown"]
+    assert not rest_calls
+    assert app.state["shutdown_pending_verification"] is False
+    assert app.state["last_shutdown_ts"] is None
+
+
+def test_shutdown_aborted_if_recovery_uncertain_before_dispatch(monkeypatch, tmp_path):
+    # "Can't tell" (e.g. sensor briefly unreadable) must never be treated as
+    # license to proceed with a destructive action either.
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app._is_stale = Mock(return_value=None)
+
+    app._do_proxmox_shutdown({})
+
+    rest_calls = [c for c in app.call_service.call_args_list if c.args and c.args[0] == "rest_command/proxmox_shutdown"]
+    assert not rest_calls
+    assert app.state["shutdown_pending_verification"] is False
+
+
+def test_shutdown_proceeds_when_still_stale_at_dispatch(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app._is_stale = Mock(return_value=True)
+
+    app._do_proxmox_shutdown({})
+
+    app.call_service.assert_called_once_with("rest_command/proxmox_shutdown")
     assert app.state["shutdown_pending_verification"] is True
 
 

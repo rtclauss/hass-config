@@ -85,6 +85,17 @@ clean or "can't tell" check in between resets the counter to zero.
      the last automatic shutdown;
    - no prior shutdown is still "pending verification" (see below).
 
+**The fault is revalidated immediately before dispatch**, not just when it
+was originally confirmed. `shutdown_notice_seconds` (default 60s) is a
+deliberate window for the notification to go out, but it's also long enough
+for a genuine reading to arrive in the meantime — `_do_proxmox_shutdown`
+re-checks staleness right before calling `rest_command/proxmox_shutdown`,
+and aborts (notifying instead) if the meter has recovered, or even if it's
+merely become unreadable ("can't tell" is never license to proceed with a
+destructive action). Without this, an avoidable Home Assistant outage could
+happen purely because of timing, seconds after the fault had already
+cleared itself.
+
 A restart or shutdown is also refused if one of the same kind is **already
 queued but hasn't fired yet** — tracked via `_pending_restart_handle`/
 `_pending_shutdown_handle`. Without this, unusually short
