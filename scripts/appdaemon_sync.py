@@ -24,6 +24,11 @@ RSYNC_EXCLUDES = (
     "namespaces/",
     "web/",
     "drift_model_data.csv",
+    # Watchdog cooldown/state files - live-only, must never be pulled into the
+    # repo (stale) or pushed back out (clobbers the live cooldown).
+    ".last_host_reboot",
+    ".rtlsdr_watchdog_state.json",
+    ".rtlsdr_watchdog_state.json.tmp",
 )
 
 

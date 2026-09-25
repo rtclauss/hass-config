@@ -49,6 +49,11 @@
   HomeKit, and Siri; set group volume on individual member entities, never the
   group entity.
 
+## RTL-SDR / Gas Meter Watchdog
+- Use `docs/rtlsdr_watchdog.md` as the source of truth before changing `appdaemon/apps/rtlsdr_watchdog.py`, its `apps.yaml` args, the rtlamr2mqtt add-on, or `rest_command.proxmox_shutdown`.
+- It ships with `dry_run: true`; only flip it to `false` in `apps.yaml` after watching real dry-run notifications for a while, per the doc's rollout section.
+- Test with `uv run --with pytest pytest tests/test_appdaemon_rtlsdr_watchdog.py`.
+
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.
 - Do not commit `AGENTS.local.md` unless explicitly asked.
