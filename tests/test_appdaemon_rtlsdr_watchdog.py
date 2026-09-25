@@ -341,8 +341,15 @@ def test_restart_stage_notifies_then_schedules(monkeypatch, tmp_path):
     assert callback == app._do_restart
 
 
+def _confirm_still_unhealthy(app):
+    """Make _do_restart's/_do_proxmox_shutdown's revalidation pass."""
+    app._is_stale = Mock(return_value=True)
+    app._match_logs = Mock(return_value=(["No supported devices found"], []))
+
+
 def test_do_restart_calls_addon_restart_service(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    _confirm_still_unhealthy(app)
     app._do_restart({})
     app.call_service.assert_called_once_with("hassio/addon_restart", addon=app.addon_slug)
     assert app.state["restart_attempts"] == 1
@@ -351,6 +358,7 @@ def test_do_restart_calls_addon_restart_service(monkeypatch, tmp_path):
 
 def test_dry_run_do_restart_never_calls_service(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": True})
+    _confirm_still_unhealthy(app)
     app._do_restart({})
     app.call_service.assert_not_called()
     # Dry-run still advances the in-memory ladder for observability.
@@ -359,12 +367,60 @@ def test_dry_run_do_restart_never_calls_service(monkeypatch, tmp_path):
 
 def test_failed_dispatch_does_not_consume_restart_attempt(monkeypatch, tmp_path):
     module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    _confirm_still_unhealthy(app)
     app.call_service = Mock(side_effect=Exception("supervisor unreachable"))
 
     app._do_restart({})
 
     assert app.state["restart_attempts"] == 0
     assert app.state["last_restart_ts"] is None
+
+
+# -- restart must revalidate immediately before dispatch (Codex P2) -------------
+
+
+def test_restart_aborted_if_recovered_before_dispatch(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app._is_stale = Mock(return_value=False)  # genuine reading arrived during the delay
+
+    app._do_restart({})
+
+    restart_calls = [c for c in app.call_service.call_args_list if c.args and c.args[0] == "hassio/addon_restart"]
+    assert not restart_calls
+    assert app.state["restart_attempts"] == 0
+
+
+def test_restart_aborted_if_recovery_uncertain_before_dispatch(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app._is_stale = Mock(return_value=None)
+
+    app._do_restart({})
+
+    restart_calls = [c for c in app.call_service.call_args_list if c.args and c.args[0] == "hassio/addon_restart"]
+    assert not restart_calls
+    assert app.state["restart_attempts"] == 0
+
+
+def test_restart_aborted_if_log_evidence_no_longer_matches(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app._is_stale = Mock(return_value=True)  # still stale...
+    app._match_logs = Mock(return_value=([], []))  # ...but no evidence remains
+
+    app._do_restart({})
+
+    restart_calls = [c for c in app.call_service.call_args_list if c.args and c.args[0] == "hassio/addon_restart"]
+    assert not restart_calls
+    assert app.state["restart_attempts"] == 0
+
+
+def test_restart_proceeds_when_still_confirmed_at_dispatch(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    _confirm_still_unhealthy(app)
+
+    app._do_restart({})
+
+    app.call_service.assert_called_once_with("hassio/addon_restart", addon=app.addon_slug)
+    assert app.state["restart_attempts"] == 1
 
 
 def test_lost_callback_never_consumes_restart_attempt(monkeypatch, tmp_path):
@@ -637,6 +693,34 @@ def test_state_write_failure_is_logged_not_raised(monkeypatch, tmp_path):
     assert app._save_state() is False  # must not raise
     messages = [c.args[0] for c in app.log.call_args_list]
     assert any("could not write" in m for m in messages)
+
+
+# -- state writes must be atomic (Codex P1) --------------------------------------
+
+
+def test_successful_save_leaves_no_tmp_file_behind(monkeypatch, tmp_path):
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app.state["restart_attempts"] = 1
+    assert app._save_state() is True
+    assert not (tmp_path / "state.json.tmp").exists()
+    assert (tmp_path / "state.json").exists()
+
+
+def test_existing_state_file_untouched_when_write_fails(monkeypatch, tmp_path):
+    # The core atomicity guarantee: a write that fails partway (simulated by
+    # making json.dump raise) must never leave the real state file
+    # truncated or corrupted - os.replace only swaps in a fully-written file.
+    module, app = _make_app(monkeypatch, tmp_path, args={"dry_run": False})
+    app.state["restart_attempts"] = 1
+    assert app._save_state() is True
+    original_bytes = (tmp_path / "state.json").read_bytes()
+
+    app.state["restart_attempts"] = 99
+    monkeypatch.setattr(module.json, "dump", Mock(side_effect=OSError("disk full")))
+    assert app._save_state() is False
+
+    assert (tmp_path / "state.json").read_bytes() == original_bytes
+    assert not (tmp_path / "state.json.tmp").exists()
 
 
 # -- dry-run must never seed live escalation state (Codex P1) -------------------

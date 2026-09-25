@@ -76,7 +76,12 @@ clean or "can't tell" check in between resets the counter to zero.
    AppDaemon reload during `pre_action_delay_seconds`) or the service call
    raises, nothing is consumed and the next unhealthy cycle retries. This
    guarantees the host is never eligible for shutdown having had fewer than
-   `max_restart_attempts` *real* restarts tried.
+   `max_restart_attempts` *real* restarts tried. The dispatch also
+   revalidates both signals immediately beforehand (same as the shutdown
+   dispatch below) — a genuine recovery, or the log evidence no longer
+   matching, during `pre_action_delay_seconds` aborts the restart instead of
+   disrupting an add-on that's already fine and burning a settle window for
+   nothing.
 3. **Shut down Proxmox** (`rest_command/proxmox_shutdown`) only once restart
    attempts are exhausted, and only when **all** of:
    - the evidence includes a USB-fault-tier hit (generic-only errors never
@@ -159,8 +164,20 @@ verification" even if the sensors otherwise look fresh.
 Persisted as JSON in `appdaemon/apps/.rtlsdr_watchdog_state.json`
 (`restart_attempts`, `last_restart_ts`, `last_shutdown_ts`,
 `shutdown_pending_verification`) so counters survive an AppDaemon restart.
-This file is excluded from `scripts/appdaemon_sync.py`'s pull/push (see
-`RSYNC_EXCLUDES`) — it's live-only state, never checked in or copied around.
+This file (and its `.tmp` write-buffer, below) is excluded from
+`scripts/appdaemon_sync.py`'s pull/push (see `RSYNC_EXCLUDES`) — it's
+live-only state, never checked in or copied around.
+
+**Writes are atomic** (write to `.rtlsdr_watchdog_state.json.tmp`, `fsync`,
+then `os.replace` onto the real file), not an in-place truncating write.
+This matters specifically because the shutdown state is saved *after*
+dispatching the actual host shutdown (see above) — if the write were a
+plain in-place overwrite and the process (or the Proxmox host itself, which
+this app just told to power off) died mid-write, the file could be left
+empty or partial, and `_load_state()` would silently treat that corruption
+as "no state," discarding the very lock this app exists to protect. With
+atomic replace, a reader only ever sees the fully-written old file or the
+fully-written new one, never a half-written one.
 
 **In dry-run, state changes are never written to this file.** The ladder
 still progresses in memory within a single dry-run session (so you can watch

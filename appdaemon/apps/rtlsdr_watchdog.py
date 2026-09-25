@@ -388,12 +388,29 @@ class RtlSdrWatchdog(hass.Hass):
                 level="DEBUG",
             )
             return True
+        # Write via a temp file + atomic rename, not an in-place truncating
+        # write. A plain open(STATE_FILE, "w") truncates immediately, then
+        # writes incrementally - if the process (or, worse, the Proxmox
+        # host this app itself just told to power off) dies mid-write, the
+        # file can be left empty or partial. _load_state() would then
+        # silently treat that corruption as "no state," discarding the very
+        # shutdown_pending_verification lock this app exists to protect.
+        # os.replace is atomic on POSIX: readers only ever see the fully
+        # written old file or the fully written new one, never a partial one.
+        tmp_path = STATE_FILE + ".tmp"
         try:
-            with open(STATE_FILE, "w") as handle:
+            with open(tmp_path, "w") as handle:
                 json.dump(self.state, handle)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, STATE_FILE)
             return True
         except OSError as err:
             self.log("rtlsdr_watchdog: could not write {}: {}".format(STATE_FILE, err), level="WARNING")
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
             return False
 
     def _notify(self, title, message, key=None):
@@ -632,6 +649,34 @@ class RtlSdrWatchdog(hass.Hass):
 
     def _do_restart(self, kwargs):
         self._pending_restart_handle = None
+
+        # Revalidate immediately before dispatch, mirroring
+        # _do_proxmox_shutdown: a genuine recovery (or the log evidence
+        # clearing) during pre_action_delay_seconds must not still trigger
+        # an unnecessary add-on restart - besides the pointless interruption,
+        # it would also burn a full restart_settle_minutes window for no
+        # reason. Re-checks both signals, same AND-gate as check() itself.
+        now = self._now()
+        last = self._last_reading_at()
+        if self._is_stale(now, last) is not True:
+            self._notify(
+                "RTL-SDR watchdog: restart aborted, fault no longer confirmed",
+                "Gas meter readings recovered (or became unreadable) during the restart "
+                "delay. Not restarting the add-on.",
+                key="restart_aborted_revalidation",
+            )
+            return
+
+        usb_hits, generic_hits = self._match_logs(self._fetch_logs(), since=last)
+        if not usb_hits and not generic_hits:
+            self._notify(
+                "RTL-SDR watchdog: restart aborted, no error evidence remains",
+                "Gas meter is still stale, but no known failure pattern matches the "
+                "add-on log anymore (or it couldn't be refetched). Not restarting.",
+                key="restart_aborted_no_evidence",
+            )
+            return
+
         if self.dry_run:
             self.log("rtlsdr_watchdog: [DRY RUN] would call hassio/addon_restart addon={}".format(
                 self.addon_slug

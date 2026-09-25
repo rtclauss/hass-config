@@ -28,6 +28,7 @@ RSYNC_EXCLUDES = (
     # repo (stale) or pushed back out (clobbers the live cooldown).
     ".last_host_reboot",
     ".rtlsdr_watchdog_state.json",
+    ".rtlsdr_watchdog_state.json.tmp",
 )
 
 
