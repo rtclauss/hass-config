@@ -290,6 +290,41 @@ Restart HA if network down:
   check_interval_minutes: 33
   min_reboot_interval_hours: 6
 
+rtlsdr_watchdog:
+  class: RtlSdrWatchdog
+  module: rtlsdr_watchdog
+  # Watches the rtlamr2mqtt add-on (RTL-SDR gas meter bridge). A USB/kernel
+  # fault on the passed-through dongle can only be cleared by power-cycling
+  # the Proxmox host. Escalation: notify -> restart add-on (x3) -> shut down
+  # Proxmox. A cycle is unhealthy only when readings are stale AND the
+  # add-on log shows a known error, for confirm_cycles consecutive checks.
+  # Anything the app can't verify (missing sensor, unreadable logs) is a
+  # no-op, never an escalation - see reboot.py's 2026-09 incident notes.
+  # DRY RUN: logs + notifies what it WOULD do. Flip to false only after
+  # watching it run for real - see docs/rtlsdr_watchdog.md.
+  dry_run: true
+  addon_slug: 6713e36e_rtlamr2mqtt
+  reading_entity: sensor.raw_house_gas_meter_reading
+  last_seen_entity: sensor.raw_house_gas_meter_last_seen
+  # logs_url defaults to the Core hassio-proxy route; override only if the
+  # rollout spike finds SUPERVISOR_TOKEN needs the ha_token fallback instead.
+  check_interval_minutes: 5
+  stale_after_minutes: 60
+  confirm_cycles: 2
+  log_tail_lines: 300
+  log_fetch_timeout_seconds: 10
+  death_loop_min_count: 5   # "rtlamr process died" occurrences in one tail
+                             # fetch that count as a USB-fault-tier hit
+  startup_grace_minutes: 20
+  max_restart_attempts: 3
+  restart_settle_minutes: 25
+  pre_action_delay_seconds: 30
+  shutdown_notice_seconds: 60
+  min_shutdown_interval_hours: 24
+  renotify_minutes: 120
+  notify_service: notify/mobile_app_wethop
+  secondary_notify_service: notify/mobile_app_faro
+
   # original ryan 6/3/2025
 # Get Bed Load Cell Average Empty Data:
 #   class: bed_history
