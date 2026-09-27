@@ -30,10 +30,109 @@ homeassistant:
       friendly_name: "Water Meter Reading Age"
       icon: mdi:clock-alert-outline
 
+    input_number.water_meter_manual_correction:
+      <<: *customize
+
+########################
+## Human-in-the-loop notifications
+########################
+# When water_meter/reader.py's self-heal and VLM requery both fail to
+# resolve a rejected reading, it sends an actionable notification (see
+# reader.py's _notify_ha_of_unresolved_reading and docs/water_meter.md
+# "Human-in-the-loop notifications") with three actions: Approve, Reject,
+# Modify. Approve/Modify both end up calling the Pi's correction-listener
+# service (a separate, persistent service - see
+# deploy/systemd/water-meter-correction-listener.service - since the reader
+# itself is a one-shot job that's already exited by the time a human
+# responds).
+#
+# Requires two secrets in secrets.yaml:
+#   water_meter_correction_url: http://<pi-ip-or-hostname>:8091/correction
+#   water_meter_correction_token: "Bearer <the same long random string set
+#     as WATER_METER_CORRECTION_TOKEN in the Pi's /etc/water-meter/
+#     credentials.env>"
+
+input_number:
+  water_meter_manual_correction:
+    name: Water Meter Manual Correction
+    icon: mdi:water-pump
+    min: 0
+    max: 10000000
+    step: 0.1
+    mode: box
+
+rest_command:
+  water_meter_apply_correction:
+    url: !secret water_meter_correction_url
+    method: POST
+    headers:
+      Authorization: !secret water_meter_correction_token
+      Content-Type: application/json
+    payload: '{"value": {{ value }}}'
+
 ########################
 ## Automation
 ########################
 automation:
+  - id: water_meter_notification_action
+    alias: water_meter_notification_action
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+    condition:
+      - condition: template
+        value_template: "{{ trigger.event.data.action.startswith('WATER_METER_') }}"
+    action:
+      - variables:
+          water_meter_action: "{{ trigger.event.data.action }}"
+      - choose:
+          - conditions: "{{ water_meter_action.startswith('WATER_METER_APPROVE_') }}"
+            sequence:
+              - action: rest_command.water_meter_apply_correction
+                data:
+                  value: "{{ water_meter_action.split('_')[-1] }}"
+              - action: notify.wethop
+                data:
+                  message: >-
+                    Approved water meter reading:
+                    {{ water_meter_action.split('_')[-1] }} gal.
+          - conditions: "{{ water_meter_action == 'WATER_METER_REJECT' }}"
+            sequence:
+              - action: notify.wethop
+                data:
+                  message: "Water meter reading rejected - no change made."
+          - conditions: "{{ water_meter_action == 'WATER_METER_MODIFY' }}"
+            sequence:
+              - action: notify.wethop
+                data:
+                  message: >-
+                    Open Home Assistant and set "Water Meter Manual
+                    Correction" to the correct reading - it'll be applied
+                    automatically.
+
+  - id: water_meter_manual_correction_applied
+    alias: water_meter_manual_correction_applied
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: input_number.water_meter_manual_correction
+    condition:
+      - condition: template
+        value_template: >-
+          {{ trigger.from_state is not none and trigger.to_state.state not in
+          ['unknown', 'unavailable'] }}
+    action:
+      - action: rest_command.water_meter_apply_correction
+        data:
+          value: "{{ trigger.to_state.state }}"
+      - action: notify.wethop
+        data:
+          message: >-
+            Applied manual water meter correction: {{ trigger.to_state.state }} gal.
+
   - id: water_meter_reading_stale
     alias: water_meter_reading_stale
     trace:

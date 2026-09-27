@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 import sys
 import types
@@ -739,6 +740,111 @@ def test_accepted_reading_with_unresolvable_glare_mismatch_falls_through_to_vlm_
     )
 
     assert result == reader.RunResult(True, 151.0, "ok", stuck=False)
+
+
+def test_unresolved_rejection_sends_ha_notification_with_approve_reject_modify_actions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(
+        tmp_path, ha_url="http://ha.local:8123", ha_token="tok123", ha_notify_service="wethop"
+    )
+    calibration = _calibration(max_gallons_per_interval=5.0)  # no glare positions, no vlm_host
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    captured: dict = {}
+
+    class _FakeResponse:
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeResponse:
+        captured["url"] = request.full_url  # type: ignore[attr-defined]
+        captured["headers"] = dict(request.header_items())  # type: ignore[attr-defined]
+        captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+        return _FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "99",  # +89, way over max 5.0
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result.accepted is False
+    assert captured["url"] == "http://ha.local:8123/api/services/notify/wethop"
+    assert captured["headers"]["Authorization"] == "Bearer tok123"
+    actions = captured["body"]["data"]["actions"]
+    assert actions[0]["action"] == "WATER_METER_APPROVE_99"
+    assert actions[1]["action"] == "WATER_METER_REJECT"
+    assert actions[2]["action"] == "WATER_METER_MODIFY"
+
+
+def test_no_ha_notification_when_ha_url_is_not_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(tmp_path)  # ha_url/ha_token default to "" - disabled
+    calibration = _calibration(max_gallons_per_interval=5.0)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+
+    def _unexpected(request: object, timeout: float) -> None:
+        raise AssertionError("should never call HA when ha_url/ha_token aren't configured")
+
+    monkeypatch.setattr("urllib.request.urlopen", _unexpected)
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "99",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result.accepted is False
+
+
+def test_no_ha_notification_for_a_hard_ocr_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A bad digit count/non-numeric read has no suggested value for a human
+    # to approve - nothing for the notification to add.
+    connection = _connection(tmp_path, ha_url="http://ha.local:8123", ha_token="tok123")
+    calibration = _calibration(max_gallons_per_interval=5.0)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+
+    def _unexpected(request: object, timeout: float) -> None:
+        raise AssertionError("should not notify for a hard OCR failure")
+
+    monkeypatch.setattr("urllib.request.urlopen", _unexpected)
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "9",  # wrong digit count (expected 2)
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result.accepted is False
 
 
 def test_default_publisher_reports_error_status_for_a_stuck_reading(
