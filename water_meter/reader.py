@@ -136,6 +136,9 @@ def run_once(
             connection, calibration, crop_path, raw_digits, validation, last_good, now
         )
 
+    if not validation.accepted and last_good is not None:
+        _notify_ha_of_unresolved_reading(connection, calibration, raw_digits, validation, last_good)
+
     if not validation.accepted:
         result = RunResult(False, None, validation.reason)
         _save_reject(connection.image_dir / "rejects", cropped, result.reason, now)
@@ -459,6 +462,81 @@ def _requery_vlm_on_suspect_value(
     else:
         LOG.info("Vision-LLM requery also rejected (%s)", requery_validation.reason)
     return requery_digits, requery_validation
+
+
+def _notify_ha_of_unresolved_reading(
+    connection: ConnectionConfig,
+    calibration: CalibrationConfig,
+    raw_digits: str,
+    validation: "sanity.ValidationResult",
+    last_good: "sanity.LastGoodReading",
+) -> None:
+    """Ask a human to approve/reject/modify a reading that self-heal and the
+    VLM requery both failed to resolve, via an actionable Home Assistant
+    notification - a lightweight, real-time alternative to GitHub issue
+    #1057's "manual digit-crop review tool" idea, using infrastructure that
+    already exists (the user's phone) instead of a new web app.
+
+    Only fires for "value decreased"/"implausible jump"/"leading-digit
+    mismatch" - reasons where the digits parsed cleanly but the *value*
+    looks wrong, exactly the ambiguity a human glancing at the crop can
+    resolve in seconds. A hard OCR failure (unparseable digits, wrong
+    digit count) has no suggested value for a human to approve, so there's
+    nothing this notification would add.
+
+    Deliberately fire-and-forget: disabled entirely if ha_url/ha_token
+    aren't configured (opt-in), and a failed notification attempt only
+    logs a warning - it must never turn an already-rejected run into a
+    harder failure. The Approve/Modify response path is a *separate*
+    system (see docs/water_meter.md "Human-in-the-loop notifications"): a
+    small persistent listener service on the Pi, since this reader is a
+    one-shot job that has already exited by the time a human responds.
+    """
+    if not connection.ha_url or not connection.ha_token:
+        return
+    if not (
+        validation.reason.startswith("value decreased")
+        or validation.reason.startswith("implausible jump")
+        or validation.reason.startswith("leading-digit mismatch")
+    ):
+        return
+    if not raw_digits.isdigit() or len(raw_digits) != calibration.digit_count:
+        return
+
+    suggested_value = int(raw_digits) / (10**calibration.decimal_places)
+    suggested_str = f"{suggested_value:.{calibration.decimal_places}f}"
+
+    import urllib.error
+    import urllib.request
+
+    payload = {
+        "title": "Water meter needs a look",
+        "message": (
+            f"Read {suggested_str} gal, but {validation.reason}. "
+            f"Last confirmed: {last_good.value} gal."
+        ),
+        "data": {
+            "actions": [
+                {"action": f"WATER_METER_APPROVE_{suggested_str}", "title": "Approve"},
+                {"action": "WATER_METER_REJECT", "title": "Reject"},
+                {"action": "WATER_METER_MODIFY", "title": "Modify"},
+            ]
+        },
+    }
+    request = urllib.request.Request(
+        f"{connection.ha_url}/api/services/notify/{connection.ha_notify_service}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {connection.ha_token}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            response.read()
+    except (urllib.error.URLError, OSError) as error:
+        LOG.warning("Failed to send HA notification for unresolved reading: %s", error)
 
 
 def _rotate_history(

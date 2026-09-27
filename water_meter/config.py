@@ -90,6 +90,18 @@ class ConnectionConfig:
     vlm_host: str = ""
     vlm_model: str = "qwen2.5vl:7b"
     vlm_timeout_seconds: float = 480.0
+    # Empty ha_url/ha_token (the default) disables the actionable-
+    # notification tier entirely - reader.py only sends one when both are
+    # set. ha_token is a Home Assistant long-lived access token (generated
+    # from the user's HA profile page - not something this code can create).
+    # See docs/water_meter.md "Human-in-the-loop notifications" for the full
+    # setup, including the separate correction-listener service this
+    # notification flow depends on to apply the user's response.
+    ha_url: str = ""
+    ha_token: str = ""
+    # The part after "notify." - e.g. "wethop" to call notify.wethop, the
+    # user's own mobile-app notify target (not a generic "notify" broadcast).
+    ha_notify_service: str = "notify"
 
 
 def connection_config_from_env() -> ConnectionConfig:
@@ -139,6 +151,9 @@ def connection_config_from_env() -> ConnectionConfig:
         vlm_timeout_seconds=float(
             os.environ.get("WATER_METER_VLM_TIMEOUT_SECONDS", "480.0")
         ),
+        ha_url=os.environ.get("WATER_METER_HA_URL", ""),
+        ha_token=os.environ.get("WATER_METER_HA_TOKEN", ""),
+        ha_notify_service=os.environ.get("WATER_METER_HA_NOTIFY_SERVICE", "notify"),
     )
 
 

@@ -67,6 +67,15 @@ Environment=WATER_METER_CAPTURE_FAILURE_REBOOT_THRESHOLD=2
 Environment=WATER_METER_VLM_HOST=10.24.1.182:30068
 Environment=WATER_METER_VLM_MODEL=qwen2.5vl:7b
 Environment=WATER_METER_VLM_TIMEOUT_SECONDS=480
+# Human-in-the-loop notification for a reading self-heal and the VLM
+# requery both couldn't resolve (reader.py's _notify_ha_of_unresolved_
+# reading) - see docs/water_meter.md "Human-in-the-loop notifications".
+# WATER_METER_HA_TOKEN (a Home Assistant long-lived access token, generated
+# from the user's own HA profile page) must be added to
+# /etc/water-meter/credentials.env, not committed here. Assumes HA runs on
+# the same host as the MQTT broker above - adjust WATER_METER_HA_URL if not.
+Environment=WATER_METER_HA_URL=http://10.24.1.11:8123
+Environment=WATER_METER_HA_NOTIFY_SERVICE=wethop
 ExecStart=/opt/hass-config/venv/bin/python3 -m water_meter.reader
 
 [Install]

@@ -1,0 +1,36 @@
+[Unit]
+Description=Water meter human-correction listener (applies Approve/Modify responses from Home Assistant)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Persistent, unlike water-meter-reader.service's oneshot: this must be
+# reachable whenever the user responds to an actionable notification, which
+# could be minutes or hours after water-meter-reader.service sent it (see
+# reader.py's _notify_ha_of_unresolved_reading and docs/water_meter.md
+# "Human-in-the-loop notifications"). Restart=always because an unhandled
+# exception here shouldn't need a manual restart to start listening again.
+Type=simple
+Restart=always
+RestartSec=5
+WorkingDirectory=/opt/hass-config
+# MQTT credentials + WATER_METER_CORRECTION_TOKEN live outside git - see
+# docs/water_meter.md. WATER_METER_CORRECTION_TOKEN is a secret the user
+# invents themselves (any long random string) and must match the
+# `water_meter_correction_token` secret used in packages/water_meter.yaml's
+# rest_command on the Home Assistant side - this listener refuses to start
+# without it (see correction_listener.main).
+EnvironmentFile=/etc/water-meter/credentials.env
+Environment=WATER_METER_MQTT_HOST=10.24.1.11
+Environment=WATER_METER_MQTT_PORT=1883
+Environment="WATER_METER_LIGHT_TOPIC=zigbee2mqtt/Basement/Water Meter Hue/set"
+Environment=WATER_METER_READING_TOPIC=waterreader/sensor/water_meter/state
+Environment=WATER_METER_LAST_READING_TIME_TOPIC=waterreader/sensor/water_meter/last_reading_time
+Environment=WATER_METER_STATUS_TOPIC=waterreader/sensor/water_meter/status
+Environment=WATER_METER_DISCOVERY_TOPIC=homeassistant/sensor/water_meter/config
+Environment=WATER_METER_STATE_DIR=/var/lib/water-meter/state
+Environment=WATER_METER_CORRECTION_PORT=8091
+ExecStart=/opt/hass-config/venv/bin/python3 -m water_meter.correction_listener
+
+[Install]
+WantedBy=multi-user.target

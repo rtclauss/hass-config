@@ -303,9 +303,74 @@ Ollama host too (1 of 3 lookups failed in testing from this Pi).
 **Known limitation**: the VLM is a real improvement, not a perfect fix - it
 has been observed to occasionally misread the same glare-affected leading
 digit (e.g. `0` read as `8`). The sanity gate and requery reduce how often
-that reaches a human, but a bad VLM read can still be safely *rejected*
-outright (never observed being *accepted*, thanks to the same non-decreasing/
-max-delta checks that protect every other OCR path here).
+that reaches a human, and a bad VLM read is usually safely *rejected*
+outright rather than accepted - but not always: a real incident (2026-09-27)
+saw a misread slip past the plausibility gate because a long gap since
+`last_good` made its time-scaled allowance generous. See "The leading-digit
+cross-check" above and "sustained-rate cap" below for the hardening that
+followed, and "Human-in-the-loop notifications" below for the human
+backstop on whatever's left.
+
+## Human-in-the-loop notifications
+
+When a rejected reading can't be automatically resolved - self-heal's
+leading-digit cross-check *and* the VLM requery both fail (`reader.py`'s
+`_notify_ha_of_unresolved_reading`) - the reader sends an actionable
+notification to Home Assistant instead of just logging a rejection. This is
+the lightweight, real-time version of GitHub issue #1057's "manual
+digit-crop review tool" idea, built on infrastructure that already exists
+(the owner's phone) rather than a new web app. It only fires for "value
+decreased"/"implausible jump"/"leading-digit mismatch" - reasons where the
+digits parsed cleanly but the *value* looked wrong, exactly the ambiguity a
+human glancing at the crop can resolve in seconds. A hard OCR failure (bad
+digit count, non-numeric) has no suggested value to approve, so nothing is
+sent for those.
+
+The notification carries three actions:
+- **Approve** - accept the rejected value as correct.
+- **Reject** - discard it, no change (`last_good` stays as-is).
+- **Modify** - set `input_number.water_meter_manual_correction` in HA to the
+  correct value; a separate automation applies it automatically.
+
+**Why a second, persistent service is needed.** `water_meter/reader.py` is a
+one-shot systemd-timer job that has already exited by the time a human
+responds - minutes or hours later. `water_meter/correction_listener.py`
+(`deploy/systemd/water-meter-correction-listener.service`, `Restart=always`)
+is a small stdlib-only HTTP server that stays up to receive that response: a
+Home Assistant automation (`packages/water_meter.yaml`) POSTs the approved/
+corrected value to it, and it writes `last_good_reading.json` *and*
+republishes the retained MQTT topics - both need updating, or the next
+scheduled read would still compare against the stale local baseline even
+after the visible sensor looked fixed.
+
+The listener deliberately trusts the human's value outright, including a
+*decrease* from the current `last_good` - overriding the reader's own
+monotonic-increase safety net is the entire point. It exists specifically
+to fix the case where `last_good` itself is the wrong (too-high) value,
+which is exactly what happened on 2026-09-27 and needed a manual SSH fix
+before this existed.
+
+**Setup** (three secrets, none of them committed to git):
+1. A Home Assistant long-lived access token (Profile -> Security ->
+   Long-lived access tokens) - set as `WATER_METER_HA_TOKEN` in the Pi's
+   `/etc/water-meter/credentials.env`. Lets `reader.py` call
+   `notify.<WATER_METER_HA_NOTIFY_SERVICE>` (see
+   `deploy/systemd/water-meter-reader.service` for the URL/service name).
+2. Any long random string, invented by the user - set as
+   `WATER_METER_CORRECTION_TOKEN` in the same credentials.env, *and* as the
+   `water_meter_correction_token` secret (prefixed `Bearer `) in HA's own
+   `secrets.yaml`. The listener refuses to start without this set - see
+   `correction_listener.main`.
+3. `water_meter_correction_url` in HA's `secrets.yaml`:
+   `http://<pi-ip-or-hostname>:8091/correction`.
+
+Enable the listener service on the Pi with:
+
+```bash
+sudo cp deploy/systemd/water-meter-correction-listener.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now water-meter-correction-listener.service
+```
 
 ## MQTT contract
 
@@ -439,11 +504,18 @@ sudo systemctl enable --now water-meter-daily-reboot.timer
     issue" below).
   - `calibrate.py` - `capture-only` (run on the Pi) and `calibrate` (run on a
     workstation with a display, using `cv2.selectROI`) subcommands.
+  - `correction_listener.py` - the persistent HTTP listener behind
+    "Human-in-the-loop notifications" above; `python3 -m
+    water_meter.correction_listener` is its systemd `ExecStart`.
 - `deploy/systemd/water-meter-reader.service` / `.timer` - the oneshot
   service + timer, mirroring `deploy/systemd/inky-owner-suite.service`.
 - `deploy/systemd/water-meter-daily-reboot.service` / `.timer` - ~daily
   monotonic preventive reboot, see "Daily preventive reboot" above.
-- `packages/water_meter.yaml` - HA-side staleness sensor + alert automation.
+- `deploy/systemd/water-meter-correction-listener.service` - persistent
+  service, see "Human-in-the-loop notifications" above.
+- `packages/water_meter.yaml` - HA-side staleness sensor + alert automation,
+  plus the Approve/Reject/Modify notification-action automations and the
+  `input_number`/`rest_command` they use.
 - `tests/test_water_meter_*.py` - unit tests for the pure logic (sanity gate,
   config parsing, ROI cropping) and the package YAML; hardware/network paths
   (camera, ssocr, MQTT broker) are exercised for real only on the Pi.
