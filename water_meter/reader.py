@@ -123,9 +123,10 @@ def run_once(
         decimal_places=calibration.decimal_places,
         nominal_interval_seconds=calibration.nominal_interval_seconds,
         stuck_after_hours=calibration.stuck_after_hours,
+        max_sustained_gallons_per_hour=calibration.max_sustained_gallons_per_hour,
     )
 
-    if not validation.accepted and last_good is not None:
+    if last_good is not None:
         raw_digits, validation = _correct_glare_positions_from_last_good(
             calibration, raw_digits, validation, last_good, now
         )
@@ -284,9 +285,9 @@ def _correct_glare_positions_from_last_good(
     last_good: "sanity.LastGoodReading",
     now: datetime,
 ) -> tuple[str, "sanity.ValidationResult"]:
-    """Splice last_good's own digits into the glare-affected positions
-    before ever paying for a VLM requery - often resolves the single most
-    common rejection outright, for free.
+    """Cross-check (and if needed, splice in) last_good's own digits at the
+    glare-affected positions - run unconditionally, on every reading, not
+    just ones that already failed validation.
 
     calibration.low_confidence_ok_indexes marks the meter's highest-place-
     value digits (millions/hundred-thousands): positions under a fixed
@@ -296,20 +297,31 @@ def _correct_glare_positions_from_last_good(
     last_good's own digits there are a strictly better source of truth than
     a fresh read of a spot the glare genuinely destroys the pixel data for.
 
-    This only ever fires after the raw reading has already failed
-    validation (a decrease or an implausible jump - the exact signature of
-    one misread digit), and the corrected candidate is re-validated through
-    the same sanity gate before being trusted - so the worst case is a
-    missed rescue (falls through to the VLM requery or a plain rejection),
-    never a wrongly-accepted value. In the one scenario this could get
-    wrong - a genuine rollover into a new highest-place-value digit that
-    also happened to look implausible on first read - the corrected
-    candidate still has to pass the same gate, so it fails safely rather
-    than smuggling through a bad value.
+    Originally this only ran after the raw reading had already failed
+    validation - but that left a real gap (hit in production 2026-09-27): a
+    misread in exactly one of these glare positions can still slip straight
+    past the plausibility gate on the *first* try whenever enough time has
+    elapsed since last_good that the time-scaled jump allowance is generous
+    (see sanity.validate_reading) - self-heal never got a chance to run
+    because nothing had failed yet. Now the digit-by-digit comparison
+    against last_good always happens, regardless of whether the raw
+    reading was already accepted:
+      - positions already agree with last_good -> no-op, whatever the raw
+        validation result was stands unchanged.
+      - positions disagree and the corrected candidate validates -> use the
+        corrected candidate (this is what catches the case above: an
+        accepted-but-wrong value gets corrected before it's ever saved as
+        the new last_good).
+      - positions disagree and the corrected candidate does NOT validate ->
+        ambiguous (could be a genuine rollover into a new highest-place-
+        value digit, or a different, deeper misread that happened to also
+        alter one of these positions). Never silently accept the raw
+        reading in this case even if it originally validated - return a
+        rejection instead so the caller's existing VLM-requery-on-suspect-
+        value fallback gets a chance to independently confirm one way or
+        the other, rather than trusting either digit string blindly.
     """
     if not calibration.low_confidence_ok_indexes:
-        return raw_digits, validation
-    if not (validation.reason.startswith("value decreased") or validation.reason.startswith("implausible jump")):
         return raw_digits, validation
 
     scaled = int(round(last_good.value * (10**calibration.decimal_places)))
@@ -338,10 +350,31 @@ def _correct_glare_positions_from_last_good(
         decimal_places=calibration.decimal_places,
         nominal_interval_seconds=calibration.nominal_interval_seconds,
         stuck_after_hours=calibration.stuck_after_hours,
+        max_sustained_gallons_per_hour=calibration.max_sustained_gallons_per_hour,
     )
     if corrected_validation.accepted:
         LOG.info("Leading-digit self-heal succeeded: %s -> %s", raw_digits, corrected_digits)
         return corrected_digits, corrected_validation
+
+    if validation.accepted:
+        LOG.warning(
+            "Accepted reading %s disagreed with last_good on glare-protected "
+            "positions %s and the corrected candidate %s doesn't validate either "
+            "(%s) - treating as suspect rather than trusting either digit string",
+            raw_digits,
+            calibration.low_confidence_ok_indexes,
+            corrected_digits,
+            corrected_validation.reason,
+        )
+        return raw_digits, sanity.ValidationResult(
+            accepted=False,
+            value=None,
+            reason=(
+                f"leading-digit mismatch: read {raw_digits} disagrees with last_good "
+                f"on positions {calibration.low_confidence_ok_indexes}, and correcting "
+                f"to {corrected_digits} still fails ({corrected_validation.reason})"
+            ),
+        )
 
     LOG.info(
         "Leading-digit self-heal did not resolve it (%s -> %s still %s)",
@@ -363,20 +396,29 @@ def _requery_vlm_on_suspect_value(
 ) -> tuple[str, "sanity.ValidationResult"]:
     """Give the vision LLM one more look at the same crop before giving up.
 
-    "value decreased" and "implausible jump" mean digits were parsed fine
-    but the resulting value looks wrong - the signature of a single misread
-    digit (confirmed live: qwen3-vl itself occasionally flips the
-    glare-affected leading digit, see ocr.read_digits_vlm) rather than a
-    garbled read that no amount of re-asking would fix. The meter hasn't
-    moved between the first attempt and now, so requerying the same crop -
-    with the suspicious value and the last confirmed reading as context -
-    gives the model a second, better-informed chance instead of discarding
-    a capture that was probably one digit away from correct. Fires at most
-    once (no loop) and only for these two reasons; every other rejection
-    (bad digit count, non-numeric, ocr failed outright) means there's
-    nothing a requery on the same image would fix.
+    "value decreased", "implausible jump", and "leading-digit mismatch" all
+    mean digits were parsed fine but the resulting value looks wrong - the
+    signature of a single misread digit (confirmed live: qwen3-vl itself
+    occasionally flips the glare-affected leading digit, see
+    ocr.read_digits_vlm) rather than a garbled read that no amount of
+    re-asking would fix. "leading-digit mismatch" specifically comes from
+    _correct_glare_positions_from_last_good rejecting an otherwise-accepted
+    reading because it disagreed with last_good on a glare-protected
+    position and the corrected candidate didn't validate either - exactly
+    the kind of ambiguity (misread vs. genuine rollover) a fresh look can
+    resolve. The meter hasn't moved between the first attempt and now, so
+    requerying the same crop - with the suspicious value and the last
+    confirmed reading as context - gives the model a second, better-informed
+    chance instead of discarding a capture that was probably one digit away
+    from correct. Fires at most once (no loop) and only for these reasons;
+    every other rejection (bad digit count, non-numeric, ocr failed
+    outright) means there's nothing a requery on the same image would fix.
     """
-    if not (validation.reason.startswith("value decreased") or validation.reason.startswith("implausible jump")):
+    if not (
+        validation.reason.startswith("value decreased")
+        or validation.reason.startswith("implausible jump")
+        or validation.reason.startswith("leading-digit mismatch")
+    ):
         return raw_digits, validation
 
     LOG.info("First read rejected (%s); requerying the vision-LLM for a second look", validation.reason)
@@ -410,6 +452,7 @@ def _requery_vlm_on_suspect_value(
         decimal_places=calibration.decimal_places,
         nominal_interval_seconds=calibration.nominal_interval_seconds,
         stuck_after_hours=calibration.stuck_after_hours,
+        max_sustained_gallons_per_hour=calibration.max_sustained_gallons_per_hour,
     )
     if requery_validation.accepted:
         LOG.info("Vision-LLM requery succeeded: %s -> %s", raw_digits, requery_digits)

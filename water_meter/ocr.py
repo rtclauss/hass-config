@@ -107,6 +107,13 @@ def _build_vlm_fewshot_prompt(digit_count: int) -> str:
         lines.append(f"Example {i} reading: {reading}")
     lines += [
         "",
+        "The leftmost 2-3 digits are frequently crossed by a bright glare "
+        "band that can distort their shape. Look carefully through the "
+        "glare rather than guessing - and note that these leftmost (most "
+        "significant) digits change extremely rarely, often staying "
+        "identical across many consecutive readings, unlike the digits "
+        "further right which change more often.",
+        "",
         "The final image is a new reading from the same display. Using the "
         "examples above as a guide to this display's digit shapes and "
         f"lighting, read the {digit_count}-digit number shown in the final "

@@ -126,6 +126,83 @@ def test_implausible_jump_still_rejected_when_it_exceeds_the_scaled_allowance() 
     assert "implausible jump" in result.reason
 
 
+def test_sustained_cap_rejects_a_jump_the_old_unbounded_scaling_would_have_allowed() -> None:
+    # Regression test for a real incident (2026-09-27): a ~19-hour gap since
+    # last_good let a misread jump through because the allowance scaled
+    # linearly and unbounded forever (500/interval * 114 intervals here).
+    # With a sustained cap, only the first interval gets the full burst
+    # allowance - everything past that is capped at a realistic sustained
+    # rate, not the burst rate.
+    last_good = sanity.LastGoodReading(
+        value=214170.0,
+        timestamp=datetime(2026, 9, 27, 1, 0, 0, tzinfo=timezone.utc).isoformat(),
+    )
+    now = datetime(2026, 9, 27, 20, 0, 0, tzinfo=timezone.utc)  # 19 hours later
+
+    # Old unbounded scaling would allow 500 * (19*3600/1200) = 28,500 here -
+    # this +4500 jump easily fit under that, which is exactly what let the
+    # real incident's misread through.
+    result = sanity.validate_reading(
+        "02186700",  # +4500 vs last_good
+        digit_count=8,
+        decimal_places=1,
+        max_gallons_per_interval=500.0,
+        max_sustained_gallons_per_hour=10.0,  # very tight, to make the cap obvious
+        last_good=last_good,
+        now=now,
+        nominal_interval_seconds=1200.0,
+    )
+
+    assert result.accepted is False
+    assert "implausible jump" in result.reason
+
+
+def test_sustained_cap_still_allows_a_realistic_multi_hour_jump() -> None:
+    last_good = sanity.LastGoodReading(
+        value=1000.0, timestamp=datetime(2026, 8, 28, 11, 0, 0, tzinfo=timezone.utc).isoformat()
+    )
+    now = datetime(2026, 8, 28, 13, 0, 0, tzinfo=timezone.utc)  # 2 hours later
+
+    # First interval gets the full 500 burst allowance; the remaining ~1h50m
+    # at 300/hour sustained adds ~550 more, for an allowance around 1050 -
+    # this +900 jump (e.g. a real leak or irrigation running that whole time)
+    # should still be accepted.
+    result = sanity.validate_reading(
+        "0001900",
+        digit_count=7,
+        max_gallons_per_interval=500.0,
+        max_sustained_gallons_per_hour=300.0,
+        last_good=last_good,
+        now=now,
+        nominal_interval_seconds=1200.0,
+    )
+
+    assert result.accepted is True
+    assert result.value == 1900.0
+
+
+def test_sustained_cap_does_not_affect_the_first_interval() -> None:
+    # A very tight sustained cap must not shrink the normal single-interval
+    # burst allowance - short-gap/on-time behavior is unchanged regardless
+    # of how low max_sustained_gallons_per_hour is set.
+    last_good = sanity.LastGoodReading(
+        value=1000.0, timestamp=datetime(2026, 8, 28, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    )
+    now = datetime(2026, 8, 28, 12, 15, 0, tzinfo=timezone.utc)  # within one interval
+
+    result = sanity.validate_reading(
+        "0001490",  # +490, within the 500 burst allowance
+        digit_count=7,
+        max_gallons_per_interval=500.0,
+        max_sustained_gallons_per_hour=1.0,  # would reject this if it applied here
+        last_good=last_good,
+        now=now,
+        nominal_interval_seconds=1200.0,
+    )
+
+    assert result.accepted is True
+
+
 def test_elapsed_interval_allowance_never_shrinks_below_one_interval() -> None:
     # A reading that arrives *before* a full nominal interval has passed
     # (e.g. a manual retry seconds after the last accepted run) must not get

@@ -114,6 +114,24 @@ increasingly stale baseline. Elapsed time under one nominal interval still
 gets the full single-interval allowance (never scaled down), matching the
 original behavior for the common on-time case.
 
+**`max_sustained_gallons_per_hour` caps how far that scaling can grow.**
+A real incident (2026-09-27) showed the fully-linear version of this
+scaling let a ~4,500-gallon misread through as "plausible" after a
+~19-hour gap, because the allowance had scaled up to 28,500 gallons by
+then - no household sustains anywhere near peak burst flow for that long.
+The first `nominal_interval_seconds` still gets the full
+`max_gallons_per_interval` burst allowance (real bursty multi-fixture
+usage), but every second beyond that is capped at this much lower
+sustained rate (`DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR` = 600 gal/hour =
+10 GPM - chosen to comfortably cover a real leak, a heavy irrigation day,
+or filling a pool, while still bounding how far one bad read can be masked
+by a long gap). This is a defense-in-depth complement to the leading-digit
+cross-check above, not a replacement for it - it wouldn't have caught the
+2026-09-27 incident by itself (4,500 gallons was still under even this
+tighter cap over that particular gap length), but it meaningfully narrows
+the window for *other* misreads, especially ones landing outside the
+glare-protected positions that the cross-check can't fix.
+
 ### `stuck_after_hours` actually controls the stuck window
 
 `stuck_after_hours` is converted to a sample count via
@@ -161,6 +179,14 @@ gets the original ssocr-then-template behavior, unchanged.
   had never seen. The 6 example readings are anchored to the meter's
   current `02141xxx.x` value range and will need refreshing once the
   leading digits roll over past `021`.
+- The prompt also names the glare failure mode explicitly (added
+  2026-09-27, after the leading-digit misread incident above): it tells the
+  model the leftmost 2-3 digits are often glare-crossed and change
+  extremely rarely, unlike the digits further right. This is domain/visual
+  grounding, not an output-format rule - deliberately different from the
+  "answer with exactly N digits" strictness that was tried and made things
+  worse (see the same report). Tested against the 16-capture ground-truth
+  set with no regression (still 16/16 exact-match) before adopting.
 
 **Latency was real and highly variable**, not just slow, back when the
 Ollama host ran CPU-only: one measured call took 123.9s total, of which only
@@ -193,7 +219,7 @@ itself supports, and the 6-shot prompt sends 7 images per call (6 examples
 16384 gives real headroom above what 7 small images plus prompt text
 actually need.
 
-**Leading-digit self-heal, tried first, before ever paying for a VLM call**
+**Leading-digit cross-check, run on every reading, not just rejected ones**
 (`water_meter/reader.py`, `_correct_glare_positions_from_last_good`):
 `calibration.low_confidence_ok_indexes` marks the meter's highest-place-
 value digits (millions/hundred-thousands) - positions under a fixed glare
@@ -201,28 +227,43 @@ streak no OCR method here has ever read reliably. Those positions physically
 can't change except once every tens of thousands of gallons, far slower than
 any realistic per-poll delta, so `last_good`'s own digits there are a
 strictly better source of truth than a fresh read of a spot the glare
-genuinely destroys. On a "value decreased"/"implausible jump" rejection,
-this splices `last_good`'s digits into just those positions and re-validates
-before ever trying the (slow, network-dependent) VLM requery below - often
-resolving the single most common rejection outright, for free. The
-corrected candidate still has to pass the same sanity gate, so a genuine
-rollover into a new highest-place-value digit that also happened to look
-implausible fails safely (falls through to the VLM requery) rather than
-smuggling through a bad value.
+genuinely destroys.
+
+This used to only run after a "value decreased"/"implausible jump"
+rejection - but a real incident (2026-09-27) showed that's not enough: a
+misread on exactly one of these positions can still slip straight past the
+plausibility gate on the *first* try whenever enough time has elapsed since
+`last_good` that the time-scaled jump allowance (see `sanity.py` below) is
+generous, so self-heal never got a chance to run because nothing had
+failed yet. The cross-check now always compares the raw read against
+`last_good`'s digits at these positions, regardless of whether the raw
+reading was already accepted:
+- positions agree -> no-op, whatever the raw validation result was stands.
+- positions disagree and the corrected candidate validates -> use the
+  corrected candidate (this is what catches the 2026-09-27 case: an
+  accepted-but-wrong value gets corrected before it's ever saved as the
+  new `last_good`).
+- positions disagree and the corrected candidate does *not* validate ->
+  ambiguous (could be a genuine rollover into a new highest-place-value
+  digit, or a different, deeper misread) - never silently trust either
+  digit string; this now produces a `"leading-digit mismatch: ..."`
+  rejection so the VLM-requery fallback below gets an independent look
+  before anything is accepted.
 
 **Automatic requery on a suspicious value** (`water_meter/reader.py`,
-`_requery_vlm_on_suspect_value`): tried next, if self-heal didn't resolve
-it or no glare positions are configured. The sanity gate's "value decreased" and
-"implausible jump" rejections mean the digits parsed cleanly but the
-resulting value looks wrong - the signature of a single misread digit
-(confirmed live: even the VLM occasionally flips the glare-affected leading
-digit), not a garbled read. Since the meter hasn't moved between the first
-attempt and now, one extra VLM call against the *same* crop - with the
-suspect value and the last confirmed reading given as context - gets a
-second, better-informed answer instead of discarding the whole capture.
-This fires at most once per run and only for those two rejection reasons;
-a bad digit count, a non-numeric read, or an outright capture/OCR failure
-means there's nothing a requery of the same image would fix.
+`_requery_vlm_on_suspect_value`): tried next, if the cross-check above
+didn't resolve it or no glare positions are configured. "value decreased",
+"implausible jump", and "leading-digit mismatch" all mean the digits parsed
+cleanly but the resulting value looks wrong - the signature of a single
+misread digit (confirmed live: even the VLM occasionally flips the
+glare-affected leading digit), not a garbled read. Since the meter hasn't
+moved between the first attempt and now, one extra VLM call against the
+*same* crop - with the suspect value and the last confirmed reading given
+as context - gets a second, better-informed answer instead of discarding
+the whole capture. This fires at most once per run and only for those
+three rejection reasons; a bad digit count, a non-numeric read, or an
+outright capture/OCR failure means there's nothing a requery of the same
+image would fix.
 
 Because a single run can now involve two full VLM calls back-to-back (the
 initial attempt plus one requery), `deploy/systemd/water-meter-reader.service`

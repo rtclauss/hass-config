@@ -314,6 +314,30 @@ def test_read_digits_vlm_sends_fewshot_examples_before_the_query_image(
         assert images[i - 1] == expected_example_b64
 
 
+def test_read_digits_vlm_prompt_explains_the_glare_and_stability_of_leading_digits(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    # Added after a real incident (2026-09-27) where a leading digit was
+    # misread and, unlike a stricter-format prompt (tried and found to make
+    # things worse - see docs/water_meter.md), this adds genuine visual/
+    # domain grounding rather than output-format rules.
+    image_path = tmp_path / "crop.jpg"  # type: ignore[operator]
+    image_path.write_bytes(b"fake-jpeg-bytes")
+    captured: dict = {}
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeHttpResponse:
+        captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+        return _FakeHttpResponse({"response": "02139879"})
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    ocr.read_digits_vlm(image_path, host="truenas.local:30068", digit_count=8)
+
+    prompt = captured["body"]["prompt"]
+    assert "glare" in prompt
+    assert "change extremely rarely" in prompt
+
+
 def test_read_digits_vlm_wraps_a_network_failure_as_ocr_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
