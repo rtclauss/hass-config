@@ -63,6 +63,7 @@ def validate_reading(
     decimal_places: int = 0,
     nominal_interval_seconds: float = 600.0,
     stuck_after_hours: float = 24.0,
+    max_sustained_gallons_per_hour: float | None = None,
 ) -> ValidationResult:
     """Gate a freshly-OCR'd reading before it is ever published to HA.
 
@@ -103,6 +104,19 @@ def validate_reading(
     stuck_after_hours can only be honored up to whatever history_limit
     allows to be retained - configure history_limit generously enough to
     cover the stuck window you actually want.
+
+    max_sustained_gallons_per_hour caps how far the elapsed-time scaling
+    above can grow for gaps longer than one nominal_interval_seconds - a
+    real incident (2026-09-27) showed the uncapped version scaling to a
+    28,500-gallon allowance over a ~19-hour gap, generous enough to let a
+    ~4,500-gallon misread through as "plausible". No household sustains
+    anywhere near peak burst flow for many hours, so the *first* interval
+    still gets the full max_gallons_per_interval burst allowance (bursty
+    multi-fixture usage is real and expected), but every second beyond that
+    is capped at this much lower sustained rate instead of continuing to
+    scale at the burst rate forever. None (the default) preserves the old
+    fully-linear, uncapped behavior - only reader.py's production call site
+    passes an actual cap.
     """
     now = now or datetime.now(timezone.utc)
 
@@ -130,14 +144,28 @@ def validate_reading(
         last_good_time = last_good_time.replace(tzinfo=timezone.utc)
     elapsed_seconds = max(0.0, (now - last_good_time).total_seconds())
     intervals_elapsed = max(1.0, elapsed_seconds / nominal_interval_seconds)
-    allowance = max_gallons_per_interval * intervals_elapsed
+    if max_sustained_gallons_per_hour is None:
+        allowance = max_gallons_per_interval * intervals_elapsed
+    else:
+        extra_seconds = max(0.0, elapsed_seconds - nominal_interval_seconds)
+        allowance = max_gallons_per_interval + max_sustained_gallons_per_hour * (
+            extra_seconds / 3600.0
+        )
     if delta > allowance:
+        if max_sustained_gallons_per_hour is None:
+            detail = (
+                f"{intervals_elapsed:.1f}x the {max_gallons_per_interval}/interval allowance "
+                f"over {elapsed_seconds:.0f}s since the last good reading"
+            )
+        else:
+            detail = (
+                f"{max_gallons_per_interval} burst + {max_sustained_gallons_per_hour}/hour "
+                f"sustained over {elapsed_seconds:.0f}s since the last good reading"
+            )
         return ValidationResult(
             False,
             None,
-            f"implausible jump: +{delta} exceeds max {allowance} "
-            f"({intervals_elapsed:.1f}x the {max_gallons_per_interval}/interval allowance "
-            f"over {elapsed_seconds:.0f}s since the last good reading)",
+            f"implausible jump: +{delta} exceeds max {allowance} ({detail})",
         )
 
     history = (*last_good.history, value)[-history_limit:]

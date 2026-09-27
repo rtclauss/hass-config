@@ -675,6 +675,72 @@ def test_self_heal_falls_through_to_vlm_requery_when_it_cannot_resolve_it(
     assert result == reader.RunResult(True, 11.0, "ok", stuck=False)
 
 
+def test_accepted_reading_with_wrong_glare_digit_gets_silently_corrected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression test for a real 2026-09-27 incident: a misread landed on a
+    # glare-protected position but the resulting (wrong) value still looked
+    # like a plausible jump on its own - because a long gap since last_good
+    # made the time-scaled allowance generous - so it was accepted outright
+    # and self-heal (gated on "already failed validation") never ran. Now
+    # the leading-digit cross-check always runs, even on an accepted read.
+    connection = _connection(tmp_path, vlm_host="truenas.local:30068")
+    calibration = _calibration(
+        digit_count=3, max_gallons_per_interval=1000.0, low_confidence_ok_indexes=(0,)
+    )
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=150.0, timestamp=NOW.isoformat())
+    )
+
+    def _unexpected(image_path: object, **kwargs: object) -> str:
+        raise AssertionError("should be corrected for free, never needing the VLM")
+
+    monkeypatch.setattr(ocr, "read_digits_vlm", _unexpected)
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        # "950" (true "150") validates fine on its own (+800, well under the
+        # generous max) - but position 0 disagrees with last_good's "1".
+        ocr_reader=lambda image_path, digit_crops: "950",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result == reader.RunResult(True, 150.0, "ok", stuck=False)
+
+
+def test_accepted_reading_with_unresolvable_glare_mismatch_falls_through_to_vlm_requery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Same setup, but this time correcting position 0 back to last_good's
+    # digit produces a decrease (140 < 150) rather than a clean match -
+    # ambiguous enough (genuine rollover vs. a deeper misread) that it must
+    # not be silently trusted either way; the VLM requery gets the final say.
+    connection = _connection(tmp_path, vlm_host="truenas.local:30068")
+    calibration = _calibration(
+        digit_count=3, max_gallons_per_interval=1000.0, low_confidence_ok_indexes=(0,)
+    )
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=150.0, timestamp=NOW.isoformat())
+    )
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda image_path, **kwargs: "151")
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "940",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result == reader.RunResult(True, 151.0, "ok", stuck=False)
+
+
 def test_default_publisher_reports_error_status_for_a_stuck_reading(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

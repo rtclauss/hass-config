@@ -12,6 +12,19 @@ DEFAULT_FRAMES_TO_DISCARD = 2
 DEFAULT_FRAMES_TO_GRAB = 4
 DEFAULT_HISTORY_LIMIT = 200
 DEFAULT_MAX_GALLONS_PER_INTERVAL = 500.0
+# Real incident (2026-09-27): max_gallons_per_interval scaled linearly and
+# unbounded by elapsed time (see sanity.validate_reading), so a ~19-hour gap
+# since last_good let a misread ~4,500-gallon jump through as "plausible"
+# (28,500 gal was allowed over that gap) - the reading looked fine on its
+# own even though nothing in a household actually sustains anywhere near
+# peak burst flow for that long. 10 GPM (600 gal/hour) is a deliberately
+# generous sustained-usage cap - well above a severe continuous leak (EPA
+# WaterSense's own "severe" running-toilet threshold is ~0.5 GPM) and above
+# a full day of heavy irrigation/pool-filling - while still bounding how far
+# a single bad read can be masked by a long gap. Only applies to elapsed
+# time *beyond* the first nominal_interval_seconds; short-gap/on-time
+# behavior is unchanged (see sanity.validate_reading).
+DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR = 600.0
 # Matches the systemd timer's OnUnitActiveSec (deploy/systemd/water-meter-
 # reader.timer - 20min, raised from 10min on 2026-09-14 after the near-
 # continuous vision-LLM load from a 10-minute cadence tripped the TrueNAS
@@ -170,6 +183,8 @@ class CalibrationConfig:
     # OnUnitActiveSec for the elapsed-interval scaling in
     # sanity.validate_reading to mean what its name says.
     nominal_interval_seconds: float = DEFAULT_NOMINAL_INTERVAL_SECONDS
+    # See DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR.
+    max_sustained_gallons_per_hour: float = DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -187,6 +202,7 @@ class CalibrationConfig:
             "decimal_places": self.decimal_places,
             "low_confidence_ok_indexes": list(self.low_confidence_ok_indexes),
             "nominal_interval_seconds": self.nominal_interval_seconds,
+            "max_sustained_gallons_per_hour": self.max_sustained_gallons_per_hour,
         }
 
 
@@ -216,6 +232,9 @@ def calibration_config_from_dict(data: dict[str, Any]) -> CalibrationConfig:
         ),
         nominal_interval_seconds=float(
             data.get("nominal_interval_seconds", DEFAULT_NOMINAL_INTERVAL_SECONDS)
+        ),
+        max_sustained_gallons_per_hour=float(
+            data.get("max_sustained_gallons_per_hour", DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR)
         ),
     )
 
