@@ -87,15 +87,20 @@ confusion the VLM kept misreading identically across 8 consecutive polls -
 the crop simply didn't have enough real pixels in it at 640x480 for that
 specific digit pattern.
 
-**Existing `calibration.json` files drawn against 640x480 must have every
-pixel coordinate (`roi`, every `digit_boxes` entry) multiplied by the same
-scale factor as the resolution change**, or the boxes will land in the
-wrong place on the now-larger frame. This project's own move was a clean
-2x in both dimensions (640x480 -> 1280x960), so every coordinate was simply
-doubled - no interactive recalibration needed, since doubling preserves the
-same physical field of view exactly. A non-integer or non-uniform
-resolution change would need a real recalibration pass instead (`calibrate
-capture-only` + `calibrate` - see the runbook below).
+**Changing capture resolution requires a real recalibration pass, even for
+an exact 2x change.** The first attempt at this project's own 640x480 ->
+1280x960 move just doubled every existing `roi`/`digit_boxes` coordinate,
+on the assumption that a clean 2x resolution change preserves the same
+physical field of view. It didn't: this camera's 1280x960 mode is not a
+uniform 2x crop/scale of its 640x480 mode (a common UVC sensor-windowing
+quirk - different resolution modes on the same sensor can each crop a
+slightly different region), so the doubled ROI landed visibly
+misaligned/clipped on the larger frame. The fix was a genuine recalibration
+against a fresh 1280x960 reference frame (`calibrate capture-only` +
+`calibrate` - see the runbook below), not arithmetic on the old
+coordinates. Treat any capture-resolution change the same way: always
+recalibrate against a fresh frame at the new resolution and visually
+confirm the crop, never assume the scale factor carries over.
 `CalibrationConfig.capture_width`/`capture_height` default to the *old*
 640x480 (not the new defaults) specifically so an existing calibration.json
 without these fields doesn't silently start capturing at the wrong
@@ -390,6 +395,13 @@ before this existed.
    `/etc/water-meter/credentials.env`. Lets `reader.py` call
    `notify.<WATER_METER_HA_NOTIFY_SERVICE>` (see
    `deploy/systemd/water-meter-reader.service` for the URL/service name).
+   **A mobile_app device's real service name is `mobile_app_<slug>`, not the
+   bare device name** (e.g. `mobile_app_wethop`, not `wethop`) - confirmed
+   via `GET /api/services` on the live HA instance. Getting this wrong
+   doesn't surface as an error: the notifier is deliberately fire-and-forget
+   (see below), so a wrong service name just silently 400s forever. Verify
+   with a manual `curl` against `/api/services/notify/<name>` before trusting
+   it, not just by setting the env var and waiting for a real rejection.
 2. Any long random string, invented by the user - set as
    `WATER_METER_CORRECTION_TOKEN` in the same credentials.env, *and* as the
    `water_meter_correction_token` secret (prefixed `Bearer `) in HA's own
