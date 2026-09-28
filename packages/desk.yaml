@@ -311,17 +311,31 @@ script:
     fields:
       target_button:
         name: Target button
-        required: true
+        required: false
         selector:
           entity:
             domain: button
+      height_limit:
+        name: Height limit
+        selector:
+          select:
+            options:
+              - max
+              - min
     sequence:
       - condition: state
         entity_id: timer.uplift_desk_motion_window
         state: "idle"
-      - action: button.press
-        target:
-          entity_id: "{{ target_button }}"
+      - choose:
+          - conditions: "{{ height_limit is defined }}"
+            sequence:
+              - action: script.uplift_desk_move_to_limit
+                data:
+                  height_limit: "{{ height_limit }}"
+        default:
+          - action: button.press
+            target:
+              entity_id: "{{ target_button }}"
       - action: timer.start
         target:
           entity_id: timer.uplift_desk_motion_window
@@ -337,7 +351,7 @@ script:
     sequence:
       - action: script.uplift_desk_auto_move
         data:
-          target_button: button.uplift_desk_75b205_move_to_max_height
+          height_limit: max
 
   uplift_desk_auto_move_preset_1:
     alias: uplift_desk_auto_move_preset_1
@@ -376,9 +390,9 @@ script:
     trace:
       stored_traces: 10
     sequence:
-      - action: button.press
-        target:
-          entity_id: button.uplift_desk_75b205_move_to_max_height
+      - action: script.uplift_desk_move_to_limit
+        data:
+          height_limit: max
 
   uplift_desk_manual_move_min:
     alias: uplift_desk_manual_move_min
@@ -391,9 +405,40 @@ script:
     trace:
       stored_traces: 10
     sequence:
-      - action: button.press
+      - action: script.uplift_desk_move_to_limit
+        data:
+          height_limit: min
+
+  uplift_desk_move_to_limit:
+    alias: Desk Move to Height Limit
+    mode: single
+    trace:
+      stored_traces: 10
+    fields:
+      height_limit:
+        required: true
+        selector:
+          select:
+            options:
+              - max
+              - min
+    sequence:
+      # User-confirmed keypad limits: 25.3 and 50.9 inches, rounded to mm.
+      - variables:
+          target_mm: "{{ 1293 if height_limit == 'max' else 643 }}"
+      - condition: template
+        value_template: >-
+          {{ height_limit in ['min', 'max'] and
+             states('number.uplift_desk_75b205_height_setpoint') != 'unavailable' and
+             state_attr('number.uplift_desk_75b205_height_setpoint', 'min') is number and
+             state_attr('number.uplift_desk_75b205_height_setpoint', 'max') is number and
+             state_attr('number.uplift_desk_75b205_height_setpoint', 'min') <= target_mm | int <=
+             state_attr('number.uplift_desk_75b205_height_setpoint', 'max') }}
+      - action: number.set_value
         target:
-          entity_id: button.uplift_desk_75b205_move_to_min_height
+          entity_id: number.uplift_desk_75b205_height_setpoint
+        data:
+          value: "{{ target_mm }}"
 
   uplift_desk_manual_move_preset_1:
     alias: uplift_desk_manual_move_preset_1
