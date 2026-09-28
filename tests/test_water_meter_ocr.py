@@ -314,6 +314,73 @@ def test_read_digits_vlm_sends_fewshot_examples_before_the_query_image(
         assert images[i - 1] == expected_example_b64
 
 
+def test_load_dynamic_examples_returns_empty_without_a_directory() -> None:
+    assert ocr.load_dynamic_examples(None) == ()
+
+
+def test_load_dynamic_examples_returns_empty_when_index_is_missing(tmp_path: object) -> None:
+    assert ocr.load_dynamic_examples(tmp_path) == ()  # type: ignore[arg-type]
+
+
+def test_load_dynamic_examples_reads_the_most_recent_entries_up_to_the_limit(
+    tmp_path: object,
+) -> None:
+    directory = tmp_path  # type: ignore[assignment]
+    entries = []
+    for i in range(5):
+        (directory / f"ex{i}.jpg").write_bytes(f"image-{i}".encode())  # type: ignore[operator]
+        entries.append({"file": f"ex{i}.jpg", "digits": f"0000000{i}"})
+    (directory / "index.json").write_text(json.dumps(entries))  # type: ignore[operator]
+
+    result = ocr.load_dynamic_examples(directory, limit=2)  # type: ignore[arg-type]
+
+    assert [digits for _, digits in result] == ["00000003", "00000004"]
+
+
+def test_load_dynamic_examples_skips_entries_whose_image_file_is_missing(
+    tmp_path: object,
+) -> None:
+    directory = tmp_path  # type: ignore[assignment]
+    (directory / "index.json").write_text(  # type: ignore[operator]
+        json.dumps([{"file": "missing.jpg", "digits": "12345678"}])
+    )
+
+    assert ocr.load_dynamic_examples(directory) == ()  # type: ignore[arg-type]
+
+
+def test_read_digits_vlm_appends_dynamic_examples_after_the_static_ones(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    image_path = tmp_path / "crop.jpg"  # type: ignore[operator]
+    image_path.write_bytes(b"the-actual-query-crop")
+    examples_dir = tmp_path / "human_corrections"  # type: ignore[operator]
+    examples_dir.mkdir()
+    (examples_dir / "correction1.jpg").write_bytes(b"human-corrected-crop")
+    (examples_dir / "index.json").write_text(
+        json.dumps([{"file": "correction1.jpg", "digits": "02149999"}])
+    )
+    captured: dict = {}
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeHttpResponse:
+        captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+        return _FakeHttpResponse({"response": "02139879"})
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    ocr.read_digits_vlm(
+        image_path, host="truenas.local:30068", digit_count=8, dynamic_examples_dir=examples_dir
+    )
+
+    images = captured["body"]["images"]
+    # static examples, then the dynamic one, then the query image last.
+    assert len(images) == len(ocr.VLM_FEWSHOT_EXAMPLES) + 2
+    assert images[len(ocr.VLM_FEWSHOT_EXAMPLES)] == base64.b64encode(
+        b"human-corrected-crop"
+    ).decode("ascii")
+    assert images[-1] == base64.b64encode(b"the-actual-query-crop").decode("ascii")
+    assert f"Example {len(ocr.VLM_FEWSHOT_EXAMPLES) + 1} reading: 02149999" in captured["body"]["prompt"]
+
+
 def test_read_digits_vlm_prompt_explains_the_glare_and_stability_of_leading_digits(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:

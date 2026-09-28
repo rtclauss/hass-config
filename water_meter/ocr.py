@@ -64,7 +64,7 @@ VLM_FEWSHOT_EXAMPLES: tuple[tuple[str, str], ...] = (
     ("example_2_02139768.jpg", "02139768"),
     ("example_3_02140095.jpg", "02140095"),
     ("example_4_02140333.jpg", "02140333"),
-    ("example_5_02138978.jpg", "02138978"),
+    ("example_5_02147134.jpg", "02147134"),
     ("example_6_02140226.jpg", "02140226"),
 )
 """Real captures of this exact meter, each with its true reading confirmed
@@ -76,6 +76,27 @@ looks worked far better than just wording the zero-shot prompt more
 strictly (which was tried first and made accuracy *worse*, not better -
 see the report). Anchored to the meter's current 02141xxx.x value range;
 will need refreshing once the leading digits roll over past "021".
+
+example_5 was originally a second 02138978 photo - byte-different from
+example_1 but the same digit string, adding real-world photo variety but
+teaching the model nothing about any digit it hadn't already seen. A
+2026-09-28 golden-set regression run (water_meter/eval.py,
+water_meter/golden_set/ - 16 diverse real captures, visually verified)
+found the production model scored only 2/16 (12%) exact-match, with 12 of
+the 14 misses sharing one specific error: digit position 3 read as "1" or
+"0" whenever its true value was "7" (the same position correctly reads "6"
+and "8" without issue) - and a second, differently-trained model
+(qwen3-vl:30b-a3b-instruct) hit the identical failure, which rules out
+"this model is just bad at this" and points at a real few-shot coverage
+gap instead: none of the 6 original examples happen to contain a "7" at
+that position. Swapping the redundant example_5 for a real "7134" capture
+took the same qwen2.5vl:7b model from 2/16 to 7/16 in isolation, and to
+12/16 (75%) when tested with three diverse "7"-position examples via the
+dynamic-few-shot mechanism (see load_dynamic_examples) - strong evidence
+this is a coverage problem, not a model-quality one. Only one slot was
+swapped here (not three) to keep this static set's context-budget cost
+unchanged; the dynamic mechanism is the intended path for feeding in
+further real corrected examples over time without bloating every call.
 """
 
 DEFAULT_VLM_TIMEOUT = 480.0
@@ -95,15 +116,74 @@ excuse to shrink the safety margin. See the service's TimeoutStartSec,
 which must stay above this.
 """
 
-def _build_vlm_fewshot_prompt(digit_count: int) -> str:
+DEFAULT_DYNAMIC_FEWSHOT_LIMIT = 3
+"""Cap on how many human-corrected examples get appended to the static
+6-shot prompt (see load_dynamic_examples). Each image costs real context
+budget - 6 static examples + 1 query already run ~7-8k tokens against the
+16384 num_ctx (see DEFAULT_VLM_NUM_CTX), so this stays small enough to
+leave headroom rather than chasing every available correction.
+"""
+
+
+def load_dynamic_examples(
+    directory: Path | None, limit: int = DEFAULT_DYNAMIC_FEWSHOT_LIMIT
+) -> tuple[tuple[Path, str], ...]:
+    """Load the most recent human-corrected (image, digits) pairs, if any.
+
+    directory is correction_listener.py's rolling human_corrections folder -
+    every time a person approves/modifies a reading via the actionable
+    notification, that crop and its confirmed-correct digit string get
+    saved there. Feeding a handful of these back into the prompt as
+    additional few-shot examples is the mechanism for "learning" from a
+    correction without retraining anything: they're real captures of this
+    display, at its current value range, confirmed correct by a human who
+    looked at the actual crop - a stronger signal than any of this
+    project's other feedback loops.
+
+    Missing directory/index (no corrections yet, or the feature unused)
+    returns an empty tuple - dynamic examples are additive, never required.
+    """
+    if directory is None:
+        return ()
+    index_path = directory / "index.json"
+    if not index_path.exists():
+        return ()
+    try:
+        import json as json_module
+
+        entries = json_module.loads(index_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ()
+    if not isinstance(entries, list):
+        return ()
+
+    examples = []
+    for entry in entries[-limit:]:
+        try:
+            file_name = str(entry["file"])
+            digits = str(entry["digits"])
+        except (KeyError, TypeError):
+            continue
+        path = directory / file_name
+        if path.exists():
+            examples.append((path, digits))
+    return tuple(examples)
+
+
+def _build_vlm_fewshot_prompt(
+    digit_count: int, dynamic_examples: tuple[tuple[Path, str], ...] = ()
+) -> str:
+    all_readings = [reading for _, reading in VLM_FEWSHOT_EXAMPLES] + [
+        reading for _, reading in dynamic_examples
+    ]
     lines = [
         "You are reading a water meter's LCD digit display. The first "
-        f"{len(VLM_FEWSHOT_EXAMPLES)} images below are examples from this "
+        f"{len(all_readings)} images below are examples from this "
         f"exact same display, each labeled with its correct {digit_count}-digit "
         "reading, including any leading zeros:",
         "",
     ]
-    for i, (_, reading) in enumerate(VLM_FEWSHOT_EXAMPLES, 1):
+    for i, reading in enumerate(all_readings, 1):
         lines.append(f"Example {i} reading: {reading}")
     lines += [
         "",
@@ -154,6 +234,7 @@ def read_digits_vlm(
     num_thread: int = DEFAULT_VLM_NUM_THREAD,
     num_ctx: int = DEFAULT_VLM_NUM_CTX,
     hint: str | None = None,
+    dynamic_examples_dir: Path | None = None,
 ) -> str:
     """Ask a vision LLM (via an Ollama /api/generate endpoint) to read the
     digits directly off the crop image.
@@ -184,18 +265,22 @@ def read_digits_vlm(
     import urllib.error
     import urllib.request
 
-    prompt = _build_vlm_fewshot_prompt(digit_count)
+    dynamic_examples = load_dynamic_examples(dynamic_examples_dir)
+    prompt = _build_vlm_fewshot_prompt(digit_count, dynamic_examples)
     if hint:
         prompt = f"{prompt} {hint}"
     example_images = [
         base64.b64encode((VLM_EXAMPLES_DIR / filename).read_bytes()).decode("ascii")
         for filename, _ in VLM_FEWSHOT_EXAMPLES
     ]
+    dynamic_images = [
+        base64.b64encode(path.read_bytes()).decode("ascii") for path, _ in dynamic_examples
+    ]
     query_image = base64.b64encode(image_path.read_bytes()).decode("ascii")
     payload = {
         "model": model,
         "prompt": prompt,
-        "images": [*example_images, query_image],
+        "images": [*example_images, *dynamic_images, query_image],
         "stream": False,
         "options": {"num_thread": num_thread, "num_ctx": num_ctx},
     }
@@ -403,6 +488,7 @@ def read_digits(
     vlm_host: str | None = None,
     vlm_model: str = DEFAULT_VLM_MODEL,
     vlm_timeout: float = DEFAULT_VLM_TIMEOUT,
+    dynamic_examples_dir: Path | None = None,
 ) -> str:
     """ssocr (cheap, fast when it works) -> vision LLM (slow, ~2min, but the
     only method that has ever correctly read the glare-obscured digits) ->
@@ -451,6 +537,7 @@ def read_digits(
                 digit_count=calibration.digit_count,
                 model=vlm_model,
                 timeout=vlm_timeout,
+                dynamic_examples_dir=dynamic_examples_dir,
             )
             if bootstrap:
                 confirmation = read_digits_vlm(
@@ -459,6 +546,7 @@ def read_digits(
                     digit_count=calibration.digit_count,
                     model=vlm_model,
                     timeout=vlm_timeout,
+                    dynamic_examples_dir=dynamic_examples_dir,
                 )
                 if confirmation != digits:
                     raise OcrError(
