@@ -10,6 +10,19 @@ from typing import Any
 DEFAULT_LIGHT_WARMUP_SECONDS = 1.5
 DEFAULT_FRAMES_TO_DISCARD = 2
 DEFAULT_FRAMES_TO_GRAB = 4
+# The webcam (Logitech C270) was being opened with no explicit resolution
+# request, so cv2/V4L2 defaulted to the lowest common UVC mode (640x480)
+# instead of the camera's actual best mode. Confirmed via `v4l2-ctl
+# --list-formats-ext`: this camera supports up to 1280x960 in both YUYV and
+# MJPG at full 30fps. A real incident (2026-09-28) needed the full raw frame
+# (not the tiny ~142x32 calibrated crop) to visually resolve a 0/8 digit
+# confusion the VLM kept getting wrong - the calibrated ROI simply didn't
+# have enough real pixels in it at 640x480. 1280x960 is exactly 2x in each
+# dimension, so it doubles the pixel count of the same physical field of
+# view without moving the camera - every existing calibration.json
+# coordinate (roi, digit_boxes) needs doubling to match.
+DEFAULT_CAPTURE_WIDTH = 1280
+DEFAULT_CAPTURE_HEIGHT = 960
 DEFAULT_HISTORY_LIMIT = 200
 DEFAULT_MAX_GALLONS_PER_INTERVAL = 500.0
 # Real incident (2026-09-27): max_gallons_per_interval scaled linearly and
@@ -200,6 +213,16 @@ class CalibrationConfig:
     nominal_interval_seconds: float = DEFAULT_NOMINAL_INTERVAL_SECONDS
     # See DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR.
     max_sustained_gallons_per_hour: float = DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR
+    # Defaults to the *old* 640x480 (not DEFAULT_CAPTURE_WIDTH/HEIGHT above),
+    # deliberately - a calibration.json without these fields was drawn
+    # against 640x480 captures, and roi/digit_boxes are raw pixel
+    # coordinates that would land in the wrong place at a different
+    # resolution. Any deployment moving to a higher capture resolution must
+    # set these explicitly and re-derive its box coordinates to match (a
+    # clean integer scale factor, like this project's 640x480 -> 1280x960
+    # move, just needs every coordinate multiplied by that factor).
+    capture_width: int = 640
+    capture_height: int = 480
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -218,6 +241,8 @@ class CalibrationConfig:
             "low_confidence_ok_indexes": list(self.low_confidence_ok_indexes),
             "nominal_interval_seconds": self.nominal_interval_seconds,
             "max_sustained_gallons_per_hour": self.max_sustained_gallons_per_hour,
+            "capture_width": self.capture_width,
+            "capture_height": self.capture_height,
         }
 
 
@@ -251,6 +276,8 @@ def calibration_config_from_dict(data: dict[str, Any]) -> CalibrationConfig:
         max_sustained_gallons_per_hour=float(
             data.get("max_sustained_gallons_per_hour", DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR)
         ),
+        capture_width=int(data.get("capture_width", 640)),
+        capture_height=int(data.get("capture_height", 480)),
     )
 
 

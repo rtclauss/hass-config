@@ -6,9 +6,12 @@ from pathlib import Path
 
 from . import capture, ocr
 from .config import (
+    DEFAULT_CAPTURE_HEIGHT,
+    DEFAULT_CAPTURE_WIDTH,
     DEFAULT_FRAMES_TO_DISCARD,
     DEFAULT_FRAMES_TO_GRAB,
     DEFAULT_LIGHT_WARMUP_SECONDS,
+    DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR,
     DEFAULT_NOMINAL_INTERVAL_SECONDS,
     CalibrationConfig,
     connection_config_from_env,
@@ -36,6 +39,8 @@ def capture_reference_frame(output_path: Path) -> None:
             connection.camera_device,
             frames_to_grab=DEFAULT_FRAMES_TO_GRAB,
             frames_to_discard=DEFAULT_FRAMES_TO_DISCARD,
+            width=DEFAULT_CAPTURE_WIDTH,
+            height=DEFAULT_CAPTURE_HEIGHT,
         )
     finally:
         capture.set_light(connection, on=False)
@@ -114,6 +119,18 @@ def write_config(
         nominal_interval_seconds=(
             existing.nominal_interval_seconds if existing else DEFAULT_NOMINAL_INTERVAL_SECONDS
         ),
+        max_sustained_gallons_per_hour=(
+            existing.max_sustained_gallons_per_hour
+            if existing
+            else DEFAULT_MAX_SUSTAINED_GALLONS_PER_HOUR
+        ),
+        # NOT preserved from `existing` - roi/digit_boxes are always fresh
+        # coordinates just drawn on a reference frame captured at *this*
+        # resolution (capture_reference_frame uses these same defaults), so
+        # an old capture_width/height from a previous, possibly different
+        # resolution would be wrong here, not merely stale.
+        capture_width=DEFAULT_CAPTURE_WIDTH,
+        capture_height=DEFAULT_CAPTURE_HEIGHT,
     )
     save_calibration_config(config_path, config)
     return config

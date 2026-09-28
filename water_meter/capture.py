@@ -76,13 +76,35 @@ def set_light(connection: ConnectionConfig, *, on: bool) -> None:
     LOG.info("Published light %s to %s", "ON" if on else "OFF", connection.light_topic)
 
 
-def grab_stable_frame(device: str, *, frames_to_grab: int, frames_to_discard: int) -> "np.ndarray":
-    """Open the webcam, discard the auto-exposure settling frames, return the last."""
+def grab_stable_frame(
+    device: str,
+    *,
+    frames_to_grab: int,
+    frames_to_discard: int,
+    width: int = 640,
+    height: int = 480,
+) -> "np.ndarray":
+    """Open the webcam, discard the auto-exposure settling frames, return the last.
+
+    width/height are requested explicitly because cv2.VideoCapture doesn't
+    otherwise ask the driver for anything - V4L2 was silently defaulting to
+    640x480 (the lowest common UVC mode) even though this camera (Logitech
+    C270) supports up to 1280x960. That mattered for real: a 2026-09-28
+    incident needed the full raw frame, not the tiny ~142x32 calibrated
+    crop, to visually resolve a 0/8 digit confusion the VLM kept getting
+    wrong at the old resolution. MJPG (not the default raw YUYV) because
+    this camera's higher resolutions only hit full 30fps in MJPG - see
+    `v4l2-ctl --list-formats-ext`.
+    """
     import cv2
 
     capture = cv2.VideoCapture(device)
     if not capture.isOpened():
         raise CaptureError(f"Could not open camera device {device!r}")
+
+    capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
     try:
         frame = None

@@ -18,6 +18,8 @@ def test_write_config_uses_defaults_when_no_existing_file(tmp_path: Path) -> Non
     assert config.decimal_places == 0
     assert config.low_confidence_ok_indexes == ()
     assert config.nominal_interval_seconds == 1200.0
+    assert config.capture_width == calibrate.DEFAULT_CAPTURE_WIDTH
+    assert config.capture_height == calibrate.DEFAULT_CAPTURE_HEIGHT
 
 
 def test_write_config_preserves_every_existing_field_on_recalibration(tmp_path: Path) -> None:
@@ -44,6 +46,9 @@ def test_write_config_preserves_every_existing_field_on_recalibration(tmp_path: 
         decimal_places=1,
         low_confidence_ok_indexes=(0, 1),
         nominal_interval_seconds=300.0,
+        max_sustained_gallons_per_hour=42.0,
+        capture_width=999,
+        capture_height=888,
     )
     save_calibration_config(config_path, existing)
 
@@ -65,6 +70,13 @@ def test_write_config_preserves_every_existing_field_on_recalibration(tmp_path: 
     assert config.stuck_after_hours == 12.0
     assert config.history_limit == 100
     assert config.ssocr_args == ("-d", "8")
+    assert config.max_sustained_gallons_per_hour == 42.0
+    # capture_width/height are deliberately NOT preserved - the new
+    # roi/digit_boxes were just drawn on a reference frame captured at the
+    # *current* default resolution, not whatever resolution the old config
+    # happened to record.
+    assert config.capture_width == calibrate.DEFAULT_CAPTURE_WIDTH
+    assert config.capture_height == calibrate.DEFAULT_CAPTURE_HEIGHT
 
 
 def _install_fake_cv2(monkeypatch: pytest.MonkeyPatch) -> None:

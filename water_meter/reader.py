@@ -61,6 +61,8 @@ def run_once(
             connection.camera_device,
             frames_to_grab=calibration.frames_to_grab,
             frames_to_discard=calibration.frames_to_discard,
+            width=calibration.capture_width,
+            height=calibration.capture_height,
         )
     )
     set_light = set_light or (lambda on: capture.set_light(connection, on=on))

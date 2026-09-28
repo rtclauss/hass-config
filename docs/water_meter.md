@@ -13,11 +13,14 @@ or `deploy/systemd/water-meter-reader.*`.
   to read.
 - Location: indoors, conditioned space, mains power nearby - no weatherproofing
   or battery/duty-cycling needed.
-- Raspberry Pi 3B/3B+, running **Raspberry Pi OS Lite (64-bit)**, Debian 13
-  "Trixie" - headless, no desktop needed.
-- A USB webcam and an existing Zigbee bulb (already paired to zigbee2mqtt),
-  mounted in a fixed jig in front of the meter's display window. Offset the
-  light ~30-45 degrees from the camera axis (not coaxial) to avoid glare.
+- Raspberry Pi 4 Model B, running Ubuntu 26.04 LTS - headless, no desktop
+  needed. (Originally a Pi 3B+ on Raspberry Pi OS Lite; replaced 2026-09-20.)
+- A USB webcam (Logitech C270) and an existing Zigbee bulb (already paired
+  to zigbee2mqtt), mounted in a fixed jig in front of the meter's display
+  window. Offset the light ~30-45 degrees from the camera axis (not
+  coaxial) to avoid glare. Captured at **1280x960** (see "Capture
+  resolution" below) - the camera supports this in both YUYV and MJPG at
+  full 30fps (`v4l2-ctl --list-formats-ext`).
 
 ## Architecture
 
@@ -66,6 +69,37 @@ Design choices made specifically to avoid repeating the ESP32-CAM experience:
   failures across runs and reboots the host once they cross
   `WATER_METER_CAPTURE_FAILURE_REBOOT_THRESHOLD` (default 2), rather than
   silently erroring every cycle until a human notices and reboots it by hand.
+
+### Capture resolution
+
+`cv2.VideoCapture(device)` doesn't request a resolution, so V4L2 was
+silently defaulting to 640x480 - the lowest common UVC mode - even though
+this camera supports up to 1280x960 (confirmed via `v4l2-ctl
+--list-formats-ext`; both YUYV and MJPG hit full 30fps at that size).
+`capture.grab_stable_frame` now explicitly requests `CalibrationConfig.
+capture_width`/`capture_height` (default 1280x960 for a fresh calibration -
+see `DEFAULT_CAPTURE_WIDTH`/`DEFAULT_CAPTURE_HEIGHT` in `config.py`) and
+switches to MJPG to get there.
+
+This mattered for real: a 2026-09-28 incident needed the *full raw frame*,
+not the tiny ~142x32 calibrated ROI crop, to visually resolve a 0/8 digit
+confusion the VLM kept misreading identically across 8 consecutive polls -
+the crop simply didn't have enough real pixels in it at 640x480 for that
+specific digit pattern.
+
+**Existing `calibration.json` files drawn against 640x480 must have every
+pixel coordinate (`roi`, every `digit_boxes` entry) multiplied by the same
+scale factor as the resolution change**, or the boxes will land in the
+wrong place on the now-larger frame. This project's own move was a clean
+2x in both dimensions (640x480 -> 1280x960), so every coordinate was simply
+doubled - no interactive recalibration needed, since doubling preserves the
+same physical field of view exactly. A non-integer or non-uniform
+resolution change would need a real recalibration pass instead (`calibrate
+capture-only` + `calibrate` - see the runbook below).
+`CalibrationConfig.capture_width`/`capture_height` default to the *old*
+640x480 (not the new defaults) specifically so an existing calibration.json
+without these fields doesn't silently start capturing at the wrong
+resolution for its own box coordinates.
 
 ### Light brightness
 
