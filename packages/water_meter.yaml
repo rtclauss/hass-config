@@ -93,24 +93,45 @@ automation:
               - action: rest_command.water_meter_apply_correction
                 data:
                   value: "{{ water_meter_action.split('_')[-1] }}"
-              - action: notify.wethop
+              - action: notify.mobile_app_wethop
                 data:
                   message: >-
                     Approved water meter reading:
                     {{ water_meter_action.split('_')[-1] }} gal.
           - conditions: "{{ water_meter_action == 'WATER_METER_REJECT' }}"
             sequence:
-              - action: notify.wethop
+              - action: notify.mobile_app_wethop
                 data:
                   message: "Water meter reading rejected - no change made."
           - conditions: "{{ water_meter_action == 'WATER_METER_MODIFY' }}"
             sequence:
-              - action: notify.wethop
-                data:
-                  message: >-
-                    Open Home Assistant and set "Water Meter Manual
-                    Correction" to the correct reading - it'll be applied
-                    automatically.
+              - variables:
+                  # The companion app's "text input" action (reader.py's
+                  # notification sets behavior: textInput on Modify) sends
+                  # whatever the human typed back as reply_text alongside
+                  # the action id - this is what makes "enter the value
+                  # right in the notification" work, instead of the older
+                  # flow that just told the human to go open HA and set
+                  # input_number.water_meter_manual_correction by hand.
+                  modify_reply: "{{ trigger.event.data.reply_text | default('', true) | trim }}"
+              - choose:
+                  - conditions: "{{ modify_reply is not none and modify_reply | is_number }}"
+                    sequence:
+                      - action: rest_command.water_meter_apply_correction
+                        data:
+                          value: "{{ modify_reply | float }}"
+                      - action: notify.mobile_app_wethop
+                        data:
+                          message: >-
+                            Applied corrected water meter reading:
+                            {{ modify_reply | float }} gal.
+                default:
+                  - action: notify.mobile_app_wethop
+                    data:
+                      message: >-
+                        Couldn't read "{{ modify_reply }}" as a number - open
+                        Home Assistant and set "Water Meter Manual
+                        Correction" instead.
 
   - id: water_meter_manual_correction_applied
     alias: water_meter_manual_correction_applied
@@ -128,7 +149,7 @@ automation:
       - action: rest_command.water_meter_apply_correction
         data:
           value: "{{ trigger.to_state.state }}"
-      - action: notify.wethop
+      - action: notify.mobile_app_wethop
         data:
           message: >-
             Applied manual water meter correction: {{ trigger.to_state.state }} gal.

@@ -350,6 +350,87 @@ cross-check" above and "sustained-rate cap" below for the hardening that
 followed, and "Human-in-the-loop notifications" below for the human
 backstop on whatever's left.
 
+### Dynamic few-shot examples from human corrections
+
+`read_digits_vlm`'s `dynamic_examples_dir` parameter (wired to
+`connection.image_dir / "human_corrections"` in `reader.py`) appends up to
+`DEFAULT_DYNAMIC_FEWSHOT_LIMIT` (3) additional in-context examples after the
+6 static ones, loaded from `human_corrections/index.json` - the same folder
+`correction_listener.py`'s `_record_dynamic_example` grows every time a
+human approves/modifies an unresolved reading via the actionable
+notification. This turns every human correction into a permanent accuracy
+improvement for future reads of a similar misread, not just a one-off fix
+for that single rejected run.
+
+**This is not a hypothetical benefit.** A 2026-09-28 investigation (see
+`water_meter/eval.py` below) found the production model getting only 2/16
+(12%) exact-match on a diverse, honest golden set - traced to digit
+position 3 being systematically read as "1" or "0" whenever its true value
+was "7" (the same position read "6"/"8" correctly). A second, differently-
+trained model (`qwen3-vl:30b-a3b-instruct`) hit the *identical* failure,
+ruling out "this model is just bad" - the real cause was that none of the 6
+static few-shot examples happened to contain a "7" at that position. Adding
+3 diverse real "7"-position examples via this exact dynamic-examples
+mechanism took the same model from 12% to 69-75% exact-match on the golden
+set, zero cost beyond the examples themselves. One of the 6 static examples
+was also permanently swapped for a real "7" capture (it was replacing a
+redundant second photo of an already-covered value), and the Pi's
+`human_corrections/` folder was seeded with the same 3 verified examples so
+production gets the full benefit immediately rather than waiting for
+organic corrections to accumulate.
+
+**Known trade-off**: over-representing one previously-weak digit value in
+the few-shot set measurably improved that value's accuracy but introduced
+a smaller opposite bias - a couple of golden-set examples calling for a
+different digit at that position started getting mis-read *as* "7" instead.
+This is a real few-shot balance to keep an eye on as `human_corrections/`
+grows organically, not a reason to avoid the mechanism - the self-heal/
+requery/sanity gates and the human-in-the-loop notification below remain
+the actual backstops against any single-digit bias reaching a published
+reading.
+
+### Model/prompt regression harness
+
+`water_meter/eval.py` (`python3 -m water_meter.eval run|compare|list`) runs
+any model/prompt/dynamic-examples combination against
+`water_meter/golden_set/` - 16 real captures spanning ~3 days, each with its
+true reading confirmed by direct visual inspection of the *raw* frame (not
+the tiny crop, and not any model's own output), tracked in
+`golden_set/manifest.json`. This replaces the ad hoc, one-off comparison
+scripts every previous round of model/prompt evaluation used (see the
+"Reading Through Glare" report) - none of which were rerunnable, which is
+exactly how the position-3 "7" bug above went undetected for over a week:
+every prior held-out set happened to not include a real "7" there.
+
+```
+python3 -m water_meter.eval run --host <ollama-host>:<port> --model qwen2.5vl:7b --label baseline
+python3 -m water_meter.eval compare eval_results/<run1>.json eval_results/<run2>.json
+python3 -m water_meter.eval list
+```
+
+Saved runs (`water_meter/eval_results/*.json`) are committed to git
+deliberately - a durable, greppable, diffable history of what was tried and
+what happened, in the spirit of the project's existing evidence-tracking
+practice (the "Reading Through Glare" artifact), not a scratch file that
+gets overwritten by the next run. `compare` calls out per-file regressions
+and improvements by name, not just the headline rate - a prompt change that
+trades one failure for a different one at the same overall accuracy is
+invisible in the rate alone.
+
+**Other Qwen model sizes considered (2026-09-28):** `qwen3-vl:30b-a3b-
+instruct` (a mixture-of-experts model, 30B total/~3B active per token) ran
+at a very usable ~11-20s/call on the Ollama host's 16GB-VRAM/64GB-RAM split
+- MoE offload of the "cold" experts to system RAM worked well, unlike the
+dense `qwen3.8:27b` model tested the same day, which took **417s/call**
+under partial CPU offload and was abandoned as impractical. `qwen3-vl:8b`
+(bare/default tag, likely a "thinking" variant) was abandoned after 35+
+minutes with no completed call - Ollama serializes GPU work, so this
+couldn't be cleanly proven "hung" vs. just extremely slow, but either way it
+was impractical for this task. Bottom line: **no model swap tested came
+close to matching what fixing the actual few-shot coverage gap achieved on
+the existing production model** - the lesson generalizes beyond this one
+bug: check example coverage before reaching for a bigger model.
+
 ## Human-in-the-loop notifications
 
 When a rejected reading can't be automatically resolved - self-heal's
@@ -365,11 +446,27 @@ human glancing at the crop can resolve in seconds. A hard OCR failure (bad
 digit count, non-numeric) has no suggested value to approve, so nothing is
 sent for those.
 
-The notification carries three actions:
+The notification carries three actions, plus the actual crop image as an
+attachment (`data.image`, served by the correction listener's `GET
+/crop?token=...` - see below) so the human is judging the real capture, not
+guessing from the summary text:
 - **Approve** - accept the rejected value as correct.
 - **Reject** - discard it, no change (`last_good` stays as-is).
-- **Modify** - set `input_number.water_meter_manual_correction` in HA to the
-  correct value; a separate automation applies it automatically.
+- **Modify** - a companion-app "text input" action (`behavior: textInput`):
+  tapping it prompts for free text right in the notification, delivered back
+  as `event.data.reply_text` and applied directly - no separate trip to set
+  `input_number.water_meter_manual_correction` needed (that helper still
+  exists as a manual fallback).
+
+**Rate-limited to one push per `ha_notify_min_interval_seconds`** (default
+3600s/1 hour, `WATER_METER_HA_NOTIFY_MIN_INTERVAL_SECONDS`). The underlying
+digit-confusion failure this exists for tends to repeat every poll until it
+self-resolves (see the "Reading Through Glare" report's resolution section)
+- without this, a run of consecutive rejections would page the phone every
+single cycle. Only the *notification* is suppressed; the run itself still
+rejects, still attempts self-heal/requery, and the staleness sensors
+(`sensor.water_meter_status`/`reading_age`) still surface a genuinely stuck
+meter regardless.
 
 **Why a second, persistent service is needed.** `water_meter/reader.py` is a
 one-shot systemd-timer job that has already exited by the time a human
@@ -406,9 +503,15 @@ before this existed.
    `WATER_METER_CORRECTION_TOKEN` in the same credentials.env, *and* as the
    `water_meter_correction_token` secret (prefixed `Bearer `) in HA's own
    `secrets.yaml`. The listener refuses to start without this set - see
-   `correction_listener.main`.
+   `correction_listener.main`. Reused (not a new secret) as the `?token=`
+   query param on `GET /crop` - a mobile-app notification image fetch can't
+   send a custom `Authorization` header, so the same shared secret travels
+   in the URL for that one read-only endpoint instead.
 3. `water_meter_correction_url` in HA's `secrets.yaml`:
    `http://<pi-ip-or-hostname>:8091/correction`.
+4. `WATER_METER_CORRECTION_BASE_URL` (e.g. `http://10.24.1.102:8091`) in
+   `reader.py`'s own environment - builds the notification's image-attachment
+   URL. Leaving it unset just omits the image; nothing else breaks.
 
 Enable the listener service on the Pi with:
 

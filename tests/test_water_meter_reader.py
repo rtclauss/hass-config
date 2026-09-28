@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sys
@@ -789,6 +789,135 @@ def test_unresolved_rejection_sends_ha_notification_with_approve_reject_modify_a
     assert actions[0]["action"] == "WATER_METER_APPROVE_99"
     assert actions[1]["action"] == "WATER_METER_REJECT"
     assert actions[2]["action"] == "WATER_METER_MODIFY"
+    # Modify prompts for free text on the phone (companion-app "text input"
+    # action) instead of just telling the human to go open HA separately.
+    assert actions[2]["behavior"] == "textInput"
+    assert actions[2]["textInputButtonTitle"]
+    # No correction_base_url/token configured in this fixture - no image.
+    assert "image" not in captured["body"]["data"]
+
+
+def test_ha_notification_includes_crop_image_url_when_correction_service_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(
+        tmp_path,
+        ha_url="http://ha.local:8123",
+        ha_token="tok123",
+        correction_base_url="http://10.24.1.102:8091",
+        correction_token="corr-secret",
+    )
+    calibration = _calibration(max_gallons_per_interval=5.0)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    captured: dict = {}
+
+    class _FakeResponse:
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeResponse:
+        captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+        return _FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "99",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert captured["body"]["data"]["image"] == "http://10.24.1.102:8091/crop?token=corr-secret"
+
+
+def test_ha_notification_suppressed_within_rate_limit_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(
+        tmp_path,
+        ha_url="http://ha.local:8123",
+        ha_token="tok123",
+        ha_notify_min_interval_seconds=3600.0,
+    )
+    calibration = _calibration(max_gallons_per_interval=5.0)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    reader._record_notification_sent(connection.state_dir, NOW - timedelta(minutes=30))
+
+    def _unexpected(request: object, timeout: float) -> None:
+        raise AssertionError("should not notify again within the rate-limit window")
+
+    monkeypatch.setattr("urllib.request.urlopen", _unexpected)
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "99",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result.accepted is False  # the run itself still rejects normally
+
+
+def test_ha_notification_sent_again_after_rate_limit_window_elapses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(
+        tmp_path,
+        ha_url="http://ha.local:8123",
+        ha_token="tok123",
+        ha_notify_min_interval_seconds=3600.0,
+    )
+    calibration = _calibration(max_gallons_per_interval=5.0)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    reader._record_notification_sent(connection.state_dir, NOW - timedelta(hours=2))
+    sent: list[bool] = []
+
+    class _FakeResponse:
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    def _fake_urlopen(request: object, timeout: float) -> _FakeResponse:
+        sent.append(True)
+        return _FakeResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+
+    reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "99",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert sent == [True]
 
 
 def test_no_ha_notification_when_ha_url_is_not_configured(

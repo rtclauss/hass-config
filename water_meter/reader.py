@@ -81,6 +81,7 @@ def run_once(
             vlm_host=connection.vlm_host or None,
             vlm_model=connection.vlm_model,
             vlm_timeout=connection.vlm_timeout_seconds,
+            dynamic_examples_dir=connection.image_dir / "human_corrections",
         )
     )
 
@@ -139,7 +140,9 @@ def run_once(
         )
 
     if not validation.accepted and last_good is not None:
-        _notify_ha_of_unresolved_reading(connection, calibration, raw_digits, validation, last_good)
+        _notify_ha_of_unresolved_reading(
+            connection, calibration, raw_digits, validation, last_good, now
+        )
 
     if not validation.accepted:
         result = RunResult(False, None, validation.reason)
@@ -442,6 +445,7 @@ def _requery_vlm_on_suspect_value(
             model=connection.vlm_model,
             timeout=connection.vlm_timeout_seconds,
             hint=hint,
+            dynamic_examples_dir=connection.image_dir / "human_corrections",
         )
     except ocr.OcrError as error:
         LOG.warning("Vision-LLM requery failed (%s); keeping the original rejection", error)
@@ -466,12 +470,35 @@ def _requery_vlm_on_suspect_value(
     return requery_digits, requery_validation
 
 
+_LAST_NOTIFICATION_FILE = "last_ha_notification.json"
+
+
+def _seconds_since_last_notification(state_dir: Path, now: datetime) -> float | None:
+    path = state_dir / _LAST_NOTIFICATION_FILE
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        last = datetime.fromisoformat(data["timestamp"])
+    except (OSError, ValueError, KeyError):
+        return None
+    return (now - last).total_seconds()
+
+
+def _record_notification_sent(state_dir: Path, now: datetime) -> None:
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / _LAST_NOTIFICATION_FILE).write_text(
+        json.dumps({"timestamp": now.isoformat()}), encoding="utf-8"
+    )
+
+
 def _notify_ha_of_unresolved_reading(
     connection: ConnectionConfig,
     calibration: CalibrationConfig,
     raw_digits: str,
     validation: "sanity.ValidationResult",
     last_good: "sanity.LastGoodReading",
+    now: datetime,
 ) -> None:
     """Ask a human to approve/reject/modify a reading that self-heal and the
     VLM requery both failed to resolve, via an actionable Home Assistant
@@ -485,6 +512,16 @@ def _notify_ha_of_unresolved_reading(
     resolve in seconds. A hard OCR failure (unparseable digits, wrong
     digit count) has no suggested value for a human to approve, so there's
     nothing this notification would add.
+
+    Rate-limited to at most one real push per
+    ha_notify_min_interval_seconds (default 1 hour): a run of consecutive
+    rejections from the same underlying failure (the digit-confusion
+    pattern documented in the "Reading Through Glare" report repeats every
+    poll until it self-resolves) would otherwise page the phone every
+    single cycle. The run itself still rejects and still gets a requery
+    attempt exactly as before - only the phone notification is suppressed,
+    and only the notification, so a genuinely stuck meter is still visible
+    via sensor.water_meter_status/reading_age (see packages/water_meter.yaml).
 
     Deliberately fire-and-forget: disabled entirely if ha_url/ha_token
     aren't configured (opt-in), and a failed notification attempt only
@@ -505,11 +542,48 @@ def _notify_ha_of_unresolved_reading(
     if not raw_digits.isdigit() or len(raw_digits) != calibration.digit_count:
         return
 
+    elapsed = _seconds_since_last_notification(connection.state_dir, now)
+    if elapsed is not None and elapsed < connection.ha_notify_min_interval_seconds:
+        LOG.info(
+            "Suppressing HA notification - last one was %.0fs ago (min interval %.0fs)",
+            elapsed,
+            connection.ha_notify_min_interval_seconds,
+        )
+        return
+
     suggested_value = int(raw_digits) / (10**calibration.decimal_places)
     suggested_str = f"{suggested_value:.{calibration.decimal_places}f}"
 
     import urllib.error
     import urllib.request
+
+    notification_data: dict = {
+        "actions": [
+            {"action": f"WATER_METER_APPROVE_{suggested_str}", "title": "Approve"},
+            {"action": "WATER_METER_REJECT", "title": "Reject"},
+            {
+                "action": "WATER_METER_MODIFY",
+                "title": "Modify",
+                # Companion-app "text input" action: tapping it prompts for
+                # free text on the phone instead of just firing the action,
+                # delivered back as event.data.reply_text alongside the
+                # action id - see packages/water_meter.yaml's handling.
+                # Without this, "Modify" could only tell the human to go
+                # open HA and set a helper entity by hand.
+                "behavior": "textInput",
+                "textInputButtonTitle": "Submit",
+                "textInputPlaceholder": f"Correct value, e.g. {suggested_str}",
+            },
+        ]
+    }
+    if connection.correction_base_url and connection.correction_token:
+        # Same crop the OCR pipeline actually read, so the human is judging
+        # the real input, not a guess from the summary text - correction_
+        # listener.py serves this from disk, authenticated by the same
+        # token already required for POST /correction (not a new secret).
+        notification_data["image"] = (
+            f"{connection.correction_base_url}/crop?token={connection.correction_token}"
+        )
 
     payload = {
         "title": "Water meter needs a look",
@@ -517,13 +591,7 @@ def _notify_ha_of_unresolved_reading(
             f"Read {suggested_str} gal, but {validation.reason}. "
             f"Last confirmed: {last_good.value} gal."
         ),
-        "data": {
-            "actions": [
-                {"action": f"WATER_METER_APPROVE_{suggested_str}", "title": "Approve"},
-                {"action": "WATER_METER_REJECT", "title": "Reject"},
-                {"action": "WATER_METER_MODIFY", "title": "Modify"},
-            ]
-        },
+        "data": notification_data,
     }
     request = urllib.request.Request(
         f"{connection.ha_url}/api/services/notify/{connection.ha_notify_service}",
@@ -539,6 +607,8 @@ def _notify_ha_of_unresolved_reading(
             response.read()
     except (urllib.error.URLError, OSError) as error:
         LOG.warning("Failed to send HA notification for unresolved reading: %s", error)
+        return
+    _record_notification_sent(connection.state_dir, now)
 
 
 def _rotate_history(

@@ -82,6 +82,13 @@ Environment=WATER_METER_HA_URL=http://10.24.1.11:8123
 # this fire-and-forget notifier swallows silently - the mismatch went
 # undetected until a live-fire test surfaced the 400.
 Environment=WATER_METER_HA_NOTIFY_SERVICE=mobile_app_wethop
+# Base URL of this same Pi's own correction-listener service (see
+# water-meter-correction-listener.service) - used to build the
+# notification's image-attachment URL (GET /crop?token=...) so a human can
+# see the actual misread crop without SSHing in first. The token itself is
+# WATER_METER_CORRECTION_TOKEN, already sourced from credentials.env above
+# (the same secret POST /correction requires) - not duplicated here.
+Environment=WATER_METER_CORRECTION_BASE_URL=http://10.24.1.102:8091
 ExecStart=/opt/hass-config/venv/bin/python3 -m water_meter.reader
 
 [Install]

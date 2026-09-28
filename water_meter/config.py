@@ -112,9 +112,28 @@ class ConnectionConfig:
     # notification flow depends on to apply the user's response.
     ha_url: str = ""
     ha_token: str = ""
-    # The part after "notify." - e.g. "wethop" to call notify.wethop, the
-    # user's own mobile-app notify target (not a generic "notify" broadcast).
+    # The part after "notify." - e.g. "mobile_app_wethop" to call
+    # notify.mobile_app_wethop, the user's own mobile-app notify target (not
+    # a generic "notify" broadcast). Note: a mobile_app device's real
+    # service name is "mobile_app_<slug>", not the bare device name - a
+    # bare name 400s on every call, which this fire-and-forget notifier
+    # swallows silently (see docs/water_meter.md).
     ha_notify_service: str = "notify"
+    # A second, real notification within this many seconds of the last one
+    # is suppressed (the run still rejects normally - only the phone ping is
+    # skipped). Without this, a run of consecutive rejections (the same
+    # digit-confusion failure mode repeating every 20 minutes) pages the
+    # phone every single cycle. 3600s (1 hour) still surfaces a genuinely
+    # ongoing problem promptly without being noisy about it.
+    ha_notify_min_interval_seconds: float = 3600.0
+    # Base URL of the Pi's own correction-listener service (e.g.
+    # "http://10.24.1.102:8091") and the same bearer token it requires for
+    # POST /correction - reused here (not a new secret) to build an
+    # authenticated GET /crop?token=... URL for the notification's image
+    # attachment, so a human can see the actual misread crop without
+    # needing to SSH in first. Empty (the default) omits the image.
+    correction_base_url: str = ""
+    correction_token: str = ""
 
 
 def connection_config_from_env() -> ConnectionConfig:
@@ -167,6 +186,11 @@ def connection_config_from_env() -> ConnectionConfig:
         ha_url=os.environ.get("WATER_METER_HA_URL", ""),
         ha_token=os.environ.get("WATER_METER_HA_TOKEN", ""),
         ha_notify_service=os.environ.get("WATER_METER_HA_NOTIFY_SERVICE", "notify"),
+        ha_notify_min_interval_seconds=float(
+            os.environ.get("WATER_METER_HA_NOTIFY_MIN_INTERVAL_SECONDS", "3600.0")
+        ),
+        correction_base_url=os.environ.get("WATER_METER_CORRECTION_BASE_URL", ""),
+        correction_token=os.environ.get("WATER_METER_CORRECTION_TOKEN", ""),
     )
 
 
