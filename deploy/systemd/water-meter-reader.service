@@ -75,7 +75,13 @@ Environment=WATER_METER_VLM_TIMEOUT_SECONDS=480
 # /etc/water-meter/credentials.env, not committed here. Assumes HA runs on
 # the same host as the MQTT broker above - adjust WATER_METER_HA_URL if not.
 Environment=WATER_METER_HA_URL=http://10.24.1.11:8123
-Environment=WATER_METER_HA_NOTIFY_SERVICE=wethop
+# Not "wethop" - HA's actual notify service for a mobile_app device is
+# prefixed "mobile_app_<device_slug>" (confirmed via GET /api/services on
+# the real HA instance, which lists mobile_app_wethop, mobile_app_faro,
+# etc., but no bare "wethop"). A bare "wethop" 400s on every call, which
+# this fire-and-forget notifier swallows silently - the mismatch went
+# undetected until a live-fire test surfaced the 400.
+Environment=WATER_METER_HA_NOTIFY_SERVICE=mobile_app_wethop
 ExecStart=/opt/hass-config/venv/bin/python3 -m water_meter.reader
 
 [Install]
