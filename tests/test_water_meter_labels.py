@@ -272,3 +272,43 @@ def test_dynamic_pool_keeps_one_example_per_reading_newest_wins(tmp_path: Path) 
     assert [e["digits"] for e in index] == ["02147700", "02148506"]
     assert (pool / "20260929T104130Z_02148506.jpg").read_bytes() == b"new"
     assert not (pool / "20260929T045652Z_02148506.jpg").exists()  # superseded image removed
+
+
+def _jpeg(width: int, height: int) -> bytes:
+    sof = b"\xff\xc0" + (17).to_bytes(2, "big") + b"\x08" + height.to_bytes(2, "big") + width.to_bytes(2, "big") + b"\x03" + b"\x00" * 9
+    return b"\xff\xd8" + sof + b"\xff\xd9"
+
+
+def test_frames_the_calibration_cannot_apply_to_are_legacy_and_kept_out_of_the_queue(tmp_path: Path) -> None:
+    (tmp_path / "cal.json").write_text(json.dumps({"capture_width": 1280, "capture_height": 960}))
+    store = _store(tmp_path)
+    history = tmp_path / "images" / "history"
+    history.mkdir(parents=True)
+    fixtures = {
+        "20260929T100000Z": _jpeg(1280, 960),  # matches the calibration
+        "20260928T100000Z": _jpeg(640, 480),  # other resolution: different field of view
+    }
+    for cid, raw in fixtures.items():
+        (history / f"{cid}_raw.jpg").write_bytes(raw)
+        (history / f"{cid}_crop.jpg").write_bytes(b"crop")
+    (history / "20260927T100000Z_crop.jpg").write_bytes(b"crop")  # no full frame at all
+
+    assert store.frame_size("20260929T100000Z") == (1280, 960)
+    assert not store.is_legacy("20260929T100000Z")
+    assert store.is_legacy("20260928T100000Z")
+    assert store.is_legacy("20260927T100000Z")
+    assert store.item("20260928T100000Z")["frame"] == {"width": 640, "height": 480}
+
+    assert [i["id"] for i in store.queue("queue")["items"]] == ["20260929T100000Z"]
+    assert {i["id"] for i in store.queue("legacy")["items"]} == {"20260928T100000Z", "20260927T100000Z"}
+    assert len(store.queue("all")["items"]) == 3
+    # labeling a legacy frame's reading is still allowed (the reading is valid)
+    store.add_label("20260928T100000Z", "reading", value="02147013", now=NOW)
+    assert "20260928T100000Z" in [i["id"] for i in store.queue("legacy")["items"]]  # still listed there
+
+
+def test_without_a_calibration_nothing_is_legacy(tmp_path: Path) -> None:
+    store = _store(tmp_path)  # cal.json absent
+    _capture(tmp_path, "20260929T100000Z")
+    assert store.expected_frame_size() is None
+    assert not store.is_legacy("20260929T100000Z")
