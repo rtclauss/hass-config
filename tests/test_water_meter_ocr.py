@@ -266,7 +266,7 @@ def test_read_digits_vlm_omits_hint_language_when_none_is_given(
     assert captured["body"]["prompt"] == ocr._build_vlm_fewshot_prompt(8)
 
 
-def test_read_digits_vlm_caps_cpu_threads_and_context_size(
+def test_read_digits_vlm_caps_cpu_threads_context_size_and_pins_decoding(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
     image_path = tmp_path / "crop.jpg"  # type: ignore[operator]
@@ -284,6 +284,8 @@ def test_read_digits_vlm_caps_cpu_threads_and_context_size(
     assert captured["body"]["options"] == {
         "num_thread": ocr.DEFAULT_VLM_NUM_THREAD,
         "num_ctx": ocr.DEFAULT_VLM_NUM_CTX,
+        "temperature": 0,
+        "seed": ocr.VLM_SEED,
     }
 
 
