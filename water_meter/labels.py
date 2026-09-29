@@ -100,7 +100,15 @@ def append_dynamic_example(
         entries = []
     file_name = f"{stamp}_{digits}.jpg"
     (examples_dir / file_name).write_bytes(source_crop.read_bytes())
-    entries = [e for e in entries if e.get("file") != file_name]
+    # One example per reading: near-identical frames of the same value add no
+    # teaching signal, crowd out diverse examples in the small window the prompt
+    # uses, and invite the model to copy an example's answer. The newest wins.
+    for stale in [e for e in entries if e.get("digits") == digits and e.get("file") != file_name]:
+        try:
+            (examples_dir / str(stale["file"])).unlink(missing_ok=True)
+        except (OSError, KeyError, TypeError):
+            pass
+    entries = [e for e in entries if e.get("digits") != digits and e.get("file") != file_name]
     entries.append({"file": file_name, "digits": digits})
     while len(entries) > limit:
         stale = entries.pop(0)
