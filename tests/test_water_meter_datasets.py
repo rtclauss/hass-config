@@ -87,3 +87,34 @@ def test_training_labels_never_include_verify_or_test_and_allow_partial_digits(t
     assert rows["20260901T020000Z"]["digits"][4] == "7"
     assert rows["20260901T020000Z"]["digits"][0] is None  # partial label, masked downstream
     assert rows["20260901T020000Z"]["reading"] is None
+
+
+def test_export_golden_caps_near_duplicate_frames_per_value_keeping_them_spread(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ids = [f"20260901T{h:02d}0000Z" for h in range(10)]
+    for cid in ids:
+        _capture(tmp_path, cid)
+        store.add_label(cid, "reading", value="02148506", split="verify", now=NOW)
+
+    golden = tmp_path / "golden"
+    counts = datasets.export_golden(store, golden, max_per_value=3)
+
+    files = sorted(e["file"] for e in json.loads((golden / "manifest.json").read_text()))
+    assert counts["total"] == 3
+    assert files == [f"{ids[0]}.jpg", f"{ids[4]}.jpg", f"{ids[9]}.jpg"]  # first, middle, last
+
+
+def test_inferred_training_labels_are_train_only(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    for split, prefix in (("train", "20260901"), ("verify", "20260902")):
+        ids = [f"{prefix}T{h:02d}0000Z" for h in range(3)]
+        for cid in ids:
+            _capture(tmp_path, cid)
+        value = "02148506" if split == "train" else "02147013"
+        store.add_label(ids[0], "reading", value=value, split=split, now=NOW)
+        store.add_label(ids[2], "reading", value=value, split=split, now=NOW)
+
+    rows = datasets.inferred_training_labels(store)
+
+    assert [r["id"] for r in rows] == ["20260901T010000Z"]
+    assert rows[0]["digits"] == list("02148506") and rows[0]["tier"] == "inferred"

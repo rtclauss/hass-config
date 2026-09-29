@@ -34,7 +34,22 @@ def _usable_readings(store: LabelStore) -> list[dict]:
     return usable
 
 
-def export_golden(store: LabelStore, golden_dir: Path, *, splits: tuple[str, ...] = EVAL_SPLITS) -> dict:
+def _spread(rows: list[dict], k: int) -> list[dict]:
+    """Up to k rows evenly spaced through a time-ordered list (first and last kept)."""
+    if len(rows) <= k:
+        return rows
+    if k == 1:
+        return [rows[len(rows) // 2]]
+    return [rows[round(i * (len(rows) - 1) / (k - 1))] for i in range(k)]
+
+
+def export_golden(
+    store: LabelStore,
+    golden_dir: Path,
+    *,
+    splits: tuple[str, ...] = EVAL_SPLITS,
+    max_per_value: int = 3,
+) -> dict:
     """Write verify/test captures into golden_dir and merge them into its
     manifest (existing entries kept; same-file entries refreshed). Crops are
     what eval.py scores; raw frames are kept too so recalibration or a
@@ -45,9 +60,15 @@ def export_golden(store: LabelStore, golden_dir: Path, *, splits: tuple[str, ...
     if manifest_path.exists():
         manifest = {e["file"]: e for e in json.loads(manifest_path.read_text(encoding="utf-8"))}
     added = updated = 0
-    for row in _usable_readings(store):
-        if row["split"] not in splits:
-            continue
+    # A long constant run yields dozens of near-identical frames of one reading;
+    # keeping them all would let that one value dominate the eval set. Keep a few,
+    # evenly spread in time, per (split, reading).
+    grouped: dict[tuple[str, str], list[dict]] = {}
+    for row in sorted(_usable_readings(store), key=lambda r: r["id"]):
+        if row["split"] in splits:
+            grouped.setdefault((row["split"], row["digits"]), []).append(row)
+    chosen = [r for rows in grouped.values() for r in _spread(rows, max_per_value)]
+    for row in sorted(chosen, key=lambda r: r["id"]):
         files = store.capture_files(row["id"])
         crop = files.get("crop")
         if crop is None:
@@ -77,6 +98,21 @@ def export_golden(store: LabelStore, golden_dir: Path, *, splits: tuple[str, ...
         json.dumps([manifest[k] for k in sorted(manifest)], indent=2) + "\n", encoding="utf-8"
     )
     return {"added": added, "updated": updated, "total": len(manifest)}
+
+
+def inferred_training_labels(store: LabelStore) -> list[dict]:
+    """Weaker-tier train labels: readings implied for unlabeled captures that sit
+    between two human labels of the same value (the meter only counts up). Train
+    split only - never verify/test."""
+    splits = store._load_splits()
+    rows = []
+    for capture_id, reading in sorted(store.inferred_readings().items()):
+        if splits["value"].get(reading) != "train":
+            continue
+        rows.append(
+            {"id": capture_id, "reading": reading, "digits": list(reading), "tier": "inferred"}
+        )
+    return rows
 
 
 def human_training_labels(store: LabelStore) -> list[dict]:

@@ -307,6 +307,40 @@ class LabelStore:
             "labeled_at": labeled_at,
         }
 
+    # ---- inference ---------------------------------------------------
+
+    def inferred_readings(self, events: list[dict] | None = None) -> dict[str, str]:
+        """Readings implied for unlabeled captures that sit in time between two
+        human-labeled captures with the *same* reading.
+
+        The meter only counts up, so nothing between two frames showing V can
+        show anything but V. Labeling every frame of a long constant run is
+        therefore wasted effort (it is also where near-duplicate frames come
+        from); these inferred labels are a weaker tier than a human label and
+        are never used for verify/test.
+        """
+        events = events if events is not None else self._events()
+        effective: dict[str, dict] = {}
+        for capture_id in {e.get("capture_id") for e in events if e.get("capture_id")}:
+            effective[capture_id] = self.effective_labels(capture_id, events)
+        anchors = sorted(
+            (cid, lab["reading"])
+            for cid, lab in effective.items()
+            if lab["reading"] and not (set(lab["flags"]) & set(EXCLUDING_FLAGS))
+        )
+        inferred: dict[str, str] = {}
+        ids = sorted(self.list_capture_ids())
+        for (start, value), (end, next_value) in zip(anchors, anchors[1:]):
+            if value != next_value:
+                continue
+            for capture_id in ids:
+                if start < capture_id < end:
+                    lab = effective.get(capture_id)
+                    if lab and (lab["reading"] or lab["flags"] or lab["digits"]):
+                        continue  # a human already spoke about this one
+                    inferred[capture_id] = value
+        return inferred
+
     # ---- splits ------------------------------------------------------
 
     def _load_splits(self) -> dict:
@@ -445,12 +479,16 @@ class LabelStore:
         blind: bool = False,
         events: list[dict] | None = None,
         splits: dict | None = None,
+        inferred_map: dict[str, str] | None = None,
     ) -> dict:
+        if inferred_map is None:
+            inferred_map = self.inferred_readings(events)
         files = self.capture_files(capture_id)
         labels = self.effective_labels(capture_id, events)
         sidecar = self.read_sidecar(capture_id) or {}
         split = (splits if splits is not None else self._load_splits())["capture"].get(capture_id)
         flags = set(labels["flags"])
+        inferred = (inferred_map if inferred_map is not None else {}).get(capture_id)
         status = (
             "excluded"
             if "bad_frame" in flags
@@ -458,6 +496,8 @@ class LabelStore:
             if labels["reading"] or "unreadable" in flags
             else "partial"
             if labels["digits"] or flags
+            else "inferred"
+            if inferred
             else "unlabeled"
         )
         size = self.frame_size(capture_id)
@@ -470,6 +510,7 @@ class LabelStore:
             "split": split,
             "scheduled_split": scheduled_split(capture_id),
             "status": status,
+            "inferred": inferred,
             "rejected": self.was_rejected(capture_id),
             "reason": sidecar.get("reason"),
         }
@@ -481,15 +522,17 @@ class LabelStore:
     def queue(self, mode: str = "queue", limit: int = 50, *, blind: bool = False) -> dict:
         """mode: queue (unlabeled: pipeline-rejected first, then captures scheduled
         into an eval split that is still under its target, then distinct guessed
-        values), all, labeled, excluded (bad frames) or legacy (frames the current
+        values), all, labeled, excluded (bad frames), inferred (readings implied by
+        equal neighbours - never queued) or legacy (frames the current
         calibration can't apply to, e.g. other resolutions - never in the queue)."""
         events = self._events()
         splits = self._load_splits()
         ids = self.list_capture_ids()
+        inferred_map = self.inferred_readings(events)
         items = []
         for capture_id in ids:
-            item = self.item(capture_id, events=events, splits=splits)
-            done = item["status"] in ("labeled", "excluded")
+            item = self.item(capture_id, events=events, splits=splits, inferred_map=inferred_map)
+            done = item["status"] in ("labeled", "excluded", "inferred")
             if mode == "queue" and (done or item["legacy"]):
                 continue
             if mode == "legacy" and (item["status"] == "excluded" or not item["legacy"]):
@@ -497,6 +540,8 @@ class LabelStore:
             if mode == "labeled" and item["status"] != "labeled":
                 continue
             if mode == "excluded" and item["status"] != "excluded":
+                continue
+            if mode == "inferred" and item["status"] != "inferred":
                 continue
             items.append(item)
         if mode == "queue":
@@ -530,7 +575,8 @@ class LabelStore:
         events = self._events()
         splits = self._load_splits()
         ids = self.list_capture_ids()
-        counts = {"labeled": 0, "partial": 0, "unlabeled": 0, "excluded": 0}
+        counts = {"labeled": 0, "partial": 0, "unlabeled": 0, "excluded": 0, "inferred": 0}
+        inferred_map = self.inferred_readings(events)
         by_split = {s: 0 for s in SPLITS}
         distinct_by_split: dict[str, set[str]] = {s: set() for s in SPLITS}
         coverage: list[list[int]] = [[0] * 10 for _ in range(self.digit_count)]
@@ -550,6 +596,8 @@ class LabelStore:
                 counts["labeled"] += 1
             elif labels["digits"] or flags:
                 counts["partial"] += 1
+            elif capture_id in inferred_map:
+                counts["inferred"] += 1
             else:
                 counts["unlabeled"] += 1
             split = splits["capture"].get(capture_id)

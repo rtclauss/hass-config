@@ -173,6 +173,17 @@ class EvalRun:
     def clean_exact_match_count(self) -> int:
         return sum(1 for r in self.clean_results if r.exact_match)
 
+    def value_weighted(self) -> tuple[int, float]:
+        """(distinct expected values, mean per-value exact rate). Near-duplicate
+        captures of one reading count once, so a long constant run can't make an
+        eval look bigger (or better) than the number of distinct readings."""
+        groups: dict[str, list[bool]] = {}
+        for r in self.results:
+            groups.setdefault(r.expected, []).append(r.exact_match)
+        if not groups:
+            return 0, 0.0
+        return len(groups), sum(sum(v) / len(v) for v in groups.values()) / len(groups)
+
     def per_position_accuracy(self) -> list[float]:
         """Fraction correct at each digit index; a hard error counts as wrong."""
         width = max((len(r.expected) for r in self.results), default=0)
@@ -429,6 +440,11 @@ def format_summary(run: EvalRun) -> str:
         f"{run.exact_match_count}/{run.n} exact ({run.exact_match_rate:.0%}, 95% CI "
         f"{low:.0%}-{high:.0%}), {run.error_count} errors, {run.avg_seconds:.1f}s/call avg"
     ]
+    groups, weighted = run.value_weighted()
+    if groups < run.n:
+        lines.append(
+            f"only {groups} distinct values among {run.n} captures; value-weighted exact: {weighted:.0%}"
+        )
     if run.leaked_files:
         clean_n = len(run.clean_results)
         lines.append(
