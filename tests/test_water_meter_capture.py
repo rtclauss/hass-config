@@ -152,5 +152,8 @@ def test_rotate_frame_uses_opencv_center_rotation_with_replicated_edges(
         shape = (960, 1280, 3)
 
     assert capture.rotate_frame(_Frame(), 2.0) == "rotated"  # type: ignore[arg-type]
-    assert calls["matrix"] == ((640.0, 480.0), 2.0, 1.0)
+    assert calls["matrix"] == ((640.0, 480.0), 2.0, 1.0)  # default pivot: frame centre
     assert calls["warp"] == ("M", (1280, 960), 1, 2)
+
+    capture.rotate_frame(_Frame(), 2.0, center=(975.0, 566.0))  # type: ignore[arg-type]
+    assert calls["matrix"] == ((975.0, 566.0), 2.0, 1.0)

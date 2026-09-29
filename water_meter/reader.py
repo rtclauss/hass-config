@@ -103,7 +103,10 @@ def run_once(
     # The raw frame is saved (and kept in history) exactly as captured;
     # rotation only affects the crops, so labeled raw frames stay usable if
     # the rotation setting changes later.
-    straightened = capture.rotate_frame(frame, calibration.rotation_degrees)
+    roi_x, roi_y, roi_w, roi_h = calibration.roi
+    straightened = capture.rotate_frame(
+        frame, calibration.rotation_degrees, center=(roi_x + roi_w / 2, roi_y + roi_h / 2)
+    )
     cropped = capture.crop_roi(straightened, calibration.roi)
     capture.save_image(cropped, crop_path)
     digit_crops = capture.crop_boxes(straightened, calibration.digit_boxes)
