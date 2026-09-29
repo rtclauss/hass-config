@@ -313,3 +313,26 @@ def test_dynamic_examples_are_capped_at_the_configured_limit(
     assert len(index) == 2
     remaining_files = {p.name for p in examples_dir.glob("*.jpg")}
     assert remaining_files == {entry["file"] for entry in index}
+
+
+def test_corrections_for_sealed_eval_values_never_enter_the_dynamic_pool(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from water_meter.labels import LabelStore
+
+    _install_fake_paho(monkeypatch)
+    connection = _connection(tmp_path)
+    connection.image_dir.mkdir(parents=True, exist_ok=True)
+    (connection.image_dir / "latest_crop.jpg").write_bytes(b"crop")
+    history = connection.image_dir / "history"
+    history.mkdir()
+    (history / "20260926T045114Z_crop.jpg").write_bytes(b"x")
+    LabelStore(connection.image_dir, connection.state_dir).add_label(
+        "20260926T045114Z", "reading", value="02148085", split="verify"
+    )
+
+    correction_listener.apply_correction(
+        connection, 214808.5, now=NOW, calibration=_calibration()
+    )
+
+    assert not (connection.image_dir / "human_corrections").exists()

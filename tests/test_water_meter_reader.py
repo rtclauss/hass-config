@@ -1010,3 +1010,101 @@ def test_default_publisher_reports_ok_status_for_a_healthy_accepted_reading(
     assert status_message["payload"] == "ok"
     reading_message = next(m for m in published if m["topic"] == connection.reading_topic)
     assert reading_message["payload"] == "12.0"
+
+
+def test_run_writes_a_read_sidecar_for_the_labeling_queue(tmp_path: Path) -> None:
+    connection = _connection(tmp_path)
+    calibration = _calibration(max_gallons_per_interval=5.0)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    stamp = NOW.strftime("%Y%m%dT%H%M%SZ")
+    sidecar = connection.image_dir / "history" / f"{stamp}_read.json"
+
+    rejected = reader.run_once(
+        connection, calibration, grab_frame=lambda: "frame", set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "99", publisher=lambda res, now: None, now=NOW,
+    )
+    assert rejected.accepted is False
+    data = json.loads(sidecar.read_text())
+    assert data["raw_digits"] == "99" and data["accepted"] is False
+    assert "implausible jump" in data["reason"] or "decreased" in data["reason"]
+
+    accepted = reader.run_once(
+        connection, calibration, grab_frame=lambda: "frame", set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "11", publisher=lambda res, now: None, now=NOW,
+    )
+    assert accepted.accepted is True
+    assert json.loads(sidecar.read_text()) == {"raw_digits": "11", "accepted": True, "reason": "ok"}
+
+
+def test_ocr_failure_sidecar_has_no_digits(tmp_path: Path) -> None:
+    connection = _connection(tmp_path)
+    calibration = _calibration()
+
+    def _boom(image_path: object, digit_crops: object) -> str:
+        raise ocr.OcrError("nope")
+
+    reader.run_once(
+        connection, calibration, grab_frame=lambda: "frame", set_light=lambda on: None,
+        ocr_reader=_boom, publisher=lambda res, now: None, now=NOW,
+    )
+    stamp = NOW.strftime("%Y%m%dT%H%M%SZ")
+    data = json.loads((connection.image_dir / "history" / f"{stamp}_read.json").read_text())
+    assert data["raw_digits"] is None and data["accepted"] is False
+
+
+def test_history_rotation_also_removes_stale_read_sidecars(tmp_path: Path) -> None:
+    history = tmp_path / "history"
+    history.mkdir()
+    for stamp in ("20260901T000000Z", "20260902T000000Z", "20260903T000000Z"):
+        (history / f"{stamp}_crop.jpg").write_bytes(b"x")
+        (history / f"{stamp}_read.json").write_text("{}")
+
+    reader._rotate_history(history, "frame", "crop", [], 2, datetime(2026, 9, 4, tzinfo=timezone.utc))
+
+    assert not (history / "20260901T000000Z_read.json").exists()
+    assert (history / "20260902T000000Z_read.json").exists()
+
+
+def test_notification_deep_links_to_the_label_ui_when_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def run(**overrides: object) -> dict:
+        connection = _connection(
+            tmp_path / str(len(overrides)), ha_url="http://ha.local:8123", ha_token="tok", **overrides
+        )
+        sanity.save_last_good(
+            connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+        )
+        captured: dict = {}
+
+        class _Resp:
+            def __enter__(self) -> "_Resp":
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b"{}"
+
+        def _urlopen(request: object, timeout: float) -> _Resp:
+            captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+            return _Resp()
+
+        monkeypatch.setattr("urllib.request.urlopen", _urlopen)
+        reader.run_once(
+            connection, _calibration(max_gallons_per_interval=5.0), grab_frame=lambda: "f",
+            set_light=lambda on: None, ocr_reader=lambda p, d: "99",
+            publisher=lambda r, n: None, now=NOW,
+        )
+        return captured["body"]["data"]
+
+    linked = run(label_ui_base_url="http://10.24.1.102:8092")
+    stamp = NOW.strftime("%Y%m%dT%H%M%SZ")
+    assert linked["url"] == f"http://10.24.1.102:8092/?item={stamp}"
+    assert linked["clickAction"] == linked["url"]
+    assert "token" not in linked["url"]  # the UI's auth cookie, not a URL secret
+
+    assert "url" not in run()
