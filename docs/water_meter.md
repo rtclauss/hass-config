@@ -364,15 +364,16 @@ for that single rejected run.
 
 **This is not a hypothetical benefit.** A 2026-09-28 investigation (see
 `water_meter/eval.py` below) found the production model getting only 2/16
-(12%) exact-match on a diverse, honest golden set - traced to digit
-position 3 being systematically read as "1" or "0" whenever its true value
-was "7" (the same position read "6"/"8" correctly). A second, differently-
+(12%) exact-match on a diverse, honest golden set - traced to the
+thousands digit (index 4, the 5th character) being systematically read as "1"
+or "0" whenever its true value was "7" (the same index read "6"/"8" correctly). A second, differently-
 trained model (`qwen3-vl:30b-a3b-instruct`) hit the *identical* failure,
 ruling out "this model is just bad" - the real cause was that none of the 6
-static few-shot examples happened to contain a "7" at that position. Adding
-3 diverse real "7"-position examples via this exact dynamic-examples
-mechanism took the same model from 12% to 69-75% exact-match on the golden
-set, zero cost beyond the examples themselves. One of the 6 static examples
+static few-shot examples happened to contain a "7" at that index. Adding
+3 diverse real "7" examples via this exact dynamic-examples
+mechanism took the same model from 12% to 69-75% exact-match on that set
+(directional, not final: only 12 distinct values, and the seeded examples share
+values with some golden captures - see "Model/prompt regression harness"). One of the 6 static examples
 was also permanently swapped for a real "7" capture (it was replacing a
 redundant second photo of an already-covered value), and the Pi's
 `human_corrections/` folder was seeded with the same 3 verified examples so
@@ -399,7 +400,7 @@ the tiny crop, and not any model's own output), tracked in
 `golden_set/manifest.json`. This replaces the ad hoc, one-off comparison
 scripts every previous round of model/prompt evaluation used (see the
 "Reading Through Glare" report) - none of which were rerunnable, which is
-exactly how the position-3 "7" bug above went undetected for over a week:
+exactly how the index-4 "7" bug above went undetected for over a week:
 every prior held-out set happened to not include a real "7" there.
 
 ```

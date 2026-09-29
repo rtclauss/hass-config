@@ -81,22 +81,26 @@ example_5 was originally a second 02138978 photo - byte-different from
 example_1 but the same digit string, adding real-world photo variety but
 teaching the model nothing about any digit it hadn't already seen. A
 2026-09-28 golden-set regression run (water_meter/eval.py,
-water_meter/golden_set/ - 16 diverse real captures, visually verified)
-found the production model scored only 2/16 (12%) exact-match, with 12 of
-the 14 misses sharing one specific error: digit position 3 read as "1" or
-"0" whenever its true value was "7" (the same position correctly reads "6"
-and "8" without issue) - and a second, differently-trained model
-(qwen3-vl:30b-a3b-instruct) hit the identical failure, which rules out
-"this model is just bad at this" and points at a real few-shot coverage
-gap instead: none of the 6 original examples happen to contain a "7" at
-that position. Swapping the redundant example_5 for a real "7134" capture
-took the same qwen2.5vl:7b model from 2/16 to 7/16 in isolation, and to
-12/16 (75%) when tested with three diverse "7"-position examples via the
-dynamic-few-shot mechanism (see load_dynamic_examples) - strong evidence
-this is a coverage problem, not a model-quality one. Only one slot was
-swapped here (not three) to keep this static set's context-budget cost
-unchanged; the dynamic mechanism is the intended path for feeding in
-further real corrected examples over time without bloating every call.
+water_meter/golden_set/ - 16 real captures, visually verified) found the
+production model scored only 2/16 (12%) exact-match. Most of the 14 misses
+shared one specific error: the thousands digit (index 4, the 5th character)
+read as "1" or "0" whenever its true value was "7" (the same index reads
+"6" and "8" without issue) - and a second, differently-trained model
+(qwen3-vl:30b-a3b-instruct) hit the same failure, which points at a real
+few-shot coverage gap rather than "this model is just bad at this": none of
+the 6 original examples contains a "7" at that index. Swapping the
+redundant example_5 for a real "7134" capture measured 6/16; adding one
+"7134" example via the dynamic mechanism (see load_dynamic_examples)
+measured 7/16, and three diverse dynamic "7" examples 12/16.
+
+Caveats on those numbers: the golden set has only 12 distinct values and
+the seeded examples share values with some of its captures, so they are
+optimistic, and runs were not deterministic before temperature/seed were
+pinned. Treat them as directional; eval.py now flags value overlap between
+the examples and the eval set. Only one static slot was swapped here (not
+three) to keep this static set's context-budget cost unchanged; the dynamic
+mechanism is the intended path for feeding in further real examples over
+time without bloating every call.
 """
 
 DEFAULT_VLM_TIMEOUT = 480.0
@@ -203,6 +207,9 @@ def _build_vlm_fewshot_prompt(
     return "\n".join(lines)
 
 
+VLM_TEMPERATURE = 0
+VLM_SEED = 0
+
 DEFAULT_VLM_NUM_THREAD = 2
 """Caps the CPU threads Ollama uses per call, even though qwen3-vl:4b now
 runs GPU-resident (an RTX 2000 Ada was added to the TrueNAS box). GPU
@@ -282,7 +289,16 @@ def read_digits_vlm(
         "prompt": prompt,
         "images": [*example_images, *dynamic_images, query_image],
         "stream": False,
-        "options": {"num_thread": num_thread, "num_ctx": num_ctx},
+        "options": {
+            "num_thread": num_thread,
+            "num_ctx": num_ctx,
+            # Greedy decoding with a fixed seed: the same crop and prompt
+            # must give the same answer, or eval.py can't tell a real
+            # regression from sampling noise (the same config scored 6/16 and
+            # 7/16 on consecutive runs before this).
+            "temperature": VLM_TEMPERATURE,
+            "seed": VLM_SEED,
+        },
     }
     request = urllib.request.Request(
         f"http://{host}/api/generate",
