@@ -29,6 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import capture, sanity
 from .config import CalibrationConfig, ConnectionConfig, connection_config_from_env
+from .labels import LabelStore, append_dynamic_example
 
 LOG = logging.getLogger(__name__)
 
@@ -63,8 +64,6 @@ def _record_dynamic_example(
     except (ValueError, OverflowError):
         return
 
-    from .labels import LabelStore
-
     if LabelStore(connection.image_dir, connection.state_dir).value_split(digits) in (
         "verify",
         "test",
@@ -73,32 +72,16 @@ def _record_dynamic_example(
         # example would leak the answer into the eval set.
         return
 
-    examples_dir = connection.image_dir / "human_corrections"
-    examples_dir.mkdir(parents=True, exist_ok=True)
-    index_path = examples_dir / "index.json"
     try:
-        entries = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else []
-        if not isinstance(entries, list):
-            entries = []
-    except (OSError, ValueError):
-        entries = []
-
-    file_name = f"{now.strftime('%Y%m%dT%H%M%SZ')}_{digits}.jpg"
-    try:
-        (examples_dir / file_name).write_bytes(crop_path.read_bytes())
+        append_dynamic_example(
+            connection.image_dir / "human_corrections",
+            crop_path,
+            digits,
+            now.strftime("%Y%m%dT%H%M%SZ"),
+            limit=DYNAMIC_EXAMPLES_LIMIT,
+        )
     except OSError:
         LOG.exception("Failed to save dynamic few-shot example")
-        return
-    entries.append({"file": file_name, "digits": digits})
-
-    while len(entries) > DYNAMIC_EXAMPLES_LIMIT:
-        stale = entries.pop(0)
-        try:
-            (examples_dir / str(stale["file"])).unlink(missing_ok=True)
-        except (OSError, KeyError, TypeError):
-            pass
-
-    index_path.write_text(json.dumps(entries), encoding="utf-8")
 
 
 def apply_correction(

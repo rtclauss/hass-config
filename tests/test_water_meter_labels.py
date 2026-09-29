@@ -258,3 +258,17 @@ def test_import_manifest_seals_value_groups_and_is_idempotent(tmp_path: Path) ->
     later = store.add_label("20260929T100000Z", "reading", value="02146964", now=NOW, split="train")
     assert later["split"] == "verify"
     assert not (tmp_path / "images" / "human_corrections" / "index.json").exists()
+
+
+def test_dynamic_pool_keeps_one_example_per_reading_newest_wins(tmp_path: Path) -> None:
+    pool = tmp_path / "pool"
+    old, new, other = tmp_path / "old.jpg", tmp_path / "new.jpg", tmp_path / "other.jpg"
+    old.write_bytes(b"old"); new.write_bytes(b"new"); other.write_bytes(b"other")
+    labels.append_dynamic_example(pool, old, "02148506", "20260929T045652Z")
+    labels.append_dynamic_example(pool, other, "02147700", "20260929T050000Z")
+    labels.append_dynamic_example(pool, new, "02148506", "20260929T104130Z")
+
+    index = json.loads((pool / "index.json").read_text())
+    assert [e["digits"] for e in index] == ["02147700", "02148506"]
+    assert (pool / "20260929T104130Z_02148506.jpg").read_bytes() == b"new"
+    assert not (pool / "20260929T045652Z_02148506.jpg").exists()  # superseded image removed
