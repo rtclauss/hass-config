@@ -121,18 +121,27 @@ def grab_stable_frame(
         capture.release()
 
 
-def rotate_frame(frame: "np.ndarray", degrees: float) -> "np.ndarray":
-    """Rotate the whole frame about its centre, positive = counter-clockwise
-    (OpenCV's convention), so a slightly tilted jig can be straightened before
-    the ROI and digit boxes are cut. A no-op at 0 degrees (no cv2 needed).
-    Edges replicate rather than go black so a crop near the border stays
-    plausible. The labeling UI's box editor previews exactly this transform."""
+def rotate_frame(
+    frame: "np.ndarray", degrees: float, center: tuple[float, float] | None = None
+) -> "np.ndarray":
+    """Rotate the whole frame by `degrees` about `center` (default: the frame's
+    centre), positive = counter-clockwise (OpenCV's convention), so a slightly
+    tilted jig can be straightened before the ROI and digit boxes are cut.
+
+    The reader pivots on the ROI's centre: rotating about the far-away frame
+    centre mostly *translates* the display (about 6 px per degree here) with
+    only a slight tilt, so every rotation step would force the boxes to be
+    re-positioned. Pivoting on the display itself keeps it in place and just
+    tilts it. A no-op at 0 degrees (no cv2 needed). Edges replicate rather than
+    go black. The labeling UI's box editor previews exactly this transform.
+    """
     if not degrees:
         return frame
     import cv2
 
     height, width = frame.shape[:2]
-    matrix = cv2.getRotationMatrix2D((width / 2, height / 2), degrees, 1.0)
+    pivot = center if center is not None else (width / 2, height / 2)
+    matrix = cv2.getRotationMatrix2D(pivot, degrees, 1.0)
     return cv2.warpAffine(
         frame, matrix, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
     )

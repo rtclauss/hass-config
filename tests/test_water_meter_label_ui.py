@@ -273,3 +273,13 @@ def test_bad_frames_leave_the_queue_and_can_be_restored(server) -> None:
 
     _request(port, "POST", "/api/label", body={**body, "value": False})
     assert json.loads(_request(port, "GET", "/api/queue?mode=queue")[2])["depth"] == 1
+
+
+def test_editor_pivots_rotation_on_the_roi_like_the_reader(server) -> None:
+    # Rotating about the far-away frame centre mostly slides the display
+    # (about 6 px per degree) instead of tilting it; the reader and the editor
+    # must both pivot on the ROI centre or the preview lies about what is cut.
+    port, _, _ = server
+    html = _request(port, "GET", "/")[2].decode()
+    assert "px = r[0]+r[2]/2, py = r[1]+r[3]/2" in html
+    assert "c.translate(px, py)" in html

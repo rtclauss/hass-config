@@ -134,7 +134,7 @@ main{max-width:980px;margin:0 auto;padding:12px;display:grid;gap:12px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .row label{display:flex;gap:8px;align-items:center;min-height:44px}
 input[type=checkbox]{width:22px;height:22px}
-#reading{font-size:1.4rem;letter-spacing:.15em;width:11ch;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:4px 8px;font-variant-numeric:tabular-nums}
+#reading{font-size:1.4rem;letter-spacing:.12em;width:13ch;min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:4px 8px;font-variant-numeric:tabular-nums}
 .bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--card);border-top:1px solid var(--line);display:flex;gap:8px;padding:8px 12px calc(8px + env(safe-area-inset-bottom))}
 .bar button{flex:1;font-size:1rem}
 .bar .primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -365,8 +365,11 @@ function liveOk(){ return !!(frameImg && calib && boxes.length === N && frameImg
 function rebuildRotated(){
   if (!frameImg){ rc.width = rc.height = 0; return; }
   rc.width = frameImg.naturalWidth; rc.height = frameImg.naturalHeight;
-  const c = rc.getContext('2d'); c.save(); c.translate(rc.width/2, rc.height/2);
-  c.rotate(-rot*Math.PI/180); c.drawImage(frameImg, -rc.width/2, -rc.height/2); c.restore();
+  // Pivot on the ROI centre (same as reader.py), so the display tilts in place
+  // instead of sliding away from the boxes.
+  const r = calib ? calib.roi : [0, 0, rc.width, rc.height], px = r[0]+r[2]/2, py = r[1]+r[3]/2;
+  const c = rc.getContext('2d'); c.save(); c.translate(px, py);
+  c.rotate(-rot*Math.PI/180); c.drawImage(frameImg, -px, -py); c.restore();
 }
 function drawCrop(cv, b, maxH){
   if (!b || !rc.width) return;

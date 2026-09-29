@@ -1118,7 +1118,9 @@ def test_run_cuts_crops_from_the_rotated_frame_but_keeps_the_raw_frame(
     saved: dict = {}
     rotations: list[tuple[object, float]] = []
     monkeypatch.setattr(
-        capture, "rotate_frame", lambda frame, degrees: rotations.append((frame, degrees)) or "rotated"
+        capture,
+        "rotate_frame",
+        lambda frame, degrees, center=None: rotations.append((frame, degrees, center)) or "rotated",
     )
     monkeypatch.setattr(capture, "save_image", lambda frame, path: saved.setdefault(path.name, frame))
     monkeypatch.setattr(capture, "crop_roi", lambda frame, roi: f"crop-of-{frame}")
@@ -1129,7 +1131,8 @@ def test_run_cuts_crops_from_the_rotated_frame_but_keeps_the_raw_frame(
         ocr_reader=lambda p, d: "12", publisher=lambda r, n: None, now=NOW,
     )
 
-    assert rotations == [("frame", -2.0)]
+    # pivots on the ROI centre, so the display tilts in place
+    assert rotations == [("frame", -2.0, (5.0, 5.0))]
     assert saved["latest_raw.jpg"] == "frame"  # raw stays as captured
     assert saved["latest_crop.jpg"] == "crop-of-rotated"
     assert saved[f"{NOW.strftime('%Y%m%dT%H%M%SZ')}_digit0.jpg"] == "digit-of-rotated"
