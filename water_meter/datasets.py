@@ -13,28 +13,9 @@ import json
 from pathlib import Path
 import shutil
 
-from .labels import EXCLUDING_FLAGS, FLAGS, LabelStore
+from .labels import EXCLUDING_FLAGS, FLAGS, LabelStore, jpeg_size
 
 EVAL_SPLITS = ("verify", "test")
-
-
-def jpeg_size(data: bytes) -> tuple[int, int]:
-    """(width, height) from a JPEG's SOF marker, or (0, 0) if unparseable."""
-    i = 2
-    while i + 9 < len(data) and data[0:2] == b"\xff\xd8":
-        if data[i] != 0xFF:
-            i += 1
-            continue
-        marker = data[i + 1]
-        if marker in (0xC0, 0xC1, 0xC2):
-            height = int.from_bytes(data[i + 5 : i + 7], "big")
-            width = int.from_bytes(data[i + 7 : i + 9], "big")
-            return width, height
-        if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
-            i += 2
-            continue
-        i += 2 + int.from_bytes(data[i + 2 : i + 4], "big")
-    return (0, 0)
 
 
 def _usable_readings(store: LabelStore) -> list[dict]:

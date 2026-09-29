@@ -116,7 +116,8 @@ main{max-width:980px;margin:0 auto;padding:12px;display:grid;gap:12px}
 @media (min-width:860px){main{grid-template-columns:1.15fr 1fr;align-items:start}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
 .imgbox{background:#000;border-radius:8px;overflow:auto;touch-action:pinch-zoom pan-x pan-y}
-.imgbox img{display:block;width:100%;height:auto;image-rendering:pixelated}
+.imgbox img,.imgbox #roiView{display:block;width:100%;height:auto;image-rendering:pixelated}
+[hidden]{display:none !important}
 .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:.85rem;color:var(--muted)}
 .badge{border:1px solid var(--line);border-radius:999px;padding:2px 10px}
 .badge.test{color:var(--bad);border-color:var(--bad)}.badge.verify{color:var(--warn);border-color:var(--warn)}.badge.train{color:var(--good);border-color:var(--good)}
@@ -158,14 +159,14 @@ button{cursor:pointer}
 <header>
   <h1>Meter labels <span id="depth" class="chip"></span></h1>
   <select id="mode" aria-label="List">
-    <option value="queue">Queue</option><option value="all">All</option><option value="labeled">Labeled</option><option value="excluded">Rejected frames</option>
+    <option value="queue">Queue</option><option value="all">All</option><option value="labeled">Labeled</option><option value="excluded">Rejected frames</option><option value="legacy">Legacy frames</option>
   </select>
   <label class="chip"><input type="checkbox" id="blind"> Blind</label>
 </header>
 <div id="toast" role="status"></div>
 <main>
   <section class="card" id="viewer">
-    <div class="imgbox"><img id="crop" alt="meter display crop"></div>
+    <div class="imgbox"><canvas id="roiView" hidden></canvas><img id="crop" alt="meter display crop"></div>
     <div class="row"><button id="toggleRaw" class="chip" type="button">Full frame</button>
       <span id="capid" class="chip"></span></div>
     <div class="imgbox" id="rawbox" hidden><img id="raw" alt="full frame"></div>
@@ -259,8 +260,7 @@ function renderCells(){
     const d = document.createElement('div');
     d.className = 'cell'+(i===sel?' sel':'')+(state[i]?(' '+state[i]):''); d.tabIndex = 0;
     if (liveOk()){ const cv = document.createElement('canvas'); cv.dataset.i = i; d.appendChild(cv); }
-    else if (cur && cur.files.includes('digit'+i)){ const im = document.createElement('img'); im.alt=''; im.src='/img?id='+cur.id+'&name=digit'+i; d.appendChild(im); }
-    else d.appendChild(document.createElement('span'));
+    else d.appendChild(document.createElement('span'));  // legacy frame: stored digit crops were cut with other boxes, so show none
     const sp = document.createElement('span'); sp.className='d'; sp.textContent = cells[i]||'·'; d.appendChild(sp);
     d.onclick = () => { sel=i; renderCells(); };
     box.appendChild(d);
@@ -280,7 +280,7 @@ async function show(id){
   $('raw').src = cur.files.includes('raw') ? '/img?id='+id+'&name=raw' : '';
   $('capid').textContent = id;
   frameImg = cur.files.includes('raw') ? await loadImage('/img?id='+id+'&name=raw') : null;
-  rebuildRotated();
+  rebuildRotated(); drawRoiView();
   const digits = cur.labels.digits || {};
   const labeled = Object.keys(digits).length > 0;
   for (let i=0;i<N;i++){
@@ -297,6 +297,7 @@ async function show(id){
   badges.push('<span class="badge">'+cur.status+'</span>');
   if (cur.rejected) badges.push('<span class="badge" style="color:var(--bad)">rejected</span>');
   if (cur.reason) badges.push('<span class="badge">'+cur.reason.replace(/[<>&]/g,'')+'</span>');
+  if (cur.legacy) badges.push('<span class="badge warn" title="Captured at '+cur.frame.width+'x'+cur.frame.height+' (or no full frame): the current ROI, digit boxes and rotation do not apply, so digit crops are hidden. You can still label the full reading from the image.">legacy frame '+(cur.frame.width?cur.frame.width+'x'+cur.frame.height:'(no full frame)')+'</span>');
   if (cur.guess) badges.push('<span class="badge">model: '+cur.guess+'</span>');
   $('meta').innerHTML = badges.join('');
   $('hint').textContent = labeled ? 'labeled - edit to relabel' : (cur.guess ? 'orange = model guess, unconfirmed' : 'tap a digit, then the keypad');
@@ -384,9 +385,14 @@ function drawPreview(){
 function drawBoxes(){
   if (!$('boxbox').open) return;
   const cv = $('boxCanvas'), note = $('boxNote');
-  if (!frameImg || !calib || !rc.width){ cv.width = 10; cv.height = 10; note.textContent = 'No full frame for this capture'; return; }
-  note.textContent = liveOk() ? '' : 'This frame is '+frameImg.naturalWidth+'x'+frameImg.naturalHeight+
-      ' but the calibration is for '+calib.capture_width+'x'+calib.capture_height+' - pick a newer capture';
+  if (!liveOk()){
+    cv.width = 10; cv.height = 10;
+    note.textContent = !frameImg || !calib ? 'No full frame for this capture - pick a newer one to adjust boxes'
+      : 'This frame is '+frameImg.naturalWidth+'x'+frameImg.naturalHeight+' but the calibration is for '+
+        calib.capture_width+'x'+calib.capture_height+' - pick a newer capture to adjust boxes';
+    return;
+  }
+  note.textContent = '';
   const r = calib.roi, m = 24;
   const rx = Math.max(0, r[0]-m), ry = Math.max(0, r[1]-m);
   const rw = Math.min(rc.width-rx, r[2]+2*m), rh = Math.min(rc.height-ry, r[3]+2*m);
@@ -403,7 +409,7 @@ function drawBoxes(){
   view = {rx, ry, S};
 }
 function boxesChanged(){ drawBoxes(); drawPreview(); renderCells(); }
-function setRot(v){ rot = Math.max(-15, Math.min(15, Math.round(v))); $('rotVal').textContent = rot+'°'; rebuildRotated(); boxesChanged(); }
+function setRot(v){ rot = Math.max(-15, Math.min(15, Math.round(v))); $('rotVal').textContent = rot+'°'; rebuildRotated(); drawRoiView(); boxesChanged(); }
 function clampBox(b){
   const W = rc.width || calib.capture_width, H = rc.height || calib.capture_height;
   b[2] = Math.max(4, Math.min(W, b[2])); b[3] = Math.max(4, Math.min(H, b[3]));
@@ -452,7 +458,7 @@ async function loadCalib(){
 }
 $('boxRevert').onclick = () => loadCalib().then(() => toast('Reverted to saved'));
 $('boxSave').onclick = async () => {
-  if (!liveOk() && !confirm('This frame does not match the calibration resolution. Save anyway?')) return;
+  if (!liveOk()){ toast('Open a frame at the calibration resolution to save boxes'); return; }
   try {
     calib = await api('/api/calibration', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({digit_boxes: boxes, rotation_degrees: rot})});
@@ -462,19 +468,31 @@ $('boxSave').onclick = async () => {
 $('boxbox').addEventListener('toggle', e => { if (e.target.open){ boxesChanged(); } });
 window.addEventListener('resize', () => drawBoxes());
 
+// The main view re-cuts the ROI from the raw frame with the *current* calibration (ROI +
+// rotation) whenever the frame matches it, so old misframed stored crops never mislead a label.
+function drawRoiView(){
+  const cv = $('roiView'), im = $('crop');
+  if (!liveOk()){ cv.hidden = true; im.hidden = false; return; }
+  const r = calib.roi; cv.width = r[2]*3; cv.height = r[3]*3;
+  const c = cv.getContext('2d'); c.imageSmoothingQuality = 'high'; c.drawImage(rc, r[0], r[1], r[2], r[3], 0, 0, cv.width, cv.height);
+  cv.hidden = false; im.hidden = true; checkCutoff(cv);
+}
 // Flag frames whose display looks cut off: ink touching the top/bottom edge of the crop.
-$('crop').addEventListener('load', () => {
+function checkCutoff(src){
   try {
-    const im = $('crop'), cv = document.createElement('canvas'); cv.width = im.naturalWidth; cv.height = im.naturalHeight;
-    const c = cv.getContext('2d'); c.drawImage(im, 0, 0);
-    const w = cv.width, h = cv.height, x0 = Math.round(w*.15), x1 = Math.round(w*.85), d = c.getImageData(0,0,w,h).data;
+    const w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const c = cv.getContext('2d'); c.drawImage(src, 0, 0, w, h);
+    const x0 = Math.round(w*.15), x1 = Math.round(w*.85), d = c.getImageData(0,0,w,h).data;
     const luma = (x,y) => { const k = (y*w+x)*4; return .3*d[k]+.59*d[k+1]+.11*d[k+2]; };
     let mean = 0, n = 0; for (let y = 0; y < h; y += 2) for (let x = x0; x < x1; x += 2){ mean += luma(x,y); n++; } mean /= n;
+    const t = Math.max(3, Math.round(h*.045));
     const edge = rows => { let dark = 0, tot = 0; rows.forEach(y => { for (let x = x0; x < x1; x++){ tot++; if (luma(x,y) < mean-45) dark++; } }); return dark/tot; };
-    const top = edge([0,1,2]), bottom = edge([h-3,h-2,h-1]);
+    const top = edge([...Array(t).keys()]), bottom = edge([...Array(t).keys()].map(k => h-1-k));
     if (top > .06 || bottom > .06){ const b = document.createElement('span'); b.className = 'badge warn'; b.textContent = 'may be cut off ('+(top>bottom?'top':'bottom')+')'; $('meta').appendChild(b); }
   } catch (e) { /* canvas read can fail on odd images; the badge is only a hint */ }
-});
+}
+$('crop').addEventListener('load', () => { if (!$('crop').hidden) checkCutoff($('crop')); });
 
 (async () => {
   try { await loadCalib(); } catch (e) { /* editor is optional */ }
@@ -558,7 +576,7 @@ def make_handler(store: LabelStore, token: str) -> type[BaseHTTPRequestHandler]:
                 self.wfile.write(page)
             elif path == "/api/queue":
                 mode = query.get("mode", "queue")
-                if mode not in ("queue", "all", "labeled", "excluded"):
+                if mode not in ("queue", "all", "labeled", "excluded", "legacy"):
                     _json(self, 400, {"error": "bad mode"})
                     return
                 try:

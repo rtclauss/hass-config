@@ -66,6 +66,25 @@ def more_sealed(a: str | None, b: str | None) -> str | None:
     return max(candidates, key=SPLIT_RANK.__getitem__) if candidates else None
 
 
+def jpeg_size(data: bytes) -> tuple[int, int]:
+    """(width, height) from a JPEG's SOF marker, or (0, 0) if unparseable."""
+    i = 2
+    while i + 9 < len(data) and data[0:2] == b"\xff\xd8":
+        if data[i] != 0xFF:
+            i += 1
+            continue
+        marker = data[i + 1]
+        if marker in (0xC0, 0xC1, 0xC2):
+            height = int.from_bytes(data[i + 5 : i + 7], "big")
+            width = int.from_bytes(data[i + 7 : i + 9], "big")
+            return width, height
+        if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+            i += 2
+            continue
+        i += 2 + int.from_bytes(data[i + 2 : i + 4], "big")
+    return (0, 0)
+
+
 def scheduled_split(capture_id: str) -> str:
     """The split a capture's timestamp falls into (see the module docstring)."""
     seconds = (capture_time(capture_id) - SCHEDULE_EPOCH).total_seconds()
@@ -161,6 +180,35 @@ class LabelStore:
                 files["read"] = path
                 break
         return files
+
+    def expected_frame_size(self) -> tuple[int, int] | None:
+        """(width, height) the current calibration was drawn for, or None."""
+        if self.calibration_path is None or not self.calibration_path.exists():
+            return None
+        try:
+            data = json.loads(self.calibration_path.read_text(encoding="utf-8"))
+            return int(data.get("capture_width", 640)), int(data.get("capture_height", 480))
+        except (OSError, ValueError, TypeError):
+            return None
+
+    def frame_size(self, capture_id: str) -> tuple[int, int]:
+        raw = self.capture_files(capture_id).get("raw")
+        if raw is None:
+            return (0, 0)
+        try:
+            with raw.open("rb") as handle:
+                return jpeg_size(handle.read(65536))
+        except OSError:
+            return (0, 0)
+
+    def is_legacy(self, capture_id: str, expected: tuple[int, int] | None = None) -> bool:
+        """True when the current ROI/digit boxes/rotation can't apply to this
+        capture: no raw frame, or captured at a different resolution (e.g. the
+        640x480 era - a different field of view, not a scaled copy)."""
+        expected = expected or self.expected_frame_size()
+        if expected is None:
+            return False
+        return self.frame_size(capture_id) != expected
 
     def capture_exists(self, capture_id: str) -> bool:
         return "crop" in self.capture_files(capture_id) or "raw" in self.capture_files(capture_id)
@@ -412,9 +460,12 @@ class LabelStore:
             if labels["digits"] or flags
             else "unlabeled"
         )
+        size = self.frame_size(capture_id)
         item = {
             "id": capture_id,
             "files": sorted(files),
+            "frame": {"width": size[0], "height": size[1]},
+            "legacy": self.is_legacy(capture_id),
             "labels": labels,
             "split": split,
             "scheduled_split": scheduled_split(capture_id),
@@ -430,7 +481,8 @@ class LabelStore:
     def queue(self, mode: str = "queue", limit: int = 50, *, blind: bool = False) -> dict:
         """mode: queue (unlabeled: pipeline-rejected first, then captures scheduled
         into an eval split that is still under its target, then distinct guessed
-        values), all, labeled, or excluded (bad frames)."""
+        values), all, labeled, excluded (bad frames) or legacy (frames the current
+        calibration can't apply to, e.g. other resolutions - never in the queue)."""
         events = self._events()
         splits = self._load_splits()
         ids = self.list_capture_ids()
@@ -438,7 +490,9 @@ class LabelStore:
         for capture_id in ids:
             item = self.item(capture_id, events=events, splits=splits)
             done = item["status"] in ("labeled", "excluded")
-            if mode == "queue" and done:
+            if mode == "queue" and (done or item["legacy"]):
+                continue
+            if mode == "legacy" and (item["status"] == "excluded" or not item["legacy"]):
                 continue
             if mode == "labeled" and item["status"] != "labeled":
                 continue
