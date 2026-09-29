@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from water_meter import capture
 from water_meter.config import ConnectionConfig
 
@@ -116,3 +118,39 @@ def test_publish_with_retry_raises_the_last_error_after_exhausting_attempts(monk
         assert False, "expected OSError to propagate"
     except OSError as error:
         assert "still down" in str(error)
+
+
+def test_rotate_frame_is_a_noop_at_zero_without_needing_cv2() -> None:
+    frame = object()
+    assert capture.rotate_frame(frame, 0) is frame  # type: ignore[arg-type]
+
+
+def test_rotate_frame_uses_opencv_center_rotation_with_replicated_edges(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+    import types
+
+    calls: dict = {}
+    fake_cv2 = types.ModuleType("cv2")
+    fake_cv2.INTER_LINEAR = 1  # type: ignore[attr-defined]
+    fake_cv2.BORDER_REPLICATE = 2  # type: ignore[attr-defined]
+
+    def _matrix(center: tuple, angle: float, scale: float) -> str:
+        calls["matrix"] = (center, angle, scale)
+        return "M"
+
+    def _warp(frame: object, matrix: str, size: tuple, flags: int, borderMode: int) -> str:
+        calls["warp"] = (matrix, size, flags, borderMode)
+        return "rotated"
+
+    fake_cv2.getRotationMatrix2D = _matrix  # type: ignore[attr-defined]
+    fake_cv2.warpAffine = _warp  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "cv2", fake_cv2)
+
+    class _Frame:
+        shape = (960, 1280, 3)
+
+    assert capture.rotate_frame(_Frame(), 2.0) == "rotated"  # type: ignore[arg-type]
+    assert calls["matrix"] == ((640.0, 480.0), 2.0, 1.0)
+    assert calls["warp"] == ("M", (1280, 960), 1, 2)

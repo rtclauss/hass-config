@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 import shutil
 
-from .labels import FLAGS, LabelStore
+from .labels import EXCLUDING_FLAGS, FLAGS, LabelStore
 
 EVAL_SPLITS = ("verify", "test")
 
@@ -44,7 +44,7 @@ def _usable_readings(store: LabelStore) -> list[dict]:
     usable = []
     for capture_id in store.list_capture_ids():
         labels = store.effective_labels(capture_id, events)
-        if not labels["reading"] or set(labels["flags"]) & set(FLAGS):
+        if not labels["reading"] or set(labels["flags"]) & set(FLAGS):  # any flag: not a clean sample
             continue
         split = splits["capture"].get(capture_id)
         if split is None:
@@ -108,7 +108,7 @@ def human_training_labels(store: LabelStore) -> list[dict]:
         if splits["capture"].get(capture_id) != "train":
             continue
         labels = store.effective_labels(capture_id, events)
-        if not labels["digits"] or set(labels["flags"]) & {"unreadable"}:
+        if not labels["digits"] or set(labels["flags"]) & set(EXCLUDING_FLAGS):
             continue
         rows.append(
             {

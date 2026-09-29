@@ -102,3 +102,13 @@ def test_load_calibration_config_rejects_non_mapping_json(tmp_path: Path) -> Non
 
     with pytest.raises(ValueError, match="JSON object"):
         config.load_calibration_config(path)
+
+
+def test_rotation_degrees_defaults_to_zero_and_round_trips() -> None:
+    from water_meter.config import calibration_config_from_dict
+
+    base = {"roi": [0, 0, 10, 10], "digit_boxes": [[0, 0, 5, 5]]}
+    assert calibration_config_from_dict(base).rotation_degrees == 0.0
+    config = calibration_config_from_dict({**base, "rotation_degrees": -2.0})
+    assert config.rotation_degrees == -2.0
+    assert config.to_dict()["rotation_degrees"] == -2.0

@@ -100,9 +100,13 @@ def run_once(
     crop_path = connection.image_dir / "latest_crop.jpg"
     capture.save_image(frame, raw_path)
 
-    cropped = capture.crop_roi(frame, calibration.roi)
+    # The raw frame is saved (and kept in history) exactly as captured;
+    # rotation only affects the crops, so labeled raw frames stay usable if
+    # the rotation setting changes later.
+    straightened = capture.rotate_frame(frame, calibration.rotation_degrees)
+    cropped = capture.crop_roi(straightened, calibration.roi)
     capture.save_image(cropped, crop_path)
-    digit_crops = capture.crop_boxes(frame, calibration.digit_boxes)
+    digit_crops = capture.crop_boxes(straightened, calibration.digit_boxes)
 
     _rotate_history(
         connection.image_dir / "history", frame, cropped, digit_crops, calibration.history_limit, now

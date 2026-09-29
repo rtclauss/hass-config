@@ -49,6 +49,7 @@ def test_write_config_preserves_every_existing_field_on_recalibration(tmp_path: 
         max_sustained_gallons_per_hour=42.0,
         capture_width=999,
         capture_height=888,
+        rotation_degrees=-2.0,
     )
     save_calibration_config(config_path, existing)
 
@@ -77,6 +78,7 @@ def test_write_config_preserves_every_existing_field_on_recalibration(tmp_path: 
     # happened to record.
     assert config.capture_width == calibrate.DEFAULT_CAPTURE_WIDTH
     assert config.capture_height == calibrate.DEFAULT_CAPTURE_HEIGHT
+    assert config.rotation_degrees == -2.0  # the editor's tilt correction survives
 
 
 def _install_fake_cv2(monkeypatch: pytest.MonkeyPatch) -> None:

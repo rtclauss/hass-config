@@ -131,6 +131,11 @@ def write_config(
         # resolution would be wrong here, not merely stale.
         capture_width=DEFAULT_CAPTURE_WIDTH,
         capture_height=DEFAULT_CAPTURE_HEIGHT,
+        # Preserved: the boxes were just drawn on a frame that is not
+        # pre-rotated, so a rotation set via the labeling UI's box editor must
+        # survive a recalibration only if the user wants it - keep it, they can
+        # reset it in the editor.
+        rotation_degrees=existing.rotation_degrees if existing else 0.0,
     )
     save_calibration_config(config_path, config)
     return config

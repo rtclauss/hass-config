@@ -10,17 +10,25 @@ pulses).
 Every labeled capture is snapshotted into `image_dir/labeled/<capture_id>/`
 because `history/` rotates; nothing in this module ever deletes from there.
 
-Splits (train / verify / test) are assigned per *value group* - all captures
-sharing one reading share a split, so near-duplicate frames never straddle
-train and eval - and are sticky: once assigned they only ever move toward the
-more sealed split (train -> verify -> test), never back, because moving an
-item out of test would leak it into training.
+Splits (train / verify / test) come from a fixed *time-block schedule*, not a
+random hash: the meter is monotonic, so time order is value order, and
+contiguous blocks make eval measure reading values the model has not seen
+(interpolation/extrapolation) instead of near-duplicate frames of a value it
+trained on. A block is 8 hours; a 20-block cycle is 14 train / 3 verify / 3 test
+with eval blocks never adjacent, and train captures within an hour of an eval
+block are `embargo` (kept, but excluded from training) because neighbouring
+frames share their value and lighting. Proportions are guaranteed over a cycle
+rather than left to a hash's luck at small n.
+
+Captures sharing one reading form a value group and share a split (the most
+sealed of its members), and splits are sticky: once assigned they only ever move
+toward the more sealed split (train -> embargo -> verify -> test), never back,
+because moving an item out of test would leak it into training.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -28,13 +36,20 @@ import shutil
 
 CAPTURE_ID_RE = re.compile(r"^\d{8}T\d{6}Z$")
 IMAGE_NAMES = ("raw", "crop") + tuple(f"digit{i}" for i in range(8))
-SPLITS = ("train", "verify", "test")
+SPLITS = ("train", "embargo", "verify", "test")
 SPLIT_RANK = {name: rank for rank, name in enumerate(SPLITS)}
-FLAGS = ("unreadable", "not_totalizer")
-DEFAULT_SALT = "wm-labels-1"
-# Recent captures are preferentially eval data: deployment always means
-# reading values the model hasn't seen, so a forward block tests exactly that.
-FORWARD_BLOCK = timedelta(days=2)
+FLAGS = ("unreadable", "not_totalizer", "bad_frame")
+# Flags that take a capture out of every dataset and the labeling queue.
+EXCLUDING_FLAGS = ("unreadable", "bad_frame")
+SCHEDULE_EPOCH = datetime(2026, 1, 1, tzinfo=timezone.utc)
+BLOCK_SECONDS = 8 * 3600
+# T=train, V=verify, E=test. 14/3/3 = 70/15/15; eval blocks are never adjacent.
+SCHEDULE = "TTTVTTETTVTTETTVTTET"
+EMBARGO_SECONDS = 3600
+# While a split is under its target, unlabeled captures scheduled into it are
+# offered first (eval data is the scarce kind).
+EVAL_TARGETS = {"test": 60, "verify": 30}
+_SCHEDULE_NAMES = {"T": "train", "V": "verify", "E": "test"}
 DYNAMIC_EXAMPLES_LIMIT = 12
 
 
@@ -49,6 +64,22 @@ def capture_time(capture_id: str) -> datetime:
 def more_sealed(a: str | None, b: str | None) -> str | None:
     candidates = [s for s in (a, b) if s]
     return max(candidates, key=SPLIT_RANK.__getitem__) if candidates else None
+
+
+def scheduled_split(capture_id: str) -> str:
+    """The split a capture's timestamp falls into (see the module docstring)."""
+    seconds = (capture_time(capture_id) - SCHEDULE_EPOCH).total_seconds()
+    block = int(seconds // BLOCK_SECONDS)
+    kind = SCHEDULE[block % len(SCHEDULE)]
+    if kind == "T":
+        offset = seconds - block * BLOCK_SECONDS
+        before = SCHEDULE[(block - 1) % len(SCHEDULE)]
+        after = SCHEDULE[(block + 1) % len(SCHEDULE)]
+        if (before != "T" and offset < EMBARGO_SECONDS) or (
+            after != "T" and BLOCK_SECONDS - offset < EMBARGO_SECONDS
+        ):
+            return "embargo"
+    return _SCHEDULE_NAMES[kind]
 
 
 def append_dynamic_example(
@@ -89,7 +120,6 @@ class LabelStore:
         *,
         calibration_path: Path | None = None,
         digit_count: int = 8,
-        salt: str = DEFAULT_SALT,
     ) -> None:
         self.history_dir = image_dir / "history"
         self.rejects_dir = image_dir / "rejects"
@@ -99,7 +129,6 @@ class LabelStore:
         self.splits_path = state_dir / "label_splits.json"
         self.calibration_path = calibration_path
         self.digit_count = digit_count
-        self.salt = salt
 
     # ---- files -------------------------------------------------------
 
@@ -243,9 +272,6 @@ class LabelStore:
         tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding="utf-8")
         tmp.replace(self.splits_path)
 
-    def _bucket(self, key: str) -> int:
-        return int(hashlib.sha256(f"{self.salt}:{key}".encode()).hexdigest()[:8], 16) % 100
-
     def split_of(self, capture_id: str) -> str | None:
         return self._load_splits()["capture"].get(capture_id)
 
@@ -262,10 +288,7 @@ class LabelStore:
         if forced:
             existing = more_sealed(existing, forced)
         if existing is None:
-            bucket = self._bucket(reading or capture_id)
-            forward = now - capture_time(capture_id) <= FORWARD_BLOCK
-            train_below, verify_below = (40, 60) if forward else (70, 85)
-            existing = "train" if bucket < train_below else "verify" if bucket < verify_below else "test"
+            existing = scheduled_split(capture_id)
         changed: list[str] = []
         previous = dict(data["capture"])
         data["capture"][capture_id] = more_sealed(data["capture"].get(capture_id), existing)
@@ -347,9 +370,9 @@ class LabelStore:
         event["split"] = assigned
         self._append(event)
 
-        if kind == "reading" and assigned == "train" and "unreadable" not in self.effective_labels(
-            capture_id
-        )["flags"]:
+        if kind == "reading" and assigned == "train" and not (
+            set(self.effective_labels(capture_id)["flags"]) & set(EXCLUDING_FLAGS)
+        ):
             crop = self.capture_files(capture_id).get("crop")
             if crop is not None:
                 append_dynamic_example(
@@ -371,11 +394,14 @@ class LabelStore:
         labels = self.effective_labels(capture_id, events)
         sidecar = self.read_sidecar(capture_id) or {}
         split = (splits if splits is not None else self._load_splits())["capture"].get(capture_id)
+        flags = set(labels["flags"])
         status = (
-            "labeled"
-            if labels["reading"] or "unreadable" in labels["flags"]
+            "excluded"
+            if "bad_frame" in flags
+            else "labeled"
+            if labels["reading"] or "unreadable" in flags
             else "partial"
-            if labels["digits"] or labels["flags"]
+            if labels["digits"] or flags
             else "unlabeled"
         )
         item = {
@@ -383,6 +409,7 @@ class LabelStore:
             "files": sorted(files),
             "labels": labels,
             "split": split,
+            "scheduled_split": scheduled_split(capture_id),
             "status": status,
             "rejected": self.was_rejected(capture_id),
             "reason": sidecar.get("reason"),
@@ -393,32 +420,43 @@ class LabelStore:
         return item
 
     def queue(self, mode: str = "queue", limit: int = 50, *, blind: bool = False) -> dict:
-        """mode: queue (unlabeled, rejected first then diverse values),
-        all (everything newest first) or labeled."""
+        """mode: queue (unlabeled: pipeline-rejected first, then captures scheduled
+        into an eval split that is still under its target, then distinct guessed
+        values), all, labeled, or excluded (bad frames)."""
         events = self._events()
         splits = self._load_splits()
         ids = self.list_capture_ids()
         items = []
         for capture_id in ids:
-            labels = self.effective_labels(capture_id, events)
-            labeled = bool(labels["reading"]) or "unreadable" in labels["flags"]
-            if mode == "queue" and labeled:
+            item = self.item(capture_id, events=events, splits=splits)
+            done = item["status"] in ("labeled", "excluded")
+            if mode == "queue" and done:
                 continue
-            if mode == "labeled" and not labeled:
+            if mode == "labeled" and item["status"] != "labeled":
                 continue
-            items.append(self.item(capture_id, events=events, splits=splits))
+            if mode == "excluded" and item["status"] != "excluded":
+                continue
+            items.append(item)
         if mode == "queue":
+            labeled_by_split = self.stats()["by_split"]
+            needy = {
+                name for name, target in EVAL_TARGETS.items() if labeled_by_split.get(name, 0) < target
+            }
             seen_values: set[str] = set()
-            rejected, diverse, rest = [], [], []
+            rejected, needed, diverse, rest = [], [], [], []
             for item in items:
+                fresh_value = bool(item["guess"]) and item["guess"] not in seen_values
                 if item["rejected"]:
                     rejected.append(item)
-                elif item["guess"] and item["guess"] not in seen_values:
-                    seen_values.add(item["guess"])
+                elif item["scheduled_split"] in needy and (fresh_value or not item["guess"]):
+                    needed.append(item)
+                elif fresh_value:
                     diverse.append(item)
                 else:
                     rest.append(item)
-            items = rejected + diverse + rest
+                if fresh_value:
+                    seen_values.add(item["guess"])
+            items = rejected + needed + diverse + rest
         depth = len(items)
         if blind:
             for item in items:
@@ -430,16 +468,25 @@ class LabelStore:
         events = self._events()
         splits = self._load_splits()
         ids = self.list_capture_ids()
-        counts = {"labeled": 0, "partial": 0, "unlabeled": 0}
+        counts = {"labeled": 0, "partial": 0, "unlabeled": 0, "excluded": 0}
         by_split = {s: 0 for s in SPLITS}
         distinct_by_split: dict[str, set[str]] = {s: set() for s in SPLITS}
         coverage: list[list[int]] = [[0] * 10 for _ in range(self.digit_count)]
+        coverage_by_split = {
+            s: [[0] * 10 for _ in range(self.digit_count)] for s in SPLITS
+        }
         flag_counts = {f: 0 for f in FLAGS}
         for capture_id in ids:
             labels = self.effective_labels(capture_id, events)
-            if labels["reading"] or "unreadable" in labels["flags"]:
+            flags = set(labels["flags"])
+            for flag in flags:
+                flag_counts[flag] += 1
+            if "bad_frame" in flags:
+                counts["excluded"] += 1
+                continue
+            if labels["reading"] or "unreadable" in flags:
                 counts["labeled"] += 1
-            elif labels["digits"] or labels["flags"]:
+            elif labels["digits"] or flags:
                 counts["partial"] += 1
             else:
                 counts["unlabeled"] += 1
@@ -450,14 +497,15 @@ class LabelStore:
                     distinct_by_split[split].add(labels["reading"])
             for position, digit in labels["digits"].items():
                 coverage[int(position)][int(digit)] += 1
-            for flag in labels["flags"]:
-                flag_counts[flag] += 1
+                if split:
+                    coverage_by_split[split][int(position)][int(digit)] += 1
         return {
             "captures": len(ids),
             **counts,
             "by_split": by_split,
             "distinct_values_by_split": {s: len(v) for s, v in distinct_by_split.items()},
             "coverage": coverage,
+            "coverage_by_split": coverage_by_split,
             "flags": flag_counts,
         }
 
