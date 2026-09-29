@@ -159,7 +159,7 @@ button{cursor:pointer}
 <header>
   <h1>Meter labels <span id="depth" class="chip"></span></h1>
   <select id="mode" aria-label="List">
-    <option value="queue">Queue</option><option value="all">All</option><option value="labeled">Labeled</option><option value="excluded">Rejected frames</option><option value="legacy">Legacy frames</option>
+    <option value="queue">Queue</option><option value="all">All</option><option value="labeled">Labeled</option><option value="excluded">Rejected frames</option><option value="legacy">Legacy frames</option><option value="inferred">Inferred</option>
   </select>
   <label class="chip"><input type="checkbox" id="blind"> Blind</label>
 </header>
@@ -285,6 +285,7 @@ async function show(id){
   const labeled = Object.keys(digits).length > 0;
   for (let i=0;i<N;i++){
     if (digits[i] !== undefined){ cells[i]=digits[i]; state[i]='human'; }
+    else if (cur.inferred && cur.inferred.length===N){ cells[i]=cur.inferred[i]; state[i]='guess'; }
     else if (cur.guess && cur.guess.length===N){ cells[i]=cur.guess[i]; state[i]='guess'; }
     else { cells[i]=''; state[i]=''; }
   }
@@ -300,7 +301,7 @@ async function show(id){
   if (cur.legacy) badges.push('<span class="badge warn" title="Captured at '+cur.frame.width+'x'+cur.frame.height+' (or no full frame): the current ROI, digit boxes and rotation do not apply, so digit crops are hidden. You can still label the full reading from the image.">legacy frame '+(cur.frame.width?cur.frame.width+'x'+cur.frame.height:'(no full frame)')+'</span>');
   if (cur.guess) badges.push('<span class="badge">model: '+cur.guess+'</span>');
   $('meta').innerHTML = badges.join('');
-  $('hint').textContent = labeled ? 'labeled - edit to relabel' : (cur.guess ? 'orange = model guess, unconfirmed' : 'tap a digit, then the keypad');
+  $('hint').textContent = labeled ? 'labeled - edit to relabel' : (cur.inferred ? 'orange = implied by equal labeled neighbours (save to confirm)' : cur.guess ? 'orange = model guess, unconfirmed' : 'tap a digit, then the keypad');
   renderCells(); drawBoxes(); drawPreview();
 }
 async function loadList(keep){
@@ -331,7 +332,7 @@ async function flag(name, value){
 }
 async function loadStats(){
   const s = await api('/api/stats');
-  let h = '<p>'+s.captures+' captures: '+s.labeled+' labeled, '+s.partial+' partial, '+s.unlabeled+' unlabeled, '+s.excluded+' rejected frames.<br>'+
+  let h = '<p>'+s.captures+' captures: '+s.labeled+' labeled, '+s.partial+' partial, '+s.unlabeled+' unlabeled, '+s.inferred+' inferred, '+s.excluded+' rejected frames.<br>'+
     'Labeled by split - train '+s.by_split.train+', verify '+s.by_split.verify+', test '+s.by_split.test+
     ' (distinct values '+s.distinct_values_by_split.train+'/'+s.distinct_values_by_split.verify+'/'+s.distinct_values_by_split.test+').</p>'+
     '<table><tr><th>pos</th>'+[...Array(10).keys()].map(d=>'<th>'+d+'</th>').join('')+'</tr>';
@@ -576,7 +577,7 @@ def make_handler(store: LabelStore, token: str) -> type[BaseHTTPRequestHandler]:
                 self.wfile.write(page)
             elif path == "/api/queue":
                 mode = query.get("mode", "queue")
-                if mode not in ("queue", "all", "labeled", "excluded", "legacy"):
+                if mode not in ("queue", "all", "labeled", "excluded", "legacy", "inferred"):
                     _json(self, 400, {"error": "bad mode"})
                     return
                 try:

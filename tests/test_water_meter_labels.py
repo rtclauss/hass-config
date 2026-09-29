@@ -312,3 +312,34 @@ def test_without_a_calibration_nothing_is_legacy(tmp_path: Path) -> None:
     _capture(tmp_path, "20260929T100000Z")
     assert store.expected_frame_size() is None
     assert not store.is_legacy("20260929T100000Z")
+
+
+def test_readings_between_two_equal_human_labels_are_inferred_and_never_queued(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ids = [f"20260929T{h:02d}0000Z" for h in range(8, 14)]
+    for cid in ids:
+        _capture(tmp_path, cid)
+    store.add_label(ids[0], "reading", value="02148506", split="train", now=NOW)
+    store.add_label(ids[3], "reading", value="02148506", split="train", now=NOW)
+    store.add_label(ids[5], "reading", value="02148528", split="train", now=NOW)
+    store.add_label(ids[2], "flag", flag="bad_frame", value=True, now=NOW)  # a human already spoke
+
+    inferred = store.inferred_readings()
+    assert inferred == {ids[1]: "02148506"}  # ids[2] is flagged; ids[4] sits between different values
+    assert store.item(ids[1])["status"] == "inferred"
+    queue_ids = [i["id"] for i in store.queue("queue")["items"]]
+    assert ids[1] not in queue_ids and ids[4] in queue_ids
+    assert [i["id"] for i in store.queue("inferred")["items"]] == [ids[1]]
+    assert store.stats()["inferred"] == 1
+
+
+def test_a_human_label_overrides_an_inference(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ids = [f"20260929T{h:02d}0000Z" for h in range(8, 11)]
+    for cid in ids:
+        _capture(tmp_path, cid)
+    store.add_label(ids[0], "reading", value="02148506", split="train", now=NOW)
+    store.add_label(ids[2], "reading", value="02148506", split="train", now=NOW)
+    assert ids[1] in store.inferred_readings()
+    store.add_label(ids[1], "digit", position=7, value="6", now=NOW)
+    assert ids[1] not in store.inferred_readings()

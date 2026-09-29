@@ -368,3 +368,13 @@ def test_collect_provenance_records_versions_and_hashes(
     assert len(info["prompt_sha256"]) == 16
     assert len(info["examples_sha256"]) == 16
     assert info["temperature"] == 0
+
+
+def test_value_weighted_rate_counts_near_duplicates_once() -> None:
+    run = _run_with(
+        [("a1", "111", "111"), ("a2", "111", "111"), ("a3", "111", "111"), ("b", "222", "999")]
+    )
+    groups, weighted = run.value_weighted()
+    assert groups == 2 and weighted == 0.5  # 3 right copies of one value + 1 wrong value
+    assert run.exact_match_rate == 0.75  # the raw rate flatters it
+    assert "only 2 distinct values among 4 captures" in water_meter_eval.format_summary(run)
