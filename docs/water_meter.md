@@ -432,6 +432,50 @@ close to matching what fixing the actual few-shot coverage gap achieved on
 the existing production model** - the lesson generalizes beyond this one
 bug: check example coverage before reaching for a bigger model.
 
+### Labeling UI, datasets and splits
+
+`water_meter/label_ui.py` (`deploy/systemd/water-meter-label-ui.service`, port
+8092, stdlib-only, LAN only) is a responsive web page for labeling captures -
+usable with touch on a phone (on-screen 0-9 keypad, single column, >= 44 px
+targets, pinch-zoom on the image) and with the keyboard on a desktop (digits,
+arrows, Enter). Open it once as `http://<pi>:8092/?token=<WATER_METER_CORRECTION_TOKEN>`;
+it sets a long-lived cookie and strips the token from the URL. The
+unresolved-reading notification deep-links to `/?item=<capture_id>`.
+
+- **Two label kinds:** a full reading (implies every digit) and single digits
+  (partial labels are fine, e.g. only the glare-obscured position), plus flags
+  `unreadable` and `not_totalizer` (the display cycles to non-totalizer fields).
+- **Queue:** rejected reads first, then one capture per distinct model-guessed
+  value, then the rest. *Blind* mode hides the model's guess server-side, for
+  labeling verify/test items without anchoring. `reader.py` writes a
+  `history/<stamp>_read.json` sidecar (raw digits, accepted, reason) that the
+  queue uses.
+- **Retention:** labeling snapshots the raw frame, crop, digit crops and the
+  `calibration.json` in effect into `image_dir/labeled/<capture_id>/`, which no
+  rotation code touches (`history/` rotates at 200 captures). Labels are an
+  append-only `state_dir/labels.jsonl` (latest wins); revert a bad batch by
+  replaying without it.
+- **Splits (train / verify / test):** assigned per *value group* (all captures of
+  one reading share a split), deterministic (hash) and **sticky** - a split only
+  ever moves toward the more sealed one (train -> verify -> test), never back,
+  and each promotion is audited in `labels.jsonl`. Captures from the last two
+  days are preferentially eval data (deployment always means reading unseen
+  values). Only human-labeled data reaches verify/test; training may later add
+  weaker tiers, weighted below human labels.
+  - `train`: fits Coral, feeds the dynamic few-shot pool (human labels in the
+    train split are added to `human_corrections/` automatically; the correction
+    listener refuses values that are sealed eval data).
+  - `verify`: tuning - prompt/example choice, thresholds. Run freely.
+  - `test`: sealed golden set for final numbers; `eval --final` only, every run
+    logged in `eval_results/test_runs.jsonl`.
+  The original 16 golden captures are `verify` (they were tuned against). Register
+  them with `python3 -m water_meter.label_ui import-golden --dir water_meter/golden_set`.
+- **Exporters** (`water_meter/datasets.py`): `export_golden` writes verify/test
+  captures (crop + raw frame + sha256) into `golden_set/`; `human_training_labels`
+  returns train-split digit labels (partial allowed) for the Coral trainer.
+  Note the split assignment is not stratified by digit yet - the UI's coverage
+  matrix (Progress & coverage) shows which digit values still lack labels.
+
 ## Human-in-the-loop notifications
 
 When a rejected reading can't be automatically resolved - self-heal's
@@ -521,6 +565,9 @@ sudo cp deploy/systemd/water-meter-correction-listener.service /etc/systemd/syst
 sudo systemctl daemon-reload
 sudo systemctl enable --now water-meter-correction-listener.service
 ```
+
+The labeling UI is deployed the same way (`water-meter-label-ui.service`, port
+8092; it reuses `WATER_METER_CORRECTION_TOKEN`).
 
 ## MQTT contract
 
@@ -663,6 +710,9 @@ sudo systemctl enable --now water-meter-daily-reboot.timer
   monotonic preventive reboot, see "Daily preventive reboot" above.
 - `deploy/systemd/water-meter-correction-listener.service` - persistent
   service, see "Human-in-the-loop notifications" above.
+- `deploy/systemd/water-meter-label-ui.service` - persistent labeling web UI,
+  see "Labeling UI, datasets and splits" above. Related modules: `labels.py`
+  (label store, split policy), `datasets.py` (exporters), `eval.py`.
 - `packages/water_meter.yaml` - HA-side staleness sensor + alert automation,
   plus the Approve/Reject/Modify notification-action automations and the
   `input_number`/`rest_command` they use.

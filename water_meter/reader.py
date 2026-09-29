@@ -112,6 +112,7 @@ def run_once(
         raw_digits = ocr_reader(crop_path, digit_crops)
     except ocr.OcrError as error:
         result = RunResult(False, None, f"ocr failed: {error}")
+        _write_read_sidecar(connection.image_dir / "history", now, None, False, result.reason)
         _save_reject(connection.image_dir / "rejects", cropped, result.reason, now)
         publisher(result, now)
         return result
@@ -143,6 +144,10 @@ def run_once(
         _notify_ha_of_unresolved_reading(
             connection, calibration, raw_digits, validation, last_good, now
         )
+
+    _write_read_sidecar(
+        connection.image_dir / "history", now, raw_digits, validation.accepted, validation.reason
+    )
 
     if not validation.accepted:
         result = RunResult(False, None, validation.reason)
@@ -576,6 +581,13 @@ def _notify_ha_of_unresolved_reading(
             },
         ]
     }
+    if connection.label_ui_base_url:
+        # Tapping the notification body opens this capture in the labeling UI
+        # (the phone's browser already holds the UI's auth cookie after its
+        # first visit, so no token travels in this URL).
+        link = f"{connection.label_ui_base_url}/?item={now.strftime('%Y%m%dT%H%M%SZ')}"
+        notification_data["url"] = link
+        notification_data["clickAction"] = link
     if connection.correction_base_url and connection.correction_token:
         # Same crop the OCR pipeline actually read, so the human is judging
         # the real input, not a guess from the summary text - correction_
@@ -639,6 +651,26 @@ def _rotate_history(
     for stale_stamp in existing_pairs[:-limit] if limit > 0 else []:
         for stale in history_dir.glob(f"{stale_stamp}_*.jpg"):
             stale.unlink(missing_ok=True)
+        (history_dir / f"{stale_stamp}_read.json").unlink(missing_ok=True)
+
+
+def _write_read_sidecar(
+    history_dir: Path, now: datetime, raw_digits: str | None, accepted: bool, reason: str
+) -> None:
+    """Record what the pipeline concluded for this capture (label_ui.py's
+    queue uses it to surface rejected reads first and to prefill a guess).
+
+    Best-effort: a failed write must never affect the reading itself.
+    """
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    try:
+        history_dir.mkdir(parents=True, exist_ok=True)
+        (history_dir / f"{stamp}_read.json").write_text(
+            json.dumps({"raw_digits": raw_digits, "accepted": accepted, "reason": reason}),
+            encoding="utf-8",
+        )
+    except OSError:
+        LOG.warning("Could not write read sidecar for %s", stamp)
 
 
 def _save_reject(rejects_dir: Path, cropped: "np.ndarray", reason: str, now: datetime) -> None:

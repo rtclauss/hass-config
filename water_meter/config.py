@@ -134,6 +134,9 @@ class ConnectionConfig:
     # needing to SSH in first. Empty (the default) omits the image.
     correction_base_url: str = ""
     correction_token: str = ""
+    # Base URL of the labeling UI (label_ui.py), e.g. "http://10.24.1.102:8092".
+    # When set, the unresolved-reading notification deep-links to that capture.
+    label_ui_base_url: str = ""
 
 
 def connection_config_from_env() -> ConnectionConfig:
@@ -191,6 +194,7 @@ def connection_config_from_env() -> ConnectionConfig:
         ),
         correction_base_url=os.environ.get("WATER_METER_CORRECTION_BASE_URL", ""),
         correction_token=os.environ.get("WATER_METER_CORRECTION_TOKEN", ""),
+        label_ui_base_url=os.environ.get("WATER_METER_LABEL_UI_BASE_URL", ""),
     )
 
 

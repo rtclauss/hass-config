@@ -63,6 +63,16 @@ def _record_dynamic_example(
     except (ValueError, OverflowError):
         return
 
+    from .labels import LabelStore
+
+    if LabelStore(connection.image_dir, connection.state_dir).value_split(digits) in (
+        "verify",
+        "test",
+    ):
+        # This value is sealed eval data - feeding it to the prompt as an
+        # example would leak the answer into the eval set.
+        return
+
     examples_dir = connection.image_dir / "human_corrections"
     examples_dir.mkdir(parents=True, exist_ok=True)
     index_path = examples_dir / "index.json"

@@ -1,0 +1,27 @@
+[Unit]
+Description=Water meter labeling web UI (label captures, full readings and single digits)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Persistent so labels can be entered from a phone or desktop at any time,
+# including from the notification deep link (reader.py sets
+# WATER_METER_LABEL_UI_BASE_URL). Stdlib-only, LAN only - see
+# water_meter/label_ui.py and docs/water_meter.md "Labeling UI".
+Type=simple
+Restart=always
+RestartSec=5
+WorkingDirectory=/opt/hass-config
+# The UI shares WATER_METER_CORRECTION_TOKEN with the correction listener
+# (override with WATER_METER_LABEL_UI_TOKEN). Open the UI once with
+# http://<pi>:8092/?token=<token>; it then sets a long-lived cookie. It refuses
+# to start without a token because it can write training labels.
+EnvironmentFile=/etc/water-meter/credentials.env
+Environment=WATER_METER_STATE_DIR=/var/lib/water-meter/state
+Environment=WATER_METER_IMAGE_DIR=/var/lib/water-meter/images
+Environment=WATER_METER_CALIBRATION_PATH=/opt/water-meter/calibration.json
+Environment=WATER_METER_LABEL_UI_PORT=8092
+ExecStart=/opt/hass-config/venv/bin/python3 -m water_meter.label_ui serve
+
+[Install]
+WantedBy=multi-user.target
