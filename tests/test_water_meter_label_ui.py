@@ -162,3 +162,114 @@ def test_main_refuses_to_serve_without_a_token(monkeypatch: pytest.MonkeyPatch, 
     monkeypatch.setattr("sys.argv", ["label_ui"])
     with pytest.raises(SystemExit):
         label_ui.main()
+
+
+def _calibration_json() -> dict:
+    boxes = [[100 + 25 * i, 40, 24, 40] for i in range(8)]
+    return {
+        "roi": [90, 30, 250, 60],
+        "digit_boxes": boxes,
+        "digit_count": 8,
+        "ssocr_args": ["-d", "8"],
+        "decimal_places": 1,
+        "capture_width": 1280,
+        "capture_height": 960,
+        "rotation_degrees": 0.0,
+    }
+
+
+@pytest.fixture()
+def cal_server(tmp_path: Path):
+    tmp_path = tmp_path / "cal"
+    history = tmp_path / "images" / "history"
+    history.mkdir(parents=True)
+    (history / f"{CAPTURE}_crop.jpg").write_bytes(b"\xff\xd8crop")
+    cal_path = tmp_path / "calibration.json"
+    cal_path.write_text(json.dumps(_calibration_json()))
+    store = LabelStore(tmp_path / "images", tmp_path / "state", calibration_path=cal_path)
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), label_ui.make_handler(store, TOKEN))
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    yield httpd.server_port, cal_path
+    httpd.shutdown()
+    thread.join(timeout=2)
+
+
+def test_calibration_get_requires_auth_and_a_file(server, cal_server) -> None:
+    port, _, _ = server
+    assert _request(port, "GET", "/api/calibration", cookie=False)[0] == 401
+    assert _request(port, "GET", "/api/calibration")[0] == 404  # this server has no calibration file
+    cal_port, _ = cal_server
+    status, _, body = _request(cal_port, "GET", "/api/calibration")
+    data = json.loads(body)
+    assert status == 200 and len(data["digit_boxes"]) == 8 and data["rotation_degrees"] == 0.0
+    assert data["capture_width"] == 1280
+
+
+def test_calibration_save_updates_boxes_and_rotation_keeps_the_rest_and_backs_up(cal_server) -> None:
+    port, cal_path = cal_server
+    boxes = [[90 + 26 * i, 36, 28, 44] for i in range(8)]
+    status, _, body = _request(port, "POST", "/api/calibration", body={"digit_boxes": boxes, "rotation_degrees": -2})
+    assert status == 200 and json.loads(body)["rotation_degrees"] == -2.0
+
+    saved = json.loads(cal_path.read_text())
+    assert saved["digit_boxes"] == boxes and saved["rotation_degrees"] == -2.0
+    assert saved["ssocr_args"] == ["-d", "8"] and saved["decimal_places"] == 1  # untouched
+    assert saved["capture_width"] == 1280
+    backups = list(cal_path.parent.glob("calibration.json.bak.*"))
+    assert len(backups) == 1
+    assert json.loads(backups[0].read_text())["rotation_degrees"] == 0.0  # the previous file
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"digit_boxes": [[0, 0, 10, 10]] * 7},  # wrong count
+        {"digit_boxes": [[1270, 0, 30, 10]] * 8},  # past the frame edge
+        {"digit_boxes": [[0, 0, 2, 2]] * 8},  # degenerate
+        {"digit_boxes": [[0, 0, 10.5, 10]] * 8},  # not integers
+        {"digit_boxes": [[True, 0, 10, 10]] * 8},  # bools are not ints here
+        {"rotation_degrees": 30},
+        {"rotation_degrees": "2"},
+        {"digit_boxes": "nope"},
+        {"roi": [0, 0, 5000, 10]},
+    ],
+)
+def test_calibration_save_rejects_bad_edits_without_touching_the_file(cal_server, body) -> None:
+    port, cal_path = cal_server
+    before = cal_path.read_text()
+    status, _, _ = _request(port, "POST", "/api/calibration", body=body)
+    assert status == 400
+    assert cal_path.read_text() == before
+    assert not list(cal_path.parent.glob("calibration.json.bak.*"))
+
+
+def test_calibration_save_requires_auth(cal_server) -> None:
+    port, cal_path = cal_server
+    status, _, _ = _request(port, "POST", "/api/calibration", cookie=False, body={"rotation_degrees": 1})
+    assert status == 401
+    assert json.loads(cal_path.read_text())["rotation_degrees"] == 0.0
+
+
+def test_page_has_rotation_box_editor_and_reject_frame_controls(server) -> None:
+    port, _, _ = server
+    html = _request(port, "GET", "/")[2].decode()
+    for marker in ('id="rotM"', 'id="rotP"', 'id="boxCanvas"', 'id="boxSave"', 'id="fBad"', "counter-clockwise",
+                   'value="excluded"', "may be cut off"):
+        assert marker in html, marker
+
+
+def test_bad_frames_leave_the_queue_and_can_be_restored(server) -> None:
+    port, store, _ = server
+    body = {"capture_id": CAPTURE, "kind": "flag", "flag": "bad_frame", "value": True}
+    status, _, resp = _request(port, "POST", "/api/label", body=body)
+    assert status == 200 and json.loads(resp)["status"] == "excluded"
+
+    assert json.loads(_request(port, "GET", "/api/queue?mode=queue")[2])["depth"] == 0
+    excluded = json.loads(_request(port, "GET", "/api/queue?mode=excluded")[2])
+    assert [i["id"] for i in excluded["items"]] == [CAPTURE]
+    stats = json.loads(_request(port, "GET", "/api/stats")[2])
+    assert stats["excluded"] == 1 and stats["unlabeled"] == 0
+
+    _request(port, "POST", "/api/label", body={**body, "value": False})
+    assert json.loads(_request(port, "GET", "/api/queue?mode=queue")[2])["depth"] == 1

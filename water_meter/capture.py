@@ -121,6 +121,23 @@ def grab_stable_frame(
         capture.release()
 
 
+def rotate_frame(frame: "np.ndarray", degrees: float) -> "np.ndarray":
+    """Rotate the whole frame about its centre, positive = counter-clockwise
+    (OpenCV's convention), so a slightly tilted jig can be straightened before
+    the ROI and digit boxes are cut. A no-op at 0 degrees (no cv2 needed).
+    Edges replicate rather than go black so a crop near the border stays
+    plausible. The labeling UI's box editor previews exactly this transform."""
+    if not degrees:
+        return frame
+    import cv2
+
+    height, width = frame.shape[:2]
+    matrix = cv2.getRotationMatrix2D((width / 2, height / 2), degrees, 1.0)
+    return cv2.warpAffine(
+        frame, matrix, (width, height), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE
+    )
+
+
 def crop_roi(frame: "np.ndarray", roi: Box) -> "np.ndarray":
     x, y, width, height = roi
     return frame[y : y + height, x : x + width]

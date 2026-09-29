@@ -455,13 +455,20 @@ unresolved-reading notification deep-links to `/?item=<capture_id>`.
   rotation code touches (`history/` rotates at 200 captures). Labels are an
   append-only `state_dir/labels.jsonl` (latest wins); revert a bad batch by
   replaying without it.
-- **Splits (train / verify / test):** assigned per *value group* (all captures of
-  one reading share a split), deterministic (hash) and **sticky** - a split only
-  ever moves toward the more sealed one (train -> verify -> test), never back,
-  and each promotion is audited in `labels.jsonl`. Captures from the last two
-  days are preferentially eval data (deployment always means reading unseen
-  values). Only human-labeled data reaches verify/test; training may later add
-  weaker tiers, weighted below human labels.
+- **Splits (train / verify / test):** a fixed *time-block schedule*, not a random
+  hash. The meter is monotonic, so time order is value order; contiguous 8-hour
+  blocks make eval measure reading values the model has not seen instead of
+  near-duplicate frames of a value it trained on. A 20-block cycle is
+  14 train / 3 verify / 3 test with eval blocks never adjacent, so proportions
+  are guaranteed rather than left to a hash's luck at small n. Train captures
+  within an hour of an eval block are `embargo` (kept, excluded from training)
+  because neighbouring frames share their value and lighting. Captures sharing
+  one reading form a value group and share a split (the most sealed of its
+  members); splits are **sticky** and only ever move toward the more sealed side
+  (train -> embargo -> verify -> test), each promotion audited in `labels.jsonl`.
+  The UI shows the scheduled split before you label, and the queue offers
+  captures scheduled into an eval split first while that split is under its
+  target (60 test / 30 verify). Only human-labeled data reaches verify/test.
   - `train`: fits Coral, feeds the dynamic few-shot pool (human labels in the
     train split are added to `human_corrections/` automatically; the correction
     listener refuses values that are sealed eval data).
@@ -473,8 +480,25 @@ unresolved-reading notification deep-links to `/?item=<capture_id>`.
 - **Exporters** (`water_meter/datasets.py`): `export_golden` writes verify/test
   captures (crop + raw frame + sha256) into `golden_set/`; `human_training_labels`
   returns train-split digit labels (partial allowed) for the Coral trainer.
-  Note the split assignment is not stratified by digit yet - the UI's coverage
-  matrix (Progress & coverage) shows which digit values still lack labels.
+  The split is not stratified by digit - the UI's coverage matrix (Progress &
+  coverage) shows which digit values still lack labels.
+- **Rejecting bad frames:** "Cut off / bad frame" (flag `bad_frame`) takes a
+  capture out of the queue and every dataset (nothing is deleted; "Rejected
+  frames" lists them and unchecking restores one). Frames whose crop has ink
+  touching its top/bottom edge get a "may be cut off" hint.
+- **Digit boxes and rotation:** the "Refine digit boxes & rotation" panel rotates
+  the frame in 1 degree steps (positive = counter-clockwise, the reader's own
+  `capture.rotate_frame` transform) and lets you drag or nudge each box, space them
+  evenly, or make them the same size, with a live preview strip of the eight crops
+  (each should hold exactly one digit). "Save to Pi" validates the edit, keeps a
+  `calibration.json.bak.<timestamp>`, and applies from the next read. The
+  rotation is stored as `rotation_degrees`; `reader.py` straightens the frame
+  before cutting the ROI and digit crops, while the saved raw frame stays exactly
+  as captured. Digit *labels* are per position, not per crop, so relabeling is
+  never needed after moving a box; the labeling strip re-cuts thumbnails from the
+  raw frame with the boxes currently in the editor. The LCD is italic with
+  right-aligned "1"s, so boxes are on a uniform pitch (about 23 px at 1280x960)
+  and a little wider than one cell rather than tight around each glyph.
 
 ## Human-in-the-loop notifications
 

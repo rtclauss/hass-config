@@ -1108,3 +1108,28 @@ def test_notification_deep_links_to_the_label_ui_when_configured(
     assert "token" not in linked["url"]  # the UI's auth cookie, not a URL secret
 
     assert "url" not in run()
+
+
+def test_run_cuts_crops_from_the_rotated_frame_but_keeps_the_raw_frame(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(tmp_path)
+    calibration = _calibration(rotation_degrees=-2.0)
+    saved: dict = {}
+    rotations: list[tuple[object, float]] = []
+    monkeypatch.setattr(
+        capture, "rotate_frame", lambda frame, degrees: rotations.append((frame, degrees)) or "rotated"
+    )
+    monkeypatch.setattr(capture, "save_image", lambda frame, path: saved.setdefault(path.name, frame))
+    monkeypatch.setattr(capture, "crop_roi", lambda frame, roi: f"crop-of-{frame}")
+    monkeypatch.setattr(capture, "crop_boxes", lambda frame, boxes: [f"digit-of-{frame}"] * len(boxes))
+
+    reader.run_once(
+        connection, calibration, grab_frame=lambda: "frame", set_light=lambda on: None,
+        ocr_reader=lambda p, d: "12", publisher=lambda r, n: None, now=NOW,
+    )
+
+    assert rotations == [("frame", -2.0)]
+    assert saved["latest_raw.jpg"] == "frame"  # raw stays as captured
+    assert saved["latest_crop.jpg"] == "crop-of-rotated"
+    assert saved[f"{NOW.strftime('%Y%m%dT%H%M%SZ')}_digit0.jpg"] == "digit-of-rotated"

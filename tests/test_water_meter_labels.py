@@ -111,23 +111,61 @@ def test_value_groups_share_a_split_and_splits_only_move_toward_sealed(tmp_path:
     assert any(e["kind"] == "split" for e in events)  # promotion is audited
 
 
-def test_split_assignment_is_deterministic_and_forward_block_favors_eval(tmp_path: Path) -> None:
-    def assign(salt_dir: str, capture_id: str, reading: str) -> str:
-        store = LabelStore(tmp_path / salt_dir / "images", tmp_path / salt_dir / "state")
-        history = tmp_path / salt_dir / "images" / "history"
-        history.mkdir(parents=True)
-        (history / f"{capture_id}_crop.jpg").write_bytes(b"x")
-        return store.add_label(capture_id, "reading", value=reading, now=NOW)["split"]
+def _id_at(hours: float) -> str:
+    return (labels.SCHEDULE_EPOCH + timedelta(hours=hours)).strftime("%Y%m%dT%H%M%SZ")
 
-    old = "20260801T000000Z"
-    assert assign("a", old, "02147013") == assign("b", old, "02147013")
 
-    recent = (NOW - timedelta(hours=3)).strftime("%Y%m%dT%H%M%SZ")
-    readings = [f"0214{n:04d}" for n in range(200)]
-    old_splits = [assign(f"o{n}", old, r) for n, r in enumerate(readings)]
-    recent_splits = [assign(f"r{n}", recent, r) for n, r in enumerate(readings)]
-    assert old_splits.count("train") > recent_splits.count("train")
-    assert recent_splits.count("test") > old_splits.count("test")
+def test_schedule_has_the_advertised_proportions_and_isolated_eval_blocks() -> None:
+    schedule = labels.SCHEDULE
+    assert len(schedule) == 20
+    assert schedule.count("T") == 14 and schedule.count("V") == 3 and schedule.count("E") == 3
+    for i, kind in enumerate(schedule):
+        if kind != "T":
+            assert schedule[(i - 1) % 20] == "T" and schedule[(i + 1) % 20] == "T", i
+
+
+def test_scheduled_split_is_deterministic_and_follows_time_blocks() -> None:
+    block_hours = labels.BLOCK_SECONDS / 3600
+    # middle of each block of one full cycle
+    splits = [labels.scheduled_split(_id_at((b + 0.5) * block_hours)) for b in range(20)]
+    assert splits == [
+        {"T": "train", "V": "verify", "E": "test"}[k] for k in labels.SCHEDULE
+    ]
+    assert labels.scheduled_split(_id_at(5.5 * block_hours)) == labels.scheduled_split(_id_at(5.5 * block_hours))
+    # over a long span the shares approach 70/15/15
+    counts = {"train": 0, "embargo": 0, "verify": 0, "test": 0}
+    for hour in range(0, 24 * 60):
+        counts[labels.scheduled_split(_id_at(hour + 0.25))] += 1
+    total = sum(counts.values())
+    assert 0.12 < counts["test"] / total < 0.18
+    assert 0.12 < counts["verify"] / total < 0.18
+    assert counts["embargo"] > 0 and counts["train"] / total > 0.55
+
+
+def test_train_captures_next_to_an_eval_block_are_embargoed() -> None:
+    block_hours = labels.BLOCK_SECONDS / 3600
+    test_block = labels.SCHEDULE.index("E")
+    # start of the train block right after the test block, and its far end
+    just_after = _id_at((test_block + 1) * block_hours + 0.1)
+    far_from_eval = _id_at((test_block + 1) * block_hours + block_hours / 2)
+    just_before = _id_at(test_block * block_hours - 0.1)
+    assert labels.scheduled_split(just_after) == "embargo"
+    assert labels.scheduled_split(just_before) == "embargo"
+    assert labels.scheduled_split(far_from_eval) == "train"
+
+
+def test_first_label_uses_the_schedule_and_digit_only_labels_follow_their_time_block(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    block_hours = labels.BLOCK_SECONDS / 3600
+    test_id = _id_at((labels.SCHEDULE.index("E") + 0.5) * block_hours)
+    train_id = _id_at((labels.SCHEDULE.index("T") + 0.5) * block_hours)
+    _capture(tmp_path, test_id)
+    _capture(tmp_path, train_id)
+
+    assert store.add_label(test_id, "digit", position=4, value="7", now=NOW)["split"] == "test"
+    assert store.add_label(train_id, "reading", value="02147013", now=NOW)["split"] == "train"
 
 
 def test_train_split_readings_feed_the_dynamic_pool_but_eval_splits_do_not(tmp_path: Path) -> None:

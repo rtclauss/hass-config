@@ -251,6 +251,10 @@ class CalibrationConfig:
     # move, just needs every coordinate multiplied by that factor).
     capture_width: int = 640
     capture_height: int = 480
+    # Rotate the frame this many degrees counter-clockwise (OpenCV convention)
+    # before cutting roi/digit_boxes - straightens a tilted jig. roi and
+    # digit_boxes are in the *rotated* frame's coordinates. Default 0 = no-op.
+    rotation_degrees: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -271,6 +275,7 @@ class CalibrationConfig:
             "max_sustained_gallons_per_hour": self.max_sustained_gallons_per_hour,
             "capture_width": self.capture_width,
             "capture_height": self.capture_height,
+            "rotation_degrees": self.rotation_degrees,
         }
 
 
@@ -306,6 +311,7 @@ def calibration_config_from_dict(data: dict[str, Any]) -> CalibrationConfig:
         ),
         capture_width=int(data.get("capture_width", 640)),
         capture_height=int(data.get("capture_height", 480)),
+        rotation_degrees=float(data.get("rotation_degrees", 0.0)),
     )
 
 
