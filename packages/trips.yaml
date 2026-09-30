@@ -1113,18 +1113,63 @@ automation:
                   state: "on"
             - action: script.vacuum_dock_all_robots
               continue_on_error: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - action: alarm_control_panel.alarm_disarm
               continue_on_error: true
               target:
                 entity_id: alarm_control_panel.home_alarm
               data:
                 code: !secret alarm_code
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - action: switch.turn_off
               continue_on_error: true
               target:
                 entity_id:
                   - switch.livingroom_motion_detection
                   - switch.tikiroomcam_tikiroom_motion_detection
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - action: switch.turn_on
               continue_on_error: true
               target:
@@ -1234,12 +1279,42 @@ automation:
               continue_on_error: true
               target:
                 entity_id: switch.basement_water_shutoff
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - action: alarm_control_panel.alarm_arm_away
               continue_on_error: true
               target:
                 entity_id: alarm_control_panel.home_alarm
               data:
                 code: !secret alarm_code
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - action: switch.turn_on
               continue_on_error: true
               target:

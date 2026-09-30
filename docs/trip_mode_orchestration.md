@@ -77,7 +77,9 @@ every final vacuum start boundary in `packages/xiaomi_robot_vacuum.yaml` vetoes
 while the flag is on, so queued or preparing runs cannot start. Both guest-visit automations also run at Home Assistant start (after a 1-minute
 delay): with a restored visit flag, an unlocked door reconciles to the open state
 and a locked door to the secured state. Both the unlock and relock sequences re-check the door, trip mode, presence and
-the visit flag before each attempt and after each wait, and abort if the visit
+the visit flag before each attempt, before each state-changing step and after each
+wait (a single in-flight service call can still complete after a concurrent
+transition), and abort if the visit
 state has changed. `vacation_lights_on` (including after its random delay) and
 `vacation_lights_off` are also vetoed during a visit. While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
 `water_shutoff_on_trip` skips its 4-hour shutoff while the flag is on; the relock

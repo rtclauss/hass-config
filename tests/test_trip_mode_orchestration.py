@@ -164,7 +164,7 @@ def test_unlock_docks_vacuums_and_relock_aborts_if_unlocked() -> None:
 
     assert "script.vacuum_dock_all_robots" in unlock
     guard = 'alias: "still a guest visit"'
-    assert lock.count(guard) == 2
+    assert lock.count(guard) == 4
     assert lock.index(guard) < lock.index("action: switch.turn_off")
     assert lock.rindex(guard) > lock.index("wait_template")
     assert lock.rindex(guard) < lock.index("input_boolean.turn_off")
@@ -175,7 +175,7 @@ def test_visit_guards_unlock_loop_relock_presence_and_vacation_lights() -> None:
     lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
     guard = 'alias: "still a guest visit"'
 
-    assert unlock.count(guard) == 2
+    assert unlock.count(guard) == 5
     assert unlock.index(guard) < unlock.index("alarm_disarm")
     assert unlock.rindex(guard) > unlock.index("wait_template")
     for block in (unlock, lock):
