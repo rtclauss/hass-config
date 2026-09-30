@@ -108,3 +108,20 @@ def test_guest_visit_flag_clears_on_return_or_trip_end() -> None:
     assert "entity_id: input_boolean.trip\n" in block
     assert "action: input_boolean.turn_off" in block
     assert "input_boolean.trip_guest_visit_active" in block
+
+
+def test_guest_visit_disables_cameras_vetoes_vacuum_and_verifies_relock() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "switch.livingroom_motion_detection" in unlock
+    assert "switch.tikiroomcam_tikiroom_motion_detection" in unlock
+    assert "switch.livingroom_motion_detection" in lock
+
+    for automation_id in ("vacuum_on_trip", "vacuum_flying_home"):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        assert "input_boolean.trip_guest_visit_active" in block
+
+    # The flag is cleared only after the secured state is verified.
+    assert lock.index("wait_template") < lock.index("input_boolean.turn_off")
+    assert "House NOT secured" in lock or "NOT secured" in lock

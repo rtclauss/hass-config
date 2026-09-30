@@ -986,6 +986,10 @@ automation:
           condition: state
           entity_id: input_boolean.guest_mode
           state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
     action:
       - action: script.trip_vacuum_main_and_upstairs_levels
         data:
@@ -1015,6 +1019,9 @@ automation:
           state: "off"
         - condition: state
           entity_id: input_boolean.guest_mode
+          state: "off"
+        - condition: state
+          entity_id: input_boolean.trip_guest_visit_active
           state: "off"
     action:
       - action: script.trip_vacuum_main_and_upstairs_levels
@@ -1054,6 +1061,12 @@ automation:
           entity_id: alarm_control_panel.home_alarm
         data:
           code: !secret alarm_code
+      - action: switch.turn_off
+        continue_on_error: true
+        target:
+          entity_id:
+            - switch.livingroom_motion_detection
+            - switch.tikiroomcam_tikiroom_motion_detection
       - action: switch.turn_on
         continue_on_error: true
         target:
@@ -1062,7 +1075,7 @@ automation:
         continue_on_error: true
         data:
           title: "Guest visit"
-          message: "Front door unlocked during trip: alarm disarmed, water on."
+          message: "Front door unlocked during trip: alarm disarmed, cameras' motion detection off, water on."
 
   - alias: trip_guest_door_lock_close_house
     id: trip_guest_door_lock_close_house
@@ -1088,24 +1101,53 @@ automation:
         entity_id: binary_sensor.bayesian_zeke_home
         state: "off"
     action:
-      - action: input_boolean.turn_off
-        target:
-          entity_id: input_boolean.trip_guest_visit_active
-      - action: switch.turn_off
-        continue_on_error: true
-        target:
-          entity_id: switch.basement_water_shutoff
-      - action: alarm_control_panel.alarm_arm_away
-        continue_on_error: true
-        target:
-          entity_id: alarm_control_panel.home_alarm
-        data:
-          code: !secret alarm_code
+      - repeat:
+          count: 3
+          sequence:
+            - action: switch.turn_off
+              continue_on_error: true
+              target:
+                entity_id: switch.basement_water_shutoff
+            - action: alarm_control_panel.alarm_arm_away
+              continue_on_error: true
+              target:
+                entity_id: alarm_control_panel.home_alarm
+              data:
+                code: !secret alarm_code
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id:
+                  - switch.livingroom_motion_detection
+                  - switch.tikiroomcam_tikiroom_motion_detection
+            - wait_template: >-
+                {{ is_state('switch.basement_water_shutoff', 'off')
+                   and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away'] }}
+              timeout: "00:00:20"
+              continue_on_timeout: true
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ is_state('switch.basement_water_shutoff', 'off')
+                       and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away'] }}
+              then:
+                - action: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.trip_guest_visit_active
+                - action: notify.mobile_app_wethop
+                  continue_on_error: true
+                  data:
+                    title: "Guest visit over"
+                    message: "Front door locked: alarm armed, cameras on, water off."
+                - stop: "House secured"
       - action: notify.mobile_app_wethop
         continue_on_error: true
         data:
-          title: "Guest visit over"
-          message: "Front door locked: alarm armed, water off."
+          title: "Guest visit: house NOT secured"
+          message: >-
+            Front door locked but the water is {{ states('switch.basement_water_shutoff') }}
+            and the alarm is {{ states('alarm_control_panel.home_alarm') }}. Visit flag kept;
+            it retries on the next lock event.
 
   - alias: trip_guest_visit_clear_on_return
     id: trip_guest_visit_clear_on_return

@@ -61,12 +61,15 @@ area presence signal and is idempotently controlled by `script.house_transition`
 
 While `input_boolean.trip` is on and `binary_sensor.bayesian_zeke_home` is off,
 unlocking `lock.front_door_lock` (`trip_guest_door_unlock_open_house`) turns
-`switch.basement_water_shutoff` on, disarms `alarm_control_panel.home_alarm`, and
+`switch.basement_water_shutoff` on, turns off the indoor camera motion-detection
+switches, disarms `alarm_control_panel.home_alarm`, and
 sets `input_boolean.trip_guest_visit_active`. Locking the door again
-(`trip_guest_door_lock_close_house`) turns the water back off and re-arms the
-alarm, but only if that flag is set, so the owner's own return never re-arms.
+(`trip_guest_door_lock_close_house`) turns the water back off, re-arms the
+alarm and camera motion detection (retrying up to 3 times and only clearing the
+flag once verified; otherwise it keeps the flag and notifies), but only if that flag is set, so the owner's own return never re-arms.
 `trip_guest_visit_clear_on_return` clears the flag when you return home or trip
 mode ends, so a stale flag never carries into the next trip.
+While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
 Caveat: `water_shutoff_on_trip` can still fire its 4-hour shutoff mid-visit.
 
 ## Manual Verification
