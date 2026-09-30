@@ -1057,6 +1057,8 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.trip_guest_visit_active
+      - action: script.vacuum_dock_all_robots
+        continue_on_error: true
       - repeat:
           count: 3
           sequence:
@@ -1135,6 +1137,9 @@ automation:
       - repeat:
           count: 3
           sequence:
+            - condition: state
+              entity_id: lock.front_door_lock
+              state: locked
             - action: switch.turn_off
               continue_on_error: true
               target:
@@ -1158,6 +1163,9 @@ automation:
                    and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
               timeout: "00:00:20"
               continue_on_timeout: true
+            - condition: state
+              entity_id: lock.front_door_lock
+              state: locked
             - if:
                 - condition: template
                   value_template: >-

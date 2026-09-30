@@ -156,3 +156,15 @@ def test_unlock_verifies_water_alarm_and_cameras_before_success() -> None:
     assert "is_state('switch.livingroom_motion_detection', 'off')" in verify
     assert "is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')" in verify
     assert "repeat:" in unlock
+
+
+def test_unlock_docks_vacuums_and_relock_aborts_if_unlocked() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "script.vacuum_dock_all_robots" in unlock
+    guard = "entity_id: lock.front_door_lock\n              state: locked"
+    assert lock.count(guard) == 2
+    assert lock.index(guard) < lock.index("action: switch.turn_off")
+    assert lock.rindex(guard) > lock.index("wait_template")
+    assert lock.rindex(guard) < lock.index("input_boolean.turn_off")

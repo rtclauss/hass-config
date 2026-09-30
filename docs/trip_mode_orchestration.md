@@ -69,7 +69,8 @@ alarm and camera motion detection (retrying up to 3 times and only clearing the
 flag once water, alarm and both camera switches are verified; otherwise it keeps the flag and notifies), but only if that flag is set, so the owner's own return never re-arms.
 `trip_guest_visit_clear_on_return` clears the flag when you return home or trip
 mode ends, so a stale flag never carries into the next trip.
-While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
+Unlocking also docks all robot vacuums (`script.vacuum_dock_all_robots`). The relock
+sequence aborts if the door is no longer locked. While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
 `water_shutoff_on_trip` skips its 4-hour shutoff while the flag is on; the relock
 shuts the water off instead. If the alarm does not disarm on unlock, a push says so.
 
