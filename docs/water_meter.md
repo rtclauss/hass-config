@@ -458,6 +458,15 @@ unresolved-reading notification deep-links to `/?item=<capture_id>`.
   time or value. Click a row to edit it: Prev/Skip then walk the *filtered* list,
   saving keeps you on the capture, and "List" returns with your filters intact
   (they persist in the browser). `/?view=browse` opens it directly.
+- **Select and delete:** "Select" on the Browse tab adds checkboxes (click, shift-click
+  for a range, "Select all shown"). Delete moves the captures to `image_dir/trash/` - they
+  leave the queue, lists, stats, inference anchors and every dataset, but nothing is
+  destroyed: filter by **Trash** to "Restore" them or "Delete forever" (the only
+  irreversible step, separately confirmed). Labels stay in the append-only log. Captures in
+  the sealed **test** split are refused unless you confirm a second prompt (the server
+  requires an explicit `allow_sealed`); that override is audit-logged, and the deleted
+  value stays sealed so it can never turn into training data. Bulk requests are
+  all-or-nothing and capped at 500 ids.
 - **Retention:** labeling snapshots the raw frame, crop, digit crops and the
   `calibration.json` in effect into `image_dir/labeled/<capture_id>/`, which no
   rotation code touches (`history/` rotates at 200 captures). Labels are an

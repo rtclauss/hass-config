@@ -343,3 +343,83 @@ def test_a_human_label_overrides_an_inference(tmp_path: Path) -> None:
     assert ids[1] in store.inferred_readings()
     store.add_label(ids[1], "digit", position=7, value="6", now=NOW)
     assert ids[1] not in store.inferred_readings()
+
+
+def _full_capture(tmp_path: Path, cid: str, *, labeled: bool = True, split: str = "train", value: str = "02148506") -> None:
+    _capture(tmp_path, cid, guess=value)
+    rejects = tmp_path / "images" / "rejects"
+    rejects.mkdir(parents=True, exist_ok=True)
+    (rejects / f"{cid}_value_decreased.jpg").write_bytes(b"reject")
+    if labeled:
+        _store(tmp_path).add_label(cid, "reading", value=value, split=split, now=NOW)
+
+
+def test_delete_moves_everything_to_trash_and_restore_puts_it_back(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    cid = "20260929T100000Z"
+    _full_capture(tmp_path, cid)
+    before = sorted(str(p.relative_to(tmp_path / "images")) for p in (tmp_path / "images").rglob("*") if p.is_file())
+
+    assert store.delete_captures([cid], now=NOW) == {"deleted": 1}
+
+    assert cid not in store.list_capture_ids()
+    assert store.list_trash_ids() == [cid]
+    assert not list((tmp_path / "images" / "history").glob(f"{cid}_*"))
+    assert not (tmp_path / "images" / "labeled" / cid).exists()
+    assert not list((tmp_path / "images" / "rejects").glob(f"{cid}_*"))
+    assert store.trash_item(cid)["labels"]["reading"] == "02148506"  # label survives in the log
+    assert store.queue("trash")["items"][0]["id"] == cid
+    assert cid not in [i["id"] for i in store.queue("all")["items"]]
+    assert store.stats()["captures"] == 0
+
+    store.restore_captures([cid], now=NOW)
+    after = sorted(str(p.relative_to(tmp_path / "images")) for p in (tmp_path / "images").rglob("*") if p.is_file())
+    assert [a for a in after if not a.startswith("trash")] == [b for b in before if not b.startswith("trash")]
+    assert store.list_trash_ids() == []
+    assert store.effective_labels(cid)["reading"] == "02148506"
+
+
+def test_sealed_test_captures_are_refused_unless_explicitly_allowed_and_stay_sealed(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    keep, sealed = "20260929T100000Z", "20260929T110000Z"
+    _full_capture(tmp_path, keep, split="train", value="02148506")
+    _full_capture(tmp_path, sealed, split="test", value="02148528")
+
+    with pytest.raises(LabelError, match="sealed test split"):
+        store.delete_captures([keep, sealed], now=NOW)
+    assert store.list_trash_ids() == []  # all-or-nothing: the unsealed one was not moved either
+    assert {keep, sealed} <= set(store.list_capture_ids())
+
+    store.delete_captures([keep, sealed], allow_sealed=True, now=NOW)
+    events = [json.loads(l) for l in store.events_path.read_text().splitlines() if '"delete"' in l]
+    assert [e["allow_sealed"] for e in events] == [False, True]  # the override is audited
+    assert store.value_split("02148528") == "test"  # the value can never turn into training data
+
+
+def test_purge_only_touches_the_trash_and_deleted_anchors_stop_inferring(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    ids = [f"20260929T{h:02d}0000Z" for h in (8, 9, 10)]
+    for cid in ids:
+        _capture(tmp_path, cid)
+    store.add_label(ids[0], "reading", value="02148506", split="train", now=NOW)
+    store.add_label(ids[2], "reading", value="02148506", split="train", now=NOW)
+    assert store.inferred_readings() == {ids[1]: "02148506"}
+
+    with pytest.raises(LabelError, match="not in the trash"):
+        store.purge_captures([ids[1]])
+    store.delete_captures([ids[2]], now=NOW)  # an anchor is deleted (maybe it was mislabeled)
+    assert store.inferred_readings() == {}
+
+    store.purge_captures([ids[2]], now=NOW)
+    assert store.list_trash_ids() == []
+    with pytest.raises(LabelError, match="not in the trash"):
+        store.restore_captures([ids[2]])
+
+
+def test_delete_rejects_unknown_and_malformed_ids_without_partial_effects(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    _full_capture(tmp_path, "20260929T100000Z", labeled=False)
+    for bad in ("../x", "nope", "20260101T000000Z"):
+        with pytest.raises(LabelError):
+            store.delete_captures(["20260929T100000Z", bad], now=NOW)
+    assert store.list_trash_ids() == [] and "20260929T100000Z" in store.list_capture_ids()

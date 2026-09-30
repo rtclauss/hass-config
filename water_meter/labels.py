@@ -151,6 +151,7 @@ class LabelStore:
         self.history_dir = image_dir / "history"
         self.rejects_dir = image_dir / "rejects"
         self.labeled_dir = image_dir / "labeled"
+        self.trash_dir = image_dir / "trash"
         self.image_dir = image_dir
         self.events_path = state_dir / "labels.jsonl"
         self.splits_path = state_dir / "label_splits.json"
@@ -163,19 +164,23 @@ class LabelStore:
         if not isinstance(capture_id, str) or not CAPTURE_ID_RE.match(capture_id):
             raise LabelError(f"bad capture id {capture_id!r}")
 
-    def capture_files(self, capture_id: str) -> dict[str, Path]:
+    def capture_files(self, capture_id: str, *, trash: bool = False) -> dict[str, Path]:
         """Existing image/sidecar files for a capture: the labeled snapshot
-        wins over history (history may have rotated a file away)."""
+        wins over history (history may have rotated a file away). With
+        trash=True, looks in the capture's trash folder instead."""
         self._check_id(capture_id)
+        if trash:
+            base = self.trash_dir / capture_id
+            snapshot, history = base / "labeled", base / "history"
+        else:
+            snapshot, history = self.labeled_dir / capture_id, self.history_dir
         files: dict[str, Path] = {}
         for name in IMAGE_NAMES:
-            for base in (self.labeled_dir / capture_id, self.history_dir):
-                path = base / (f"{name}.jpg" if base.name == capture_id else f"{capture_id}_{name}.jpg")
+            for path in (snapshot / f"{name}.jpg", history / f"{capture_id}_{name}.jpg"):
                 if path.exists():
                     files[name] = path
                     break
-        for base in (self.labeled_dir / capture_id, self.history_dir):
-            path = base / ("read.json" if base.name == capture_id else f"{capture_id}_read.json")
+        for path in (snapshot / "read.json", history / f"{capture_id}_read.json"):
             if path.exists():
                 files["read"] = path
                 break
@@ -258,6 +263,130 @@ class LabelStore:
             ids.update(p.name for p in self.labeled_dir.iterdir() if p.is_dir())
         return sorted((i for i in ids if CAPTURE_ID_RE.match(i)), reverse=True)
 
+    # ---- delete / restore ---------------------------------------------
+
+    def _capture_sources(self, capture_id: str) -> list[Path]:
+        """Every path belonging to a capture, absolute, under image_dir."""
+        sources: list[Path] = []
+        if self.history_dir.exists():
+            sources += sorted(self.history_dir.glob(f"{capture_id}_*"))
+        if (self.labeled_dir / capture_id).is_dir():
+            sources.append(self.labeled_dir / capture_id)
+        if self.rejects_dir.exists():
+            sources += sorted(self.rejects_dir.glob(f"{capture_id}_*"))
+        return sources
+
+    def delete_captures(
+        self,
+        capture_ids: list[str],
+        *,
+        allow_sealed: bool = False,
+        now: datetime | None = None,
+    ) -> dict:
+        """Move captures out of every list and dataset into image_dir/trash/.
+
+        Soft: nothing is destroyed (restore_captures undoes it, purge_captures is
+        the separate permanent step). Labels stay in the append-only log, but a
+        deleted capture no longer exists for exports, stats or as an inference
+        anchor. Captures in the sealed test split are refused unless the caller
+        says so explicitly: that is eval data, and deleting it is audit-logged.
+        A deleted value's split stays sealed, so it can't reappear in training.
+        """
+        now = now or datetime.now(timezone.utc)
+        ids = list(dict.fromkeys(capture_ids))
+        for capture_id in ids:
+            self._check_id(capture_id)
+            if not self._capture_sources(capture_id):
+                raise LabelError(f"unknown capture {capture_id}")
+        splits = self._load_splits()["capture"]
+        sealed = [c for c in ids if splits.get(c) == "test"]
+        if sealed and not allow_sealed:
+            raise LabelError(
+                f"{len(sealed)} capture(s) are in the sealed test split ({sealed[0]}...); "
+                "deleting eval data needs explicit confirmation"
+            )
+        for capture_id in ids:
+            for source in self._capture_sources(capture_id):
+                relative = source.relative_to(self.image_dir)
+                target = self.trash_dir / capture_id / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(source), str(target))
+            self._append(
+                {
+                    "ts": now.isoformat(),
+                    "kind": "delete",
+                    "capture_id": capture_id,
+                    "split": splits.get(capture_id),
+                    "allow_sealed": bool(allow_sealed and splits.get(capture_id) == "test"),
+                }
+            )
+        return {"deleted": len(ids)}
+
+    def list_trash_ids(self) -> list[str]:
+        if not self.trash_dir.exists():
+            return []
+        return sorted(
+            (p.name for p in self.trash_dir.iterdir() if p.is_dir() and CAPTURE_ID_RE.match(p.name)),
+            reverse=True,
+        )
+
+    def restore_captures(self, capture_ids: list[str], *, now: datetime | None = None) -> dict:
+        now = now or datetime.now(timezone.utc)
+        restored = 0
+        for capture_id in dict.fromkeys(capture_ids):
+            self._check_id(capture_id)
+            base = self.trash_dir / capture_id
+            if not base.is_dir():
+                raise LabelError(f"{capture_id} is not in the trash")
+            for path in sorted(p for p in base.rglob("*") if p.is_file()):
+                target = self.image_dir / path.relative_to(base)
+                if target.exists():
+                    continue  # never overwrite something that has appeared since
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(path), str(target))
+            shutil.rmtree(base, ignore_errors=True)
+            self._append({"ts": now.isoformat(), "kind": "restore", "capture_id": capture_id})
+            restored += 1
+        return {"restored": restored}
+
+    def purge_captures(self, capture_ids: list[str], *, now: datetime | None = None) -> dict:
+        """Permanently delete captures that are already in the trash."""
+        now = now or datetime.now(timezone.utc)
+        purged = 0
+        for capture_id in dict.fromkeys(capture_ids):
+            self._check_id(capture_id)
+            base = self.trash_dir / capture_id
+            if not base.is_dir():
+                raise LabelError(f"{capture_id} is not in the trash")
+            shutil.rmtree(base)
+            self._append({"ts": now.isoformat(), "kind": "purge", "capture_id": capture_id})
+            purged += 1
+        return {"purged": purged}
+
+    def trash_item(self, capture_id: str) -> dict:
+        files = self.capture_files(capture_id, trash=True)
+        events = self._events()
+        labels = self.effective_labels(capture_id, events)
+        deleted_at = next(
+            (e["ts"] for e in reversed(events) if e.get("capture_id") == capture_id and e.get("kind") == "delete"),
+            None,
+        )
+        return {
+            "id": capture_id,
+            "files": sorted(files),
+            "labels": labels,
+            "split": self._load_splits()["capture"].get(capture_id),
+            "scheduled_split": scheduled_split(capture_id),
+            "status": "deleted",
+            "inferred": None,
+            "guess": (json.loads(files["read"].read_text()).get("raw_digits") if "read" in files else None),
+            "rejected": False,
+            "reason": None,
+            "legacy": False,
+            "frame": {"width": 0, "height": 0},
+            "deleted_at": deleted_at,
+        }
+
     # ---- events / effective labels -----------------------------------
 
     def _events(self) -> list[dict]:
@@ -320,8 +449,11 @@ class LabelStore:
         are never used for verify/test.
         """
         events = events if events is not None else self._events()
+        existing = set(self.list_capture_ids())
         effective: dict[str, dict] = {}
-        for capture_id in {e.get("capture_id") for e in events if e.get("capture_id")}:
+        # deleted captures are not anchors: they may have been deleted *because*
+        # their label was wrong
+        for capture_id in {e.get("capture_id") for e in events if e.get("capture_id")} & existing:
             effective[capture_id] = self.effective_labels(capture_id, events)
         anchors = sorted(
             (cid, lab["reading"])
@@ -525,6 +657,12 @@ class LabelStore:
         values), all, labeled, excluded (bad frames), inferred (readings implied by
         equal neighbours - never queued) or legacy (frames the current
         calibration can't apply to, e.g. other resolutions - never in the queue)."""
+        if mode == "trash":
+            trashed = [self.trash_item(c) for c in self.list_trash_ids()]
+            if blind:
+                for item in trashed:
+                    item["guess"] = None
+            return {"items": trashed[:limit], "depth": len(trashed)}
         events = self._events()
         splits = self._load_splits()
         ids = self.list_capture_ids()
