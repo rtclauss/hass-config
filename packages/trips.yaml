@@ -1057,44 +1057,56 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.trip_guest_visit_active
-      - action: alarm_control_panel.alarm_disarm
-        continue_on_error: true
-        target:
-          entity_id: alarm_control_panel.home_alarm
-        data:
-          code: !secret alarm_code
-      - action: switch.turn_off
-        continue_on_error: true
-        target:
-          entity_id:
-            - switch.livingroom_motion_detection
-            - switch.tikiroomcam_tikiroom_motion_detection
-      - action: switch.turn_on
-        continue_on_error: true
-        target:
-          entity_id: switch.basement_water_shutoff
-      - wait_template: "{{ is_state('alarm_control_panel.home_alarm', 'disarmed') }}"
-        timeout: "00:00:10"
-        continue_on_timeout: true
-      - if:
-          - condition: not
-            conditions:
-              - condition: state
+      - repeat:
+          count: 3
+          sequence:
+            - action: alarm_control_panel.alarm_disarm
+              continue_on_error: true
+              target:
                 entity_id: alarm_control_panel.home_alarm
-                state: disarmed
-        then:
-          - action: notify.mobile_app_wethop
-            continue_on_error: true
-            data:
-              title: "Guest visit: alarm NOT disarmed"
-              message: >-
-                Front door unlocked but the alarm is {{ states('alarm_control_panel.home_alarm') }}.
-                The guest may trigger it.
+              data:
+                code: !secret alarm_code
+            - action: switch.turn_off
+              continue_on_error: true
+              target:
+                entity_id:
+                  - switch.livingroom_motion_detection
+                  - switch.tikiroomcam_tikiroom_motion_detection
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id: switch.basement_water_shutoff
+            - wait_template: >-
+                {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
+                   and is_state('switch.basement_water_shutoff', 'on')
+                   and is_state('switch.livingroom_motion_detection', 'off')
+                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off') }}
+              timeout: "00:00:10"
+              continue_on_timeout: true
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
+                       and is_state('switch.basement_water_shutoff', 'on')
+                       and is_state('switch.livingroom_motion_detection', 'off')
+                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off') }}
+              then:
+                - action: notify.mobile_app_wethop
+                  continue_on_error: true
+                  data:
+                    title: "Guest visit"
+                    message: "Front door unlocked during trip: alarm disarmed, cameras' motion detection off, water on."
+                - stop: "House ready for guest"
       - action: notify.mobile_app_wethop
         continue_on_error: true
         data:
-          title: "Guest visit"
-          message: "Front door unlocked during trip: alarm disarmed, cameras' motion detection off, water on."
+          title: "Guest visit: house NOT ready"
+          message: >-
+            Front door unlocked but the alarm is {{ states('alarm_control_panel.home_alarm') }},
+            the water is {{ states('switch.basement_water_shutoff') }}, living-room camera
+            motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
+            motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}.
+            The guest may trigger the alarm, be photographed, or have no water.
 
   - alias: trip_guest_door_lock_close_house
     id: trip_guest_door_lock_close_house

@@ -131,7 +131,7 @@ def test_guest_visit_hardening() -> None:
     unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
     assert "from: locked" not in unlock
     assert "not_from:" in unlock
-    assert "alarm NOT disarmed" in unlock
+    assert "NOT ready" in unlock
 
     shutoff = _automation_block(
         ROOT / "packages" / "utilities.yaml", "water_shutoff_on_trip"
@@ -145,3 +145,14 @@ def test_relock_verifies_camera_switches_before_clearing_flag() -> None:
 
     assert "is_state('switch.livingroom_motion_detection', 'on')" in verify
     assert "is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on')" in verify
+
+
+def test_unlock_verifies_water_alarm_and_cameras_before_success() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    verify = unlock[unlock.index("wait_template") : unlock.index("House ready for guest")]
+
+    assert "is_state('alarm_control_panel.home_alarm', 'disarmed')" in verify
+    assert "is_state('switch.basement_water_shutoff', 'on')" in verify
+    assert "is_state('switch.livingroom_motion_detection', 'off')" in verify
+    assert "is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')" in verify
+    assert "repeat:" in unlock
