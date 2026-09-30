@@ -187,3 +187,11 @@ def test_visit_guards_unlock_loop_relock_presence_and_vacation_lights() -> None:
     assert lights_on.count("input_boolean.trip_guest_visit_active") == 2
     assert lights_on.rindex("input_boolean.trip_guest_visit_active") > lights_on.index("delay:")
     assert "input_boolean.trip_guest_visit_active" in lights_off
+
+
+def test_relock_reconciles_on_homeassistant_start() -> None:
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "trigger: homeassistant" in lock
+    assert "event: start" in lock
+    assert lock.index("trigger.platform") < lock.index("repeat:")

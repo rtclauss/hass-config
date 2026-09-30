@@ -69,7 +69,9 @@ alarm and camera motion detection (retrying up to 3 times and only clearing the
 flag once water, alarm and both camera switches are verified; otherwise it keeps the flag and notifies), but only if that flag is set, so the owner's own return never re-arms.
 `trip_guest_visit_clear_on_return` clears the flag when you return home or trip
 mode ends, so a stale flag never carries into the next trip.
-Unlocking also docks all robot vacuums (`script.vacuum_dock_all_robots`). Both the unlock and relock sequences re-check the door, trip mode, presence and
+Unlocking also docks all robot vacuums (`script.vacuum_dock_all_robots`). The relock automation also runs at Home Assistant start (after a 1-minute delay),
+so a restart mid-close or with a restored flag and a locked door reconciles to the
+secured state. Both the unlock and relock sequences re-check the door, trip mode, presence and
 the visit flag before each attempt and after each wait, and abort if the visit
 state has changed. `vacation_lights_on` (including after its random delay) and
 `vacation_lights_off` are also vetoed during a visit. While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.

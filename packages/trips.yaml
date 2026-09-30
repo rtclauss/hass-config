@@ -1157,7 +1157,8 @@ automation:
     description: >-
       When the front door locks again after a guest visit during a trip, turn
       the water main back off and re-arm the alarm. Only acts if the unlock
-      automation started a visit, so it never re-arms on the owner's own return.
+      automation started a visit, so it never re-arms on the owner's own return. Also runs at Home Assistant start so a restart mid-close
+      (or with a restored visit flag and a locked door) reconciles the secured state.
     mode: single
     trace:
       stored_traces: 10
@@ -1165,6 +1166,8 @@ automation:
       - trigger: state
         entity_id: lock.front_door_lock
         to: locked
+      - trigger: homeassistant
+        event: start
     condition:
       - condition: state
         entity_id: input_boolean.trip_guest_visit_active
@@ -1176,6 +1179,11 @@ automation:
         entity_id: binary_sensor.bayesian_zeke_home
         state: "off"
     action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: "00:01:00"
       - repeat:
           count: 3
           sequence:
