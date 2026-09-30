@@ -913,8 +913,16 @@ automation:
           condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
     action:
       - delay: 00:{{ (range(5,45)|random|int) }}:00
+      - alias: "no guest visit started during the delay"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - action: scene.turn_on
         data:
           target: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
@@ -941,6 +949,10 @@ automation:
         - alias: "vacation lights off while primary resident is away"
           condition: state
           entity_id: binary_sensor.bayesian_zeke_home
+          state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
           state: "off"
     action:
       - action: script.lights_off_except
@@ -1062,6 +1074,21 @@ automation:
       - repeat:
           count: 3
           sequence:
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - action: alarm_control_panel.alarm_disarm
               continue_on_error: true
               target:
@@ -1085,6 +1112,21 @@ automation:
                    and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off') }}
               timeout: "00:00:10"
               continue_on_timeout: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - if:
                 - condition: template
                   value_template: >-
@@ -1137,9 +1179,21 @@ automation:
       - repeat:
           count: 3
           sequence:
-            - condition: state
-              entity_id: lock.front_door_lock
-              state: locked
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - action: switch.turn_off
               continue_on_error: true
               target:
@@ -1163,9 +1217,21 @@ automation:
                    and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
               timeout: "00:00:20"
               continue_on_timeout: true
-            - condition: state
-              entity_id: lock.front_door_lock
-              state: locked
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
             - if:
                 - condition: template
                   value_template: >-

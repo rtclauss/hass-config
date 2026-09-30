@@ -163,8 +163,27 @@ def test_unlock_docks_vacuums_and_relock_aborts_if_unlocked() -> None:
     lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
 
     assert "script.vacuum_dock_all_robots" in unlock
-    guard = "entity_id: lock.front_door_lock\n              state: locked"
+    guard = 'alias: "still a guest visit"'
     assert lock.count(guard) == 2
     assert lock.index(guard) < lock.index("action: switch.turn_off")
     assert lock.rindex(guard) > lock.index("wait_template")
     assert lock.rindex(guard) < lock.index("input_boolean.turn_off")
+
+
+def test_visit_guards_unlock_loop_relock_presence_and_vacation_lights() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+    guard = 'alias: "still a guest visit"'
+
+    assert unlock.count(guard) == 2
+    assert unlock.index(guard) < unlock.index("alarm_disarm")
+    assert unlock.rindex(guard) > unlock.index("wait_template")
+    for block in (unlock, lock):
+        assert "input_boolean.trip\n" in block
+        assert "binary_sensor.bayesian_zeke_home" in block
+
+    lights_on = _automation_block(TRIPS_PATH, "vacation_lights_on")
+    lights_off = _automation_block(TRIPS_PATH, "vacation_lights_off")
+    assert lights_on.count("input_boolean.trip_guest_visit_active") == 2
+    assert lights_on.rindex("input_boolean.trip_guest_visit_active") > lights_on.index("delay:")
+    assert "input_boolean.trip_guest_visit_active" in lights_off
