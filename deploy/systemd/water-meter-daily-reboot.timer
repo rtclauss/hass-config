@@ -1,0 +1,37 @@
+[Unit]
+Description=Daily preventive reboot for the water meter Pi
+
+[Timer]
+# Monotonic (elapsed-time-since-boot), NOT OnCalendar - deliberately.
+#
+# This Pi has no battery-backed RTC: every boot starts with a stale pre-NTP
+# clock (observed defaulting to 2026-07-27, the firmware build date) until
+# NTP corrects it, which can take anywhere from a few seconds to longer if
+# the network is slow to come up.
+#
+# An OnCalendar timer (originally OnCalendar=*-*-* 03:00:00 here) is
+# fundamentally unsafe under that condition, independent of Persistent=true:
+# systemd computes the "next fire" deadline using whatever clock is active
+# when the timer starts. When NTP later jumps the clock forward by weeks/
+# months in a single step, that already-computed deadline is suddenly in
+# the past relative to the corrected time - so systemd fires it immediately.
+# This caused TWO real incidents:
+#   - 2026-09-23: Persistent=true made it worse (explicit "missed run"
+#     catch-up logic), rebooting every ~50s until Persistent=true was
+#     removed.
+#   - 2026-09-24: even WITHOUT Persistent=true, the same clock-jump-vs-
+#     precomputed-deadline race fired the timer immediately on every boot
+#     anyway - the Persistent=true fix was necessary but not sufficient.
+#     Both times required a manual power cycle to break the loop.
+#
+# OnBootSec/OnUnitActiveSec are computed relative to elapsed monotonic time
+# since boot/last activation, never wall-clock time - completely immune to
+# this whole class of NTP-jump race, matching the same pattern already
+# proven reliable by water-meter-reader.timer. The trade-off: reboots land
+# at a rolling time (whenever the Pi happened to last boot), not a fixed
+# 3am - acceptable for a "cheap hygiene" reboot with no other requirement.
+OnBootSec=24h
+OnUnitActiveSec=24h
+
+[Install]
+WantedBy=timers.target

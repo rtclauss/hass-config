@@ -1,0 +1,804 @@
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+import logging
+import os
+from pathlib import Path
+import re
+import time
+from typing import Callable, TYPE_CHECKING
+
+from . import capture, ocr, sanity, watchdog
+from .config import (
+    CalibrationConfig,
+    ConnectionConfig,
+    connection_config_from_env,
+    load_calibration_config,
+)
+
+if TYPE_CHECKING:
+    import numpy as np
+
+LOG = logging.getLogger(__name__)
+
+GrabFrame = Callable[[], "np.ndarray"]
+SetLight = Callable[[bool], None]
+OcrReader = Callable[..., str]
+Publisher = Callable[["RunResult", datetime], None]
+Reboot = Callable[[], None]
+
+
+@dataclass(frozen=True)
+class RunResult:
+    accepted: bool
+    value: float | None
+    reason: str
+    stuck: bool = False
+
+
+def run_once(
+    connection: ConnectionConfig,
+    calibration: CalibrationConfig,
+    *,
+    grab_frame: GrabFrame | None = None,
+    set_light: SetLight | None = None,
+    ocr_reader: OcrReader | None = None,
+    publisher: Publisher | None = None,
+    reboot: Reboot | None = None,
+    now: datetime | None = None,
+) -> RunResult:
+    """Light on -> capture -> light off -> crop -> OCR -> validate -> publish.
+
+    Every dependency is injectable so the orchestration logic here can be
+    unit tested with fakes instead of a real camera, MQTT broker, or ssocr
+    binary - only the default implementations below touch real hardware.
+    """
+    grab_frame = grab_frame or (
+        lambda: capture.grab_stable_frame(
+            connection.camera_device,
+            frames_to_grab=calibration.frames_to_grab,
+            frames_to_discard=calibration.frames_to_discard,
+            width=calibration.capture_width,
+            height=calibration.capture_height,
+        )
+    )
+    set_light = set_light or (lambda on: capture.set_light(connection, on=on))
+    publisher = publisher or default_publisher(connection)
+    reboot = reboot or watchdog.trigger_reboot
+    now = now or datetime.now(timezone.utc)
+
+    last_good = sanity.load_last_good(connection.state_dir)
+    vlm_available = True
+    if connection.vlm_host and ocr_reader is None:
+        vlm_available = ocr.vlm_is_responsive(
+            connection.vlm_host,
+            model=connection.vlm_model,
+            timeout=connection.vlm_probe_timeout_seconds,
+        )
+        if not vlm_available:
+            LOG.warning(
+                "Vision-LLM at %s did not answer a probe within %.0fs; this run skips it "
+                "(falling back to template matching) instead of waiting out two full timeouts",
+                connection.vlm_host,
+                connection.vlm_probe_timeout_seconds,
+            )
+    ocr_reader = ocr_reader or (
+        lambda image_path, digit_crops: ocr.read_digits(
+            image_path,
+            digit_crops,
+            calibration,
+            templates_dir=connection.templates_dir,
+            bootstrap=last_good is None,
+            vlm_host=(connection.vlm_host or None) if vlm_available else None,
+            vlm_model=connection.vlm_model,
+            vlm_timeout=connection.vlm_timeout_seconds,
+            dynamic_examples_dir=connection.image_dir / "human_corrections",
+        )
+    )
+
+    set_light(True)
+    try:
+        time.sleep(calibration.warmup_seconds)
+        frame = grab_frame()
+    except capture.CaptureError as error:
+        return _handle_capture_failure(connection, error, publisher, reboot, now)
+    finally:
+        set_light(False)
+
+    watchdog.record_capture_success(connection.state_dir)
+
+    raw_path = connection.image_dir / "latest_raw.jpg"
+    crop_path = connection.image_dir / "latest_crop.jpg"
+    capture.save_image(frame, raw_path)
+
+    # The raw frame is saved (and kept in history) exactly as captured;
+    # rotation only affects the crops, so labeled raw frames stay usable if
+    # the rotation setting changes later.
+    roi_x, roi_y, roi_w, roi_h = calibration.roi
+    straightened = capture.rotate_frame(
+        frame, calibration.rotation_degrees, center=(roi_x + roi_w / 2, roi_y + roi_h / 2)
+    )
+    cropped = capture.crop_roi(straightened, calibration.roi)
+    capture.save_image(cropped, crop_path)
+    digit_crops = capture.crop_boxes(straightened, calibration.digit_boxes)
+
+    _rotate_history(
+        connection.image_dir / "history", frame, cropped, digit_crops, calibration.history_limit, now
+    )
+
+    try:
+        raw_digits = ocr_reader(crop_path, digit_crops)
+    except ocr.OcrError as error:
+        result = RunResult(False, None, f"ocr failed: {error}")
+        _write_read_sidecar(connection.image_dir / "history", now, None, False, result.reason)
+        _save_reject(connection.image_dir / "rejects", cropped, result.reason, now)
+        publisher(result, now)
+        return result
+
+    validation = sanity.validate_reading(
+        raw_digits,
+        digit_count=calibration.digit_count,
+        max_gallons_per_interval=calibration.max_gallons_per_interval,
+        last_good=last_good,
+        now=now,
+        history_limit=calibration.history_limit,
+        decimal_places=calibration.decimal_places,
+        nominal_interval_seconds=calibration.nominal_interval_seconds,
+        stuck_after_hours=calibration.stuck_after_hours,
+        max_sustained_gallons_per_hour=calibration.max_sustained_gallons_per_hour,
+    )
+
+    if last_good is not None:
+        raw_digits, validation = _correct_glare_positions_from_last_good(
+            calibration, raw_digits, validation, last_good, now
+        )
+
+    if not validation.accepted and connection.vlm_host and vlm_available and last_good is not None:
+        raw_digits, validation = _requery_vlm_on_suspect_value(
+            connection, calibration, crop_path, raw_digits, validation, last_good, now
+        )
+
+    if not validation.accepted and last_good is not None:
+        if vlm_available:
+            _notify_ha_of_unresolved_reading(
+                connection, calibration, raw_digits, validation, last_good, now
+            )
+        else:
+            # Whatever was read came from the template matcher, not the model -
+            # offering it with an Approve button would invite baking garbage into
+            # last_good. Say the model is down instead.
+            _notify_ha_of_vlm_outage(connection, last_good, now)
+
+    _write_read_sidecar(
+        connection.image_dir / "history", now, raw_digits, validation.accepted, validation.reason
+    )
+
+    if not validation.accepted:
+        result = RunResult(False, None, validation.reason)
+        _save_reject(connection.image_dir / "rejects", cropped, result.reason, now)
+        publisher(result, now)
+        return result
+
+    new_last_good = sanity.next_last_good(
+        validation.value, last_good, history_limit=calibration.history_limit, now=now
+    )
+    sanity.save_last_good(connection.state_dir, new_last_good)
+
+    reason = "stuck: unchanged for the full history window" if validation.stuck else "ok"
+    result = RunResult(True, validation.value, reason, stuck=validation.stuck)
+    publisher(result, now)
+    return result
+
+
+def default_publisher(connection: ConnectionConfig) -> Publisher:
+    def publish(result: RunResult, now: datetime) -> None:
+        from paho.mqtt import publish as mqtt_publish
+
+        # A stuck reading is still `accepted` (the value itself is legitimate
+        # and unchanged - see sanity.validate_reading's `stuck` flag), but
+        # publishing "ok" here would make a frozen camera/OCR pipeline look
+        # perfectly healthy forever: packages/water_meter.yaml's staleness
+        # automation only alerts on reading_age or a status starting with
+        # "error", and last_reading_time keeps advancing on every accepted
+        # run (stuck or not), so reading_age never grows either. Reusing the
+        # existing "error:" prefix for a stuck status is what actually makes
+        # the advertised stuck-reading detection reach that automation.
+        healthy = result.accepted and not result.stuck
+        messages = [
+            {
+                "topic": connection.status_topic,
+                "payload": "ok" if healthy else f"error:{result.reason}",
+                "retain": True,
+            },
+            {
+                "topic": connection.discovery_topic,
+                "payload": json.dumps(discovery_payload(connection)),
+                "retain": True,
+            },
+        ]
+        if result.accepted:
+            messages.append(
+                {"topic": connection.reading_topic, "payload": str(result.value), "retain": True}
+            )
+            messages.append(
+                {
+                    "topic": connection.last_reading_time_topic,
+                    "payload": now.isoformat(),
+                    "retain": True,
+                }
+            )
+
+        capture.publish_with_retry(
+            lambda: mqtt_publish.multiple(
+                messages,
+                hostname=connection.mqtt_host,
+                port=connection.mqtt_port,
+                auth=capture.mqtt_auth(connection),
+            )
+        )
+
+    return publish
+
+
+def noop_publisher(result: RunResult, now: datetime) -> None:
+    LOG.info("Dry run - not publishing. accepted=%s value=%s reason=%s", result.accepted, result.value, result.reason)
+
+
+def discovery_payload(connection: ConnectionConfig) -> dict:
+    """MQTT discovery config for sensor.water_meter.
+
+    device/origin are what actually make this show up properly in HA's
+    device registry and MQTT integration page (grouped device, not an
+    orphan entity) rather than cosmetic extras - confirmed against the
+    current MQTT discovery docs. No icon needed: device_class "water"
+    already gives the frontend a water-drop icon automatically.
+
+    Deliberately no availability_topic: this reader is a one-shot systemd
+    timer job, not a persistent MQTT client, so there is no real connection
+    to back a Last Will/Testament-style availability signal. Wiring
+    availability to status_topic (as an earlier version of this did) made
+    HA mark the entity fully "Unavailable" on every routine OCR rejection,
+    even though the last accepted value in state_topic was still valid -
+    staleness is already surfaced by the dedicated
+    sensor.water_meter_status/sensor.water_meter_reading_age entities.
+    """
+    return {
+        "name": "Water Meter",
+        "unique_id": "water_meter",
+        "state_topic": connection.reading_topic,
+        "device_class": "water",
+        "state_class": "total_increasing",
+        "unit_of_measurement": "gal",
+        "device": {
+            "identifiers": ["water_meter_reader"],
+            "name": "Water Meter Reader",
+            "manufacturer": "Home-built (Raspberry Pi + webcam OCR)",
+            "model": 'Mueller Systems 3/4" S encoder register',
+        },
+        "origin": {
+            "name": "water-meter-reader",
+        },
+    }
+
+
+def _handle_capture_failure(
+    connection: ConnectionConfig,
+    error: capture.CaptureError,
+    publisher: Publisher,
+    reboot: Reboot,
+    now: datetime,
+) -> RunResult:
+    """Track consecutive capture failures and reboot once they cross the threshold.
+
+    The V4L2/GStreamer backend for the bench-tested webcam has been observed
+    to wedge - every read times out, even from a freshly opened
+    cv2.VideoCapture in a brand-new process - in a way that only a host
+    reboot clears. Since each run is already a fresh process (the systemd
+    timer), a single failure could still be a one-off USB hiccup, so this
+    only escalates to a reboot after connection.capture_failure_reboot_threshold
+    consecutive failures; a single successful capture (see the call to
+    watchdog.record_capture_success above) resets the count.
+    """
+    streak = watchdog.record_capture_failure(connection.state_dir)
+    reason = f"capture failed (streak {streak}): {error}"
+    LOG.error(reason)
+    publisher(RunResult(False, None, reason), now)
+
+    if watchdog.should_reboot(streak, threshold=connection.capture_failure_reboot_threshold):
+        reboot_reason = f"camera stuck after {streak} consecutive failures, rebooting"
+        LOG.error(reboot_reason)
+        publisher(RunResult(False, None, reboot_reason), now)
+        watchdog.record_capture_success(connection.state_dir)  # fresh count after reboot
+        reboot()
+        return RunResult(False, None, reboot_reason)
+
+    return RunResult(False, None, reason)
+
+
+def _correct_glare_positions_from_last_good(
+    calibration: CalibrationConfig,
+    raw_digits: str,
+    validation: "sanity.ValidationResult",
+    last_good: "sanity.LastGoodReading",
+    now: datetime,
+) -> tuple[str, "sanity.ValidationResult"]:
+    """Cross-check (and if needed, splice in) last_good's own digits at the
+    glare-affected positions - run unconditionally, on every reading, not
+    just ones that already failed validation.
+
+    calibration.low_confidence_ok_indexes marks the meter's highest-place-
+    value digits (millions/hundred-thousands): positions under a fixed
+    glare streak that no OCR method here has ever read reliably. Those
+    positions physically cannot change except once every tens of thousands
+    of gallons - far slower than any realistic per-poll delta - so
+    last_good's own digits there are a strictly better source of truth than
+    a fresh read of a spot the glare genuinely destroys the pixel data for.
+
+    Originally this only ran after the raw reading had already failed
+    validation - but that left a real gap (hit in production 2026-09-27): a
+    misread in exactly one of these glare positions can still slip straight
+    past the plausibility gate on the *first* try whenever enough time has
+    elapsed since last_good that the time-scaled jump allowance is generous
+    (see sanity.validate_reading) - self-heal never got a chance to run
+    because nothing had failed yet. Now the digit-by-digit comparison
+    against last_good always happens, regardless of whether the raw
+    reading was already accepted:
+      - positions already agree with last_good -> no-op, whatever the raw
+        validation result was stands unchanged.
+      - positions disagree and the corrected candidate validates -> use the
+        corrected candidate (this is what catches the case above: an
+        accepted-but-wrong value gets corrected before it's ever saved as
+        the new last_good).
+      - positions disagree and the corrected candidate does NOT validate ->
+        ambiguous (could be a genuine rollover into a new highest-place-
+        value digit, or a different, deeper misread that happened to also
+        alter one of these positions). Never silently accept the raw
+        reading in this case even if it originally validated - return a
+        rejection instead so the caller's existing VLM-requery-on-suspect-
+        value fallback gets a chance to independently confirm one way or
+        the other, rather than trusting either digit string blindly.
+    """
+    if not calibration.low_confidence_ok_indexes:
+        return raw_digits, validation
+
+    scaled = int(round(last_good.value * (10**calibration.decimal_places)))
+    last_good_digits = f"{scaled:0{calibration.digit_count}d}"
+    if len(last_good_digits) != calibration.digit_count:
+        # last_good has more digits than the display can show (a real
+        # rollover past the meter's own max) - nothing sane to splice in.
+        return raw_digits, validation
+
+    corrected = list(raw_digits)
+    for pos in calibration.low_confidence_ok_indexes:
+        if 0 <= pos < calibration.digit_count:
+            corrected[pos] = last_good_digits[pos]
+    corrected_digits = "".join(corrected)
+
+    if corrected_digits == raw_digits:
+        return raw_digits, validation
+
+    corrected_validation = sanity.validate_reading(
+        corrected_digits,
+        digit_count=calibration.digit_count,
+        max_gallons_per_interval=calibration.max_gallons_per_interval,
+        last_good=last_good,
+        now=now,
+        history_limit=calibration.history_limit,
+        decimal_places=calibration.decimal_places,
+        nominal_interval_seconds=calibration.nominal_interval_seconds,
+        stuck_after_hours=calibration.stuck_after_hours,
+        max_sustained_gallons_per_hour=calibration.max_sustained_gallons_per_hour,
+    )
+    if corrected_validation.accepted:
+        LOG.info("Leading-digit self-heal succeeded: %s -> %s", raw_digits, corrected_digits)
+        return corrected_digits, corrected_validation
+
+    if validation.accepted:
+        LOG.warning(
+            "Accepted reading %s disagreed with last_good on glare-protected "
+            "positions %s and the corrected candidate %s doesn't validate either "
+            "(%s) - treating as suspect rather than trusting either digit string",
+            raw_digits,
+            calibration.low_confidence_ok_indexes,
+            corrected_digits,
+            corrected_validation.reason,
+        )
+        return raw_digits, sanity.ValidationResult(
+            accepted=False,
+            value=None,
+            reason=(
+                f"leading-digit mismatch: read {raw_digits} disagrees with last_good "
+                f"on positions {calibration.low_confidence_ok_indexes}, and correcting "
+                f"to {corrected_digits} still fails ({corrected_validation.reason})"
+            ),
+        )
+
+    LOG.info(
+        "Leading-digit self-heal did not resolve it (%s -> %s still %s)",
+        raw_digits,
+        corrected_digits,
+        corrected_validation.reason,
+    )
+    return raw_digits, validation
+
+
+def _requery_vlm_on_suspect_value(
+    connection: ConnectionConfig,
+    calibration: CalibrationConfig,
+    crop_path: Path,
+    raw_digits: str,
+    validation: "sanity.ValidationResult",
+    last_good: "sanity.LastGoodReading",
+    now: datetime,
+) -> tuple[str, "sanity.ValidationResult"]:
+    """Give the vision LLM one more look at the same crop before giving up.
+
+    "value decreased", "implausible jump", and "leading-digit mismatch" all
+    mean digits were parsed fine but the resulting value looks wrong - the
+    signature of a single misread digit (confirmed live: qwen3-vl itself
+    occasionally flips the glare-affected leading digit, see
+    ocr.read_digits_vlm) rather than a garbled read that no amount of
+    re-asking would fix. "leading-digit mismatch" specifically comes from
+    _correct_glare_positions_from_last_good rejecting an otherwise-accepted
+    reading because it disagreed with last_good on a glare-protected
+    position and the corrected candidate didn't validate either - exactly
+    the kind of ambiguity (misread vs. genuine rollover) a fresh look can
+    resolve. The meter hasn't moved between the first attempt and now, so
+    requerying the same crop - with the suspicious value and the last
+    confirmed reading as context - gives the model a second, better-informed
+    chance instead of discarding a capture that was probably one digit away
+    from correct. Fires at most once (no loop) and only for these reasons;
+    every other rejection (bad digit count, non-numeric, ocr failed
+    outright) means there's nothing a requery on the same image would fix.
+    """
+    if not (
+        validation.reason.startswith("value decreased")
+        or validation.reason.startswith("implausible jump")
+        or validation.reason.startswith("leading-digit mismatch")
+    ):
+        return raw_digits, validation
+
+    LOG.info("First read rejected (%s); requerying the vision-LLM for a second look", validation.reason)
+    hint = (
+        f"A first read of this exact image gave {raw_digits}, which would be "
+        f"{validation.reason} versus the last confirmed reading of {last_good.value}. "
+        "That is more likely a misread of one digit than a real jump - look very "
+        "carefully at each digit, especially the leftmost ones which are sometimes "
+        "affected by glare, and answer again with exactly the digits you see."
+    )
+    try:
+        requery_digits = ocr.read_digits_vlm(
+            crop_path,
+            host=connection.vlm_host,
+            digit_count=calibration.digit_count,
+            model=connection.vlm_model,
+            timeout=connection.vlm_timeout_seconds,
+            hint=hint,
+            dynamic_examples_dir=connection.image_dir / "human_corrections",
+        )
+    except ocr.OcrError as error:
+        LOG.warning("Vision-LLM requery failed (%s); keeping the original rejection", error)
+        return raw_digits, validation
+
+    requery_validation = sanity.validate_reading(
+        requery_digits,
+        digit_count=calibration.digit_count,
+        max_gallons_per_interval=calibration.max_gallons_per_interval,
+        last_good=last_good,
+        now=now,
+        history_limit=calibration.history_limit,
+        decimal_places=calibration.decimal_places,
+        nominal_interval_seconds=calibration.nominal_interval_seconds,
+        stuck_after_hours=calibration.stuck_after_hours,
+        max_sustained_gallons_per_hour=calibration.max_sustained_gallons_per_hour,
+    )
+    if requery_validation.accepted:
+        LOG.info("Vision-LLM requery succeeded: %s -> %s", raw_digits, requery_digits)
+    else:
+        LOG.info("Vision-LLM requery also rejected (%s)", requery_validation.reason)
+    return requery_digits, requery_validation
+
+
+_LAST_NOTIFICATION_FILE = "last_ha_notification.json"
+
+
+_LAST_OUTAGE_NOTIFICATION_FILE = "last_ha_outage_notification.json"
+
+
+def _seconds_since_last_notification(
+    state_dir: Path, now: datetime, filename: str = _LAST_NOTIFICATION_FILE
+) -> float | None:
+    path = state_dir / filename
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        last = datetime.fromisoformat(data["timestamp"])
+    except (OSError, ValueError, KeyError):
+        return None
+    return (now - last).total_seconds()
+
+
+def _record_notification_sent(
+    state_dir: Path, now: datetime, filename: str = _LAST_NOTIFICATION_FILE
+) -> None:
+    state_dir.mkdir(parents=True, exist_ok=True)
+    (state_dir / filename).write_text(
+        json.dumps({"timestamp": now.isoformat()}), encoding="utf-8"
+    )
+
+
+def _notify_ha_of_unresolved_reading(
+    connection: ConnectionConfig,
+    calibration: CalibrationConfig,
+    raw_digits: str,
+    validation: "sanity.ValidationResult",
+    last_good: "sanity.LastGoodReading",
+    now: datetime,
+) -> None:
+    """Ask a human to approve/reject/modify a reading that self-heal and the
+    VLM requery both failed to resolve, via an actionable Home Assistant
+    notification - a lightweight, real-time alternative to GitHub issue
+    #1057's "manual digit-crop review tool" idea, using infrastructure that
+    already exists (the user's phone) instead of a new web app.
+
+    Only fires for "value decreased"/"implausible jump"/"leading-digit
+    mismatch" - reasons where the digits parsed cleanly but the *value*
+    looks wrong, exactly the ambiguity a human glancing at the crop can
+    resolve in seconds. A hard OCR failure (unparseable digits, wrong
+    digit count) has no suggested value for a human to approve, so there's
+    nothing this notification would add.
+
+    Rate-limited to at most one real push per
+    ha_notify_min_interval_seconds (default 1 hour): a run of consecutive
+    rejections from the same underlying failure (the digit-confusion
+    pattern documented in the "Reading Through Glare" report repeats every
+    poll until it self-resolves) would otherwise page the phone every
+    single cycle. The run itself still rejects and still gets a requery
+    attempt exactly as before - only the phone notification is suppressed,
+    and only the notification, so a genuinely stuck meter is still visible
+    via sensor.water_meter_status/reading_age (see packages/water_meter.yaml).
+
+    Deliberately fire-and-forget: disabled entirely if ha_url/ha_token
+    aren't configured (opt-in), and a failed notification attempt only
+    logs a warning - it must never turn an already-rejected run into a
+    harder failure. The Approve/Modify response path is a *separate*
+    system (see docs/water_meter.md "Human-in-the-loop notifications"): a
+    small persistent listener service on the Pi, since this reader is a
+    one-shot job that has already exited by the time a human responds.
+    """
+    if not connection.ha_url or not connection.ha_token:
+        return
+    if not (
+        validation.reason.startswith("value decreased")
+        or validation.reason.startswith("implausible jump")
+        or validation.reason.startswith("leading-digit mismatch")
+    ):
+        return
+    if not raw_digits.isdigit() or len(raw_digits) != calibration.digit_count:
+        return
+
+    elapsed = _seconds_since_last_notification(connection.state_dir, now)
+    if elapsed is not None and elapsed < connection.ha_notify_min_interval_seconds:
+        LOG.info(
+            "Suppressing HA notification - last one was %.0fs ago (min interval %.0fs)",
+            elapsed,
+            connection.ha_notify_min_interval_seconds,
+        )
+        return
+
+    suggested_value = int(raw_digits) / (10**calibration.decimal_places)
+    suggested_str = f"{suggested_value:.{calibration.decimal_places}f}"
+
+    import urllib.error
+    import urllib.request
+
+    notification_data: dict = {
+        "actions": [
+            {"action": f"WATER_METER_APPROVE_{suggested_str}", "title": "Approve"},
+            {"action": "WATER_METER_REJECT", "title": "Reject"},
+            {
+                "action": "WATER_METER_MODIFY",
+                "title": "Modify",
+                # Companion-app "text input" action: tapping it prompts for
+                # free text on the phone instead of just firing the action,
+                # delivered back as event.data.reply_text alongside the
+                # action id - see packages/water_meter.yaml's handling.
+                # Without this, "Modify" could only tell the human to go
+                # open HA and set a helper entity by hand.
+                "behavior": "textInput",
+                "textInputButtonTitle": "Submit",
+                "textInputPlaceholder": f"Correct value, e.g. {suggested_str}",
+            },
+        ]
+    }
+    if connection.label_ui_base_url:
+        # Tapping the notification body opens this capture in the labeling UI
+        # (the phone's browser already holds the UI's auth cookie after its
+        # first visit, so no token travels in this URL).
+        link = f"{connection.label_ui_base_url}/?item={now.strftime('%Y%m%dT%H%M%SZ')}"
+        notification_data["url"] = link
+        notification_data["clickAction"] = link
+    if connection.correction_base_url and connection.correction_token:
+        # Same crop the OCR pipeline actually read, so the human is judging
+        # the real input, not a guess from the summary text - correction_
+        # listener.py serves this from disk, authenticated by the same
+        # token already required for POST /correction (not a new secret).
+        notification_data["image"] = (
+            f"{connection.correction_base_url}/crop?token={connection.correction_token}"
+        )
+
+    payload = {
+        "title": "Water meter needs a look",
+        "message": (
+            f"Read {suggested_str} gal, but {validation.reason}. "
+            f"Last confirmed: {last_good.value} gal."
+        ),
+        "data": notification_data,
+    }
+    request = urllib.request.Request(
+        f"{connection.ha_url}/api/services/notify/{connection.ha_notify_service}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {connection.ha_token}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            response.read()
+    except (urllib.error.URLError, OSError) as error:
+        LOG.warning("Failed to send HA notification for unresolved reading: %s", error)
+        return
+    _record_notification_sent(connection.state_dir, now)
+
+
+def _notify_ha_of_vlm_outage(
+    connection: ConnectionConfig, last_good: "sanity.LastGoodReading", now: datetime
+) -> None:
+    """Tell the human the vision model is unreachable - a different problem from
+    a doubtful reading, and one only they can fix (restart Ollama on the TrueNAS
+    host). No Approve/Modify actions: there is no trustworthy value to offer.
+    Rate-limited like the reading notification, on its own clock so an outage
+    page is never suppressed by an earlier reading page (or vice versa)."""
+    if not connection.ha_url or not connection.ha_token:
+        return
+    elapsed = _seconds_since_last_notification(
+        connection.state_dir, now, _LAST_OUTAGE_NOTIFICATION_FILE
+    )
+    if elapsed is not None and elapsed < connection.ha_notify_min_interval_seconds:
+        return
+
+    import urllib.error
+    import urllib.request
+
+    data: dict = {"tag": "water-meter-vlm-outage"}
+    if connection.label_ui_base_url:
+        data["url"] = data["clickAction"] = connection.label_ui_base_url
+    payload = {
+        "title": "Water meter vision model is down",
+        "message": (
+            f"{connection.vlm_host} is not answering, so readings are being rejected "
+            f"(last confirmed {last_good.value} gal). Restart the Ollama app on the "
+            "TrueNAS host. Reads resume on their own once it answers."
+        ),
+        "data": data,
+    }
+    request = urllib.request.Request(
+        f"{connection.ha_url}/api/services/notify/{connection.ha_notify_service}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {connection.ha_token}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            response.read()
+    except (urllib.error.URLError, OSError) as error:
+        LOG.warning("Failed to send HA notification for VLM outage: %s", error)
+        return
+    _record_notification_sent(connection.state_dir, now, _LAST_OUTAGE_NOTIFICATION_FILE)
+
+
+def _rotate_history(
+    history_dir: Path,
+    frame: "np.ndarray",
+    cropped: "np.ndarray",
+    digit_crops: list["np.ndarray"],
+    limit: int,
+    now: datetime,
+) -> None:
+    """Save this run's raw frame, ROI crop, and individual digit slices.
+
+    Digit slices are saved on every run - accepted, rejected, or OCR-failed -
+    not just failures: building a broad, real-world sample library (not only
+    the cases that happened to fail) is what let calibration drift and
+    missing digit templates (see ocr.py's completeness check) get fixed from
+    actual captures instead of guesswork. Sharing history_dir's existing
+    stamp-based rotation keeps this bounded automatically.
+    """
+    history_dir.mkdir(parents=True, exist_ok=True)
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    capture.save_image(frame, history_dir / f"{stamp}_raw.jpg")
+    capture.save_image(cropped, history_dir / f"{stamp}_crop.jpg")
+    for index, digit_crop in enumerate(digit_crops):
+        capture.save_image(digit_crop, history_dir / f"{stamp}_digit{index}.jpg")
+
+    existing_pairs = sorted({path.name.split("_", 1)[0] for path in history_dir.glob("*.jpg")})
+    for stale_stamp in existing_pairs[:-limit] if limit > 0 else []:
+        for stale in history_dir.glob(f"{stale_stamp}_*.jpg"):
+            stale.unlink(missing_ok=True)
+        (history_dir / f"{stale_stamp}_read.json").unlink(missing_ok=True)
+
+
+def _write_read_sidecar(
+    history_dir: Path, now: datetime, raw_digits: str | None, accepted: bool, reason: str
+) -> None:
+    """Record what the pipeline concluded for this capture (label_ui.py's
+    queue uses it to surface rejected reads first and to prefill a guess).
+
+    Best-effort: a failed write must never affect the reading itself.
+    """
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    try:
+        history_dir.mkdir(parents=True, exist_ok=True)
+        (history_dir / f"{stamp}_read.json").write_text(
+            json.dumps({"raw_digits": raw_digits, "accepted": accepted, "reason": reason}),
+            encoding="utf-8",
+        )
+    except OSError:
+        LOG.warning("Could not write read sidecar for %s", stamp)
+
+
+def _save_reject(rejects_dir: Path, cropped: "np.ndarray", reason: str, now: datetime) -> None:
+    rejects_dir.mkdir(parents=True, exist_ok=True)
+    stamp = now.strftime("%Y%m%dT%H%M%SZ")
+    safe_reason = re.sub(r"[^a-zA-Z0-9_-]+", "_", reason)[:80]
+    capture.save_image(cropped, rejects_dir / f"{stamp}_{safe_reason}.jpg")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Capture and OCR a water meter reading, then publish it to MQTT."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run the full capture/OCR/validation pipeline but do not publish to MQTT.",
+    )
+    parser.add_argument(
+        "--check-config",
+        action="store_true",
+        help="Load configuration and exit without touching the camera, light, or MQTT.",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(level=os.environ.get("WATER_METER_LOG_LEVEL", "INFO"))
+    connection = connection_config_from_env()
+    calibration = load_calibration_config(connection.calibration_path)
+
+    if args.check_config:
+        LOG.info(
+            "Loaded water meter config: camera=%s roi=%s digits=%s",
+            connection.camera_device,
+            calibration.roi,
+            calibration.digit_count,
+        )
+        return
+
+    publisher = noop_publisher if args.dry_run else None
+    result = run_once(connection, calibration, publisher=publisher)
+    LOG.info(
+        "Run result: accepted=%s value=%s reason=%s", result.accepted, result.value, result.reason
+    )
+    raise SystemExit(0 if result.accepted else 1)
+
+
+if __name__ == "__main__":
+    main()
