@@ -103,6 +103,12 @@ class ConnectionConfig:
     vlm_host: str = ""
     vlm_model: str = "qwen2.5vl:7b"
     vlm_timeout_seconds: float = 480.0
+    # Before each run commits to a real VLM call (480s timeout, twice with the
+    # requery), a tiny same-options request checks the model actually answers. A
+    # hung Ollama runner (seen twice: all reads for 7+ hours) otherwise costs two
+    # full timeouts per run and leaves queued requests behind. Must exceed a cold
+    # model load (~40s observed).
+    vlm_probe_timeout_seconds: float = 60.0
     # Empty ha_url/ha_token (the default) disables the actionable-
     # notification tier entirely - reader.py only sends one when both are
     # set. ha_token is a Home Assistant long-lived access token (generated
@@ -185,6 +191,9 @@ def connection_config_from_env() -> ConnectionConfig:
         vlm_model=os.environ.get("WATER_METER_VLM_MODEL", "qwen2.5vl:7b"),
         vlm_timeout_seconds=float(
             os.environ.get("WATER_METER_VLM_TIMEOUT_SECONDS", "480.0")
+        ),
+        vlm_probe_timeout_seconds=float(
+            os.environ.get("WATER_METER_VLM_PROBE_TIMEOUT_SECONDS", "60.0")
         ),
         ha_url=os.environ.get("WATER_METER_HA_URL", ""),
         ha_token=os.environ.get("WATER_METER_HA_TOKEN", ""),

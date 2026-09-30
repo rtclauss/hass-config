@@ -93,6 +93,13 @@ def _stub_image_io(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(capture, "crop_boxes", lambda frame, boxes: [frame] * len(boxes))
 
 
+@pytest.fixture(autouse=True)
+def _vlm_probe_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pre-run VLM health probe is a real network call; tests that want an
+    outage override this."""
+    monkeypatch.setattr(ocr, "vlm_is_responsive", lambda host, **kwargs: True)
+
+
 def test_accepted_run_toggles_light_and_publishes_reading(tmp_path: Path) -> None:
     connection = _connection(tmp_path)
     calibration = _calibration()
@@ -1136,3 +1143,85 @@ def test_run_cuts_crops_from_the_rotated_frame_but_keeps_the_raw_frame(
     assert saved["latest_raw.jpg"] == "frame"  # raw stays as captured
     assert saved["latest_crop.jpg"] == "crop-of-rotated"
     assert saved[f"{NOW.strftime('%Y%m%dT%H%M%SZ')}_digit0.jpg"] == "digit-of-rotated"
+
+
+def test_unresponsive_vlm_skips_the_model_and_its_requery_and_pages_about_the_outage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(
+        tmp_path, vlm_host="truenas.local:30068", ha_url="http://ha.local:8123", ha_token="tok",
+        label_ui_base_url="http://10.24.1.102:8092",
+    )
+    calibration = _calibration(max_gallons_per_interval=5.0)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    )
+    monkeypatch.setattr(ocr, "vlm_is_responsive", lambda host, **kwargs: False)
+    seen: dict = {}
+    # the template matcher's garbage: a value the gate rejects
+    monkeypatch.setattr(ocr, "read_digits", lambda *a, **k: seen.setdefault("kwargs", k) and "99")
+
+    def _no_vlm(*args: object, **kwargs: object) -> str:
+        raise AssertionError("an unresponsive VLM must not be called (no 480s waits)")
+
+    monkeypatch.setattr(ocr, "read_digits_vlm", _no_vlm)
+    sent: list[dict] = []
+
+    class _Resp:
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda request, timeout: sent.append(json.loads(request.data)) or _Resp()
+    )
+
+    def run() -> reader.RunResult:
+        return reader.run_once(
+            connection, calibration, grab_frame=lambda: "frame", set_light=lambda on: None,
+            publisher=lambda r, n: None, now=NOW,
+        )
+
+    result = run()
+
+    assert result.accepted is False
+    assert seen["kwargs"]["vlm_host"] is None  # the chain skipped the model
+    assert len(sent) == 1
+    page = sent[0]
+    assert "vision model is down" in page["title"].lower()
+    assert "actions" not in page["data"]  # nothing to Approve: the value is garbage
+    assert "99" not in page["message"]
+    assert str(sanity.load_last_good(connection.state_dir).value) in page["message"]
+
+    run()  # same outage, within the hour: no second page
+    assert len(sent) == 1
+
+
+def test_outage_page_is_independent_of_the_reading_page_rate_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(tmp_path, ha_url="http://ha.local:8123", ha_token="tok")
+    last_good = sanity.LastGoodReading(value=10.0, timestamp=NOW.isoformat())
+    reader._record_notification_sent(connection.state_dir, NOW)  # a reading page went out just now
+    sent: list[bool] = []
+
+    class _Resp:
+        def __enter__(self) -> "_Resp":
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{}"
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout: sent.append(True) or _Resp())
+
+    reader._notify_ha_of_vlm_outage(connection, last_good, NOW)
+
+    assert sent == [True]

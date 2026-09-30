@@ -71,6 +71,20 @@ def run_once(
     now = now or datetime.now(timezone.utc)
 
     last_good = sanity.load_last_good(connection.state_dir)
+    vlm_available = True
+    if connection.vlm_host and ocr_reader is None:
+        vlm_available = ocr.vlm_is_responsive(
+            connection.vlm_host,
+            model=connection.vlm_model,
+            timeout=connection.vlm_probe_timeout_seconds,
+        )
+        if not vlm_available:
+            LOG.warning(
+                "Vision-LLM at %s did not answer a probe within %.0fs; this run skips it "
+                "(falling back to template matching) instead of waiting out two full timeouts",
+                connection.vlm_host,
+                connection.vlm_probe_timeout_seconds,
+            )
     ocr_reader = ocr_reader or (
         lambda image_path, digit_crops: ocr.read_digits(
             image_path,
@@ -78,7 +92,7 @@ def run_once(
             calibration,
             templates_dir=connection.templates_dir,
             bootstrap=last_good is None,
-            vlm_host=connection.vlm_host or None,
+            vlm_host=(connection.vlm_host or None) if vlm_available else None,
             vlm_model=connection.vlm_model,
             vlm_timeout=connection.vlm_timeout_seconds,
             dynamic_examples_dir=connection.image_dir / "human_corrections",
@@ -142,15 +156,21 @@ def run_once(
             calibration, raw_digits, validation, last_good, now
         )
 
-    if not validation.accepted and connection.vlm_host and last_good is not None:
+    if not validation.accepted and connection.vlm_host and vlm_available and last_good is not None:
         raw_digits, validation = _requery_vlm_on_suspect_value(
             connection, calibration, crop_path, raw_digits, validation, last_good, now
         )
 
     if not validation.accepted and last_good is not None:
-        _notify_ha_of_unresolved_reading(
-            connection, calibration, raw_digits, validation, last_good, now
-        )
+        if vlm_available:
+            _notify_ha_of_unresolved_reading(
+                connection, calibration, raw_digits, validation, last_good, now
+            )
+        else:
+            # Whatever was read came from the template matcher, not the model -
+            # offering it with an Approve button would invite baking garbage into
+            # last_good. Say the model is down instead.
+            _notify_ha_of_vlm_outage(connection, last_good, now)
 
     _write_read_sidecar(
         connection.image_dir / "history", now, raw_digits, validation.accepted, validation.reason
@@ -485,8 +505,13 @@ def _requery_vlm_on_suspect_value(
 _LAST_NOTIFICATION_FILE = "last_ha_notification.json"
 
 
-def _seconds_since_last_notification(state_dir: Path, now: datetime) -> float | None:
-    path = state_dir / _LAST_NOTIFICATION_FILE
+_LAST_OUTAGE_NOTIFICATION_FILE = "last_ha_outage_notification.json"
+
+
+def _seconds_since_last_notification(
+    state_dir: Path, now: datetime, filename: str = _LAST_NOTIFICATION_FILE
+) -> float | None:
+    path = state_dir / filename
     if not path.exists():
         return None
     try:
@@ -497,9 +522,11 @@ def _seconds_since_last_notification(state_dir: Path, now: datetime) -> float | 
     return (now - last).total_seconds()
 
 
-def _record_notification_sent(state_dir: Path, now: datetime) -> None:
+def _record_notification_sent(
+    state_dir: Path, now: datetime, filename: str = _LAST_NOTIFICATION_FILE
+) -> None:
     state_dir.mkdir(parents=True, exist_ok=True)
-    (state_dir / _LAST_NOTIFICATION_FILE).write_text(
+    (state_dir / filename).write_text(
         json.dumps({"timestamp": now.isoformat()}), encoding="utf-8"
     )
 
@@ -628,6 +655,55 @@ def _notify_ha_of_unresolved_reading(
         LOG.warning("Failed to send HA notification for unresolved reading: %s", error)
         return
     _record_notification_sent(connection.state_dir, now)
+
+
+def _notify_ha_of_vlm_outage(
+    connection: ConnectionConfig, last_good: "sanity.LastGoodReading", now: datetime
+) -> None:
+    """Tell the human the vision model is unreachable - a different problem from
+    a doubtful reading, and one only they can fix (restart Ollama on the TrueNAS
+    host). No Approve/Modify actions: there is no trustworthy value to offer.
+    Rate-limited like the reading notification, on its own clock so an outage
+    page is never suppressed by an earlier reading page (or vice versa)."""
+    if not connection.ha_url or not connection.ha_token:
+        return
+    elapsed = _seconds_since_last_notification(
+        connection.state_dir, now, _LAST_OUTAGE_NOTIFICATION_FILE
+    )
+    if elapsed is not None and elapsed < connection.ha_notify_min_interval_seconds:
+        return
+
+    import urllib.error
+    import urllib.request
+
+    data: dict = {"tag": "water-meter-vlm-outage"}
+    if connection.label_ui_base_url:
+        data["url"] = data["clickAction"] = connection.label_ui_base_url
+    payload = {
+        "title": "Water meter vision model is down",
+        "message": (
+            f"{connection.vlm_host} is not answering, so readings are being rejected "
+            f"(last confirmed {last_good.value} gal). Restart the Ollama app on the "
+            "TrueNAS host. Reads resume on their own once it answers."
+        ),
+        "data": data,
+    }
+    request = urllib.request.Request(
+        f"{connection.ha_url}/api/services/notify/{connection.ha_notify_service}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {connection.ha_token}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            response.read()
+    except (urllib.error.URLError, OSError) as error:
+        LOG.warning("Failed to send HA notification for VLM outage: %s", error)
+        return
+    _record_notification_sent(connection.state_dir, now, _LAST_OUTAGE_NOTIFICATION_FILE)
 
 
 def _rotate_history(
