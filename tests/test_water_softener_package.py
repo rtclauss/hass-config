@@ -192,21 +192,26 @@ def test_low_salt_threshold_template_fallbacks_track_calibrated_value() -> None:
     text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
 
     # Regression guard: the low-salt threshold input_number is calibrated
-    # to this sensor's confirmed-empty baseline (~451mm), set to 440mm.
-    # The three template sensors that read it also carry a
-    # float(default=...) fallback for the brief window where the
+    # as 75% depleted between the two real measured baselines (confirmed-
+    # just-refilled ~172mm, confirmed-empty ~451mm): 172 + 0.75*(451-172)
+    # ~= 381, rounded to the step:10 grid -> 380mm. This replaced an
+    # earlier 440mm calibration (~10mm short of bare water) that made
+    # "low salt" mean "almost completely out" with too little real lead
+    # time. The three template sensors that read the threshold also carry
+    # a float(default=...) fallback for the brief window where the
     # input_number is transiently unknown/unavailable (e.g. HA startup
     # before helpers load) -- a stale fallback there would silently mask
     # a real low-salt state during that window (caught in review). All
     # three fallbacks must track the same calibrated value, not an old
     # or ad-hoc one.
-    assert "initial: 440" in text
+    assert "initial: 380" in text
     fallback_count = text.count(
         "states('input_number.water_softener_low_salt_threshold_mm') "
-        "| float(default=440)"
+        "| float(default=380)"
     )
     assert fallback_count == 3
     assert "float(default=500)" not in text
+    assert "float(default=440)" not in text
 
 
 def test_refill_reset_threshold_calibrated_between_empty_and_full_baselines() -> None:
@@ -215,12 +220,12 @@ def test_refill_reset_threshold_calibrated_between_empty_and_full_baselines() ->
     # Regression guard: refill_reset_threshold_mm is calibrated against a
     # real 2026-09-16 refill (confirmed-empty ~451mm -> confirmed-just-
     # refilled ~170-174mm). 300mm must stay strictly between the low-salt
-    # threshold (440mm, the confirmed-empty side) and today's observed
+    # threshold (380mm, the 75%-depleted side) and today's observed
     # full-tank reading, so it can never misfire on normal depletion near
     # empty nor fail to detect a lighter future refill.
     assert "initial: 300" in text
 
-    low_salt_threshold = 440
+    low_salt_threshold = 380
     refill_reset_threshold = 300
     observed_full_reading = 172
 
