@@ -73,6 +73,12 @@ While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
 `water_shutoff_on_trip` skips its 4-hour shutoff while the flag is on; the relock
 shuts the water off instead. If the alarm does not disarm on unlock, a push says so.
 
+Trigger source: `lock.front_door_lock` is a virtual optimistic template lock backed
+by `input_boolean.front_door_lock`; nothing in HA reads the physical deadbolt. The
+guest visit therefore starts only when that virtual lock is unlocked (HomeKit,
+Siri, a dashboard button), not from the keypad or thumbturn. Retarget both
+automations if a real lock entity is added.
+
 ## Manual Verification
 
 1. Turn `input_boolean.trip` on and confirm `switch.vacation_simulation` turns on.
