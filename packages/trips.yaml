@@ -1042,8 +1042,10 @@ automation:
     trigger:
       - trigger: state
         entity_id: lock.front_door_lock
-        from: locked
         to: unlocked
+        not_from:
+          - unknown
+          - unavailable
     condition:
       - condition: state
         entity_id: input_boolean.trip
@@ -1071,6 +1073,23 @@ automation:
         continue_on_error: true
         target:
           entity_id: switch.basement_water_shutoff
+      - wait_template: "{{ is_state('alarm_control_panel.home_alarm', 'disarmed') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: true
+      - if:
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: alarm_control_panel.home_alarm
+                state: disarmed
+        then:
+          - action: notify.mobile_app_wethop
+            continue_on_error: true
+            data:
+              title: "Guest visit: alarm NOT disarmed"
+              message: >-
+                Front door unlocked but the alarm is {{ states('alarm_control_panel.home_alarm') }}.
+                The guest may trigger it.
       - action: notify.mobile_app_wethop
         continue_on_error: true
         data:

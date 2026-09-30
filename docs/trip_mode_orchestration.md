@@ -70,7 +70,8 @@ flag once verified; otherwise it keeps the flag and notifies), but only if that 
 `trip_guest_visit_clear_on_return` clears the flag when you return home or trip
 mode ends, so a stale flag never carries into the next trip.
 While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
-Caveat: `water_shutoff_on_trip` can still fire its 4-hour shutoff mid-visit.
+`water_shutoff_on_trip` skips its 4-hour shutoff while the flag is on; the relock
+shuts the water off instead. If the alarm does not disarm on unlock, a push says so.
 
 ## Manual Verification
 

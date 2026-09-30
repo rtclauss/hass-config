@@ -125,3 +125,15 @@ def test_guest_visit_disables_cameras_vetoes_vacuum_and_verifies_relock() -> Non
     # The flag is cleared only after the secured state is verified.
     assert lock.index("wait_template") < lock.index("input_boolean.turn_off")
     assert "House NOT secured" in lock or "NOT secured" in lock
+
+
+def test_guest_visit_hardening() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    assert "from: locked" not in unlock
+    assert "not_from:" in unlock
+    assert "alarm NOT disarmed" in unlock
+
+    shutoff = _automation_block(
+        ROOT / "packages" / "utilities.yaml", "water_shutoff_on_trip"
+    )
+    assert "input_boolean.trip_guest_visit_active" in shutoff
