@@ -48,6 +48,16 @@ homeassistant:
       friendly_name: "Log Calendar Vacation Diagnostics"
       icon: mdi:clipboard-text-clock
 
+    automation.trip_guest_door_unlock_open_house:
+      <<: *customize
+      friendly_name: "Trip Guest Door Unlock"
+      icon: mdi:door-open
+
+    automation.trip_guest_door_lock_close_house:
+      <<: *customize
+      friendly_name: "Trip Guest Door Lock"
+      icon: mdi:door-closed-lock
+
     automation.trip_mode_watchdog_home_1h:
       <<: *customize
       friendly_name: "Trip Mode Watchdog"
@@ -1008,6 +1018,90 @@ automation:
           notify_message: >-
             Vacuuming the main and upstairs levels while you fly home 💺
 
+  - alias: trip_guest_door_unlock_open_house
+    id: trip_guest_door_unlock_open_house
+    description: >-
+      While on a trip and away, unlocking the front door means a guest is
+      checking on the cats: turn the water main back on and disarm the alarm,
+      and remember the visit so the relock can undo it.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: lock.front_door_lock
+        from: locked
+        to: unlocked
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+    action:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.trip_guest_visit_active
+      - action: alarm_control_panel.alarm_disarm
+        continue_on_error: true
+        target:
+          entity_id: alarm_control_panel.home_alarm
+        data:
+          code: !secret alarm_code
+      - action: switch.turn_on
+        continue_on_error: true
+        target:
+          entity_id: switch.basement_water_shutoff
+      - action: notify.mobile_app_wethop
+        continue_on_error: true
+        data:
+          title: "Guest visit"
+          message: "Front door unlocked during trip: alarm disarmed, water on."
+
+  - alias: trip_guest_door_lock_close_house
+    id: trip_guest_door_lock_close_house
+    description: >-
+      When the front door locks again after a guest visit during a trip, turn
+      the water main back off and re-arm the alarm. Only acts if the unlock
+      automation started a visit, so it never re-arms on the owner's own return.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: lock.front_door_lock
+        to: locked
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.trip_guest_visit_active
+      - action: switch.turn_off
+        continue_on_error: true
+        target:
+          entity_id: switch.basement_water_shutoff
+      - action: alarm_control_panel.alarm_arm_away
+        continue_on_error: true
+        target:
+          entity_id: alarm_control_panel.home_alarm
+        data:
+          code: !secret alarm_code
+      - action: notify.mobile_app_wethop
+        continue_on_error: true
+        data:
+          title: "Guest visit over"
+          message: "Front door locked: alarm armed, water off."
+
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab
   #   trigger:
@@ -1084,6 +1178,8 @@ input_boolean:
     name: On a Trip
   house_unoccupied:
     name: House Unoccupied
+  trip_guest_visit_active:
+    name: Trip Guest Visit Active
 
 ########################
 # Input DateTimes

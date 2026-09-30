@@ -57,6 +57,16 @@ floor. Only the main-floor X40 mops; the upstairs and den robots are vacuum-only
 Trip-mode vacation simulation is still allowed because it is an exterior/common-
 area presence signal and is idempotently controlled by `script.house_transition`.
 
+## Guest Cat Check (Front Door)
+
+While `input_boolean.trip` is on and `binary_sensor.bayesian_zeke_home` is off,
+unlocking `lock.front_door_lock` (`trip_guest_door_unlock_open_house`) turns
+`switch.basement_water_shutoff` on, disarms `alarm_control_panel.home_alarm`, and
+sets `input_boolean.trip_guest_visit_active`. Locking the door again
+(`trip_guest_door_lock_close_house`) turns the water back off and re-arms the
+alarm, but only if that flag is set, so the owner's own return never re-arms.
+Caveat: `water_shutoff_on_trip` can still fire its 4-hour shutoff mid-visit.
+
 ## Manual Verification
 
 1. Turn `input_boolean.trip` on and confirm `switch.vacation_simulation` turns on.

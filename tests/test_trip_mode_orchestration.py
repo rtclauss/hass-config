@@ -81,3 +81,21 @@ def test_trip_orchestration_doc_captures_owner_and_guest_policy() -> None:
         assert token in doc
 
     assert "docs/trip_mode_orchestration.md" in house_doc
+
+
+def test_guest_door_unlock_opens_house_and_lock_closes_it() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "entity_id: lock.front_door_lock" in unlock
+    assert "input_boolean.trip\n" in unlock
+    assert "binary_sensor.bayesian_zeke_home" in unlock
+    assert "action: alarm_control_panel.alarm_disarm" in unlock
+    assert "action: switch.turn_on" in unlock
+    assert "switch.basement_water_shutoff" in unlock
+
+    assert "to: locked" in lock
+    assert "input_boolean.trip_guest_visit_active" in lock
+    assert "action: alarm_control_panel.alarm_arm_away" in lock
+    assert "action: switch.turn_off" in lock
+    assert "switch.basement_water_shutoff" in lock
