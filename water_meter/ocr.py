@@ -323,6 +323,52 @@ def read_digits_vlm(
     return digits
 
 
+def vlm_is_responsive(
+    host: str,
+    *,
+    model: str = DEFAULT_VLM_MODEL,
+    timeout: float = 60.0,
+    num_thread: int = DEFAULT_VLM_NUM_THREAD,
+    num_ctx: int = DEFAULT_VLM_NUM_CTX,
+) -> bool:
+    """True if the model answers a trivial request within `timeout`.
+
+    /api/tags and /api/version keep answering while a model's runner is hung
+    (observed: both fine, every generate on that model stuck), so only a real
+    generate against the same model proves it works. It deliberately reuses the
+    production num_thread/num_ctx: Ollama reloads a model when those differ,
+    which would turn the health check itself into a slow reload.
+    """
+    import json as json_module
+    import urllib.error
+    import urllib.request
+
+    payload = {
+        "model": model,
+        "prompt": "Reply with OK.",
+        "stream": False,
+        "options": {
+            "num_thread": num_thread,
+            "num_ctx": num_ctx,
+            "num_predict": 1,
+            "temperature": VLM_TEMPERATURE,
+            "seed": VLM_SEED,
+        },
+    }
+    request = urllib.request.Request(
+        f"http://{host}/api/generate",
+        data=json_module.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            json_module.loads(response.read())
+    except (urllib.error.URLError, OSError, TimeoutError, ValueError):
+        return False
+    return True
+
+
 def load_digit_templates(directory: Path) -> dict[str, list["np.ndarray"]]:
     """Load every reference sample for each digit, not just one.
 

@@ -608,3 +608,27 @@ def test_read_digits_skips_the_vision_llm_when_no_host_is_configured(
     )
 
     assert result == "3"
+
+
+def test_vlm_probe_uses_production_options_and_reports_health(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    def _ok(request: object, timeout: float) -> _FakeHttpResponse:
+        captured["body"] = json.loads(request.data)  # type: ignore[attr-defined]
+        captured["timeout"] = timeout
+        return _FakeHttpResponse({"response": "O"})
+
+    monkeypatch.setattr("urllib.request.urlopen", _ok)
+    assert ocr.vlm_is_responsive("host:1", model="m", timeout=12.0) is True
+    options = captured["body"]["options"]
+    # same num_ctx/num_thread as real calls: differing options make Ollama reload the model
+    assert options["num_ctx"] == ocr.DEFAULT_VLM_NUM_CTX and options["num_thread"] == ocr.DEFAULT_VLM_NUM_THREAD
+    assert options["num_predict"] == 1 and "images" not in captured["body"]
+    assert captured["timeout"] == 12.0
+
+    for failure in (TimeoutError("hung"), urllib.error.URLError("refused"), OSError("reset")):
+        def _boom(request: object, timeout: float, failure: Exception = failure) -> None:
+            raise failure
+
+        monkeypatch.setattr("urllib.request.urlopen", _boom)
+        assert ocr.vlm_is_responsive("host:1", timeout=1.0) is False
