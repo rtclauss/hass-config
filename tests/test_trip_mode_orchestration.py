@@ -229,3 +229,16 @@ def test_startup_does_not_rewrite_flag_and_lights_off_rechecks_visit() -> None:
         "script.leave_home_transition"
     )
     assert off.index("action: fan.turn_off") > off.index("during the light fade")
+
+
+def test_startup_conditions_are_checked_after_the_settle_delay() -> None:
+    for automation_id in (
+        "trip_guest_door_unlock_open_house",
+        "trip_guest_door_lock_close_house",
+    ):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        cond = block[block.index("    condition:\n") : block.index("    action:\n")]
+        assert "condition: or" in cond
+        assert "trigger.platform == 'homeassistant'" in cond
+        action = block[block.index("    action:\n") :]
+        assert action.index('delay: "00:01:00"') < action.index("repeat:")

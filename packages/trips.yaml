@@ -1069,23 +1069,28 @@ automation:
       - trigger: homeassistant
         event: start
     condition:
-      - alias: "at HA start, only reconcile a restored visit"
-        condition: template
-        value_template: >-
-          {{ trigger.platform != 'homeassistant'
-             or is_state('input_boolean.trip_guest_visit_active', 'on') }}
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        state: "off"
+      - alias: "state-triggered runs check now; HA-start runs are checked after the settle delay"
+        condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
     action:
       - if:
           - condition: template
             value_template: "{{ trigger.platform == 'homeassistant' }}"
         then:
           - delay: "00:01:00"
+          - condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "on"
       - if:
           - condition: template
             value_template: "{{ trigger.platform != 'homeassistant' }}"
@@ -1242,21 +1247,31 @@ automation:
       - trigger: homeassistant
         event: start
     condition:
-      - condition: state
-        entity_id: input_boolean.trip_guest_visit_active
-        state: "on"
-      - condition: state
-        entity_id: input_boolean.trip
-        state: "on"
-      - condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
-        state: "off"
+      - alias: "state-triggered runs check now; HA-start runs are checked after the settle delay"
+        condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
     action:
       - if:
           - condition: template
             value_template: "{{ trigger.platform == 'homeassistant' }}"
         then:
           - delay: "00:01:00"
+          - condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "on"
       - repeat:
           count: 3
           sequence:
