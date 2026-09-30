@@ -99,3 +99,12 @@ def test_guest_door_unlock_opens_house_and_lock_closes_it() -> None:
     assert "action: alarm_control_panel.alarm_arm_away" in lock
     assert "action: switch.turn_off" in lock
     assert "switch.basement_water_shutoff" in lock
+
+
+def test_guest_visit_flag_clears_on_return_or_trip_end() -> None:
+    block = _automation_block(TRIPS_PATH, "trip_guest_visit_clear_on_return")
+
+    assert "entity_id: binary_sensor.bayesian_zeke_home" in block
+    assert "entity_id: input_boolean.trip\n" in block
+    assert "action: input_boolean.turn_off" in block
+    assert "input_boolean.trip_guest_visit_active" in block

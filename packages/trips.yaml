@@ -58,6 +58,11 @@ homeassistant:
       friendly_name: "Trip Guest Door Lock"
       icon: mdi:door-closed-lock
 
+    automation.trip_guest_visit_clear_on_return:
+      <<: *customize
+      friendly_name: "Trip Guest Visit Clear"
+      icon: mdi:broom
+
     automation.trip_mode_watchdog_home_1h:
       <<: *customize
       friendly_name: "Trip Mode Watchdog"
@@ -1101,6 +1106,31 @@ automation:
         data:
           title: "Guest visit over"
           message: "Front door locked: alarm armed, water off."
+
+  - alias: trip_guest_visit_clear_on_return
+    id: trip_guest_visit_clear_on_return
+    description: >-
+      Clears the guest-visit flag when the owner returns home or trip mode ends,
+      so a visit left open mid-trip cannot re-arm the alarm or shut the water
+      off on a later lock event.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "on"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.trip_guest_visit_active
 
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab

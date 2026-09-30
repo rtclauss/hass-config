@@ -65,6 +65,8 @@ unlocking `lock.front_door_lock` (`trip_guest_door_unlock_open_house`) turns
 sets `input_boolean.trip_guest_visit_active`. Locking the door again
 (`trip_guest_door_lock_close_house`) turns the water back off and re-arms the
 alarm, but only if that flag is set, so the owner's own return never re-arms.
+`trip_guest_visit_clear_on_return` clears the flag when you return home or trip
+mode ends, so a stale flag never carries into the next trip.
 Caveat: `water_shutoff_on_trip` can still fire its 4-hour shutoff mid-visit.
 
 ## Manual Verification
