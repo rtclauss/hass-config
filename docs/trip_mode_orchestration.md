@@ -74,8 +74,9 @@ and verified for the den and X40, which must report `docked` or `idle`; the upst
 is docked but not verified), turns the basement grow light off through
 `catnip_grow_light_reconcile`, and
 every final vacuum start boundary in `packages/xiaomi_robot_vacuum.yaml` vetoes
-while the flag is on, so queued or preparing runs cannot start. Both guest-visit automations also run at Home Assistant start (after a 1-minute
-delay): with a restored visit flag, an unlocked door reconciles to the open state
+while the flag is on, so queued or preparing runs cannot start. Both guest-visit automations also run at Home Assistant start. Their trip, presence
+and flag checks for that path run after a 1-minute settle delay (state-triggered
+runs check immediately): with a restored visit flag, an unlocked door reconciles to the open state
 and a locked door to the secured state. Both the unlock and relock sequences re-check the door, trip mode, presence and
 the visit flag before each attempt, before each state-changing step and after each
 wait (a single in-flight service call can still complete after a concurrent
