@@ -149,7 +149,7 @@ def test_blind_mode_is_enforced_server_side(server) -> None:
 
 def test_oversized_bodies_are_rejected(server) -> None:
     port, _, _ = server
-    status, _, _ = _request(port, "POST", "/api/label", body={"capture_id": CAPTURE, "kind": "flag", "flag": "unreadable", "pad": "x" * 5000})
+    status, _, _ = _request(port, "POST", "/api/label", body={"capture_id": CAPTURE, "kind": "flag", "flag": "unreadable", "pad": "x" * 40000})
     assert status == 400
 
 
@@ -303,3 +303,46 @@ def test_browse_feed_carries_what_the_list_needs(cal_server) -> None:
         assert key in item, key
     cal = json.loads(_request(port, "GET", "/api/calibration")[2])
     assert cal["decimal_places"] == 1  # the list formats 02148506 as 214850.6
+
+
+def test_bulk_delete_restore_purge_over_http(server) -> None:
+    port, store, _ = server
+    other = "20260929T110000Z"
+    (Path(store.history_dir) / f"{other}_crop.jpg").write_bytes(b"\xff\xd8crop2")
+
+    status, _, body = _request(port, "POST", "/api/delete", body={"ids": [CAPTURE, other]})
+    assert status == 200 and json.loads(body) == {"deleted": 2}
+    assert json.loads(_request(port, "GET", "/api/queue?mode=all")[2])["depth"] == 0
+    trash = json.loads(_request(port, "GET", "/api/queue?mode=trash")[2])
+    assert {i["id"] for i in trash["items"]} == {CAPTURE, other} and trash["items"][0]["status"] == "deleted"
+    # thumbnails of trashed captures are served only with trash=1
+    assert _request(port, "GET", f"/img?id={CAPTURE}&name=crop")[0] == 404
+    assert _request(port, "GET", f"/img?id={CAPTURE}&name=crop&trash=1")[0] == 200
+
+    assert _request(port, "POST", "/api/restore", body={"ids": [CAPTURE]})[0] == 200
+    assert json.loads(_request(port, "GET", "/api/queue?mode=all")[2])["depth"] == 1
+    assert _request(port, "POST", "/api/purge", body={"ids": [CAPTURE]})[0] == 400  # restored, not in trash
+    assert _request(port, "POST", "/api/purge", body={"ids": [other]})[0] == 200
+    assert json.loads(_request(port, "GET", "/api/queue?mode=trash")[2])["depth"] == 0
+
+
+def test_bulk_endpoints_validate_ids_require_auth_and_guard_the_test_split(server) -> None:
+    port, store, _ = server
+    for body in ({}, {"ids": []}, {"ids": "x"}, {"ids": [1]}, {"ids": ["20260929T100000Z"] * 501}):
+        assert _request(port, "POST", "/api/delete", body=body)[0] == 400, body
+    assert _request(port, "POST", "/api/delete", cookie=False, body={"ids": [CAPTURE]})[0] == 401
+    assert _request(port, "POST", "/api/delete", body={"ids": ["../etc"]})[0] == 400
+
+    store.add_label(CAPTURE, "reading", value="02147013", split="test")
+    status, _, resp = _request(port, "POST", "/api/delete", body={"ids": [CAPTURE]})
+    assert status == 400 and "sealed" in json.loads(resp)["error"]
+    assert _request(port, "POST", "/api/delete", body={"ids": [CAPTURE], "allow_sealed": "yes"})[0] == 400  # only literal true
+    assert _request(port, "POST", "/api/delete", body={"ids": [CAPTURE], "allow_sealed": True})[0] == 200
+
+
+def test_page_has_selection_delete_and_trash_controls(server) -> None:
+    port, _, _ = server
+    html = _request(port, "GET", "/")[2].decode()
+    for marker in ('id="selToggle"', 'id="selBar"', 'id="selDelete"', 'id="selRestore"', 'id="selPurge"',
+                   'value="trash"', "/api/delete", "/api/restore", "/api/purge", "sealed TEST split"):
+        assert marker in html, marker

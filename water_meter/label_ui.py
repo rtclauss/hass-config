@@ -42,7 +42,8 @@ LOG = logging.getLogger(__name__)
 
 DEFAULT_PORT = 8092
 COOKIE_NAME = "wm_token"
-MAX_BODY_BYTES = 4096
+MAX_BODY_BYTES = 32768  # a bulk delete can carry a few hundred capture ids
+MAX_BULK_IDS = 500
 MAX_ROTATION_DEGREES = 15.0
 
 
@@ -167,9 +168,17 @@ details{margin-top:8px}
 .rc-val.none{color:var(--muted);font-weight:400}
 .rc-sub{font-size:.8rem;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
 .rc-sub .diff{color:var(--bad);font-weight:600}
+.rowcard.sel-mode{grid-template-columns:28px 132px 1fr}
+.rowcard .chk{width:22px;height:22px;border:2px solid var(--line);border-radius:6px;background:var(--bg);display:inline-block;position:relative}
+.rowcard.picked{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.rowcard.picked .chk{background:var(--accent);border-color:var(--accent)}
+.rowcard.picked .chk::after{content:"";position:absolute;left:5px;top:1px;width:6px;height:12px;border:solid var(--accent-ink);border-width:0 3px 3px 0;transform:rotate(45deg)}
+#selBar{position:sticky;top:61px;z-index:4;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#selBar button{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);padding:0 14px;font-weight:600}
+#selBar .danger{background:var(--bad);color:#fff;border-color:var(--bad)}
 .rc-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .rc-badges .badge{font-size:.72rem;padding:0 8px}
-@media (max-width:520px){.rowcard{grid-template-columns:96px 1fr}.rowcard img{width:96px}}
+@media (max-width:520px){.rowcard{grid-template-columns:96px 1fr}.rowcard.sel-mode{grid-template-columns:28px 96px 1fr}.rowcard img{width:96px}}
 .badge.warn{color:var(--warn);border-color:var(--warn)}
 button{cursor:pointer}
 </style>
@@ -192,7 +201,7 @@ button{cursor:pointer}
     <div class="row">
       <select id="fStatus" aria-label="status"><option value="">Any status</option><option value="unlabeled">Unlabeled</option>
         <option value="labeled">Labeled</option><option value="inferred">Inferred</option><option value="partial">Partial</option>
-        <option value="excluded">Rejected frames</option><option value="legacy">Legacy frames</option><option value="pipeline_rejected">Rejected by pipeline</option></select>
+        <option value="excluded">Rejected frames</option><option value="legacy">Legacy frames</option><option value="pipeline_rejected">Rejected by pipeline</option><option value="trash">Trash</option></select>
       <select id="fSplit" aria-label="split"><option value="">Any split</option><option value="train">train</option><option value="verify">verify</option>
         <option value="test">test</option><option value="embargo">embargo</option><option value="none">no split yet</option></select>
       <select id="fModel" aria-label="model agreement"><option value="">Any model read</option><option value="disagrees">Disagrees with model</option>
@@ -204,8 +213,17 @@ button{cursor:pointer}
       <select id="fSort" aria-label="sort"><option value="new">Newest first</option><option value="old">Oldest first</option>
         <option value="high">Value high &rarr; low</option><option value="low">Value low &rarr; high</option></select>
     </div>
-    <div class="row"><span id="browseCount" class="chip"></span><button id="fReset" class="chip" type="button">Reset filters</button></div>
+    <div class="row"><span id="browseCount" class="chip"></span><button id="fReset" class="chip" type="button">Reset filters</button>
+      <button id="selToggle" class="chip" type="button">Select</button></div>
   </section>
+  <div id="selBar" hidden>
+    <span id="selCount" class="chip">0 selected</span>
+    <button id="selAll" type="button">Select all shown</button>
+    <button id="selNone" type="button">Clear</button>
+    <button id="selDelete" class="danger" type="button">Delete</button>
+    <button id="selRestore" type="button" hidden>Restore</button>
+    <button id="selPurge" class="danger" type="button" hidden>Delete forever</button>
+  </div>
   <div id="rows"></div>
 </div>
 <div id="labelView">
@@ -411,6 +429,7 @@ document.addEventListener('keydown', e => {
 buildKeypad();
 // ---- Browse view: every capture, filterable, click through to edit ----
 let browseAll = [], browseFiltered = [], browseMode = false, view_ = 'label';
+let selecting = false, inTrash = false, lastPicked = null; const picked = new Set();
 const FILTER_KEYS = ['fStatus','fSplit','fModel','fSearch','fDay','fSort'];
 function fmtReading(d){
   if (!d || d.length !== N) return '';
@@ -422,7 +441,8 @@ function localDay(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart
 function shownValue(it){ return it.labels.reading || it.inferred || it.guess || ''; }
 function matchesFilters(it){
   const st = $('fStatus').value, sp = $('fSplit').value, md = $('fModel').value, q = $('fSearch').value.replace(/[^0-9]/g,''), day = $('fDay').value;
-  if (st === 'legacy'){ if (!it.legacy) return false; }
+  if (inTrash){ /* every row here is deleted; status filter doesn't apply */ }
+  else if (st === 'legacy'){ if (!it.legacy) return false; }
   else if (st === 'pipeline_rejected'){ if (!it.rejected) return false; }
   else if (st && it.status !== st) return false;
   const split = it.split || 'none'; if (sp && split !== sp) return false;
@@ -463,16 +483,20 @@ function rowCard(it){
   if (it.legacy) badges.push('<span class="badge warn">legacy '+(it.frame.width ? it.frame.width+'x'+it.frame.height : 'no frame')+'</span>');
   it.labels.flags.forEach(f => badges.push('<span class="badge warn">'+esc(f)+'</span>'));
   const modelTxt = it.guess ? 'model '+fmtReading(it.guess)+(differs ? ' <span class="diff">≠ label</span>' : '') : 'no model read';
-  b.innerHTML = '<img loading="lazy" alt="" src="/img?id='+it.id+'&name=crop">'+
+  b.innerHTML = '<img loading="lazy" alt="" src="/img?id='+it.id+'&name=crop'+(it.status === 'deleted' ? '&trash=1' : '')+'">'+
     '<div><div class="rc-val'+cls+'">'+(valTxt ? esc(valTxt)+'<small>gal · '+esc(digits)+source+'</small>' : 'no reading yet')+'</div>'+
     '<div class="rc-sub">'+(d ? esc(d.toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})) : '')+' · '+it.id+' · '+modelTxt+
-    (it.reason && it.rejected ? ' · '+esc(it.reason.slice(0,60)) : '')+'</div><div class="rc-badges">'+badges.join('')+'</div></div>';
-  b.onclick = () => openFromBrowse(it.id);
+    (it.reason && it.rejected ? ' · '+esc(it.reason.slice(0,60)) : '')+(it.deleted_at ? ' · deleted '+esc(new Date(it.deleted_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})) : '')+'</div><div class="rc-badges">'+badges.join('')+'</div></div>';
+  if (selecting){
+    b.classList.add('sel-mode'); b.classList.toggle('picked', picked.has(it.id));
+    const chk = document.createElement('span'); chk.className = 'chk'; b.insertBefore(chk, b.firstChild);
+  }
+  b.onclick = e => { if (selecting) pickRow(it.id, e.shiftKey); else openFromBrowse(it.id); };
   return b;
 }
 async function loadBrowse(){
-  const q = await api('/api/queue?mode=all&limit=500&blind='+blind());
-  browseAll = q.items; applyFilters();
+  const q = await api('/api/queue?mode='+(inTrash ? 'trash' : 'all')+'&limit=500&blind='+blind());
+  browseAll = q.items; picked.clear(); applyFilters();
 }
 async function refreshBrowseItem(id){
   const fresh = await api('/api/item?id='+id+'&blind='+blind());
@@ -492,10 +516,64 @@ async function backToBrowse(){
   if (cur) await refreshBrowseItem(cur.id).catch(() => {});
   setView('browse'); applyFilters();
 }
+
+
+// ---- multi-select, delete (to Trash), restore, delete forever ----
+function updateSelBar(){
+  $('selBar').hidden = !selecting; $('selToggle').textContent = selecting ? 'Done' : 'Select';
+  $('selCount').textContent = picked.size+' selected';
+  $('selDelete').hidden = inTrash; $('selRestore').hidden = !inTrash; $('selPurge').hidden = !inTrash;
+  ['selDelete','selRestore','selPurge'].forEach(id => { $(id).disabled = picked.size === 0; });
+}
+function pickRow(id, range){
+  if (range && lastPicked){
+    const a = browseFiltered.findIndex(x => x.id === lastPicked), b = browseFiltered.findIndex(x => x.id === id);
+    if (a >= 0 && b >= 0) browseFiltered.slice(Math.min(a,b), Math.max(a,b)+1).forEach(x => picked.add(x.id));
+  } else if (picked.has(id)) picked.delete(id); else picked.add(id);
+  lastPicked = id; applyFilters(); updateSelBar();
+}
+function setSelecting(on){ selecting = on; if (!on) picked.clear(); applyFilters(); updateSelBar(); }
+$('selToggle').onclick = () => setSelecting(!selecting);
+$('selAll').onclick = () => { browseFiltered.forEach(x => picked.add(x.id)); applyFilters(); updateSelBar(); };
+$('selNone').onclick = () => { picked.clear(); applyFilters(); updateSelBar(); };
+async function bulk(path, ids, extra){
+  return api(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(Object.assign({ids}, extra||{}))});
+}
+function pickedItems(){ return [...picked].map(id => browseAll.find(x => x.id === id)).filter(Boolean); }
+$('selDelete').onclick = async () => {
+  const its = pickedItems(); if (!its.length) return;
+  const labeled = its.filter(x => x.labels.reading || x.labels.digits && Object.keys(x.labels.digits).length).length;
+  const sealed = its.filter(x => x.split === 'test');
+  let msg = 'Move '+its.length+' capture'+(its.length>1?'s':'')+' to the Trash?\nThey leave the queue, lists and datasets; you can restore them from Trash.';
+  if (labeled) msg += '\n'+labeled+' have human labels (the labels stay in the audit log).';
+  if (!confirm(msg)) return;
+  if (sealed.length && !confirm(sealed.length+' of these are in the sealed TEST split. Deleting eval data is logged, and those values stay sealed (they can never be trained on). Delete them anyway?')) return;
+  try {
+    await bulk('/api/delete', its.map(x => x.id), {allow_sealed: sealed.length > 0});
+    toast('Moved '+its.length+' to Trash'); picked.clear(); await loadBrowse(); updateSelBar();
+  } catch (e) { toast('Delete failed: '+e.message); }
+};
+$('selRestore').onclick = async () => {
+  const ids = [...picked]; if (!ids.length) return;
+  try { await bulk('/api/restore', ids); toast('Restored '+ids.length); picked.clear(); await loadBrowse(); updateSelBar(); }
+  catch (e) { toast('Restore failed: '+e.message); }
+};
+$('selPurge').onclick = async () => {
+  const ids = [...picked]; if (!ids.length) return;
+  if (!confirm('Permanently delete '+ids.length+' capture'+(ids.length>1?'s':'')+' and their images? This cannot be undone.')) return;
+  try { await bulk('/api/purge', ids); toast('Deleted '+ids.length+' forever'); picked.clear(); await loadBrowse(); updateSelBar(); }
+  catch (e) { toast('Delete failed: '+e.message); }
+};
+// Trash is a different list (files live elsewhere): switching to/from it reloads.
+$('fStatus').addEventListener('change', () => {
+  const t = $('fStatus').value === 'trash';
+  if (t !== inTrash){ inTrash = t; picked.clear(); if (t) selecting = true; loadBrowse().then(updateSelBar); }
+});
+
 $('tabBrowse').onclick = async () => { if (view_ !== 'browse'){ setView('browse'); await loadBrowse(); } };
 $('tabLabel').onclick = async () => { browseMode = false; $('backBrowse').hidden = true; setView('label'); await loadList(false); };
 $('backBrowse').onclick = backToBrowse;
-FILTER_KEYS.forEach(k => { const el = $(k), saved = localStorage.getItem('wm_'+k); if (saved !== null) el.value = saved; el.addEventListener('input', applyFilters); el.addEventListener('change', applyFilters); });
+FILTER_KEYS.forEach(k => { const el = $(k), saved = localStorage.getItem('wm_'+k); if (saved !== null) el.value = saved === 'trash' ? '' : saved; el.addEventListener('input', applyFilters); el.addEventListener('change', applyFilters); });
 $('fReset').onclick = () => { FILTER_KEYS.forEach(k => { $(k).value = k === 'fSort' ? 'new' : ''; }); applyFilters(); };
 
 // ---- rotation + digit-box editor ----
@@ -717,7 +795,7 @@ def make_handler(store: LabelStore, token: str) -> type[BaseHTTPRequestHandler]:
                 self.wfile.write(page)
             elif path == "/api/queue":
                 mode = query.get("mode", "queue")
-                if mode not in ("queue", "all", "labeled", "excluded", "legacy", "inferred"):
+                if mode not in ("queue", "all", "labeled", "excluded", "legacy", "inferred", "trash"):
                     _json(self, 400, {"error": "bad mode"})
                     return
                 try:
@@ -745,7 +823,7 @@ def make_handler(store: LabelStore, token: str) -> type[BaseHTTPRequestHandler]:
                     self.send_response(404)
                     self.end_headers()
                     return
-                file_path = store.capture_files(capture_id).get(name)
+                file_path = store.capture_files(capture_id, trash=query.get("trash") == "1").get(name)
                 if file_path is None:
                     self.send_response(404)
                     self.end_headers()
@@ -766,7 +844,9 @@ def make_handler(store: LabelStore, token: str) -> type[BaseHTTPRequestHandler]:
             if not self._authorized({}):
                 self._deny(api=True)
                 return
-            if parsed.path not in ("/api/label", "/api/calibration"):
+            if parsed.path not in (
+                "/api/label", "/api/calibration", "/api/delete", "/api/restore", "/api/purge"
+            ):
                 self.send_response(404)
                 self.end_headers()
                 return
@@ -780,6 +860,28 @@ def make_handler(store: LabelStore, token: str) -> type[BaseHTTPRequestHandler]:
                     raise TypeError("body must be an object")
             except (ValueError, TypeError):
                 _json(self, 400, {"error": "bad request"})
+                return
+            if parsed.path in ("/api/delete", "/api/restore", "/api/purge"):
+                ids = body.get("ids")
+                if not (
+                    isinstance(ids, list)
+                    and 0 < len(ids) <= MAX_BULK_IDS
+                    and all(isinstance(i, str) for i in ids)
+                ):
+                    _json(self, 400, {"error": f"ids must be 1-{MAX_BULK_IDS} capture ids"})
+                    return
+                try:
+                    if parsed.path == "/api/delete":
+                        result = store.delete_captures(ids, allow_sealed=body.get("allow_sealed") is True)
+                    elif parsed.path == "/api/restore":
+                        result = store.restore_captures(ids)
+                    else:
+                        result = store.purge_captures(ids)
+                except LabelError as error:
+                    _json(self, 400, {"error": str(error)})
+                    return
+                LOG.info("%s %d capture(s)", parsed.path.rsplit("/", 1)[1], len(ids))
+                _json(self, 200, result)
                 return
             if parsed.path == "/api/calibration":
                 try:
