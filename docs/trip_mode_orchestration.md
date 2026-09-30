@@ -69,7 +69,10 @@ alarm and camera motion detection (retrying up to 3 times and only clearing the
 flag once water, alarm and both camera switches are verified; otherwise it keeps the flag and notifies), but only if that flag is set, so the owner's own return never re-arms.
 `trip_guest_visit_clear_on_return` clears the flag when you return home or trip
 mode ends, so a stale flag never carries into the next trip.
-Unlocking also docks all robot vacuums (`script.vacuum_dock_all_robots`), and
+Unlocking also docks all robot vacuums (`script.vacuum_dock_all_robots`, retried
+and verified for the den and X40; the upstairs robot has no HA state entity, so it
+is docked but not verified), turns the basement grow light off through
+`catnip_grow_light_reconcile`, and
 every final vacuum start boundary in `packages/xiaomi_robot_vacuum.yaml` vetoes
 while the flag is on, so queued or preparing runs cannot start. Both guest-visit automations also run at Home Assistant start (after a 1-minute
 delay): with a restored visit flag, an unlocked door reconciles to the open state

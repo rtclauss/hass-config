@@ -206,3 +206,13 @@ def test_unlock_reconciles_at_start_and_vacuum_boundaries_veto_visit() -> None:
     assert vacuum.count("input_boolean.trip_guest_visit_active") == vacuum.count(
         "entity_id: input_boolean.guest_mode"
     )
+
+
+def test_unlock_verifies_vacuums_stopped_and_grow_light_honors_visit() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    assert unlock.index("script.vacuum_dock_all_robots") > unlock.index("repeat:")
+    assert unlock.count("not is_state('vacuum.x40_ultra', 'cleaning')") == 2
+    assert unlock.count("not is_state('vacuum.valetudo_den', 'cleaning')") == 2
+
+    plants = (ROOT / "packages" / "plants.yaml").read_text(encoding="utf-8")
+    assert plants.count("input_boolean.trip_guest_visit_active") >= 3

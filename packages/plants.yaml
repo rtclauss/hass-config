@@ -209,6 +209,9 @@ automation:
       - condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
     action:
       - action: switch.turn_on
         target:
@@ -250,11 +253,15 @@ automation:
       - trigger: state
         entity_id: input_boolean.guest_mode
       - trigger: state
+        entity_id: input_boolean.trip_guest_visit_active
+      - trigger: state
         entity_id: switch.basement_grow_light
     action:
       - variables:
           should_be_on: >-
-            {{ now().hour >= 6 and is_state('input_boolean.guest_mode', 'off') }}
+            {{ now().hour >= 6
+               and is_state('input_boolean.guest_mode', 'off')
+               and is_state('input_boolean.trip_guest_visit_active', 'off') }}
       - choose:
           - conditions:
               - condition: template

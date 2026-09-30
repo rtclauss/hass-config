@@ -1081,8 +1081,6 @@ automation:
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.trip_guest_visit_active
-      - action: script.vacuum_dock_all_robots
-        continue_on_error: true
       - repeat:
           count: 3
           sequence:
@@ -1101,6 +1099,8 @@ automation:
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
                   state: "on"
+            - action: script.vacuum_dock_all_robots
+              continue_on_error: true
             - action: alarm_control_panel.alarm_disarm
               continue_on_error: true
               target:
@@ -1121,7 +1121,9 @@ automation:
                 {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
                    and is_state('switch.basement_water_shutoff', 'on')
                    and is_state('switch.livingroom_motion_detection', 'off')
-                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off') }}
+                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
+                   and not is_state('vacuum.valetudo_den', 'cleaning')
+                   and not is_state('vacuum.x40_ultra', 'cleaning') }}
               timeout: "00:00:10"
               continue_on_timeout: true
             - alias: "still a guest visit"
@@ -1145,7 +1147,9 @@ automation:
                     {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
                        and is_state('switch.basement_water_shutoff', 'on')
                        and is_state('switch.livingroom_motion_detection', 'off')
-                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off') }}
+                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
+                       and not is_state('vacuum.valetudo_den', 'cleaning')
+                       and not is_state('vacuum.x40_ultra', 'cleaning') }}
               then:
                 - action: notify.mobile_app_wethop
                   continue_on_error: true
@@ -1162,7 +1166,7 @@ automation:
             the water is {{ states('switch.basement_water_shutoff') }}, living-room camera
             motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
             motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}.
-            The guest may trigger the alarm, be photographed, or have no water.
+            The guest may trigger the alarm, be photographed, have no water, or meet a running vacuum (den {{ states('vacuum.valetudo_den') }}, X40 {{ states('vacuum.x40_ultra') }}).
 
   - alias: trip_guest_door_lock_close_house
     id: trip_guest_door_lock_close_house
