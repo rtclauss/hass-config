@@ -242,3 +242,13 @@ def test_startup_conditions_are_checked_after_the_settle_delay() -> None:
         assert "trigger.platform == 'homeassistant'" in cond
         action = block[block.index("    action:\n") :]
         assert action.index('delay: "00:01:00"') < action.index("repeat:")
+
+
+def test_guest_visit_automations_restart_so_startup_run_cannot_drop_a_transition() -> None:
+    for automation_id in (
+        "trip_guest_door_unlock_open_house",
+        "trip_guest_door_lock_close_house",
+    ):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        assert "mode: restart" in block
+        assert "mode: single" not in block
