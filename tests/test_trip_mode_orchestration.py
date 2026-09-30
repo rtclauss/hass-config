@@ -211,8 +211,21 @@ def test_unlock_reconciles_at_start_and_vacuum_boundaries_veto_visit() -> None:
 def test_unlock_verifies_vacuums_stopped_and_grow_light_honors_visit() -> None:
     unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
     assert unlock.index("script.vacuum_dock_all_robots") > unlock.index("repeat:")
-    assert unlock.count("not is_state('vacuum.x40_ultra', 'cleaning')") == 2
-    assert unlock.count("not is_state('vacuum.valetudo_den', 'cleaning')") == 2
+    assert unlock.count("states('vacuum.x40_ultra') in ['docked', 'idle']") == 2
+    assert unlock.count("states('vacuum.valetudo_den') in ['docked', 'idle']") == 2
 
     plants = (ROOT / "packages" / "plants.yaml").read_text(encoding="utf-8")
     assert plants.count("input_boolean.trip_guest_visit_active") >= 3
+
+
+def test_startup_does_not_rewrite_flag_and_lights_off_rechecks_visit() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    turn_on = unlock.index("action: input_boolean.turn_on")
+    assert "trigger.platform != 'homeassistant'" in unlock[:turn_on]
+
+    off = _automation_block(TRIPS_PATH, "vacation_lights_off")
+    assert off.count("input_boolean.trip_guest_visit_active") == 3
+    assert off.rindex("input_boolean.trip_guest_visit_active") < off.index(
+        "script.leave_home_transition"
+    )
+    assert off.index("action: fan.turn_off") > off.index("during the light fade")

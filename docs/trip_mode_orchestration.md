@@ -70,7 +70,7 @@ flag once water, alarm and both camera switches are verified; otherwise it keeps
 `trip_guest_visit_clear_on_return` clears the flag when you return home or trip
 mode ends, so a stale flag never carries into the next trip.
 Unlocking also docks all robot vacuums (`script.vacuum_dock_all_robots`, retried
-and verified for the den and X40; the upstairs robot has no HA state entity, so it
+and verified for the den and X40, which must report `docked` or `idle`; the upstairs robot has no HA state entity, so it
 is docked but not verified), turns the basement grow light off through
 `catnip_grow_light_reconcile`, and
 every final vacuum start boundary in `packages/xiaomi_robot_vacuum.yaml` vetoes

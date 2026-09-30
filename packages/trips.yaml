@@ -963,6 +963,10 @@ automation:
             - light.outside_south_west_garage
             - light.outside_front_door
           transition: 240
+      - alias: "no guest visit started during the light fade"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       # - action: light.turn_off
       #   entity_id: "all"
       - action: fan.turn_off
@@ -972,6 +976,10 @@ automation:
         data:
           message: Lights off while you're away.
       - delay: 25
+      - alias: "no guest visit started during the light fade"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - action: script.leave_home_transition
 
   - id: vacuum_on_trip
@@ -1078,9 +1086,13 @@ automation:
             value_template: "{{ trigger.platform == 'homeassistant' }}"
         then:
           - delay: "00:01:00"
-      - action: input_boolean.turn_on
-        target:
-          entity_id: input_boolean.trip_guest_visit_active
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform != 'homeassistant' }}"
+        then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.trip_guest_visit_active
       - repeat:
           count: 3
           sequence:
@@ -1122,8 +1134,8 @@ automation:
                    and is_state('switch.basement_water_shutoff', 'on')
                    and is_state('switch.livingroom_motion_detection', 'off')
                    and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
-                   and not is_state('vacuum.valetudo_den', 'cleaning')
-                   and not is_state('vacuum.x40_ultra', 'cleaning') }}
+                   and states('vacuum.valetudo_den') in ['docked', 'idle']
+                   and states('vacuum.x40_ultra') in ['docked', 'idle'] }}
               timeout: "00:00:10"
               continue_on_timeout: true
             - alias: "still a guest visit"
@@ -1148,8 +1160,8 @@ automation:
                        and is_state('switch.basement_water_shutoff', 'on')
                        and is_state('switch.livingroom_motion_detection', 'off')
                        and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
-                       and not is_state('vacuum.valetudo_den', 'cleaning')
-                       and not is_state('vacuum.x40_ultra', 'cleaning') }}
+                       and states('vacuum.valetudo_den') in ['docked', 'idle']
+                       and states('vacuum.x40_ultra') in ['docked', 'idle'] }}
               then:
                 - action: notify.mobile_app_wethop
                   continue_on_error: true
@@ -1166,7 +1178,7 @@ automation:
             the water is {{ states('switch.basement_water_shutoff') }}, living-room camera
             motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
             motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}.
-            The guest may trigger the alarm, be photographed, have no water, or meet a running vacuum (den {{ states('vacuum.valetudo_den') }}, X40 {{ states('vacuum.x40_ultra') }}).
+            The guest may trigger the alarm, be photographed, have no water, or meet a vacuum that has not docked (den {{ states('vacuum.valetudo_den') }}, X40 {{ states('vacuum.x40_ultra') }}).
 
   - alias: trip_guest_door_lock_close_house
     id: trip_guest_door_lock_close_house
