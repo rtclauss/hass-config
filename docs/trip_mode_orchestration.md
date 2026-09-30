@@ -57,6 +57,43 @@ floor. Only the main-floor X40 mops; the upstairs and den robots are vacuum-only
 Trip-mode vacation simulation is still allowed because it is an exterior/common-
 area presence signal and is idempotently controlled by `script.house_transition`.
 
+## Guest Cat Check (Front Door)
+
+While `input_boolean.trip` is on and `binary_sensor.bayesian_zeke_home` is off,
+unlocking `lock.front_door_lock` (`trip_guest_door_unlock_open_house`) turns
+`switch.basement_water_shutoff` on, turns off the indoor camera motion-detection
+switches, disarms `alarm_control_panel.home_alarm`, and
+sets `input_boolean.trip_guest_visit_active`. Locking the door again
+(`trip_guest_door_lock_close_house`) turns the water back off, re-arms the
+alarm and camera motion detection (retrying up to 3 times and only clearing the
+flag once water, alarm and both camera switches are verified; otherwise it keeps the flag and notifies), but only if that flag is set, so the owner's own return never re-arms.
+`trip_guest_visit_clear_on_return` clears the flag when you return home or trip
+mode ends, so a stale flag never carries into the next trip.
+Unlocking also docks all robot vacuums (`script.vacuum_dock_all_robots`, retried
+and verified for the den and X40, which must report `docked` or `idle`; the upstairs robot has no HA state entity, so it
+is docked but not verified), turns the basement grow light off through
+`catnip_grow_light_reconcile`, and
+every final vacuum start boundary in `packages/xiaomi_robot_vacuum.yaml` vetoes
+while the flag is on, so queued or preparing runs cannot start. Both guest-visit automations use `mode: restart`, so a real lock or unlock during
+the startup settle delay supersedes the startup run instead of being dropped.
+Both also run at Home Assistant start. Their trip, presence
+and flag checks for that path run after a 1-minute settle delay (state-triggered
+runs check immediately): with a restored visit flag, an unlocked door reconciles to the open state
+and a locked door to the secured state. Both the unlock and relock sequences re-check the door, trip mode, presence and
+the visit flag before each attempt, before each state-changing step and after each
+wait (a single in-flight service call can still complete after a concurrent
+transition), and abort if the visit
+state has changed. `vacation_lights_on` (including after its random delay) and
+`vacation_lights_off` are also vetoed during a visit. While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
+`water_shutoff_on_trip` skips its 4-hour shutoff while the flag is on; the relock
+shuts the water off instead. If the alarm does not disarm on unlock, a push says so.
+
+Trigger source: `lock.front_door_lock` is a virtual optimistic template lock backed
+by `input_boolean.front_door_lock`; nothing in HA reads the physical deadbolt. The
+guest visit therefore starts only when that virtual lock is unlocked (HomeKit,
+Siri, a dashboard button), not from the keypad or thumbturn. Retarget both
+automations if a real lock entity is added.
+
 ## Manual Verification
 
 1. Turn `input_boolean.trip` on and confirm `switch.vacation_simulation` turns on.
