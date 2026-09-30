@@ -200,7 +200,7 @@ def test_relock_reconciles_on_homeassistant_start() -> None:
 def test_unlock_reconciles_at_start_and_vacuum_boundaries_veto_visit() -> None:
     unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
     assert "trigger: homeassistant" in unlock
-    assert "at HA start" in unlock
+    assert "HA-start runs are checked after the settle delay" in unlock
 
     vacuum = (ROOT / "packages" / "xiaomi_robot_vacuum.yaml").read_text(encoding="utf-8")
     assert vacuum.count("input_boolean.trip_guest_visit_active") == vacuum.count(
