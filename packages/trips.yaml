@@ -1058,7 +1058,14 @@ automation:
         not_from:
           - unknown
           - unavailable
+      - trigger: homeassistant
+        event: start
     condition:
+      - alias: "at HA start, only reconcile a restored visit"
+        condition: template
+        value_template: >-
+          {{ trigger.platform != 'homeassistant'
+             or is_state('input_boolean.trip_guest_visit_active', 'on') }}
       - condition: state
         entity_id: input_boolean.trip
         state: "on"
@@ -1066,6 +1073,11 @@ automation:
         entity_id: binary_sensor.bayesian_zeke_home
         state: "off"
     action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: "00:01:00"
       - action: input_boolean.turn_on
         target:
           entity_id: input_boolean.trip_guest_visit_active
