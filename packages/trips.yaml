@@ -1141,14 +1141,18 @@ automation:
                   - switch.tikiroomcam_tikiroom_motion_detection
             - wait_template: >-
                 {{ is_state('switch.basement_water_shutoff', 'off')
-                   and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away'] }}
+                   and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away']
+                   and is_state('switch.livingroom_motion_detection', 'on')
+                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
               timeout: "00:00:20"
               continue_on_timeout: true
             - if:
                 - condition: template
                   value_template: >-
                     {{ is_state('switch.basement_water_shutoff', 'off')
-                       and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away'] }}
+                       and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away']
+                       and is_state('switch.livingroom_motion_detection', 'on')
+                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
               then:
                 - action: input_boolean.turn_off
                   target:
@@ -1164,8 +1168,10 @@ automation:
         data:
           title: "Guest visit: house NOT secured"
           message: >-
-            Front door locked but the water is {{ states('switch.basement_water_shutoff') }}
-            and the alarm is {{ states('alarm_control_panel.home_alarm') }}. Visit flag kept;
+            Front door locked but the water is {{ states('switch.basement_water_shutoff') }},
+            the alarm is {{ states('alarm_control_panel.home_alarm') }}, living-room camera
+            motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
+            motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}. Visit flag kept;
             it retries on the next lock event.
 
   - alias: trip_guest_visit_clear_on_return

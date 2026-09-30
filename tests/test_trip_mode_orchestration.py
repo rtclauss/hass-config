@@ -137,3 +137,11 @@ def test_guest_visit_hardening() -> None:
         ROOT / "packages" / "utilities.yaml", "water_shutoff_on_trip"
     )
     assert "input_boolean.trip_guest_visit_active" in shutoff
+
+
+def test_relock_verifies_camera_switches_before_clearing_flag() -> None:
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+    verify = lock[lock.index("wait_template") : lock.index("input_boolean.turn_off")]
+
+    assert "is_state('switch.livingroom_motion_detection', 'on')" in verify
+    assert "is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on')" in verify

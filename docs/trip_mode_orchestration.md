@@ -66,7 +66,7 @@ switches, disarms `alarm_control_panel.home_alarm`, and
 sets `input_boolean.trip_guest_visit_active`. Locking the door again
 (`trip_guest_door_lock_close_house`) turns the water back off, re-arms the
 alarm and camera motion detection (retrying up to 3 times and only clearing the
-flag once verified; otherwise it keeps the flag and notifies), but only if that flag is set, so the owner's own return never re-arms.
+flag once water, alarm and both camera switches are verified; otherwise it keeps the flag and notifies), but only if that flag is set, so the owner's own return never re-arms.
 `trip_guest_visit_clear_on_return` clears the flag when you return home or trip
 mode ends, so a stale flag never carries into the next trip.
 While the flag is on, `vacuum_on_trip` and `vacuum_flying_home` are vetoed.
