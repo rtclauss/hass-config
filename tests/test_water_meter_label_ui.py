@@ -283,3 +283,23 @@ def test_editor_pivots_rotation_on_the_roi_like_the_reader(server) -> None:
     html = _request(port, "GET", "/")[2].decode()
     assert "px = r[0]+r[2]/2, py = r[1]+r[3]/2" in html
     assert "c.translate(px, py)" in html
+
+
+def test_page_has_a_browse_view_with_filters_and_click_through(server) -> None:
+    port, _, _ = server
+    html = _request(port, "GET", "/")[2].decode()
+    for marker in ('id="tabBrowse"', 'id="browseView"', 'id="fStatus"', 'id="fSplit"', 'id="fModel"',
+                   'id="fSearch"', 'id="fDay"', 'id="fSort"', 'id="rows"', "openFromBrowse", 'id="backBrowse"',
+                   "Disagrees with model", "pipeline_rejected"):
+        assert marker in html, marker
+
+
+def test_browse_feed_carries_what_the_list_needs(cal_server) -> None:
+    port, _ = cal_server
+    status, _, body = _request(port, "GET", "/api/queue?mode=all&limit=500")
+    item = json.loads(body)["items"][0]
+    for key in ("id", "status", "split", "scheduled_split", "labels", "inferred", "guess", "rejected",
+                "reason", "legacy", "frame"):
+        assert key in item, key
+    cal = json.loads(_request(port, "GET", "/api/calibration")[2])
+    assert cal["decimal_places"] == 1  # the list formats 02148506 as 214850.6

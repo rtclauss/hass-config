@@ -93,6 +93,7 @@ def calibration_view(config: CalibrationConfig) -> dict:
         "capture_width": config.capture_width,
         "capture_height": config.capture_height,
         "digit_count": config.digit_count,
+        "decimal_places": config.decimal_places,
     }
 
 PAGE = r"""<!doctype html>
@@ -151,6 +152,24 @@ details{margin-top:8px}
 #preview canvas{border:1px solid var(--line);border-radius:6px;background:var(--card);height:64px;width:auto}
 .nudge button,.row .sm{min-height:44px;min-width:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:1.1rem}
 .badge.embargo{color:var(--muted)}
+.tabs{display:flex;gap:4px}
+.tab{min-height:44px;padding:0 16px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-weight:600}
+.tab.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+#browseView{max-width:980px;margin:0 auto;padding:12px;display:grid;gap:12px}
+#filters .row select,#filters .row input{min-height:44px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:4px 8px}
+#fSearch{flex:1 1 180px;min-width:140px}
+.rowcard{width:100%;display:grid;grid-template-columns:132px 1fr;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;text-align:left}
+.rowcard:hover,.rowcard:focus{border-color:var(--accent);outline:none}
+.rowcard img{width:132px;height:auto;min-height:30px;background:#000;border-radius:6px;image-rendering:pixelated}
+.rc-val{font-size:1.25rem;font-weight:700;font-variant-numeric:tabular-nums}
+.rc-val small{font-weight:400;color:var(--muted);font-size:.8rem;margin-left:6px}
+.rc-val.inf{font-style:italic;color:var(--warn)}
+.rc-val.none{color:var(--muted);font-weight:400}
+.rc-sub{font-size:.8rem;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.rc-sub .diff{color:var(--bad);font-weight:600}
+.rc-badges{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.rc-badges .badge{font-size:.72rem;padding:0 8px}
+@media (max-width:520px){.rowcard{grid-template-columns:96px 1fr}.rowcard img{width:96px}}
 .badge.warn{color:var(--warn);border-color:var(--warn)}
 button{cursor:pointer}
 </style>
@@ -158,12 +177,38 @@ button{cursor:pointer}
 <body>
 <header>
   <h1>Meter labels <span id="depth" class="chip"></span></h1>
+  <nav class="tabs" aria-label="views">
+    <button id="tabLabel" class="tab on" type="button">Label</button>
+    <button id="tabBrowse" class="tab" type="button">Browse</button>
+  </nav>
   <select id="mode" aria-label="List">
     <option value="queue">Queue</option><option value="all">All</option><option value="labeled">Labeled</option><option value="excluded">Rejected frames</option><option value="legacy">Legacy frames</option><option value="inferred">Inferred</option>
   </select>
   <label class="chip"><input type="checkbox" id="blind"> Blind</label>
 </header>
 <div id="toast" role="status"></div>
+<div id="browseView" hidden>
+  <section class="card" id="filters">
+    <div class="row">
+      <select id="fStatus" aria-label="status"><option value="">Any status</option><option value="unlabeled">Unlabeled</option>
+        <option value="labeled">Labeled</option><option value="inferred">Inferred</option><option value="partial">Partial</option>
+        <option value="excluded">Rejected frames</option><option value="legacy">Legacy frames</option><option value="pipeline_rejected">Rejected by pipeline</option></select>
+      <select id="fSplit" aria-label="split"><option value="">Any split</option><option value="train">train</option><option value="verify">verify</option>
+        <option value="test">test</option><option value="embargo">embargo</option><option value="none">no split yet</option></select>
+      <select id="fModel" aria-label="model agreement"><option value="">Any model read</option><option value="disagrees">Disagrees with model</option>
+        <option value="agrees">Agrees with model</option><option value="nomodel">No model read</option></select>
+    </div>
+    <div class="row">
+      <input id="fSearch" inputmode="decimal" placeholder="reading, e.g. 214850.6" aria-label="search reading" autocomplete="off">
+      <input id="fDay" type="date" aria-label="day">
+      <select id="fSort" aria-label="sort"><option value="new">Newest first</option><option value="old">Oldest first</option>
+        <option value="high">Value high &rarr; low</option><option value="low">Value low &rarr; high</option></select>
+    </div>
+    <div class="row"><span id="browseCount" class="chip"></span><button id="fReset" class="chip" type="button">Reset filters</button></div>
+  </section>
+  <div id="rows"></div>
+</div>
+<div id="labelView">
 <main>
   <section class="card" id="viewer">
     <div class="imgbox"><canvas id="roiView" hidden></canvas><img id="crop" alt="meter display crop"></div>
@@ -216,11 +261,13 @@ button{cursor:pointer}
     <div id="preview" aria-label="digit crops preview"></div>
   </details>
 </section>
-<div class="bar">
+<div class="bar" id="labelBar">
+  <button id="backBrowse" type="button" hidden>&#9776; List</button>
   <button id="prev" type="button">&larr; Prev</button>
   <button id="skip" type="button">Skip</button>
   <button id="saveDigit" type="button">Save digit</button>
   <button id="saveReading" type="button" class="primary">Save reading</button>
+</div>
 </div>
 <script>
 const N = __DIGITS__;
@@ -319,16 +366,19 @@ async function saveReading(){
   if (!cur) return;
   if (cells.some(c => c === '')){ toast('Fill all '+N+' digits first'); return; }
   await post({capture_id: cur.id, kind:'reading', value: cells.join('')});
-  toast('Saved reading'); await loadList(true);
+  toast('Saved reading');
+  if (browseMode){ await refreshBrowseItem(cur.id); await show(cur.id); } else await loadList(true);
 }
 async function saveDigit(){
   if (!cur || cells[sel] === ''){ toast('Pick a digit first'); return; }
   await post({capture_id: cur.id, kind:'digit', position: sel, value: cells[sel]});
-  toast('Saved digit '+(sel+1)); await show(cur.id);
+  toast('Saved digit '+(sel+1)); if (browseMode) await refreshBrowseItem(cur.id); await show(cur.id);
 }
 async function flag(name, value){
   if (!cur) return; await post({capture_id: cur.id, kind:'flag', flag:name, value:value});
-  toast(name+(value?' set':' cleared')); if (value && (name==='unreadable' || name==='bad_frame')) await loadList(true);
+  toast(name+(value?' set':' cleared'));
+  if (browseMode){ await refreshBrowseItem(cur.id); await show(cur.id); }
+  else if (value && (name==='unreadable' || name==='bad_frame')) await loadList(true);
 }
 async function loadStats(){
   const s = await api('/api/stats');
@@ -359,6 +409,95 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
 });
 buildKeypad();
+// ---- Browse view: every capture, filterable, click through to edit ----
+let browseAll = [], browseFiltered = [], browseMode = false, view_ = 'label';
+const FILTER_KEYS = ['fStatus','fSplit','fModel','fSearch','fDay','fSort'];
+function fmtReading(d){
+  if (!d || d.length !== N) return '';
+  const dp = (calib && calib.decimal_places) || 0;
+  return (dp ? d.slice(0, N-dp)+'.'+d.slice(N-dp) : d).replace(/^0+(?=\d)/, '');
+}
+function captureDate(id){ const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(id); return m ? new Date(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6])) : null; }
+function localDay(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function shownValue(it){ return it.labels.reading || it.inferred || it.guess || ''; }
+function matchesFilters(it){
+  const st = $('fStatus').value, sp = $('fSplit').value, md = $('fModel').value, q = $('fSearch').value.replace(/[^0-9]/g,''), day = $('fDay').value;
+  if (st === 'legacy'){ if (!it.legacy) return false; }
+  else if (st === 'pipeline_rejected'){ if (!it.rejected) return false; }
+  else if (st && it.status !== st) return false;
+  const split = it.split || 'none'; if (sp && split !== sp) return false;
+  const human = it.labels.reading;
+  if (md === 'disagrees' && !(human && it.guess && human !== it.guess)) return false;
+  if (md === 'agrees' && !(human && it.guess && human === it.guess)) return false;
+  if (md === 'nomodel' && it.guess) return false;
+  if (q && ![it.labels.reading, it.inferred, it.guess].some(v => v && v.includes(q))) return false;
+  if (day){ const d = captureDate(it.id); if (!d || localDay(d) !== day) return false; }
+  return true;
+}
+function applyFilters(){
+  FILTER_KEYS.forEach(k => localStorage.setItem('wm_'+k, $(k).value));
+  browseFiltered = browseAll.filter(matchesFilters);
+  const sort = $('fSort').value, val = it => shownValue(it);
+  browseFiltered.sort((a, b) => sort === 'old' ? (a.id < b.id ? -1 : 1) : sort === 'high' ? (val(b) > val(a) ? 1 : val(b) < val(a) ? -1 : (a.id < b.id ? 1 : -1))
+    : sort === 'low' ? (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : (a.id < b.id ? -1 : 1)) : (a.id < b.id ? 1 : -1));
+  $('browseCount').textContent = browseFiltered.length+' of '+browseAll.length;
+  const box = $('rows'); box.innerHTML = '';
+  if (!browseFiltered.length){ box.innerHTML = '<p class="meta">Nothing matches these filters.</p>'; return; }
+  const frag = document.createDocumentFragment();
+  browseFiltered.forEach(it => frag.appendChild(rowCard(it)));
+  box.appendChild(frag);
+}
+function esc(t){ return String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function rowCard(it){
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'rowcard'; b.dataset.id = it.id;
+  const human = it.labels.reading, d = captureDate(it.id);
+  const valTxt = human ? fmtReading(human) : it.inferred ? fmtReading(it.inferred) : it.guess ? fmtReading(it.guess) : '';
+  const cls = human ? '' : it.inferred ? ' inf' : ' none';
+  const digits = human || it.inferred || it.guess || '';
+  const source = human ? '' : it.inferred ? ' (inferred)' : ' (model read, unreviewed)';
+  const differs = human && it.guess && human !== it.guess;
+  const badges = [];
+  badges.push('<span class="badge '+(it.split||it.scheduled_split||'')+'">'+(it.split ? it.split : 'will be '+it.scheduled_split)+'</span>');
+  badges.push('<span class="badge">'+it.status+'</span>');
+  if (it.rejected) badges.push('<span class="badge" style="color:var(--bad)">pipeline rejected</span>');
+  if (it.legacy) badges.push('<span class="badge warn">legacy '+(it.frame.width ? it.frame.width+'x'+it.frame.height : 'no frame')+'</span>');
+  it.labels.flags.forEach(f => badges.push('<span class="badge warn">'+esc(f)+'</span>'));
+  const modelTxt = it.guess ? 'model '+fmtReading(it.guess)+(differs ? ' <span class="diff">≠ label</span>' : '') : 'no model read';
+  b.innerHTML = '<img loading="lazy" alt="" src="/img?id='+it.id+'&name=crop">'+
+    '<div><div class="rc-val'+cls+'">'+(valTxt ? esc(valTxt)+'<small>gal · '+esc(digits)+source+'</small>' : 'no reading yet')+'</div>'+
+    '<div class="rc-sub">'+(d ? esc(d.toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})) : '')+' · '+it.id+' · '+modelTxt+
+    (it.reason && it.rejected ? ' · '+esc(it.reason.slice(0,60)) : '')+'</div><div class="rc-badges">'+badges.join('')+'</div></div>';
+  b.onclick = () => openFromBrowse(it.id);
+  return b;
+}
+async function loadBrowse(){
+  const q = await api('/api/queue?mode=all&limit=500&blind='+blind());
+  browseAll = q.items; applyFilters();
+}
+async function refreshBrowseItem(id){
+  const fresh = await api('/api/item?id='+id+'&blind='+blind());
+  const i = browseAll.findIndex(x => x.id === id); if (i >= 0) browseAll[i] = fresh;
+}
+function setView(v){
+  view_ = v; $('browseView').hidden = v !== 'browse'; $('labelView').hidden = v !== 'label';
+  $('tabBrowse').classList.toggle('on', v === 'browse'); $('tabLabel').classList.toggle('on', v === 'label');
+  $('mode').hidden = v === 'browse'; $('depth').hidden = v === 'browse';
+}
+async function openFromBrowse(id){
+  browseMode = true; items = browseFiltered.slice(); idx = Math.max(0, items.findIndex(x => x.id === id));
+  setView('label'); $('backBrowse').hidden = false; window.scrollTo(0, 0);
+  await show(id);
+}
+async function backToBrowse(){
+  if (cur) await refreshBrowseItem(cur.id).catch(() => {});
+  setView('browse'); applyFilters();
+}
+$('tabBrowse').onclick = async () => { if (view_ !== 'browse'){ setView('browse'); await loadBrowse(); } };
+$('tabLabel').onclick = async () => { browseMode = false; $('backBrowse').hidden = true; setView('label'); await loadList(false); };
+$('backBrowse').onclick = backToBrowse;
+FILTER_KEYS.forEach(k => { const el = $(k), saved = localStorage.getItem('wm_'+k); if (saved !== null) el.value = saved; el.addEventListener('input', applyFilters); el.addEventListener('change', applyFilters); });
+$('fReset').onclick = () => { FILTER_KEYS.forEach(k => { $(k).value = k === 'fSort' ? 'new' : ''; }); applyFilters(); };
+
 // ---- rotation + digit-box editor ----
 let calib = null, frameImg = null, rot = 0, boxes = [], bsel = 0, view = null, drag = null;
 const rc = document.createElement('canvas');
@@ -499,6 +638,7 @@ $('crop').addEventListener('load', () => { if (!$('crop').hidden) checkCutoff($(
   try { await loadCalib(); } catch (e) { /* editor is optional */ }
   const want = qs.get('item');
   await loadList(false);
+  if (qs.get('view') === 'browse' && !want) $('tabBrowse').click();
   if (want && /^\d{8}T\d{6}Z$/.test(want)) { try { await show(want); } catch (e) { toast('Capture not found'); } }
 })();
 </script>

@@ -450,6 +450,14 @@ unresolved-reading notification deep-links to `/?item=<capture_id>`.
   labeling verify/test items without anchoring. `reader.py` writes a
   `history/<stamp>_read.json` sidecar (raw digits, accepted, reason) that the
   queue uses.
+- **Browse tab:** every capture as a list (thumbnail, value as gallons and raw
+  digits, time, the model's read, split, status and flag badges) with filters -
+  status (unlabeled / labeled / inferred / partial / rejected frames / legacy /
+  rejected by the pipeline), split, model agreement ("Disagrees with model" finds
+  label-vs-pipeline mismatches), a reading search, a day picker - and sorting by
+  time or value. Click a row to edit it: Prev/Skip then walk the *filtered* list,
+  saving keeps you on the capture, and "List" returns with your filters intact
+  (they persist in the browser). `/?view=browse` opens it directly.
 - **Retention:** labeling snapshots the raw frame, crop, digit crops and the
   `calibration.json` in effect into `image_dir/labeled/<capture_id>/`, which no
   rotation code touches (`history/` rotates at 200 captures). Labels are an
