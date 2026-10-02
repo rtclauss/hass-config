@@ -25,7 +25,7 @@
 # Use the pinned interpreter from .python-version (for example via pyenv)
 python -m pip install --upgrade pip yamllint
 python scripts/check_ha_python_support.py --python-version-file .python-version
-uv run --with pytest pytest
+uv run --with pytest --with pyyaml --with jinja2 pytest
 python scripts/allium_weed_check.py --changed-from origin/develop
 ```
 
@@ -223,7 +223,7 @@ Software on the NUC:
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
   * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/main/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
-  * [Uplift Desk custom component](https://github.com/rtclauss/hass-uplift-desk) - Fork used for standing desk entities and controls in `packages/desk.yaml`.
+  * [Uplift Desk custom component](https://github.com/Bennett-Wendorf/hass-uplift-desk) - Upstream v2.0.0 supplies standing desk entities and controls in `packages/desk.yaml`. See [migration and verification notes](docs/uplift_desk.md).
   * ~~[Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)~~ Moving to Zigbee/Thread/Matter
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
   * [Home Assistant Google Drive Backup](https://github.com/sabeechen/hassio-google-drive-backup)
@@ -288,7 +288,7 @@ replacement below.
 | <a id="live-localtuya"></a>LocalTuya / Good Earth | Good Earth / Tuya LED flat panels in kitchen and laundry areas. |
 | <a id="live-rachio"></a>Rachio | Rachio Gen 3 irrigation controller and zone switches. |
 | <a id="live-smartthings"></a>SmartThings | The modified SmartThings Arrival Sensor is still paired via Zigbee2MQTT. |
-| <a id="live-uplift-desk"></a>Uplift Desk | Office standing desk using the [`rtclauss/hass-uplift-desk`](https://github.com/rtclauss/hass-uplift-desk) custom component fork. |
+| <a id="live-uplift-desk"></a>Uplift Desk | Office standing desk using upstream [`Bennett-Wendorf/hass-uplift-desk`](https://github.com/Bennett-Wendorf/hass-uplift-desk) v2.0.0 via the office Bluetooth proxy. [Configuration and verified heights](docs/uplift_desk.md). |
 | <a id="live-tesla"></a>Tesla | Tesla Model 3 (`Nigori`) on the custom Tesla integration. |
 | <a id="live-unifi"></a>UniFi | The `unifi` integration is active for network entities, WLANs, and device trackers, although exact hardware model inventory is no longer fully represented in Home Assistant. |
 | <a id="live-adaptive-lighting"></a>Adaptive Lighting | Active room-specific Adaptive Lighting instances across the lighting stack. |
