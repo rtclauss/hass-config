@@ -48,6 +48,21 @@ homeassistant:
       friendly_name: "Log Calendar Vacation Diagnostics"
       icon: mdi:clipboard-text-clock
 
+    automation.trip_guest_door_unlock_open_house:
+      <<: *customize
+      friendly_name: "Trip Guest Door Unlock"
+      icon: mdi:door-open
+
+    automation.trip_guest_door_lock_close_house:
+      <<: *customize
+      friendly_name: "Trip Guest Door Lock"
+      icon: mdi:door-closed-lock
+
+    automation.trip_guest_visit_clear_on_return:
+      <<: *customize
+      friendly_name: "Trip Guest Visit Clear"
+      icon: mdi:broom
+
     automation.trip_mode_watchdog_home_1h:
       <<: *customize
       friendly_name: "Trip Mode Watchdog"
@@ -898,8 +913,16 @@ automation:
           condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
     action:
       - delay: 00:{{ (range(5,45)|random|int) }}:00
+      - alias: "no guest visit started during the delay"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - action: scene.turn_on
         data:
           target: scene.vacation_group_{{ states("input_number.random_vacation_light_group")|int }}
@@ -927,6 +950,10 @@ automation:
           condition: state
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
     action:
       - action: script.lights_off_except
         data:
@@ -936,6 +963,10 @@ automation:
             - light.outside_south_west_garage
             - light.outside_front_door
           transition: 240
+      - alias: "no guest visit started during the light fade"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       # - action: light.turn_off
       #   entity_id: "all"
       - action: fan.turn_off
@@ -945,6 +976,10 @@ automation:
         data:
           message: Lights off while you're away.
       - delay: 25
+      - alias: "no guest visit started during the light fade"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - action: script.leave_home_transition
 
   - id: vacuum_on_trip
@@ -970,6 +1005,10 @@ automation:
         - alias: "guest mode off"
           condition: state
           entity_id: input_boolean.guest_mode
+          state: "off"
+        - alias: "no guest visit in progress"
+          condition: state
+          entity_id: input_boolean.trip_guest_visit_active
           state: "off"
     action:
       - action: script.trip_vacuum_main_and_upstairs_levels
@@ -1001,12 +1040,376 @@ automation:
         - condition: state
           entity_id: input_boolean.guest_mode
           state: "off"
+        - condition: state
+          entity_id: input_boolean.trip_guest_visit_active
+          state: "off"
     action:
       - action: script.trip_vacuum_main_and_upstairs_levels
         data:
           force_mop: true
           notify_message: >-
             Vacuuming the main and upstairs levels while you fly home 💺
+
+  - alias: trip_guest_door_unlock_open_house
+    id: trip_guest_door_unlock_open_house
+    description: >-
+      While on a trip and away, unlocking the (virtual) front door lock means a guest is
+      checking on the cats: turn the water main back on and disarm the alarm,
+      and remember the visit so the relock can undo it.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: lock.front_door_lock
+        to: unlocked
+        not_from:
+          - unknown
+          - unavailable
+      - trigger: homeassistant
+        event: start
+    condition:
+      - alias: "state-triggered runs check now; HA-start runs are checked after the settle delay"
+        condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: "00:01:00"
+          - condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "on"
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform != 'homeassistant' }}"
+        then:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.trip_guest_visit_active
+      - repeat:
+          count: 3
+          sequence:
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: script.vacuum_dock_all_robots
+              continue_on_error: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: alarm_control_panel.alarm_disarm
+              continue_on_error: true
+              target:
+                entity_id: alarm_control_panel.home_alarm
+              data:
+                code: !secret alarm_code
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_off
+              continue_on_error: true
+              target:
+                entity_id:
+                  - switch.livingroom_motion_detection
+                  - switch.tikiroomcam_tikiroom_motion_detection
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id: switch.basement_water_shutoff
+            - wait_template: >-
+                {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
+                   and is_state('switch.basement_water_shutoff', 'on')
+                   and is_state('switch.livingroom_motion_detection', 'off')
+                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
+                   and states('vacuum.valetudo_den') in ['docked', 'idle']
+                   and states('vacuum.x40_ultra') in ['docked', 'idle'] }}
+              timeout: "00:00:10"
+              continue_on_timeout: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: unlocked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ is_state('alarm_control_panel.home_alarm', 'disarmed')
+                       and is_state('switch.basement_water_shutoff', 'on')
+                       and is_state('switch.livingroom_motion_detection', 'off')
+                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')
+                       and states('vacuum.valetudo_den') in ['docked', 'idle']
+                       and states('vacuum.x40_ultra') in ['docked', 'idle'] }}
+              then:
+                - action: notify.mobile_app_wethop
+                  continue_on_error: true
+                  data:
+                    title: "Guest visit"
+                    message: "Front door unlocked during trip: alarm disarmed, cameras' motion detection off, water on."
+                - stop: "House ready for guest"
+      - action: notify.mobile_app_wethop
+        continue_on_error: true
+        data:
+          title: "Guest visit: house NOT ready"
+          message: >-
+            Front door unlocked but the alarm is {{ states('alarm_control_panel.home_alarm') }},
+            the water is {{ states('switch.basement_water_shutoff') }}, living-room camera
+            motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
+            motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}.
+            The guest may trigger the alarm, be photographed, have no water, or meet a vacuum that has not docked (den {{ states('vacuum.valetudo_den') }}, X40 {{ states('vacuum.x40_ultra') }}).
+
+  - alias: trip_guest_door_lock_close_house
+    id: trip_guest_door_lock_close_house
+    description: >-
+      When the front door locks again after a guest visit during a trip, turn
+      the water main back off and re-arm the alarm. Only acts if the unlock
+      automation started a visit, so it never re-arms on the owner's own return. Also runs at Home Assistant start so a restart mid-close
+      (or with a restored visit flag and a locked door) reconciles the secured state.
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: lock.front_door_lock
+        to: locked
+      - trigger: homeassistant
+        event: start
+    condition:
+      - alias: "state-triggered runs check now; HA-start runs are checked after the settle delay"
+        condition: or
+        conditions:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "on"
+              - condition: state
+                entity_id: input_boolean.trip
+                state: "on"
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
+    action:
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - delay: "00:01:00"
+          - condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "on"
+      - repeat:
+          count: 3
+          sequence:
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_off
+              continue_on_error: true
+              target:
+                entity_id: switch.basement_water_shutoff
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: alarm_control_panel.alarm_arm_away
+              continue_on_error: true
+              target:
+                entity_id: alarm_control_panel.home_alarm
+              data:
+                code: !secret alarm_code
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - action: switch.turn_on
+              continue_on_error: true
+              target:
+                entity_id:
+                  - switch.livingroom_motion_detection
+                  - switch.tikiroomcam_tikiroom_motion_detection
+            - wait_template: >-
+                {{ is_state('switch.basement_water_shutoff', 'off')
+                   and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away']
+                   and is_state('switch.livingroom_motion_detection', 'on')
+                   and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
+              timeout: "00:00:20"
+              continue_on_timeout: true
+            - alias: "still a guest visit"
+              condition: and
+              conditions:
+                - condition: state
+                  entity_id: lock.front_door_lock
+                  state: locked
+                - condition: state
+                  entity_id: input_boolean.trip
+                  state: "on"
+                - condition: state
+                  entity_id: binary_sensor.bayesian_zeke_home
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.trip_guest_visit_active
+                  state: "on"
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ is_state('switch.basement_water_shutoff', 'off')
+                       and states('alarm_control_panel.home_alarm') in ['arming', 'armed_away']
+                       and is_state('switch.livingroom_motion_detection', 'on')
+                       and is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on') }}
+              then:
+                - action: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.trip_guest_visit_active
+                - action: notify.mobile_app_wethop
+                  continue_on_error: true
+                  data:
+                    title: "Guest visit over"
+                    message: "Front door locked: alarm armed, cameras on, water off."
+                - stop: "House secured"
+      - action: notify.mobile_app_wethop
+        continue_on_error: true
+        data:
+          title: "Guest visit: house NOT secured"
+          message: >-
+            Front door locked but the water is {{ states('switch.basement_water_shutoff') }},
+            the alarm is {{ states('alarm_control_panel.home_alarm') }}, living-room camera
+            motion is {{ states('switch.livingroom_motion_detection') }} and Tiki-room camera
+            motion is {{ states('switch.tikiroomcam_tikiroom_motion_detection') }}. Visit flag kept;
+            it retries on the next lock event.
+
+  - alias: trip_guest_visit_clear_on_return
+    id: trip_guest_visit_clear_on_return
+    description: >-
+      Clears the guest-visit flag when the owner returns home or trip mode ends,
+      so a visit left open mid-trip cannot re-arm the alarm or shut the water
+      off on a later lock event.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        to: "on"
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "on"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.trip_guest_visit_active
 
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab
@@ -1084,6 +1487,8 @@ input_boolean:
     name: On a Trip
   house_unoccupied:
     name: House Unoccupied
+  trip_guest_visit_active:
+    name: Trip Guest Visit Active
 
 ########################
 # Input DateTimes

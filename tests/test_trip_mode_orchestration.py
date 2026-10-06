@@ -81,3 +81,174 @@ def test_trip_orchestration_doc_captures_owner_and_guest_policy() -> None:
         assert token in doc
 
     assert "docs/trip_mode_orchestration.md" in house_doc
+
+
+def test_guest_door_unlock_opens_house_and_lock_closes_it() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "entity_id: lock.front_door_lock" in unlock
+    assert "input_boolean.trip\n" in unlock
+    assert "binary_sensor.bayesian_zeke_home" in unlock
+    assert "action: alarm_control_panel.alarm_disarm" in unlock
+    assert "action: switch.turn_on" in unlock
+    assert "switch.basement_water_shutoff" in unlock
+
+    assert "to: locked" in lock
+    assert "input_boolean.trip_guest_visit_active" in lock
+    assert "action: alarm_control_panel.alarm_arm_away" in lock
+    assert "action: switch.turn_off" in lock
+    assert "switch.basement_water_shutoff" in lock
+
+
+def test_guest_visit_flag_clears_on_return_or_trip_end() -> None:
+    block = _automation_block(TRIPS_PATH, "trip_guest_visit_clear_on_return")
+
+    assert "entity_id: binary_sensor.bayesian_zeke_home" in block
+    assert "entity_id: input_boolean.trip\n" in block
+    assert "action: input_boolean.turn_off" in block
+    assert "input_boolean.trip_guest_visit_active" in block
+
+
+def test_guest_visit_disables_cameras_vetoes_vacuum_and_verifies_relock() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "switch.livingroom_motion_detection" in unlock
+    assert "switch.tikiroomcam_tikiroom_motion_detection" in unlock
+    assert "switch.livingroom_motion_detection" in lock
+
+    for automation_id in ("vacuum_on_trip", "vacuum_flying_home"):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        assert "input_boolean.trip_guest_visit_active" in block
+
+    # The flag is cleared only after the secured state is verified.
+    assert lock.index("wait_template") < lock.index("input_boolean.turn_off")
+    assert "House NOT secured" in lock or "NOT secured" in lock
+
+
+def test_guest_visit_hardening() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    assert "from: locked" not in unlock
+    assert "not_from:" in unlock
+    assert "NOT ready" in unlock
+
+    shutoff = _automation_block(
+        ROOT / "packages" / "utilities.yaml", "water_shutoff_on_trip"
+    )
+    assert "input_boolean.trip_guest_visit_active" in shutoff
+
+
+def test_relock_verifies_camera_switches_before_clearing_flag() -> None:
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+    verify = lock[lock.index("wait_template") : lock.index("input_boolean.turn_off")]
+
+    assert "is_state('switch.livingroom_motion_detection', 'on')" in verify
+    assert "is_state('switch.tikiroomcam_tikiroom_motion_detection', 'on')" in verify
+
+
+def test_unlock_verifies_water_alarm_and_cameras_before_success() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    verify = unlock[unlock.index("wait_template") : unlock.index("House ready for guest")]
+
+    assert "is_state('alarm_control_panel.home_alarm', 'disarmed')" in verify
+    assert "is_state('switch.basement_water_shutoff', 'on')" in verify
+    assert "is_state('switch.livingroom_motion_detection', 'off')" in verify
+    assert "is_state('switch.tikiroomcam_tikiroom_motion_detection', 'off')" in verify
+    assert "repeat:" in unlock
+
+
+def test_unlock_docks_vacuums_and_relock_aborts_if_unlocked() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "script.vacuum_dock_all_robots" in unlock
+    guard = 'alias: "still a guest visit"'
+    assert lock.count(guard) == 4
+    assert lock.index(guard) < lock.index("action: switch.turn_off")
+    assert lock.rindex(guard) > lock.index("wait_template")
+    assert lock.rindex(guard) < lock.index("input_boolean.turn_off")
+
+
+def test_visit_guards_unlock_loop_relock_presence_and_vacation_lights() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+    guard = 'alias: "still a guest visit"'
+
+    assert unlock.count(guard) == 5
+    assert unlock.index(guard) < unlock.index("alarm_disarm")
+    assert unlock.rindex(guard) > unlock.index("wait_template")
+    for block in (unlock, lock):
+        assert "input_boolean.trip\n" in block
+        assert "binary_sensor.bayesian_zeke_home" in block
+
+    lights_on = _automation_block(TRIPS_PATH, "vacation_lights_on")
+    lights_off = _automation_block(TRIPS_PATH, "vacation_lights_off")
+    assert lights_on.count("input_boolean.trip_guest_visit_active") == 2
+    assert lights_on.rindex("input_boolean.trip_guest_visit_active") > lights_on.index("delay:")
+    assert "input_boolean.trip_guest_visit_active" in lights_off
+
+
+def test_relock_reconciles_on_homeassistant_start() -> None:
+    lock = _automation_block(TRIPS_PATH, "trip_guest_door_lock_close_house")
+
+    assert "trigger: homeassistant" in lock
+    assert "event: start" in lock
+    assert lock.index("trigger.platform") < lock.index("repeat:")
+
+
+def test_unlock_reconciles_at_start_and_vacuum_boundaries_veto_visit() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    assert "trigger: homeassistant" in unlock
+    assert "HA-start runs are checked after the settle delay" in unlock
+
+    vacuum = (ROOT / "packages" / "xiaomi_robot_vacuum.yaml").read_text(encoding="utf-8")
+    assert vacuum.count("input_boolean.trip_guest_visit_active") == vacuum.count(
+        "entity_id: input_boolean.guest_mode"
+    )
+
+
+def test_unlock_verifies_vacuums_stopped_and_grow_light_honors_visit() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    assert unlock.index("script.vacuum_dock_all_robots") > unlock.index("repeat:")
+    assert unlock.count("states('vacuum.x40_ultra') in ['docked', 'idle']") == 2
+    assert unlock.count("states('vacuum.valetudo_den') in ['docked', 'idle']") == 2
+
+    plants = (ROOT / "packages" / "plants.yaml").read_text(encoding="utf-8")
+    assert plants.count("input_boolean.trip_guest_visit_active") >= 3
+
+
+def test_startup_does_not_rewrite_flag_and_lights_off_rechecks_visit() -> None:
+    unlock = _automation_block(TRIPS_PATH, "trip_guest_door_unlock_open_house")
+    turn_on = unlock.index("action: input_boolean.turn_on")
+    assert "trigger.platform != 'homeassistant'" in unlock[:turn_on]
+
+    off = _automation_block(TRIPS_PATH, "vacation_lights_off")
+    assert off.count("input_boolean.trip_guest_visit_active") == 3
+    assert off.rindex("input_boolean.trip_guest_visit_active") < off.index(
+        "script.leave_home_transition"
+    )
+    assert off.index("action: fan.turn_off") > off.index("during the light fade")
+
+
+def test_startup_conditions_are_checked_after_the_settle_delay() -> None:
+    for automation_id in (
+        "trip_guest_door_unlock_open_house",
+        "trip_guest_door_lock_close_house",
+    ):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        cond = block[block.index("    condition:\n") : block.index("    action:\n")]
+        assert "condition: or" in cond
+        assert "trigger.platform == 'homeassistant'" in cond
+        action = block[block.index("    action:\n") :]
+        assert action.index('delay: "00:01:00"') < action.index("repeat:")
+
+
+def test_guest_visit_automations_restart_so_startup_run_cannot_drop_a_transition() -> None:
+    for automation_id in (
+        "trip_guest_door_unlock_open_house",
+        "trip_guest_door_lock_close_house",
+    ):
+        block = _automation_block(TRIPS_PATH, automation_id)
+        assert "mode: restart" in block
+        assert "mode: single" not in block
