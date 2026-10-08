@@ -1,0 +1,71 @@
+name: Promotion Audit
+
+on:
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Days a file must be quiet before it counts as promotable"
+        required: false
+        default: "30"
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: promotion-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Promotion Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Run promotion audit
+        env:
+          DAYS: ${{ inputs.days || '30' }}
+        run: |
+          set -euo pipefail
+          python scripts/promotion_audit.py \
+            --days "$DAYS" \
+            --base origin/main \
+            --head origin/develop \
+            --output promotion-audit.md \
+            --files-out promotion-audit-files.txt
+          cat promotion-audit.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish promotion issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Promotion candidates: develop → main (weekly audit)"
+          gh label create promotion-audit \
+            --color 0e8a16 \
+            --description "Weekly develop to main promotion audit" 2>/dev/null || true
+          number=$(gh issue list --label promotion-audit --state open --limit 1 \
+            --json number --jq '.[0].number // empty')
+          if [[ -n "$number" ]]; then
+            gh issue edit "$number" --title "$title" --body-file promotion-audit.md
+          else
+            gh issue create --title "$title" --label promotion-audit --body-file promotion-audit.md
+          fi
+
+      - name: Upload promotable file list
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-audit-files
+          path: promotion-audit-files.txt

@@ -9,6 +9,7 @@
 - Do not push directly to `main`.
 - After HA soak testing, promote with a PR from `develop` to `main`.
 - Run `uv run --with pytest pytest` before PRs and merges.
+- A weekly `Promotion Audit` workflow keeps one issue (label `promotion-audit`) listing what is quiet enough to promote; see `docs/promotion_audit.md`.
 
 ## Reviews
 - Audit GraphQL `reviewThreads` before merge.
