@@ -77,6 +77,9 @@ def repo(tmp_path: Path) -> Path:
     )
     # Vendored integration touched recently: soaking.
     commit(tmp_path, {"custom_components/bar/y.py": "y = 1\n"}, 3, "add bar (#8)")
+    # An isolated file edited twice on develop (45d, 40d).
+    commit(tmp_path, {"packages/base.yaml": "a: 2\n"}, 45, "Edit base (#10)")
+    commit(tmp_path, {"packages/base.yaml": "a: 3\n"}, 40, "Edit base again (#11)")
     # Excluded by the exclusions list even though old.
     commit(tmp_path, {"packages/excl.yaml": "1\n"}, 45, "Add excluded (#5)")
     # Wide sweep: ignored for linking, so each file stands alone.
@@ -120,6 +123,50 @@ def test_promotable_files_are_isolated_and_quiet(repo: Path) -> None:
     assert "packages/excl.yaml" not in files
     # Meta files are never promoted on their own.
     assert "README.md" not in files
+
+
+def test_already_promoted_files_drop_out_of_the_delta(repo: Path) -> None:
+    # Promote A by copying it onto a branch of main (no merge, no shared ancestry).
+    git(repo, "checkout", "-q", "-b", "main_copied", "main")
+    git(repo, "checkout", "develop", "--", "packages/a1.yaml", "packages/a2.yaml")
+    git(repo, "commit", "-q", "-m", "copy A", when=NOW - DAY)
+    git(repo, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(repo, base="main_copied", head="develop", now=NOW)
+
+    assert "packages/a1.yaml" not in result.status
+    assert "packages/a1.yaml" not in result.promotable_files
+    assert "packages/a2.yaml" not in result.promotable_files
+    assert "packages/h1.yaml" in result.promotable_files  # still outstanding
+
+
+def test_older_develop_version_on_main_is_a_fast_forward(repo: Path) -> None:
+    # main holds the 45d version of base.yaml; develop has since edited it again (40d).
+    first = git(repo, "log", "--format=%H", "--grep=Edit base (#10)", "develop").strip()
+    git(repo, "checkout", "-q", "-b", "main_ff", "main")
+    git(repo, "checkout", first, "--", "packages/base.yaml")
+    git(repo, "commit", "-q", "-m", "promote base v1", when=NOW - DAY)
+    git(repo, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(repo, base="main_ff", head="develop", now=NOW)
+
+    assert "packages/base.yaml" in result.status
+    assert "packages/base.yaml" not in result.excluded
+    assert "packages/base.yaml" in result.promotable_files
+
+
+def test_independent_change_on_main_holds_the_file_back(repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "main_hotfix", "main")
+    commit(repo, {"packages/base.yaml": "a: hotfix\n"}, 1, "hotfix on main")
+    git(repo, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(repo, base="main_hotfix", head="develop", now=NOW)
+
+    assert result.excluded["packages/base.yaml"] == promotion_audit.DIVERGED_REASON
+    assert "packages/base.yaml" not in result.promotable_files
+    # Unrelated files are unaffected.
+    assert "packages/a1.yaml" in result.promotable_files
+    assert "Held back on purpose" in promotion_audit.render_markdown(result, repo)
 
 
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
@@ -206,6 +253,7 @@ def test_markdown_report_and_files_out(repo: Path, tmp_path_factory: pytest.Temp
     assert "## What is blocking the rest" in report
     assert "packages/hub.yaml" in report
     assert "held on purpose" in report
+    assert "must come from `develop`" in report
     assert len(report) < promotion_audit.MAX_BODY_CHARS
     lines = files_path.read_text(encoding="utf-8").splitlines()
     assert "A\tpackages/a1.yaml" in lines

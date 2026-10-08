@@ -23,6 +23,11 @@ python3 scripts/promotion_audit.py --output /tmp/audit.md --files-out /tmp/files
 
 ## The rule
 
+The outstanding delta is the tree difference between `main` and `develop`, so files that were
+already promoted (by copy or squash merge) drop out. A file that was also changed on `main`
+independently (a revert or hotfix) is held back, because promoting it would overwrite that
+change; a file whose `main` version is just an older `develop` version is fine.
+
 A file is **promotable** only if everything it was ever changed together with (the
 same first-parent change on `develop`: squash commit, PR merge, or direct commit)
 has also been quiet for N days (default 30). That stops half of a feature reaching
@@ -42,15 +47,15 @@ has also been quiet for N days (default 30). That stops half of a feature reachi
 ## Reading the report
 
 - **Promotable now** are *candidates*, not a guarantee. Some tests read shared files
-  such as `README.md`, and runtime dependencies are not visible to git. Build a branch off
-  `main`, copy the files from `develop`, and run `uv run --with pytest pytest` plus the HA
-  config check before opening the promotion PR.
+  such as `README.md`, and runtime dependencies are not visible to git. Run
+  `uv run --with pytest pytest` plus the HA config check on the result before promoting.
 - **Quiet but entangled** changes are old but share files with code that is still changing.
   The "What is blocking the rest" table names the recently changed files holding them up.
 - **Still soaking** changes touch files changed within the threshold.
 
-## Merging a promotion
+## Policy
 
-`.github/workflows/enforce-main-promotion.yml` requires PRs into `main` to come from
-`develop`. A partial promotion comes from a `promote/*` branch, so that check fails and
-needs a manual override. See #1089 / #1090 for the first one.
+`AGENTS.md` and `.github/workflows/enforce-main-promotion.yml` require PRs into `main` to
+come from `develop`. The audit is advisory and does not change that. Promoting only part of
+`develop` cannot satisfy the rule, so it is an exception that needs explicit owner approval
+each time (the owner approved one for #1089 / #1090). It is not a standing workflow.
