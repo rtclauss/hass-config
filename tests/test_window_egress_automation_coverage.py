@@ -82,7 +82,13 @@ def _script_block(path: Path, script_id: str) -> str:
 def test_motion_detected_on_trip_watches_all_known_window_and_egress_contacts() -> None:
     block = _automation_block(ALERTS_PATH, "motion_detected_on_trip")
 
-    assert "entity_id: binary_sensor.any_egress_open" in block
+    # Per-contact trigger (#1088): the aggregate any_egress_open off->on edge
+    # never fired when another contact was already open, so a second door
+    # opening was invisible. Trigger on the open-egress count rising instead.
+    assert "entity_id: sensor.open_egress_points" in block
+    assert "entity_id: binary_sensor.any_egress_open" not in block
+    assert "is_number" in block
+    assert "(trigger.to_state.state | int(0)) > (trigger.from_state.state | int(0))" in block
     assert 'from: "off"' in block
     assert 'to: "on"' in block
     assert "entity_id: binary_sensor.office_occupancy_2" in block

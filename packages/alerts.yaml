@@ -166,19 +166,22 @@ automation:
     trace:
       stored_traces: 10
     trigger:
+      # Fires on every NEW open egress contact (count goes up), not on the
+      # aggregate binary_sensor.any_egress_open off->on edge: with one contact
+      # already open, a second door opening never produced that edge (#1088).
       - trigger: state
-        entity_id: binary_sensor.any_egress_open
-        from: "off"
-        to: "on"
+        entity_id: sensor.open_egress_points
+        id: egress
       - trigger: state
         entity_id: binary_sensor.office_occupancy_2
         from: "off"
         to: "on"
+        id: office
     variables:
       open_egress_points: >-
         {{ state_attr('sensor.open_egress_points', 'friendly_names') | default('', true) }}
       trigger_label: >-
-        {% if trigger.entity_id == 'binary_sensor.any_egress_open' %}
+        {% if trigger.id == 'egress' %}
           {{ open_egress_points if open_egress_points else 'an egress point' }}
         {% else %}
           {{ trigger.to_state.attributes.friendly_name }}
@@ -187,6 +190,17 @@ automation:
       - condition: state
         entity_id: alarm_control_panel.home_alarm
         state: armed_away
+      - alias: "office motion, or the open-egress count went UP between two numeric states"
+        condition: or
+        conditions:
+          - condition: trigger
+            id: office
+          - condition: template
+            value_template: >-
+              {{ trigger.from_state is not none
+                 and trigger.from_state.state | is_number
+                 and trigger.to_state.state | is_number
+                 and (trigger.to_state.state | int(0)) > (trigger.from_state.state | int(0)) }}
     action:
       - action: alarm_control_panel.alarm_trigger
         target:
@@ -199,9 +213,12 @@ automation:
   - alias: alarm_triggered_response
     id: alarm_triggered_response
     description: >-
-      Responds when the alarm enters triggered state: always sends a push
-      notification; also flashes all lights for 3 minutes (90 × 2 s cycles)
-      when Zeke is away from home.
+      Responds when the alarm enters triggered state. Always sends a push with a
+      camera snapshot. When Zeke is away, runs a grace timeline instead of
+      strobing straight away (#1088): a guest visit starting (garage keypad or
+      NFC picture tap) or a disarm ends it quietly; otherwise a critical push at
+      +10 min and the entry/foyer/hall strobe at +15 min. The panel only stays
+      `triggered` for ~4 s, so this automation owns the timeline.
     mode: single
     trace:
       stored_traces: 10
@@ -213,17 +230,50 @@ automation:
       - action: notify.mobile_app_wethop
         continue_on_error: true
         data:
-          message: "Something triggered alarm panel at home!"
-      - choose:
-          - conditions:
-              - condition: state
-                entity_id: binary_sensor.bayesian_zeke_home
-                state: "off"
-            sequence:
-              - repeat:
-                  count: 90  # 90 × 2 s/cycle = 3 minutes
-                  sequence:
-                    - action: script.flash_lights
+          message: "Something triggered alarm panel at home! No guest visit has started."
+          data:
+            entity_id: camera.livingroomcamera
+      - if:
+          - condition: state
+            entity_id: binary_sensor.bayesian_zeke_home
+            state: "off"
+        then:
+          - alias: "Grace 1/2: wait for a guest visit or a disarm (10 min)"
+            wait_template: >-
+              {{ is_state('input_boolean.trip_guest_visit_active', 'on')
+                 or is_state('alarm_control_panel.home_alarm', 'disarmed') }}
+            timeout: "00:10:00"
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            then:
+              - stop: "Resolved during grace period"
+          - action: notify.mobile_app_wethop
+            continue_on_error: true
+            data:
+              title: "Unconfirmed entry at home"
+              message: "10 minutes with no guest visit or disarm. Lights strobe in 5 minutes."
+              data:
+                entity_id: camera.livingroomcamera
+                push:
+                  interruption-level: critical
+                  sound:
+                    name: default
+                    critical: 1
+                    volume: 1.0
+          - alias: "Grace 2/2: wait for a guest visit or a disarm (5 min)"
+            wait_template: >-
+              {{ is_state('input_boolean.trip_guest_visit_active', 'on')
+                 or is_state('alarm_control_panel.home_alarm', 'disarmed') }}
+            timeout: "00:05:00"
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ wait.completed }}"
+            then:
+              - stop: "Resolved during grace period"
+          - action: script.alarm_strobe_until_resolved
 
   - alias: mirror_shared_notifications_to_lg_tv_when_on
     id: mirror_shared_notifications_to_lg_tv_when_on
@@ -428,6 +478,56 @@ scene: []
 # Scripts
 ########################
 script:
+  alarm_strobe_until_resolved:
+    alias: alarm_strobe_until_resolved
+    description: >-
+      Strobes the entry, foyer and hallway lights (not the whole house) for up to
+      3 minutes. Stops as soon as the alarm is disarmed or a guest visit starts,
+      instead of always running every cycle (#1088).
+    mode: single
+    trace:
+      stored_traces: 10
+    sequence:
+      - repeat:
+          while:
+            - condition: template
+              value_template: "{{ repeat.index <= 90 }}"
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: alarm_control_panel.home_alarm
+                  state: disarmed
+            - condition: state
+              entity_id: input_boolean.trip_guest_visit_active
+              state: "off"
+          sequence:
+            - action: script.flash_entry_lights
+
+  flash_entry_lights:
+    description: >-
+      Single flash pulse on the entry, foyer and hallway lights only: on for 1 s
+      then off for 1 s. Callers loop externally.
+    trace:
+      stored_traces: 10
+    sequence:
+      - action: light.turn_on
+        target:
+          entity_id: &entry_flash_lights
+            - light.hall_main_foyer_1
+            - light.hall_main_foyer_2
+            - light.hall_transition
+            - light.hall_upstairs_1
+            - light.hall_upstairs_2
+            - light.hall_laundry
+            - light.outside_front_door
+      - delay:
+          seconds: 1
+      - action: light.turn_off
+        target:
+          entity_id: *entry_flash_lights
+      - delay:
+          seconds: 1
+
   flash_lights:
     description: >-
       Single flash pulse: turn all lights on for 1 s then off for 1 s.

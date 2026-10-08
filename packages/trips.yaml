@@ -63,6 +63,31 @@ homeassistant:
       friendly_name: "Trip Guest Visit Clear"
       icon: mdi:broom
 
+    automation.trip_garage_credentialed_open_starts_visit:
+      <<: *customize
+      friendly_name: "Trip Garage Keypad Starts Visit"
+      icon: mdi:garage-open-variant
+
+    automation.trip_guest_nfc_picture_tap:
+      <<: *customize
+      friendly_name: "Trip Guest Picture Tap"
+      icon: mdi:nfc-tap
+
+    automation.trip_guest_visit_expiry:
+      <<: *customize
+      friendly_name: "Trip Guest Visit Expiry"
+      icon: mdi:timer-sand
+
+    automation.trip_guest_visit_early_end:
+      <<: *customize
+      friendly_name: "Trip Guest Visit Early End"
+      icon: mdi:door-closed-lock
+
+    automation.trip_stale_disarm_rearm:
+      <<: *customize
+      friendly_name: "Trip Stale Disarm Re-arm"
+      icon: mdi:shield-sync
+
     automation.trip_mode_watchdog_home_1h:
       <<: *customize
       friendly_name: "Trip Mode Watchdog"
@@ -746,6 +771,15 @@ automation:
           entity_id: binary_sensor.bayesian_zeke_home
           state: "off"
     action:
+      - alias: "A keypad/remote open already started a guest visit (#1088): no prompt, no auto-close"
+        if:
+          - condition: trigger
+            id: door_opened_while_gone
+          - condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "on"
+        then:
+          - stop: "Guest visit active (see trip_garage_credentialed_open_starts_visit)"
       - choose:
           - conditions:
               - condition: trigger
@@ -764,12 +798,6 @@ automation:
                     actions:
                       - action: "CLOSE_GARAGE"
                         title: "Close the door now"
-                        activationMode: background
-                        authenticationRequired: false
-                        destructive: false
-                        behavior: default
-                      - action: "IGNORE_GARAGE"
-                        title: "Ignore for 5 minutes"
                         activationMode: background
                         authenticationRequired: false
                         destructive: false
@@ -1411,6 +1439,305 @@ automation:
         target:
           entity_id: input_boolean.trip_guest_visit_active
 
+  - alias: trip_garage_credentialed_open_starts_visit
+    id: trip_garage_credentialed_open_starts_visit
+    description: >-
+      While on a trip and away, a garage open that came from the opener itself
+      (keypad or remote: no Home Assistant user/automation context on the
+      `opening` state, motor ran, wall button not pressed) means someone with a
+      credential is arriving, so start a quiet guest visit (#1088). Opens issued
+      by Home Assistant, the app or an automation carry a context on `opening`
+      and keep the old notify path.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: cover.garage_door
+        to: opening
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+      - alias: "no Home Assistant context: opener-originated"
+        condition: template
+        value_template: >-
+          {{ trigger.to_state.context.parent_id is none
+             and trigger.to_state.context.user_id is none }}
+    action:
+      - alias: "Motor must actually run (ratgdo reports it ~1 s after the cover)"
+        wait_template: "{{ is_state('binary_sensor.ratgdov25i_1bbf11_motor', 'on') }}"
+        timeout: "00:00:10"
+        continue_on_timeout: false
+      - alias: "Wall button not pressed in the last 10 s (someone inside, not a credential)"
+        condition: template
+        value_template: >-
+          {{ is_state('binary_sensor.ratgdov25i_1bbf11_button', 'off')
+             and (now() - states.binary_sensor.ratgdov25i_1bbf11_button.last_changed).total_seconds() > 10 }}
+      - action: script.trip_guest_visit_start
+        data:
+          source: garage keypad/remote
+
+  - alias: trip_guest_nfc_picture_tap
+    id: trip_guest_nfc_picture_tap
+    description: >-
+      Visitors tap a picture on the mantle with their phone (plain NFC URL tags
+      pointing at these webhooks, no app needed). The correct picture starts a
+      guest visit; a decoy picture escalates immediately (#1088). Accepting only
+      works when there is something to answer (alarm pending/triggered, or an
+      entry in the last 30 min), so a leaked URL cannot disarm the house.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: webhook
+        webhook_id: !secret guest_tap_accept_webhook_id
+        allowed_methods: [GET, POST]
+        local_only: false
+        id: accept
+      - trigger: webhook
+        webhook_id: !secret guest_tap_decoy_a_webhook_id
+        allowed_methods: [GET, POST]
+        local_only: false
+        id: decoy
+      - trigger: webhook
+        webhook_id: !secret guest_tap_decoy_b_webhook_id
+        allowed_methods: [GET, POST]
+        local_only: false
+        id: decoy
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+    action:
+      - choose:
+          - alias: "Correct picture"
+            conditions:
+              - condition: trigger
+                id: accept
+            sequence:
+              - if:
+                  - condition: state
+                    entity_id: input_boolean.trip_guest_visit_active
+                    state: "on"
+                then:
+                  # Already accepted: just extend the visit timer.
+                  - event: trip_guest_visit_evidence
+                    event_data:
+                      source: picture tap
+                  - stop: "Visit already active"
+              - alias: "Something to answer: pending/triggered, or an entry in the last 30 min"
+                condition: template
+                value_template: >-
+                  {% set last_entry = state_attr('automation.motion_detected_on_trip', 'last_triggered') %}
+                  {{ states('alarm_control_panel.home_alarm') in ['pending', 'triggered']
+                     or (is_state('alarm_control_panel.home_alarm', 'armed_away')
+                         and last_entry is not none
+                         and (now() - last_entry).total_seconds() < 1800) }}
+              - action: script.trip_guest_visit_start
+                data:
+                  source: picture tap
+              - alias: "Wait for the visit to take effect, then confirm with a light blink"
+                wait_template: "{{ is_state('input_boolean.trip_guest_visit_active', 'on') }}"
+                timeout: "00:00:20"
+                continue_on_timeout: false
+              - action: scene.create
+                data:
+                  scene_id: guest_tap_blink_restore
+                  snapshot_entities:
+                    - light.hall_main_foyer_1
+                    - light.hall_main_foyer_2
+                    - light.hall_transition
+              - repeat:
+                  count: 2
+                  sequence:
+                    - action: light.turn_off
+                      target:
+                        entity_id:
+                          - light.hall_main_foyer_1
+                          - light.hall_main_foyer_2
+                          - light.hall_transition
+                    - delay:
+                        milliseconds: 500
+                    - action: light.turn_on
+                      target:
+                        entity_id:
+                          - light.hall_main_foyer_1
+                          - light.hall_main_foyer_2
+                          - light.hall_transition
+                    - delay:
+                        milliseconds: 500
+              - action: scene.turn_on
+                target:
+                  entity_id: scene.guest_tap_blink_restore
+          - alias: "Wrong picture: escalate now, unless a visit was already accepted"
+            conditions:
+              - condition: trigger
+                id: decoy
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "off"
+              - condition: not
+                conditions:
+                  - condition: state
+                    entity_id: alarm_control_panel.home_alarm
+                    state: disarmed
+            sequence:
+              - action: notify.mobile_app_wethop
+                continue_on_error: true
+                data:
+                  title: "Wrong picture tapped"
+                  message: "Someone tapped a decoy picture while the house is armed. Strobing now."
+                  data:
+                    entity_id: camera.livingroomcamera
+                    push:
+                      interruption-level: critical
+                      sound:
+                        name: default
+                        critical: 1
+                        volume: 1.0
+              - action: script.turn_on
+                target:
+                  entity_id: script.alarm_strobe_until_resolved
+
+  - alias: trip_guest_visit_expiry
+    id: trip_guest_visit_expiry
+    description: >-
+      Ends a guest visit 2 h after the last evidence of a person (visit start,
+      picture tap, keypad open), with a 4 h hard cap, by relocking the virtual
+      front door which runs trip_guest_door_lock_close_house (re-arm, water
+      off, motion detection on). Door contacts cannot tell in from out, so this
+      is a timer rather than an inference (#1088).
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: event
+        event_type: trip_guest_visit_evidence
+        id: evidence
+      - trigger: homeassistant
+        event: start
+        id: evidence
+      - trigger: state
+        entity_id: input_boolean.trip_guest_visit_active
+        to: "on"
+        for:
+          hours: 4
+        id: hard_cap
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "on"
+    action:
+      - if:
+          - condition: trigger
+            id: evidence
+        then:
+          - delay: "02:00:00"
+      - action: script.trip_guest_visit_end
+
+  - alias: trip_guest_visit_early_end
+    id: trip_guest_visit_early_end
+    description: >-
+      Ends a visit early after the garage closes with no motion on the main
+      level for 10 min, but never in the first 20 min of a visit (the arrival
+      itself closes the garage behind the visitor).
+    mode: restart
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: cover.garage_door
+        to: closed
+    condition:
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ (now() - states.input_boolean.trip_guest_visit_active.last_changed).total_seconds() > 1200 }}
+    action:
+      - delay: "00:10:00"
+      - condition: state
+        entity_id: cover.garage_door
+        state: closed
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "on"
+      - alias: "Nobody moving anywhere for 10 min"
+        condition: state
+        entity_id:
+          - binary_sensor.hall_main_foyer_motion_occupancy
+          - binary_sensor.kitchen_motion_occupancy
+          - binary_sensor.hall_transition_switch_occupancy
+          - binary_sensor.den_motion_occupancy
+          - binary_sensor.hall_upstairs_motion_occupancy
+        state: "off"
+        for:
+          minutes: 10
+      - action: script.trip_guest_visit_end
+
+  - alias: trip_stale_disarm_rearm
+    id: trip_stale_disarm_rearm
+    description: >-
+      Safety net (#1088): if the owner is away on a trip and the alarm has sat
+      disarmed for 30 min with no guest visit in progress, re-arm it through
+      arm_alarm and say so. On 2026-10-07 the house stayed disarmed after a
+      visitor left because nothing re-armed it.
+    mode: single
+    trace:
+      stored_traces: 10
+    trigger:
+      - trigger: state
+        entity_id: alarm_control_panel.home_alarm
+        to: disarmed
+        for:
+          minutes: 30
+      - trigger: state
+        entity_id: input_boolean.trip
+        to: "on"
+        for:
+          minutes: 30
+      - trigger: state
+        entity_id: input_boolean.trip_guest_visit_active
+        to: "off"
+        for:
+          minutes: 30
+    condition:
+      - condition: state
+        entity_id: alarm_control_panel.home_alarm
+        state: disarmed
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+      - condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
+    action:
+      - action: automation.trigger
+        target:
+          entity_id: automation.arm_alarm
+        data:
+          skip_condition: false
+      - action: notify.mobile_app_wethop
+        continue_on_error: true
+        data:
+          title: "Alarm re-armed"
+          message: "The house was disarmed for 30 minutes with nobody home and no guest visit, so it was re-armed."
+          data:
+            push:
+              interruption-level: passive
+
   # - id: toggle_vacation_tab
   #   alias: toggle_vacation_tab
   #   trigger:
@@ -1603,6 +1930,99 @@ scene:
 # Scripts
 ########################
 script:
+  trip_guest_visit_start:
+    alias: trip_guest_visit_start
+    description: >-
+      Starts (or extends) a quiet guest visit while on a trip and away (#1088).
+      Reuses the tested virtual front-door flow: unlocking lock.front_door_lock
+      runs trip_guest_door_unlock_open_house (disarm, camera motion off, vacuums
+      dock, water on, visit flag). That flow only fires on the locked->unlocked
+      edge, so when the lock is somehow already unlocked it is triggered directly.
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    fields:
+      source:
+        description: What identified the visitor, for the notification.
+        example: garage keypad/remote
+    sequence:
+      - condition: state
+        entity_id: input_boolean.trip
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.bayesian_zeke_home
+        state: "off"
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: lock.front_door_lock
+                state: locked
+            sequence:
+              - action: lock.unlock
+                target:
+                  entity_id: lock.front_door_lock
+          - conditions:
+              - condition: state
+                entity_id: lock.front_door_lock
+                state: unlocked
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "off"
+            sequence:
+              - action: automation.trigger
+                target:
+                  entity_id: automation.trip_guest_door_unlock_open_house
+                data:
+                  skip_condition: false
+      - alias: "The visit flag is set by the unlock flow; the expiry timer needs it on"
+        wait_template: "{{ is_state('input_boolean.trip_guest_visit_active', 'on') }}"
+        timeout: "00:00:20"
+        continue_on_timeout: false
+      - event: trip_guest_visit_evidence
+        event_data:
+          source: "{{ source | default('unknown', true) }}"
+      - action: notify.mobile_app_wethop
+        continue_on_error: true
+        data:
+          title: "Guest visit started"
+          message: "{{ source | default('Someone', true) }}: alarm disarmed, no strobe."
+          data:
+            entity_id: camera.livingroomcamera
+            push:
+              interruption-level: passive
+
+  trip_guest_visit_end:
+    alias: trip_guest_visit_end
+    description: >-
+      Ends a guest visit by relocking the virtual front door, which runs
+      trip_guest_door_lock_close_house (water off, motion detection on, re-arm,
+      visit flag cleared). Triggers that flow directly if the lock is already
+      locked (#1088).
+    mode: single
+    trace:
+      stored_traces: 10
+    sequence:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: lock.front_door_lock
+                state: unlocked
+            sequence:
+              - action: lock.lock
+                target:
+                  entity_id: lock.front_door_lock
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "on"
+            sequence:
+              - action: automation.trigger
+                target:
+                  entity_id: automation.trip_guest_door_lock_close_house
+                data:
+                  skip_condition: false
+
   resume_ecobee_program_for_return_home:
     alias: resume_ecobee_program_for_return_home
     description: >-
