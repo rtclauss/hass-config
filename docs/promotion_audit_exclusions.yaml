@@ -1,0 +1,24 @@
+# Deliberate holds for the weekly promotion audit (scripts/promotion_audit.py).
+#
+# A YAML list of globs (one per line), with an optional reason after "#". A matching file counts as
+# recently changed, so it blocks itself and everything that was changed
+# together with it. Delete a line once the reason no longer applies.
+
+# Consumers of these integrations are still being tuned.
+- "custom_components/places/*"  # Places v3 entity model; automations still being tuned (#980, #981)
+- "custom_components/tesla_custom/*"  # Tesla charge planner automations still churning
+
+# Music Assistant was reverted off main as in-progress (open #635, #931, #932).
+- "docs/music_assistant.md"  # Music Assistant not on main
+- "lovelace/speaker_group.yaml"  # Music Assistant not on main
+- "lovelace/tiles/tiles_bathroom.yaml"  # Music Assistant not on main
+- ".storage/lovelace.dashboard_strategy"  # Music Assistant not on main
+- "packages/debug.yaml"  # Music Assistant not on main
+- "tests/test_music_assistant_entity_names.py"  # Music Assistant not on main
+
+# Must land atomically across every ESPHome node.
+- "esphome/packages/common/base.yaml"  # wifi_ap -> wifi_ssid secret rename still in flux
+- "esphome/tikiroom.yaml"  # wifi_ap -> wifi_ssid secret rename still in flux
+
+# Temporary diagnostics should not be promoted.
+- "packages/blind_forensics.yaml"  # temporary blind-opener diagnostic (#781)
