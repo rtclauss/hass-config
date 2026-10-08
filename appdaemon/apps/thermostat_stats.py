@@ -162,7 +162,11 @@ class ThermostatStats(hass.Hass):
             if entity_id:
                 self.listen_state(self.state_changed, entity_id, attribute="all")
 
-        engine = sqlalchemy.create_engine(self.thermostat_database, echo=True)
+        engine = sqlalchemy.create_engine(
+            self.thermostat_database,
+            echo=True,
+            pool_pre_ping=True,
+        )
         Base.metadata.create_all(engine)
         self._ensure_optional_columns(engine)
 
@@ -437,5 +441,16 @@ class ThermostatStats(hass.Hass):
             aux_heat_on=aux_heat_on,
         )
 
+        self._commit_thermostat_change(temp_info)
+
+    def _commit_thermostat_change(self, temp_info):
         self.session.add(temp_info)
-        self.session.commit()
+        try:
+            self.session.commit()
+        except sqlalchemy.exc.SQLAlchemyError as err:
+            self.session.rollback()
+            self.log(
+                "ThermostatStats DB write failed; rolled back session and skipped sample: "
+                f"{err}",
+                level="WARNING",
+            )
