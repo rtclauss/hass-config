@@ -142,13 +142,50 @@ def load_changes(repo: Path, base: str, head: str) -> list[Change]:
 
 
 def load_status(repo: Path, base: str, head: str) -> dict[str, str]:
-    out = git(repo, "diff", "--name-status", "--no-renames", f"{base}...{head}")
+    """Outstanding delta between the two branch trees (not against their merge base).
+
+    A three-dot diff would keep reporting files that were already promoted by
+    copying them (or by a squash merge), because their commits are not ancestors.
+    """
+    out = git(repo, "diff", "--name-status", "--no-renames", base, head)
     status: dict[str, str] = {}
     for line in out.splitlines():
         code, _, path = line.partition("\t")
         if path:
             status[path] = code[0]
     return status
+
+
+DIVERGED_REASON = "also changed on main since the branches diverged"
+
+
+def _blob(repo: Path, ref: str, path: str) -> str | None:
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"{ref}:{path}"],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str]:
+    """Files whose base version is not simply an older version from head's history.
+
+    A file promoted earlier and edited again on head is a fast-forward and fine.
+    A file edited independently on base (a revert, a hotfix) would be overwritten.
+    """
+    merge_base = git(repo, "merge-base", base, head).strip()
+    changed_on_base = (
+        set(git(repo, "diff", "--name-only", "--no-renames", merge_base, base).splitlines()) & paths
+    )
+    diverged: set[str] = set()
+    for path in sorted(changed_on_base):
+        base_blob = _blob(repo, base, path)
+        raw = git(repo, "log", "--format=", "--raw", "--no-abbrev", "--no-renames", head, "--", path)
+        history = {line.split()[3] for line in raw.splitlines() if line.startswith(":")}
+        if base_blob is None or base_blob not in history:
+            diverged.add(path)
+    return diverged
 
 
 class UnionFind:
@@ -194,6 +231,10 @@ def run_audit(
                 excluded[path] = reason or "excluded"
                 age[path] = 0.0
                 break
+
+    for path in sorted(diverged_files(repo, base, head, set(age))):
+        excluded.setdefault(path, DIVERGED_REASON)
+        age[path] = 0.0
 
     unit_age: dict[str, float] = {}
     unit_files: dict[str, list[str]] = collections.defaultdict(list)
@@ -355,9 +396,9 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
     else:
         out += [
             f"{len(audit.promotable_files)} files in {len(audit.promotable)} groups. Treat these as "
-            "**candidates**: build a branch off `main`, copy them from `develop`, and run `pytest` and the "
-            "HA config check before opening the promotion PR (some tests read shared files such as "
-            "`README.md`).",
+            "**candidates** for the next promotion: run `pytest` and the HA config check on the result "
+            "before promoting (some tests read shared files such as `README.md`). Promotions into "
+            "`main` must come from `develop` (see `AGENTS.md`); anything narrower needs explicit owner approval.",
             "",
         ]
         by_file: dict[str, list[Change]] = {}
@@ -403,7 +444,12 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
         out.append("")
 
     if audit.excluded:
-        out += ["## Exclusions in effect", "", f"{len(audit.excluded)} file(s) are held by `docs/promotion_audit_exclusions.yaml`:", ""]
+        out += [
+            "## Held back on purpose",
+            "",
+            f"{len(audit.excluded)} file(s) are held by `docs/promotion_audit_exclusions.yaml` or because they also changed on `main`:",
+            "",
+        ]
         reasons = collections.defaultdict(list)
         for path, reason in sorted(audit.excluded.items()):
             reasons[reason].append(path)
