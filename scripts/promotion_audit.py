@@ -14,6 +14,7 @@ Uses git only (no network). See docs/promotion_audit.md.
 from __future__ import annotations
 
 import argparse
+import ast
 import collections
 import dataclasses
 import fnmatch
@@ -162,16 +163,16 @@ def load_status(repo: Path, base: str, head: str) -> dict[str, str]:
 
 DIVERGED_REASON = "also changed on main since the branches diverged"
 INCOMPLETE_REASON = "vendored snapshot is incomplete in git (imports or platforms missing; see .gitignore allow-list)"
-RELATIVE_IMPORT = r"^\s*from\s+\.+[A-Za-z_.]*\s+import\s"
+DELETED = "deleted"
 
 
-def _state(repo: Path, ref: str, path: str) -> str | None:
-    """Tree-entry state of a path at a ref: file mode and blob id, so mode-only changes count."""
+def _state(repo: Path, ref: str, path: str) -> str:
+    """Tree-entry state of a path at a ref: file mode and blob id (or DELETED), so mode-only changes count."""
     result = subprocess.run(
         ["git", "-C", str(repo), "ls-tree", ref, "--", path], capture_output=True, text=True
     )
     fields = result.stdout.split("\t", 1)[0].split()
-    return f"{fields[0]}:{fields[2]}" if result.returncode == 0 and len(fields) == 3 else None
+    return f"{fields[0]}:{fields[2]}" if result.returncode == 0 and len(fields) == 3 else DELETED
 
 
 def _is_ancestor(repo: Path, commit: str, other: str) -> bool:
@@ -193,8 +194,7 @@ def _head_states(repo: Path, head: str, path: str) -> list[tuple[str, str]]:
             commit = line
         elif line.startswith(":"):
             fields = line.split()
-            if fields[1] != "000000":  # deletions are not a state a file can be promoted to
-                entries.append((commit, f"{fields[1]}:{fields[3]}"))
+            entries.append((commit, DELETED if fields[1] == "000000" else f"{fields[1]}:{fields[3]}"))
     return entries
 
 
@@ -233,12 +233,28 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
         ).split()
         for sha in commits:
             state = _state(repo, sha, path)
-            later = [q for q in positions.get(state or "", []) if q >= current]
-            if state is None or not later:
+            later = [q for q in positions.get(state, []) if q >= current]
+            if not later:
                 diverged.add(path)
                 break
             current = min(later)
     return diverged
+
+
+def _top_level_names(source: str) -> set[str]:
+    names: set[str] = set()
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return names
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+    return names
 
 
 def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str]:
@@ -246,73 +262,60 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
 
     The repo's .gitignore is an allow-list, so brand-new files from a HACS update are
     silently left out while edited ones are committed. Promoting such a snapshot
-    would put an integration on main that imports files git does not have.
+    would put an integration on main that imports files git does not have. Python
+    sources are parsed with ast, so multi-line imports and comments are handled.
     """
     wanted = {u for u in units if u.startswith(VENDORED_PREFIX)}
     if not wanted:
         return set()
     tree = set(git(repo, "ls-tree", "-r", "--name-only", head, "custom_components").splitlines())
-    prefix = f"{head}:"
-    bad: set[str] = set()
+    init_names: dict[str, set[str]] = {}
 
-    def grep(pattern: str, pathspec: str) -> list[tuple[str, str]]:
+    def source(path: str) -> str:
         result = subprocess.run(
-            ["git", "-C", str(repo), "grep", "-nE", pattern, head, "--", pathspec],
-            capture_output=True,
-            text=True,
-        )
-        rows = []
-        for line in result.stdout.splitlines():
-            rest = line[len(prefix):] if line.startswith(prefix) else line
-            path, _, tail = rest.partition(":")
-            rows.append((path, tail.partition(":")[2]))
-        return rows
-
-    def init_text(folder: str) -> str:
-        result = subprocess.run(
-            ["git", "-C", str(repo), "show", f"{head}:{folder}/__init__.py"], capture_output=True, text=True
+            ["git", "-C", str(repo), "show", f"{head}:{path}"], capture_output=True, text=True
         )
         return result.stdout if result.returncode == 0 else ""
 
-    for path, text in grep(RELATIVE_IMPORT, "custom_components/*.py"):
+    def module_exists(target: str) -> bool:
+        return f"{target}.py" in tree or f"{target}/__init__.py" in tree
+
+    def package_defines(folder: str, name: str) -> bool:
+        if folder not in init_names:
+            init_names[folder] = _top_level_names(source(f"{folder}/__init__.py"))
+        return name in init_names[folder]
+
+    bad: set[str] = set()
+    for path in sorted(tree):
         unit = unit_of(path)
-        if unit not in wanted or unit in bad:
+        if not path.endswith(".py") or unit not in wanted or unit in bad:
             continue
-        match = re.match(r"\s*from\s+(\.+)([A-Za-z_.]*)\s+import\s+(.*)", text)
-        if not match:
+        try:
+            module = ast.parse(source(path))
+        except (SyntaxError, ValueError):
             continue
-        dots, module, names = match.groups()
         folder = path.rsplit("/", 1)[0]
-        for _ in range(len(dots) - 1):
-            folder = folder.rsplit("/", 1)[0]
-        if module:
-            target = f"{folder}/{module.replace('.', '/')}"
-            if f"{target}.py" not in tree and f"{target}/__init__.py" not in tree:
+        for node in ast.walk(module):
+            if isinstance(node, ast.ImportFrom) and node.level:
+                base = folder
+                for _ in range(node.level - 1):
+                    base = base.rsplit("/", 1)[0]
+                if node.module:
+                    if not module_exists(f"{base}/{node.module.replace('.', '/')}"):
+                        bad.add(unit)
+                else:
+                    for alias in node.names:
+                        if alias.name != "*" and not module_exists(f"{base}/{alias.name}") and not package_defines(base, alias.name):
+                            bad.add(unit)
+            elif (
+                path.count("/") == 2  # custom_components/<name>/<module>.py, where PLATFORMS lists live
+                and isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "Platform"
+                and not module_exists(f"{unit}/{node.attr.lower()}")
+            ):
                 bad.add(unit)
-            continue
-        # `from . import name`: each name is a submodule or a symbol defined in the package.
-        for raw_name in names.split("#")[0].replace("(", "").replace(")", "").split(","):
-            name = raw_name.strip().split(" as ")[0].strip()
-            if not re.fullmatch(r"[A-Za-z_]\w*", name):
-                continue
-            if f"{folder}/{name}.py" in tree or f"{folder}/{name}/__init__.py" in tree:
-                continue
-            defined = re.search(
-                rf"^\s*(?:async\s+def|def|class)\s+{name}\b|^\s*{name}\s*(?::[^=\n]+)?=", init_text(folder), re.M
-            )
-            if not defined:
-                bad.add(unit)
-                break
-    for path, text in grep(r"Platform\.[A-Z_]+", "custom_components/*.py"):
-        if path.count("/") != 2:  # only custom_components/<name>/<module>.py, where PLATFORMS lists live
-            continue
-        unit = unit_of(path)
-        if unit not in wanted or unit in bad:
-            continue
-        for name in re.findall(r"Platform\.([A-Z_]+)", text):
-            target = f"{unit}/{name.lower()}"
-            if f"{target}.py" not in tree and f"{target}/__init__.py" not in tree:
-                bad.add(unit)
+            if unit in bad:
                 break
     return bad
 
