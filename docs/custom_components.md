@@ -48,3 +48,90 @@ Restart Home Assistant, confirm the integrations load, then delete the backup. I
 pulls automatically (Git Pull add-on or a cron job), stop it first; anything that runs
 `git reset --hard` or `git clean` will delete these files too. The same applies when this
 change reaches `main`.
+
+## Why git does not track HACS integrations
+
+This matches common practice: the Home Assistant `.gitignore` template lists `custom_components`
+under "Development files" ([template](https://www.toptal.com/developers/gitignore/api/homeassistant)),
+and large public configs ignore `custom_components/*` and re-include only their own hand-written
+integrations ([example](https://raw.githubusercontent.com/CCOSTAN/Home-AssistantConfig/master/.gitignore)).
+HACS records what is installed in `.storage/hacs.repositories` and can redownload it, so a code
+copy in git adds drift without adding recoverability. The Git Pull add-on has a "reset" mode that
+runs `git reset --hard` and overwrites tracked files
+([docs](https://raw.githubusercontent.com/home-assistant/addons/master/git_pull/DOCS.md)), which is
+another reason not to leave HACS-owned files tracked.
+
+## Server migration plan
+
+Do these in order on the Home Assistant host (SSH add-on shell, repo at `/config`).
+
+### 0. Look first (read-only)
+
+```bash
+cd /config && git status --short | head -20; git branch --show-current; git log -1 --oneline
+ha addons 2>/dev/null | grep -i -B1 -A3 git            # is an auto-pull add-on installed?
+ls custom_components/weatheralerts/frontend.py custom_components/smartthinq_sensors/number.py
+```
+
+If those two files exist, nothing is broken today; the tracked copy was just incomplete. Then run
+this inventory. It lists every folder in `custom_components/` with its HACS version, active config
+entries, enabled entities, and how many YAML/Python/Jinja files in `/config` mention it:
+
+```bash
+python3 - <<'EOF'
+import json, os, subprocess, collections
+cfg = "/config"
+st = lambda n: json.load(open(f"{cfg}/.storage/{n}"))["data"]
+entries = collections.Counter(e["domain"] for e in st("core.config_entries")["entries"] if not e.get("disabled_by"))
+ents = collections.Counter(e["platform"] for e in st("core.entity_registry")["entities"] if not e.get("disabled_by"))
+try:
+    hacs = {(r.get("domain") or r.get("full_name", "").split("/")[-1]): r.get("version_installed")
+            for r in st("hacs.repositories").values() if r.get("installed")}
+except Exception:
+    hacs = {}
+print(f"{'directory':32}{'hacs version':14}{'entries':>8}{'entities':>9}{'yaml refs':>10}")
+for d in sorted(os.listdir(f"{cfg}/custom_components")):
+    if not os.path.isdir(f"{cfg}/custom_components/{d}") or d == "__pycache__":
+        continue
+    refs = subprocess.run(
+        ["grep", "-rIlw", "--include=*.yaml", "--include=*.py", "--include=*.jinja", d, cfg,
+         "--exclude-dir=custom_components", "--exclude-dir=.git", "--exclude-dir=.storage", "--exclude-dir=backup"],
+        capture_output=True, text=True).stdout.split()
+    print(f"{d:32}{str(hacs.get(d, '-')):14}{entries[d]:>8}{ents[d]:>9}{len(refs):>10}")
+EOF
+```
+
+### 1. Safety net
+
+Take a full backup (`ha backups new --name pre-untrack`), copy `custom_components` somewhere outside
+the repo (for example `/share/custom_components.bak`), and stop any auto-pull add-on.
+
+### 2. Remove integrations nothing uses (before the git change)
+
+Do this first so you do not back up or restore dead code. An integration is a candidate when the
+inventory shows 0 entries, 0 entities **and** 0 YAML references. Services-only integrations
+(`retry`, `spook`, `watchman`, `browser_mod`) have no entities but may be called from YAML, so the
+YAML column decides. Evidence from this repo as of 2026-10-09 (it can only see YAML; UI-configured
+integrations leave no trace, so confirm with the inventory before deleting anything):
+
+| Evidence | Integrations |
+|---|---|
+| Clearly used | `adaptive_lighting`, `hacs`, `places`, `bermuda`, `mail_and_packages`, `somafm`, `tesla_custom`, `dreame_vacuum`, `garbage_collection`, `retry`, `spook`, `weatheralerts`, `f1_sensor`, `browser_mod`, `scrypted`, `smartthinq_sensors`, `localtuya`, `birdbuddy` |
+| No repo trace, check the inventory | `auto_areas`, `magic_areas`, `noaa_space_weather`, `midea_ac_lan`, `ha_washdata`, `llmvision`, `ha_unavailable_devices_report` |
+| Check carefully | `watchman` (only the admin-dashboard issue mentions it), `presence_simulation` (an open issue says its startup hook crashes, so it is installed and failing), `magic_areas` / `auto_areas` (named as possible sources of the unexpected blind opener in the blind-forensics issue) |
+| Nothing uses it | `mass_queue`, apart from the tracked `services.yaml` mirror and its test |
+
+Remove through HACS ("Remove"), restart, and watch Repairs and the logs for a day before deleting
+the backup. Do not delete folders by hand: HACS then keeps listing them as installed.
+
+### 3. Sync git and the host
+
+After this change reaches the branch the host runs, follow the backup, pull, restore sequence in
+"Deploy warning" above. Then restart Home Assistant, confirm the integrations load, run a HACS
+update and check `git status --short custom_components` is still empty.
+
+### 4. Keep it that way
+
+The final `.gitignore` block keeps new HACS files out of git, and the weekly promotion audit
+(`docs/promotion_audit.md`) never recommends `custom_components/**`. To make a fresh-host restore
+easy, save the inventory output (or `.storage/hacs.repositories`) next to your backups.
