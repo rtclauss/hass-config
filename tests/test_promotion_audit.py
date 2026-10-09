@@ -379,6 +379,52 @@ def test_module_less_relative_imports_are_checked(tmp_path: Path) -> None:
     assert "custom_components/yy/sensor.py" in result.promotable_files
 
 
+def test_multiline_imports_and_commented_platforms(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {"custom_components/ml/__init__.py": "from . import (\n    helpers,\n    frontend,\n)\n", "custom_components/ml/helpers.py": "x = 1\n"},
+        60,
+        "add ml (#1)",
+    )  # frontend.py was ignored by the allow-list
+    commit(
+        tmp_path,
+        {
+            "custom_components/cm/__init__.py": "from .const import PLATFORMS\n",
+            "custom_components/cm/const.py": "PLATFORMS = [\n    Platform.SENSOR,\n    # Platform.BUTTON,\n]\n",
+            "custom_components/cm/sensor.py": "x = 1\n",
+        },
+        60,
+        "add cm (#2)",
+    )
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert result.excluded["custom_components/ml/__init__.py"] == promotion_audit.INCOMPLETE_REASON
+    assert "custom_components/cm/const.py" in result.promotable_files  # commented-out platform is ignored
+
+
+def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: 1\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    git(tmp_path, "rm", "-q", "packages/f.yaml")
+    git(tmp_path, "commit", "-q", "-m", "drop f (#1)", when=NOW - 70 * DAY)
+    commit(tmp_path, {"packages/f.yaml": "a: 2\n"}, 50, "re-add f (#2)")
+    # main already promoted develop's deletion.
+    git(tmp_path, "checkout", "-q", "-b", "main_deleted", "main")
+    git(tmp_path, "rm", "-q", "packages/f.yaml")
+    git(tmp_path, "commit", "-q", "-m", "promote deletion", when=NOW - 60 * DAY)
+    git(tmp_path, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(tmp_path, base="main_deleted", head="develop", now=NOW)
+
+    assert "packages/f.yaml" not in result.excluded
+    assert "packages/f.yaml" in result.promotable_files
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.
