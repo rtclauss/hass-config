@@ -127,7 +127,6 @@ def test_promotable_files_are_isolated_and_quiet(repo: Path) -> None:
     assert {"packages/a1.yaml", "packages/a2.yaml"} <= files
     assert {"packages/h1.yaml", "packages/h2.yaml"} <= files
     assert {f"packages/w{i}.yaml" for i in range(25)} <= files
-    assert {"custom_components/foo/manifest.json", "custom_components/foo/x.py"} <= files
     # Entangled with a recent change, recent itself, or excluded.
     assert "packages/b.yaml" not in files
     assert "packages/hub.yaml" not in files
@@ -197,15 +196,6 @@ def test_revert_on_main_after_promotion_holds_the_file_back(repo: Path) -> None:
     assert "packages/base.yaml" not in result.promotable_files
 
 
-def test_incomplete_vendored_snapshot_is_held_back(repo: Path) -> None:
-    result = audit(repo)
-
-    assert "custom_components/inc/__init__.py" not in result.promotable_files
-    assert result.excluded["custom_components/inc/__init__.py"] == promotion_audit.INCOMPLETE_REASON
-    assert "custom_components/okc/__init__.py" in result.promotable_files
-    assert "custom_components/foo/x.py" in result.promotable_files
-
-
 def test_side_branch_blob_is_not_a_valid_promoted_version(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: base\n"}, 200, "base")
@@ -262,27 +252,6 @@ def test_holds_do_not_depend_on_the_age_threshold(repo: Path) -> None:
 
     assert "packages/excl.yaml" not in result.promotable_files
     assert "custom_components/inc/__init__.py" not in result.promotable_files  # incomplete snapshot
-
-
-def test_platform_list_in_const_module_is_checked(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(
-        tmp_path,
-        {
-            "custom_components/bm/__init__.py": "from .const import PLATFORMS\n",
-            "custom_components/bm/const.py": "PLATFORMS = [Platform.SENSOR, Platform.BUTTON]\n",
-            "custom_components/bm/sensor.py": "x = 1\n",
-        },
-        60,
-        "add bm (#1)",
-    )  # button.py was silently ignored by the allow-list
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert "custom_components/bm/const.py" not in result.promotable_files
-    assert result.excluded["custom_components/bm/const.py"] == promotion_audit.INCOMPLETE_REASON
 
 
 def test_version_revisited_on_develop_is_not_divergence(tmp_path: Path) -> None:
@@ -356,142 +325,6 @@ def test_mode_only_change_on_main_counts_as_divergence(tmp_path: Path) -> None:
     assert result.excluded["scripts/run.sh"] == promotion_audit.DIVERGED_REASON
 
 
-def test_module_less_relative_imports_are_checked(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(tmp_path, {"custom_components/zz/__init__.py": "from . import frontend\n"}, 60, "add zz (#1)")
-    commit(
-        tmp_path,
-        {
-            "custom_components/yy/__init__.py": "DOMAIN = 'yy'\nfrom . import helpers\n",
-            "custom_components/yy/helpers.py": "x = 1\n",
-            "custom_components/yy/sensor.py": "from . import DOMAIN\n",
-        },
-        60,
-        "add yy (#2)",
-    )
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert result.excluded["custom_components/zz/__init__.py"] == promotion_audit.INCOMPLETE_REASON
-    assert "custom_components/yy/__init__.py" in result.promotable_files
-    assert "custom_components/yy/sensor.py" in result.promotable_files
-
-
-def test_multiline_imports_and_commented_platforms(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(
-        tmp_path,
-        {"custom_components/ml/__init__.py": "from . import (\n    helpers,\n    frontend,\n)\n", "custom_components/ml/helpers.py": "x = 1\n"},
-        60,
-        "add ml (#1)",
-    )  # frontend.py was ignored by the allow-list
-    commit(
-        tmp_path,
-        {
-            "custom_components/cm/__init__.py": "from .const import PLATFORMS\n",
-            "custom_components/cm/const.py": "PLATFORMS = [\n    Platform.SENSOR,\n    # Platform.BUTTON,\n]\n",
-            "custom_components/cm/sensor.py": "x = 1\n",
-        },
-        60,
-        "add cm (#2)",
-    )
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert result.excluded["custom_components/ml/__init__.py"] == promotion_audit.INCOMPLETE_REASON
-    assert "custom_components/cm/const.py" in result.promotable_files  # commented-out platform is ignored
-
-
-def test_children_of_relative_packages_and_pep695_aliases(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(
-        tmp_path,
-        {
-            "custom_components/pk/__init__.py": "from .core import missing\n",
-            "custom_components/pk/core/__init__.py": "",
-            "custom_components/pk/core/present.py": "x = 1\n",
-        },
-        60,
-        "add pk (#1)",
-    )  # core/missing.py was ignored by the allow-list
-    commit(
-        tmp_path,
-        {
-            "custom_components/ta/__init__.py": "type ConfigEntry = dict\nfrom .core import present\n",
-            "custom_components/ta/core/__init__.py": "from .present import thing\n",
-            "custom_components/ta/core/present.py": "thing = 1\n",
-            "custom_components/ta/sensor.py": "from . import ConfigEntry\nfrom .core import thing\n",
-        },
-        60,
-        "add ta (#2)",
-    )
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert result.excluded["custom_components/pk/__init__.py"] == promotion_audit.INCOMPLETE_REASON
-    assert "custom_components/ta/sensor.py" in result.promotable_files  # alias + re-exported name resolve
-
-
-def test_reexported_symbols_resolve_for_consumers_but_not_inside_init(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(
-        tmp_path,
-        {
-            "custom_components/rx/__init__.py": "from .const import DOMAIN\n",
-            "custom_components/rx/const.py": "DOMAIN = 'rx'\n",
-            "custom_components/rx/sensor.py": "from . import DOMAIN\n",
-        },
-        60,
-        "add rx (#1)",
-    )
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert "custom_components/rx/sensor.py" in result.promotable_files
-    assert not result.excluded
-
-
-def test_wildcard_reexports_are_followed(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(
-        tmp_path,
-        {
-            "custom_components/wq/__init__.py": "",
-            "custom_components/wq/wideq/__init__.py": "from .const import *\n",
-            "custom_components/wq/wideq/const.py": "class DeviceType:\n    pass\n",
-            "custom_components/wq/sensor.py": "from .wideq import DeviceType\n",
-        },
-        60,
-        "add wq (#1)",
-    )
-    commit(
-        tmp_path,
-        {
-            "custom_components/bad/__init__.py": "",
-            "custom_components/bad/wideq/__init__.py": "from .const import *\n",
-            "custom_components/bad/wideq/const.py": "class DeviceType:\n    pass\n",
-            "custom_components/bad/sensor.py": "from .wideq import NotThere\n",
-        },
-        60,
-        "add bad (#2)",
-    )
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert "custom_components/wq/sensor.py" in result.promotable_files
-    assert result.excluded["custom_components/bad/sensor.py"] == promotion_audit.INCOMPLETE_REASON
-
-
 def test_hotfix_matching_a_future_develop_state_is_still_divergence(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: 0\n"}, 300, "base")
@@ -507,75 +340,6 @@ def test_hotfix_matching_a_future_develop_state_is_still_divergence(tmp_path: Pa
 
     assert result.excluded["packages/f.yaml"] == promotion_audit.DIVERGED_REASON
     assert "packages/f.yaml" not in result.promotable_files
-
-
-def test_absolute_self_imports_are_checked(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(
-        tmp_path,
-        {
-            "custom_components/aa/__init__.py": "from custom_components.aa.new_module import X\n",
-            "custom_components/aa/entity.py": "import custom_components.aa.present\n",
-            "custom_components/aa/present.py": "x = 1\n",
-        },
-        60,
-        "add aa (#1)",
-    )  # new_module.py was ignored by the allow-list
-    commit(
-        tmp_path,
-        {
-            "custom_components/ab/__init__.py": "from custom_components.ab.present import X\nfrom custom_components.other.thing import Y\n",
-            "custom_components/ab/present.py": "X = 1\n",
-        },
-        60,
-        "add ab (#2)",
-    )  # imports of other integrations are not this unit's concern
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert result.excluded["custom_components/aa/__init__.py"] == promotion_audit.INCOMPLETE_REASON
-    assert "custom_components/ab/present.py" in result.promotable_files
-
-
-def test_string_platform_declarations_are_checked(tmp_path: Path) -> None:
-    git(tmp_path, "init", "-q", "-b", "main")
-    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
-    git(tmp_path, "checkout", "-q", "-b", "develop")
-    commit(
-        tmp_path,
-        {
-            "custom_components/sp/__init__.py": 'PLATFORMS = ["switch", "button"]\n',
-            "custom_components/sp/switch.py": "x = 1\n",
-        },
-        60,
-        "add sp (#1)",
-    )  # button.py was ignored by the allow-list
-    commit(
-        tmp_path,
-        {
-            "custom_components/fw/__init__.py": "async def setup(hass, entry):\n    await hass.config_entries.async_forward_entry_setups(entry, ['sensor', 'number'])\n",
-            "custom_components/fw/sensor.py": "x = 1\n",
-        },
-        60,
-        "add fw (#2)",
-    )  # number.py was ignored by the allow-list
-    commit(
-        tmp_path,
-        {
-            "custom_components/ok/__init__.py": 'SUPPORTED_PLATFORMS: list[str] = ("sensor",)\nOTHER = ["unrelated"]\n',
-            "custom_components/ok/sensor.py": "x = 1\n",
-        },
-        60,
-        "add ok (#3)",
-    )
-
-    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
-
-    assert result.excluded["custom_components/sp/__init__.py"] == promotion_audit.INCOMPLETE_REASON
-    assert result.excluded["custom_components/fw/__init__.py"] == promotion_audit.INCOMPLETE_REASON
-    assert "custom_components/ok/sensor.py" in result.promotable_files
 
 
 def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
@@ -597,6 +361,17 @@ def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_pa
     assert "packages/f.yaml" in result.promotable_files
 
 
+def test_vendored_integrations_are_never_recommended(repo: Path) -> None:
+    result = audit(repo)
+
+    vendored = [p for p in result.status if p.startswith("custom_components/")]
+    assert vendored
+    for path in vendored:
+        assert path not in result.promotable_files
+        assert result.excluded[path] == promotion_audit.VENDORED_REASON
+    assert "vendored (`custom_components/`, owned by HACS)" in promotion_audit.render_markdown(result, repo)
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.
@@ -610,7 +385,7 @@ def test_change_states(repo: Path) -> None:
     }
 
     assert "#1" in states["promotable"]
-    assert "#4" in states["promotable"]
+    assert "#4" in states["soaking"]  # vendored integrations are always held back
     assert "#6" in states["promotable"]
     assert "#2" in states["soaking"]  # touches the recently changed hub itself
     assert "#9" in states["entangled"]  # old, but tied to the hub through b.yaml
@@ -677,7 +452,6 @@ def test_markdown_report_and_files_out(repo: Path, tmp_path_factory: pytest.Temp
     assert rc == 0
     assert report.startswith("<!-- promotion-audit -->")
     assert "## Promotable now" in report
-    assert "`custom_components/foo` version 0.9.0 → 1.0.0" in report
     assert "## What is blocking the rest" in report
     assert "packages/hub.yaml" in report
     assert "held on purpose" in report
@@ -685,7 +459,6 @@ def test_markdown_report_and_files_out(repo: Path, tmp_path_factory: pytest.Temp
     assert len(report) < promotion_audit.MAX_BODY_CHARS
     lines = files_path.read_text(encoding="utf-8").splitlines()
     assert "A\tpackages/a1.yaml" in lines
-    assert "M\tcustom_components/foo/x.py" in lines
 
 
 def test_ledger_respects_budget() -> None:

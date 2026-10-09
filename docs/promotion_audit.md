@@ -35,11 +35,11 @@ same first-parent change on `develop`: squash commit, PR merge, or direct commit
 has also been quiet for N days (default 30). That stops half of a feature reaching
 `main`.
 
-- `custom_components/<name>` is judged as one unit and is never linked to other files.
-  Its consumers are covered by the exclusions file instead. The repo's `.gitignore` is an
-  allow-list, so brand-new files from a HACS update are silently left out of git while edited
-  ones are committed. A vendored snapshot that imports a missing module, or forwards a
-  `Platform.X` with no `x.py`, is held back as incomplete.
+- `custom_components/**` is owned by HACS (#1097) and is **always held back**. The repo's
+  `.gitignore` is an allow-list, so brand-new files from a HACS update were silently left
+  out of git while edited ones were committed, which made tracked snapshots impossible to
+  verify as complete. Guessing completeness by parsing the Python kept missing one more
+  pattern, so the audit does not try.
 - `README.md`, `AGENTS.md`, `.gitignore`, `inventory.md` and `.github/**` are touched by
   almost every PR, so they do not link changes together and are never promoted by
   the audit.

@@ -3,10 +3,10 @@
 
 Rule: a file is promotable only if everything it was ever changed together with
 (same first-parent change on develop) has also been quiet for N days. That keeps
-main from receiving half of a feature. custom_components are judged per
-integration and never linked to other files; README/AGENTS/.gitignore/CI churn
-is ignored when linking changes. Files matching the exclusions file count as
-recently changed, so they hold back everything tied to them.
+main from receiving half of a feature. custom_components belong to HACS (#1097)
+and are always held back; README/AGENTS/.gitignore/CI churn is ignored when
+linking changes. Files matching the exclusions file count as recently changed,
+so they hold back everything tied to them.
 
 Uses git only (no network). See docs/promotion_audit.md.
 """
@@ -14,7 +14,6 @@ Uses git only (no network). See docs/promotion_audit.md.
 from __future__ import annotations
 
 import argparse
-import ast
 import collections
 import dataclasses
 import fnmatch
@@ -162,7 +161,7 @@ def load_status(repo: Path, base: str, head: str) -> dict[str, str]:
 
 
 DIVERGED_REASON = "also changed on main since the branches diverged"
-INCOMPLETE_REASON = "vendored snapshot is incomplete in git (imports or platforms missing; see .gitignore allow-list)"
+VENDORED_REASON = "vendored integration: HACS manages custom_components, git cannot show a complete snapshot (see docs/custom_components.md)"
 DELETED = "deleted"
 
 
@@ -248,180 +247,6 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
     return diverged
 
 
-def _top_level_names(source: str, include_imports: bool = False) -> set[str]:
-    """Names a module defines at top level (def/class/assignment/PEP 695 alias, optionally imports)."""
-    names: set[str] = set()
-    try:
-        tree = ast.parse(source)
-    except (SyntaxError, ValueError):
-        return names
-    type_alias = getattr(ast, "TypeAlias", None)  # Python 3.12+
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            names.add(node.name)
-        elif isinstance(node, ast.Assign):
-            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            names.add(node.target.id)
-        elif type_alias is not None and isinstance(node, type_alias) and isinstance(node.name, ast.Name):
-            names.add(node.name.id)
-        elif include_imports and isinstance(node, (ast.Import, ast.ImportFrom)):
-            names.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
-    return names
-
-
-def _declared_platform_strings(node: ast.AST) -> list[str]:
-    """String platform names from `PLATFORMS = ["switch"]`-style declarations and forward calls."""
-
-    def strings(value: ast.AST | None) -> list[str]:
-        if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
-            return [e.value for e in value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
-        return []
-
-    if isinstance(node, ast.Assign):
-        names = [t.id for t in node.targets if isinstance(t, ast.Name)]
-        value = node.value
-    elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-        names, value = [node.target.id], node.value
-    elif isinstance(node, ast.Call):
-        func = node.func
-        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-        if called in {"async_forward_entry_setups", "async_forward_entry_setup"} and len(node.args) >= 2:
-            return strings(node.args[1])
-        return []
-    else:
-        return []
-    if any(n.upper() == "PLATFORM" or n.upper().endswith("PLATFORMS") for n in names):
-        return strings(value)
-    return []
-
-
-def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str]:
-    """Vendored integrations whose tracked snapshot cannot import itself.
-
-    The repo's .gitignore is an allow-list, so brand-new files from a HACS update are
-    silently left out while edited ones are committed. Promoting such a snapshot
-    would put an integration on main that imports files git does not have. Python
-    sources are parsed with ast, so multi-line imports and comments are handled.
-    """
-    wanted = {u for u in units if u.startswith(VENDORED_PREFIX)}
-    if not wanted:
-        return set()
-    tree = set(git(repo, "ls-tree", "-r", "--name-only", head, "custom_components").splitlines())
-
-    def source(path: str) -> str:
-        result = subprocess.run(
-            ["git", "-C", str(repo), "show", f"{head}:{path}"], capture_output=True, text=True
-        )
-        return result.stdout if result.returncode == 0 else ""
-
-    def module_exists(target: str) -> bool:
-        return f"{target}.py" in tree or f"{target}/__init__.py" in tree
-
-    names_cache: dict[tuple[str, bool], set[str]] = {}
-
-    def module_names(path: str, include_imports: bool, depth: int = 0) -> set[str]:
-        """Top-level names of a tracked module, following `from .x import *` up to three levels."""
-        key = (path, include_imports)
-        if key in names_cache:
-            return names_cache[key]
-        text = source(path)
-        names = _top_level_names(text, include_imports)
-        names_cache[key] = names  # also guards against import cycles
-        if include_imports and depth < 3:
-            try:
-                body = ast.parse(text).body
-            except (SyntaxError, ValueError):
-                body = []
-            for node in body:
-                if isinstance(node, ast.ImportFrom) and node.level and node.module and any(a.name == "*" for a in node.names):
-                    folder = path.rsplit("/", 1)[0]
-                    for _ in range(node.level - 1):
-                        folder = folder.rsplit("/", 1)[0]
-                    target = f"{folder}/{node.module.replace('.', '/')}"
-                    for candidate in (f"{target}.py", f"{target}/__init__.py"):
-                        if candidate in tree:
-                            names |= module_names(candidate, True, depth + 1)
-                            break
-        return names
-
-    def package_defines(folder: str, name: str, include_imports: bool = False) -> bool:
-        return name in module_names(f"{folder}/__init__.py", include_imports)
-
-    bad: set[str] = set()
-    for path in sorted(tree):
-        unit = unit_of(path)
-        if not path.endswith(".py") or unit not in wanted or unit in bad:
-            continue
-        try:
-            module = ast.parse(source(path))
-        except (SyntaxError, ValueError):
-            continue
-        folder = path.rsplit("/", 1)[0]
-        for node in ast.walk(module):
-            if isinstance(node, ast.ImportFrom):
-                base: str | None = None
-                module_path: str | None = node.module
-                if node.level:  # relative import
-                    base = folder
-                    for _ in range(node.level - 1):
-                        base = base.rsplit("/", 1)[0]
-                elif node.module and node.module.split(".")[0] == "custom_components":
-                    parts = node.module.split(".")  # absolute import of this same integration
-                    if len(parts) >= 2 and f"custom_components/{parts[1]}" == unit:
-                        base = unit
-                        module_path = ".".join(parts[2:]) or None
-                if base is None:
-                    continue
-                if module_path:
-                    target = f"{base}/{module_path.replace('.', '/')}"
-                    if not module_exists(target):
-                        bad.add(unit)
-                    elif f"{target}/__init__.py" in tree:
-                        # `from .pkg import child`: each name is a submodule or something the package exports.
-                        for alias in node.names:
-                            if (
-                                alias.name != "*"
-                                and not module_exists(f"{target}/{alias.name}")
-                                and not package_defines(target, alias.name, include_imports=True)
-                            ):
-                                bad.add(unit)
-                else:
-                    # `from . import name`: each name is a submodule or a symbol defined in the package.
-                    # Inside the package's own __init__.py an import cannot define the name it imports,
-                    # so be strict there; other modules may use anything the package re-exports.
-                    strict = path == f"{base}/__init__.py"
-                    for alias in node.names:
-                        if (
-                            alias.name != "*"
-                            and not module_exists(f"{base}/{alias.name}")
-                            and not package_defines(base, alias.name, include_imports=not strict)
-                        ):
-                            bad.add(unit)
-            elif isinstance(node, ast.Import):
-                for alias in node.names:  # `import custom_components.<this integration>.module`
-                    parts = alias.name.split(".")
-                    if len(parts) > 2 and parts[0] == "custom_components" and f"custom_components/{parts[1]}" == unit:
-                        if not module_exists("/".join(parts)):
-                            bad.add(unit)
-            elif (
-                path.count("/") == 2  # custom_components/<name>/<module>.py, where PLATFORMS lists live
-                and isinstance(node, ast.Attribute)
-                and isinstance(node.value, ast.Name)
-                and node.value.id == "Platform"
-                and not module_exists(f"{unit}/{node.attr.lower()}")
-            ):
-                bad.add(unit)
-            if path.count("/") == 2 and unit not in bad:
-                for platform in _declared_platform_strings(node):
-                    if not module_exists(f"{unit}/{platform}"):
-                        bad.add(unit)
-                        break
-            if unit in bad:
-                break
-    return bad
-
-
 class UnionFind:
     def __init__(self) -> None:
         self.parent: dict[str, str] = {}
@@ -478,11 +303,13 @@ def run_audit(
         excluded.setdefault(path, DIVERGED_REASON)
         age[path] = 0.0
 
-    for unit in sorted(incomplete_vendored_units(repo, head, {unit_of(p) for p in age})):
-        for path in status:
-            if path in age and unit_of(path) == unit:
-                excluded.setdefault(path, INCOMPLETE_REASON)
-                age[path] = 0.0
+    # HACS owns custom_components (#1097): git cannot show a complete snapshot of an
+    # integration, so none of it is ever recommended. Analysing the Python to guess
+    # completeness always misses one more pattern, so hold it all.
+    for path in status:
+        if path in age and path.startswith(VENDORED_PREFIX):
+            excluded.setdefault(path, VENDORED_REASON)
+            age[path] = 0.0
 
     # Holds are tracked as a set, not just as age 0, so no threshold can make them promotable.
     held = set(excluded)
@@ -596,14 +423,6 @@ def _blockers(
     return [(root, unit_age[root], n) for root, n in counts.most_common(limit)]
 
 
-def _vendored_version(repo: Path, ref: str, unit: str) -> str | None:
-    try:
-        text = git(repo, "show", f"{ref}:{unit}/manifest.json")
-        return json.loads(text).get("version")
-    except (subprocess.CalledProcessError, ValueError):
-        return None
-
-
 def _change_line(change: Change, audit: Audit) -> str:
     day = time.strftime("%Y-%m-%d", time.gmtime(change.ts))
     title = change.title.replace("|", "\\|")
@@ -644,12 +463,6 @@ def _cluster_block(
     block += [_change_line(change, audit)[:300] for change in ordered[:MAX_CHANGE_LINES_PER_GROUP]]
     if len(ordered) > MAX_CHANGE_LINES_PER_GROUP:
         block.append(f"- … {len(ordered) - MAX_CHANGE_LINES_PER_GROUP} more change(s)")
-    if repo is not None:
-        for unit in (u for u in cluster.units if u.startswith(VENDORED_PREFIX)):
-            before = _vendored_version(repo, audit.base, unit)
-            after = _vendored_version(repo, audit.head, unit)
-            if after and before != after:
-                block.append(f"- `{unit}` version {before or 'none'} → {after}")
     block += ["", "<details><summary>Files</summary>", ""]
     block += [f"- `{audit.status[f]}` {f}"[:300] for f in cluster.files[:MAX_FILES_PER_GROUP]]
     if len(cluster.files) > MAX_FILES_PER_GROUP:
@@ -721,7 +534,7 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
         out += [
             "## Held back on purpose",
             "",
-            f"{len(audit.excluded)} file(s) are held back: listed in `docs/promotion_audit_exclusions.yaml`, also changed on `main`, or part of a vendored snapshot that is incomplete in git:",
+            f"{len(audit.excluded)} file(s) are held back: listed in `docs/promotion_audit_exclusions.yaml`, also changed on `main`, or vendored (`custom_components/`, owned by HACS):",
             "",
         ]
         reasons = collections.defaultdict(list)
