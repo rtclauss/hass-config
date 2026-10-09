@@ -250,6 +250,58 @@ def test_report_stays_within_the_issue_size_limit_for_huge_sweeps(tmp_path: Path
     assert report.count("<details>") == report.count("</details>")
 
 
+def test_threshold_below_one_day_is_rejected(repo: Path) -> None:
+    with pytest.raises(ValueError):
+        promotion_audit.run_audit(repo, base="main", head="develop", days=0, now=NOW)
+    with pytest.raises(SystemExit):
+        promotion_audit.parse_args(["--days", "0"])
+
+
+def test_holds_do_not_depend_on_the_age_threshold(repo: Path) -> None:
+    result = audit(repo, days=1, exclusions=[("packages/excl.yaml", "held")])
+
+    assert "packages/excl.yaml" not in result.promotable_files
+    assert "custom_components/inc/__init__.py" not in result.promotable_files  # incomplete snapshot
+
+
+def test_platform_list_in_const_module_is_checked(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {
+            "custom_components/bm/__init__.py": "from .const import PLATFORMS\n",
+            "custom_components/bm/const.py": "PLATFORMS = [Platform.SENSOR, Platform.BUTTON]\n",
+            "custom_components/bm/sensor.py": "x = 1\n",
+        },
+        60,
+        "add bm (#1)",
+    )  # button.py was silently ignored by the allow-list
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert "custom_components/bm/const.py" not in result.promotable_files
+    assert result.excluded["custom_components/bm/const.py"] == promotion_audit.INCOMPLETE_REASON
+
+
+def test_version_revisited_on_develop_is_not_divergence(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: A\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(tmp_path, {"packages/f.yaml": "a: B\n"}, 80, "edit to B (#1)")
+    commit(tmp_path, {"packages/f.yaml": "a: A\n"}, 60, "revert to A (#2)")  # develop revisits A
+    # main already promoted B (a valid develop state).
+    git(tmp_path, "checkout", "-q", "-b", "main_b", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: B\n"}, 70, "promote B")
+    git(tmp_path, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(tmp_path, base="main_b", head="develop", now=NOW)
+
+    assert "packages/f.yaml" not in result.excluded
+    assert "packages/f.yaml" in result.promotable_files
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.

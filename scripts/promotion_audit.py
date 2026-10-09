@@ -198,19 +198,23 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
             repo, "log", "--first-parent", "--diff-merges=first-parent", "--reverse", "--format=",
             "--raw", "--no-abbrev", "--no-renames", head, "--", path,
         )
-        order: dict[str, int] = {}
+        positions: dict[str, list[int]] = collections.defaultdict(list)
         for index, line in enumerate(l for l in raw.splitlines() if l.startswith(":")):
-            order[line.split()[3]] = index  # last occurrence wins
-        current = order.get(_blob(repo, merge_base, path) or "", -1)
+            positions[line.split()[3]].append(index)
+        # Start at the earliest place the merge-base version occurs; every step on base must
+        # then land on an occurrence at or after the previous one, so a version develop
+        # revisits (A -> B -> A) can be followed in either direction without false alarms.
+        current = min(positions.get(_blob(repo, merge_base, path) or "", [-1]))
         commits = git(
             repo, "log", "--first-parent", "--reverse", "--format=%H", f"{merge_base}..{base}", "--", path
         ).split()
         for sha in commits:
             blob = _blob(repo, sha, path)
-            if blob is None or blob not in order or order[blob] < current:
+            later = [q for q in positions.get(blob or "", []) if q >= current]
+            if blob is None or not later:
                 diverged.add(path)
                 break
-            current = order[blob]
+            current = min(later)
     return diverged
 
 
@@ -254,7 +258,9 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
         target = f"{folder}/{match.group(2).replace('.', '/')}"
         if f"{target}.py" not in tree and f"{target}/__init__.py" not in tree:
             bad.add(unit)
-    for path, text in grep(r"Platform\.[A-Z_]+", "custom_components/*/__init__.py"):
+    for path, text in grep(r"Platform\.[A-Z_]+", "custom_components/*.py"):
+        if path.count("/") != 2:  # only custom_components/<name>/<module>.py, where PLATFORMS lists live
+            continue
         unit = unit_of(path)
         if unit not in wanted or unit in bad:
             continue
@@ -290,6 +296,8 @@ def run_audit(
     exclusions: list[tuple[str, str]] | None = None,
     now: float | None = None,
 ) -> Audit:
+    if days < 1:
+        raise ValueError("days must be at least 1")
     now = time.time() if now is None else now
     exclusions = exclusions or []
     status = load_status(repo, base, head)
@@ -319,6 +327,9 @@ def run_audit(
             if path in age and unit_of(path) == unit:
                 excluded.setdefault(path, INCOMPLETE_REASON)
                 age[path] = 0.0
+
+    # Holds are tracked as a set, not just as age 0, so no threshold can make them promotable.
+    held = set(excluded)
 
     unit_age: dict[str, float] = {}
     unit_files: dict[str, list[str]] = collections.defaultdict(list)
@@ -354,7 +365,7 @@ def run_audit(
     promotable_units: set[str] = set()
     for members in groups.values():
         quiet = min(unit_age[u] for u in members)
-        if quiet >= days:
+        if quiet >= days and not any(f in held for u in members for f in unit_files[u]):
             files = sorted(f for u in members for f in unit_files[u])
             clusters.append(Cluster(sorted(members), files, quiet))
             promotable_units.update(members)
@@ -370,7 +381,7 @@ def run_audit(
         in_a = [p for p in remaining if p in promotable_set]
         if len(in_a) == len(remaining):
             states["promotable"].append(change)
-        elif any(age[p] < days for p in remaining):
+        elif any(age[p] < days or p in held for p in remaining):
             states["soaking"].append(change)
         elif in_a:
             states["partial"].append(change)
@@ -593,12 +604,19 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
     return text
 
 
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return number
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", default=".", type=Path)
     parser.add_argument("--base", default="origin/main")
     parser.add_argument("--head", default="origin/develop")
-    parser.add_argument("--days", type=int, default=DEFAULT_DAYS)
+    parser.add_argument("--days", type=_positive_int, default=DEFAULT_DAYS)
     parser.add_argument("--wide", type=int, default=DEFAULT_WIDE, help="ignore changes touching this many files or more when linking")
     parser.add_argument("--exclusions", type=Path, default=Path("docs/promotion_audit_exclusions.yaml"))
     parser.add_argument("--now", type=float, help="treat this epoch time as now (for reproducible runs and tests)")
