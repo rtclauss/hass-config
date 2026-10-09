@@ -406,6 +406,38 @@ def test_multiline_imports_and_commented_platforms(tmp_path: Path) -> None:
     assert "custom_components/cm/const.py" in result.promotable_files  # commented-out platform is ignored
 
 
+def test_children_of_relative_packages_and_pep695_aliases(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {
+            "custom_components/pk/__init__.py": "from .core import missing\n",
+            "custom_components/pk/core/__init__.py": "",
+            "custom_components/pk/core/present.py": "x = 1\n",
+        },
+        60,
+        "add pk (#1)",
+    )  # core/missing.py was ignored by the allow-list
+    commit(
+        tmp_path,
+        {
+            "custom_components/ta/__init__.py": "type ConfigEntry = dict\nfrom .core import present\n",
+            "custom_components/ta/core/__init__.py": "from .present import thing\n",
+            "custom_components/ta/core/present.py": "thing = 1\n",
+            "custom_components/ta/sensor.py": "from . import ConfigEntry\nfrom .core import thing\n",
+        },
+        60,
+        "add ta (#2)",
+    )
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert result.excluded["custom_components/pk/__init__.py"] == promotion_audit.INCOMPLETE_REASON
+    assert "custom_components/ta/sensor.py" in result.promotable_files  # alias + re-exported name resolve
+
+
 def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: 1\n"}, 300, "base")
