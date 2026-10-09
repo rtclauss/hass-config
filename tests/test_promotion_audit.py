@@ -390,6 +390,36 @@ def test_vendored_hold_propagates_to_companion_files_in_the_same_change(tmp_path
     assert "packages/standalone.yaml" in result.promotable_files
 
 
+def test_recently_restored_companion_still_blocks_the_old_edit(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"packages/a.yaml": "a: 0\n", "packages/b.yaml": "b: 0\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(tmp_path, {"packages/a.yaml": "a: 1\n", "packages/b.yaml": "b: 1\n"}, 60, "change A with B (#1)")
+    # A recent commit restores B to exactly main's state, so B leaves the delta.
+    commit(tmp_path, {"packages/b.yaml": "b: 0\n"}, 2, "revert B (#2)")
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert "packages/b.yaml" not in result.status
+    assert "packages/a.yaml" in result.status
+    assert "packages/a.yaml" not in result.promotable_files
+
+
+def test_wide_change_containing_a_held_file_links_everything_in_it(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    files = {f"custom_components/foo/mod{i}.py": "x = 1\n" for i in range(19)}
+    files["packages/foo.yaml"] = "needs: foo\n"
+    commit(tmp_path, files, 60, "update foo and its package (#1)")  # 20 files: a 'wide' change
+    commit(tmp_path, {f"packages/sweep_{i}.yaml": "1\n" for i in range(25)}, 60, "ordinary sweep (#2)")
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert "packages/foo.yaml" not in result.promotable_files
+    assert "packages/sweep_0.yaml" in result.promotable_files  # sweeps without held files still do not link
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.

@@ -314,44 +314,47 @@ def run_audit(
     # Holds are tracked as a set, not just as age 0, so no threshold can make them promotable.
     held = set(excluded)
 
+    # Linkage uses every path the post-fork changes touched, not only paths still in the delta:
+    # a companion that a later commit restored to main's state is no longer emitted, but its
+    # recent change still means the old edit it was made with is not safe to promote alone.
+    last_all: dict[str, int] = {}
+    for change in changes:
+        for path in change.files:
+            last_all[path] = max(last_all.get(path, 0), change.ts)
     unit_age: dict[str, float] = {}
     unit_files: dict[str, list[str]] = collections.defaultdict(list)
-    for path in status:
-        if path not in age or is_meta(path):
+    for path, stamp in last_all.items():
+        if is_meta(path):
             continue
         unit = unit_of(path)
-        unit_files[unit].append(path)
-        unit_age[unit] = min(unit_age.get(unit, float("inf")), age[path])
+        unit_age[unit] = min(unit_age.get(unit, float("inf")), age[path] if path in age else (now - stamp) / DAY)
+    for path in status:
+        if path in age and not is_meta(path):
+            unit_files[unit_of(path)].append(path)
 
     uf = UnionFind()
-    for unit in unit_files:
+    for unit in unit_age:
         uf.find(unit)
     link_edges: list[tuple[Change, list[str]]] = []
     for change in changes:
-        units = sorted(
-            {
-                unit_of(p)
-                for p in change.files
-                if p in age and not is_meta(p)
-            }
-        )
-        if len(change.files) >= wide or len(units) < 1:
+        units = sorted({unit_of(p) for p in change.files if not is_meta(p)})
+        # Ordinary sweeps (wide changes) do not link files, but a sweep that contains a held
+        # file must still hold everything made with it.
+        if not units or (len(change.files) >= wide and not any(p in held for p in change.files)):
             continue
         link_edges.append((change, units))
         for other in units[1:]:
             uf.union(units[0], other)
 
     groups: dict[str, list[str]] = collections.defaultdict(list)
-    for unit in unit_files:
+    for unit in unit_age:
         groups[uf.find(unit)].append(unit)
     clusters: list[Cluster] = []
-    promotable_units: set[str] = set()
     for members in groups.values():
         quiet = min(unit_age[u] for u in members)
-        if quiet >= days and not any(f in held for u in members for f in unit_files[u]):
-            files = sorted(f for u in members for f in unit_files[u])
+        files = sorted(f for u in members for f in unit_files.get(u, []))
+        if files and quiet >= days and not any(f in held for f in files):
             clusters.append(Cluster(sorted(members), files, quiet))
-            promotable_units.update(members)
     clusters.sort(key=lambda c: (-c.quiet_days, c.units[0]))
     promotable_files = sorted(f for c in clusters for f in c.files)
     promotable_set = set(promotable_files)
