@@ -37,12 +37,16 @@ otherwise git lists it as untracked:
 
 ```bash
 cd /config
-cp -a custom_components /share/custom_components.bak      # 1. back up what HACS installed
-git checkout -- custom_components                         # 2. drop local edits to tracked copies
-git pull --ff-only                                         # 3. deletes the old tracked copies
-cp -a /share/custom_components.bak/. custom_components/    # 4. restore everything from the backup
-git status --short custom_components                       # 5. must print nothing (all ignored)
+BAK=/share/custom_components.$(date +%Y%m%d-%H%M%S)        # always a fresh path: cp onto an existing folder nests the copy
+cp -a custom_components "$BAK"                             # 1. back up what HACS has installed right now
+git checkout -- custom_components                          # 2. drop local edits to tracked copies
+git pull --ff-only                                          # 3. deletes the old tracked copies
+cp -a "$BAK"/. custom_components/                           # 4. restore everything from the backup
+git status --short custom_components                        # 5. must print nothing (all ignored)
 ```
+
+Never reuse an older backup folder for this: restoring a stale one would bring back integrations
+you have since removed.
 
 Restart Home Assistant, confirm the integrations load, then delete the backup. If an add-on
 pulls automatically (Git Pull add-on or a cron job), stop it first; anything that runs
@@ -103,8 +107,8 @@ EOF
 
 ### 1. Safety net
 
-Take a full backup (`ha backups new --name pre-untrack`), copy `custom_components` somewhere outside
-the repo (for example `/share/custom_components.bak`), and stop any auto-pull add-on.
+Take a full backup (`ha backups new --name pre-untrack`) and stop any auto-pull add-on. The
+`custom_components` copy comes later, in step 3, so it reflects the cleaned-up state.
 
 ### 2. Remove integrations nothing uses (before the git change)
 
@@ -127,7 +131,7 @@ the backup. Do not delete folders by hand: HACS then keeps listing them as insta
 ### 3. Sync git and the host
 
 After this change reaches the branch the host runs, follow the backup, pull, restore sequence in
-"Deploy warning" above. Then restart Home Assistant, confirm the integrations load, run a HACS
+"Deploy warning" above, taking its dated backup *after* step 2 so removed integrations are not restored. Then restart Home Assistant, confirm the integrations load, run a HACS
 update and check `git status --short custom_components` is still empty.
 
 ### 4. Keep it that way
