@@ -372,6 +372,24 @@ def test_vendored_integrations_are_never_recommended(repo: Path) -> None:
     assert "vendored (`custom_components/`, owned by HACS)" in promotion_audit.render_markdown(result, repo)
 
 
+def test_vendored_hold_propagates_to_companion_files_in_the_same_change(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {"custom_components/foo/manifest.json": '{"version": "2"}\n', "packages/foo.yaml": "uses: foo v2\n"},
+        60,
+        "update foo and its package (#1)",
+    )
+    commit(tmp_path, {"packages/standalone.yaml": "x: 1\n"}, 60, "standalone (#2)")
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert "packages/foo.yaml" not in result.promotable_files  # needs the unpromoted integration version
+    assert "packages/standalone.yaml" in result.promotable_files
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.
