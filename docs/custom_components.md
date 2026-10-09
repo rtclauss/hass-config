@@ -136,6 +136,7 @@ update and check `git status --short custom_components` is still empty.
 
 ### 4. Keep it that way
 
-The final `.gitignore` block keeps new HACS files out of git, and the weekly promotion audit
-(`docs/promotion_audit.md`) never recommends `custom_components/**`. To make a fresh-host restore
-easy, save the inventory output (or `.storage/hacs.repositories`) next to your backups.
+The final `.gitignore` block (checked by `tests/test_custom_components_gitignore.py`) keeps new HACS
+files out of git. If the weekly promotion audit proposed in #1095 is merged, it will also never
+recommend `custom_components/**` for promotion. To make a fresh-host restore easy, save the
+inventory output (or `.storage/hacs.repositories`) next to your backups.
