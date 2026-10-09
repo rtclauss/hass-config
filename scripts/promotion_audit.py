@@ -270,6 +270,32 @@ def _top_level_names(source: str, include_imports: bool = False) -> set[str]:
     return names
 
 
+def _declared_platform_strings(node: ast.AST) -> list[str]:
+    """String platform names from `PLATFORMS = ["switch"]`-style declarations and forward calls."""
+
+    def strings(value: ast.AST | None) -> list[str]:
+        if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+            return [e.value for e in value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+        return []
+
+    if isinstance(node, ast.Assign):
+        names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        value = node.value
+    elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+        names, value = [node.target.id], node.value
+    elif isinstance(node, ast.Call):
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if called in {"async_forward_entry_setups", "async_forward_entry_setup"} and len(node.args) >= 2:
+            return strings(node.args[1])
+        return []
+    else:
+        return []
+    if any(n.upper() == "PLATFORM" or n.upper().endswith("PLATFORMS") for n in names):
+        return strings(value)
+    return []
+
+
 def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str]:
     """Vendored integrations whose tracked snapshot cannot import itself.
 
@@ -386,6 +412,11 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
                 and not module_exists(f"{unit}/{node.attr.lower()}")
             ):
                 bad.add(unit)
+            if path.count("/") == 2 and unit not in bad:
+                for platform in _declared_platform_strings(node):
+                    if not module_exists(f"{unit}/{platform}"):
+                        bad.add(unit)
+                        break
             if unit in bad:
                 break
     return bad
