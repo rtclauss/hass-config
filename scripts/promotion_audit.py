@@ -241,12 +241,14 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
     return diverged
 
 
-def _top_level_names(source: str) -> set[str]:
+def _top_level_names(source: str, include_imports: bool = False) -> set[str]:
+    """Names a module defines at top level (def/class/assignment/PEP 695 alias, optionally imports)."""
     names: set[str] = set()
     try:
         tree = ast.parse(source)
     except (SyntaxError, ValueError):
         return names
+    type_alias = getattr(ast, "TypeAlias", None)  # Python 3.12+
     for node in tree.body:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
             names.add(node.name)
@@ -254,6 +256,10 @@ def _top_level_names(source: str) -> set[str]:
             names.update(t.id for t in node.targets if isinstance(t, ast.Name))
         elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             names.add(node.target.id)
+        elif type_alias is not None and isinstance(node, type_alias) and isinstance(node.name, ast.Name):
+            names.add(node.name.id)
+        elif include_imports and isinstance(node, (ast.Import, ast.ImportFrom)):
+            names.update((alias.asname or alias.name).split(".")[0] for alias in node.names)
     return names
 
 
@@ -269,7 +275,7 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
     if not wanted:
         return set()
     tree = set(git(repo, "ls-tree", "-r", "--name-only", head, "custom_components").splitlines())
-    init_names: dict[str, set[str]] = {}
+    init_names: dict[tuple[str, bool], set[str]] = {}
 
     def source(path: str) -> str:
         result = subprocess.run(
@@ -280,10 +286,11 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
     def module_exists(target: str) -> bool:
         return f"{target}.py" in tree or f"{target}/__init__.py" in tree
 
-    def package_defines(folder: str, name: str) -> bool:
-        if folder not in init_names:
-            init_names[folder] = _top_level_names(source(f"{folder}/__init__.py"))
-        return name in init_names[folder]
+    def package_defines(folder: str, name: str, include_imports: bool = False) -> bool:
+        key = (folder, include_imports)
+        if key not in init_names:
+            init_names[key] = _top_level_names(source(f"{folder}/__init__.py"), include_imports)
+        return name in init_names[key]
 
     bad: set[str] = set()
     for path in sorted(tree):
@@ -301,8 +308,18 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
                 for _ in range(node.level - 1):
                     base = base.rsplit("/", 1)[0]
                 if node.module:
-                    if not module_exists(f"{base}/{node.module.replace('.', '/')}"):
+                    target = f"{base}/{node.module.replace('.', '/')}"
+                    if not module_exists(target):
                         bad.add(unit)
+                    elif f"{target}/__init__.py" in tree:
+                        # `from .pkg import child`: each name is a submodule or something the package exports.
+                        for alias in node.names:
+                            if (
+                                alias.name != "*"
+                                and not module_exists(f"{target}/{alias.name}")
+                                and not package_defines(target, alias.name, include_imports=True)
+                            ):
+                                bad.add(unit)
                 else:
                     for alias in node.names:
                         if alias.name != "*" and not module_exists(f"{base}/{alias.name}") and not package_defines(base, alias.name):
