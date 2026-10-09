@@ -27,6 +27,10 @@ from pathlib import Path
 DEFAULT_DAYS = 30
 DEFAULT_WIDE = 20
 MAX_BODY_CHARS = 60000
+PROMOTABLE_BUDGET = 30000
+MAX_CHANGE_LINES_PER_GROUP = 12
+MAX_FILES_PER_GROUP = 40
+MAX_EXCLUSION_LINES = 25
 META_FILES = {"README.md", "AGENTS.md", ".gitignore", "inventory.md"}
 META_PREFIXES = (".github/",)
 VENDORED_PREFIX = "custom_components/"
@@ -175,8 +179,9 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
 
     Walks every first-parent commit on base since the merge base that touched the
     path (including ones whose net effect is zero, such as promote-then-revert) and
-    requires each resulting version to be a later version from head's history than
-    the previous one. A file promoted and edited again on head passes; a hotfix, a
+    requires each resulting version to be a later version from head's first-parent
+    history than the previous one (blobs that only existed on a merged side branch do
+    not count). A file promoted and edited again on head passes; a hotfix, a
     revert, or a deletion on base does not.
     """
     merge_base = git(repo, "merge-base", base, head).strip()
@@ -190,7 +195,8 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
     diverged: set[str] = set()
     for path in sorted(touched_on_base):
         raw = git(
-            repo, "log", "--reverse", "--format=", "--raw", "--no-abbrev", "--no-renames", head, "--", path
+            repo, "log", "--first-parent", "--diff-merges=first-parent", "--reverse", "--format=",
+            "--raw", "--no-abbrev", "--no-renames", head, "--", path,
         )
         order: dict[str, int] = {}
         for index, line in enumerate(l for l in raw.splitlines() if l.startswith(":")):
@@ -438,6 +444,8 @@ def _change_line(change: Change, audit: Audit) -> str:
 
 
 def _ledger(changes: list[Change], audit: Audit, budget: int) -> str:
+    if budget <= 0 or not changes:
+        return f"- … {len(changes)} change(s) not listed (run the script locally for the full list)" if changes else "- none"
     lines: list[str] = []
     used = 0
     for change in sorted(changes, key=lambda c: c.ts):
@@ -448,6 +456,39 @@ def _ledger(changes: list[Change], audit: Audit, budget: int) -> str:
         lines.append(line)
         used += len(line) + 1
     return "\n".join(lines)
+
+
+def _cluster_block(
+    cluster: Cluster, audit: Audit, by_file: dict[str, list[Change]], repo: Path | None
+) -> list[str]:
+    title = ", ".join(f"`{u}`" for u in cluster.units[:3])
+    if len(cluster.units) > 3:
+        title += f" +{len(cluster.units) - 3} more"
+    block = [
+        f"### {title}"[:300],
+        f"Quiet for **{int(cluster.quiet_days)} days** · {len(cluster.files)} file(s)",
+        "",
+    ]
+    seen: dict[str, Change] = {}
+    for path in cluster.files:
+        for change in by_file.get(path, []):
+            seen[change.sha] = change
+    ordered = sorted(seen.values(), key=lambda ch: ch.ts)
+    block += [_change_line(change, audit)[:300] for change in ordered[:MAX_CHANGE_LINES_PER_GROUP]]
+    if len(ordered) > MAX_CHANGE_LINES_PER_GROUP:
+        block.append(f"- … {len(ordered) - MAX_CHANGE_LINES_PER_GROUP} more change(s)")
+    if repo is not None:
+        for unit in (u for u in cluster.units if u.startswith(VENDORED_PREFIX)):
+            before = _vendored_version(repo, audit.base, unit)
+            after = _vendored_version(repo, audit.head, unit)
+            if after and before != after:
+                block.append(f"- `{unit}` version {before or 'none'} → {after}")
+    block += ["", "<details><summary>Files</summary>", ""]
+    block += [f"- `{audit.status[f]}` {f}"[:300] for f in cluster.files[:MAX_FILES_PER_GROUP]]
+    if len(cluster.files) > MAX_FILES_PER_GROUP:
+        block.append(f"- … {len(cluster.files) - MAX_FILES_PER_GROUP} more")
+    block += ["", "</details>", ""]
+    return block
 
 
 def render_markdown(audit: Audit, repo: Path | None = None) -> str:
@@ -483,31 +524,19 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
         for change in audit.all_changes:
             for path in change.files:
                 by_file.setdefault(path, []).append(change)
-        for cluster in audit.promotable:
-            title = ", ".join(f"`{u}`" for u in cluster.units[:3])
-            if len(cluster.units) > 3:
-                title += f" +{len(cluster.units) - 3} more"
-            out.append(f"### {title}")
-            out.append(f"Quiet for **{int(cluster.quiet_days)} days** · {len(cluster.files)} file(s)")
-            out.append("")
-            seen: dict[str, Change] = {}
-            for path in cluster.files:
-                for change in by_file.get(path, []):
-                    seen[change.sha] = change
-            for change in sorted(seen.values(), key=lambda ch: ch.ts):
-                out.append(_change_line(change, audit))
-            vendored = [u for u in cluster.units if u.startswith(VENDORED_PREFIX)]
-            if repo is not None:
-                for unit in vendored:
-                    before = _vendored_version(repo, audit.base, unit)
-                    after = _vendored_version(repo, audit.head, unit)
-                    if after and before != after:
-                        out.append(f"- `{unit}` version {before or 'none'} → {after}")
-            out += ["", "<details><summary>Files</summary>", ""]
-            out += [f"- `{audit.status[f]}` {f}" for f in cluster.files[:60]]
-            if len(cluster.files) > 60:
-                out.append(f"- … {len(cluster.files) - 60} more")
-            out += ["", "</details>", ""]
+        used = 0
+        for position, cluster in enumerate(audit.promotable):
+            block = _cluster_block(cluster, audit, by_file, repo)
+            size = sum(len(line) + 1 for line in block)
+            if used + size > PROMOTABLE_BUDGET:
+                out += [
+                    f"- … {len(audit.promotable) - position} more group(s) omitted to fit GitHub's size limit. "
+                    "The full list is in the `promotion-audit-files` artifact or from running the script locally.",
+                    "",
+                ]
+                break
+            out += block
+            used += size
 
     if audit.blockers:
         out += [
@@ -531,17 +560,20 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
         reasons = collections.defaultdict(list)
         for path, reason in sorted(audit.excluded.items()):
             reasons[reason].append(path)
-        for reason, paths in reasons.items():
-            out.append(f"- {reason}: " + ", ".join(f"`{p}`" for p in paths[:6]) + (f" +{len(paths) - 6} more" if len(paths) > 6 else ""))
+        for reason, paths in list(reasons.items())[:MAX_EXCLUSION_LINES]:
+            line = f"- {reason}: " + ", ".join(f"`{p}`" for p in paths[:6]) + (f" +{len(paths) - 6} more" if len(paths) > 6 else "")
+            out.append(line[:500])
+        if len(reasons) > MAX_EXCLUSION_LINES:
+            out.append(f"- … {len(reasons) - MAX_EXCLUSION_LINES} more reason(s)")
         out.append("")
 
     head_text = "\n".join(out)
-    budget = MAX_BODY_CHARS - len(head_text) - 600
+    budget = MAX_BODY_CHARS - len(head_text) - 1200  # room for the ledger wrappers
     held = c["entangled"] + c["partial"]
     soaking = c["soaking"]
     total = len(held) + len(soaking) or 1
-    held_budget = max(budget * len(held) // total, 500)
-    soak_budget = max(budget - held_budget, 500)
+    held_budget = max(budget * len(held) // total, 0)
+    soak_budget = max(budget - held_budget, 0)
     tail = [
         f"<details><summary>Ledger: {len(held)} quiet-but-entangled changes</summary>",
         "",
@@ -555,7 +587,10 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
         "",
         "</details>",
     ]
-    return head_text + "\n" + "\n".join(tail) + "\n"
+    text = head_text + "\n" + "\n".join(tail) + "\n"
+    if len(text) > MAX_BODY_CHARS:  # last-resort guard; the budgets above should prevent this
+        text = text[: MAX_BODY_CHARS - 100].rsplit("\n", 1)[0] + "\n\n_(report truncated)_\n"
+    return text
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

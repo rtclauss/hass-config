@@ -206,6 +206,50 @@ def test_incomplete_vendored_snapshot_is_held_back(repo: Path) -> None:
     assert "custom_components/foo/x.py" in result.promotable_files
 
 
+def test_side_branch_blob_is_not_a_valid_promoted_version(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: base\n"}, 200, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    git(tmp_path, "checkout", "-q", "-b", "feat")
+    commit(tmp_path, {"packages/f.yaml": "a: X\n"}, 70, "feature edit (#1)")  # only ever on the side branch
+    git(tmp_path, "checkout", "-q", "develop")
+    commit(tmp_path, {"packages/f.yaml": "a: Z\n"}, 65, "develop edit (#2)")
+    # Conflict resolution produces Y, which matches neither parent, so a plain
+    # `git log -- path` also walks the side branch and sees X.
+    git(tmp_path, "merge", "--no-ff", "--no-commit", "-s", "ours", "-q", "feat")
+    (tmp_path / "packages" / "f.yaml").write_text("a: Y\n", encoding="utf-8")
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-q", "-m", "Merge pull request #3 from o/feat", when=NOW - 60 * DAY)
+    # main independently hotfixes the file to exactly X.
+    git(tmp_path, "checkout", "-q", "-b", "main_hotfix", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: X\n"}, 20, "hotfix on main")
+    git(tmp_path, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(tmp_path, base="main_hotfix", head="develop", now=NOW)
+
+    assert result.excluded["packages/f.yaml"] == promotion_audit.DIVERGED_REASON
+    assert "packages/f.yaml" not in result.promotable_files
+
+
+def test_report_stays_within_the_issue_size_limit_for_huge_sweeps(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    # A wide sweep of 700 files is ignored for linking, so each file is its own group.
+    commit(tmp_path, {f"packages/very_long_package_name_number_{i:04d}.yaml": "1\n" for i in range(700)}, 60, "Sweep (#1)")
+    for i in range(30):
+        commit(tmp_path, {f"packages/soak_{i}.yaml": "1\n"}, 2, f"Recent change {i} (#{10 + i})")
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+    report = promotion_audit.render_markdown(result, tmp_path)
+
+    assert len(result.promotable) >= 700
+    assert len(report) <= promotion_audit.MAX_BODY_CHARS
+    assert "more group(s) omitted to fit GitHub's size limit" in report
+    assert "## Promotable now" in report
+    assert report.count("<details>") == report.count("</details>")
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.
