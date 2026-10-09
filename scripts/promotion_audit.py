@@ -181,20 +181,21 @@ def _is_ancestor(repo: Path, commit: str, other: str) -> bool:
     ).returncode == 0
 
 
-def _head_states(repo: Path, head: str, path: str) -> list[tuple[str, str]]:
-    """(commit, state) for each first-parent commit on head that changed path, oldest first."""
+def _head_states(repo: Path, head: str, path: str) -> list[tuple[str, str, int]]:
+    """(commit, state, commit time) for each first-parent commit on head that changed path, oldest first."""
     raw = git(
-        repo, "log", "--first-parent", "--diff-merges=first-parent", "--reverse", "--format=%H",
+        repo, "log", "--first-parent", "--diff-merges=first-parent", "--reverse", "--format=%H %ct",
         "--raw", "--no-abbrev", "--no-renames", head, "--", path,
     )
-    entries: list[tuple[str, str]] = []
-    commit = ""
+    entries: list[tuple[str, str, int]] = []
+    commit, stamp = "", 0
     for line in raw.splitlines():
-        if re.fullmatch(r"[0-9a-f]{40}", line):
-            commit = line
+        header = re.fullmatch(r"([0-9a-f]{40}) (\d+)", line)
+        if header:
+            commit, stamp = header.group(1), int(header.group(2))
         elif line.startswith(":"):
             fields = line.split()
-            entries.append((commit, DELETED if fields[1] == "000000" else f"{fields[1]}:{fields[3]}"))
+            entries.append((commit, DELETED if fields[1] == "000000" else f"{fields[1]}:{fields[3]}", stamp))
     return entries
 
 
@@ -204,7 +205,9 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
     Walks every first-parent commit on base since the merge base that touched the
     path (including ones whose net effect is zero, such as promote-then-revert) and
     requires each resulting state (file mode and blob) to be a later state from
-    head's first-parent history than the previous one. The walk starts at the state
+    head's first-parent history than the previous one that head had already reached
+    when the base commit was made (so a coincidental match with a future head state
+    does not count). The walk starts at the state
     head had at the merge base. A file promoted and edited again on head passes; a
     hotfix, a revert, a mode change or a deletion on base does not.
     """
@@ -220,7 +223,7 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
     for path in sorted(touched_on_base):
         entries = _head_states(repo, head, path)
         positions: dict[str, list[int]] = collections.defaultdict(list)
-        for index, (_, state) in enumerate(entries):
+        for index, (_, state, _) in enumerate(entries):
             positions[state].append(index)
         # Anchor at the last head commit that is already part of the merge base.
         current = -1
@@ -228,12 +231,16 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
             if _is_ancestor(repo, entries[index][0], merge_base):
                 current = index
                 break
-        commits = git(
-            repo, "log", "--first-parent", "--reverse", "--format=%H", f"{merge_base}..{base}", "--", path
-        ).split()
-        for sha in commits:
+        commits = [
+            line.split()
+            for line in git(
+                repo, "log", "--first-parent", "--reverse", "--format=%H %ct", f"{merge_base}..{base}", "--", path
+            ).splitlines()
+            if line.strip()
+        ]
+        for sha, stamp in commits:
             state = _state(repo, sha, path)
-            later = [q for q in positions.get(state, []) if q >= current]
+            later = [q for q in positions.get(state, []) if q >= current and entries[q][2] <= int(stamp)]
             if not later:
                 diverged.add(path)
                 break
