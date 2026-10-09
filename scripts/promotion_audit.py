@@ -165,13 +165,37 @@ INCOMPLETE_REASON = "vendored snapshot is incomplete in git (imports or platform
 RELATIVE_IMPORT = r"^\s*from\s+\.+[A-Za-z_.]*\s+import\s"
 
 
-def _blob(repo: Path, ref: str, path: str) -> str | None:
+def _state(repo: Path, ref: str, path: str) -> str | None:
+    """Tree-entry state of a path at a ref: file mode and blob id, so mode-only changes count."""
     result = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "-q", "--verify", f"{ref}:{path}"],
-        capture_output=True,
-        text=True,
+        ["git", "-C", str(repo), "ls-tree", ref, "--", path], capture_output=True, text=True
     )
-    return result.stdout.strip() or None if result.returncode == 0 else None
+    fields = result.stdout.split("\t", 1)[0].split()
+    return f"{fields[0]}:{fields[2]}" if result.returncode == 0 and len(fields) == 3 else None
+
+
+def _is_ancestor(repo: Path, commit: str, other: str) -> bool:
+    return subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", commit, other], capture_output=True
+    ).returncode == 0
+
+
+def _head_states(repo: Path, head: str, path: str) -> list[tuple[str, str]]:
+    """(commit, state) for each first-parent commit on head that changed path, oldest first."""
+    raw = git(
+        repo, "log", "--first-parent", "--diff-merges=first-parent", "--reverse", "--format=%H",
+        "--raw", "--no-abbrev", "--no-renames", head, "--", path,
+    )
+    entries: list[tuple[str, str]] = []
+    commit = ""
+    for line in raw.splitlines():
+        if re.fullmatch(r"[0-9a-f]{40}", line):
+            commit = line
+        elif line.startswith(":"):
+            fields = line.split()
+            if fields[1] != "000000":  # deletions are not a state a file can be promoted to
+                entries.append((commit, f"{fields[1]}:{fields[3]}"))
+    return entries
 
 
 def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str]:
@@ -179,10 +203,10 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
 
     Walks every first-parent commit on base since the merge base that touched the
     path (including ones whose net effect is zero, such as promote-then-revert) and
-    requires each resulting version to be a later version from head's first-parent
-    history than the previous one (blobs that only existed on a merged side branch do
-    not count). A file promoted and edited again on head passes; a hotfix, a
-    revert, or a deletion on base does not.
+    requires each resulting state (file mode and blob) to be a later state from
+    head's first-parent history than the previous one. The walk starts at the state
+    head had at the merge base. A file promoted and edited again on head passes; a
+    hotfix, a revert, a mode change or a deletion on base does not.
     """
     merge_base = git(repo, "merge-base", base, head).strip()
     touched_on_base: set[str] = set()
@@ -194,24 +218,23 @@ def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str
             touched_on_base.add(line.strip())
     diverged: set[str] = set()
     for path in sorted(touched_on_base):
-        raw = git(
-            repo, "log", "--first-parent", "--diff-merges=first-parent", "--reverse", "--format=",
-            "--raw", "--no-abbrev", "--no-renames", head, "--", path,
-        )
+        entries = _head_states(repo, head, path)
         positions: dict[str, list[int]] = collections.defaultdict(list)
-        for index, line in enumerate(l for l in raw.splitlines() if l.startswith(":")):
-            positions[line.split()[3]].append(index)
-        # Start at the earliest place the merge-base version occurs; every step on base must
-        # then land on an occurrence at or after the previous one, so a version develop
-        # revisits (A -> B -> A) can be followed in either direction without false alarms.
-        current = min(positions.get(_blob(repo, merge_base, path) or "", [-1]))
+        for index, (_, state) in enumerate(entries):
+            positions[state].append(index)
+        # Anchor at the last head commit that is already part of the merge base.
+        current = -1
+        for index in range(len(entries) - 1, -1, -1):
+            if _is_ancestor(repo, entries[index][0], merge_base):
+                current = index
+                break
         commits = git(
             repo, "log", "--first-parent", "--reverse", "--format=%H", f"{merge_base}..{base}", "--", path
         ).split()
         for sha in commits:
-            blob = _blob(repo, sha, path)
-            later = [q for q in positions.get(blob or "", []) if q >= current]
-            if blob is None or not later:
+            state = _state(repo, sha, path)
+            later = [q for q in positions.get(state or "", []) if q >= current]
+            if state is None or not later:
                 diverged.add(path)
                 break
             current = min(later)
@@ -245,19 +268,41 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
             rows.append((path, tail.partition(":")[2]))
         return rows
 
+    def init_text(folder: str) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "show", f"{head}:{folder}/__init__.py"], capture_output=True, text=True
+        )
+        return result.stdout if result.returncode == 0 else ""
+
     for path, text in grep(RELATIVE_IMPORT, "custom_components/*.py"):
         unit = unit_of(path)
         if unit not in wanted or unit in bad:
             continue
-        match = re.match(r"\s*from\s+(\.+)([A-Za-z_.]*)\s+import\s", text)
-        if not match or not match.group(2):
+        match = re.match(r"\s*from\s+(\.+)([A-Za-z_.]*)\s+import\s+(.*)", text)
+        if not match:
             continue
+        dots, module, names = match.groups()
         folder = path.rsplit("/", 1)[0]
-        for _ in range(len(match.group(1)) - 1):
+        for _ in range(len(dots) - 1):
             folder = folder.rsplit("/", 1)[0]
-        target = f"{folder}/{match.group(2).replace('.', '/')}"
-        if f"{target}.py" not in tree and f"{target}/__init__.py" not in tree:
-            bad.add(unit)
+        if module:
+            target = f"{folder}/{module.replace('.', '/')}"
+            if f"{target}.py" not in tree and f"{target}/__init__.py" not in tree:
+                bad.add(unit)
+            continue
+        # `from . import name`: each name is a submodule or a symbol defined in the package.
+        for raw_name in names.split("#")[0].replace("(", "").replace(")", "").split(","):
+            name = raw_name.strip().split(" as ")[0].strip()
+            if not re.fullmatch(r"[A-Za-z_]\w*", name):
+                continue
+            if f"{folder}/{name}.py" in tree or f"{folder}/{name}/__init__.py" in tree:
+                continue
+            defined = re.search(
+                rf"^\s*(?:async\s+def|def|class)\s+{name}\b|^\s*{name}\s*(?::[^=\n]+)?=", init_text(folder), re.M
+            )
+            if not defined:
+                bad.add(unit)
+                break
     for path, text in grep(r"Platform\.[A-Z_]+", "custom_components/*.py"):
         if path.count("/") != 2:  # only custom_components/<name>/<module>.py, where PLATFORMS lists live
             continue
@@ -318,6 +363,12 @@ def run_audit(
                 age[path] = 0.0
                 break
 
+    # Paths that differ but that head has not touched since the fork were changed on base
+    # only (a deletion, hotfix or revert there); promoting around them would break atomic units.
+    for path in status:
+        if path not in age:
+            excluded.setdefault(path, DIVERGED_REASON)
+            age[path] = 0.0
     for path in sorted(diverged_files(repo, base, head, set(age))):
         excluded.setdefault(path, DIVERGED_REASON)
         age[path] = 0.0
