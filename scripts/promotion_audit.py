@@ -157,6 +157,8 @@ def load_status(repo: Path, base: str, head: str) -> dict[str, str]:
 
 
 DIVERGED_REASON = "also changed on main since the branches diverged"
+INCOMPLETE_REASON = "vendored snapshot is incomplete in git (imports or platforms missing; see .gitignore allow-list)"
+RELATIVE_IMPORT = r"^\s*from\s+\.+[A-Za-z_.]*\s+import\s"
 
 
 def _blob(repo: Path, ref: str, path: str) -> str | None:
@@ -169,23 +171,93 @@ def _blob(repo: Path, ref: str, path: str) -> str | None:
 
 
 def diverged_files(repo: Path, base: str, head: str, paths: set[str]) -> set[str]:
-    """Files whose base version is not simply an older version from head's history.
+    """Files whose history on base is not a pure fast-forward through head's history.
 
-    A file promoted earlier and edited again on head is a fast-forward and fine.
-    A file edited independently on base (a revert, a hotfix) would be overwritten.
+    Walks every first-parent commit on base since the merge base that touched the
+    path (including ones whose net effect is zero, such as promote-then-revert) and
+    requires each resulting version to be a later version from head's history than
+    the previous one. A file promoted and edited again on head passes; a hotfix, a
+    revert, or a deletion on base does not.
     """
     merge_base = git(repo, "merge-base", base, head).strip()
-    changed_on_base = (
-        set(git(repo, "diff", "--name-only", "--no-renames", merge_base, base).splitlines()) & paths
-    )
+    touched_on_base: set[str] = set()
+    for line in git(
+        repo, "log", "--first-parent", "--diff-merges=first-parent", "--no-renames",
+        "--name-only", "--format=", f"{merge_base}..{base}",
+    ).splitlines():
+        if line.strip() in paths:
+            touched_on_base.add(line.strip())
     diverged: set[str] = set()
-    for path in sorted(changed_on_base):
-        base_blob = _blob(repo, base, path)
-        raw = git(repo, "log", "--format=", "--raw", "--no-abbrev", "--no-renames", head, "--", path)
-        history = {line.split()[3] for line in raw.splitlines() if line.startswith(":")}
-        if base_blob is None or base_blob not in history:
-            diverged.add(path)
+    for path in sorted(touched_on_base):
+        raw = git(
+            repo, "log", "--reverse", "--format=", "--raw", "--no-abbrev", "--no-renames", head, "--", path
+        )
+        order: dict[str, int] = {}
+        for index, line in enumerate(l for l in raw.splitlines() if l.startswith(":")):
+            order[line.split()[3]] = index  # last occurrence wins
+        current = order.get(_blob(repo, merge_base, path) or "", -1)
+        commits = git(
+            repo, "log", "--first-parent", "--reverse", "--format=%H", f"{merge_base}..{base}", "--", path
+        ).split()
+        for sha in commits:
+            blob = _blob(repo, sha, path)
+            if blob is None or blob not in order or order[blob] < current:
+                diverged.add(path)
+                break
+            current = order[blob]
     return diverged
+
+
+def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str]:
+    """Vendored integrations whose tracked snapshot cannot import itself.
+
+    The repo's .gitignore is an allow-list, so brand-new files from a HACS update are
+    silently left out while edited ones are committed. Promoting such a snapshot
+    would put an integration on main that imports files git does not have.
+    """
+    wanted = {u for u in units if u.startswith(VENDORED_PREFIX)}
+    if not wanted:
+        return set()
+    tree = set(git(repo, "ls-tree", "-r", "--name-only", head, "custom_components").splitlines())
+    prefix = f"{head}:"
+    bad: set[str] = set()
+
+    def grep(pattern: str, pathspec: str) -> list[tuple[str, str]]:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "grep", "-nE", pattern, head, "--", pathspec],
+            capture_output=True,
+            text=True,
+        )
+        rows = []
+        for line in result.stdout.splitlines():
+            rest = line[len(prefix):] if line.startswith(prefix) else line
+            path, _, tail = rest.partition(":")
+            rows.append((path, tail.partition(":")[2]))
+        return rows
+
+    for path, text in grep(RELATIVE_IMPORT, "custom_components/*.py"):
+        unit = unit_of(path)
+        if unit not in wanted or unit in bad:
+            continue
+        match = re.match(r"\s*from\s+(\.+)([A-Za-z_.]*)\s+import\s", text)
+        if not match or not match.group(2):
+            continue
+        folder = path.rsplit("/", 1)[0]
+        for _ in range(len(match.group(1)) - 1):
+            folder = folder.rsplit("/", 1)[0]
+        target = f"{folder}/{match.group(2).replace('.', '/')}"
+        if f"{target}.py" not in tree and f"{target}/__init__.py" not in tree:
+            bad.add(unit)
+    for path, text in grep(r"Platform\.[A-Z_]+", "custom_components/*/__init__.py"):
+        unit = unit_of(path)
+        if unit not in wanted or unit in bad:
+            continue
+        for name in re.findall(r"Platform\.([A-Z_]+)", text):
+            target = f"{unit}/{name.lower()}"
+            if f"{target}.py" not in tree and f"{target}/__init__.py" not in tree:
+                bad.add(unit)
+                break
+    return bad
 
 
 class UnionFind:
@@ -235,6 +307,12 @@ def run_audit(
     for path in sorted(diverged_files(repo, base, head, set(age))):
         excluded.setdefault(path, DIVERGED_REASON)
         age[path] = 0.0
+
+    for unit in sorted(incomplete_vendored_units(repo, head, {unit_of(p) for p in age})):
+        for path in status:
+            if path in age and unit_of(path) == unit:
+                excluded.setdefault(path, INCOMPLETE_REASON)
+                age[path] = 0.0
 
     unit_age: dict[str, float] = {}
     unit_files: dict[str, list[str]] = collections.defaultdict(list)
@@ -447,7 +525,7 @@ def render_markdown(audit: Audit, repo: Path | None = None) -> str:
         out += [
             "## Held back on purpose",
             "",
-            f"{len(audit.excluded)} file(s) are held by `docs/promotion_audit_exclusions.yaml` or because they also changed on `main`:",
+            f"{len(audit.excluded)} file(s) are held back: listed in `docs/promotion_audit_exclusions.yaml`, also changed on `main`, or part of a vendored snapshot that is incomplete in git:",
             "",
         ]
         reasons = collections.defaultdict(list)

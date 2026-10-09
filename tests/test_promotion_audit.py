@@ -77,6 +77,18 @@ def repo(tmp_path: Path) -> Path:
     )
     # Vendored integration touched recently: soaking.
     commit(tmp_path, {"custom_components/bar/y.py": "y = 1\n"}, 3, "add bar (#8)")
+    # A vendored snapshot that imports a file git does not have, and a complete one.
+    commit(tmp_path, {"custom_components/inc/__init__.py": "from .frontend import register\n"}, 41, "add inc (#12)")
+    commit(
+        tmp_path,
+        {
+            "custom_components/okc/__init__.py": "from .helper import x\nPLATFORMS = [Platform.SENSOR]\n",
+            "custom_components/okc/helper.py": "x = 1\n",
+            "custom_components/okc/sensor.py": "y = 1\n",
+        },
+        41,
+        "add okc (#13)",
+    )
     # An isolated file edited twice on develop (45d, 40d).
     commit(tmp_path, {"packages/base.yaml": "a: 2\n"}, 45, "Edit base (#10)")
     commit(tmp_path, {"packages/base.yaml": "a: 3\n"}, 40, "Edit base again (#11)")
@@ -167,6 +179,31 @@ def test_independent_change_on_main_holds_the_file_back(repo: Path) -> None:
     # Unrelated files are unaffected.
     assert "packages/a1.yaml" in result.promotable_files
     assert "Held back on purpose" in promotion_audit.render_markdown(result, repo)
+
+
+def test_revert_on_main_after_promotion_holds_the_file_back(repo: Path) -> None:
+    # main promoted base.yaml (develop's 45d version), then reverted it to the pre-fork
+    # content. The final tree matches the merge base, but the history shows a deliberate revert.
+    first = git(repo, "log", "--format=%H", "--grep=Edit base (#10)", "develop").strip()
+    git(repo, "checkout", "-q", "-b", "main_reverted", "main")
+    git(repo, "checkout", first, "--", "packages/base.yaml")
+    git(repo, "commit", "-q", "-m", "promote base", when=NOW - 20 * DAY)
+    commit(repo, {"packages/base.yaml": "a: 1\n"}, 10, "revert base")
+    git(repo, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(repo, base="main_reverted", head="develop", now=NOW)
+
+    assert result.excluded["packages/base.yaml"] == promotion_audit.DIVERGED_REASON
+    assert "packages/base.yaml" not in result.promotable_files
+
+
+def test_incomplete_vendored_snapshot_is_held_back(repo: Path) -> None:
+    result = audit(repo)
+
+    assert "custom_components/inc/__init__.py" not in result.promotable_files
+    assert result.excluded["custom_components/inc/__init__.py"] == promotion_audit.INCOMPLETE_REASON
+    assert "custom_components/okc/__init__.py" in result.promotable_files
+    assert "custom_components/foo/x.py" in result.promotable_files
 
 
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
