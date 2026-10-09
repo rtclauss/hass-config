@@ -332,7 +332,7 @@ def run_audit(
             {
                 unit_of(p)
                 for p in change.files
-                if p in age and not is_meta(p) and not p.startswith(VENDORED_PREFIX)
+                if p in age and not is_meta(p)
             }
         )
         if len(change.files) >= wide or len(units) < 1:
