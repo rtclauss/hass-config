@@ -459,6 +459,39 @@ def test_reexported_symbols_resolve_for_consumers_but_not_inside_init(tmp_path: 
     assert not result.excluded
 
 
+def test_wildcard_reexports_are_followed(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {
+            "custom_components/wq/__init__.py": "",
+            "custom_components/wq/wideq/__init__.py": "from .const import *\n",
+            "custom_components/wq/wideq/const.py": "class DeviceType:\n    pass\n",
+            "custom_components/wq/sensor.py": "from .wideq import DeviceType\n",
+        },
+        60,
+        "add wq (#1)",
+    )
+    commit(
+        tmp_path,
+        {
+            "custom_components/bad/__init__.py": "",
+            "custom_components/bad/wideq/__init__.py": "from .const import *\n",
+            "custom_components/bad/wideq/const.py": "class DeviceType:\n    pass\n",
+            "custom_components/bad/sensor.py": "from .wideq import NotThere\n",
+        },
+        60,
+        "add bad (#2)",
+    )
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert "custom_components/wq/sensor.py" in result.promotable_files
+    assert result.excluded["custom_components/bad/sensor.py"] == promotion_audit.INCOMPLETE_REASON
+
+
 def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: 1\n"}, 300, "base")

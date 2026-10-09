@@ -275,7 +275,6 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
     if not wanted:
         return set()
     tree = set(git(repo, "ls-tree", "-r", "--name-only", head, "custom_components").splitlines())
-    init_names: dict[tuple[str, bool], set[str]] = {}
 
     def source(path: str) -> str:
         result = subprocess.run(
@@ -286,11 +285,35 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
     def module_exists(target: str) -> bool:
         return f"{target}.py" in tree or f"{target}/__init__.py" in tree
 
+    names_cache: dict[tuple[str, bool], set[str]] = {}
+
+    def module_names(path: str, include_imports: bool, depth: int = 0) -> set[str]:
+        """Top-level names of a tracked module, following `from .x import *` up to three levels."""
+        key = (path, include_imports)
+        if key in names_cache:
+            return names_cache[key]
+        text = source(path)
+        names = _top_level_names(text, include_imports)
+        names_cache[key] = names  # also guards against import cycles
+        if include_imports and depth < 3:
+            try:
+                body = ast.parse(text).body
+            except (SyntaxError, ValueError):
+                body = []
+            for node in body:
+                if isinstance(node, ast.ImportFrom) and node.level and node.module and any(a.name == "*" for a in node.names):
+                    folder = path.rsplit("/", 1)[0]
+                    for _ in range(node.level - 1):
+                        folder = folder.rsplit("/", 1)[0]
+                    target = f"{folder}/{node.module.replace('.', '/')}"
+                    for candidate in (f"{target}.py", f"{target}/__init__.py"):
+                        if candidate in tree:
+                            names |= module_names(candidate, True, depth + 1)
+                            break
+        return names
+
     def package_defines(folder: str, name: str, include_imports: bool = False) -> bool:
-        key = (folder, include_imports)
-        if key not in init_names:
-            init_names[key] = _top_level_names(source(f"{folder}/__init__.py"), include_imports)
-        return name in init_names[key]
+        return name in module_names(f"{folder}/__init__.py", include_imports)
 
     bad: set[str] = set()
     for path in sorted(tree):
