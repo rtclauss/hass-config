@@ -539,6 +539,45 @@ def test_absolute_self_imports_are_checked(tmp_path: Path) -> None:
     assert "custom_components/ab/present.py" in result.promotable_files
 
 
+def test_string_platform_declarations_are_checked(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {
+            "custom_components/sp/__init__.py": 'PLATFORMS = ["switch", "button"]\n',
+            "custom_components/sp/switch.py": "x = 1\n",
+        },
+        60,
+        "add sp (#1)",
+    )  # button.py was ignored by the allow-list
+    commit(
+        tmp_path,
+        {
+            "custom_components/fw/__init__.py": "async def setup(hass, entry):\n    await hass.config_entries.async_forward_entry_setups(entry, ['sensor', 'number'])\n",
+            "custom_components/fw/sensor.py": "x = 1\n",
+        },
+        60,
+        "add fw (#2)",
+    )  # number.py was ignored by the allow-list
+    commit(
+        tmp_path,
+        {
+            "custom_components/ok/__init__.py": 'SUPPORTED_PLATFORMS: list[str] = ("sensor",)\nOTHER = ["unrelated"]\n',
+            "custom_components/ok/sensor.py": "x = 1\n",
+        },
+        60,
+        "add ok (#3)",
+    )
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert result.excluded["custom_components/sp/__init__.py"] == promotion_audit.INCOMPLETE_REASON
+    assert result.excluded["custom_components/fw/__init__.py"] == promotion_audit.INCOMPLETE_REASON
+    assert "custom_components/ok/sensor.py" in result.promotable_files
+
+
 def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: 1\n"}, 300, "base")
