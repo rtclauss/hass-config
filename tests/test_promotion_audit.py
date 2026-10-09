@@ -492,6 +492,23 @@ def test_wildcard_reexports_are_followed(tmp_path: Path) -> None:
     assert result.excluded["custom_components/bad/sensor.py"] == promotion_audit.INCOMPLETE_REASON
 
 
+def test_hotfix_matching_a_future_develop_state_is_still_divergence(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: 0\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    # main hotfixes the file to B at 70d; develop only reaches B later (60d) and then C (50d).
+    git(tmp_path, "checkout", "-q", "-b", "main_hotfix", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: B\n"}, 70, "independent hotfix on main")
+    git(tmp_path, "checkout", "-q", "develop")
+    commit(tmp_path, {"packages/f.yaml": "a: B\n"}, 60, "develop reaches B (#1)")
+    commit(tmp_path, {"packages/f.yaml": "a: C\n"}, 50, "develop reaches C (#2)")
+
+    result = promotion_audit.run_audit(tmp_path, base="main_hotfix", head="develop", now=NOW)
+
+    assert result.excluded["packages/f.yaml"] == promotion_audit.DIVERGED_REASON
+    assert "packages/f.yaml" not in result.promotable_files
+
+
 def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: 1\n"}, 300, "base")
