@@ -438,6 +438,27 @@ def test_children_of_relative_packages_and_pep695_aliases(tmp_path: Path) -> Non
     assert "custom_components/ta/sensor.py" in result.promotable_files  # alias + re-exported name resolve
 
 
+def test_reexported_symbols_resolve_for_consumers_but_not_inside_init(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {
+            "custom_components/rx/__init__.py": "from .const import DOMAIN\n",
+            "custom_components/rx/const.py": "DOMAIN = 'rx'\n",
+            "custom_components/rx/sensor.py": "from . import DOMAIN\n",
+        },
+        60,
+        "add rx (#1)",
+    )
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert "custom_components/rx/sensor.py" in result.promotable_files
+    assert not result.excluded
+
+
 def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: 1\n"}, 300, "base")
