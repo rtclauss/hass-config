@@ -25,8 +25,10 @@ python3 scripts/promotion_audit.py --output /tmp/audit.md --files-out /tmp/files
 
 The outstanding delta is the tree difference between `main` and `develop`, so files that were
 already promoted (by copy or squash merge) drop out. A file that was also changed on `main`
-independently (a revert or hotfix) is held back, because promoting it would overwrite that
-change; a file whose `main` version is just an older `develop` version is fine.
+independently (a hotfix, or a promotion later reverted) is held back, because promoting it would
+overwrite that change. The check walks every commit on `main` that touched the file, so a
+revert is caught even when the final tree matches the old version. A file whose `main` history
+is just older `develop` versions is fine.
 
 A file is **promotable** only if everything it was ever changed together with (the
 same first-parent change on `develop`: squash commit, PR merge, or direct commit)
@@ -34,7 +36,10 @@ has also been quiet for N days (default 30). That stops half of a feature reachi
 `main`.
 
 - `custom_components/<name>` is judged as one unit and is never linked to other files.
-  Its consumers are covered by the exclusions file instead.
+  Its consumers are covered by the exclusions file instead. The repo's `.gitignore` is an
+  allow-list, so brand-new files from a HACS update are silently left out of git while edited
+  ones are committed. A vendored snapshot that imports a missing module, or forwards a
+  `Platform.X` with no `x.py`, is held back as incomplete.
 - `README.md`, `AGENTS.md`, `.gitignore`, `inventory.md` and `.github/**` are touched by
   almost every PR, so they do not link changes together and are never promoted by
   the audit.
