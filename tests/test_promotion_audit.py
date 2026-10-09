@@ -302,6 +302,83 @@ def test_version_revisited_on_develop_is_not_divergence(tmp_path: Path) -> None:
     assert "packages/f.yaml" in result.promotable_files
 
 
+def test_main_only_deletion_holds_the_whole_vendored_unit(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(
+        tmp_path,
+        {"custom_components/foo/__init__.py": "from .y import z\n", "custom_components/foo/y.py": "z = 1\n"},
+        300,
+        "base",
+    )
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(tmp_path, {"custom_components/foo/__init__.py": "from .y import z\nx = 2\n"}, 60, "update foo (#1)")
+    git(tmp_path, "checkout", "-q", "-b", "main_del", "main")
+    git(tmp_path, "rm", "-q", "custom_components/foo/y.py")
+    git(tmp_path, "commit", "-q", "-m", "drop y on main", when=NOW - 10 * DAY)
+    git(tmp_path, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(tmp_path, base="main_del", head="develop", now=NOW)
+
+    assert "custom_components/foo/__init__.py" not in result.promotable_files
+    assert result.excluded["custom_components/foo/y.py"] == promotion_audit.DIVERGED_REASON
+
+
+def test_rollback_is_caught_when_the_merge_base_state_occurred_earlier(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: B\n"}, 300, "B")
+    commit(tmp_path, {"packages/f.yaml": "a: A\n"}, 290, "A")
+    commit(tmp_path, {"packages/f.yaml": "a: B\n"}, 280, "B again")  # merge base state
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(tmp_path, {"packages/f.yaml": "a: C\n"}, 60, "C (#1)")
+    git(tmp_path, "checkout", "-q", "-b", "main_rollback", "main")
+    commit(tmp_path, {"packages/f.yaml": "a: A\n"}, 30, "deliberate rollback on main")
+    git(tmp_path, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(tmp_path, base="main_rollback", head="develop", now=NOW)
+
+    assert result.excluded["packages/f.yaml"] == promotion_audit.DIVERGED_REASON
+    assert "packages/f.yaml" not in result.promotable_files
+
+
+def test_mode_only_change_on_main_counts_as_divergence(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"scripts/run.sh": "echo 1\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(tmp_path, {"scripts/run.sh": "echo 2\n"}, 60, "edit script (#1)")
+    git(tmp_path, "checkout", "-q", "-b", "main_exec", "main")
+    (tmp_path / "scripts" / "run.sh").chmod(0o755)
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-q", "-m", "make executable", when=NOW - 20 * DAY)
+    git(tmp_path, "checkout", "-q", "develop")
+
+    result = promotion_audit.run_audit(tmp_path, base="main_exec", head="develop", now=NOW)
+
+    assert result.excluded["scripts/run.sh"] == promotion_audit.DIVERGED_REASON
+
+
+def test_module_less_relative_imports_are_checked(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(tmp_path, {"custom_components/zz/__init__.py": "from . import frontend\n"}, 60, "add zz (#1)")
+    commit(
+        tmp_path,
+        {
+            "custom_components/yy/__init__.py": "DOMAIN = 'yy'\nfrom . import helpers\n",
+            "custom_components/yy/helpers.py": "x = 1\n",
+            "custom_components/yy/sensor.py": "from . import DOMAIN\n",
+        },
+        60,
+        "add yy (#2)",
+    )
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert result.excluded["custom_components/zz/__init__.py"] == promotion_audit.INCOMPLETE_REASON
+    assert "custom_components/yy/__init__.py" in result.promotable_files
+    assert "custom_components/yy/sensor.py" in result.promotable_files
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.
