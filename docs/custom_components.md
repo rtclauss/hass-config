@@ -21,13 +21,24 @@ to be tracked: `adaptive_lighting`, `auto_areas`, `bermuda`, `birdbuddy`, `brows
 
 ## Deploy warning (read before pulling this change onto a host)
 
-A commit that stops tracking files deletes them from the working tree of any host that pulls it
-(Git Pull add-on, `git pull`, `git checkout`). On a host that runs from this repo, either:
+Pulling a commit that stops tracking files **deletes them from that host's working tree**, and
+a plain `git pull` is refused while HACS has modified any tracked file (the normal state of a
+host that has updated an integration). Do not make a local "untracking" commit on the host:
+it diverges from the incoming commit and an `--ff-only` pull rejects it.
 
-1. Make the untracking commit **on that host** (`git rm -r --cached custom_components/<dir>`)
-   so the files stay on disk; or
-2. Back up first: `cp -a /config/custom_components /config/custom_components.bak`, pull, then
-   `cp -a /config/custom_components.bak/. /config/custom_components/`. The restored files are
-   ignored, so they stay untracked.
+Use backup, pull, restore. Keep the backup **outside** the repo (for example `/share`),
+otherwise git lists it as untracked:
 
-This also applies when this lands on `main`.
+```bash
+cd /config
+cp -a custom_components /share/custom_components.bak      # 1. back up what HACS installed
+git checkout -- custom_components                         # 2. drop local edits to tracked copies
+git pull --ff-only                                         # 3. deletes the old tracked copies
+cp -a /share/custom_components.bak/. custom_components/    # 4. restore everything from the backup
+git status --short custom_components                       # 5. must print nothing (all ignored)
+```
+
+Restart Home Assistant, confirm the integrations load, then delete the backup. If an add-on
+pulls automatically (Git Pull add-on or a cron job), stop it first; anything that runs
+`git reset --hard` or `git clean` will delete these files too. The same applies when this
+change reaches `main`.
