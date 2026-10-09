@@ -7,17 +7,23 @@ so the tracked copy drifted into a half-updated snapshot that could not import i
 
 ## What is tracked
 
-Only hand-written stubs: `custom_components/mass_queue/services.yaml` (used by the Music
-Assistant dashboard, see `tests/test_mass_queue_services_present.py`) and a few
-`services.yaml`-only placeholders. Everything else under `custom_components/` is ignored.
+Only `custom_components/mass_queue/services.yaml`, which `tests/test_mass_queue_services_present.py`
+reads for the Music Assistant dashboard. It mirrors the upstream Music Assistant Queue Actions
+integration's `services.yaml`, so if that integration is ever installed through HACS it will
+modify this tracked file and make the host dirty. If that happens, or if nothing uses the
+integration, drop the file and its test and ignore the whole directory. Everything else under
+`custom_components/` is ignored, including the small `services.yaml`-only copies that used to be
+tracked: HACS rewrites them on every update, so tracking them would keep the host dirty.
 
 ## Restoring a host
 
-Install HACS, then reinstall the integrations from HACS. The list of integrations that used
-to be tracked: `adaptive_lighting`, `auto_areas`, `bermuda`, `birdbuddy`, `browser_mod`,
-`garbage_collection`, `hacs`, `localtuya`, `magic_areas`, `mail_and_packages`,
-`noaa_space_weather`, `places`, `retry`, `scrypted`, `smartthinq_sensors`, `somafm`, `spook`,
-`tesla_custom`, `weatheralerts`. Home Assistant backups also include `custom_components/`.
+Install HACS, then reinstall the integrations from HACS. Home Assistant backups also include
+`custom_components/`. Integrations that used to be tracked: `adaptive_lighting`, `auto_areas`,
+`bermuda`, `birdbuddy`, `browser_mod`, `garbage_collection`, `hacs`, `localtuya`, `magic_areas`,
+`mail_and_packages`, `noaa_space_weather`, `places`, `retry`, `scrypted`, `smartthinq_sensors`,
+`somafm`, `spook`, `tesla_custom`, `weatheralerts`, plus `services.yaml`-only copies of
+`dreame_vacuum`, `f1_sensor`, `ha_unavailable_devices_report`, `ha_washdata`, `llmvision`,
+`midea_ac_lan`, `presence_simulation` and `watchman`.
 
 ## Deploy warning (read before pulling this change onto a host)
 
