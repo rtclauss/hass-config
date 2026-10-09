@@ -509,6 +509,36 @@ def test_hotfix_matching_a_future_develop_state_is_still_divergence(tmp_path: Pa
     assert "packages/f.yaml" not in result.promotable_files
 
 
+def test_absolute_self_imports_are_checked(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {"README.md": "base\n"}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    commit(
+        tmp_path,
+        {
+            "custom_components/aa/__init__.py": "from custom_components.aa.new_module import X\n",
+            "custom_components/aa/entity.py": "import custom_components.aa.present\n",
+            "custom_components/aa/present.py": "x = 1\n",
+        },
+        60,
+        "add aa (#1)",
+    )  # new_module.py was ignored by the allow-list
+    commit(
+        tmp_path,
+        {
+            "custom_components/ab/__init__.py": "from custom_components.ab.present import X\nfrom custom_components.other.thing import Y\n",
+            "custom_components/ab/present.py": "X = 1\n",
+        },
+        60,
+        "add ab (#2)",
+    )  # imports of other integrations are not this unit's concern
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert result.excluded["custom_components/aa/__init__.py"] == promotion_audit.INCOMPLETE_REASON
+    assert "custom_components/ab/present.py" in result.promotable_files
+
+
 def test_main_following_a_deletion_and_readd_on_develop_is_not_divergence(tmp_path: Path) -> None:
     git(tmp_path, "init", "-q", "-b", "main")
     commit(tmp_path, {"packages/f.yaml": "a: 1\n"}, 300, "base")
