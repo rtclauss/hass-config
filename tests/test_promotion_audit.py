@@ -420,6 +420,22 @@ def test_wide_change_containing_a_held_file_links_everything_in_it(tmp_path: Pat
     assert "packages/sweep_0.yaml" in result.promotable_files  # sweeps without held files still do not link
 
 
+def test_restored_vendored_path_in_a_wide_change_still_links_companions(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q", "-b", "main")
+    commit(tmp_path, {f"custom_components/foo/mod{i}.py": "x = 0\n" for i in range(19)}, 300, "base")
+    git(tmp_path, "checkout", "-q", "-b", "develop")
+    files = {f"custom_components/foo/mod{i}.py": "x = 1\n" for i in range(19)}
+    files["packages/foo.yaml"] = "needs: foo v2\n"
+    commit(tmp_path, files, 60, "update foo and its package (#1)")  # 20 files: wide
+    # A later commit restores every vendored file to main's state, so none is held any more.
+    commit(tmp_path, {f"custom_components/foo/mod{i}.py": "x = 0\n" for i in range(19)}, 50, "restore foo (#2)")
+
+    result = promotion_audit.run_audit(tmp_path, base="main", head="develop", now=NOW)
+
+    assert not any(p.startswith("custom_components/") for p in result.status)
+    assert "packages/foo.yaml" not in result.promotable_files
+
+
 def test_meta_files_do_not_link_changes(repo: Path) -> None:
     result = audit(repo)
     # README.md was touched by both A (60d) and C (2d); A must stay promotable.

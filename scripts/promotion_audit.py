@@ -336,11 +336,18 @@ def run_audit(
     for unit in unit_age:
         uf.find(unit)
     link_edges: list[tuple[Change, list[str]]] = []
+
+    def holds_by_policy(path: str) -> bool:
+        """Held now, or a path that policy would hold (vendored or excluded) even after a later restore."""
+        return path in held or path.startswith(VENDORED_PREFIX) or any(
+            fnmatch.fnmatch(path, pattern) for pattern, _ in exclusions
+        )
+
     for change in changes:
         units = sorted({unit_of(p) for p in change.files if not is_meta(p)})
         # Ordinary sweeps (wide changes) do not link files, but a sweep that contains a held
         # file must still hold everything made with it.
-        if not units or (len(change.files) >= wide and not any(p in held for p in change.files)):
+        if not units or (len(change.files) >= wide and not any(holds_by_policy(p) for p in change.files)):
             continue
         link_edges.append((change, units))
         for other in units[1:]:
@@ -353,7 +360,7 @@ def run_audit(
     for members in groups.values():
         quiet = min(unit_age[u] for u in members)
         files = sorted(f for u in members for f in unit_files.get(u, []))
-        if files and quiet >= days and not any(f in held for f in files):
+        if files and quiet >= days and not any(f in held for f in files) and not any(holds_by_policy(u) for u in members):
             clusters.append(Cluster(sorted(members), files, quiet))
     clusters.sort(key=lambda c: (-c.quiet_days, c.units[0]))
     promotable_files = sorted(f for c in clusters for f in c.files)
