@@ -321,8 +321,15 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
                             ):
                                 bad.add(unit)
                 else:
+                    # Inside the package's own __init__.py an import cannot define the name it imports,
+                    # so be strict there; other modules may use anything the package re-exports.
+                    strict = path == f"{base}/__init__.py"
                     for alias in node.names:
-                        if alias.name != "*" and not module_exists(f"{base}/{alias.name}") and not package_defines(base, alias.name):
+                        if (
+                            alias.name != "*"
+                            and not module_exists(f"{base}/{alias.name}")
+                            and not package_defines(base, alias.name, include_imports=not strict)
+                        ):
                             bad.add(unit)
             elif (
                 path.count("/") == 2  # custom_components/<name>/<module>.py, where PLATFORMS lists live
