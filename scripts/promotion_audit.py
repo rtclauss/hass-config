@@ -333,12 +333,22 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
             continue
         folder = path.rsplit("/", 1)[0]
         for node in ast.walk(module):
-            if isinstance(node, ast.ImportFrom) and node.level:
-                base = folder
-                for _ in range(node.level - 1):
-                    base = base.rsplit("/", 1)[0]
-                if node.module:
-                    target = f"{base}/{node.module.replace('.', '/')}"
+            if isinstance(node, ast.ImportFrom):
+                base: str | None = None
+                module_path: str | None = node.module
+                if node.level:  # relative import
+                    base = folder
+                    for _ in range(node.level - 1):
+                        base = base.rsplit("/", 1)[0]
+                elif node.module and node.module.split(".")[0] == "custom_components":
+                    parts = node.module.split(".")  # absolute import of this same integration
+                    if len(parts) >= 2 and f"custom_components/{parts[1]}" == unit:
+                        base = unit
+                        module_path = ".".join(parts[2:]) or None
+                if base is None:
+                    continue
+                if module_path:
+                    target = f"{base}/{module_path.replace('.', '/')}"
                     if not module_exists(target):
                         bad.add(unit)
                     elif f"{target}/__init__.py" in tree:
@@ -351,6 +361,7 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
                             ):
                                 bad.add(unit)
                 else:
+                    # `from . import name`: each name is a submodule or a symbol defined in the package.
                     # Inside the package's own __init__.py an import cannot define the name it imports,
                     # so be strict there; other modules may use anything the package re-exports.
                     strict = path == f"{base}/__init__.py"
@@ -360,6 +371,12 @@ def incomplete_vendored_units(repo: Path, head: str, units: set[str]) -> set[str
                             and not module_exists(f"{base}/{alias.name}")
                             and not package_defines(base, alias.name, include_imports=not strict)
                         ):
+                            bad.add(unit)
+            elif isinstance(node, ast.Import):
+                for alias in node.names:  # `import custom_components.<this integration>.module`
+                    parts = alias.name.split(".")
+                    if len(parts) > 2 and parts[0] == "custom_components" and f"custom_components/{parts[1]}" == unit:
+                        if not module_exists("/".join(parts)):
                             bad.add(unit)
             elif (
                 path.count("/") == 2  # custom_components/<name>/<module>.py, where PLATFORMS lists live
