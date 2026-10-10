@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-ZIGBEE2MQTT_CONFIG_PATH = REPO_ROOT / "zigbee2mqtt" / "configuration.yaml"
+ZIGBEE2MQTT_CONFIG_PATH = REPO_ROOT / "zigbee2mqtt" / "configuration.example.yaml"
 
 
 def _section_lines(section_name: str) -> list[str]:
