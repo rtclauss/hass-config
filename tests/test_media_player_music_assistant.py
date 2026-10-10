@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
+
 import re
 from pathlib import Path
 
 
 MEDIA_PLAYER_PATH = Path(__file__).resolve().parents[1] / "packages" / "media_player.yaml"
-DASHBOARD_PATH = Path(__file__).resolve().parents[1] / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "dashboard.example.json"))
 PERSONALIZED_SPOTIFY_PLAYLIST_MARKERS = (
     "37i9dQZF1E",
     "37i9dQZF1CA",  # Summer Rewind family (Codex P2 follow-up on #679)

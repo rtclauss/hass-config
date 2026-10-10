@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 AIRPLANES_PATH = ROOT / "packages" / "airplanes.yaml"
 BIRDS_PATH = ROOT / "packages" / "birds.yaml"
-LOVELACE_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+LOVELACE_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 
 
 def test_garden_birds_sensor_handles_missing_common_name_without_template_errors() -> None:

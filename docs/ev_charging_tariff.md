@@ -82,9 +82,9 @@ Tariffs:
 
 The EV tariff is surfaced on both Tesla dashboard paths:
 
-- storage mode: `.storage/lovelace.ryan_new_mushroom`, view path `tesla-v2`
+- storage mode: the private UI dashboard, view path `tesla-v2`
 - YAML mode: `lovelace/tiles/tiles_tesla_charging.yaml`
-- storage mode energy view: `.storage/lovelace.ryan_new_mushroom`, view path `energy`
+- storage mode energy view: the private UI dashboard, view path `energy`
 
 The Tesla dashboards now show:
 

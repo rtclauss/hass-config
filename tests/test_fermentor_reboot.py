@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import os
+
 import json
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "fermentor.yaml"
-DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 DOCUMENTATION_PATH = ROOT / "docs" / "fermentor_reboot.md"
 
 

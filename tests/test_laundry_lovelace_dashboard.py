@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
+
 import json
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 
 
 def _dashboard_config() -> dict:

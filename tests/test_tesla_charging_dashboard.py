@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CAR_PACKAGE_PATH = ROOT / "packages" / "car.yaml"
 TESLA_TILE_PATH = ROOT / "lovelace" / "tiles" / "tiles_tesla_charging.yaml"
-DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 
 
 def test_daily_plan_binary_sensor_tracks_inverse_of_max_range_override() -> None:
@@ -75,7 +77,7 @@ def test_dashboard_copy_explains_alarm_only_days_and_home_preconditioning_logic(
     for text in (
         "Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs",
         "Cabin preconditioning only runs when a real next-day departure is scheduled",
-        "Cabin preconditioning is scheduled separately when Ryan and Nigori are home",
+        "Cabin preconditioning is scheduled separately when",
         "Planner is following tomorrow's alarm for charge-limit planning only",
         "Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed",
         "Planner is keeping the Tesla app home schedule because no extra home charging is needed",

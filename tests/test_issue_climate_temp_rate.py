@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 
 CLIMATE_PATH = Path(__file__).resolve().parents[1] / "packages" / "climate.yaml"
-DASHBOARD_PATH = Path(__file__).resolve().parents[1] / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "dashboard.example.json"))
 
 
 def test_dead_change_rate_statistics_chain_is_removed() -> None:

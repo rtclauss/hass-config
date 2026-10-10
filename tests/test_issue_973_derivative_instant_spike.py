@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 
 CLIMATE_PATH = Path(__file__).resolve().parents[1] / "packages" / "climate.yaml"
 WATER_SOFTENER_PATH = Path(__file__).resolve().parents[1] / "packages" / "water_softener.yaml"
-DASHBOARD_PATH = Path(__file__).resolve().parents[1] / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "dashboard.example.json"))
 
 
 def _derivative_block(path: Path, name: str) -> str:
