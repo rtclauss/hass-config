@@ -1010,24 +1010,50 @@ automation:
           condition: state
           entity_id: input_boolean.trip_guest_visit_active
           state: "off"
+        # On a flying-home day the pre-landing clean (vacuum_flying_home) owns the
+        # X40 queue. Written as `not on` so an unavailable helper never stops the
+        # ordinary daily trip clean.
+        - alias: "no pre-landing clean covering today"
+          condition: template
+          value_template: "{{ not is_state('binary_sensor.pre_arrival_clean_day', 'on') }}"
     action:
       - action: script.trip_vacuum_main_and_upstairs_levels
         data:
+          # Dropped at dequeue time if it waited >2 h or you are home by then, so a
+          # request stuck behind a long run can never start after you arrive.
+          require_away: true
+          expires_at: "{{ (now() + timedelta(hours=2)).isoformat() }}"
           notify_message: >-
             Vacuuming the main and upstairs levels while you're away 💺
 
   - id: vacuum_flying_home
     alias: vacuum_flying_home
     description: >-
-      Run one full-floor pass on the main and upstairs levels before Ryan flies
-      home.
+      Start the flying-home clean far enough ahead that it is FINISHED before the
+      plane lands: start = landing - input_number.pre_arrival_clean_lead_minutes
+      (default 210; a full vacuum+mop cycle measures 182-191 min). Anchored to the
+      flight's ARRIVAL (sensor.next_flight_home_arrival), not takeoff, because a
+      cycle is longer than the flight; the house is empty for the whole trip so
+      starting before takeoff is fine. A late start (late booking, HA restart,
+      schedule change) degrades instead of running past landing: vacuum-only when
+      at least 100 min remain, otherwise skipped with a notification. Launches once
+      per landing (input_datetime.pre_arrival_clean_done_for). The replaced trigger
+      was takeoff (binary_sensor.flying_home_today), which on 2026-10-09 finished
+      the clean 49 min after landing.
     trace:
       stored_traces: 10
     trigger:
-      - entity_id: binary_sensor.flying_home_today
-        from: "off"
-        trigger: state
-        to: "on"
+      - trigger: time
+        at: sensor.pre_arrival_clean_start
+        id: scheduled
+      # Catch-up: the itinerary appeared/moved after its start time had passed, or
+      # the lead helper was edited. The conditions below decide whether it is late.
+      - trigger: state
+        entity_id: sensor.pre_arrival_clean_start
+        id: rescheduled
+      - trigger: homeassistant
+        event: start
+        id: boot
     condition:
       condition: and
       conditions:
@@ -1043,12 +1069,80 @@ automation:
         - condition: state
           entity_id: input_boolean.trip_guest_visit_active
           state: "off"
+        - alias: "a future flight home is known"
+          condition: template
+          value_template: >-
+            {{ states('sensor.next_flight_home_arrival') not in ['unknown', 'unavailable', 'none', 'None', '']
+               and states('sensor.pre_arrival_clean_start') not in ['unknown', 'unavailable', 'none', 'None', ''] }}
+        - alias: "start time has been reached"
+          condition: template
+          value_template: >-
+            {{ as_timestamp(now()) >= as_timestamp(states('sensor.pre_arrival_clean_start'), default=9999999999) }}
+        # Tolerates a delayed flight shifting the landing a little (6 h), but a
+        # different day's flight gets its own clean.
+        - alias: "not already launched for this landing"
+          condition: template
+          value_template: >-
+            {% set arrival = as_timestamp(states('sensor.next_flight_home_arrival'), default=0) | float(0) %}
+            {% set done = as_timestamp(states('input_datetime.pre_arrival_clean_done_for'), default=0) | float(0) %}
+            {{ done <= 0 or ((arrival - done) | abs) >= 6 * 3600 }}
     action:
-      - action: script.trip_vacuum_main_and_upstairs_levels
+      - variables:
+          arrival_ts: "{{ as_timestamp(states('sensor.next_flight_home_arrival'), default=0) | float(0) }}"
+          arrival_iso: "{{ states('sensor.next_flight_home_arrival') }}"
+          landing_label: "{{ (as_datetime(arrival_iso) | as_local).strftime('%-I:%M %p') }}"
+          lead_min: "{{ states('input_number.pre_arrival_clean_lead_minutes') | float(210) }}"
+          # Minutes left before landing; what still fits a FULL vacuum+mop cycle (worst
+          # observed 191 min, so 195; or the lead itself if it was set lower, minus 5 min
+          # of trigger jitter, so the scheduled start is always "full"); and the least
+          # that still fits a vacuum pass (measured 81-87 min).
+          remaining_min: "{{ ((arrival_ts - as_timestamp(now())) / 60) | round(0) }}"
+          full_min: "{{ [lead_min - 5, 195] | min }}"
+          vacuum_only_min: 100
+          plan: >-
+            {{ 'full' if remaining_min >= full_min
+               else ('vacuum' if remaining_min >= vacuum_only_min else 'skip') }}
+      # Record the landing first so a retrigger (boot, schedule edit) cannot launch
+      # the same flight twice, including on the skip path.
+      - action: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.pre_arrival_clean_done_for
         data:
-          force_mop: true
-          notify_message: >-
-            Vacuuming the main and upstairs levels while you fly home 💺
+          timestamp: "{{ arrival_ts }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ plan == 'full' }}"
+            sequence:
+              - action: script.trip_vacuum_main_and_upstairs_levels
+                data:
+                  force_mop: true
+                  require_away: true
+                  expires_at: "{{ arrival_iso }}"
+                  notify_message: >-
+                    Pre-landing clean started: vacuum, then mop. It should finish
+                    before your {{ landing_label }} landing ✈️
+          - conditions:
+              - condition: template
+                value_template: "{{ plan == 'vacuum' }}"
+            sequence:
+              - action: script.trip_vacuum_main_and_upstairs_levels
+                data:
+                  force_mop: false
+                  allow_mop: false
+                  require_away: true
+                  expires_at: "{{ arrival_iso }}"
+                  notify_message: >-
+                    Pre-landing clean started late ({{ remaining_min | int }} min before
+                    your {{ landing_label }} landing): vacuum only, no mop ✈️
+        default:
+          - action: notify.all
+            data:
+              data:
+                url: "/ryan-new-mushroom/cleaning"
+              message: >-
+                Pre-landing clean skipped: only {{ remaining_min | int }} min before your
+                {{ landing_label }} landing, not enough time to finish.
 
   - alias: trip_guest_door_unlock_open_house
     id: trip_guest_door_unlock_open_house
@@ -1498,6 +1592,13 @@ input_datetime:
     name: Turn Off Lights at a Random Time
     has_date: false
     has_time: true
+  # The flight arrival (landing) timestamp a pre-landing clean was already launched
+  # for. Run-once guard for vacuum_flying_home: it tolerates a few hours of
+  # schedule drift (a delayed flight changes the arrival) but not a different day.
+  pre_arrival_clean_done_for:
+    name: Pre-Arrival Clean Done For (Landing Time)
+    has_date: true
+    has_time: true
 
 ########################
 # Input Numbers
@@ -1508,6 +1609,17 @@ input_number:
     max: 4
     step: 1
     mode: box
+  # How long before the flight LANDS the flying-home clean starts. Calibrated from
+  # 2026-10-06..09 X40 history: vacuum pass 81-87 min, mop pass 97-104 min, full
+  # vacuum+mop cycle 182-191 min. 210 = worst observed cycle + ~19 min margin.
+  pre_arrival_clean_lead_minutes:
+    name: Pre-Arrival Clean Lead (min before landing)
+    min: 120
+    max: 360
+    step: 5
+    mode: box
+    unit_of_measurement: min
+    initial: 210
   trip_trigger_radius_miles:
     name: Trip Trigger Radius (mi)
     min: 25
@@ -1640,6 +1752,15 @@ script:
       force_mop:
         description: "Force a main-level mop pass after the X40 vacuum pass."
         example: true
+      allow_mop:
+        description: "false forces a vacuum-only main-level pass (not enough time left for a mop). Defaults to true."
+        example: false
+      require_away:
+        description: "Drop the queued main-level request unless the owner is still confirmed away when it runs."
+        example: true
+      expires_at:
+        description: "ISO timestamp after which a still-queued main-level request is dropped (e.g. the flight's landing)."
+        example: "2026-10-09T14:13:00-05:00"
       notify_message:
         description: >-
           Notification text describing why the trip vacuum pass started.
@@ -1652,6 +1773,9 @@ script:
       - action: script.vacuum_main_and_upstairs_levels
         data:
           force_mop: "{{ force_mop | default(false) | bool }}"
+          allow_mop: "{{ allow_mop | default(true) | bool }}"
+          require_away: "{{ require_away | default(false) | bool }}"
+          expires_at: "{{ expires_at | default('', true) | string }}"
       # Also clean the den on trip/flying-home days so all three areas match the
       # departure path. This central boundary already fails closed on den-door
       # open, guest mode, and non-Unattended policy, so no extra guards here.
@@ -1746,6 +1870,23 @@ template:
             false
           {% endif %}
         name: flying_home_today
+      # True on a day the pre-landing clean owns the X40: the landing or the clean's
+      # start falls today, or one was launched within the last 12 h (so it still
+      # holds after landing moves "next arrival" on to a later trip). vacuum_on_trip
+      # and the daily litter pass skip while this is on, so nothing queues behind
+      # (or after) the clean that has to finish before the plane lands.
+      - default_entity_id: binary_sensor.pre_arrival_clean_day
+        unique_id: pre_arrival_clean_day
+        name: pre_arrival_clean_day
+        state: >-
+          {% set today = now().date() %}
+          {% set bad = ['unknown', 'unavailable', 'none', 'None', ''] %}
+          {% set arrival = states('sensor.next_flight_home_arrival') %}
+          {% set start = states('sensor.pre_arrival_clean_start') %}
+          {% set done = as_timestamp(states('input_datetime.pre_arrival_clean_done_for'), default=0) | float(0) %}
+          {{ (arrival not in bad and (as_datetime(arrival) | as_local).date() == today)
+             or (start not in bad and (as_datetime(start) | as_local).date() == today)
+             or (done > 0 and ((as_timestamp(now()) - done) | abs) < 12 * 3600) }}
   - trigger:
       - trigger: homeassistant
         event: start
@@ -2721,3 +2862,36 @@ template:
           {% set minutes = to_home % 60 %}
           {% set hours = (to_home % 1440) // 60 %}
           {{ '%02d:%02d:00' | format(hours, minutes) }}
+      # Landing time of the NEXT flight home (MSP or RST). The flight_to_*_today
+      # sensors keep exposing the next not-yet-landed itinerary in their attributes
+      # even while they are off, so this is known days ahead, not just once airborne.
+      - name: Next Flight Home Arrival
+        default_entity_id: sensor.next_flight_home_arrival
+        unique_id: next_flight_home_arrival
+        device_class: timestamp
+        state: >-
+          {% set ns = namespace(best=none) %}
+          {% for ent in ['binary_sensor.flight_to_msp_today', 'binary_sensor.flight_to_rst_today'] %}
+            {% set raw = state_attr(ent, 'end_time') %}
+            {% if raw not in [none, '', 'unknown', 'unavailable'] %}
+              {% set dt = as_datetime(raw) %}
+              {% if dt is not none and dt.tzinfo is not none and as_timestamp(dt) > as_timestamp(now()) and (ns.best is none or as_timestamp(dt) < as_timestamp(ns.best)) %}
+                {% set ns.best = dt %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.best.isoformat() if ns.best is not none else none }}
+      # When the flying-home clean should START so it is finished by landing:
+      # landing minus the calibrated cycle lead (input_number.pre_arrival_clean_lead_minutes).
+      # Anchored to ARRIVAL, not takeoff: a full vacuum+mop cycle (182-191 min) is
+      # longer than a typical 2.5 h flight, and the house is empty all trip anyway.
+      - name: Pre-Arrival Clean Start
+        default_entity_id: sensor.pre_arrival_clean_start
+        unique_id: pre_arrival_clean_start
+        device_class: timestamp
+        availability: >-
+          {{ states('sensor.next_flight_home_arrival') not in ['unknown', 'unavailable', 'none', 'None', '']
+             and states('input_number.pre_arrival_clean_lead_minutes') | is_number }}
+        state: >-
+          {{ (as_datetime(states('sensor.next_flight_home_arrival'))
+              - timedelta(minutes=states('input_number.pre_arrival_clean_lead_minutes') | float(210))).isoformat() }}
