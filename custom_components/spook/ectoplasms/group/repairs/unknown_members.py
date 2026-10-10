@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import DATA_ENTITY_PLATFORM, EntityPl
 
 from ....const import LOGGER
 from ....entity_filtering import async_filter_known_entity_ids, async_get_all_entity_ids
+from ....entity_suggestions import async_describe_unknown_entities
 from ....repairs import AbstractSpookRepair
 
 
@@ -38,9 +39,12 @@ class SpookRepair(AbstractSpookRepair):
         if not (platforms := self.hass.data[DATA_ENTITY_PLATFORM].get(self.domain)):
             return  # Nothing to do.
 
-        for platform in platforms:
+        # Taken as a snapshot: describing what is missing can hand the event
+        # loop a turn, and a change to the live collection during it ends the
+        # inspection in a `RuntimeError`. #1558.
+        for platform in list(platforms):
             # We don't want to check the old style group platform
-            for entity in platform.entities.values():
+            for entity in list(platform.entities.values()):
                 self.possible_issue_ids.add(entity.entity_id)
                 members = []
                 if platform.domain == group.DOMAIN:
@@ -55,12 +59,24 @@ class SpookRepair(AbstractSpookRepair):
                 if unknown_entities := async_filter_known_entity_ids(
                     self.hass, entity_ids=members, known_entity_ids=known_entity_ids
                 ):
+                    described = await async_describe_unknown_entities(
+                        self.hass, sorted(unknown_entities)
+                    )
                     self.async_create_issue(
                         issue_id=entity.entity_id,
-                        translation_placeholders={
-                            "entities": "\n".join(
-                                f"- `{entity_id}`" for entity_id in unknown_entities
+                        references=unknown_entities,
+                        is_fixable=True,
+                        data={
+                            "group_entity_id": entity.entity_id,
+                            # What the fix checks again before dropping any.
+                            "group_unknown_entity_ids": ",".join(
+                                sorted(unknown_entities)
                             ),
+                            "group": entity.name,
+                            "entities": described,
+                        },
+                        translation_placeholders={
+                            "entities": described,
                             "group": entity.name,
                             "entity_id": entity.entity_id,
                         },

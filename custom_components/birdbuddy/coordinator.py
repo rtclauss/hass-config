@@ -2,21 +2,34 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from birdbuddy.client import BirdBuddy
+from birdbuddy.exceptions import (
+    CompositeException,
+    GraphqlError,
+    UnexpectedResponseError,
+)
 from birdbuddy.feed import FeedNode, FeedNodeType
 from birdbuddy.feeder import Feeder
 from birdbuddy.media import Collection
-from birdbuddy.sightings import PostcardSighting, SightingFinishStrategy
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import EventOrigin, HomeAssistant
-from homeassistant.helpers.update_coordinator import (
-    CALLBACK_TYPE,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
+from homeassistant.core import CALLBACK_TYPE, EventOrigin, HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, EVENT_NEW_POSTCARD_SIGHTING, LOGGER, POLLING_INTERVAL
+from .const import (
+    ATTR_FEEDER_ID,
+    ATTR_MEDIA,
+    ATTR_POSTCARD_ID,
+    ATTR_SHARE,
+    ATTR_SPECIES,
+    DOMAIN,
+    EVENT_NEW_POSTCARD,
+    LOGGER,
+    POLLING_INTERVAL,
+)
 from .device import BirdBuddyDevice
+from .repairs import async_check_legacy_event_listeners
 from .visitors import RecentVisitors, VisitorCallback
 
 
@@ -34,7 +47,13 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
         client: BirdBuddy,
         entry: ConfigEntry,
     ) -> None:
-        """Initialize the BirdBuddy data coordinator."""
+        """Initialize the BirdBuddy data coordinator.
+
+        Args:
+            hass: The Home Assistant instance.
+            client: The authenticated Bird Buddy API client.
+            entry: The config entry this coordinator serves.
+        """
         self.client = client
         self.feeders = {}
         self.visitors = {}
@@ -49,19 +68,33 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
     def add_visitor_listener(
         self, feeder: Feeder, listener: VisitorCallback
     ) -> CALLBACK_TYPE:
-        """Register a callback to be called when a new visitor is detected."""
+        """Register a callback fired when a new visitor is detected.
+
+        Args:
+            feeder: The feeder to watch for visitors.
+            listener: The callback to invoke on each new visitor.
+
+        Returns:
+            A callable that unregisters the listener when called.
+        """
         if feeder.id not in self.visitors:
             self.visitors[feeder.id] = RecentVisitors(feeder, self.client, self.hass)
         return self.visitors[feeder.id].register_callback(listener)
 
-    async def _process_feed(self, feed: list[FeedNode]) -> bool:
-        """Attempt to process new feed items.
+    async def _process_feed(self, feed: list[FeedNode]) -> None:
+        """Process new feed items, emitting an event per new postcard.
 
-        There are some options for how we can process these:
-        - If the sighting contains a recognized bird, we can finish it automatically
-          using :func:`BirdBuddy.finish_postcard`.
-        - For all new postcards, we can simply emit a HA event, and leave it up to
-          the user's automations to finish them, however (and if) the user wants.
+        For each new postcard, run the AI identification with
+        ``BirdBuddy.identify_postcard`` and fire a slim
+        ``birdbuddy_new_postcard`` event carrying the recognized species and
+        media. Collecting is left to the user's automations, via the
+        ``birdbuddy.collect_postcard`` service.
+
+        A postcard the server refuses to identify is logged and skipped, so
+        the entities that read the account data stay available.
+
+        Args:
+            feed: The feed nodes returned by the latest feed refresh.
         """
         LOGGER.debug("Found feed items %s", feed)
         postcards = [
@@ -69,8 +102,10 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
         ]
 
         for node in feed:
-            if node.node_type == FeedNodeType.SpeciesUnlocked and (
-                c := Collection(node.get("collection"))
+            if (
+                node.node_type == FeedNodeType.SpeciesUnlocked
+                and (raw := node.get("collection"))
+                and (c := Collection(raw))
             ):
                 LOGGER.info("Recently unlocked species: %s", c.bird_name)
                 self.client.collections.setdefault(c.collection_id, c)
@@ -78,44 +113,54 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
         LOGGER.debug("Found postcards %s", postcards)
         for postcard in postcards:
             LOGGER.debug("A new postcard is ready to process: %s", postcard)
-            if not self.hass.bus.async_listeners().get(EVENT_NEW_POSTCARD_SIGHTING):
-                # if no one is listening, no sense in getting sighting data
-                LOGGER.debug("No event listeners: skipping postcard conversion")
+            if not self.hass.bus.async_listeners().get(EVENT_NEW_POSTCARD):
+                # No listeners, so skip the identify API call.
+                LOGGER.debug("No event listeners: skipping postcard identification")
                 continue
 
-            # emit a new event with sighting data and postcard data
-            # expose services that can:
-            # 1. auto-collect a recognized bird
-            # 2. manually assign a species
-            # 3. auto-collect a best-guess species, using sightingReport confidence
-            # 4. assign the sighting as "mystery visitor"
-            # 5. all-in-one service that can choose the best option of 1, 3, or 4
-            # Automations could use the sighting media URLs to do additional AI processing,
-            # such as with Merlin or other AI classifiers, and then do #2 with the results.
-            # If this is a viable option, we can supply a Recipe in docs to show how this could
-            # be done. Similarly, we can supply some default blueprints to handle this with
-            # user input.
-            sighting = await self.client.sighting_from_postcard(postcard=postcard)
+            # Identify the visitor (species + media) without collecting, then
+            # fire a slim event. Automations collect via the service; the
+            # payload stays small enough for HA's 32 KiB event limit.
+            try:
+                analysis = await self.client.identify_postcard(postcard)
+            except CompositeException, GraphqlError, UnexpectedResponseError:
+                # The server rejected this one postcard. Every other entity
+                # reads the account data the refresh already returned, so keep
+                # the poll successful and carry on with the next postcard.
+                LOGGER.exception("Could not identify postcard %s", postcard.node_id)
+                continue
+            media = next(iter(analysis.medias), None)
             data = {
-                "postcard": postcard.data,
-                "sighting": sighting.data,
+                ATTR_POSTCARD_ID: analysis.id,
+                ATTR_FEEDER_ID: (analysis.feeder.id if analysis.feeder else None),
+                ATTR_SPECIES: [dict(s) for s in analysis.species],
+                ATTR_MEDIA: dict(media) if media else None,
             }
-            self.hass.bus.fire(
-                event_type=EVENT_NEW_POSTCARD_SIGHTING,
+            self.hass.bus.async_fire(
+                event_type=EVENT_NEW_POSTCARD,
                 event_data=data,
                 origin=EventOrigin.remote,
             )
 
     async def _async_update_data(self) -> BirdBuddy:
+        """Fetch the latest data from the Bird Buddy API.
+
+        Returns:
+            The refreshed BirdBuddy client.
+
+        Raises:
+            UpdateFailed: If the API refresh fails or no feeders are found.
+        """
         try:
             await self.client.refresh()
 
-            # Skip processing the Feed on the first update. This works around a minor issue
-            # where the `automation` integration is not loaded yet by the time we make our first
-            # update call. If we proceed, we might emit the postcard feed items while there are
-            # no automations listening; and because refresh_feed() keeps track of the last seen
-            # feed item timestamp, that would prevent seeing that postcard again.
-            # This delays the first attempt at postcard handling until the next update interval.
+            # Skip processing the feed on the first update. This works
+            # around a minor issue where the `automation` integration is not
+            # loaded yet by the time we make our first update call. If we
+            # proceed, we might emit the postcard feed items while nothing is
+            # listening; and because refresh_feed() tracks the last seen feed
+            # item timestamp, that would prevent seeing that postcard again.
+            # This delays the first postcard handling until the next update.
             if not self.first_update:
                 feed = await self.client.refresh_feed()
                 await self._process_feed(feed)
@@ -123,44 +168,42 @@ class BirdBuddyDataUpdateCoordinator(DataUpdateCoordinator[BirdBuddy]):
             raise UpdateFailed(exc) from exc
 
         if not self.client.feeders:
-            raise UpdateFailed("No Feeders found")
+            msg = "No Feeders found"
+            raise UpdateFailed(msg)
 
         feeders = {
-            id: BirdBuddyDevice(f) for (id, f) in self.client.feeders.items()
-        }  # noqa: A001
-        # pylint: disable=invalid-name
+            feeder_id: BirdBuddyDevice(f)
+            for (feeder_id, f) in self.client.feeders.items()
+        }
         for i, f in feeders.items():
             if i in self.feeders:
                 self.feeders[i].update(f)
             else:
                 self.feeders[i] = f
         self.first_update = False
+
+        # Every poll reads the listener counts, including the first one that
+        # skips the feed above, and each repeat clears the issue once the last
+        # stale trigger has moved to the new event.
+        async_check_legacy_event_listeners(self.hass)
+
         return self.client
 
-    async def handle_collect_postcard(self, data: dict[str, any]) -> bool:
-        """Handle the `birdbuddy.collect_postcard` service call."""
-        sighting = PostcardSighting(data["sighting"])
-        postcard_id = data["postcard"]["id"]
-        strategy = SightingFinishStrategy(data.get("strategy", "recognized"))
-        confidence = data.get("best_guess_confidence")
-        share_media = data.get("share_media", False)
+    async def handle_collect_postcard(self, data: dict[str, Any]) -> bool:
+        """Handle the ``birdbuddy.collect_postcard`` service call.
 
-        LOGGER.debug(
-            "Calling collect_postcard: id=%s, sighting=%s, strategy=%s",
-            postcard_id,
-            sighting,
-            strategy,
-        )
-        success = await self.client.finish_postcard(
-            postcard_id,
-            sighting,
-            strategy,
-            confidence_threshold=confidence,
-            share_media=share_media,
-        )
-        if success:
-            LOGGER.info("Postcard collected to Media")
-        else:
-            # TODO: more info
-            LOGGER.warning("Postcard could not be collected")
-        return success
+        Args:
+            data: The service payload with a ``postcard_id`` and an optional
+                ``share`` flag.
+
+        Returns:
+            True if the postcard was collected to Media.
+        """
+        postcard_id = data[ATTR_POSTCARD_ID]
+        share = data.get(ATTR_SHARE, False)
+        LOGGER.debug("Calling collect_postcard: id=%s, share=%s", postcard_id, share)
+        collected = await self.client.collect_postcard(postcard_id, share=share)
+        # collect_postcard raises on failure, so reaching this line means the
+        # postcard was collected.
+        LOGGER.info("Collected postcard %s to Media", postcard_id)
+        return bool(collected)
