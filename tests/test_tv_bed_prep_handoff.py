@@ -30,7 +30,7 @@ def test_tv_bed_prep_handles_lg_shutdown_handoff_without_unconditional_offline_f
     assert 'from: "on"\n        to: "off"' in block
     assert 'from: "on"\n        to: "unavailable"' in block
     assert 'from: "off"\n        to: "unavailable"' in block
-    assert 'entity_id: media_player.basement\n        to: "off"' in block
+    assert 'entity_id: media_player.basement_great_room_basement_atv\n        to: "off"' in block
     assert "seconds: 15" in block
     assert "seconds: 10" in block
     assert "seconds: 5" in block

@@ -166,6 +166,10 @@ automation:
       - condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      - alias: "No trip guest visit in progress"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - condition: state
         entity_id: binary_sensor.bayesian_zeke_home
         state: "on"
@@ -524,6 +528,10 @@ script:
         condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      - alias: "No trip guest visit in progress"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - alias: "Den doors are confirmed closed"
         condition: state
         entity_id: binary_sensor.den_doors_contact
@@ -737,6 +745,10 @@ script:
           - alias: "Recheck guest-mode veto immediately before vacuum start"
             condition: state
             entity_id: input_boolean.guest_mode
+            state: "off"
+          - alias: "No trip guest visit in progress"
+            condition: state
+            entity_id: input_boolean.trip_guest_visit_active
             state: "off"
           # Only credit a FRESH full-floor pass: require the robot to be at rest
           # before starting. If it is already `cleaning` (a manual, app, or
@@ -1024,6 +1036,10 @@ script:
             condition: state
             entity_id: input_boolean.guest_mode
             state: "off"
+          - alias: "No trip guest visit in progress"
+            condition: state
+            entity_id: input_boolean.trip_guest_visit_active
+            state: "off"
           # Only credit a FRESH mop pass: require the robot at rest before start.
           # If it is already `cleaning` (a manual/app/segment run), our start is a
           # no-op and the confirmation below would credit that unrelated run as a
@@ -1256,6 +1272,10 @@ script:
         condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      - alias: "No trip guest visit in progress"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - action: mqtt.publish
         data:
           topic: valetudo/upstairs-vacuum/BasicControlCapability/operation/set
@@ -1442,6 +1462,10 @@ script:
                 condition: state
                 entity_id: input_boolean.guest_mode
                 state: "off"
+              - alias: "No trip guest visit in progress"
+                condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "off"
               - alias: "Recheck the X40 is still at rest immediately before segment start"
                 condition: state
                 entity_id: vacuum.x40_ultra
@@ -1544,6 +1568,10 @@ script:
         condition: state
         entity_id: input_boolean.guest_mode
         state: "off"
+      - alias: "No trip guest visit in progress"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
+        state: "off"
       - action: "{{ room_script }}"
       # Confirm the run actually started (status -> cleaning) via MQTT. If it
       # never starts (e.g. a no-op), skip the terminal wait so we do not hang.
@@ -1615,6 +1643,10 @@ script:
       - alias: "Guest mode vetoes automatic/supervised vacuuming"
         condition: state
         entity_id: input_boolean.guest_mode
+        state: "off"
+      - alias: "No trip guest visit in progress"
+        condition: state
+        entity_id: input_boolean.trip_guest_visit_active
         state: "off"
       - choose:
           # Upstairs Valetudo rooms route through the shared supervised boundary,

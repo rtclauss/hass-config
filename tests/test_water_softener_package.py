@@ -186,3 +186,73 @@ def test_water_softener_forecast_status_is_visible_on_home_dashboard_tile() -> N
     assert "entity: sensor.water_softener_forecast_low_salt_at" in text
     assert "entity: sensor.water_softener_salt_level" in text
     assert "entity: input_number.bags_of_salt_at_home" in text
+
+
+def test_low_salt_threshold_template_fallbacks_track_calibrated_value() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # Regression guard: the low-salt threshold input_number is calibrated
+    # as 75% depleted between the two real measured baselines (confirmed-
+    # just-refilled ~172mm, confirmed-empty ~451mm): 172 + 0.75*(451-172)
+    # ~= 381, rounded to the step:10 grid -> 380mm. This replaced an
+    # earlier 440mm calibration (~10mm short of bare water) that made
+    # "low salt" mean "almost completely out" with too little real lead
+    # time. The three template sensors that read the threshold also carry
+    # a float(default=...) fallback for the brief window where the
+    # input_number is transiently unknown/unavailable (e.g. HA startup
+    # before helpers load) -- a stale fallback there would silently mask
+    # a real low-salt state during that window (caught in review). All
+    # three fallbacks must track the same calibrated value, not an old
+    # or ad-hoc one.
+    assert "initial: 380" in text
+    fallback_count = text.count(
+        "states('input_number.water_softener_low_salt_threshold_mm') "
+        "| float(default=380)"
+    )
+    assert fallback_count == 3
+    assert "float(default=500)" not in text
+    assert "float(default=440)" not in text
+
+
+def test_refill_reset_threshold_calibrated_between_empty_and_full_baselines() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # Regression guard: refill_reset_threshold_mm is calibrated against a
+    # real 2026-09-16 refill (confirmed-empty ~451mm -> confirmed-just-
+    # refilled ~170-174mm). 300mm must stay strictly between the low-salt
+    # threshold (380mm, the 75%-depleted side) and today's observed
+    # full-tank reading, so it can never misfire on normal depletion near
+    # empty nor fail to detect a lighter future refill.
+    assert "initial: 300" in text
+
+    low_salt_threshold = 380
+    refill_reset_threshold = 300
+    observed_full_reading = 172
+
+    assert observed_full_reading < refill_reset_threshold < low_salt_threshold
+
+
+def test_minimum_depletion_rate_and_forecast_fallbacks_stay_in_sync() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # Regression guard: calibrated against real post-refill depletion data
+    # (2026-09-24 check-in). Genuine depletion windows clustered at
+    # 0.79-1.04mm/day, but the 7-day window -- the longest, most
+    # independent estimate -- came in at 0.448mm/day, just under the old
+    # 0.5 noise floor, silently discarding the best available evidence.
+    # 0.2 admits genuinely slow-but-real depletion while staying above the
+    # pure post-refill settling noise observed (-0.05 to -0.32mm/day).
+    assert "initial: 0.2" in text
+
+    # The forecast_rate template's float(default=...) fallbacks (for the
+    # brief window where the input_number is transiently unknown/
+    # unavailable) must track the same calibrated value -- a stale
+    # fallback here would silently exclude real depletion during that
+    # window, the same class of bug caught in review for the low-salt
+    # threshold's fallbacks.
+    fallback_count = text.count(
+        "states('input_number.water_softener_minimum_depletion_rate_mm_per_day') "
+        "| float(default=0.2)"
+    )
+    assert fallback_count == 2
+    assert "float(default=0.5)" not in text

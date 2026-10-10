@@ -9,6 +9,7 @@ Rules:
 - Use the `Preferred UI Name` for new dashboards, helpers, script aliases, notifications, and friendly names.
 - Do not mass-rename live entity IDs or Zigbee2MQTT `friendly_name` values just to match the preferred UI name. Open a separate safe-refactor issue first.
 - If an existing live namespace is still required, add it to the registry instead of introducing a new alias.
+- `Main Level` and `Upstairs` are existing Zigbee2MQTT floor prefixes for shared devices, not room names; the registry allows them without assigning room intent.
 
 ## Canonical Names
 

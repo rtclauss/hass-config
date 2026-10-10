@@ -131,7 +131,11 @@ cards:
               {% elif has_calendar_departure and home_planner %}
                 ### {{ state_attr('binary_sensor.upcoming_trip_charging', 'entry') }}
                 #### Departure plan: {{ trip_start_raw }}
-                #### Distance: {{ state_attr("sensor.waze_next_trip_distance", "distance")| int(0) }} mi
+                #### Distance: {{ state_attr('binary_sensor.upcoming_trip_charging', 'distance_mi') | float(default=0) | round(0) }} mi
+                {% set furthest_entry = state_attr('binary_sensor.upcoming_trip_charging', 'furthest_entry') %}
+                {% if furthest_entry and furthest_entry != state_attr('binary_sensor.upcoming_trip_charging', 'entry') %}
+                #### Charge target reflects today's furthest stop: {{ furthest_entry }}
+                {% endif %}
                 #### Cabin preconditioning is {% if resident_home %}scheduled{% else %}suppressed because Ryan is away{% endif %}
               {% elif protected_location and not home_planner %}
                 ### Protected location

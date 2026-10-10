@@ -634,6 +634,16 @@ automation:
                   message: "Water main shutoff cancelled."
                   data:
                     tag: water-shutoff-on-trip
+          - conditions:
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "on"
+            sequence:
+              - action: notify.mobile_app_wethop
+                data:
+                  message: "Water main shutoff skipped: guest visit in progress (shuts off when the door locks)."
+                  data:
+                    tag: water-shutoff-on-trip
         default:
           - action: switch.turn_off
             target:

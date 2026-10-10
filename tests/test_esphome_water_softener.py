@@ -50,5 +50,63 @@ def test_vl53l1x_wiring_and_measurement_contract_are_explicit() -> None:
 def test_home_assistant_package_consumes_new_sensor_entity() -> None:
     text = HA_PACKAGE.read_text(encoding="utf-8")
 
-    assert "entity_id: sensor.my_water_softener_vl53l1x_sensor" in text
+    # The salt-level filter sensor consumes the normalized-to-mm template
+    # sensor, not the raw ESPHome entity directly -- see
+    # test_salt_level_source_normalizes_units_to_mm below for why.
+    assert "entity_id: sensor.water_softener_distance_normalized_mm" in text
     assert "entity_id: sensor.my_water_softener_vl53l0x_sensor" not in text
+    assert "entity_id: sensor.my_water_softener_vl53l1x_sensor" not in text
+
+
+def test_salt_level_source_normalizes_units_to_mm() -> None:
+    text = HA_PACKAGE.read_text(encoding="utf-8")
+
+    # HA registers this ESPHome node's entity with a "watersoftener_"
+    # device-name prefix (confirmed via the live entity registry after the
+    # VL53L0X -> VL53L1X hardware migration and ESPHome integration
+    # reconfigure); the un-prefixed id never existed post-migration.
+    assert "sensor.watersoftener_my_water_softener_vl53l1x_sensor" in text
+
+    # The normalizing template sensor must actually declare mm and handle
+    # the unit HA was observed reporting post-migration (in), not just the
+    # expected one (mm) -- a raw registry override is not version-controlled
+    # and was flagged as fragile in review.
+    assert 'unique_id: water_softener_distance_normalized_mm' in text
+    assert 'unit_of_measurement: "mm"' in text
+    assert "value * 25.4" in text
+
+    # Regression guard: an actual (non-comment) "device_class: distance"
+    # key on this template sensor would make HA's own unit-system
+    # conversion apply to *it* too, silently re-converting its mm state
+    # back to inches under an imperial unit system and reintroducing the
+    # exact bug this sensor exists to fix, one level downstream (caught in
+    # review). Checked line-by-line so this assertion survives explaining
+    # itself in a comment, same as this one does.
+    live_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert not any(line == "device_class: distance" for line in live_lines)
+
+
+def test_salt_level_filter_has_no_permanently_stuck_outlier_rejection() -> None:
+    text = HA_PACKAGE.read_text(encoding="utf-8")
+
+    # Regression guard: HA's `outlier` filter only widens its comparison
+    # window with values it *accepts*. A genuine step change bigger than
+    # its radius -- exactly what a real salt refill produces -- gets
+    # rejected forever afterward, since every later (correct) reading
+    # keeps comparing against the same stale pre-refill window. That would
+    # silently and permanently break refill detection, the whole point of
+    # this sensor (caught in review). Spike rejection belongs entirely in
+    # the firmware-side median filter, which has no such lockout.
+    live_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    assert not any(line == "filter: outlier" for line in live_lines)
+
+    esphome_text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+    assert "median:" in esphome_text
