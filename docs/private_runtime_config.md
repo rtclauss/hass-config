@@ -86,9 +86,10 @@ Afterward, confirm the same dashboards load through Home Assistant's dashboard
 API or UI. The file copy is only for the one-time Git migration; use the API or
 UI for subsequent dashboard changes.
 
-CI tests use `tests/fixtures/dashboard.example.json`, a small synthetic
-dashboard. Set `HA_DASHBOARD_PATH` to a private dashboard export when running
-the same tests against the live dashboard; do not commit that export.
+CI tests use two small synthetic fixtures in `tests/fixtures/`. Set
+`HA_DASHBOARD_PATH` and `HA_STRATEGY_DASHBOARD_PATH` to the corresponding
+private dashboard exports when running the same checks against live content;
+do not commit those exports.
 
 After changing the live Zigbee2MQTT roster, pass its private configuration to
 `scripts/check_z2m_availability_roster.py -` on stdin. The checker compares it
