@@ -17,6 +17,11 @@
 - If fixed elsewhere, open a linked issue/PR and reference the source PR/comment.
 - Re-check unresolved Codex threads after merge.
 
+## Review guidelines
+- Skip `custom_components/**`. It is vendored third-party code refreshed from HACS, not authored here, so do not review it or leave comments on it.
+- If a PR touches only `custom_components/**`, say that it is a vendored-integration refresh and stop.
+- Spend review attention on our own config: `packages/`, `lovelace/`, `esphome/`, `appdaemon/`, `scripts/`, `tests/`, `docs/`, and `specs/`.
+
 ## Room Intent
 - Use `docs/room_intent.yaml` as the source of truth for room purpose, guest privacy, and room-sensitive automation behavior.
 - Read it before changing guest mode, occupancy, lighting, media, vacuum, climate, dashboards, or other room-targeted logic.
