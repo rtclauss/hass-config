@@ -29,9 +29,10 @@ wifi:
   min_auth_mode: WPA2
 
 
-# Enable logging
+# INFO, not DEBUG: DEBUG logs every 2 s raw reading. Switch back temporarily
+# when diagnosing the sensor over USB serial.
 logger:
-  level: DEBUG
+  level: INFO
 
 # Enable Home Assistant API
 api:
@@ -61,7 +62,7 @@ sensor:
     device_class: distance
     state_class: measurement
     unit_of_measurement: "mm"
-    accuracy_decimals: 0
+    accuracy_decimals: 1
     address: 0x29
     timeout: 1s
     update_interval: 2s
@@ -72,20 +73,45 @@ sensor:
       # the Home Assistant water softener package and its existing thresholds.
       - lambda: return x * 1000;
       # Reject single-sample spikes (e.g. a specular bounce off the brine
-      # surface) before they reach the EMA below. window_size looks back
+      # surface) before they reach the average below. window_size looks back
       # across the last 7 raw (2s) readings -- widened from 5 after the
       # live baseline still showed two lone +-4-5mm single-sample outliers
       # (447mm, 456mm against a ~452mm/1.3mm-stdev baseline) slipping
       # through; 7 rejects a lone bad sample even when its neighbor on one
-      # side is itself borderline. send_every: 1 keeps the same ~2s cadence
-      # feeding the EMA, so this only adds spike rejection without slowing
-      # down the final publish rate. A real step change (e.g. a refill)
-      # still comes through within ~14s, since median has no lockout.
+      # side is itself borderline. send_every: 1 keeps the 2s cadence feeding
+      # the average. A real step change (e.g. a refill) still comes through,
+      # since median has no lockout.
       - median:
           window_size: 7
           send_every: 1
           send_first_at: 1
-      - exponential_moving_average:
-          alpha: 0.1
-          send_every: 15
-      - round: 0
+      # Publish one average of the ~150 readings in each 5 minutes, instead of
+      # an EMA snapshot every ~30 s. The salt level moves ~0.5 mm/day and the
+      # HA side applies a time-weighted 6h average, so a replay of the recorded
+      # 2026-09/10 data showed the same downstream noise and lag with ~10x fewer
+      # state rows. Deploy only after the HA package dropped its per-update
+      # lowpass (#1110): with it, a 5-minute cadence would add 11-25h of lag.
+      - throttle_average: 5min
+      # Averaging carries sub-millimetre information; keep 0.1 mm.
+      - round: 1
+
+  # Diagnostics for the sealed enclosure: the recorder showed ~8 s device-side
+  # outages with no way to tell a reboot from a Wi-Fi drop.
+  - platform: uptime
+    name: "Uptime"
+    # A boot timestamp changes only on reboot, unlike a seconds counter that
+    # would write a recorder row every update.
+    type: timestamp
+    entity_category: diagnostic
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 5min
+    entity_category: diagnostic
+
+button:
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+  - platform: safe_mode
+    name: "Safe Mode Boot"
+    entity_category: config
