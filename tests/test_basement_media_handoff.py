@@ -25,8 +25,8 @@ def test_basement_lights_auto_on_retries_after_media_shutdown_handoffs() -> None
 
     for token in (
         'entity_id: binary_sensor.basement_landing_occupancy',
-        'entity_id: media_player.basement\n        to: "idle"',
-        'entity_id: media_player.basement\n        to: "off"',
+        'entity_id: media_player.basement_great_room_basement_atv\n        to: "idle"',
+        'entity_id: media_player.basement_great_room_basement_atv\n        to: "off"',
         'entity_id: media_player.lg_webos_smart_tv\n        from: "on"\n        to: "off"',
         "seconds: 3",
         "seconds: 10",
@@ -40,8 +40,8 @@ def test_basement_lights_auto_on_requires_occupancy_and_non_playback_states() ->
     for token in (
         'alias: "Basement landing still occupied"',
         'entity_id: binary_sensor.basement_landing_occupancy\n        state: "on"',
-        'entity_id: media_player.basement\n                state: "playing"',
-        'entity_id: media_player.basement\n                state: "paused"',
+        'entity_id: media_player.basement_great_room_basement_atv\n                state: "playing"',
+        'entity_id: media_player.basement_great_room_basement_atv\n                state: "paused"',
         'entity_id: media_player.plex_basement_apple_tv\n                state: "playing"',
         'entity_id: media_player.plex_basement_apple_tv\n                state: "paused"',
         "script.turn_on_basement_lights_sequentially",

@@ -127,7 +127,7 @@ def test_all_watch_scripts_are_exposed_to_siri_and_voice_integrations() -> None:
 def test_watch_f1_script_uses_basement_apple_tv_path() -> None:
     f1_block = _script_block("watch_f1")
 
-    assert "entity_id: media_player.basement" in f1_block
+    assert "entity_id: media_player.basement_great_room_basement_atv" in f1_block
     assert 'source: "F1 TV"' in f1_block
     assert "action: script.music_assistant_pause_house_audio" in f1_block
 

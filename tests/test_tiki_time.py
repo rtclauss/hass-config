@@ -40,7 +40,7 @@ def test_tiki_time_uses_shared_music_assistant_helpers() -> None:
     assert "media_type: radio" in block
     assert "somafm://radio/tikitime" not in block
     assert "media_player.ma_group_everywhere" in block
-    assert "media_player.basement" in block
+    assert "media_player.basement_great_room_basement_atv" in block
     assert "source: Photos" in block
     assert "flash: short" in block
     assert "script.tiki_time_tropical_color_cycle" in block

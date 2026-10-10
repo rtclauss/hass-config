@@ -17,6 +17,11 @@
 - If fixed elsewhere, open a linked issue/PR and reference the source PR/comment.
 - Re-check unresolved Codex threads after merge.
 
+## Review guidelines
+- Skip `custom_components/**`. It is vendored third-party code refreshed from HACS, not authored here, so do not review it or leave comments on it.
+- If a PR touches only `custom_components/**`, say that it is a vendored-integration refresh and stop.
+- Spend review attention on our own config: `packages/`, `lovelace/`, `esphome/`, `appdaemon/`, `scripts/`, `tests/`, `docs/`, and `specs/`.
+
 ## Room Intent
 - Use `docs/room_intent.yaml` as the source of truth for room purpose, guest privacy, and room-sensitive automation behavior.
 - Read it before changing guest mode, occupancy, lighting, media, vacuum, climate, dashboards, or other room-targeted logic.
@@ -48,6 +53,11 @@
   `*_sonos` entities. Keep their entity-registry names room-friendly for the UI,
   HomeKit, and Siri; set group volume on individual member entities, never the
   group entity.
+
+## RTL-SDR / Gas Meter Watchdog
+- Use `docs/rtlsdr_watchdog.md` as the source of truth before changing `appdaemon/apps/rtlsdr_watchdog.py`, its `apps.yaml` args, the rtlamr2mqtt add-on, or `rest_command.proxmox_shutdown`.
+- It ships with `dry_run: true`; only flip it to `false` in `apps.yaml` after watching real dry-run notifications for a while, per the doc's rollout section.
+- Test with `uv run --with pytest pytest tests/test_appdaemon_rtlsdr_watchdog.py`.
 
 ## Local Runtime Targets
 - Keep machine-local runtime verification targets in `AGENTS.local.md`.
