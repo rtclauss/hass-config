@@ -7,7 +7,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATHS = [
     ROOT / "configuration.yaml",
-    ROOT / "automations.yaml",
+    ROOT / "automations.example.yaml",
     ROOT / "scripts.yaml",
     *sorted((ROOT / "packages").glob("*.yaml")),
     *sorted((ROOT / "blueprints").rglob("*.yaml")),

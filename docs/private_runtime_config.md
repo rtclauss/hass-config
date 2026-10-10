@@ -41,6 +41,26 @@ Home Assistant and ESPHome secrets also remain in their ignored `secrets.yaml`
 files. CI uses `travis_secrets.example.yaml`, which contains synthetic values.
 Do not use those values on a live system.
 
+The root `automations.yaml` is Home Assistant UI-owned on the live host. The
+public `automations.example.yaml` is an empty fixture for CI, not a deployment
+file. The live file has already been byte-verified under
+`.private-runtime-backup/current-config/automations.yaml` on the host. Before
+updating its Git checkout, stop any automatic pull and automation reload, then
+run this from `/config` after confirming that private backup still matches the
+live file:
+
+```sh
+cmp automations.yaml .private-runtime-backup/current-config/automations.yaml
+git restore -- automations.yaml  # release the tracked, locally edited path
+# Update the checkout using the Zigbee steps above and docs/custom_components.md.
+cp -p .private-runtime-backup/current-config/automations.yaml automations.yaml
+git check-ignore automations.yaml
+```
+
+Restore the private copy immediately after the checkout update, before
+restarting or reloading automations. Never copy the public example over the
+live file.
+
 After changing the live Zigbee2MQTT roster, pass its private configuration to
 `scripts/check_z2m_availability_roster.py -` on stdin. The checker compares it
 with `packages/z2m_availability.yaml` and prints counts only.
