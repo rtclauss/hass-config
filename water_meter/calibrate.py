@@ -89,6 +89,8 @@ def write_config(
     config_path: Path,
     roi: tuple[int, int, int, int],
     digit_boxes: list[tuple[int, int, int, int]],
+    *,
+    decimal_places: int | None = None,
 ) -> CalibrationConfig:
     existing: CalibrationConfig | None = None
     if config_path.exists():
@@ -96,6 +98,15 @@ def write_config(
             existing = load_calibration_config(config_path)
         except (OSError, ValueError):
             existing = None
+
+    if existing is None and decimal_places is None:
+        raise ValueError(
+            "decimal_places is required when creating a calibration; "
+            "pass --decimal-places to match the physical meter display"
+        )
+    effective_decimal_places = existing.decimal_places if decimal_places is None else decimal_places
+    if effective_decimal_places < 0:
+        raise ValueError("decimal_places must be zero or greater")
 
     config = CalibrationConfig(
         roi=roi,
@@ -114,7 +125,7 @@ def write_config(
         # documented meter's config would otherwise silently drop
         # decimal_places (1), making every raw reading 10x too large and
         # leaving the reader permanently rejecting against its own baseline.
-        decimal_places=existing.decimal_places if existing else 0,
+        decimal_places=effective_decimal_places,
         low_confidence_ok_indexes=existing.low_confidence_ok_indexes if existing else (),
         nominal_interval_seconds=(
             existing.nominal_interval_seconds if existing else DEFAULT_NOMINAL_INTERVAL_SECONDS
@@ -200,6 +211,13 @@ def main() -> None:
     calibrate_parser.add_argument("--image", type=Path, required=True)
     calibrate_parser.add_argument("--write-config", type=Path, required=True)
     calibrate_parser.add_argument(
+        "--decimal-places",
+        type=int,
+        default=None,
+        help="Digits after the physical meter's decimal point. Required for a new config; "
+        "an existing config keeps its current value when omitted.",
+    )
+    calibrate_parser.add_argument(
         "--test", action="store_true", help="Run a test OCR pass against --image after writing config."
     )
     calibrate_parser.add_argument(
@@ -228,7 +246,12 @@ def main() -> None:
         return
 
     roi, digit_boxes = pick_boxes_interactively(args.image)
-    config = write_config(args.write_config, roi, digit_boxes)
+    config = write_config(
+        args.write_config,
+        roi,
+        digit_boxes,
+        decimal_places=args.decimal_places,
+    )
     LOG.info("Wrote calibration to %s: roi=%s digits=%d", args.write_config, config.roi, config.digit_count)
 
     if args.test:

@@ -495,6 +495,9 @@ def _requery_vlm_on_suspect_value(
         stuck_after_hours=calibration.stuck_after_hours,
         max_sustained_gallons_per_hour=calibration.max_sustained_gallons_per_hour,
     )
+    requery_digits, requery_validation = _correct_glare_positions_from_last_good(
+        calibration, requery_digits, requery_validation, last_good, now
+    )
     if requery_validation.accepted:
         LOG.info("Vision-LLM requery succeeded: %s -> %s", raw_digits, requery_digits)
     else:
@@ -598,10 +601,13 @@ def _notify_ha_of_unresolved_reading(
 
     notification_data: dict = {
         "actions": [
-            {"action": f"WATER_METER_APPROVE_{suggested_str}", "title": "Approve"},
+            {
+                "action": f"WATER_METER_APPROVE_{suggested_str}_{last_good.timestamp}",
+                "title": "Approve",
+            },
             {"action": "WATER_METER_REJECT", "title": "Reject"},
             {
-                "action": "WATER_METER_MODIFY",
+                "action": f"WATER_METER_MODIFY_{last_good.timestamp}",
                 "title": "Modify",
                 # Companion-app "text input" action: tapping it prompts for
                 # free text on the phone instead of just firing the action,

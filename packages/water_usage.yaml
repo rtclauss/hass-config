@@ -141,8 +141,9 @@ automation:
         condition: template
         value_template: >-
           {{ trigger.from_state is not none and trigger.to_state is not none
-             and trigger.from_state.state not in ['unknown', 'unavailable']
-             and trigger.to_state.state not in ['unknown', 'unavailable'] }}
+             and trigger.to_state.state not in ['unknown', 'unavailable']
+             and (trigger.from_state.state not in ['unknown', 'unavailable']
+                  or is_state('input_boolean.water_meter_arm_baseline_captured', 'on')) }}
       - alias: "House has been armed away or armed night for a while"
         condition: state
         entity_id: alarm_control_panel.home_alarm

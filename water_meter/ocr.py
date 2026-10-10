@@ -540,6 +540,15 @@ def match_digits(
     return "".join(digits)
 
 
+def _normalize_excluded_digits(digits: str, excluded_indexes: Sequence[int]) -> str:
+    """Round ignored sweep/indicator positions down for every OCR tier."""
+    normalized = list(digits)
+    for index in excluded_indexes:
+        if 0 <= index < len(normalized):
+            normalized[index] = "0"
+    return "".join(normalized)
+
+
 def read_digits(
     image_path: Path,
     digit_crops: Sequence["np.ndarray"],
@@ -558,9 +567,10 @@ def read_digits(
     unreachable, times out, or vlm_host isn't configured).
 
     Templates are only loaded from disk if both of the above fail, since the
-    common case never needs them. bootstrap is forwarded to match_digits -
-    see there for why the reading that establishes the baseline can't use
-    the same confidence exemptions as every reading after it.
+    common case never needs them. During bootstrap, even a valid ssocr result
+    is held until the VLM or template matcher corroborates it; match_digits
+    also receives bootstrap so the baseline cannot use ordinary confidence
+    exemptions.
 
     The VLM path has no numeric confidence signal to gate on the way
     match_digits does, and it has been confirmed (live) to occasionally
@@ -573,6 +583,8 @@ def read_digits(
     confidence on bootstrap - see match_digits) rather than guessing between
     the two answers.
     """
+    ssocr_digits: str | None = None
+    vlm_digits: str | None = None
     try:
         digits = run_ssocr(image_path, ssocr_args=calibration.ssocr_args)
         if not digits.isdigit() or len(digits) != calibration.digit_count:
@@ -587,28 +599,47 @@ def read_digits(
                 f"ssocr returned unusable output {digits!r} "
                 f"(expected {calibration.digit_count} numeric digits)"
             )
-        return digits
+        digits = _normalize_excluded_digits(digits, calibration.excluded_digit_indexes)
+        if not bootstrap:
+            return digits
+        ssocr_digits = digits
+        LOG.info("Holding bootstrap ssocr read %s until another OCR tier corroborates it", digits)
     except OcrError as ssocr_error:
         LOG.warning("ssocr failed (%s)", ssocr_error)
 
     if vlm_host:
         try:
-            digits = read_digits_vlm(
-                image_path,
-                host=vlm_host,
-                digit_count=calibration.digit_count,
-                model=vlm_model,
-                timeout=vlm_timeout,
-                dynamic_examples_dir=dynamic_examples_dir,
-            )
-            if bootstrap:
-                confirmation = read_digits_vlm(
+            digits = _normalize_excluded_digits(
+                read_digits_vlm(
                     image_path,
                     host=vlm_host,
                     digit_count=calibration.digit_count,
                     model=vlm_model,
                     timeout=vlm_timeout,
                     dynamic_examples_dir=dynamic_examples_dir,
+                ),
+                calibration.excluded_digit_indexes,
+            )
+            if bootstrap and ssocr_digits is not None:
+                if digits == ssocr_digits:
+                    return digits
+                vlm_digits = digits
+                LOG.warning(
+                    "Bootstrap ssocr/VLM disagreement (%s vs %s); trying template match",
+                    ssocr_digits,
+                    vlm_digits,
+                )
+            elif bootstrap:
+                confirmation = _normalize_excluded_digits(
+                    read_digits_vlm(
+                        image_path,
+                        host=vlm_host,
+                        digit_count=calibration.digit_count,
+                        model=vlm_model,
+                        timeout=vlm_timeout,
+                        dynamic_examples_dir=dynamic_examples_dir,
+                    ),
+                    calibration.excluded_digit_indexes,
                 )
                 if confirmation != digits:
                     raise OcrError(
@@ -617,18 +648,33 @@ def read_digits(
                         f"{confirmation!r} - refusing to seed a baseline from a single "
                         f"unconfirmed VLM read"
                     )
-            return digits
+                return digits
+            else:
+                return digits
         except OcrError as vlm_error:
             LOG.warning("vision-LLM fallback failed (%s); falling back to template match", vlm_error)
 
     if not templates_dir:
+        if bootstrap and ssocr_digits is not None:
+            raise OcrError(
+                "ssocr bootstrap read is uncorroborated and no independent "
+                "vision-LLM/templates fallback is configured"
+            )
         raise OcrError("ssocr failed and no vision-LLM/templates fallback is configured")
 
     templates = load_digit_templates(templates_dir)
-    return match_digits(
+    template_digits = match_digits(
         digit_crops,
         templates,
         excluded_indexes=calibration.excluded_digit_indexes,
         low_confidence_ok_indexes=calibration.low_confidence_ok_indexes,
         bootstrap=bootstrap,
     )
+    if bootstrap and ssocr_digits is not None:
+        if template_digits == ssocr_digits or template_digits == vlm_digits:
+            return template_digits
+        raise OcrError(
+            "bootstrap OCR tiers did not corroborate one another: "
+            f"ssocr={ssocr_digits!r}, VLM={vlm_digits!r}, template={template_digits!r}"
+        )
+    return template_digits

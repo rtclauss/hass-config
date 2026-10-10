@@ -10,12 +10,24 @@ from water_meter import calibrate, capture, ocr
 from water_meter.config import CalibrationConfig, save_calibration_config
 
 
-def test_write_config_uses_defaults_when_no_existing_file(tmp_path: Path) -> None:
+def test_write_config_requires_decimal_places_when_no_existing_file(tmp_path: Path) -> None:
     config_path = tmp_path / "calibration.json"
 
-    config = calibrate.write_config(config_path, roi=(1, 2, 3, 4), digit_boxes=[(1, 2, 3, 4)])
+    with pytest.raises(ValueError, match="decimal_places is required"):
+        calibrate.write_config(config_path, roi=(1, 2, 3, 4), digit_boxes=[(1, 2, 3, 4)])
 
-    assert config.decimal_places == 0
+
+def test_write_config_uses_explicit_decimal_places_for_new_file(tmp_path: Path) -> None:
+    config_path = tmp_path / "calibration.json"
+
+    config = calibrate.write_config(
+        config_path,
+        roi=(1, 2, 3, 4),
+        digit_boxes=[(1, 2, 3, 4)],
+        decimal_places=1,
+    )
+
+    assert config.decimal_places == 1
     assert config.low_confidence_ok_indexes == ()
     assert config.nominal_interval_seconds == 1200.0
     assert config.capture_width == calibrate.DEFAULT_CAPTURE_WIDTH

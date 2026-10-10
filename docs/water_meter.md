@@ -565,6 +565,12 @@ republishes the retained MQTT topics - both need updating, or the next
 scheduled read would still compare against the stale local baseline even
 after the visible sensor looked fixed.
 
+Approve and Modify actions carry the exact `last_good` timestamp that was
+current when the notification was created. The listener returns HTTP 409 and
+does nothing if a later scheduled read has already advanced that baseline,
+so an old phone notification cannot overwrite newer meter state. The manual
+correction helper remains an explicit force override.
+
 The listener deliberately trusts the human's value outright, including a
 *decrease* from the current `last_good` - overriding the reader's own
 monotonic-increase safety net is the entire point. It exists specifically
@@ -845,7 +851,7 @@ python3 -m water_meter.calibrate capture-only -o /tmp/reference_frame.jpg
 # On a workstation with a display:
 scp <user>@water-meter.local:/tmp/reference_frame.jpg .
 python3 -m water_meter.calibrate calibrate --image reference_frame.jpg \
-    --write-config calibration.json --test
+    --write-config calibration.json --decimal-places 1 --test
 scp calibration.json <user>@water-meter.local:/opt/water-meter/calibration.json
 ```
 
@@ -857,6 +863,11 @@ rotating/sweep indicator (common on encoder registers) - if so, add its index
 to `excluded_digit_indexes` in `calibration.json` so it's rounded down instead
 of fought with OCR.
 
+`--decimal-places` is required when creating a new calibration so a fresh
+setup cannot silently interpret a decimal meter as an integer meter. It may
+be omitted when updating an existing calibration, which preserves the saved
+value.
+
 `--test` alone only exercises `ssocr`, since it runs on a workstation with
 none of the Pi's deployment env vars - on a meter that actually needs the
 fallback tiers (like this documented one, under a fixed glare streak), any
@@ -867,7 +878,7 @@ of the Pi's `digit_templates/`) and/or `--vlm-host`/`--vlm-model`/
 
 ```bash
 python3 -m water_meter.calibrate calibrate --image reference_frame.jpg \
-    --write-config calibration.json --test \
+    --write-config calibration.json --decimal-places 1 --test \
     --templates-dir ./digit_templates --vlm-host truenas.local:30068
 ```
 

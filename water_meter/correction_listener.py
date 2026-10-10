@@ -46,6 +46,10 @@ MAX_PLAUSIBLE_VALUE = 10_000_000.0
 DYNAMIC_EXAMPLES_LIMIT = 12
 
 
+class SupersededCorrectionError(RuntimeError):
+    """The reading that a notification was based on is no longer current."""
+
+
 def _record_dynamic_example(
     connection: ConnectionConfig, calibration: CalibrationConfig, value: float, now: datetime
 ) -> None:
@@ -89,9 +93,16 @@ def apply_correction(
     value: float,
     now: datetime | None = None,
     calibration: CalibrationConfig | None = None,
+    expected_last_good_timestamp: str | None = None,
 ) -> None:
     now = now or datetime.now(timezone.utc)
     previous = sanity.load_last_good(connection.state_dir)
+    if expected_last_good_timestamp is not None and (
+        previous is None or previous.timestamp != expected_last_good_timestamp
+    ):
+        raise SupersededCorrectionError(
+            "the water meter baseline changed after this correction was requested"
+        )
     new_last_good = sanity.next_last_good(value, previous, history_limit=200, now=now)
     sanity.save_last_good(connection.state_dir, new_last_good)
     LOG.info("Applied human-approved correction: %s -> %s", previous.value if previous else None, value)
@@ -164,7 +175,13 @@ def _make_handler(
             length = int(self.headers.get("Content-Length", 0))
             try:
                 body = json.loads(self.rfile.read(length))
+                if not isinstance(body, dict):
+                    raise ValueError("request body must be a JSON object")
                 value = float(body["value"])
+                force = body.get("force") is True
+                expected_timestamp = body.get("expected_last_good_timestamp")
+                if not force and not isinstance(expected_timestamp, str):
+                    raise ValueError("expected_last_good_timestamp is required")
             except (ValueError, KeyError, TypeError, json.JSONDecodeError):
                 self.send_response(400)
                 self.end_headers()
@@ -176,7 +193,19 @@ def _make_handler(
                 return
 
             try:
-                apply_correction(connection, value, calibration=calibration)
+                apply_correction(
+                    connection,
+                    value,
+                    calibration=calibration,
+                    expected_last_good_timestamp=None if force else expected_timestamp,
+                )
+            except SupersededCorrectionError as error:
+                LOG.warning("Rejected stale water meter correction: %s", error)
+                self.send_response(409)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": str(error)}).encode("utf-8"))
+                return
             except Exception:
                 LOG.exception("Failed to apply correction")
                 self.send_response(500)

@@ -118,12 +118,64 @@ def test_listener_applies_a_valid_authenticated_correction(
     )
     server, base_url, thread = _start_test_server(connection, "secret-token")
     try:
-        status, body = _post(base_url, "secret-token", {"value": 214170.0})
+        status, body = _post(
+            base_url,
+            "secret-token",
+            {"value": 214170.0, "expected_last_good_timestamp": NOW.isoformat()},
+        )
         assert status == 200
         assert json.loads(body) == {"ok": True, "value": 214170.0}
         saved = sanity.load_last_good(connection.state_dir)
         assert saved is not None
         assert saved.value == 214170.0
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+
+def test_listener_rejects_a_correction_for_a_superseded_reading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_paho(monkeypatch)
+    connection = _connection(tmp_path)
+    current_timestamp = (NOW + timedelta(minutes=10)).isoformat()
+    sanity.save_last_good(
+        connection.state_dir,
+        sanity.LastGoodReading(value=101.0, timestamp=current_timestamp),
+    )
+    server, base_url, thread = _start_test_server(connection, "secret-token")
+    try:
+        status, body = _post(
+            base_url,
+            "secret-token",
+            {"value": 214170.0, "expected_last_good_timestamp": NOW.isoformat()},
+        )
+        assert status == 409
+        assert "baseline changed" in json.loads(body)["error"]
+        saved = sanity.load_last_good(connection.state_dir)
+        assert saved is not None
+        assert saved.value == 101.0
+        assert saved.timestamp == current_timestamp
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+
+
+def test_listener_allows_an_explicit_manual_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fake_paho(monkeypatch)
+    connection = _connection(tmp_path)
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=100.0, timestamp=NOW.isoformat())
+    )
+    server, base_url, thread = _start_test_server(connection, "secret-token")
+    try:
+        status, _ = _post(base_url, "secret-token", {"value": 99.0, "force": True})
+        assert status == 200
+        saved = sanity.load_last_good(connection.state_dir)
+        assert saved is not None
+        assert saved.value == 99.0
     finally:
         server.shutdown()
         thread.join(timeout=2)
