@@ -1,0 +1,158 @@
+{
+  "data": {
+    "config": {
+      "views": [
+        {
+          "title": "Main Floor",
+          "sections": [
+            {
+              "cards": [
+                {
+                  "heading": "Laundry Room"
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.washing_machine_running"
+                    },
+                    {
+                      "entity": "binary_sensor.dryer_running"
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:mushroom-chips-card",
+                  "chips": [
+                    {
+                      "entity": "binary_sensor.washing_machine_running",
+                      "name": "Washer",
+                      "icon": "mdi:washing-machine"
+                    },
+                    {
+                      "entity": "binary_sensor.dryer_running",
+                      "name": "Dryer",
+                      "icon": "mdi:tumble-dryer"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Cleaning-v2",
+          "sections": [
+            {
+              "cards": [
+                {
+                  "heading": "Clothes"
+                },
+                {
+                  "primary": "Washer",
+                  "entity": "binary_sensor.washing_machine_running",
+                  "secondary": "sensor.laundry_room_washing_machine_power sensor.laundry_room_washing_machine_current",
+                  "icon_color": "binary_sensor.washing_machine_running"
+                },
+                {
+                  "primary": "Dryer",
+                  "entity": "binary_sensor.dryer_running",
+                  "secondary": "sensor.laundry_room_dryer_power sensor.laundry_room_dryer_current",
+                  "icon_color": "binary_sensor.dryer_running"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "path": "testing",
+          "cards": [
+            {
+              "entity": "script.reboot_fermentor",
+              "name": "Reboot Fermentor",
+              "icon": "mdi:restart-alert",
+              "tap_action": {
+                "action": "call-service",
+                "service": "script.turn_on",
+                "target": {
+                  "entity_id": "script.reboot_fermentor"
+                },
+                "confirmation": {
+                  "text": "Reboot fermentor? Services hosted there will be briefly unavailable."
+                }
+              }
+            },
+            {
+              "entity": "sensor.derivative_default_house_temp_change"
+            },
+            {
+              "entity": "sensor.derivative_10_10_minutes_house_temp_change"
+            }
+          ]
+        },
+        {
+          "path": "music-assistant",
+          "title": "Music Assistant",
+          "cards": [
+            {
+              "type": "custom:mass-player-card",
+              "entity": "media_player.ma_bedroom"
+            }
+          ]
+        },
+        {
+          "title": "Synthetic contract",
+          "cards": [
+            {
+              "entity": "binary_sensor.tesla_daily_plan_active",
+              "name": "Use Daily Plan",
+              "tap_action": {
+                "service": "input_boolean.turn_off"
+              }
+            },
+            {
+              "entity": "sensor.average_daily_ev_charging_cost"
+            },
+            {
+              "entity": "sensor.average_daily_vehicle_miles"
+            },
+            {
+              "entity": "sensor.weekly_regular_gas_price_example"
+            },
+            {
+              "entity": "sensor.average_daily_gas_car_cost_30mpg"
+            },
+            {
+              "entity": "sensor.average_daily_ev_savings_vs_30mpg"
+            }
+          ],
+          "examples": [
+            "Aircraft Overhead (≤5 mi, unlimited altitude)",
+            "No aircraft currently within 5 mi at any altitude.",
+            "Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs",
+            "Cabin preconditioning only runs when a real next-day departure is scheduled",
+            "Cabin preconditioning is scheduled separately when resident and vehicle are home",
+            "Planner is following tomorrow's alarm for charge-limit planning only",
+            "Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed",
+            "Planner is keeping the Tesla app home schedule because no extra home charging is needed",
+            "Preserve Tesla app default at {{ location_label }} because no extra home charging is needed",
+            "script.uplift_desk_manual_move_max",
+            "script.uplift_desk_manual_move_min",
+            "script.uplift_desk_manual_move_preset_1",
+            "script.uplift_desk_manual_move_preset_2",
+            "sensor.valetudo_mainlevel_stall_status",
+            "sensor.valetudo_den_stall_status",
+            "sensor.valetudo_upstairs_vacuum_stall_status",
+            "binary_sensor.valetudo_mainlevel_stalled",
+            "binary_sensor.valetudo_den_stalled",
+            "binary_sensor.valetudo_upstairs_vacuum_stalled",
+            "Ground Floor Stall Evidence",
+            "Den Stall Evidence",
+            "Upstairs Stall Evidence",
+            "script.uplift_desk_manual_stop"
+          ]
+        }
+      ]
+    }
+  }
+}

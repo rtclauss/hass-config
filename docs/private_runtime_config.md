@@ -61,6 +61,35 @@ Restore the private copy immediately after the checkout update, before
 restarting or reloading automations. Never copy the public example over the
 live file.
 
+## UI-owned dashboards
+
+Home Assistant owns its Lovelace files in `.storage/`; the public repository
+does not track them. The four formerly tracked files have byte-identical live
+copies, already preserved in the ignored
+`.private-runtime-backup/current-config/.storage/` directory on the host.
+Before updating that checkout, verify each copy with `cmp`. The checkout
+update removes the formerly tracked files; restore the private copies from
+the backup immediately afterward, before restarting Home Assistant. Leave
+all other `.storage` files in place. Change dashboard content through Home
+Assistant's dashboard API or UI, not by editing `.storage` directly.
+
+```sh
+for backup in .private-runtime-backup/current-config/.storage/*; do
+  cmp ".storage/${backup##*/}" "$backup"
+done
+# Update the checkout using the coordinated HACS/Zigbee migration.
+cp -p .private-runtime-backup/current-config/.storage/* .storage/
+git check-ignore .storage/lovelace_dashboards
+```
+
+Afterward, confirm the same dashboards load through Home Assistant's dashboard
+API or UI. The file copy is only for the one-time Git migration; use the API or
+UI for subsequent dashboard changes.
+
+CI tests use `tests/fixtures/dashboard.example.json`, a small synthetic
+dashboard. Set `HA_DASHBOARD_PATH` to a private dashboard export when running
+the same tests against the live dashboard; do not commit that export.
+
 After changing the live Zigbee2MQTT roster, pass its private configuration to
 `scripts/check_z2m_availability_roster.py -` on stdin. The checker compares it
 with `packages/z2m_availability.yaml` and prints counts only.
