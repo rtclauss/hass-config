@@ -29,6 +29,15 @@ def test_runtime_zigbee_and_ci_secrets_are_not_tracked() -> None:
     assert "zigbee2mqtt/configuration.example.yaml" in tracked
 
 
+def test_private_migration_backup_is_ignored() -> None:
+    ignored = subprocess.check_output(
+        ["git", "check-ignore", ".private-runtime-backup/zigbee2mqtt/secret.yaml"],
+        cwd=ROOT,
+        text=True,
+    ).strip()
+    assert ignored == ".private-runtime-backup/zigbee2mqtt/secret.yaml"
+
+
 def test_zigbee_example_uses_private_secret_file() -> None:
     example = (ROOT / "zigbee2mqtt/configuration.example.yaml").read_text()
     assert "'!secret.yaml mqtt_password'" in example
