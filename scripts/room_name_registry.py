@@ -154,6 +154,20 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
         home_assistant_area="Unfinished Basement",
         zigbee2mqtt_namespaces=("Unfinished Basement",),
     ),
+    RoomNameSpec(
+        key="upstairs",
+        preferred_label="Upstairs",
+        home_assistant_area="Upstairs",
+        zigbee2mqtt_namespaces=("Upstairs",),
+        notes="Floor-level namespace used by devices that are not assigned to one room.",
+    ),
+    RoomNameSpec(
+        key="main_level",
+        preferred_label="Main Level",
+        home_assistant_area="Main Level",
+        zigbee2mqtt_namespaces=("Main Level",),
+        notes="Floor-level namespace used by devices that are not assigned to one room.",
+    ),
 )
 
 
