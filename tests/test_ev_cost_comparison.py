@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 TESLA_TILE_PATH = ROOT / "lovelace" / "tiles" / "tiles_tesla_charging.yaml"
-DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 
 
 def test_utilities_package_defines_weekly_gas_price_and_ev_comparison_sensors() -> None:
@@ -39,7 +41,7 @@ def test_tesla_yaml_tile_exposes_ev_vs_gas_comparison_entities() -> None:
     for token in (
         "sensor.average_daily_ev_charging_cost",
         "sensor.average_daily_vehicle_miles",
-        "sensor.weekly_regular_gas_price_55125",
+        "sensor.weekly_regular_gas_price_",
         "sensor.average_daily_gas_car_cost_30mpg",
         "sensor.average_daily_ev_savings_vs_30mpg",
         "Avg Gas Cost / Day @ 30 MPG",
@@ -54,7 +56,7 @@ def test_storage_dashboard_exposes_ev_vs_gas_comparison_tiles() -> None:
     for token in (
         '"entity": "sensor.average_daily_ev_charging_cost"',
         '"entity": "sensor.average_daily_vehicle_miles"',
-        '"entity": "sensor.weekly_regular_gas_price_55125"',
+        '"entity": "sensor.weekly_regular_gas_price_',
         '"entity": "sensor.average_daily_gas_car_cost_30mpg"',
         '"entity": "sensor.average_daily_ev_savings_vs_30mpg"',
     ):

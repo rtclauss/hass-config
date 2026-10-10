@@ -165,7 +165,7 @@ The `trip_change` trigger itself has no attribute filter — it exists so the au
 
 Storage-mode dashboard:
 
-- `.storage/lovelace.ryan_new_mushroom`
+- the private UI-owned Lovelace dashboard in `.storage/`
 - view path: `tesla-v2`
 - companion storage energy view path: `energy`
 

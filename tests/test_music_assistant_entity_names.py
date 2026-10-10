@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from pathlib import Path
 
 
@@ -29,8 +31,8 @@ LEGACY_ROOM_PLAYERS = {
 OPERATIONAL_PATHS = (
     ROOT / "packages",
     ROOT / "lovelace",
-    ROOT / ".storage" / "lovelace.dashboard_strategy",
-    ROOT / ".storage" / "lovelace.ryan_new_mushroom",
+    Path(os.environ.get("HA_STRATEGY_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard_strategy.example.json")),
+    Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json")),
 )
 
 

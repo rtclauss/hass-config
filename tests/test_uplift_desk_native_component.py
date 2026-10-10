@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import re
 from pathlib import Path
 
@@ -11,7 +13,7 @@ from jinja2 import Environment, StrictUndefined
 ROOT = Path(__file__).resolve().parents[1]
 DESK_PACKAGE = ROOT / "packages" / "desk.yaml"
 OFFICE_TILE = ROOT / "lovelace" / "tiles" / "tiles_office.yaml"
-MUSHROOM_DASHBOARD = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+MUSHROOM_DASHBOARD = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 
 NATIVE_DESK_BUTTONS = {
     "button.uplift_desk_75b205_move_to_preset_1",

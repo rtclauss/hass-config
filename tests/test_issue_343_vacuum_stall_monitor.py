@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import importlib.util
 import json
 import struct
@@ -13,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.py"
 APP_CONFIG_PATH = ROOT / "appdaemon" / "apps" / "vacuum_stall_monitor.yaml"
 CONFIGURATION_PATH = ROOT / "configuration.yaml"
-DASHBOARD_PATH = ROOT / ".storage" / "lovelace.ryan_new_mushroom"
+DASHBOARD_PATH = Path(os.environ.get("HA_DASHBOARD_PATH", ROOT / "tests" / "fixtures" / "dashboard.example.json"))
 GITIGNORE_PATH = ROOT / ".gitignore"
 MEDIA_STALL_KEEP_PATH = ROOT / "media" / "vacuum_stalls" / ".gitkeep"
 
