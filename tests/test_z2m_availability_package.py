@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "z2m_availability.yaml"
-Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.yaml"
+Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.example.yaml"
 GRAFANA_DASHBOARD_PATH = ROOT / "docs" / "grafana" / "z2m_availability_dashboard.json"
 
 
@@ -157,17 +157,14 @@ def test_package_does_not_duplicate_z2m_lifecycle_sensors() -> None:
     assert "reboot_counter" not in text
 
 
-def test_sensor_count_matches_device_count() -> None:
+def test_availability_topics_are_unique_and_cover_example_devices() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
     named_devices = _named_devices()
-    # Each device should have exactly one state_topic entry
+    # The public example samples the roster; the live roster is private.
     topic_pattern = re.compile(r'state_topic: "zigbee2mqtt/.+/availability"')
     sensor_topics = topic_pattern.findall(text)
-    # +1 for bridge sensor which has a different topic pattern
-    # bridge uses "zigbee2mqtt/bridge/state" not "/availability"
-    assert len(sensor_topics) == len(named_devices), (
-        f"Expected {len(named_devices)} device sensors, found {len(sensor_topics)}"
-    )
+    assert len(sensor_topics) == len(set(sensor_topics))
+    assert len(sensor_topics) >= len(named_devices)
 
 
 def test_grafana_dashboard_is_valid_json() -> None:

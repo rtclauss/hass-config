@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "z2m_lifecycle.yaml"
 AVAILABILITY_PACKAGE_PATH = ROOT / "packages" / "z2m_availability.yaml"
-Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.yaml"
+Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.example.yaml"
 
 
 def _automation_block(automation_id: str) -> str:
@@ -184,7 +184,7 @@ def test_z2m_recovery_candidates_uses_active_roster_not_global_state_scan() -> N
     assert "for s in states" not in sensor_block
 
 
-def test_zigbee2mqtt_configuration_enables_health_feed_and_does_not_disable_removal() -> None:
+def test_zigbee2mqtt_example_enables_health_feed_and_does_not_disable_removal() -> None:
     text = Z2M_CONFIG_PATH.read_text(encoding="utf-8")
 
     assert "health:\n  interval: 10\n  reset_on_check: false" in text
