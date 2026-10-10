@@ -78,7 +78,7 @@ def _stored_traces(lines: list[str], start: int, end: int) -> int | None:
 
 def test_automation_and_script_traces_use_approved_bounded_counts() -> None:
     config_paths = [
-        ROOT / "automations.yaml",
+        ROOT / "automations.example.yaml",
         ROOT / "scripts.yaml",
         *sorted((ROOT / "packages").glob("*.yaml")),
     ]

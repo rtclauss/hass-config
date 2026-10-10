@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 Z2M_LIFECYCLE_PATH = ROOT / "packages" / "z2m_lifecycle.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 YAML_SEARCH_ROOTS = (
-    ROOT / "automations.yaml",
+    ROOT / "automations.example.yaml",
     ROOT / "scripts.yaml",
     ROOT / "packages",
 )
