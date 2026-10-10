@@ -25,7 +25,7 @@ Entry or motion while armed and away: push with a snapshot now, critical push at
 
 ## When a visit ends
 
-`trip_guest_visit_expiry` relocks the virtual front door 2 hours after the last sign of a person (4 hour hard cap), which runs `trip_guest_door_lock_close_house` (re-arm, water off, motion detection on). `trip_guest_visit_early_end` can end it sooner: after 20 minutes into a visit, once the garage closes and the main level is motion-free for 10 minutes. `trip_stale_disarm_rearm` re-arms if the house sits disarmed for 30 minutes with no visit.
+`trip_guest_visit_expiry` relocks the virtual front door 2 hours after the last sign of a person (4 hour hard cap), which runs `trip_guest_door_lock_close_house` (re-arm, water off, motion detection on). The hard-cap deadline is stored as an absolute timestamp, so Home Assistant restarts cannot extend it. `trip_guest_visit_early_end` can end it sooner: after 20 minutes into a visit, once the garage closes and the main level is motion-free for 10 minutes. `trip_stale_disarm_rearm` re-arms if the house sits disarmed for 30 minutes with no visit.
 
 ## Setup checklist
 

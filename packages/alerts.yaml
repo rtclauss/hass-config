@@ -237,6 +237,9 @@ automation:
           - condition: state
             entity_id: binary_sensor.bayesian_zeke_home
             state: "off"
+          - condition: state
+            entity_id: input_boolean.trip
+            state: "on"
         then:
           - alias: "Grace 1/2: wait for a guest visit or a disarm (10 min)"
             wait_template: >-
@@ -274,6 +277,14 @@ automation:
             then:
               - stop: "Resolved during grace period"
           - action: script.alarm_strobe_until_resolved
+        else:
+          - if:
+              - condition: state
+                entity_id: binary_sensor.bayesian_zeke_home
+                state: "off"
+            then:
+              - alias: "Ordinary away mode keeps the immediate alarm response"
+                action: script.alarm_strobe_until_resolved
 
   - alias: mirror_shared_notifications_to_lg_tv_when_on
     id: mirror_shared_notifications_to_lg_tv_when_on

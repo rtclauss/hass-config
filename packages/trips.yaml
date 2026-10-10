@@ -1096,6 +1096,8 @@ automation:
           - unavailable
       - trigger: homeassistant
         event: start
+      - trigger: event
+        event_type: trip_guest_visit_open_house_requested
     condition:
       - alias: "state-triggered runs check now; HA-start runs are checked after the settle delay"
         condition: or
@@ -1123,9 +1125,20 @@ automation:
           - condition: template
             value_template: "{{ trigger.platform != 'homeassistant' }}"
         then:
-          - action: input_boolean.turn_on
-            target:
-              entity_id: input_boolean.trip_guest_visit_active
+          - if:
+              - condition: state
+                entity_id: input_boolean.trip_guest_visit_active
+                state: "off"
+            then:
+              - alias: "Persist the absolute four-hour safety deadline before activating the visit"
+                action: input_datetime.set_datetime
+                target:
+                  entity_id: input_datetime.trip_guest_visit_deadline
+                data:
+                  datetime: "{{ now() + timedelta(hours=4) }}"
+              - action: input_boolean.turn_on
+                target:
+                  entity_id: input_boolean.trip_guest_visit_active
       - repeat:
           count: 3
           sequence:
@@ -1624,23 +1637,38 @@ automation:
         id: evidence
       - trigger: homeassistant
         event: start
-        id: evidence
+        id: resume
       - trigger: state
         entity_id: input_boolean.trip_guest_visit_active
         to: "on"
-        for:
-          hours: 4
+        id: evidence
+      - trigger: time
+        at: input_datetime.trip_guest_visit_deadline
         id: hard_cap
     condition:
       - condition: state
         entity_id: input_boolean.trip_guest_visit_active
         state: "on"
     action:
+      - variables:
+          deadline_timestamp: >-
+            {{ state_attr('input_datetime.trip_guest_visit_deadline', 'timestamp') | float(0) }}
+          expiry_delay_seconds: >-
+            {% set hard_cap_remaining = [deadline_timestamp - now().timestamp(), 0] | max %}
+            {{ [hard_cap_remaining, 7200] | min | int }}
       - if:
-          - condition: trigger
-            id: evidence
+          - condition: or
+            conditions:
+              - condition: trigger
+                id: hard_cap
+              - condition: template
+                value_template: "{{ expiry_delay_seconds | int(0) <= 0 }}"
         then:
-          - delay: "02:00:00"
+          - action: script.trip_guest_visit_end
+          - stop: "Absolute guest-visit deadline reached"
+        else:
+          - delay:
+              seconds: "{{ expiry_delay_seconds }}"
       - action: script.trip_guest_visit_end
 
   - alias: trip_guest_visit_early_end
@@ -1821,6 +1849,10 @@ input_boolean:
 # Input DateTimes
 ########################
 input_datetime:
+  trip_guest_visit_deadline:
+    name: Trip Guest Visit Deadline
+    has_date: true
+    has_time: true
   random_vacation_lights_off:
     name: Turn Off Lights at a Random Time
     has_date: false
@@ -1937,7 +1969,8 @@ script:
       Reuses the tested virtual front-door flow: unlocking lock.front_door_lock
       runs trip_guest_door_unlock_open_house (disarm, camera motion off, vacuums
       dock, water on, visit flag). That flow only fires on the locked->unlocked
-      edge, so when the lock is somehow already unlocked it is triggered directly.
+      edge, so when the lock is somehow already unlocked a custom event requests
+      the same flow with normal trigger context.
     mode: queued
     max: 5
     trace:
@@ -1970,11 +2003,9 @@ script:
                 entity_id: input_boolean.trip_guest_visit_active
                 state: "off"
             sequence:
-              - action: automation.trigger
-                target:
-                  entity_id: automation.trip_guest_door_unlock_open_house
-                data:
-                  skip_condition: false
+              - event: trip_guest_visit_open_house_requested
+                event_data:
+                  source: "{{ source | default('unknown', true) }}"
       - alias: "The visit flag is set by the unlock flow; the expiry timer needs it on"
         wait_template: "{{ is_state('input_boolean.trip_guest_visit_active', 'on') }}"
         timeout: "00:00:20"
