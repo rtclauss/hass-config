@@ -46,6 +46,16 @@ removed before any water is applied. The mop runs when it is due (pending, or th
 last mop is at least three days old); the flying-home path additionally forces
 the mop. Only the X40 mops; the upstairs and den robots are vacuum-only.
 
+Every X40 run goes through one `mode: queued` dispatcher, so a request can wait hours
+behind a ~3 h cycle. The dispatcher therefore re-validates a request when it is
+**dequeued**: its mop decision is computed then (not at queue time, when
+script-level `variables:` would have been rendered), and a request is dropped if it
+has passed its `expires_at`, or if it is away-only (`require_away`) and the owner is
+not confirmed away. Fail closed: an unparseable `expires_at`, or unknown/unavailable
+presence on an away-only request, drops it. `allow_mop: false` forces a vacuum-only
+pass. The flying-home clean uses these to finish before landing and never start
+after you are home (see `docs/trip_mode_orchestration.md`).
+
 Dashboard controls, approval-gated unattended runs, area mapping, and a quiet
 one-area supervised launcher remain follow-up work because they require validated
 live mappings and native Home Assistant UI/API changes; do not edit `.storage`
