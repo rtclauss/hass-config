@@ -465,3 +465,24 @@ def test_live_activity_phase_count_requires_owning_the_active_run() -> None:
     two_stage_definition = block[two_stage_index : two_stage_index + 250]
     assert "script.x40_ultra_main_level_mop_after_vacuum" in two_stage_definition
     assert "x40_ultra_active_run_owned" in two_stage_definition
+
+
+def test_every_live_activity_update_is_silent() -> None:
+    # Live Activity updates (X40 / washer / dryer) fire many times per cycle; on iOS
+    # `silent: true` delivers them without sound at lower priority. Every payload that
+    # opens or updates an activity (`live_update: true`) must carry it, so adding a
+    # new phase can't reintroduce a chime. clear_notification calls don't need it.
+    lines = CLEANING_PATH.read_text(encoding="utf-8").splitlines()
+    updates = [i for i, line in enumerate(lines) if line.strip() == "live_update: true"]
+    assert updates, "expected live_update payloads in cleaning.yaml"
+
+    for index in updates:
+        indent = len(lines[index]) - len(lines[index].lstrip())
+        sibling_window = [
+            line.strip()
+            for line in lines[max(0, index - 3) : index + 4]
+            if len(line) - len(line.lstrip()) == indent
+        ]
+        assert "silent: true" in sibling_window, (
+            f"live_update payload at cleaning.yaml:{index + 1} is missing silent: true"
+        )
