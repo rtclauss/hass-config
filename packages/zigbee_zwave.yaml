@@ -1327,7 +1327,7 @@ automation:
     id: laundry_switch_actions
     description: >
       Preserve local single-tap and hold lighting control; acknowledge a
-      completed washer load with an up double tap.
+      completed washer or dryer load with an up double tap.
     mode: restart
     trace:
       stored_traces: 10
@@ -1379,19 +1379,33 @@ automation:
           - conditions:
               - condition: trigger
                 id: up-double
-              - condition: state
-                entity_id: input_boolean.washer_reminder_active
-                state: "on"
-              - condition: state
-                entity_id: input_select.washer_state
-                state:
-                  - "CLEAN"
-                  - "REMINDED"
-                  - "MUSTY"
+              - condition: or
+                conditions:
+                  - condition: and
+                    conditions:
+                      - condition: state
+                        entity_id: input_boolean.washer_reminder_active
+                        state: "on"
+                      - condition: state
+                        entity_id: input_select.washer_state
+                        state:
+                          - "CLEAN"
+                          - "REMINDED"
+                          - "MUSTY"
+                  - condition: state
+                    entity_id: input_select.dryer_state
+                    state:
+                      - "CLEAN"
+                      - "REMINDED"
             sequence:
               - action: input_boolean.turn_off
                 target:
                   entity_id: input_boolean.washer_reminder_active
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.dryer_state
+                data:
+                  option: IDLE
           - conditions:
               - condition: trigger
                 id: up-held
