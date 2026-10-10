@@ -159,6 +159,10 @@ ROOM_NAME_SPECS: tuple[RoomNameSpec, ...] = (
 
 ROOM_NAME_SPECS_BY_KEY = {spec.key: spec for spec in ROOM_NAME_SPECS}
 
+# Zigbee2MQTT also has floor-level names for shared devices. These are not
+# rooms, so they deliberately have no RoomNameSpec or room-intent key.
+ZIGBEE2MQTT_FLOOR_NAMESPACES = frozenset({"Main Level", "Upstairs"})
+
 
 def specs_with_intent_keys() -> tuple[RoomNameSpec, ...]:
     return tuple(spec for spec in ROOM_NAME_SPECS if spec.intent_key is not None)
@@ -169,7 +173,9 @@ def allowed_room_labels() -> set[str]:
 
 
 def allowed_zigbee2mqtt_namespaces() -> set[str]:
-    return {name for spec in ROOM_NAME_SPECS for name in spec.zigbee2mqtt_namespaces}
+    return {name for spec in ROOM_NAME_SPECS for name in spec.zigbee2mqtt_namespaces} | set(
+        ZIGBEE2MQTT_FLOOR_NAMESPACES
+    )
 
 
 def resolve_room_key(label: str) -> str:

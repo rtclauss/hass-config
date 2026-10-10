@@ -71,7 +71,7 @@ def test_goodnight_integrity_script_coordinates_house_shutdown_and_verification(
         "switch.office_red_lava_lamp",
         "switch.northern_light_lava_lamp",
         "media_player.lg_webos_smart_tv",
-        "media_player.basement",
+        "media_player.basement_great_room_basement_atv",
         "script.apply_owner_suite_inovelli_led_policy",
         "policy: dark",
         "lock.front_door_lock",
@@ -95,7 +95,7 @@ def test_goodnight_integrity_skips_inactive_common_area_media_targets() -> None:
     for token in (
         "expand(",
         "'media_player.lg_webos_smart_tv'",
-        "'media_player.basement'",
+        "'media_player.basement_great_room_basement_atv'",
         "['off', 'unavailable', 'unknown']",
         "common_area_media_shutdown_targets | count > 0",
         'entity_id: "{{ common_area_media_shutdown_targets }}"',
@@ -184,7 +184,7 @@ def test_in_bed_turn_off_other_lights_marks_house_mode_before_dimming_the_rest_o
 def test_basement_lights_auto_on_respects_plex_basement_playback() -> None:
     block = _automation_block(LIGHT_PATH, "basement_lights_auto_on")
 
-    assert "media_player.basement" in block
+    assert "media_player.basement_great_room_basement_atv" in block
     assert "media_player.plex_basement_apple_tv" in block
     assert "condition: not" in block
     assert "condition: or" in block
