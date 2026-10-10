@@ -119,7 +119,8 @@ def test_visit_start_reuses_virtual_lock_flow(trips: dict) -> None:
     sequence = trips["script"]["trip_guest_visit_start"]["sequence"]
     text = yaml.dump(sequence)
     assert "lock.front_door_lock" in text
-    assert "automation.trip_guest_door_unlock_open_house" in text
+    assert "trip_guest_visit_open_house_requested" in text
+    assert "automation.trip_guest_door_unlock_open_house" not in text
     # The evidence event must come AFTER the visit flag is on, or the expiry
     # automation's condition drops the first event and the visit never ends.
     kinds = [list(step)[0] for step in sequence]
@@ -134,12 +135,41 @@ def test_visit_end_reuses_close_house_flow(trips: dict) -> None:
     assert "automation.trip_guest_door_lock_close_house" in text
 
 
-def test_expiry_is_two_hours_with_four_hour_cap(trips: dict) -> None:
+def test_expiry_is_two_hours_with_restart_safe_four_hour_cap(trips: dict) -> None:
     item = _automation(trips, "trip_guest_visit_expiry")
     assert item["mode"] == "restart"
     cap = next(t for t in item["trigger"] if t.get("id") == "hard_cap")
-    assert cap["for"] == {"hours": 4}
-    assert "02:00:00" in yaml.dump(item["action"])
+    assert cap == {
+        "trigger": "time",
+        "at": "input_datetime.trip_guest_visit_deadline",
+        "id": "hard_cap",
+    }
+    assert trips["input_datetime"]["trip_guest_visit_deadline"] == {
+        "name": "Trip Guest Visit Deadline",
+        "has_date": True,
+        "has_time": True,
+    }
+    text = yaml.dump(item["action"])
+    assert "7200" in text
+    assert "deadline_timestamp" in text
+
+
+def test_open_house_initializes_deadline_before_visit_flag(trips: dict) -> None:
+    item = _automation(trips, "trip_guest_door_unlock_open_house")
+    triggers = item["trigger"]
+    assert any(
+        trigger.get("event_type") == "trip_guest_visit_open_house_requested"
+        for trigger in triggers
+    )
+    initialize_visit = item["action"][1]["then"][0]["then"]
+    assert initialize_visit[0]["target"]["entity_id"] == (
+        "input_datetime.trip_guest_visit_deadline"
+    )
+    assert initialize_visit[1]["target"]["entity_id"] == (
+        "input_boolean.trip_guest_visit_active"
+    )
+    text = yaml.dump(initialize_visit)
+    assert "timedelta(hours=4)" in text
 
 
 def test_garage_credential_uses_context_motor_and_button(trips: dict) -> None:
@@ -195,6 +225,8 @@ def test_triggered_response_has_grace_timeline(alerts: dict) -> None:
     assert "interruption-level: critical" in _text(ALERTS_PATH)
     assert "input_boolean.trip_guest_visit_active" in text
     assert "script.alarm_strobe_until_resolved" in text
+    assert "input_boolean.trip" in text
+    assert "Ordinary away mode keeps the immediate alarm response" in text
     # No more immediate whole-house flash loop in the automation itself.
     assert "script.flash_lights" not in text
 
