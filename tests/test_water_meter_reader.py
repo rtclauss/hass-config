@@ -683,6 +683,33 @@ def test_self_heal_falls_through_to_vlm_requery_when_it_cannot_resolve_it(
     assert result == reader.RunResult(True, 11.0, "ok", stuck=False)
 
 
+def test_vlm_requery_reapplies_leading_digit_self_heal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connection = _connection(tmp_path, vlm_host="truenas.local:30068")
+    calibration = _calibration(
+        digit_count=3,
+        max_gallons_per_interval=5.0,
+        low_confidence_ok_indexes=(0,),
+    )
+    sanity.save_last_good(
+        connection.state_dir, sanity.LastGoodReading(value=150.0, timestamp=NOW.isoformat())
+    )
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda image_path, **kwargs: "951")
+
+    result = reader.run_once(
+        connection,
+        calibration,
+        grab_frame=lambda: "frame",
+        set_light=lambda on: None,
+        ocr_reader=lambda image_path, digit_crops: "940",
+        publisher=lambda res, now: None,
+        now=NOW,
+    )
+
+    assert result == reader.RunResult(True, 151.0, "ok", stuck=False)
+
+
 def test_accepted_reading_with_wrong_glare_digit_gets_silently_corrected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -793,9 +820,9 @@ def test_unresolved_rejection_sends_ha_notification_with_approve_reject_modify_a
     assert captured["url"] == "http://ha.local:8123/api/services/notify/wethop"
     assert captured["headers"]["Authorization"] == "Bearer tok123"
     actions = captured["body"]["data"]["actions"]
-    assert actions[0]["action"] == "WATER_METER_APPROVE_99"
+    assert actions[0]["action"] == f"WATER_METER_APPROVE_99_{NOW.isoformat()}"
     assert actions[1]["action"] == "WATER_METER_REJECT"
-    assert actions[2]["action"] == "WATER_METER_MODIFY"
+    assert actions[2]["action"] == f"WATER_METER_MODIFY_{NOW.isoformat()}"
     # Modify prompts for free text on the phone (companion-app "text input"
     # action) instead of just telling the human to go open HA separately.
     assert actions[2]["behavior"] == "textInput"

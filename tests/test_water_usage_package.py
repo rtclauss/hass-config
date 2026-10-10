@@ -114,6 +114,13 @@ def test_leak_check_requires_the_baseline_capture_flag_to_avoid_a_race() -> None
     assert 'state: "on"' in block
 
 
+def test_leak_check_allows_valid_recovery_when_arm_baseline_already_exists() -> None:
+    block = _automation_block("water_leak_while_armed")
+
+    assert "trigger.from_state.state not in ['unknown', 'unavailable']" in block
+    assert "or is_state('input_boolean.water_meter_arm_baseline_captured', 'on')" in block
+
+
 def test_leak_check_compares_against_arm_time_baseline_not_the_previous_poll() -> None:
     # Regression test: comparing only trigger.from_state vs trigger.to_state
     # misses a slow leak that adds less than the threshold on every single

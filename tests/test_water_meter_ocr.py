@@ -488,6 +488,20 @@ def test_read_digits_trusts_ssocr_output_matching_the_configured_digit_count(
     assert result == "5"
 
 
+def test_read_digits_normalizes_excluded_positions_from_ssocr(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    monkeypatch.setattr(ocr, "run_ssocr", lambda *a, **k: "123")
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(digit_count=3, excluded_digit_indexes=(1,)),
+    )
+
+    assert result == "103"
+
+
 def test_read_digits_tries_the_vision_llm_after_ssocr_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
@@ -504,6 +518,53 @@ def test_read_digits_tries_the_vision_llm_after_ssocr_fails(
     )
 
     assert result == "7"
+
+
+def test_read_digits_normalizes_excluded_positions_from_vision_llm(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    monkeypatch.setattr(ocr, "run_ssocr", _fail(ocr.OcrError("boom")))
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda *a, **k: "789")
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(digit_count=3, excluded_digit_indexes=(1,)),
+        vlm_host="truenas.local:30068",
+    )
+
+    assert result == "709"
+
+
+def test_read_digits_bootstrap_requires_ssocr_corroboration(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    monkeypatch.setattr(ocr, "run_ssocr", lambda *a, **k: "123")
+
+    with pytest.raises(ocr.OcrError, match="uncorroborated"):
+        ocr.read_digits(
+            tmp_path / "crop.jpg",  # type: ignore[operator]
+            ["crop"],
+            _calibration(digit_count=3),
+            bootstrap=True,
+        )
+
+
+def test_read_digits_bootstrap_accepts_matching_ssocr_and_vlm(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    monkeypatch.setattr(ocr, "run_ssocr", lambda *a, **k: "123")
+    monkeypatch.setattr(ocr, "read_digits_vlm", lambda *a, **k: "123")
+
+    result = ocr.read_digits(
+        tmp_path / "crop.jpg",  # type: ignore[operator]
+        ["crop"],
+        _calibration(digit_count=3),
+        bootstrap=True,
+        vlm_host="truenas.local:30068",
+    )
+
+    assert result == "123"
 
 
 def test_read_digits_calls_the_vision_llm_only_once_on_an_ordinary_run(

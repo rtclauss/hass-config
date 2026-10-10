@@ -68,7 +68,10 @@ rest_command:
     headers:
       Authorization: !secret water_meter_correction_token
       Content-Type: application/json
-    payload: '{"value": {{ value }}}'
+    payload: >-
+      {"value": {{ value }},
+       "expected_last_good_timestamp": {{ expected_last_good_timestamp | default(none) | tojson }},
+       "force": {{ force | default(false) | tojson }}}
 
 ########################
 ## Automation
@@ -92,18 +95,19 @@ automation:
             sequence:
               - action: rest_command.water_meter_apply_correction
                 data:
-                  value: "{{ water_meter_action.split('_')[-1] }}"
+                  value: "{{ water_meter_action.split('_')[-2] }}"
+                  expected_last_good_timestamp: "{{ water_meter_action.split('_')[-1] }}"
               - action: notify.mobile_app_wethop
                 data:
                   message: >-
                     Approved water meter reading:
-                    {{ water_meter_action.split('_')[-1] }} gal.
+                    {{ water_meter_action.split('_')[-2] }} gal.
           - conditions: "{{ water_meter_action == 'WATER_METER_REJECT' }}"
             sequence:
               - action: notify.mobile_app_wethop
                 data:
                   message: "Water meter reading rejected - no change made."
-          - conditions: "{{ water_meter_action == 'WATER_METER_MODIFY' }}"
+          - conditions: "{{ water_meter_action.startswith('WATER_METER_MODIFY_') }}"
             sequence:
               - variables:
                   # The companion app's "text input" action (reader.py's
@@ -120,6 +124,7 @@ automation:
                       - action: rest_command.water_meter_apply_correction
                         data:
                           value: "{{ modify_reply | float }}"
+                          expected_last_good_timestamp: "{{ water_meter_action.split('_')[-1] }}"
                       - action: notify.mobile_app_wethop
                         data:
                           message: >-
@@ -149,6 +154,7 @@ automation:
       - action: rest_command.water_meter_apply_correction
         data:
           value: "{{ trigger.to_state.state }}"
+          force: true
       - action: notify.mobile_app_wethop
         data:
           message: >-
