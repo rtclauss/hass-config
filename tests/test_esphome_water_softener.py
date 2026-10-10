@@ -42,9 +42,36 @@ def test_vl53l1x_wiring_and_measurement_contract_are_explicit() -> None:
     assert "distance_mode: LONG" in text
     assert "timing_budget: 200ms" in text
     assert "unit_of_measurement: \"mm\"" in text
-    assert "accuracy_decimals: 0" in text
+    assert "accuracy_decimals: 1" in text
     assert "lambda: return x * 1000;" in text
     assert "update_interval: 2s" in text
+
+
+def test_firmware_publishes_five_minute_averages_at_tenth_mm() -> None:
+    text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+    live = [line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")]
+
+    # One average of the ~150 two-second reads per 5 minutes instead of an EMA
+    # snapshot every ~30 s: same downstream noise/lag on the replayed recorder
+    # data with ~10x fewer state rows. Spike rejection (median) stays first.
+    assert "- throttle_average: 5min" in live
+    assert "- exponential_moving_average:" not in live
+    assert "- round: 1" in live
+    assert live.index("- median:") < live.index("- throttle_average: 5min")
+
+
+def test_firmware_exposes_restart_aware_diagnostics() -> None:
+    text = ACTIVE_CONFIG.read_text(encoding="utf-8")
+
+    assert "level: INFO" in text
+    assert "platform: uptime" in text
+    # A boot timestamp only changes on reboot; a seconds counter would write a
+    # recorder row on every update.
+    assert "type: timestamp" in text
+    assert "platform: wifi_signal" in text
+    assert "platform: restart" in text
+    assert "platform: safe_mode" in text
 
 
 def test_home_assistant_package_consumes_new_sensor_entity() -> None:
