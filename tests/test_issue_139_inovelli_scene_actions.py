@@ -36,7 +36,7 @@ def _choose_branch(block: str, trigger_id: str) -> str:
     return actions[start:] if end == -1 else actions[start:end]
 
 
-def test_laundry_double_tap_acknowledges_only_completed_washer_loads() -> None:
+def test_laundry_double_tap_acknowledges_completed_washer_or_dryer_loads() -> None:
     block = _automation_block("laundry_switch_actions")
     branch = _choose_branch(block, "up-double")
 
@@ -46,8 +46,10 @@ def test_laundry_double_tap_acknowledges_only_completed_washer_loads() -> None:
     assert "entity_id: input_select.washer_state" in branch
     for completed_state in ("CLEAN", "REMINDED", "MUSTY"):
         assert f'- "{completed_state}"' in branch
+    assert "entity_id: input_select.dryer_state" in branch
     assert "action: input_boolean.turn_off" in branch
-    assert "option: IDLE" not in branch
+    assert "action: input_select.select_option" in branch
+    assert "option: IDLE" in branch
 
 
 def test_garage_double_taps_only_move_from_stable_opposite_states() -> None:
@@ -89,7 +91,7 @@ def test_scene_map_documents_each_switch_and_safety_contract() -> None:
         "sensor.hall_transition_switch_action",
     ):
         assert entity_id in scene_map
-    assert "completed washer load" in scene_map
+    assert "completed washer or dryer load" in scene_map
     assert "fully closed" in scene_map
     assert "fully open" in scene_map
     assert "Single taps remain native" in scene_map
