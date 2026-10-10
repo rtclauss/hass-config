@@ -401,6 +401,20 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
             ),
         },
         {
+            "spec": "specs/diffusers.allium",
+            "implementation_paths": ["packages/house_mode.yaml"],
+            "allowed_changed_line_patterns": [
+                "-*'media_player.basement'",
+                "+*'media_player.basement_great_room_basement_atv'",
+            ],
+            "classification": "non-diffuser Apple TV entity repair",
+            "reason": (
+                "Issue #1102 and PR #1104 replace the absent basement Apple TV entity "
+                "in the common-area goodnight media shutdown. Diffuser sleep/wake "
+                "participation and oil reminders remain unchanged."
+            ),
+        },
+        {
             "spec": "specs/tv_watching.allium",
             "implementation_paths": ["packages/tv.yaml"],
             "classification": "Music Assistant entity-id migration",
@@ -496,6 +510,29 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         "specs/z2m_lifecycle.allium",
     }
     assert all(scope.implementation_paths for scope in scopes)
+
+
+def test_basement_atv_diffuser_gap_only_allows_entity_replacement() -> None:
+    scope = weed.ProtectedScope(
+        spec="specs/diffusers.allium",
+        description="diffuser behavior",
+        implementation_paths=("packages/house_mode.yaml",),
+    )
+    _, gaps = weed.load_config(weed.DEFAULT_CONFIG)
+    gap = next(g for g in gaps if g.get("classification") == "non-diffuser Apple TV entity repair")
+    path = "packages/house_mode.yaml"
+    replacement = [
+        "-                      'media_player.basement'",
+        "+                      'media_player.basement_great_room_basement_atv'",
+    ]
+
+    approved = weed.detect_drift_risks([path], [scope], [gap], {path: replacement})
+    assert approved[0].classification == gap["classification"]
+
+    changed_behavior = weed.detect_drift_risks(
+        [path], [scope], [gap], {path: replacement + ["-              entity_id: group.diffusers"]}
+    )
+    assert changed_behavior[0].is_failure
 
 
 def test_markdown_report_includes_line_links(monkeypatch: pytest.MonkeyPatch) -> None:
