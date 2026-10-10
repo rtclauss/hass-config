@@ -131,7 +131,7 @@ automation:
         data:
           title: Salt level low
           data:
-            url: "/ryan-new-mushroom/cleaning"
+            url: "/ryan-new-mushroom/cleaning-v2"
           message: >-
             Water softener salt is low at {{states('sensor.water_softener_salt_level')}} mm.
 
@@ -192,7 +192,7 @@ automation:
                     data:
                       title: Softener salt forecast low
                       data:
-                        url: "/ryan-new-mushroom/cleaning"
+                        url: "/ryan-new-mushroom/cleaning-v2"
                         tag: water-softener-forecast-low
                       message: >-
                         Water softener salt is forecast to reach the low threshold in
@@ -219,9 +219,22 @@ automation:
     trace:
       stored_traces: 10
     trigger:
-      - trigger: state
-        id: salt_level_changed
+      # Fire on threshold crossings, not on every salt_level update. salt_level
+      # changes hundreds of times a day and every run wrote an automation state
+      # row + trace (47k rows between 2026-09-01 and 2026-10-10), while only a
+      # crossing can change what this automation does. The hourly recheck still
+      # drives the six-hour stability confirmation and the startup trigger
+      # re-evaluates after restarts, so behaviour is unchanged. A crossing re-fired
+      # by an unavailable blip is harmless: the window start is only written when
+      # it is unset.
+      - trigger: numeric_state
+        id: salt_level_below_reset_threshold
         entity_id: sensor.water_softener_salt_level
+        below: input_number.water_softener_refill_reset_threshold_mm
+      - trigger: numeric_state
+        id: salt_level_above_reset_threshold
+        entity_id: sensor.water_softener_salt_level
+        above: input_number.water_softener_refill_reset_threshold_mm
       - trigger: time_pattern
         id: hourly_recheck
         minutes: "45"
@@ -530,18 +543,14 @@ input_number:
     step: 0.1
     unit_of_measurement: mm/d
     # Calibrated against real post-2026-09-16-refill data. The original 0.5
-    # default was picked as a generic noise floor before any real
-    # depletion data existed. Once the sensor pipeline settled, genuine
-    # depletion windows clustered at 0.79-1.04mm/day (24h/48h/72h), but the
-    # 7-day window -- the longest, most independent, most trustworthy
-    # estimate once it became time-eligible -- came in at 0.448mm/day,
-    # just under the old 0.5 floor. That silently discarded the best
-    # available evidence for exactly the wrong reason: this household's
-    # real long-run rate legitimately runs close to what the floor assumed
-    # was noise. Lowered to 0.2: comfortably above the pure-settling noise
-    # observed right after a refill (which ran negative, -0.05 to
-    # -0.32mm/day, from the fresh pile still compacting), but low enough
-    # to admit genuinely slow-but-real depletion instead of excluding it.
+    # default was picked as a generic noise floor before any real depletion
+    # data existed; the recorded steady rate turned out to be ~0.4-0.5
+    # mm/day, right at that floor. 0.2 sits comfortably above the
+    # pure-settling noise observed right after a refill (which ran negative,
+    # -0.05 to -0.32mm/day, from the fresh pile still compacting) while
+    # admitting genuinely slow-but-real depletion. (The 0.448 mm/day 7-day
+    # reading that first prompted the change was itself depressed by the old
+    # derivative sensors' restart amnesia; the floor holds on its own merits.)
     #
     # NOTE: this `initial:` only seeds a brand-new helper -- it does NOT
     # retroactively update the live entity in an existing HA install. The
@@ -612,56 +621,56 @@ sensor:
       # recomputes over the latest raw samples every cycle, so it reflects
       # a real step change (like a refill) within seconds rather than
       # never (caught in review).
-      # HA's lowpass weights each new sample by time_diff / (time_constant +
-      # time_diff). The upstream publish cadence here is actually ~30-60s
-      # (firmware median -> EMA send_every: 15 @ 2s), so the previous
-      # time_constant: 10 gave new samples ~75-86% weight each update --
-      # barely any smoothing before values reached the 6h moving average
-      # below. Raised to 120s (roughly 2-4x the real interval) so a lone
-      # outlier is meaningfully damped (~20-33% weight) rather than passing
-      # through nearly unchanged.
-      - filter: lowpass
-        time_constant: 120
-        precision: 3
+      #
+      # No lowpass either. HA's lowpass is per state update (weight
+      # 1/time_constant, no time term), so its effective time constant is
+      # time_constant x the publish interval and silently changes whenever the
+      # firmware cadence does: time_constant 120 was ~1.7h at the old ~50s
+      # cadence and would be ~10h at a 5-minute cadence. Replaying the recorded
+      # 2026-09/10 data showed it added ~1.6h of lag on top of the 6h average
+      # while the average alone already cuts the ~1 mm per-sample noise to
+      # ~0.01 mm -- far below the ~0.25 mm real daily wobble.
+      #
+      # The time-weighted 6h average is independent of publish cadence, and the
+      # filter platform re-primes it from the recorder at startup.
       - filter: time_simple_moving_average
         window_size: "6:00"
         precision: 3
 
-  - platform: derivative
-    source: sensor.water_softener_salt_level
-    name: Water Softener Level (dt=24hrs)
-    #round: 2
-    unit_time: d
-    time_window: "24:00:00" # we look at the change over the last day
-
-  - platform: derivative
-    source: sensor.water_softener_salt_level
-    name: Water Softener Level (dt=48hrs)
-    #round: 2
-    unit_time: d
-    time_window: "48:00:00" # we look at the change over the last day
-
-  - platform: derivative
-    source: sensor.water_softener_salt_level
-    name: Water Softener Level (dt=72hrs)
-    #round: 2
-    unit_time: d
-    time_window: "72:00:00" # we look at the change over the last day
-
-  - platform: derivative
-    source: sensor.water_softener_salt_level
-    name: Water Softener Level (dt=7d)
-    #round: 2
-    unit_time: d
-    time_window: "168:00:00" # we look at the change over the 7 days
-
+  # Restart-safe depletion rate, replacing four `derivative` sensors.
+  #
+  # Why: a derivative sensor keeps its window only in memory and divides by the
+  # full window, so every HA restart (19 between 2026-09-15 and 2026-10-10)
+  # silently under-reported the 7d rate for up to a week; a replay of the
+  # recorded data with those restarts reproduces the recorded values exactly.
+  # `statistics` reloads its buffer from the recorder at startup.
+  #
+  # Why a median of 24h changes rather than one long-window slope: a single
+  # step (the 2026-09-16 refill, or the +20 mm slump on 2026-09-20) poisons a
+  # 7d/14d endpoint slope for the whole window, but only one day of 24h-change
+  # samples, which the 14-day median ignores. 24h differences also cancel the
+  # ~0.25 mm daily wobble. On the recorded data this cut the day-to-day swing of
+  # the days-until-low forecast from ~94 days to ~12 days.
   - platform: statistics
-    entity_id: sensor.water_softener_forecast_rate
-    name: Water Softener Forecast Rate Median (24h)
-    unique_id: water_softener_forecast_rate_median_24h
-    state_characteristic: median
+    name: Water Softener Level Change 24h
+    unique_id: water_softener_level_change_24h
+    entity_id: sensor.water_softener_salt_level
+    state_characteristic: change
     max_age:
       hours: 24
+    # salt_level updates a few hundred times a day; keep well above a day's worth.
+    sampling_size: 5000
+    precision: 3
+
+  - platform: statistics
+    name: Water Softener Level Change 24h Median 14d
+    unique_id: water_softener_level_change_24h_median_14d
+    entity_id: sensor.water_softener_level_change_24h
+    state_characteristic: median
+    max_age:
+      days: 14
+    sampling_size: 20000
+    precision: 3
 
 ########################
 # Template
@@ -686,7 +695,9 @@ template:
         # numbers, not unit-aware) always compare like-for-like. Fixes the
         # entity reporting in `in` after the VL53L0X -> VL53L1X hardware
         # migration re-registered it without the old entity's manual mm
-        # unit override.
+        # unit override. Kept at 0.1 mm resolution: the firmware publishes
+        # 5-minute averages, which carry sub-millimetre information that whole-mm
+        # rounding would throw away.
         availability: >-
           {{ states('sensor.watersoftener_my_water_softener_vl53l1x_sensor')
              not in ['unknown', 'unavailable'] }}
@@ -697,27 +708,27 @@ template:
           {% if value is none %}
             {{ none }}
           {% elif unit == 'mm' or unit is none %}
-            {{ value | round(0) }}
+            {{ value | round(1) }}
           {% elif unit == 'cm' %}
-            {{ (value * 10) | round(0) }}
+            {{ (value * 10) | round(1) }}
           {% elif unit == 'm' %}
-            {{ (value * 1000) | round(0) }}
+            {{ (value * 1000) | round(1) }}
           {% elif unit == 'in' %}
-            {{ (value * 25.4) | round(0) }}
+            {{ (value * 25.4) | round(1) }}
           {% elif unit == 'ft' %}
-            {{ (value * 304.8) | round(0) }}
+            {{ (value * 304.8) | round(1) }}
           {% else %}
             {{ none }}
           {% endif %}
 
-      # The float(default=...) fallbacks below only apply while
-      # input_number.water_softener_minimum_depletion_rate_mm_per_day is
-      # transiently unknown/unavailable (e.g. HA startup before helpers
-      # load). Keep in sync with that input_number's calibrated value
-      # (currently 0.2) -- a stale fallback here would silently exclude
-      # genuine low-but-real depletion windows during that window, the
-      # same class of bug caught in review for the low-salt threshold's
-      # fallbacks above.
+      # Gate the restart-safe 14-day median of 24h changes on the depletion
+      # floor: flat or negative rates (settling right after a refill, or an
+      # idle softener) have no meaningful days-until-low projection. The
+      # float(default=...) fallback only applies while the input_number is
+      # transiently unknown/unavailable (e.g. HA startup before helpers load);
+      # keep it in sync with that input_number's calibrated value (currently
+      # 0.2), the same class of bug caught in review for the low-salt
+      # threshold's fallbacks.
       - name: Water Softener Forecast Rate
         unique_id: water_softener_forecast_rate
         icon: mdi:chart-line
@@ -725,33 +736,10 @@ template:
         unit_of_measurement: mm/d
         availability: >-
           {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.2) %}
-          {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
-          {% set include_7d = last_refill_at <= 0 or as_timestamp(now()) - last_refill_at >= 7 * 24 * 60 * 60 %}
-          {% set candidates = [
-            states('sensor.water_softener_level_dt_24hrs') | float(default=none),
-            states('sensor.water_softener_level_dt_48hrs') | float(default=none),
-            states('sensor.water_softener_level_dt_72hrs') | float(default=none),
-            states('sensor.water_softener_level_dt_7d') | float(default=none) if include_7d else none
-          ] %}
-          {% set valid_rates = candidates | select('number') | select('gt', minimum_rate) | list %}
-          {{ valid_rates | count >= 2 }}
+          {% set rate = states('sensor.water_softener_level_change_24h_median_14d') | float(default=none) %}
+          {{ rate is not none and rate > minimum_rate }}
         state: >-
-          {% set minimum_rate = states('input_number.water_softener_minimum_depletion_rate_mm_per_day') | float(default=0.2) %}
-          {% set last_refill_at = states('input_datetime.water_softener_last_refill_at') | as_timestamp(default=0) %}
-          {% set include_7d = last_refill_at <= 0 or as_timestamp(now()) - last_refill_at >= 7 * 24 * 60 * 60 %}
-          {% set candidates = [
-            states('sensor.water_softener_level_dt_24hrs') | float(default=none),
-            states('sensor.water_softener_level_dt_48hrs') | float(default=none),
-            states('sensor.water_softener_level_dt_72hrs') | float(default=none),
-            states('sensor.water_softener_level_dt_7d') | float(default=none) if include_7d else none
-          ] %}
-          {% set rates = candidates | select('number') | select('gt', minimum_rate) | sort | list %}
-          {% set middle = rates | count // 2 %}
-          {% if rates | count % 2 %}
-            {{ rates[middle] | round(3) }}
-          {% else %}
-            {{ ((rates[middle - 1] + rates[middle]) / 2) | round(3) }}
-          {% endif %}
+          {{ states('sensor.water_softener_level_change_24h_median_14d') | float(default=0) | round(3) }}
       # The float(default=...) fallbacks below only apply while
       # input_number.water_softener_low_salt_threshold_mm is transiently
       # unknown/unavailable (e.g. during HA startup before helpers load).
@@ -766,12 +754,12 @@ template:
         availability: >-
           {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=380) %}
           {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
-          {% set rate = states('sensor.water_softener_forecast_rate_median_24h') | float(default=none) %}
+          {% set rate = states('sensor.water_softener_forecast_rate') | float(default=none) %}
           {{ level is not none and (level >= threshold or (rate is not none and rate > 0)) }}
         state: >-
           {% set threshold = states('input_number.water_softener_low_salt_threshold_mm') | float(default=380) %}
           {% set level = states('sensor.water_softener_salt_level') | float(default=none) %}
-          {% set rate = states('sensor.water_softener_forecast_rate_median_24h') | float(default=none) %}
+          {% set rate = states('sensor.water_softener_forecast_rate') | float(default=none) %}
           {% if level is none %}
             {{ none }}
           {% elif level >= threshold %}
@@ -785,11 +773,16 @@ template:
         unique_id: water_softener_forecast_low_salt_at
         icon: mdi:calendar-alert
         device_class: timestamp
+        # Anchored to when the days-until value was computed, not now(): a
+        # now()-based template re-renders every minute, so the projected date
+        # crept forward one minute per minute between forecast updates and
+        # wrote ~600 recorder rows a day.
         availability: >-
           {{ states('sensor.water_softener_days_until_low_salt') | float(default=none) is not none }}
         state: >-
           {% set days = states('sensor.water_softener_days_until_low_salt') | float(default=none) %}
-          {{ (now() + timedelta(days=days)).isoformat() }}
+          {% set computed_at = states.sensor.water_softener_days_until_low_salt.last_changed %}
+          {{ (computed_at + timedelta(days=days)).isoformat() }}
       # Same float(default=...) note as Water Softener Days Until Low Salt
       # above -- keep in sync with the calibrated threshold (currently
       # 380mm).

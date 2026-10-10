@@ -34,73 +34,141 @@ def _template_sensor_block(sensor_name: str) -> str:
     return match.group(0)
 
 
-def _robust_forecast_rate(
-    rates: list[float | None],
-    *,
-    minimum_rate: float = 0.5,
-) -> float | None:
-    valid_rates = sorted(rate for rate in rates if rate is not None and rate > minimum_rate)
-    if len(valid_rates) < 2:
-        return None
-    middle = len(valid_rates) // 2
-    if len(valid_rates) % 2:
-        return valid_rates[middle]
-    return (valid_rates[middle - 1] + valid_rates[middle]) / 2
+def _statistics_block(name: str) -> str:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+    pattern = re.compile(
+        rf"^  - platform: statistics\n(?:(?!^  - ).*\n)*?    name: {re.escape(name)}\n(?:(?!^  - |^#).*\n)*",
+        re.MULTILINE,
+    )
+    match = pattern.search(text)
+    if match is None:
+        raise AssertionError(f"Could not find statistics sensor block {name!r}")
+    return match.group(0)
 
 
-def test_water_softener_forecast_rate_uses_guarded_multi_window_median() -> None:
-    block = _template_sensor_block("Water Softener Forecast Rate")
-
-    assert "unique_id: water_softener_forecast_rate" in block
-    assert "unit_of_measurement: mm/d" in block
-    assert "float(default=none)" in block
-    assert "sensor.water_softener_level_dt_24hrs" in block
-    assert "sensor.water_softener_level_dt_48hrs" in block
-    assert "sensor.water_softener_level_dt_72hrs" in block
-    assert "sensor.water_softener_level_dt_7d" in block
-    assert "select('gt', minimum_rate)" in block
-    assert "valid_rates | count >= 2" in block
-    assert "rates | count % 2" in block
+def _live_lines(text: str) -> list[str]:
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
 
 
-def test_water_softener_forecast_rate_rejects_noise_and_outlier_windows() -> None:
-    assert _robust_forecast_rate([0.1, 4.0, 4.5, 40.0]) == 4.5
-    assert _robust_forecast_rate([0.1, None, 0.5, -10.0]) is None
-    assert _robust_forecast_rate([None, 3.0, 5.0, None]) == 4.0
+def _rolling_24h_change_median(samples: list[tuple[float, float]], at: float, median_days: float) -> float:
+    """Pure-Python mirror of the two statistics sensors: a `change` over 24h on
+    salt_level, then a `median` of that over `median_days` (sample-weighted)."""
+    def change_24h(t: float) -> float | None:
+        window = [v for (ts, v) in samples if t - 86400 <= ts <= t]
+        return window[-1] - window[0] if len(window) > 1 else None
+
+    changes = [c for (ts, _) in samples
+               if at - median_days * 86400 <= ts <= at and (c := change_24h(ts)) is not None]
+    changes.sort()
+    mid = len(changes) // 2
+    return changes[mid] if len(changes) % 2 else (changes[mid - 1] + changes[mid]) / 2
+
+
+def test_water_softener_rate_is_restart_safe_median_of_24h_changes() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # derivative sensors keep their window only in memory and divide by the
+    # full window, so every HA restart under-reported the rate for up to the
+    # window length (replayed against the recorded 2026-09/10 data). statistics
+    # reloads its buffer from the recorder at startup.
+    assert "platform: derivative" not in text
+    assert "water_softener_level_dt_" not in text
+    assert "water_softener_forecast_rate_median_24h" not in text
+
+    change = _statistics_block("Water Softener Level Change 24h")
+    assert "unique_id: water_softener_level_change_24h" in change
+    assert "entity_id: sensor.water_softener_salt_level" in change
+    assert "state_characteristic: change" in change
+    assert "hours: 24" in change
+    assert "sampling_size:" in change
+
+    median = _statistics_block("Water Softener Level Change 24h Median 14d")
+    assert "unique_id: water_softener_level_change_24h_median_14d" in median
+    assert "entity_id: sensor.water_softener_level_change_24h" in median
+    assert "state_characteristic: median" in median
+    assert "days: 14" in median
+    assert "sampling_size:" in median
+
+    rate = _template_sensor_block("Water Softener Forecast Rate")
+    assert "unique_id: water_softener_forecast_rate" in rate
+    assert "unit_of_measurement: mm/d" in rate
+    assert "sensor.water_softener_level_change_24h_median_14d" in rate
+    assert "rate is not none and rate > minimum_rate" in rate
+    # The refill no longer needs special-casing: the median ignores it.
+    assert "last_refill_at" not in rate
+
+
+def test_median_of_24h_changes_survives_refill_and_slump_where_window_slope_fails() -> None:
+    # Synthetic version of the recorded history: 0.46 mm/day of real depletion,
+    # a +-0.12 mm daily wobble, a refill (-277 mm) and a one-off +20 mm slump,
+    # sampled every 30 minutes.
+    import math
+
+    drift_per_day = 0.46
+    refill_day, slump_day = 2.0, 6.0
+    samples: list[tuple[float, float]] = []
+    for i in range(int(20 * 48)):
+        day = i / 48
+        level = 451.0 + drift_per_day * day + 0.12 * math.sin(2 * math.pi * day)
+        if day >= refill_day:
+            level -= 277.0
+        if day >= slump_day:
+            level += 20.0
+        samples.append((day * 86400, level))
+
+    at = 12 * 86400.0  # 10 days after the refill, 6 days after the slump
+    median_rate = _rolling_24h_change_median(samples, at, 14)
+    in_window = [v for (ts, v) in samples if at - 14 * 86400 <= ts <= at]
+    window_slope = (in_window[-1] - in_window[0]) / 14
+
+    assert abs(median_rate - drift_per_day) < 0.05
+    assert abs(window_slope - drift_per_day) > 1.0  # a single 14d slope is poisoned
 
 
 def test_water_softener_forecast_uses_statistics_smoothed_rate() -> None:
-    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
     block = _template_sensor_block("Water Softener Days Until Low Salt")
 
-    assert "platform: statistics" in text
-    assert "entity_id: sensor.water_softener_forecast_rate" in text
-    assert "state_characteristic: median" in text
-    assert "hours: 24" in text
     assert "unique_id: water_softener_days_until_low_salt" in block
     assert "unit_of_measurement: d" in block
-    assert "sensor.water_softener_forecast_rate_median_24h" in block
+    assert "states('sensor.water_softener_forecast_rate')" in block
     assert "level >= threshold" in block
     assert "rate is none or rate <= 0" in block
     assert "((threshold - level) / rate) | round(1)" in block
 
 
-def test_water_softener_forecast_excludes_recent_refill_from_7d_rate() -> None:
-    block = _template_sensor_block("Water Softener Forecast Rate")
-
-    assert "input_datetime.water_softener_last_refill_at" in block
-    assert "as_timestamp(now()) - last_refill_at >= 7 * 24 * 60 * 60" in block
-    assert "if include_7d else none" in block
-
-
 def test_water_softener_forecast_low_date_projects_days_remaining() -> None:
     block = _template_sensor_block("Water Softener Forecast Low Salt At")
-    now = datetime(2026, 6, 2, 12, tzinfo=UTC)
+    computed_at = datetime(2026, 6, 2, 12, tzinfo=UTC)
 
     assert "device_class: timestamp" in block
     assert "sensor.water_softener_days_until_low_salt" in block
-    assert "(now() + timedelta(days=days)).isoformat()" in block
-    assert now + timedelta(days=4.5) == datetime(2026, 6, 7, 0, tzinfo=UTC)
+    # Anchored to when the forecast was computed: a now()-based template
+    # re-renders every minute and drifts the date forward between updates.
+    assert "now()" not in "\n".join(_live_lines(block))
+    assert "states.sensor.water_softener_days_until_low_salt.last_changed" in block
+    assert "(computed_at + timedelta(days=days)).isoformat()" in block
+    assert computed_at + timedelta(days=4.5) == datetime(2026, 6, 7, 0, tzinfo=UTC)
+
+
+def test_salt_level_filter_is_cadence_independent() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+    sensor_section = text.split("\nsensor:\n", 1)[1].split("\n########################", 1)[0]
+    live = _live_lines(sensor_section)
+
+    # HA's lowpass is per state update (no time term): its effective time
+    # constant scales with the firmware publish interval (~1.7h at ~50s,
+    # ~10h at 5 minutes). Only the time-weighted 6h average remains.
+    assert "- filter: lowpass" not in live
+    assert "- filter: time_simple_moving_average" in live
+    assert 'window_size: "6:00"' in live
+
+
+def test_salt_notifications_link_to_existing_cleaning_view() -> None:
+    text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
+
+    # The dashboard view moved to `cleaning-v2`; `cleaning` no longer exists.
+    assert 'url: "/ryan-new-mushroom/cleaning"' not in text
+    assert text.count('url: "/ryan-new-mushroom/cleaning-v2"') == 2
 
 
 def test_water_softener_forecast_reminder_is_one_shot_before_critical() -> None:
@@ -138,7 +206,11 @@ def test_water_softener_forecast_monitor_persists_entry_time() -> None:
 def test_water_softener_refill_resets_next_reminder_cycle() -> None:
     block = _automation_block("water_softener_refill_reminder_reset")
 
-    assert "trigger: state" in block
+    # Threshold crossings, not every salt_level update (47k automation state
+    # rows in ~40 days when it fired on each update).
+    assert "trigger: state" not in block
+    assert block.count("trigger: numeric_state") == 2
+    assert "above: input_number.water_softener_refill_reset_threshold_mm" in block
     assert "entity_id: sensor.water_softener_salt_level" in block
     assert "trigger: time_pattern" in block
     assert "event: start" in block
@@ -235,16 +307,15 @@ def test_refill_reset_threshold_calibrated_between_empty_and_full_baselines() ->
 def test_minimum_depletion_rate_and_forecast_fallbacks_stay_in_sync() -> None:
     text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
 
-    # Regression guard: calibrated against real post-refill depletion data
-    # (2026-09-24 check-in). Genuine depletion windows clustered at
-    # 0.79-1.04mm/day, but the 7-day window -- the longest, most
-    # independent estimate -- came in at 0.448mm/day, just under the old
-    # 0.5 noise floor, silently discarding the best available evidence.
-    # 0.2 admits genuinely slow-but-real depletion while staying above the
-    # pure post-refill settling noise observed (-0.05 to -0.32mm/day).
+    # Regression guard: 0.2 mm/day admits genuinely slow-but-real depletion
+    # (the recorded steady rate is ~0.4-0.5 mm/day) while staying above the
+    # pure post-refill settling noise observed (-0.05 to -0.32 mm/day). The
+    # 0.448 mm/day 7-day reading that first prompted lowering it from 0.5 was
+    # later found to be depressed by derivative restart amnesia; the floor
+    # still holds on its own merits.
     assert "initial: 0.2" in text
 
-    # The forecast_rate template's float(default=...) fallbacks (for the
+    # The forecast_rate template's float(default=...) fallback (for the
     # brief window where the input_number is transiently unknown/
     # unavailable) must track the same calibrated value -- a stale
     # fallback here would silently exclude real depletion during that
@@ -254,5 +325,5 @@ def test_minimum_depletion_rate_and_forecast_fallbacks_stay_in_sync() -> None:
         "states('input_number.water_softener_minimum_depletion_rate_mm_per_day') "
         "| float(default=0.2)"
     )
-    assert fallback_count == 2
+    assert fallback_count == 1
     assert "float(default=0.5)" not in text

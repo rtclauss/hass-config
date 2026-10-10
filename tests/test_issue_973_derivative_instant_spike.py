@@ -81,17 +81,12 @@ def test_dashboard_does_not_reference_the_removed_duplicate_sensors() -> None:
     assert "sensor.derivative_10_10_minutes_house_temp_change" in text
 
 
-def test_water_softener_derivative_sensors_all_set_a_time_window() -> None:
+def test_water_softener_rate_does_not_use_unwindowed_or_restart_amnesic_derivatives() -> None:
+    # The softener's derivative sensors (all windowed, per #973) were replaced
+    # by restart-safe statistics sensors: a derivative keeps its window only in
+    # memory, so every HA restart under-reported the rate for up to a week. The
+    # #973 failure mode (dividing by a milliseconds-long interval) cannot occur
+    # with a 24h statistics `change` either.
     text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
-
-    names = [
-        "Water Softener Level (dt=24hrs)",
-        "Water Softener Level (dt=48hrs)",
-        "Water Softener Level (dt=72hrs)",
-        "Water Softener Level (dt=7d)",
-    ]
-    for name in names:
-        block = _derivative_block(WATER_SOFTENER_PATH, name)
-        assert "time_window:" in block, f"{name} is missing time_window and can spike"
-
-    assert text.count("source: sensor.water_softener_salt_level") == len(names)
+    assert "platform: derivative" not in text
+    assert "state_characteristic: change" in text
