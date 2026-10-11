@@ -66,6 +66,7 @@ def test_package_has_mqtt_binary_sensor_section() -> None:
 
 def test_bridge_sensor_present() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
+    assert 'name: "Z2M Bridge"' in text
     assert "unique_id: z2m_bridge_availability" in text
     assert 'state_topic: "zigbee2mqtt/bridge/state"' in text
     assert "device_class: connectivity" in text
