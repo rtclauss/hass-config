@@ -3127,7 +3127,7 @@ script:
 ########################
 rest_command:
   proxmox_shutdown:
-    url: https://10.24.1.253:8006/api2/json/nodes/proxmox/status
+    url: !secret private_proxmox_shutdown_url
     method: POST
     content_type: application/x-www-form-urlencoded
     verify_ssl: false
@@ -3135,23 +3135,23 @@ rest_command:
       authorization: !secret proxmoxve_api_token
     payload: "command=shutdown"
   reload_den_vacuum:
-    url: http://192.168.1.245/api/v2/valetudo/config/interfaces/mqtt
+    url: !secret private_den_vacuum_mqtt_url
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"den"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
+    payload: !secret private_den_vacuum_mqtt_payload
   reload_upstairs_vacuum:
-    url: http://192.168.1.163/api/v2/valetudo/config/interfaces/mqtt
+    url: !secret private_upstairs_vacuum_mqtt_url
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"192.168.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"upstairs-vacuum"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
+    payload: !secret private_upstairs_vacuum_mqtt_payload
   reload_main_level_vacuum:
-    url: http://valetudo-activeexoticlion.local/api/v2/valetudo/config/interfaces/mqtt
+    url: !secret private_main_level_vacuum_mqtt_url
     method: PUT
     content_type: application/json
     verify_ssl: false
-    payload: '{"enabled":true,"connection":{"host":"10.24.1.11","port":1883,"tls":{"enabled":false,"ca":"","ignoreCertificateErrors":false},"authentication":{"credentials":{"enabled":true,"username":"{{ mqtt_username }}","password":"{{ mqtt_password }}"},"clientCertificate":{"enabled":false,"certificate":"","key":""}}},"identity":{"identifier":"mainlevel"},"interfaces":{"homie":{"enabled":false,"cleanAttributesOnShutdown":false},"homeassistant":{"enabled":true,"cleanAutoconfOnShutdown":false}},"customizations":{"topicPrefix":"","provideMapData":true},"optionalExposedCapabilities":["TotalStatisticsCapability","CurrentStatisticsCapability","CarpetModeControlCapability"]}'
+    payload: !secret private_main_level_vacuum_mqtt_payload
 
 ########################
 # Sensor
