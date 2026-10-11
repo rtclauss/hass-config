@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "z2m_lifecycle.yaml"
-AVAILABILITY_PACKAGE_PATH = ROOT / "packages" / "z2m_availability.yaml"
+AVAILABILITY_PACKAGE_PATH = ROOT / "examples" / "z2m_availability.yaml"
 Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.example.yaml"
 
 
