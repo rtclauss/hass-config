@@ -90,3 +90,22 @@ def test_inactive_device_addresses_and_appdaemon_backups_are_not_public() -> Non
     assert not any("bed_occupancy.py." in path for path in tracked)
     esphome = (ROOT / "esphome/office-bt-proxy.yaml").read_text()
     assert not re.search(r"\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\b", esphome)
+
+
+def test_network_endpoints_are_loaded_from_private_secrets() -> None:
+    paths = (
+        "packages/zigbee_zwave.yaml",
+        "packages/airplanes.yaml",
+        "packages/car.yaml",
+        "packages/vacuum_map_guard.yaml",
+    )
+    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+    keys = set()
+    for path in paths:
+        source = (ROOT / path).read_text()
+        assert not re.search(r"(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)", source)
+        assert not re.search(r"\b[a-zA-Z0-9-]+\.local\b", source)
+        keys.update(re.findall(r"!secret (private_[a-z_]+(?:_url|_resource|_origin|_referer|_payload))", source))
+    assert len(keys) == 13
+    for key in keys:
+        assert re.search(rf"(?m)^{re.escape(key)}:", examples)

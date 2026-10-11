@@ -128,3 +128,12 @@ was not changed.
 Three old bed-occupancy Python copies were also untracked and ignored; their
 live copies are byte-verified under `.private-runtime-backup/appdaemon-legacy/`.
 The active `appdaemon/apps/bed_occupancy.py` remains tracked.
+
+## Private network endpoints
+
+The Zigbee/Z-Wave, aircraft, car, and vacuum-map packages read local URLs and MQTT
+reconfiguration payloads from `secrets.yaml`. The live secret file has the
+matching `private_*` keys. Its previous contents were byte-verified under
+`.private-runtime-backup/current-config/secrets.before-network-privacy.yaml`.
+The live packages remain unchanged until deployment. CI uses synthetic
+endpoints and payloads in `travis_secrets.example.yaml`.

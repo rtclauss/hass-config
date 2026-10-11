@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 
@@ -433,7 +434,7 @@ def test_valetudo_startup_reconfigure_skips_unavailable_vacuums() -> None:
     assert block.count("mqtt_password: !secret mqtt_password") == 2
 
 
-def test_valetudo_reload_commands_use_verified_runtime_endpoints() -> None:
+def test_valetudo_reload_commands_use_private_runtime_endpoints() -> None:
     den = _top_level_mapping_block(ZIGBEE_ZWAVE_PATH, "rest_command", "reload_den_vacuum")
     upstairs = _top_level_mapping_block(
         ZIGBEE_ZWAVE_PATH,
@@ -441,24 +442,28 @@ def test_valetudo_reload_commands_use_verified_runtime_endpoints() -> None:
         "reload_upstairs_vacuum",
     )
 
-    assert "REDACTED" in den
-    assert '"host":"192.168.1.11"' in den
-    assert '"identity":{"identifier":"den"}' in den
-    assert "valetudo-yummyhurtfulhornet.local" not in den
-    assert '"host":"10.254.254.11"' not in den
-
-    assert "REDACTED" in upstairs
-    assert '"host":"192.168.1.11"' in upstairs
-    assert '"identity":{"identifier":"upstairs-vacuum"}' in upstairs
-    assert "valetudo-zestycurvycaribou.local" not in upstairs
+    assert "url: !secret private_den_vacuum_mqtt_url" in den
+    assert "payload: !secret private_den_vacuum_mqtt_payload" in den
+    assert "url: !secret private_upstairs_vacuum_mqtt_url" in upstairs
+    assert "payload: !secret private_upstairs_vacuum_mqtt_payload" in upstairs
 
 
 def test_valetudo_reload_payloads_match_current_mqtt_schema() -> None:
     text = _read(ZIGBEE_ZWAVE_PATH)
+    examples = _read(ROOT / "travis_secrets.example.yaml")
 
     assert "addICBINVMapProperty" not in text
     assert "ConsumableMonitoringCapability" not in text
-    assert "<redacted>" not in text
-    assert text.count('"username":"{{ mqtt_username }}"') == 3
-    assert text.count('"password":"{{ mqtt_password }}"') == 3
-    assert text.count("CarpetModeControlCapability") == 3
+    for name in ("den", "upstairs", "main_level"):
+        key = f"private_{name}_vacuum_mqtt_payload"
+        assert f"payload: !secret {key}" in text
+        example = next(
+            line.split(": ", 1)[1]
+            for line in examples.splitlines()
+            if line.startswith(f"{key}: ")
+        )
+        payload = json.loads(example.strip("'"))
+        credentials = payload["connection"]["authentication"]["credentials"]
+        assert credentials["username"] == "{{ mqtt_username }}"
+        assert credentials["password"] == "{{ mqtt_password }}"
+        assert "CarpetModeControlCapability" in payload["optionalExposedCapabilities"]
