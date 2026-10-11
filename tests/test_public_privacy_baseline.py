@@ -22,11 +22,13 @@ def test_runtime_zigbee_and_ci_secrets_are_not_tracked() -> None:
     assert "travis_secrets.yaml" not in tracked
     assert "zigbee2mqtt/secret.yaml" not in tracked
     assert "zigbee2mqtt/configuration.yaml" not in tracked
+    assert "packages/z2m_availability.yaml" not in tracked
     assert not any(
         path.startswith("zigbee2mqtt/configuration_backup") for path in tracked
     )
     assert "travis_secrets.example.yaml" in tracked
     assert "zigbee2mqtt/configuration.example.yaml" in tracked
+    assert "examples/z2m_availability.yaml" in tracked
 
 
 def test_private_migration_backup_is_ignored() -> None:
@@ -48,7 +50,7 @@ def test_zigbee_example_uses_private_secret_file() -> None:
 
 def test_private_roster_checker_accepts_public_example() -> None:
     configuration = (ROOT / "zigbee2mqtt/configuration.example.yaml").read_text()
-    package = (ROOT / "packages/z2m_availability.yaml").read_text()
+    package = (ROOT / "examples/z2m_availability.yaml").read_text()
     assert named_devices(configuration) <= availability_devices(package)
 
 

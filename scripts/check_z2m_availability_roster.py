@@ -1,4 +1,4 @@
-"""Check private Zigbee2MQTT inventory against public HA availability sensors.
+"""Check private Zigbee2MQTT inventory against private HA availability sensors.
 
 Pass the live configuration on stdin to avoid copying it into the repository.
 Only counts are printed; device names and IEEE addresses stay private.

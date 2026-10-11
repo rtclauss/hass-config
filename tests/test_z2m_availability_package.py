@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_PATH = ROOT / "packages" / "z2m_availability.yaml"
+PACKAGE_PATH = ROOT / "examples" / "z2m_availability.yaml"
 Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.example.yaml"
 GRAFANA_DASHBOARD_PATH = ROOT / "docs" / "grafana" / "z2m_availability_dashboard.json"
 
@@ -66,6 +66,7 @@ def test_package_has_mqtt_binary_sensor_section() -> None:
 
 def test_bridge_sensor_present() -> None:
     text = PACKAGE_PATH.read_text(encoding="utf-8")
+    assert 'name: "Z2M Bridge"' in text
     assert "unique_id: z2m_bridge_availability" in text
     assert 'state_topic: "zigbee2mqtt/bridge/state"' in text
     assert "device_class: connectivity" in text
