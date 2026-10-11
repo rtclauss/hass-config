@@ -81,3 +81,12 @@ def test_zone_names_and_coordinates_are_private_secrets() -> None:
     assert len(coordinates) == 12
     for key in names + coordinates:
         assert re.search(rf"(?m)^{re.escape(key)}:", secrets_example)
+
+
+def test_inactive_device_addresses_and_appdaemon_backups_are_not_public() -> None:
+    tracked = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
+    assert not any(path.startswith("appdaemon.bak/") for path in tracked)
+    assert not any("bed_occupancy copy.py" in path for path in tracked)
+    assert not any("bed_occupancy.py." in path for path in tracked)
+    esphome = (ROOT / "esphome/office-bt-proxy.yaml").read_text()
+    assert not re.search(r"\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\b", esphome)

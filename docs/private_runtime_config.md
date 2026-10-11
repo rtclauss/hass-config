@@ -115,3 +115,16 @@ were byte-verified under
 Keep that file private. Before updating another installation, populate the
 `private_zone_XX_*` keys with its own zone values. The values in
 `travis_secrets.example.yaml` are synthetic and intended only for CI.
+
+## Archived AppDaemon and ESPHome comments
+
+The old `appdaemon.bak/` tree is ignored. Its 30 live files have been copied
+and byte-verified under `.private-runtime-backup/appdaemon.bak/` before Git
+removes the three formerly tracked files. Restore the tree from that private
+backup after the checkout update if it is still needed locally. The inactive
+Bluetooth plant sensor examples in `esphome/office-bt-proxy.yaml` were removed
+because their comments contained device addresses; active ESPHome configuration
+was not changed.
+Three old bed-occupancy Python copies were also untracked and ignored; their
+live copies are byte-verified under `.private-runtime-backup/appdaemon-legacy/`.
+The active `appdaemon/apps/bed_occupancy.py` remains tracked.
