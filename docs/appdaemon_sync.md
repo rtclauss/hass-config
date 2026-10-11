@@ -50,7 +50,7 @@ Expected local-only section:
 ```md
 ## Home Assistant Samba
 
-- host: `REDACTED`
+- host: `192.0.2.10`
 - user: `hassio`
 - password: `pass`
 - share: `addon_configs`

@@ -278,17 +278,17 @@ bayesian_device_tracker:
 Restart HA if network down:
   class: restart_ha
   module: reboot
-  # TCP-connect probes of always-on LAN infrastructure (the container has no
-  # `ping` binary - relying on it caused reboot loops on 2026-09-01/09-08).
+  # TCP probes avoid the unavailable `ping` binary.
   # A cycle only fails when EVERY target is unreachable; a refused connection
   # still counts as reachable (the host answered).
   probe_targets:
-    - "192.0.2.1:8006"   # Proxmox web UI - this VM's hypervisor, same subnet
-    - "198.51.100.1:53"     # LAN DNS / firewall
+    - !secret private_reboot_probe_primary
+    - !secret private_reboot_probe_secondary
   connect_timeout_seconds: 3
   max_failures: 5
   check_interval_minutes: 33
   min_reboot_interval_hours: 6
+  notify_service: !secret private_reboot_notify_service
 
 rtlsdr_watchdog:
   class: RtlSdrWatchdog
@@ -474,7 +474,7 @@ living_room_magic_cube:
   module: magic_cube
   class: RemoteControl
   event: zha_event
-  id: "00:11:22:33:44:55"
+  id: !secret private_living_room_remote_eui
   light: light.living_room_lamps_except_tv
 
 # Not used

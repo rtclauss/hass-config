@@ -146,3 +146,14 @@ after preserving its prior contents at
 `.private-runtime-backup/current-config/secrets.before-device-ids.yaml`.
 The live package files remain unchanged until deployment. CI uses synthetic
 IEEE values, and the Parasoll selector displays a synthetic example.
+
+## Private AppDaemon watchdog settings
+
+The AppDaemon reboot watchdog reads its two TCP probe targets and notification
+service from `!secret` values in `appdaemon/apps/apps.yaml`; a living-room
+remote IEEE is private too. The live root `secrets.yaml` contains the matching
+values and was byte-verified before this addition at
+`.private-runtime-backup/current-config/secrets.before-appdaemon-privacy.yaml`.
+The live AppDaemon files remain unchanged until deployment. If the watchdog
+lacks probes or an alert destination, it disables scheduling instead of
+rebooting without a usable check or notification. CI uses synthetic values.
