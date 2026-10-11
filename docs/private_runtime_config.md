@@ -105,3 +105,13 @@ before restarting or reloading Home Assistant. CI copies the example into
 `packages/` only in its disposable checkout; never use the example on the live
 host. Re-run the roster checker against the restored package and private
 Zigbee2MQTT configuration after migration.
+
+## Private zones
+
+The zone package reads private names and coordinates from `secrets.yaml`.
+The live `secrets.yaml` already has these keys, and its pre-change contents
+were byte-verified under
+`.private-runtime-backup/current-config/secrets.before-zone-privacy.yaml`.
+Keep that file private. Before updating another installation, populate the
+`private_zone_XX_*` keys with its own zone values. The values in
+`travis_secrets.example.yaml` are synthetic and intended only for CI.
