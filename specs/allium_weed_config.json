@@ -270,6 +270,54 @@
       ],
       "classification": "non-diffuser wake-window repair",
       "reason": "PR #939 replaces the fixed 04:30 owner-suite morning-activity gate with a window derived from enabled wake alarms. This behavior is governed by specs/alarm_wakeup.allium and does not change diffuser sleep/wake participation, afternoon fallback, or oil reminders governed by specs/diffusers.allium."
+    },
+    {
+      "spec": "specs/alarm_wakeup.allium",
+      "implementation_paths": [
+        "packages/workday.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*device_ieee: *",
+        "+*device_ieee: !secret private_*_eui"
+      ],
+      "classification": "private device identifier indirection",
+      "reason": "The privacy cleanup replaces literal Zigbee IEEE scalars with !secret keys. The live secrets retain the exact same values, so triggers and behavior are unchanged."
+    },
+    {
+      "spec": "specs/diffusers.allium",
+      "implementation_paths": [
+        "packages/workday.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*device_ieee: *",
+        "+*device_ieee: !secret private_*_eui"
+      ],
+      "classification": "private device identifier indirection",
+      "reason": "The privacy cleanup replaces literal Zigbee IEEE scalars with !secret keys. The live secrets retain the exact same values, so triggers and behavior are unchanged."
+    },
+    {
+      "spec": "specs/night_routines.allium",
+      "implementation_paths": [
+        "packages/tv.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*device_ieee: *",
+        "+*device_ieee: !secret private_*_eui"
+      ],
+      "classification": "private device identifier indirection",
+      "reason": "The privacy cleanup replaces literal Zigbee IEEE scalars with !secret keys. The live secrets retain the exact same values, so triggers and behavior are unchanged."
+    },
+    {
+      "spec": "specs/tv_watching.allium",
+      "implementation_paths": [
+        "packages/tv.yaml"
+      ],
+      "allowed_changed_line_patterns": [
+        "-*device_ieee: *",
+        "+*device_ieee: !secret private_*_eui"
+      ],
+      "classification": "private device identifier indirection",
+      "reason": "The privacy cleanup replaces literal Zigbee IEEE scalars with !secret keys. The live secrets retain the exact same values, so triggers and behavior are unchanged."
     }
   ]
 }
