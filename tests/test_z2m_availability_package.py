@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_PATH = ROOT / "packages" / "z2m_availability.yaml"
+PACKAGE_PATH = ROOT / "examples" / "z2m_availability.yaml"
 Z2M_CONFIG_PATH = ROOT / "zigbee2mqtt" / "configuration.example.yaml"
 GRAFANA_DASHBOARD_PATH = ROOT / "docs" / "grafana" / "z2m_availability_dashboard.json"
 

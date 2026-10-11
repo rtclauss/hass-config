@@ -94,3 +94,14 @@ do not commit those exports.
 After changing the live Zigbee2MQTT roster, pass its private configuration to
 `scripts/check_z2m_availability_roster.py -` on stdin. The checker compares it
 with `packages/z2m_availability.yaml` and prints counts only.
+
+The active availability package contains private Zigbee friendly names and
+entity IDs. It is ignored by Git; `examples/z2m_availability.yaml` is a small
+synthetic package used only by tests and CI. Before updating an older checkout,
+copy the active package to
+`.private-runtime-backup/current-config/packages/z2m_availability.yaml` and
+byte-compare it with the original. Restore it immediately after the update,
+before restarting or reloading Home Assistant. CI copies the example into
+`packages/` only in its disposable checkout; never use the example on the live
+host. Re-run the roster checker against the restored package and private
+Zigbee2MQTT configuration after migration.
