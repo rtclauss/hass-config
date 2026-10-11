@@ -6,8 +6,8 @@
 # Den Vacuum (Roborock V1) lacks PendingMapChangeHandlingCapability and is excluded.
 #
 # Capability confirmed present via:
-#   GET http://192.168.1.208/api/v2/robot/capabilities   (Main Level)
-#   GET http://192.168.1.163/api/v2/robot/capabilities   (Upstairs)
+#   GET http://example.invalid/api/v2/robot/capabilities   (Main Level)
+#   GET http://example.invalid/api/v2/robot/capabilities   (Upstairs)
 # REST action confirmed via:
 #   PUT /api/v2/robot/capabilities/PendingMapChangeHandlingCapability
 #   payload: {"action": "reject"} | {"action": "accept"}
@@ -27,25 +27,25 @@
 ########################
 rest_command:
   valetudo_mainlevel_reject_map_change:
-    url: "http://valetudo-activeexoticlion.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    url: !secret private_main_level_vacuum_map_url
     method: PUT
     content_type: application/json
     payload: '{"action": "reject"}'
 
   valetudo_mainlevel_accept_map_change:
-    url: "http://valetudo-activeexoticlion.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    url: !secret private_main_level_vacuum_map_url
     method: PUT
     content_type: application/json
     payload: '{"action": "accept"}'
 
   valetudo_upstairs_reject_map_change:
-    url: "http://valetudo-zestycurvycaribou.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    url: !secret private_upstairs_vacuum_map_url
     method: PUT
     content_type: application/json
     payload: '{"action": "reject"}'
 
   valetudo_upstairs_accept_map_change:
-    url: "http://valetudo-zestycurvycaribou.local/api/v2/robot/capabilities/PendingMapChangeHandlingCapability"
+    url: !secret private_upstairs_vacuum_map_url
     method: PUT
     content_type: application/json
     payload: '{"action": "accept"}'
