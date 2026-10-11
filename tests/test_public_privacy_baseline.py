@@ -1,6 +1,7 @@
 """Keep active secrets and Zigbee network inventory out of the public index."""
 
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -66,3 +67,17 @@ def test_private_roster_checker_ignores_unnamed_ieee_devices() -> None:
         "    friendly_name: '0x0000000000000001'\n"
     )
     assert named_devices(configuration) == set()
+
+
+def test_zone_names_and_coordinates_are_private_secrets() -> None:
+    zone_block = (ROOT / "packages/zone.yaml").read_text().split("\nzone:\n", 1)[1]
+    secrets_example = (ROOT / "travis_secrets.example.yaml").read_text()
+    names = re.findall(r"(?m)^  - name: !secret (private_zone_\d{2}_name)$", zone_block)
+    coordinates = re.findall(
+        r"(?m)^    (?:latitude|longitude): !secret (private_zone_\d{2}_(?:latitude|longitude))$",
+        zone_block,
+    )
+    assert len(names) == 11
+    assert len(coordinates) == 12
+    for key in names + coordinates:
+        assert re.search(rf"(?m)^{re.escape(key)}:", secrets_example)
