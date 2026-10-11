@@ -1,29 +1,8 @@
-"""Reboot the Home Assistant OS host when the LAN becomes unreachable.
+"""Reboot Home Assistant only after all configured LAN probes fail.
 
-History:
-  * Originally pinged a single external IP (8.8.8.8). When ICMP to it started
-    being dropped, every cycle "failed" and the app reboot-looped the HAOS host
-    every ~2.5 h (incident 2026-09-01).
-  * The first fix switched to a list of LAN targets but still shelled out to
-    `ping`. The AppDaemon add-on's Debian-slim base image has no `ping` binary
-    (and no CAP_NET_RAW), so `ping` failed on *every* call regardless of the
-    network -> the reboot loop continued, ~every 2 h 16 m (incident 2026-09-08).
-
-Now the reachability check is a pure-Python TCP connect (no external binary, no
-raw sockets, no capabilities). A cycle only counts as a failure when *every*
-target is unreachable. A cooldown caps reboot frequency and a notification is
-sent first so a reboot is visible in history.
-
-apps.yaml args (all optional):
-  probe_targets: list of "host:port" to test (default: Proxmox UI + LAN DNS).
-                 Also accepts the legacy keys `hosts_to_ping` / `host_to_ping`
-                 (a bare host gets a default port appended).
-  default_port: port to append to bare hosts (default 443)
-  connect_timeout_seconds: per-target TCP connect timeout (default 3)
-  max_failures: consecutive failed cycles before rebooting (default 5)
-  check_interval_minutes: minutes between cycles (default 33)
-  min_reboot_interval_hours: minimum spacing between reboots (default 6)
-  notify_service: notify service for the pre-reboot alert (default notify/mobile_app_wethop)
+Probe targets and the notification service are required AppDaemon arguments.
+TCP connects avoid dependencies on an ICMP binary or raw-socket capability.
+A cooldown caps reboot frequency and an alert is sent before reboot.
 """
 
 import os
@@ -33,10 +12,6 @@ from datetime import datetime, timedelta
 
 import hassapi as hass
 
-# Always-on LAN infrastructure this VM must be able to reach. A connection that
-# is *refused* still proves the host and the network path are alive, so only a
-# timeout / no-route counts against a target.
-DEFAULT_TARGETS = ["10.24.1.253:8006", "10.24.1.252:53"]  # Proxmox UI, LAN DNS
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".last_host_reboot")
 
 
@@ -48,8 +23,11 @@ class restart_ha(hass.Hass):
             self.args.get("probe_targets")
             or self.args.get("hosts_to_ping")
             or ([self.args["host_to_ping"]] if self.args.get("host_to_ping") else None)
-            or list(DEFAULT_TARGETS)
+            or []
         )
+        if not raw or not self.args.get("notify_service"):
+            self.log("Probe targets and notification service are required; watchdog disabled.", level="ERROR")
+            return
         self.targets = [self._parse_target(str(t), default_port) for t in raw]
 
         self.timeout = float(self.args.get("connect_timeout_seconds", 3))
@@ -58,7 +36,7 @@ class restart_ha(hass.Hass):
         self.min_reboot_interval = timedelta(
             hours=float(self.args.get("min_reboot_interval_hours", 6))
         )
-        self.notify_service = self.args.get("notify_service", "notify/mobile_app_wethop")
+        self.notify_service = self.args["notify_service"]
 
         self.num_failures = 0
         self.log(
