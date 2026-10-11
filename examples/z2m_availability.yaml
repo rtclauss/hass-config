@@ -1,0 +1,67 @@
+# Synthetic Zigbee2MQTT availability package for public tests and CI.
+# Keep the active device roster private on the Home Assistant host.
+mqtt:
+  binary_sensor:
+    - name: "Z2M Bridge Availability"
+      unique_id: z2m_bridge_availability
+      state_topic: "zigbee2mqtt/bridge/state"
+      value_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+
+    - name: "Z2M Arrival Sensor Availability"
+      unique_id: z2m_arrival_sensor_availability
+      state_topic: "zigbee2mqtt/Arrival Sensor/availability"
+      value_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+    - name: "Z2M Owner Suite/Lamp Bulb 1 Availability"
+      unique_id: z2m_owner_suite_lamp_bulb_1_availability
+      state_topic: "zigbee2mqtt/Owner Suite/Lamp Bulb 1/availability"
+      value_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"
+      payload_on: "online"
+      payload_off: "offline"
+      device_class: connectivity
+      availability_topic: "zigbee2mqtt/bridge/state"
+      availability_template: "{{ value_json.state if value_json is defined and value_json.state is defined else value }}"
+      payload_available: "online"
+      payload_not_available: "offline"
+
+group:
+  z2m_availability_entities:
+    name: Z2M Availability Entities
+    entities:
+      - binary_sensor.z2m_bridge_availability
+      - binary_sensor.z2m_arrival_sensor_availability
+      - binary_sensor.z2m_owner_suite_lamp_bulb_1_availability
+
+################################################################
+## Template sensors — aggregate Z2M availability status
+################################################################
+
+template:
+  - binary_sensor:
+      - name: "Z2M Devices Offline"
+        unique_id: z2m_devices_offline
+        device_class: problem
+        state: >
+          {% set devices = expand('group.z2m_availability_entities') %}
+          {{ devices | selectattr('state', 'in', ['off', 'unavailable', 'unknown'])
+             | list | count > 0 }}
+        attributes:
+          offline_devices: >
+            {% set devices = expand('group.z2m_availability_entities') %}
+            {{ devices | selectattr('state', 'in', ['off', 'unavailable', 'unknown'])
+               | map(attribute='name') | list }}
+          total_devices: >
+            {{ expand('group.z2m_availability_entities') | list | count }}
+          online_count: >
+            {{ expand('group.z2m_availability_entities')
+               | selectattr('state', 'eq', 'on') | list | count }}
