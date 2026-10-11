@@ -109,3 +109,16 @@ def test_network_endpoints_are_loaded_from_private_secrets() -> None:
     assert len(keys) == 13
     for key in keys:
         assert re.search(rf"(?m)^{re.escape(key)}:", examples)
+
+def test_device_ieee_values_are_private_secrets() -> None:
+    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+    keys = set()
+    for path in ("packages/light.yaml", "packages/workday.yaml", "packages/tv.yaml"):
+        source = (ROOT / path).read_text()
+        assert not re.search(r"\b(?:[0-9A-Fa-f]{2}:){7}[0-9A-Fa-f]{2}\b", source)
+        keys.update(re.findall(r"device_ieee: !secret (private_[a-z0-9_]+_eui)", source))
+    assert len(keys) == 4
+    for key in keys:
+        assert re.search(rf"(?m)^{re.escape(key)}:", examples)
+    parasoll = (ROOT / "packages/parasoll_fix.yaml").read_text()
+    assert 'example: "0x0000000000000001"' in parasoll

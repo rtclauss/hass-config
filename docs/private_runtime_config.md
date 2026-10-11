@@ -137,3 +137,12 @@ matching `private_*` keys. Its previous contents were byte-verified under
 `.private-runtime-backup/current-config/secrets.before-network-privacy.yaml`.
 The live packages remain unchanged until deployment. CI uses synthetic
 endpoints and payloads in `travis_secrets.example.yaml`.
+
+## Private device identifiers
+
+The light, workday, and TV packages resolve their Zigbee IEEE identifiers
+through `!secret`. The live values were added to the ignored `secrets.yaml`
+after preserving its prior contents at
+`.private-runtime-backup/current-config/secrets.before-device-ids.yaml`.
+The live package files remain unchanged until deployment. CI uses synthetic
+IEEE values, and the Parasoll selector displays a synthetic example.

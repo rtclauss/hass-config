@@ -70,7 +70,7 @@ def test_tv_bed_prep_supports_television_shutdown_and_button_entrypoints() -> No
         'to: "unavailable"',
         'from: "off"',
         "event_type: zha_event",
-        'device_ieee: "REDACTED"',
+        'device_ieee: !secret private_tv_remote_eui',
         'command: "attribute_updated"',
         "entity_id:\n          - sensor.hall_button_action",
         'to: "single"',
