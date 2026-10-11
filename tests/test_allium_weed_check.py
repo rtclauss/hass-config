@@ -292,7 +292,7 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         '+*entity_id: "{{ common_area_media_shutdown_targets }}"',
     ]
 
-    assert classified_gaps == [
+    expected = [
         {
             "spec": "specs/alarm_wakeup.allium",
             "implementation_paths": ["packages/media_player.yaml"],
@@ -501,6 +501,20 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
             ),
         },
     ]
+    assert classified_gaps[: len(expected)] == expected
+    privacy_gaps = classified_gaps[len(expected) :]
+    assert {(gap["spec"], tuple(gap["implementation_paths"])) for gap in privacy_gaps} == {
+        ("specs/alarm_wakeup.allium", ("packages/workday.yaml",)),
+        ("specs/diffusers.allium", ("packages/workday.yaml",)),
+        ("specs/night_routines.allium", ("packages/tv.yaml",)),
+        ("specs/tv_watching.allium", ("packages/tv.yaml",)),
+    }
+    assert all(gap["classification"] == "private device identifier indirection" for gap in privacy_gaps)
+    assert all(
+        gap["allowed_changed_line_patterns"]
+        == ["-*device_ieee: *", "+*device_ieee: !secret private_*_eui"]
+        for gap in privacy_gaps
+    )
     assert {scope.spec for scope in scopes} == {
         "specs/alarm_wakeup.allium",
         "specs/arrival_lighting.allium",
