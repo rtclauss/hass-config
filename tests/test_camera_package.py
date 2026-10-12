@@ -30,3 +30,12 @@ def test_living_room_animal_detection_notifies_with_cooldown() -> None:
         assert f"'{event_type}'" in condition
     assert automation["actions"][0]["action"] == "notify.notify_all"
     assert "delay" in automation["actions"][1]
+
+
+def test_animal_detection_ignores_availability_restores_and_names_dining_room() -> None:
+    automation = _automation("living_room_camera_animal_detected_notify")
+
+    condition = automation["conditions"][0]["value_template"]
+    assert "from_state.state not in ['unavailable', 'unknown']" in condition
+    assert "Dining Room" in automation["alias"]
+    assert "Dining Room" in automation["actions"][0]["data"]["message"]
