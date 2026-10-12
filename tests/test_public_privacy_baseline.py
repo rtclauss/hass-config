@@ -122,3 +122,34 @@ def test_device_ieee_values_are_private_secrets() -> None:
         assert re.search(rf"(?m)^{re.escape(key)}:", examples)
     parasoll = (ROOT / "packages/parasoll_fix.yaml").read_text()
     assert 'example: "0x0000000000000001"' in parasoll
+
+
+def test_birdweather_station_and_domain_alert_text_are_private() -> None:
+    birds = (ROOT / "packages/birds.yaml").read_text()
+    domain = (ROOT / "packages/domain_name.yaml").read_text()
+    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+
+    assert "resource: !secret private_birdweather_species_url" in birds
+    assert "resource: !secret private_birdweather_detections_url" in birds
+    assert "app.birdweather.com/api/v1/stations/" not in birds
+    assert domain.count("message: !secret private_domain_expiry_message") == 2
+    for key in (
+        "private_birdweather_species_url",
+        "private_birdweather_detections_url",
+        "private_domain_expiry_message",
+    ):
+        assert re.search(rf"(?m)^{key}:", examples)
+
+
+def test_watermeter_endpoints_are_private() -> None:
+    source = (ROOT / "packages/utilities.yaml").read_text()
+    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+
+    for key in (
+        "private_watermeter_light_on_url",
+        "private_watermeter_light_off_url",
+        "private_watermeter_flow_start_url",
+    ):
+        assert f"url: !secret {key}" in source
+        assert re.search(rf"(?m)^{key}:", examples)
+    assert "watermeter.iot." not in source
