@@ -288,3 +288,10 @@ def test_service_help_does_not_require_mqtt_dependency() -> None:
     )
 
     assert "--check-config" in result.stdout
+
+
+def test_pi_unit_loads_private_mqtt_credentials() -> None:
+    unit = (Path(__file__).parents[1] / "deploy/systemd/inky-owner-suite.service").read_text()
+
+    assert "EnvironmentFile=-/etc/inky-display/owner-suite.env" in unit
+    assert "INKY_MQTT_PASSWORD=" not in unit
