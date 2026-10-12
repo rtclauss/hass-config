@@ -177,3 +177,9 @@ values and was byte-verified before this addition at
 The live AppDaemon files remain unchanged until deployment. If the watchdog
 lacks probes or an alert destination, it disables scheduling instead of
 rebooting without a usable check or notification. CI uses synthetic values.
+
+The RTL-SDR watchdog's primary and secondary notification destinations are
+also `!secret` values. The live values were copied from its active `apps.yaml`
+after preserving root secrets at
+`.private-runtime-backup/current-config/secrets.before-rtlsdr-notify-privacy.yaml`.
+Missing the primary destination disables scheduling, including dry-run checks.
