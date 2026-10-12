@@ -31,6 +31,12 @@ final placement and assigned Pi here before deploying the physical service.
 Home Assistant owns display state. The Raspberry Pi owns rendering, caching, and
 physical panel refresh.
 
+The Pi service reads its broker username and password from the private
+`/etc/inky-display/owner-suite.env` file. Set `INKY_MQTT_USERNAME` and
+`INKY_MQTT_PASSWORD` there with root-only permissions, then restart the service.
+The committed systemd unit loads this file when present; keep its contents off
+the repository and out of deployment logs.
+
 ```text
 Home Assistant package/script
   -> MQTT retained-ish compact payload
