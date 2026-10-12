@@ -139,3 +139,17 @@ def test_birdweather_station_and_domain_alert_text_are_private() -> None:
         "private_domain_expiry_message",
     ):
         assert re.search(rf"(?m)^{key}:", examples)
+
+
+def test_watermeter_endpoints_are_private() -> None:
+    source = (ROOT / "packages/utilities.yaml").read_text()
+    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+
+    for key in (
+        "private_watermeter_light_on_url",
+        "private_watermeter_light_off_url",
+        "private_watermeter_flow_start_url",
+    ):
+        assert f"url: !secret {key}" in source
+        assert re.search(rf"(?m)^{key}:", examples)
+    assert "watermeter.iot." not in source

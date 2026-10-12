@@ -116,13 +116,15 @@ Zigbee2MQTT configuration after migration.
 
 ## Private feed and domain alert
 
-The Birdweather REST sensors and domain-expiry notifications also read private
-scalar values from root `secrets.yaml`. The live values were copied from the
-active packages into three `private_birdweather_*` and
-`private_domain_expiry_message` keys after the previous secret file was
+The Birdweather REST sensors, domain-expiry notifications, and water-meter REST
+commands also read private scalar values from root `secrets.yaml`. The live
+values were copied from the active packages into private keys after the
+previous secret file was
 byte-verified at
 `.private-runtime-backup/current-config/secrets.before-feed-domain-privacy.yaml`.
-CI uses synthetic station URLs and an example domain.
+The second addition was backed up at
+`.private-runtime-backup/current-config/secrets.before-watermeter-privacy.yaml`.
+CI uses synthetic station and water-meter URLs and an example domain.
 
 ## Private zones
 
