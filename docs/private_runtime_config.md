@@ -114,6 +114,16 @@ before restarting or reloading Home Assistant. CI copies the example into
 host. Re-run the roster checker against the restored package and private
 Zigbee2MQTT configuration after migration.
 
+## Private feed and domain alert
+
+The Birdweather REST sensors and domain-expiry notifications also read private
+scalar values from root `secrets.yaml`. The live values were copied from the
+active packages into three `private_birdweather_*` and
+`private_domain_expiry_message` keys after the previous secret file was
+byte-verified at
+`.private-runtime-backup/current-config/secrets.before-feed-domain-privacy.yaml`.
+CI uses synthetic station URLs and an example domain.
+
 ## Private zones
 
 The zone package reads private names and coordinates from `secrets.yaml`.
