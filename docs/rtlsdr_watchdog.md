@@ -270,6 +270,11 @@ notable ones: `dry_run`, `stale_after_minutes`, `confirm_cycles`,
 `death_loop_min_count`, `max_restart_attempts`, `restart_settle_minutes`,
 `min_shutdown_interval_hours`.
 
+The primary and secondary notification services are private `!secret` values.
+The primary service is required; if it is absent, the watchdog logs an error
+and does not schedule checks or escalation. This preserves the rule that it
+notifies before acting.
+
 ## Dry-run → live
 
 The app ships with `dry_run: true`. In dry-run it walks the full decision and
