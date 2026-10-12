@@ -58,7 +58,7 @@ apps.yaml args (all optional; see apps.yaml for the live values):
   shutdown_notice_seconds: delay between the shutdown notify and the shutdown itself (default 60)
   min_shutdown_interval_hours: minimum spacing between automatic shutdowns (default 24)
   renotify_minutes: minimum spacing between repeats of the same "can't tell" notice (default 120)
-  notify_service: primary notify service (default notify/example_target_01)
+  notify_service: required primary notification service; missing value disables scheduling
   secondary_notify_service: also notified at the Proxmox-shutdown stage (optional)
   usb_fault_patterns / generic_error_patterns: override the built-in pattern lists
 """
@@ -167,7 +167,7 @@ class RtlSdrWatchdog(hass.Hass):
             hours=float(self.args.get("min_shutdown_interval_hours", 24))
         )
         self.renotify_after = timedelta(minutes=float(self.args.get("renotify_minutes", 120)))
-        self.notify_service = self.args.get("notify_service", "notify/example_target_01")
+        self.notify_service = self.args.get("notify_service")
         self.secondary_notify_service = self.args.get("secondary_notify_service")
         self.usb_fault_patterns = tuple(
             p.lower() for p in self.args.get("usb_fault_patterns", USB_FAULT_PATTERNS)
@@ -201,6 +201,13 @@ class RtlSdrWatchdog(hass.Hass):
                 self.min_shutdown_interval,
             )
         )
+
+        if not self.notify_service:
+            self.log(
+                "rtlsdr_watchdog disabled: notify_service is required before escalation",
+                level="ERROR",
+            )
+            return
 
         self.run_every(self.check, self._now() + timedelta(seconds=30), self.check_interval)
         self.listen_event(self._manual_reset, "rtlsdr_watchdog_reset")
