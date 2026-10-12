@@ -16,6 +16,8 @@ from scripts.render_private_config import RenderError, render_all  # noqa: E402
 
 
 def _fixture(root: Path, files: list[tuple[str, str]], values: dict[str, str]) -> tuple[Path, Path]:
+    subprocess.run(["git", "init", "-q", str(root)], check=True, capture_output=True)
+    (root / ".gitignore").write_text("*.yaml\n")
     manifest = root / "manifest.json"
     value_file = root / "private.json"
     manifest.write_text(json.dumps({"version": 1, "files": [
@@ -98,3 +100,46 @@ def test_cli_does_not_print_private_values(tmp_path: Path) -> None:
     assert result.returncode == 2
     assert "synthetic-private-value" not in result.stdout + result.stderr
     assert not (tmp_path / "output.yaml").exists()
+
+
+def test_renderer_rejects_stageable_or_tracked_output(tmp_path: Path) -> None:
+    (tmp_path / "input.tmpl").write_text("name: @@PRIVATE:owner_name@@\n")
+    manifest, values = _fixture(
+        tmp_path, [("input.tmpl", "output.yaml")], {"owner_name": "Synthetic Owner"}
+    )
+    (tmp_path / ".gitignore").write_text("")
+    with pytest.raises(RenderError, match="Git-ignored"):
+        render_all(tmp_path, manifest, values)
+    assert not (tmp_path / "output.yaml").exists()
+
+    (tmp_path / ".gitignore").write_text("*.yaml\n")
+    (tmp_path / "output.yaml").write_text("old\n")
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "-f", "output.yaml"],
+        check=True, capture_output=True,
+    )
+    with pytest.raises(RenderError, match="Git-ignored"):
+        render_all(tmp_path, manifest, values)
+    assert (tmp_path / "output.yaml").read_text() == "old\n"
+
+
+def test_normalized_duplicate_outputs_are_rejected(tmp_path: Path) -> None:
+    (tmp_path / "one.tmpl").write_text("one: true\n")
+    (tmp_path / "two.tmpl").write_text("two: true\n")
+    manifest, values = _fixture(
+        tmp_path,
+        [("one.tmpl", "output.yaml"), ("two.tmpl", "./output.yaml")],
+        {},
+    )
+    with pytest.raises(RenderError, match="Duplicate"):
+        render_all(tmp_path, manifest, values)
+    assert not (tmp_path / "output.yaml").exists()
+
+
+def test_committed_manifest_and_examples_validate() -> None:
+    assert render_all(
+        ROOT,
+        ROOT / "docs/private_config_manifest.json",
+        ROOT / "examples/private_values.example.json",
+        validate=True,
+    ) >= 0

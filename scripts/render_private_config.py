@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 
 
@@ -67,16 +68,38 @@ def _load_values(path: Path) -> dict[str, str]:
     return data
 
 
-def render_all(root: Path, manifest: Path, values_path: Path, *, check: bool = False) -> int:
+def _require_ignored_output(root: Path, output: Path) -> None:
+    relative = str(output.relative_to(root.resolve()))
+    tracked = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "--error-unmatch", "--", relative],
+        capture_output=True, check=False,
+    )
+    ignored = subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "--quiet", "--no-index", "--", relative],
+        capture_output=True, check=False,
+    )
+    if tracked.returncode == 0 or ignored.returncode != 0:
+        raise RenderError(f"Rendered output must be untracked and Git-ignored: {relative}")
+
+
+def render_all(
+    root: Path, manifest: Path, values_path: Path, *,
+    check: bool = False, validate: bool = False,
+) -> int:
     """Validate and render every target; return the number of files checked."""
     entries = _load_manifest(manifest)
     values = _load_values(values_path)
     prepared: list[tuple[Path, str]] = []
+    seen_outputs: set[Path] = set()
     for source_name, output_name in entries:
         source = _inside(root, source_name)
         output = _inside(root, output_name)
+        if output in seen_outputs:
+            raise RenderError(f"Duplicate manifest output: {output_name}")
+        seen_outputs.add(output)
         if source == output or not source.is_file():
             raise RenderError(f"Missing or invalid template: {source_name}")
+        _require_ignored_output(root, output)
         template = source.read_text(encoding="utf-8")
         keys = {match.group(1) for match in MARKER.finditer(template)}
         missing = keys - values.keys()
@@ -92,6 +115,8 @@ def render_all(root: Path, manifest: Path, values_path: Path, *, check: bool = F
             raise RenderError(f"Unresolved private marker in {source_name}")
         prepared.append((output, rendered))
 
+    if validate:
+        return len(prepared)
     if check:
         for output, rendered in prepared:
             if not output.is_file() or output.read_text(encoding="utf-8") != rendered:
@@ -120,9 +145,13 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, default=ROOT / "docs/private_config_manifest.json")
     parser.add_argument("--values", type=Path, default=ROOT / ".private-runtime-config/values.json")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--validate", action="store_true")
     args = parser.parse_args()
     try:
-        count = render_all(args.root, args.manifest, args.values, check=args.check)
+        count = render_all(
+            args.root, args.manifest, args.values,
+            check=args.check, validate=args.validate,
+        )
     except (OSError, json.JSONDecodeError, RenderError) as error:
         parser.exit(2, f"Private config render failed: {error}\n")
     print(f"Validated {count} private config target(s)")

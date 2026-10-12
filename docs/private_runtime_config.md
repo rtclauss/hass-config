@@ -10,8 +10,10 @@ runtime YAML output. Keep real string values in the ignored
 `.private-runtime-config/values.json` file. Run
 `python3 scripts/render_private_config.py` before reloading Home Assistant;
 `--check` reports stale outputs without writing. The renderer validates every
-required key before writing, creates files with owner-only permissions, and
-does not print values. CI uses `examples/private_values.example.json`, which
+required key before writing, requires every output to be untracked and
+Git-ignored, creates files with owner-only permissions, and does not print
+values. CI validates the committed manifest and
+`examples/private_values.example.json` without writing outputs; that example
 must contain only synthetic values. The manifest has no targets until the first
 package is migrated.
 
