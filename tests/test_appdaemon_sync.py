@@ -22,7 +22,7 @@ def test_load_agents_local_parses_markdown_sections(tmp_path: Path) -> None:
 
 ## Home Assistant
 
-- host: `REDACTED`
+- host: `192.0.2.10`
 - user: `hassio`
 - password: `ssh-password`
 
@@ -36,7 +36,7 @@ def test_load_agents_local_parses_markdown_sections(tmp_path: Path) -> None:
 
     sections = MODULE.load_agents_local(tmp_path)
 
-    assert sections["Home Assistant"]["host"] == "REDACTED"
+    assert sections["Home Assistant"]["host"] == "192.0.2.10"
     assert sections["Home Assistant Samba"]["password"] == "pass"
     assert sections["Home Assistant Samba"]["share"] == "addon_configs"
 
