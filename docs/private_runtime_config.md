@@ -1,5 +1,13 @@
 # Private runtime configuration
 
+The retained-topic cleanup utility reads broker connection settings from a
+private Mosquitto client config file, never from committed shell arguments.
+For Mosquitto clients 2.1 or newer, put `-h`, `-u`, and `-P` options on separate
+lines in a root-readable file outside the repository or under the ignored
+`.private-runtime-config/` directory. Set `MQTT_CLIENT_CONFIG` to that file and
+run `clean_mqtt_topics.sh --apply` only when clearing all retained topics is
+intended. The script does not run during deployment.
+
 The public repository contains only a Zigbee2MQTT example. Keep the active
 `zigbee2mqtt/configuration.yaml`, its `secret.yaml`, and generated backup files
 on the Home Assistant host. Do not copy the example over a running installation:
