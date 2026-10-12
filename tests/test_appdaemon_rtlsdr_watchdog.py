@@ -38,7 +38,7 @@ def _make_app(monkeypatch, tmp_path, args=None, now=None):
     monkeypatch.setattr(module, "STATE_FILE", str(tmp_path / "state.json"))
 
     app = module.RtlSdrWatchdog.__new__(module.RtlSdrWatchdog)
-    app.args = dict(args or {})
+    app.args = {"notify_service": "notify/example_primary", **(args or {})}
     app.log = Mock()
     app.call_service = Mock()
     app.run_in = Mock(side_effect=lambda *a, **k: object())
@@ -52,6 +52,32 @@ def _make_app(monkeypatch, tmp_path, args=None, now=None):
 
     module.RtlSdrWatchdog.initialize(app)
     return module, app
+
+
+def test_missing_private_notify_service_disables_watchdog(monkeypatch, tmp_path):
+    _, app = _make_app(monkeypatch, tmp_path, args={"notify_service": None})
+
+    app.run_every.assert_not_called()
+    app.listen_event.assert_not_called()
+    assert any(
+        call.kwargs.get("level") == "ERROR" and "disabled" in call.args[0]
+        for call in app.log.call_args_list
+    )
+
+
+def test_watchdog_notification_destinations_are_private_secrets():
+    apps = APPS_YAML_PATH.read_text()
+    block = apps.split("rtlsdr_watchdog:", 1)[1].split("\n\n", 1)[0]
+    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+
+    for field, key in (
+        ("notify_service", "private_rtlsdr_primary_notify_service"),
+        ("secondary_notify_service", "private_rtlsdr_secondary_notify_service"),
+    ):
+        assert f"{field}: !secret {key}" in block
+        assert f"{key}:" in examples
+    assert "mobile_app_" not in block
+    assert "mobile_app_" not in APP_PATH.read_text()
 
 
 def _set_now(app, when):
@@ -528,15 +554,15 @@ def test_shutdown_notifies_both_services(monkeypatch, tmp_path):
     module, app = _make_app(
         monkeypatch,
         tmp_path,
-        args={"secondary_notify_service": "notify/mobile_app_faro"},
+        args={"secondary_notify_service": "notify/example_secondary"},
     )
     app.state["restart_attempts"] = 3
 
     app._escalate(usb_fault=True, evidence=["No supported devices found"])
 
     services_called = [c.args[0] for c in app.call_service.call_args_list]
-    assert "notify/mobile_app_wethop" in services_called
-    assert "notify/mobile_app_faro" in services_called
+    assert "notify/example_primary" in services_called
+    assert "notify/example_secondary" in services_called
 
 
 def test_do_proxmox_shutdown_calls_rest_command_and_marks_state(monkeypatch, tmp_path):
