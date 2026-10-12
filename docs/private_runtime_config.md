@@ -1,5 +1,22 @@
 # Private runtime configuration
 
+## Rendered private YAML
+
+For values embedded in Jinja, YAML keys, or other positions that cannot use
+`!secret`, public templates may contain `@@PRIVATE:key@@` markers. Use
+`@@PRIVATE:key|json@@` when the marker is an entire YAML string scalar. The
+`docs/private_config_manifest.json` file lists each template and its ignored
+runtime YAML output. Keep real string values in the ignored
+`.private-runtime-config/values.json` file. Run
+`python3 scripts/render_private_config.py` before reloading Home Assistant;
+`--check` reports stale outputs without writing. The renderer validates every
+required key before writing, requires every output to be untracked and
+Git-ignored, creates files with owner-only permissions, and does not print
+values. CI validates the committed manifest and
+`examples/private_values.example.json` without writing outputs; that example
+must contain only synthetic values. The manifest has no targets until the first
+package is migrated.
+
 The retained-topic cleanup utility reads broker connection settings from a
 private Mosquitto client config file, never from committed shell arguments.
 For Mosquitto clients 2.1 or newer, put `-h`, `-u`, and `-P` options on separate
