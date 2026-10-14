@@ -78,7 +78,7 @@ def test_zone_names_and_coordinates_are_private_secrets() -> None:
         zone_block,
     )
     assert len(names) == 11
-    assert len(coordinates) == 12
+    assert len(coordinates) == 16
     for key in names + coordinates:
         assert re.search(rf"(?m)^{re.escape(key)}:", secrets_example)
 

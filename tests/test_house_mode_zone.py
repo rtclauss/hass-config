@@ -6,6 +6,10 @@ from pathlib import Path
 
 HOUSE_MODE_PATH = Path(__file__).resolve().parents[1] / "packages" / "house_mode.yaml"
 ZONE_PATH = Path(__file__).resolve().parents[1] / "packages" / "zone.yaml"
+PRESENCE_SLUG = re.search(
+    r"(?m)^  - id: ([a-z]+)_arrival_emitter$",
+    ZONE_PATH.read_text(encoding="utf-8"),
+).group(1)
 ROOT_PATH = Path(__file__).resolve().parents[1]
 CONFIGURATION_PATH = ROOT_PATH / "configuration.yaml"
 SCRIPTS_PATH = ROOT_PATH / "scripts.yaml"
@@ -209,7 +213,7 @@ def test_departure_gates_on_bayesian_empty_house_not_derived_tracker() -> None:
     block = _automation_block(ZONE_PATH, "run_verified_departure")
 
     assert "House is empty per the Bayesian presence signal" in block
-    assert "entity_id: binary_sensor.bayesian_resident_home" in block
+    assert f"entity_id: binary_sensor.bayesian_{PRESENCE_SLUG}_home" in block
     assert "Primary tracker confirms departure" not in block
     assert "condition: zone" not in block
 
@@ -308,7 +312,7 @@ def test_departure_integrity_stops_if_guest_or_resident_context_returns() -> Non
     # before the away transition, before the retry pass, and before notifying.
     # The derived GPS tracker is intentionally not gated on here (#110, Codex P1).
     assert block.count("entity_id: input_boolean.guest_mode") >= 3
-    assert block.count("entity_id: binary_sensor.bayesian_resident_home") >= 3
+    assert block.count(f"entity_id: binary_sensor.bayesian_{PRESENCE_SLUG}_home") >= 3
     assert "condition: zone" not in block
     assert "zone: zone.home" not in block
 
@@ -320,7 +324,7 @@ def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
     assert "input_datetime.contextual_arrival_last_empty_at:" in text
     assert "has_date: true" in text
     assert "has_time: true" in text
-    assert "event_type: resident_departure" in block
+    assert f"event_type: {PRESENCE_SLUG}_departure" in block
     assert "source_trigger == 'bayesian_presence_off'" in block
     assert "action: input_boolean.turn_off" in block
     assert "action: input_datetime.set_datetime" in block
@@ -329,19 +333,19 @@ def test_contextual_arrival_tracks_when_house_becomes_empty() -> None:
 
 
 def test_presence_event_emitters_own_shared_arrival_and_departure_triggers() -> None:
-    arrival_emitter = _automation_block(ZONE_PATH, "resident_arrival_emitter")
-    departure_emitter = _automation_block(ZONE_PATH, "resident_departure_emitter")
+    arrival_emitter = _automation_block(ZONE_PATH, f"{PRESENCE_SLUG}_arrival_emitter")
+    departure_emitter = _automation_block(ZONE_PATH, f"{PRESENCE_SLUG}_departure_emitter")
 
     assert "event: enter" in arrival_emitter
     assert "id: tracker_entered_home" in arrival_emitter
     assert "id: bayesian_presence_on" in arrival_emitter
-    assert "event: resident_arrival" in arrival_emitter
+    assert f"event: {PRESENCE_SLUG}_arrival" in arrival_emitter
     assert "source_trigger: \"{{ trigger.id }}\"" in arrival_emitter
 
     assert "event: leave" in departure_emitter
     assert "id: tracker_left_home" in departure_emitter
     assert "id: bayesian_presence_off" in departure_emitter
-    assert "event: resident_departure" in departure_emitter
+    assert f"event: {PRESENCE_SLUG}_departure" in departure_emitter
     assert "source_trigger: \"{{ trigger.id }}\"" in departure_emitter
 
 
@@ -364,19 +368,19 @@ def test_presence_event_consumers_keep_independent_traces_and_modes() -> None:
         block = _automation_block(ZONE_PATH, automation_id)
         trigger_block = block.split("condition:", 1)[0].split("action:", 1)[0]
         assert "trace:" in block
-        assert "event_type: resident_arrival" in trigger_block
-        assert "person: resident" in trigger_block
+        assert f"event_type: {PRESENCE_SLUG}_arrival" in trigger_block
+        assert f"person: {PRESENCE_SLUG}" in trigger_block
         assert "event: enter" not in trigger_block
-        assert "binary_sensor.bayesian_resident_home" not in trigger_block
+        assert f"binary_sensor.bayesian_{PRESENCE_SLUG}_home" not in trigger_block
 
     for automation_id in departure_consumers:
         block = _automation_block(ZONE_PATH, automation_id)
         trigger_block = block.split("condition:", 1)[0].split("action:", 1)[0]
         assert "trace:" in block
-        assert "event_type: resident_departure" in trigger_block
-        assert "person: resident" in trigger_block
+        assert f"event_type: {PRESENCE_SLUG}_departure" in trigger_block
+        assert f"person: {PRESENCE_SLUG}" in trigger_block
         assert "event: leave" not in trigger_block
-        assert "binary_sensor.bayesian_resident_home" not in trigger_block
+        assert f"binary_sensor.bayesian_{PRESENCE_SLUG}_home" not in trigger_block
 
 
 def test_arrival_automations_use_contextual_arrival_transition() -> None:
@@ -416,7 +420,7 @@ def test_contextual_arrival_treats_occupied_reentry_as_quick() -> None:
     # stale last_empty timestamp and escalate to full/multi day.
     assert "occupied_reentry" in block
     assert "seconds_since_presence" in block
-    assert "is_state('binary_sensor.bayesian_resident_home', 'on')" in block
+    assert f"is_state('binary_sensor.bayesian_{PRESENCE_SLUG}_home', 'on')" in block
     assert "{% if occupied_reentry %}" in block
 
 
