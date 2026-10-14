@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -143,3 +144,23 @@ def test_committed_manifest_and_examples_validate() -> None:
         ROOT / "examples/private_values.example.json",
         validate=True,
     ) >= 0
+
+
+def test_public_media_template_contains_no_concrete_account_or_device_ids() -> None:
+    template = (ROOT / "private_templates/media_player.yaml.tmpl").read_text()
+    examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
+    assert "@@PRIVATE:media_nfc_tag_id@@" in template
+    assert "@@PRIVATE:music_uri_" in template
+    assert "@@PRIVATE:media_stream_" in template
+    assert len(examples) >= 70
+    assert not re.search(
+        r"spotify:(?:user:[A-Za-z0-9_.-]+:)?"
+        r"(?:playlist|album|track|artist):[A-Za-z0-9]+",
+        template,
+    )
+    assert not re.search(r"\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b", template, re.I)
+    assert not re.search(
+        r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+        template,
+        re.I,
+    )

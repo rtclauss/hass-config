@@ -117,12 +117,12 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      # Synthetic music note
+@@PRIVATE:music_annotation_001@@
       #     command: "rotate_left"
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      # Synthetic music note
+@@PRIVATE:music_annotation_002@@
       #     command: "rotate_right"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action_angle
@@ -151,7 +151,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      # Synthetic music note
+@@PRIVATE:music_annotation_003@@
       #     command: "knock"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action
@@ -217,7 +217,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      # Synthetic music note
+@@PRIVATE:music_annotation_004@@
       #     command: "flip"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action_to_side
@@ -243,7 +243,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      # Synthetic music note
+@@PRIVATE:music_annotation_005@@
       #     command: "slide"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action
@@ -261,7 +261,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      # Synthetic music note
+@@PRIVATE:music_annotation_006@@
       #     command: "shake"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action
@@ -378,8 +378,8 @@ automation:
       - trigger: event
         event_type: tag_scanned
         event_data:
-          device_id: 00000000-0000-4000-8000-000000000002
-          tag_id: 00000000-0000-4000-8000-000000000001
+          device_id: @@PRIVATE:media_nfc_device_id@@
+          tag_id: @@PRIVATE:media_nfc_tag_id@@
     action:
       - action: media_player.join
         data:
@@ -415,32 +415,32 @@ automation:
         condition: template
         value_template: >-
           {# input_datetime.weekday_alarm/weekend_alarm are has_date: false,
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
+@@PRIVATE:music_annotation_007@@
+@@PRIVATE:music_annotation_008@@
+@@PRIVATE:music_annotation_009@@
+@@PRIVATE:music_annotation_010@@
+@@PRIVATE:music_annotation_011@@
+@@PRIVATE:music_annotation_012@@
+@@PRIVATE:music_annotation_013@@
              morning_activity, #939). #}
           {# alarm_wake_up requires binary_sensor.workday_sensor to be
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
+@@PRIVATE:music_annotation_014@@
+@@PRIVATE:music_annotation_015@@
+@@PRIVATE:music_annotation_016@@
+@@PRIVATE:music_annotation_017@@
+@@PRIVATE:music_annotation_018@@
+@@PRIVATE:music_annotation_019@@
+@@PRIVATE:music_annotation_020@@
+@@PRIVATE:music_annotation_021@@
              (Codex P2 follow-up on #972). #}
           {% set workday_sensor_state = states('binary_sensor.workday_sensor') %}
           {% if workday_sensor_state == 'on' %}
             {# A special meeting can wake the resident earlier than the
-               # Synthetic music note
-               # Synthetic music note
-               # Synthetic music note
-               # Synthetic music note
-               # Synthetic music note
+@@PRIVATE:music_annotation_022@@
+@@PRIVATE:music_annotation_023@@
+@@PRIVATE:music_annotation_024@@
+@@PRIVATE:music_annotation_025@@
+@@PRIVATE:music_annotation_026@@
                rejected for being before the weekday alarm (Codex P2). #}
             {% set candidates = [
                  state_attr('input_datetime.weekday_alarm', 'timestamp')
@@ -460,29 +460,29 @@ automation:
           {% set now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second %}
           {% set wake_window_seconds = 90 * 60 %}
           {# alarm_wake_up's meeting-alarm branch turns special_meeting off
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
-             # Synthetic music note
+@@PRIVATE:music_annotation_027@@
+@@PRIVATE:music_annotation_028@@
+@@PRIVATE:music_annotation_029@@
+@@PRIVATE:music_annotation_030@@
+@@PRIVATE:music_annotation_031@@
+@@PRIVATE:music_annotation_032@@
+@@PRIVATE:music_annotation_033@@
+@@PRIVATE:music_annotation_034@@
+@@PRIVATE:music_annotation_035@@
+@@PRIVATE:music_annotation_036@@
+@@PRIVATE:music_annotation_037@@
+@@PRIVATE:music_annotation_038@@
+@@PRIVATE:music_annotation_039@@
+@@PRIVATE:music_annotation_040@@
+@@PRIVATE:music_annotation_041@@
+@@PRIVATE:music_annotation_042@@
+@@PRIVATE:music_annotation_043@@
+@@PRIVATE:music_annotation_044@@
+@@PRIVATE:music_annotation_045@@
+@@PRIVATE:music_annotation_046@@
+@@PRIVATE:music_annotation_047@@
+@@PRIVATE:music_annotation_048@@
+@@PRIVATE:music_annotation_049@@
              timestamp is sufficient on its own and needs no such latch. #}
           {% set alarm_firing_recently =
                (as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp') | float(0))) <= wake_window_seconds %}
@@ -1013,15 +1013,15 @@ script:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_050@@
+@@PRIVATE:music_annotation_051@@
+@@PRIVATE:music_annotation_052@@
+@@PRIVATE:music_annotation_053@@
             #}
-            {%- set plists = ["spotify:playlist:synthetic046",
-              "spotify:playlist:synthetic022",
-              "spotify:playlist:synthetic017",
-              "spotify:playlist:synthetic019"
+            {%- set plists = ["@@PRIVATE:music_uri_046@@",
+              "@@PRIVATE:music_uri_022@@",
+              "@@PRIVATE:music_uri_017@@",
+              "@@PRIVATE:music_uri_019@@"
               ] -%}
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
@@ -1406,7 +1406,7 @@ script:
       effective_max_ramp_iterations: >-
         {{ (([effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max) / effective_step_volume) | round(0, 'ceil') + 10 }}
       effective_fallback_uri: >-
-        {{ fallback_uri | default('spotify:playlist:synthetic021', true) }}
+        {{ fallback_uri | default('@@PRIVATE:music_uri_021@@', true) }}
       effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
       effective_verify_timeout: "{{ verify_timeout | default(20) | int(20) }}"
       effective_retry_backoff: "{{ retry_backoff | default(15) | int(15) }}"
@@ -1615,129 +1615,129 @@ script:
           log_name: Cube Playlist is
 
   bedroom_playlist_1:
-    alias: "Play music preset one"
+@@PRIVATE:music_label_1618@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_054@@
+@@PRIVATE:music_annotation_055@@
+@@PRIVATE:music_annotation_056@@
+@@PRIVATE:music_annotation_057@@
+@@PRIVATE:music_annotation_058@@
+@@PRIVATE:music_annotation_059@@
+@@PRIVATE:music_annotation_060@@
+@@PRIVATE:music_annotation_061@@
+@@PRIVATE:music_annotation_062@@
+@@PRIVATE:music_annotation_063@@
+@@PRIVATE:music_annotation_064@@
             #}
-            {%- set plists = ["spotify:playlist:synthetic043",
-            "spotify:playlist:synthetic035",
-            "spotify:playlist:synthetic038",
-            "spotify:playlist:synthetic047",
-            "spotify:playlist:synthetic040",
-            "spotify:playlist:synthetic044",
-            "spotify:album:synthetic003",
-            "spotify:album:synthetic007",
-            "spotify:playlist:synthetic015",
-            "spotify:playlist:synthetic037"
+            {%- set plists = ["@@PRIVATE:music_uri_043@@",
+            "@@PRIVATE:music_uri_035@@",
+            "@@PRIVATE:music_uri_038@@",
+            "@@PRIVATE:music_uri_047@@",
+            "@@PRIVATE:music_uri_040@@",
+            "@@PRIVATE:music_uri_044@@",
+            "@@PRIVATE:music_uri_003@@",
+            "@@PRIVATE:music_uri_007@@",
+            "@@PRIVATE:music_uri_015@@",
+            "@@PRIVATE:music_uri_037@@"
             ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: Preset one
+@@PRIVATE:music_label_1652@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_2:
-    alias: "Play music preset two"
+@@PRIVATE:music_label_1656@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_065@@
+@@PRIVATE:music_annotation_066@@
+@@PRIVATE:music_annotation_067@@
+@@PRIVATE:music_annotation_068@@
             #}
-            {%- set plists = ["spotify:playlist:synthetic016",
-              "spotify:playlist:synthetic013",
-              "spotify:playlist:synthetic048",
-              "spotify:playlist:synthetic049"
+            {%- set plists = ["@@PRIVATE:music_uri_016@@",
+              "@@PRIVATE:music_uri_013@@",
+              "@@PRIVATE:music_uri_048@@",
+              "@@PRIVATE:music_uri_049@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: Preset two
+@@PRIVATE:music_label_1677@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_3:
-    alias: "Play music preset three"
+@@PRIVATE:music_label_1681@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_069@@
+@@PRIVATE:music_annotation_070@@
+@@PRIVATE:music_annotation_071@@
+@@PRIVATE:music_annotation_072@@
             #}
-            {%- set plists = ["spotify:playlist:synthetic010",
-              "spotify:playlist:synthetic024",
-              "spotify:playlist:synthetic036",
-              "spotify:playlist:synthetic039"
+            {%- set plists = ["@@PRIVATE:music_uri_010@@",
+              "@@PRIVATE:music_uri_024@@",
+              "@@PRIVATE:music_uri_036@@",
+              "@@PRIVATE:music_uri_039@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: Preset three
+@@PRIVATE:music_label_1702@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_4:
-    alias: "Play music preset four"
+@@PRIVATE:music_label_1706@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_073@@
+@@PRIVATE:music_annotation_074@@
+@@PRIVATE:music_annotation_075@@
+@@PRIVATE:music_annotation_076@@
+@@PRIVATE:music_annotation_077@@
+@@PRIVATE:music_annotation_078@@
+@@PRIVATE:music_annotation_079@@
+@@PRIVATE:music_annotation_080@@
+@@PRIVATE:music_annotation_081@@
+@@PRIVATE:music_annotation_082@@
+@@PRIVATE:music_annotation_083@@
             #}
-            {%- set plists = ["spotify:playlist:synthetic026",
-              "spotify:playlist:synthetic034",
-              "spotify:album:synthetic008",
-              "spotify:playlist:synthetic027",
-              "spotify:playlist:synthetic029",
-              "spotify:user:example:playlist:synthetic069",
-              "spotify:user:example:playlist:synthetic071",
-              "spotify:user:example:playlist:synthetic058",
-              "spotify:user:example:playlist:synthetic059",
-              "spotify:playlist:synthetic033"
+            {%- set plists = ["@@PRIVATE:music_uri_026@@",
+              "@@PRIVATE:music_uri_034@@",
+              "@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_069@@",
+              "@@PRIVATE:music_uri_071@@",
+              "@@PRIVATE:music_uri_058@@",
+              "@@PRIVATE:music_uri_059@@",
+              "@@PRIVATE:music_uri_033@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: Preset four
+@@PRIVATE:music_label_1740@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_5:
@@ -1790,81 +1790,81 @@ script:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_084@@
+@@PRIVATE:music_annotation_085@@
+@@PRIVATE:music_annotation_086@@
+@@PRIVATE:music_annotation_087@@
+@@PRIVATE:music_annotation_088@@
+@@PRIVATE:music_annotation_089@@
+@@PRIVATE:music_annotation_090@@
+@@PRIVATE:music_annotation_091@@
+@@PRIVATE:music_annotation_092@@
+@@PRIVATE:music_annotation_093@@
+@@PRIVATE:music_annotation_094@@
+@@PRIVATE:music_annotation_095@@
+@@PRIVATE:music_annotation_096@@
+@@PRIVATE:music_annotation_097@@
+@@PRIVATE:music_annotation_098@@
+@@PRIVATE:music_annotation_099@@
+@@PRIVATE:music_annotation_100@@
+@@PRIVATE:music_annotation_101@@
+@@PRIVATE:music_annotation_102@@
+@@PRIVATE:music_annotation_103@@
+@@PRIVATE:music_annotation_104@@
+@@PRIVATE:music_annotation_105@@
+@@PRIVATE:music_annotation_106@@
+@@PRIVATE:music_annotation_107@@
+@@PRIVATE:music_annotation_108@@
+@@PRIVATE:music_annotation_109@@
+@@PRIVATE:music_annotation_110@@
+@@PRIVATE:music_annotation_111@@
+@@PRIVATE:music_annotation_112@@
+@@PRIVATE:music_annotation_113@@
+@@PRIVATE:music_annotation_114@@
+@@PRIVATE:music_annotation_115@@
+@@PRIVATE:music_annotation_116@@
+@@PRIVATE:music_annotation_117@@
+@@PRIVATE:music_annotation_118@@
+@@PRIVATE:music_annotation_119@@
+@@PRIVATE:music_annotation_120@@
+@@PRIVATE:music_annotation_121@@
+@@PRIVATE:music_annotation_122@@
+@@PRIVATE:music_annotation_123@@
+@@PRIVATE:music_annotation_124@@
+@@PRIVATE:music_annotation_125@@
+@@PRIVATE:music_annotation_126@@
+@@PRIVATE:music_annotation_127@@
+@@PRIVATE:music_annotation_128@@
+@@PRIVATE:music_annotation_129@@
+@@PRIVATE:music_annotation_130@@
+@@PRIVATE:music_annotation_131@@
+@@PRIVATE:music_annotation_132@@
             #}
-            {%- set plists = ["spotify:album:synthetic008",
-              "spotify:user:example:playlist:synthetic068",
-              "spotify:user:example:playlist:synthetic060",
-              "spotify:user:example:playlist:synthetic057",
-              "spotify:user:example:playlist:synthetic067",
-              "spotify:user:example:playlist:synthetic070",
-              "spotify:playlist:synthetic027",
-              "spotify:user:example:playlist:synthetic065",
-              "spotify:playlist:synthetic029",
-              "spotify:artist:synthetic009",
-              "spotify:user:example:playlist:synthetic052",
-              "spotify:playlist:synthetic031",
-              "spotify:album:synthetic005",
-              "spotify:user:example:playlist:synthetic054",
-              "spotify:playlist:synthetic025",
-              "spotify:user:example:playlist:synthetic056",
-              "spotify:user:example:playlist:synthetic053",
-              "spotify:user:example:playlist:synthetic055",
-              "spotify:user:example:playlist:synthetic051",
-              "spotify:user:example:playlist:synthetic070",
-              "spotify:user:example:playlist:synthetic063",
-              "spotify:playlist:synthetic035",
-              "spotify:playlist:synthetic030",
-              "spotify:playlist:synthetic020",
-              "spotify:playlist:synthetic037"
+            {%- set plists = ["@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_068@@",
+              "@@PRIVATE:music_uri_060@@",
+              "@@PRIVATE:music_uri_057@@",
+              "@@PRIVATE:music_uri_067@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_065@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_009@@",
+              "@@PRIVATE:music_uri_052@@",
+              "@@PRIVATE:music_uri_031@@",
+              "@@PRIVATE:music_uri_005@@",
+              "@@PRIVATE:music_uri_054@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_037@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
@@ -1972,107 +1972,107 @@ script:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_133@@
+@@PRIVATE:music_annotation_134@@
+@@PRIVATE:music_annotation_135@@
+@@PRIVATE:music_annotation_136@@
+@@PRIVATE:music_annotation_137@@
+@@PRIVATE:music_annotation_138@@
+@@PRIVATE:music_annotation_139@@
+@@PRIVATE:music_annotation_140@@
+@@PRIVATE:music_annotation_141@@
+@@PRIVATE:music_annotation_142@@
+@@PRIVATE:music_annotation_143@@
+@@PRIVATE:music_annotation_144@@
+@@PRIVATE:music_annotation_145@@
+@@PRIVATE:music_annotation_146@@
+@@PRIVATE:music_annotation_147@@
+@@PRIVATE:music_annotation_148@@
+@@PRIVATE:music_annotation_149@@
+@@PRIVATE:music_annotation_150@@
+@@PRIVATE:music_annotation_151@@
+@@PRIVATE:music_annotation_152@@
+@@PRIVATE:music_annotation_153@@
+@@PRIVATE:music_annotation_154@@
+@@PRIVATE:music_annotation_155@@
+@@PRIVATE:music_annotation_156@@
+@@PRIVATE:music_annotation_157@@
+@@PRIVATE:music_annotation_158@@
+@@PRIVATE:music_annotation_159@@
+@@PRIVATE:music_annotation_160@@
+@@PRIVATE:music_annotation_161@@
+@@PRIVATE:music_annotation_162@@
+@@PRIVATE:music_annotation_163@@
+@@PRIVATE:music_annotation_164@@
+@@PRIVATE:music_annotation_165@@
+@@PRIVATE:music_annotation_166@@
+@@PRIVATE:music_annotation_167@@
+@@PRIVATE:music_annotation_168@@
+@@PRIVATE:music_annotation_169@@
+@@PRIVATE:music_annotation_170@@
+@@PRIVATE:music_annotation_171@@
+@@PRIVATE:music_annotation_172@@
+@@PRIVATE:music_annotation_173@@
+@@PRIVATE:music_annotation_174@@
+@@PRIVATE:music_annotation_175@@
+@@PRIVATE:music_annotation_176@@
+@@PRIVATE:music_annotation_177@@
+@@PRIVATE:music_annotation_178@@
+@@PRIVATE:music_annotation_179@@
+@@PRIVATE:music_annotation_180@@
+@@PRIVATE:music_annotation_181@@
+@@PRIVATE:music_annotation_182@@
+@@PRIVATE:music_annotation_183@@
+@@PRIVATE:music_annotation_184@@
+@@PRIVATE:music_annotation_185@@
+@@PRIVATE:music_annotation_186@@
+@@PRIVATE:music_annotation_187@@
+@@PRIVATE:music_annotation_188@@
+@@PRIVATE:music_annotation_189@@
+@@PRIVATE:music_annotation_190@@
+@@PRIVATE:music_annotation_191@@
+@@PRIVATE:music_annotation_192@@
+@@PRIVATE:music_annotation_193@@
+@@PRIVATE:music_annotation_194@@
             #}
-            {%- set plists = ["spotify:album:synthetic008",
-              "spotify:user:example:playlist:synthetic068",
-              "spotify:user:example:playlist:synthetic060",
-              "spotify:user:example:playlist:synthetic057",
-              "spotify:user:example:playlist:synthetic067",
-              "spotify:user:example:playlist:synthetic070",
-              "spotify:playlist:synthetic027",
-              "spotify:user:example:playlist:synthetic065",
-              "spotify:playlist:synthetic029",
-              "spotify:artist:synthetic009",
-              "spotify:user:example:playlist:synthetic052",
-              "spotify:playlist:synthetic031",
-              "spotify:album:synthetic005",
-              "spotify:user:example:playlist:synthetic054",
-              "spotify:playlist:synthetic025",
-              "spotify:user:example:playlist:synthetic056",
-              "spotify:user:example:playlist:synthetic053",
-              "spotify:user:example:playlist:synthetic055",
-              "spotify:user:example:playlist:synthetic051",
-              "spotify:user:example:playlist:synthetic070",
-              "spotify:user:example:playlist:synthetic063",
-              "spotify:playlist:synthetic035",
-              "spotify:playlist:synthetic030",
-              "spotify:playlist:synthetic020",
-              "spotify:playlist:synthetic018",
-              "spotify:playlist:synthetic017",
-              "spotify:playlist:synthetic024",
-              "spotify:playlist:synthetic011",
-              "spotify:playlist:synthetic037",
-              "spotify:playlist:synthetic045",
-              "spotify:playlist:synthetic012",
-              "spotify:playlist:synthetic019",
-              "https://ice1.somafm.com/example-002",
-              "https://ice1.somafm.com/example-001",
-              "https://ice1.somafm.com/example-003",
-              "https://ice1.somafm.com/example-004",
-              "https://ice1.somafm.com/example-005",
-              "spotify:playlist:synthetic014"
+            {%- set plists = ["@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_068@@",
+              "@@PRIVATE:music_uri_060@@",
+              "@@PRIVATE:music_uri_057@@",
+              "@@PRIVATE:music_uri_067@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_065@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_009@@",
+              "@@PRIVATE:music_uri_052@@",
+              "@@PRIVATE:music_uri_031@@",
+              "@@PRIVATE:music_uri_005@@",
+              "@@PRIVATE:music_uri_054@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_018@@",
+              "@@PRIVATE:music_uri_017@@",
+              "@@PRIVATE:music_uri_024@@",
+              "@@PRIVATE:music_uri_011@@",
+              "@@PRIVATE:music_uri_037@@",
+              "@@PRIVATE:music_uri_045@@",
+              "@@PRIVATE:music_uri_012@@",
+              "@@PRIVATE:music_uri_019@@",
+              "@@PRIVATE:media_stream_002@@",
+              "@@PRIVATE:media_stream_001@@",
+              "@@PRIVATE:media_stream_003@@",
+              "@@PRIVATE:media_stream_004@@",
+              "@@PRIVATE:media_stream_005@@",
+              "@@PRIVATE:music_uri_014@@"
               ] -%}
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
@@ -2081,9 +2081,9 @@ script:
             {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
                else 'media_player.ma_group_everywhere' }}
           bedtime_media_type: "{{ 'radio' if 'somafm.com' in playlist else '' }}"
-          bedtime_apple_music_fallback_uri: "apple_music://track/0000000000"
+          bedtime_apple_music_fallback_uri: "@@PRIVATE:media_apple_music_fallback@@"
           bedtime_apple_music_fallback_media_type: ""
-          bedtime_local_library_fallback_uri: "library://radio/0"
+          bedtime_local_library_fallback_uri: "@@PRIVATE:media_local_radio_fallback@@"
           bedtime_local_library_fallback_media_type: radio
           bedtime_pre_playback_fingerprint: >-
             {{ [
@@ -2414,90 +2414,90 @@ script:
       - variables:
           playlist: >-
             {#
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
-            ## Synthetic music note
+@@PRIVATE:music_annotation_195@@
+@@PRIVATE:music_annotation_196@@
+@@PRIVATE:music_annotation_197@@
+@@PRIVATE:music_annotation_198@@
+@@PRIVATE:music_annotation_199@@
+@@PRIVATE:music_annotation_200@@
+@@PRIVATE:music_annotation_201@@
+@@PRIVATE:music_annotation_202@@
+@@PRIVATE:music_annotation_203@@
+@@PRIVATE:music_annotation_204@@
+@@PRIVATE:music_annotation_205@@
+@@PRIVATE:music_annotation_206@@
+@@PRIVATE:music_annotation_207@@
+@@PRIVATE:music_annotation_208@@
+@@PRIVATE:music_annotation_209@@
+@@PRIVATE:music_annotation_210@@
+@@PRIVATE:music_annotation_211@@
+@@PRIVATE:music_annotation_212@@
+@@PRIVATE:music_annotation_213@@
+@@PRIVATE:music_annotation_214@@
+@@PRIVATE:music_annotation_215@@
+@@PRIVATE:music_annotation_216@@
+@@PRIVATE:music_annotation_217@@
+@@PRIVATE:music_annotation_218@@
+@@PRIVATE:music_annotation_219@@
+@@PRIVATE:music_annotation_220@@
+@@PRIVATE:music_annotation_221@@
+@@PRIVATE:music_annotation_222@@
+@@PRIVATE:music_annotation_223@@
+@@PRIVATE:music_annotation_224@@
+@@PRIVATE:music_annotation_225@@
+@@PRIVATE:music_annotation_226@@
+@@PRIVATE:music_annotation_227@@
+@@PRIVATE:music_annotation_228@@
+@@PRIVATE:music_annotation_229@@
+@@PRIVATE:music_annotation_230@@
+@@PRIVATE:music_annotation_231@@
+@@PRIVATE:music_annotation_232@@
+@@PRIVATE:music_annotation_233@@
+@@PRIVATE:music_annotation_234@@
+@@PRIVATE:music_annotation_235@@
+@@PRIVATE:music_annotation_236@@
+@@PRIVATE:music_annotation_237@@
+@@PRIVATE:music_annotation_238@@
+@@PRIVATE:music_annotation_239@@
+@@PRIVATE:music_annotation_240@@
+@@PRIVATE:music_annotation_241@@
+@@PRIVATE:music_annotation_242@@
+@@PRIVATE:music_annotation_243@@
+@@PRIVATE:music_annotation_244@@
+@@PRIVATE:music_annotation_245@@
+@@PRIVATE:music_annotation_246@@
+@@PRIVATE:music_annotation_247@@
             #}
             {%- set plists = [
-              "spotify:user:example:playlist:synthetic061",
-              "spotify:user:example:playlist:synthetic062",
-              "spotify:user:example:playlist:synthetic071",
-              "spotify:user:example:playlist:synthetic058",
-              "spotify:user:example:playlist:synthetic059",
-              "spotify:playlist:synthetic023",
-              "spotify:album:synthetic004",
-              "spotify:playlist:synthetic032",
-              "spotify:album:synthetic006",
-              "spotify:album:synthetic002",
-              "spotify:album:synthetic001",
-              "spotify:user:example:playlist:synthetic066",
-              "spotify:user:example:playlist:synthetic064",
-              "spotify:playlist:synthetic025",
-              "spotify:user:example:playlist:synthetic056",
-              "spotify:user:example:playlist:synthetic053",
-              "spotify:user:example:playlist:synthetic055",
-              "spotify:user:example:playlist:synthetic051",
-              "spotify:user:example:playlist:synthetic070",
-              "spotify:user:example:playlist:synthetic063",
-              "spotify:playlist:synthetic035",
-              "spotify:playlist:synthetic030",
-              "spotify:playlist:synthetic020",
-              "spotify:playlist:synthetic037",
-              "spotify:playlist:synthetic045",
-              "spotify:playlist:synthetic050",
-              "spotify:playlist:synthetic041",
-              "spotify:playlist:synthetic028",
-              "spotify:playlist:synthetic042",
+              "@@PRIVATE:music_uri_061@@",
+              "@@PRIVATE:music_uri_062@@",
+              "@@PRIVATE:music_uri_071@@",
+              "@@PRIVATE:music_uri_058@@",
+              "@@PRIVATE:music_uri_059@@",
+              "@@PRIVATE:music_uri_023@@",
+              "@@PRIVATE:music_uri_004@@",
+              "@@PRIVATE:music_uri_032@@",
+              "@@PRIVATE:music_uri_006@@",
+              "@@PRIVATE:music_uri_002@@",
+              "@@PRIVATE:music_uri_001@@",
+              "@@PRIVATE:music_uri_066@@",
+              "@@PRIVATE:music_uri_064@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_037@@",
+              "@@PRIVATE:music_uri_045@@",
+              "@@PRIVATE:music_uri_050@@",
+              "@@PRIVATE:music_uri_041@@",
+              "@@PRIVATE:music_uri_028@@",
+              "@@PRIVATE:music_uri_042@@",
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}

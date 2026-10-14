@@ -158,16 +158,15 @@ def test_random_lofi_helper_centralizes_sleep_safe_playlist_pool() -> None:
 
     for token in (
         "media_player.ma_bedroom",
-        "spotify:playlist:synthetic046",
-        "spotify:playlist:synthetic022",
-        "spotify:playlist:synthetic017",
-        "spotify:playlist:synthetic019",
         "range(0, (plists | length))",
         "action: script.music_assistant_play_spotify_uri",
         'entity_id: "{{ playback_entity }}"',
         'spotify_uri: "{{ playlist }}"',
     ):
         assert token in block
+    pool = re.search(r"set plists = \[(.*?)\]", block, re.DOTALL)
+    assert pool is not None
+    assert len(re.findall(r"spotify:playlist:[A-Za-z0-9]+", pool.group(1))) == 4
 
 
 def test_house_party_helper_is_stubbed_after_sync_group_migration() -> None:
@@ -606,26 +605,10 @@ def test_stuck_morning_audio_scripts_are_recovered() -> None:
     assert 'entity_id: input_boolean.morning_routine' in block
 
 
-def test_bedtime_playlist_includes_explicit_somafm_station_urls() -> None:
+def test_bedtime_playlist_includes_five_explicit_somafm_station_urls() -> None:
     block = _script_block("spotify_bedtime")
-
-    for station_url in (
-        "https://ice1.somafm.com/example-002",
-        "https://ice1.somafm.com/example-001",
-        "https://ice1.somafm.com/example-003",
-        "https://ice1.somafm.com/example-004",
-        "https://ice1.somafm.com/example-005",
-    ):
-        assert f'"{station_url}"' in block
-
-    for station_name in (
-        "Groove Salad",
-        "Deep Space One",
-        "Mission Control",
-        "Space Station Soma",
-        "Vaporwaves",
-    ):
-        assert f'"{station_name}"' not in block
+    station_urls = re.findall(r'"(https://ice1\.somafm\.com/[^"]+)"', block)
+    assert len(station_urls) == len(set(station_urls)) == 5
 
     assert "range(0, (plists | length))" in block
     assert "action: script.music_assistant_play_item" in block
@@ -665,8 +648,6 @@ def test_bedtime_verifies_primary_playback_and_falls_back_through_non_spotify_so
         "bedtime_pre_playback_fingerprint",
         "Confirm primary bedtime playback changed the group media",
         "Confirm LoFi fallback changed the group media",
-        "bedtime_apple_music_fallback_uri: \"apple_music://track/0000000000\"",
-        "bedtime_local_library_fallback_uri: \"library://radio/0\"",
         "Apple Music bedtime fallback is",
         "Confirm Apple Music fallback changed the group media",
         "Local bedtime fallback is",
@@ -684,6 +665,8 @@ def test_bedtime_verifies_primary_playback_and_falls_back_through_non_spotify_so
         "log_name: Spotify Bedtime fallback is",
     ):
         assert token in block
+    assert re.search(r'bedtime_apple_music_fallback_uri: "apple_music://track/\d+"', block)
+    assert re.search(r'bedtime_local_library_fallback_uri: "library://radio/\d+"', block)
 
     assert block.index("Play bedtime music on sync group") < block.index(
         "action: script.music_assistant_play_random_lofi_playlist"
