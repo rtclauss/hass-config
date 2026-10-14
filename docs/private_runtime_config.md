@@ -31,7 +31,7 @@ The current live media package matched the former tracked file byte for byte.
 A fresh copy was byte-verified at
 `.private-runtime-backup/current-config/packages/media_player.before-template-2026-10-14.yaml`
 on that host. Preserve that backup and the private mapping before updating its
-checkout. The live mapping is staged with 335 keys under a root-owned
+checkout. The live mapping is staged under a root-owned
 directory (mode 0700); its file is mode 0600. After Git stops tracking the
 package, run the renderer as an account that can read that mapping (root on
 the current host), then run `python3 scripts/render_private_config.py --check`
@@ -166,13 +166,23 @@ CI uses synthetic station and water-meter URLs and an example domain.
 
 ## Private zones
 
-The zone package reads private names and coordinates from `secrets.yaml`.
-The live `secrets.yaml` already has these keys, and its pre-change contents
+The zone package is rendered from `private_templates/zone.yaml.tmpl` and the
+ignored private mapping. The template hides person and place names, zone keys,
+presence identifiers, and secret-key names that identify private locations.
+Its scalar names and coordinates still resolve through root `secrets.yaml`.
+The live `secrets.yaml` already has those values, and its pre-change contents
 were byte-verified under
 `.private-runtime-backup/current-config/secrets.before-zone-privacy.yaml`.
 Keep that file private. Before updating another installation, populate the
-`private_zone_XX_*` keys with its own zone values. The values in
-`travis_secrets.example.yaml` are synthetic and intended only for CI.
+`private_zone_XX_*` keys and the private render mapping with its own values.
+The current live zone file is byte-verified at
+`.private-runtime-backup/current-config/packages/zone.before-template-2026-10-14.yaml`.
+The real zone render matches the tracked source byte for byte; with live
+secrets resolved, it is structurally equivalent to the live file. Render it
+from the private mapping after Git stops tracking it and before any reload.
+The values in `travis_secrets.example.yaml` and
+`examples/private_values.example.json` are synthetic and intended only for
+tests and CI.
 
 ## Archived AppDaemon and ESPHome comments
 
