@@ -152,7 +152,44 @@ homeassistant:
 ################################################
 ## Automation
 ################################################
-automation: []
+automation:
+  - id: living_room_camera_animal_detected_notify
+    alias: "Dining Room Camera — Notify on animal/pet detection"
+    description: >
+      Scrypted's Home Assistant integration exposes object detections as an
+      event entity whose event_type is the detected class. Notify when the
+      Dining Room camera (legacy "living room" entity ids; see
+      docs/security_dashboard.md) reports an animal or common pet class. The cooldown
+      keeps a lingering pet from spamming notifications. Transitions out of
+      unavailable/unknown (Scrypted reconnects restore the cached last event)
+      are ignored so they do not look like new detections.
+    trace:
+      stored_traces: 100
+    triggers:
+      - trigger: state
+        entity_id: event.living_room_camera_object_detected
+        id: detection
+    conditions:
+      - condition: template
+        value_template: >
+          {{ trigger.from_state is not none
+             and trigger.from_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state is not none
+             and trigger.to_state.attributes.event_type | default('')
+                 in ['animal', 'dog', 'cat'] }}
+    actions:
+      - action: notify.notify_all
+        data:
+          title: "Pet spotted"
+          message: >
+            Dining Room camera detected
+            {{ trigger.to_state.attributes.label
+               | default(trigger.to_state.attributes.event_type, true) }}.
+          data:
+            tag: living_room_camera_animal
+            group: camera
+      - delay: "00:05:00"
+    mode: single
 
 ########################
 # Binary Sensors
