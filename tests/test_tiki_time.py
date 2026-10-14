@@ -81,7 +81,7 @@ def test_tiki_time_color_cycle_targets_individual_color_lights() -> None:
         "light.kitchen_overhead_1",
         "light.kitchen_overhead_7",
         "light.kitchen_sink_overhead",
-        "light.east_table_lamp",
+        "light.office_east_table_lamp",
         "light.west_table_lamp",
         "light.tiki_room_floor_lamp",
         "light.tiki_room_lights_tiki_room_strip",
