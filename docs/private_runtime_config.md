@@ -14,8 +14,28 @@ required key before writing, requires every output to be untracked and
 Git-ignored, creates files with owner-only permissions, and does not print
 values. CI validates the committed manifest and
 `examples/private_values.example.json` without writing outputs; that example
-must contain only synthetic values. The manifest has no targets until the first
-package is migrated.
+must contain only synthetic values. The media package is the first manifest
+target.
+
+## Private media package
+
+`packages/media_player.yaml` is generated locally from
+`private_templates/media_player.yaml.tmpl` and the ignored
+`.private-runtime-config/values.json`. The private mapping holds playlist and
+provider item IDs, stream choices, playlist annotations and labels, and an NFC
+tag ID. The committed example values render a synthetic package for CI. Never
+render those example values on the live host.
+
+The current live media package matched the former tracked file byte for byte.
+A fresh copy was byte-verified at
+`.private-runtime-backup/current-config/packages/media_player.before-template-2026-10-14.yaml`
+on that host. Preserve that backup and the private mapping before updating its
+checkout. The live mapping is staged with 334 keys under a root-owned
+directory (mode 0700); its file is mode 0600. After Git stops tracking the
+package, run the renderer as an account that can read that mapping (root on
+the current host), then run `python3 scripts/render_private_config.py --check`
+before any Home Assistant reload. The private render is byte-identical to the
+live baseline; the example render is only for CI.
 
 The retained-topic cleanup utility reads broker connection settings from a
 private Mosquitto client config file, never from committed shell arguments.

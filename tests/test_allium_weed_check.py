@@ -502,7 +502,23 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         },
     ]
     assert classified_gaps[: len(expected)] == expected
-    privacy_gaps = classified_gaps[len(expected) :]
+    later_gaps = classified_gaps[len(expected) :]
+    privacy_gaps = [
+        gap for gap in later_gaps
+        if gap["classification"] == "private device identifier indirection"
+    ]
+    media_gaps = [
+        gap for gap in later_gaps
+        if gap["classification"] == "private media template migration"
+    ]
+    assert {gap["spec"] for gap in media_gaps} == {
+        "specs/alarm_wakeup.allium",
+        "specs/night_routines.allium",
+    }
+    assert all(
+        "private_templates/media_player.yaml.tmpl" in gap["implementation_paths"]
+        for gap in media_gaps
+    )
     assert {(gap["spec"], tuple(gap["implementation_paths"])) for gap in privacy_gaps} == {
         ("specs/alarm_wakeup.allium", ("packages/workday.yaml",)),
         ("specs/diffusers.allium", ("packages/workday.yaml",)),
