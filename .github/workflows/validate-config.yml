@@ -42,6 +42,9 @@ jobs:
       - name: Validate private config templates
         run: python scripts/render_private_config.py --values examples/private_values.example.json --validate
 
+      - name: Render synthetic private config
+        run: python scripts/render_private_config.py --values examples/private_values.example.json
+
       - name: Run pytest
         run: uv run --with pytest --with pyyaml --with jinja2 pytest
 
@@ -124,6 +127,9 @@ jobs:
 
       - name: Prepare public automation example
         run: cp automations.example.yaml automations.yaml
+
+      - name: Render synthetic private config
+        run: python scripts/render_private_config.py --values examples/private_values.example.json
 
       - name: Lint YAML files
         run: |
@@ -339,6 +345,9 @@ jobs:
           cp travis_secrets.example.yaml secrets.yaml
           cp automations.example.yaml automations.yaml
           cp examples/z2m_availability.yaml packages/z2m_availability.yaml
+
+      - name: Render synthetic private config
+        run: python scripts/render_private_config.py --values examples/private_values.example.json
 
       - name: Fill missing secrets with CI placeholders
         run: |

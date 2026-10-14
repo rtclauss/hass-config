@@ -117,12 +117,12 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+@@PRIVATE:music_annotation_001@@
       #     command: "rotate_left"
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+@@PRIVATE:music_annotation_002@@
       #     command: "rotate_right"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action_angle
@@ -151,7 +151,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+@@PRIVATE:music_annotation_003@@
       #     command: "knock"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action
@@ -217,7 +217,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+@@PRIVATE:music_annotation_004@@
       #     command: "flip"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action_to_side
@@ -243,7 +243,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+@@PRIVATE:music_annotation_005@@
       #     command: "slide"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action
@@ -261,7 +261,7 @@ automation:
       # - platform: event
       #   event_type: zha_event
       #   event_data:
-      #     device_ieee: "00:15:8d:00:02:8f:66:12"
+@@PRIVATE:music_annotation_006@@
       #     command: "shake"
       - trigger: state
         entity_id: sensor.owner_suite_cube_action
@@ -379,7 +379,7 @@ automation:
         event_type: tag_scanned
         event_data:
           device_id: FA07CA5F-46D6-45E8-BFFA-F021058CCA7A
-          tag_id: 78025adc-36ac-4150-9514-9e68767ef13e
+          tag_id: @@PRIVATE:media_nfc_tag_id@@
     action:
       - action: media_player.join
         data:
@@ -415,32 +415,32 @@ automation:
         condition: template
         value_template: >-
           {# input_datetime.weekday_alarm/weekend_alarm are has_date: false,
-             so their timestamp attribute is seconds since midnight (e.g.
-             07:30:00 -> 27000), not a Unix epoch value — confirmed live.
-             Comparing that against now().timestamp() (~1.8 billion) made
-             the window condition permanently false, so this automation
-             could never fire (Codex P1 on #972). Mirrors the seconds-
-             since-midnight comparison workday.yaml already uses for the
-             same alarm helpers (workday_owner_suite_wake_transition_from_
+@@PRIVATE:music_annotation_007@@
+@@PRIVATE:music_annotation_008@@
+@@PRIVATE:music_annotation_009@@
+@@PRIVATE:music_annotation_010@@
+@@PRIVATE:music_annotation_011@@
+@@PRIVATE:music_annotation_012@@
+@@PRIVATE:music_annotation_013@@
              morning_activity, #939). #}
           {# alarm_wake_up requires binary_sensor.workday_sensor to be
-             explicitly "on" for its weekday branch and explicitly "off"
-             for its weekend branch — an unknown/unavailable state (e.g.
-             during startup) satisfies neither, so no real alarm can fire
-             at all. is_state(..., 'on') alone can't distinguish "off" from
-             "unknown"/"unavailable" (both are simply "not on"), so this
-             used to fall through to the weekend path in the unavailable
-             case and could still open a window off a persistent weekend
-             alarm even though alarm_wake_up itself would stay silent
+@@PRIVATE:music_annotation_014@@
+@@PRIVATE:music_annotation_015@@
+@@PRIVATE:music_annotation_016@@
+@@PRIVATE:music_annotation_017@@
+@@PRIVATE:music_annotation_018@@
+@@PRIVATE:music_annotation_019@@
+@@PRIVATE:music_annotation_020@@
+@@PRIVATE:music_annotation_021@@
              (Codex P2 follow-up on #972). #}
           {% set workday_sensor_state = states('binary_sensor.workday_sensor') %}
           {% if workday_sensor_state == 'on' %}
             {# A special meeting can wake the resident earlier than the
-               weekday alarm (alarm_wake_up's meeting-alarm branch, gated on
-               input_boolean.special_meeting) — mirrors the candidate-
-               selection pattern workday_owner_suite_wake_transition_from_
-               morning_activity already uses for the same helpers (#939),
-               so a bathroom trip after that earlier real wakeup isn't
+@@PRIVATE:music_annotation_022@@
+@@PRIVATE:music_annotation_023@@
+@@PRIVATE:music_annotation_024@@
+@@PRIVATE:music_annotation_025@@
+@@PRIVATE:music_annotation_026@@
                rejected for being before the weekday alarm (Codex P2). #}
             {% set candidates = [
                  state_attr('input_datetime.weekday_alarm', 'timestamp')
@@ -460,29 +460,29 @@ automation:
           {% set now_seconds_since_midnight = now().hour * 3600 + now().minute * 60 + now().second %}
           {% set wake_window_seconds = 90 * 60 %}
           {# alarm_wake_up's meeting-alarm branch turns special_meeting off
-             the instant it fires (packages/workday.yaml), before the
-             resident can reach the bathroom — so by the time this template
-             re-evaluates, the candidate list above no longer sees it and
-             falls back to the later weekday alarm (Codex P2 follow-up on
-             #972). wakeup_alarm_firing is a durable signal that some alarm
-             fired, but it is NOT bounded by this automation's window on
-             its own: turn_off_alarm_firing (packages/light.yaml) only
-             clears it at a fixed 14:34:56, not on cancel or after any
-             reasonable delay, so an unbounded OR here reopened
-             essentially the original unbounded-window bug for up to ~7
-             hours after an early alarm (Codex P1 follow-up on #972).
-             Bound it to the same wake_window_seconds using the real fire
-             time — wake_up_script records it explicitly in a restart-safe
-             input_datetime, unlike wakeup_alarm_firing's own last_changed,
-             which resets on restore instead of preserving the original
-             fire time (Codex P2 follow-up on #972). Do NOT additionally
-             require wakeup_alarm_firing itself to still read "on": that
-             same fixed 14:34:56 clear-out is uncorrelated with a variable-
-             length window — a special-meeting alarm firing later than
-             usual (e.g. 14:00, 90-minute window until 15:30) had this
-             latch cleared out from under it at 14:34:56, 34 minutes into
-             its own window, incorrectly closing the gate early (Codex P2
-             follow-up on #972). The elapsed-time check against the fire
+@@PRIVATE:music_annotation_027@@
+@@PRIVATE:music_annotation_028@@
+@@PRIVATE:music_annotation_029@@
+@@PRIVATE:music_annotation_030@@
+@@PRIVATE:music_annotation_031@@
+@@PRIVATE:music_annotation_032@@
+@@PRIVATE:music_annotation_033@@
+@@PRIVATE:music_annotation_034@@
+@@PRIVATE:music_annotation_035@@
+@@PRIVATE:music_annotation_036@@
+@@PRIVATE:music_annotation_037@@
+@@PRIVATE:music_annotation_038@@
+@@PRIVATE:music_annotation_039@@
+@@PRIVATE:music_annotation_040@@
+@@PRIVATE:music_annotation_041@@
+@@PRIVATE:music_annotation_042@@
+@@PRIVATE:music_annotation_043@@
+@@PRIVATE:music_annotation_044@@
+@@PRIVATE:music_annotation_045@@
+@@PRIVATE:music_annotation_046@@
+@@PRIVATE:music_annotation_047@@
+@@PRIVATE:music_annotation_048@@
+@@PRIVATE:music_annotation_049@@
              timestamp is sufficient on its own and needs no such latch. #}
           {% set alarm_firing_recently =
                (as_timestamp(now()) - (state_attr('input_datetime.wakeup_alarm_fired_at', 'timestamp') | float(0))) <= wake_window_seconds %}
@@ -1013,15 +1013,15 @@ script:
       - variables:
           playlist: >-
             {#
-            ##  Lowfi Sleep: spotify:playlist:6VHsDUVy0Hj79qMvOohTKV
-            ##  Chill Lofi Study Beats: spotify:playlist:37i9dQZF1DX8Uebhn9wzrS
-            ##  Spotify Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
-            ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
+@@PRIVATE:music_annotation_050@@
+@@PRIVATE:music_annotation_051@@
+@@PRIVATE:music_annotation_052@@
+@@PRIVATE:music_annotation_053@@
             #}
-            {%- set plists = ["spotify:playlist:6VHsDUVy0Hj79qMvOohTKV",
-              "spotify:playlist:37i9dQZF1DX8Uebhn9wzrS",
-              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
-              "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2"
+            {%- set plists = ["@@PRIVATE:music_uri_046@@",
+              "@@PRIVATE:music_uri_022@@",
+              "@@PRIVATE:music_uri_017@@",
+              "@@PRIVATE:music_uri_019@@"
               ] -%}
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
@@ -1406,7 +1406,7 @@ script:
       effective_max_ramp_iterations: >-
         {{ (([effective_peak_volume, effective_bedroom_peak_volume, effective_office_peak_volume] | max) / effective_step_volume) | round(0, 'ceil') + 10 }}
       effective_fallback_uri: >-
-        {{ fallback_uri | default('spotify:playlist:37i9dQZF1DX7KNKjOK0o75', true) }}
+        {{ fallback_uri | default('@@PRIVATE:music_uri_021@@', true) }}
       effective_fallback_media_type: "{{ fallback_media_type | default('playlist', true) }}"
       effective_verify_timeout: "{{ verify_timeout | default(20) | int(20) }}"
       effective_retry_backoff: "{{ retry_backoff | default(15) | int(15) }}"
@@ -1615,129 +1615,129 @@ script:
           log_name: Cube Playlist is
 
   bedroom_playlist_1:
-    alias: "Play Guster"
+@@PRIVATE:music_label_1618@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ## Showbox Seattle 2/16/19: spotify:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## MN Zoo 7/22/19: spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl
-            ## First Ave 2/9/19: spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## w/Oregon Orchestra: spotify:playlist:6al92r67tCsIrZygrIr6d6
-            ## Almost every song, ever: spotify:playlist:4z7avZTuCTdFD2uGfG6GvL
-            ## Guster Radio: spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Guster Accoustic: spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL
-            ## OMAGAH: spotify:album:33dmmZ0Zg1yvFor6pCuYGm
-            ## Lost and Gone Forever: Live: spotify:album:5DDNife8S8H4uSYRFkYUNw
-            ## With Utah Orchestra 7/29/22: spotify:playlist:2pkBoRddjDNLJgElp0rl45
-            ## Utepils 7/8/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+@@PRIVATE:music_annotation_054@@
+@@PRIVATE:music_annotation_055@@
+@@PRIVATE:music_annotation_056@@
+@@PRIVATE:music_annotation_057@@
+@@PRIVATE:music_annotation_058@@
+@@PRIVATE:music_annotation_059@@
+@@PRIVATE:music_annotation_060@@
+@@PRIVATE:music_annotation_061@@
+@@PRIVATE:music_annotation_062@@
+@@PRIVATE:music_annotation_063@@
+@@PRIVATE:music_annotation_064@@
             #}
-            {%- set plists = ["spotify:playlist:65fTj3YJl4jvFmXxru7BfO",
-            "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-            "spotify:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-            "spotify:playlist:6al92r67tCsIrZygrIr6d6",
-            "spotify:playlist:4z7avZTuCTdFD2uGfG6GvL",
-            "spotify:playlist:6FOsJt1HpOSkFpMgMgfVzL",
-            "spotify:album:33dmmZ0Zg1yvFor6pCuYGm",
-            "spotify:album:5DDNife8S8H4uSYRFkYUNw",
-            "spotify:playlist:2pkBoRddjDNLJgElp0rl45",
-            "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
+            {%- set plists = ["@@PRIVATE:music_uri_043@@",
+            "@@PRIVATE:music_uri_035@@",
+            "@@PRIVATE:music_uri_038@@",
+            "@@PRIVATE:music_uri_047@@",
+            "@@PRIVATE:music_uri_040@@",
+            "@@PRIVATE:music_uri_044@@",
+            "@@PRIVATE:music_uri_003@@",
+            "@@PRIVATE:music_uri_007@@",
+            "@@PRIVATE:music_uri_015@@",
+            "@@PRIVATE:music_uri_037@@"
             ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: Guster
+@@PRIVATE:music_label_1652@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_2:
-    alias: "Play Joe Pera"
+@@PRIVATE:music_label_1656@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ## Sweater Weather Instrumentals: spotify:playlist:37i9dQZF1DWUvZBXGjNCU4
-            ## Joe Pera Talks You to Sleep: spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ
-            ## Joe Pera Listens to all of Joe Pera: spotify:playlist:6z6y5fEt0QIUuC64w1VOw4
-            ## Holland Patent Public Radio: spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr
+@@PRIVATE:music_annotation_065@@
+@@PRIVATE:music_annotation_066@@
+@@PRIVATE:music_annotation_067@@
+@@PRIVATE:music_annotation_068@@
             #}
-            {%- set plists = ["spotify:playlist:37i9dQZF1DWUvZBXGjNCU4",
-              "spotify:playlist:1yaIzyYf3wtCbWTzKTR4pZ",
-              "spotify:playlist:6z6y5fEt0QIUuC64w1VOw4",
-              "spotify:playlist:7gU7Ul8SuSReUTGYJMv9jr"
+            {%- set plists = ["@@PRIVATE:music_uri_016@@",
+              "@@PRIVATE:music_uri_013@@",
+              "@@PRIVATE:music_uri_048@@",
+              "@@PRIVATE:music_uri_049@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: Joe Pera
+@@PRIVATE:music_label_1677@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_3:
-    alias: "Play VaporWave and Retro"
+@@PRIVATE:music_label_1681@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ##  Vaporwave Aesthetic Mix: spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5
-            ##  RetroWave/Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
-            ##  REtrowave/Synthwave: spotify:playlist:3ebHKSjHujS4Tyt2KKP97R
-            ##  Synthwave from Space: spotify:playlist:4sgUux9hmykyWYmVoe4W6p
+@@PRIVATE:music_annotation_069@@
+@@PRIVATE:music_annotation_070@@
+@@PRIVATE:music_annotation_071@@
+@@PRIVATE:music_annotation_072@@
             #}
-            {%- set plists = ["spotify:playlist:0LbHaoYiD4HCZrrHsf5JK5",
-              "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
-              "spotify:playlist:3ebHKSjHujS4Tyt2KKP97R",
-              "spotify:playlist:4sgUux9hmykyWYmVoe4W6p"
+            {%- set plists = ["@@PRIVATE:music_uri_010@@",
+              "@@PRIVATE:music_uri_024@@",
+              "@@PRIVATE:music_uri_036@@",
+              "@@PRIVATE:music_uri_039@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: RetroWave
+@@PRIVATE:music_label_1702@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_4:
-    alias: "Play Alt/Independent"
+@@PRIVATE:music_label_1706@@
     trace:
       stored_traces: 50
     sequence:
       - variables:
           playlist: >-
             {#
-            ##  This is The Wombats: spotify:playlist:37i9dQZF1DZ06evO0vIZz2
-            ##  This is Passion Pit: spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ##  Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu
-            ##  This is The Mountain Goats : spotify:playlist:37i9dQZF1DZ06evO1U0vAp
-            ##  This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
-            ##  This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ##  Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
-            ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
-            ## MGMT Kids Playlist: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
-            ## This is Walk the Moon: spotify:playlist:37i9dQZF1DZ06evO3VghcA
+@@PRIVATE:music_annotation_073@@
+@@PRIVATE:music_annotation_074@@
+@@PRIVATE:music_annotation_075@@
+@@PRIVATE:music_annotation_076@@
+@@PRIVATE:music_annotation_077@@
+@@PRIVATE:music_annotation_078@@
+@@PRIVATE:music_annotation_079@@
+@@PRIVATE:music_annotation_080@@
+@@PRIVATE:music_annotation_081@@
+@@PRIVATE:music_annotation_082@@
+@@PRIVATE:music_annotation_083@@
             #}
-            {%- set plists = ["spotify:playlist:37i9dQZF1DZ06evO0vIZz2",
-              "spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:album:78bpIziExqiI9qztvNFlQu",
-              "spotify:playlist:37i9dQZF1DZ06evO1U0vAp",
-              "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw",
-              "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
-              "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
-              "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
-              "spotify:playlist:37i9dQZF1DZ06evO3VghcA"
+            {%- set plists = ["@@PRIVATE:music_uri_026@@",
+              "@@PRIVATE:music_uri_034@@",
+              "@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_069@@",
+              "@@PRIVATE:music_uri_071@@",
+              "@@PRIVATE:music_uri_058@@",
+              "@@PRIVATE:music_uri_059@@",
+              "@@PRIVATE:music_uri_033@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
       - action: script.music_assistant_play_bedroom_playlist_choice
         data:
-          playlist_name: Alt/Independent
+@@PRIVATE:music_label_1740@@
           playlist: "{{ playlist }}"
 
   bedroom_playlist_5:
@@ -1790,81 +1790,81 @@ script:
       - variables:
           playlist: >-
             {#
-            ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu
-            ## All Out 90s : spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
-            ## 2000s Smash Hits : spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw
-            ## 2019 Sealand Invitiational : spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5
-            ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
-            ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
-            ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DZ06evO1U0vAp
-            ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
-            ## This is The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
-            ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
-            ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
-            ## This is Jimmy Eat World : spotify:playlist:37i9dQZF1DZ06evO25r82I
-            ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
-            ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
-            ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
-            ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
-            ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
-            ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
-            ## This is The Lumineers : spotify:playlist:37i9dQZF1DZ06evO0AGqf6
-            ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
-            ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
-            ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
-            ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decembersits Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
-            ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
-            ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
-            ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
-            ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
-            ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
-            ## This is Tool : spotify:playlist:37i9dQZF1DZ06evO1sZyol
-            ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DX5Ejj0EkURtP
-            ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
-            ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
-            ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
-            ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
-            ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
-            ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
-            ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
-            ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
-            ## Guster w/Utah Orchestra (7/29/22): spotify:playlist:4gmNQHup10wDckuwWL3IFZ
+@@PRIVATE:music_annotation_084@@
+@@PRIVATE:music_annotation_085@@
+@@PRIVATE:music_annotation_086@@
+@@PRIVATE:music_annotation_087@@
+@@PRIVATE:music_annotation_088@@
+@@PRIVATE:music_annotation_089@@
+@@PRIVATE:music_annotation_090@@
+@@PRIVATE:music_annotation_091@@
+@@PRIVATE:music_annotation_092@@
+@@PRIVATE:music_annotation_093@@
+@@PRIVATE:music_annotation_094@@
+@@PRIVATE:music_annotation_095@@
+@@PRIVATE:music_annotation_096@@
+@@PRIVATE:music_annotation_097@@
+@@PRIVATE:music_annotation_098@@
+@@PRIVATE:music_annotation_099@@
+@@PRIVATE:music_annotation_100@@
+@@PRIVATE:music_annotation_101@@
+@@PRIVATE:music_annotation_102@@
+@@PRIVATE:music_annotation_103@@
+@@PRIVATE:music_annotation_104@@
+@@PRIVATE:music_annotation_105@@
+@@PRIVATE:music_annotation_106@@
+@@PRIVATE:music_annotation_107@@
+@@PRIVATE:music_annotation_108@@
+@@PRIVATE:music_annotation_109@@
+@@PRIVATE:music_annotation_110@@
+@@PRIVATE:music_annotation_111@@
+@@PRIVATE:music_annotation_112@@
+@@PRIVATE:music_annotation_113@@
+@@PRIVATE:music_annotation_114@@
+@@PRIVATE:music_annotation_115@@
+@@PRIVATE:music_annotation_116@@
+@@PRIVATE:music_annotation_117@@
+@@PRIVATE:music_annotation_118@@
+@@PRIVATE:music_annotation_119@@
+@@PRIVATE:music_annotation_120@@
+@@PRIVATE:music_annotation_121@@
+@@PRIVATE:music_annotation_122@@
+@@PRIVATE:music_annotation_123@@
+@@PRIVATE:music_annotation_124@@
+@@PRIVATE:music_annotation_125@@
+@@PRIVATE:music_annotation_126@@
+@@PRIVATE:music_annotation_127@@
+@@PRIVATE:music_annotation_128@@
+@@PRIVATE:music_annotation_129@@
+@@PRIVATE:music_annotation_130@@
+@@PRIVATE:music_annotation_131@@
+@@PRIVATE:music_annotation_132@@
             #}
-            {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu",
-              "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
-              "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
-              "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
-              "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:playlist:37i9dQZF1DZ06evO1U0vAp",
-              "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
-              "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
-              "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
-              "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
-              "spotify:playlist:37i9dQZF1DZ06evO25r82I",
-              "spotify:album:4JEgSaokMH5mMRClx9wp3S",
-              "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
-              "spotify:playlist:37i9dQZF1DZ06evO0AGqf6",
-              "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
-              "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-              "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
-              "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
-              "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-              "spotify:playlist:37i9dQZF1DZ06evO1sZyol",
-              "spotify:playlist:37i9dQZF1DX5Ejj0EkURtP",
-              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ"
+            {%- set plists = ["@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_068@@",
+              "@@PRIVATE:music_uri_060@@",
+              "@@PRIVATE:music_uri_057@@",
+              "@@PRIVATE:music_uri_067@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_065@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_009@@",
+              "@@PRIVATE:music_uri_052@@",
+              "@@PRIVATE:music_uri_031@@",
+              "@@PRIVATE:music_uri_005@@",
+              "@@PRIVATE:music_uri_054@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_037@@"
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
@@ -1972,107 +1972,107 @@ script:
       - variables:
           playlist: >-
             {#
-            ## Arctic Monkeys - AM : spotify:album:78bpIziExqiI9qztvNFlQu
-            ## All Out 90s : spotify:playlist:37i9dQZF1DXbTxeAdrVG2l
-            ## 2000s Smash Hits : spotify:playlist:2f6tXtN0XesjONxicAzMIw
-            ## 2019 Sealand Invitiational : spotify:playlist:6uNCXLheVaTbfE1HRCIsQ5
-            ## Discover Weekly: spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## 90s Acoustic: spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL
-            ## This is Passion Pit: spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Panic! at the Disco Pretty. Odd. : spotify:album:7Hk9WbjPbN1n2GXaK7aldw
-            ## This is The Mountain Goats : spotify:playlist:37i9dQZF1DZ06evO1U0vAp
-            ## It's ALT Good! : spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ
-            ## The Griswolds : spotify:playlist:37i9dQZF1DZ06evO1XPrLQ
-            ## The Wombats : spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB
-            ## The Decemberists @ Palace 2018 : spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i
-            ## This is Jimmy Eat World : spotify:playlist:37i9dQZF1DZ06evO25r82I
-            ## David Bowie Legacy : spotify:album:4JEgSaokMH5mMRClx9wp3S
-            ## This is Cake: spotify:user:spotify:playlist:37i9dQZF1DZ06evO3T3SWA
-            ## SDSU : spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1
-            ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
-            ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
-            ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
-            ## This is The Lumineers : spotify:playlist:37i9dQZF1DZ06evO0AGqf6
-            ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
-            ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
-            ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
-            ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
-            ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
-            ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
-            ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
-            ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
-            ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
-            ## This is Tool : spotify:playlist:37i9dQZF1DZ06evO1sZyol
-            ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DX5Ejj0EkURtP
-            ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
-            ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
-            ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
-            ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
-            ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
-            ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
-            ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
-            ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
-            ## 90s Pop Rock Essentials: spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
-            ## Lo-Fi Beats: spotify:playlist:37i9dQZF1DWWQRwui0ExPn
-            ## RetroWave Outrun: spotify:playlist:37i9dQZF1DXdLEN7aqioXM
-            ## Simpsons Wave: spotify:playlist:0OZV1MvJmJdeShboKpNKC8
-            ## Guster w/Utah Symphone 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
-            ## Sigur Ros @ State Theatre 5/31/2022: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
-            ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
-            ##  Darksynth | Synthwave: spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp
-            ##  Lowfi Covers: spotify:playlist:37i9dQZF1DX4nNmLlb3JR2
-            ## SomaFM Groove Salad: https://somafm.com/groovesalad.pls
-            ## SomaFM Deep Space One: https://somafm.com/deepspaceone.pls
-            ## SomaFM Mission Control: https://somafm.com/missioncontrol.pls
-            ## SomaFM Space Station Soma: https://somafm.com/spacestation.pls
-            ## SomaFM Vaporwaves: https://somafm.com/vaporwaves.pls
+@@PRIVATE:music_annotation_133@@
+@@PRIVATE:music_annotation_134@@
+@@PRIVATE:music_annotation_135@@
+@@PRIVATE:music_annotation_136@@
+@@PRIVATE:music_annotation_137@@
+@@PRIVATE:music_annotation_138@@
+@@PRIVATE:music_annotation_139@@
+@@PRIVATE:music_annotation_140@@
+@@PRIVATE:music_annotation_141@@
+@@PRIVATE:music_annotation_142@@
+@@PRIVATE:music_annotation_143@@
+@@PRIVATE:music_annotation_144@@
+@@PRIVATE:music_annotation_145@@
+@@PRIVATE:music_annotation_146@@
+@@PRIVATE:music_annotation_147@@
+@@PRIVATE:music_annotation_148@@
+@@PRIVATE:music_annotation_149@@
+@@PRIVATE:music_annotation_150@@
+@@PRIVATE:music_annotation_151@@
+@@PRIVATE:music_annotation_152@@
+@@PRIVATE:music_annotation_153@@
+@@PRIVATE:music_annotation_154@@
+@@PRIVATE:music_annotation_155@@
+@@PRIVATE:music_annotation_156@@
+@@PRIVATE:music_annotation_157@@
+@@PRIVATE:music_annotation_158@@
+@@PRIVATE:music_annotation_159@@
+@@PRIVATE:music_annotation_160@@
+@@PRIVATE:music_annotation_161@@
+@@PRIVATE:music_annotation_162@@
+@@PRIVATE:music_annotation_163@@
+@@PRIVATE:music_annotation_164@@
+@@PRIVATE:music_annotation_165@@
+@@PRIVATE:music_annotation_166@@
+@@PRIVATE:music_annotation_167@@
+@@PRIVATE:music_annotation_168@@
+@@PRIVATE:music_annotation_169@@
+@@PRIVATE:music_annotation_170@@
+@@PRIVATE:music_annotation_171@@
+@@PRIVATE:music_annotation_172@@
+@@PRIVATE:music_annotation_173@@
+@@PRIVATE:music_annotation_174@@
+@@PRIVATE:music_annotation_175@@
+@@PRIVATE:music_annotation_176@@
+@@PRIVATE:music_annotation_177@@
+@@PRIVATE:music_annotation_178@@
+@@PRIVATE:music_annotation_179@@
+@@PRIVATE:music_annotation_180@@
+@@PRIVATE:music_annotation_181@@
+@@PRIVATE:music_annotation_182@@
+@@PRIVATE:music_annotation_183@@
+@@PRIVATE:music_annotation_184@@
+@@PRIVATE:music_annotation_185@@
+@@PRIVATE:music_annotation_186@@
+@@PRIVATE:music_annotation_187@@
+@@PRIVATE:music_annotation_188@@
+@@PRIVATE:music_annotation_189@@
+@@PRIVATE:music_annotation_190@@
+@@PRIVATE:music_annotation_191@@
+@@PRIVATE:music_annotation_192@@
+@@PRIVATE:music_annotation_193@@
+@@PRIVATE:music_annotation_194@@
             #}
-            {%- set plists = ["spotify:album:78bpIziExqiI9qztvNFlQu",
-              "spotify:user:spotify:playlist:37i9dQZF1DXbTxeAdrVG2l",
-              "spotify:user:myplay.com:playlist:2f6tXtN0XesjONxicAzMIw",
-              "spotify:user:126202651:playlist:6uNCXLheVaTbfE1HRCIsQ5",
-              "spotify:user:spotify:playlist:37i9dQZF1DXb9LIXaj5WhL",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:playlist:37i9dQZF1DZ06evO1U0vAp",
-              "spotify:user:spotify:playlist:37i9dQZF1DX2SK4ytI2KAZ",
-              "spotify:playlist:37i9dQZF1DZ06evO1XPrLQ",
-              "spotify:artist:0Ya43ZKWHTKkAbkoJJkwIB",
-              "spotify:user:126202651:playlist:4CIBhwpAL598munofpCu6i",
-              "spotify:playlist:37i9dQZF1DZ06evO25r82I",
-              "spotify:album:4JEgSaokMH5mMRClx9wp3S",
-              "spotify:user:126202651:playlist:56WlVUutx91MElxdsbtzj1",
-              "spotify:playlist:37i9dQZF1DZ06evO0AGqf6",
-              "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
-              "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-              "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
-              "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
-              "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-              "spotify:playlist:37i9dQZF1DZ06evO1sZyol",
-              "spotify:playlist:37i9dQZF1DX5Ejj0EkURtP",
-              "spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
-              "spotify:playlist:37i9dQZF1DWWQRwui0ExPn",
-              "spotify:playlist:37i9dQZF1DXdLEN7aqioXM",
-              "spotify:playlist:0OZV1MvJmJdeShboKpNKC8",
-              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
-              "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
-              "spotify:playlist:1Iowhep08Kl9MJ0XOwsBMp",
-              "spotify:playlist:37i9dQZF1DX4nNmLlb3JR2",
-              "https://ice1.somafm.com/groovesalad-128-mp3",
-              "https://ice1.somafm.com/deepspaceone-128-mp3",
-              "https://ice1.somafm.com/missioncontrol-128-mp3",
-              "https://ice1.somafm.com/spacestation-128-mp3",
-              "https://ice1.somafm.com/vaporwaves-128-mp3",
-              "spotify:playlist:2I2cwYxeuLbIXaNRccMViZ"
+            {%- set plists = ["@@PRIVATE:music_uri_008@@",
+              "@@PRIVATE:music_uri_068@@",
+              "@@PRIVATE:music_uri_060@@",
+              "@@PRIVATE:music_uri_057@@",
+              "@@PRIVATE:music_uri_067@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_027@@",
+              "@@PRIVATE:music_uri_065@@",
+              "@@PRIVATE:music_uri_029@@",
+              "@@PRIVATE:music_uri_009@@",
+              "@@PRIVATE:music_uri_052@@",
+              "@@PRIVATE:music_uri_031@@",
+              "@@PRIVATE:music_uri_005@@",
+              "@@PRIVATE:music_uri_054@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_018@@",
+              "@@PRIVATE:music_uri_017@@",
+              "@@PRIVATE:music_uri_024@@",
+              "@@PRIVATE:music_uri_011@@",
+              "@@PRIVATE:music_uri_037@@",
+              "@@PRIVATE:music_uri_045@@",
+              "@@PRIVATE:music_uri_012@@",
+              "@@PRIVATE:music_uri_019@@",
+              "@@PRIVATE:media_stream_002@@",
+              "@@PRIVATE:media_stream_001@@",
+              "@@PRIVATE:media_stream_003@@",
+              "@@PRIVATE:media_stream_004@@",
+              "@@PRIVATE:media_stream_005@@",
+              "@@PRIVATE:music_uri_014@@"
               ] -%}
             {% set pindex = (range(0, (plists | length))|random) -%}
             {{ plists[pindex] }}
@@ -2081,9 +2081,9 @@ script:
             {{ 'media_player.ma_group_guest' if is_state('input_boolean.guest_mode', 'on')
                else 'media_player.ma_group_everywhere' }}
           bedtime_media_type: "{{ 'radio' if 'somafm.com' in playlist else '' }}"
-          bedtime_apple_music_fallback_uri: "apple_music://track/1492333325"
+          bedtime_apple_music_fallback_uri: "@@PRIVATE:media_apple_music_fallback@@"
           bedtime_apple_music_fallback_media_type: ""
-          bedtime_local_library_fallback_uri: "library://radio/17"
+          bedtime_local_library_fallback_uri: "@@PRIVATE:media_local_radio_fallback@@"
           bedtime_local_library_fallback_media_type: radio
           bedtime_pre_playback_fingerprint: >-
             {{ [
@@ -2414,90 +2414,90 @@ script:
       - variables:
           playlist: >-
             {#
-            ## Your Top Songs 2017 : spotify:user:spotify:playlist:37i9dQZF1E9G2yMdYA64HW
-            ## Have a Great Day! : spotify:user:spotify:playlist:37i9dQZF1DX7KNKjOK0o75
-            ## 90s Greatest Guilty Pleasures: spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs
-            ## Alternative Nation: spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB
-            ## Matt & Kim Daylight Playlist: spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK
-            ## MGMT Kids Playlist: spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr
-            ## Guardians of the Galaxy Vols 1 & 2 : spotify:playlist:37i9dQZF1DXatoD1BSWRau
-            ## Walk the Moon Talking is Hard: spotify:album:3mNoFlD1wsoXfkljfFzExT
-            ## This is Fall Out Boy: spotify:playlist:37i9dQZF1DZ06evO2T19Mk
-            ## This is Panic! at the Disco : spotify:playlist:37i9dQZF1DZ06evO18A72E
-            ## Coheed & Cambria Good Apollo: spotify:album:4nYsnQpTAQaPzrPc6rOsBN
-            ## APC Mer De Noms: spotify:album:0GeWd0yUKXHbCXVag1mJvO
-            ## Matt and Kim : Lightning : spotify:album:0ByuPWOUIKAgMZGWneqO9O
-            ## '90s Pop Rock Essentials : spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx
-            ## 90s Rock Anthems: spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F
-            ## Your Top Songs 2018 : spotify:user:spotify:playlist:37i9dQZF1Ejutsu6U8IhOf
-            ## Your Time Capsule : spotify:user:spotify:playlist:37i9dQZF1E4YuevTvB5WHT
-            ## This is The Lumineers : spotify:playlist:37i9dQZF1DZ06evO0AGqf6
-            ## Guster @ Showbox Seattle 2/16/2019 spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO
-            ## Guster @ First Ave MSP 2/9/2019 spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq
-            ## Coheed & Cambria @ The Armory MSP 7/26/2018 spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP
-            ## Jimmy Eat World @ First Ave Minneapolis 5/9/18 spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8
-            ## This is Passion Pit : spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu
-            ## Your Discovery Weekly : spotify:playlist:37i9dQZEVXcMDffrPenJPl
-            ## Alternative 00s : spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG
-            ## Panic at the Disco Radio : spotify:user:spotify:playlist:37i9dQZF1E4lDVOWeZX2IT
-            ## Decemberists Radio : spotify:user:spotify:playlist:37i9dQZF1E4pBKIU2s8AX1
-            ## Guster Radio : spotify:user:spotify:playlist:37i9dQZF1E4AQ4IdimJyYD
-            ## Jimmy Eat World Radio : spotify:user:spotify:playlist:37i9dQZF1E4tDgdv9Es4ng
-            ## The Lumineers Radio : spotify:user:spotify:playlist:37i9dQZF1E4Cpj7tK5yC6M
-            ## Band of Hourses Radio : spotify:user:spotify:playlist:37i9dQZF1E4tcQYL2Wtnge
-            ## This is Band of Horses : spotify:user:spotify:playlist:37i9dQZF1DZ06evO0pK2Aw
-            ## Henry Jamison Radio : spotify:user:spotify:playlist:37i9dQZF1E4xIBgPnPOnGY
-            ## Happier Radio : spotify:playlist:37i9dQZF1E8DMpUzqgcOJh
-            ## Guster @ Weesner Family Ampitheater (MN Zoo), Jul 22, 2019
-            ## This is Tool : spotify:playlist:37i9dQZF1DZ06evO1sZyol
-            ## Best of the Decade 2011-2019: spotify:playlist:37i9dQZF1DX5Ejj0EkURtP
-            ## Top Songs of 2019: spotify:playlist:37i9dQZF1EtiMc33WI4nNn
-            ## Daily Mix 1: spotify:playlist:37i9dQZF1E37INBdbw9l8Q
-            ## Daily Mix 2: spotify:playlist:37i9dQZF1E38mQjeIPb1EL
-            ## Daily Mix 3: spotify:playlist:37i9dQZF1E354DBk6AJ16Y
-            ## Daily Mix 4: spotify:playlist:37i9dQZF1E38XO0gwAEnvS
-            ## Daily Mix 5: spotify:playlist:37i9dQZF1E37RF0IYL80qo
-            ## Daily Mix 6: spotify:playlist:37i9dQZF1E38hC1b4cOQvA
-            ## Summer Rewind: spotify:playlist:37i9dQZF1CAqqQ5eUaE9tb
-            ## Guster w/Utah Symphony 7/29/22: spotify:playlist:4gmNQHup10wDckuwWL3IFZ
-            ## Sigur Ros @ State Theatre: spotify:playlist:6NiKjgceymmq3yVzxgb9Uv
-            ## City Pop: spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk
-            ## Pachuca Sunrise Radio: spotify:playlist:37i9dQZF1E8T1k2ZTHYNkV
-            ## Pride classics: spotify:playlist:5Bm5WlLT2jF5KQHezH0a6i
-            ## This is the 1975: spotify:playlist:37i9dQZF1DZ06evO1X6Ic8
-            ## Early 2000s Alternative: spotify:playlist:5dPSsspVwjaoU7Nf6itkUZ
-            ## Anti-anxiety mix: spotify:playlist:37i9dQZF1EIg42NGihn0NZ
+@@PRIVATE:music_annotation_195@@
+@@PRIVATE:music_annotation_196@@
+@@PRIVATE:music_annotation_197@@
+@@PRIVATE:music_annotation_198@@
+@@PRIVATE:music_annotation_199@@
+@@PRIVATE:music_annotation_200@@
+@@PRIVATE:music_annotation_201@@
+@@PRIVATE:music_annotation_202@@
+@@PRIVATE:music_annotation_203@@
+@@PRIVATE:music_annotation_204@@
+@@PRIVATE:music_annotation_205@@
+@@PRIVATE:music_annotation_206@@
+@@PRIVATE:music_annotation_207@@
+@@PRIVATE:music_annotation_208@@
+@@PRIVATE:music_annotation_209@@
+@@PRIVATE:music_annotation_210@@
+@@PRIVATE:music_annotation_211@@
+@@PRIVATE:music_annotation_212@@
+@@PRIVATE:music_annotation_213@@
+@@PRIVATE:music_annotation_214@@
+@@PRIVATE:music_annotation_215@@
+@@PRIVATE:music_annotation_216@@
+@@PRIVATE:music_annotation_217@@
+@@PRIVATE:music_annotation_218@@
+@@PRIVATE:music_annotation_219@@
+@@PRIVATE:music_annotation_220@@
+@@PRIVATE:music_annotation_221@@
+@@PRIVATE:music_annotation_222@@
+@@PRIVATE:music_annotation_223@@
+@@PRIVATE:music_annotation_224@@
+@@PRIVATE:music_annotation_225@@
+@@PRIVATE:music_annotation_226@@
+@@PRIVATE:music_annotation_227@@
+@@PRIVATE:music_annotation_228@@
+@@PRIVATE:music_annotation_229@@
+@@PRIVATE:music_annotation_230@@
+@@PRIVATE:music_annotation_231@@
+@@PRIVATE:music_annotation_232@@
+@@PRIVATE:music_annotation_233@@
+@@PRIVATE:music_annotation_234@@
+@@PRIVATE:music_annotation_235@@
+@@PRIVATE:music_annotation_236@@
+@@PRIVATE:music_annotation_237@@
+@@PRIVATE:music_annotation_238@@
+@@PRIVATE:music_annotation_239@@
+@@PRIVATE:music_annotation_240@@
+@@PRIVATE:music_annotation_241@@
+@@PRIVATE:music_annotation_242@@
+@@PRIVATE:music_annotation_243@@
+@@PRIVATE:music_annotation_244@@
+@@PRIVATE:music_annotation_245@@
+@@PRIVATE:music_annotation_246@@
+@@PRIVATE:music_annotation_247@@
             #}
             {%- set plists = [
-              "spotify:user:myplay.com:playlist:3hoI0s5TLdpPMcimSRmQpj",
-              "spotify:user:patreeeek:playlist:05TbIsuVoDIQI1nfVwhpTs",
-              "spotify:user:topsify:playlist:1uBI8icgYcUED3T1W1X6dB",
-              "spotify:user:127725734:playlist:1tpH6e8WmMkWZNKv9HFvGK",
-              "spotify:user:gorillagoat:playlist:7aX5kvEDdre0kHNCvQ9sbr",
-              "spotify:playlist:37i9dQZF1DXatoD1BSWRau",
-              "spotify:album:3mNoFlD1wsoXfkljfFzExT",
-              "spotify:playlist:37i9dQZF1DZ06evO2T19Mk",
-              "spotify:album:4nYsnQpTAQaPzrPc6rOsBN",
-              "spotify:album:0GeWd0yUKXHbCXVag1mJvO",
-              "spotify:album:0ByuPWOUIKAgMZGWneqO9O",
-              "spotify:user:spotify:playlist:37i9dQZF1DX3YMp9n8fkNx",
-              "spotify:user:spotify:playlist:37i9dQZF1DX1rVvRgjX59F",
-              "spotify:playlist:37i9dQZF1DZ06evO0AGqf6",
-              "spotify:user:126202651:playlist:65fTj3YJl4jvFmXxru7BfO",
-              "spotify:user:126202651:playlist:4jmwGUvZ8XI9DmWa3NthVq",
-              "spotify:user:126202651:playlist:5wO8RqOaWT9PDJNMnktftP",
-              "spotify:user:126202651:playlist:3D3gu4wURrZfR813RTh5M8",
-              "spotify:user:spotify:playlist:37i9dQZF1DZ06evO4iu5hu",
-              "spotify:user:spotify:playlist:37i9dQZF1DX0YKekzl0blG",
-              "spotify:playlist:3dj3AYHFe2RKKjdQsaOWYl",
-              "spotify:playlist:37i9dQZF1DZ06evO1sZyol",
-              "spotify:playlist:37i9dQZF1DX5Ejj0EkURtP",
-              "spotify:playlist:4gmNQHup10wDckuwWL3IFZ",
-              "spotify:playlist:6NiKjgceymmq3yVzxgb9Uv",
-              "spotify:playlist:7kyjn0z8NNlEYJ8ZAwEYkk",
-              "spotify:playlist:5Bm5WlLT2jF5KQHezH0a6i",
-              "spotify:playlist:37i9dQZF1DZ06evO1X6Ic8",
-              "spotify:playlist:5dPSsspVwjaoU7Nf6itkUZ",
+              "@@PRIVATE:music_uri_061@@",
+              "@@PRIVATE:music_uri_062@@",
+              "@@PRIVATE:music_uri_071@@",
+              "@@PRIVATE:music_uri_058@@",
+              "@@PRIVATE:music_uri_059@@",
+              "@@PRIVATE:music_uri_023@@",
+              "@@PRIVATE:music_uri_004@@",
+              "@@PRIVATE:music_uri_032@@",
+              "@@PRIVATE:music_uri_006@@",
+              "@@PRIVATE:music_uri_002@@",
+              "@@PRIVATE:music_uri_001@@",
+              "@@PRIVATE:music_uri_066@@",
+              "@@PRIVATE:music_uri_064@@",
+              "@@PRIVATE:music_uri_025@@",
+              "@@PRIVATE:music_uri_056@@",
+              "@@PRIVATE:music_uri_053@@",
+              "@@PRIVATE:music_uri_055@@",
+              "@@PRIVATE:music_uri_051@@",
+              "@@PRIVATE:music_uri_070@@",
+              "@@PRIVATE:music_uri_063@@",
+              "@@PRIVATE:music_uri_035@@",
+              "@@PRIVATE:music_uri_030@@",
+              "@@PRIVATE:music_uri_020@@",
+              "@@PRIVATE:music_uri_037@@",
+              "@@PRIVATE:music_uri_045@@",
+              "@@PRIVATE:music_uri_050@@",
+              "@@PRIVATE:music_uri_041@@",
+              "@@PRIVATE:music_uri_028@@",
+              "@@PRIVATE:music_uri_042@@",
               ] -%}
               {% set pindex =  (range(0, (plists | length))|random) -%}
               {{ plists[pindex] }}
