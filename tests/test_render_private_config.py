@@ -162,4 +162,5 @@ def test_public_media_template_contains_no_concrete_account_or_device_ids() -> N
     assert not re.search(
         r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
         template,
+        re.I,
     )
