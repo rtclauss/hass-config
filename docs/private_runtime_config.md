@@ -22,15 +22,16 @@ target.
 `packages/media_player.yaml` is generated locally from
 `private_templates/media_player.yaml.tmpl` and the ignored
 `.private-runtime-config/values.json`. The private mapping holds playlist and
-provider item IDs, stream choices, playlist annotations and labels, and an NFC
-tag ID. The committed example values render a synthetic package for CI. Never
+provider item IDs, stream choices, playlist annotations and labels, and NFC
+device and tag IDs. The committed example values render a synthetic package
+for CI and a fresh local test checkout. Never
 render those example values on the live host.
 
 The current live media package matched the former tracked file byte for byte.
 A fresh copy was byte-verified at
 `.private-runtime-backup/current-config/packages/media_player.before-template-2026-10-14.yaml`
 on that host. Preserve that backup and the private mapping before updating its
-checkout. The live mapping is staged with 334 keys under a root-owned
+checkout. The live mapping is staged with 335 keys under a root-owned
 directory (mode 0700); its file is mode 0600. After Git stops tracking the
 package, run the renderer as an account that can read that mapping (root on
 the current host), then run `python3 scripts/render_private_config.py --check`
