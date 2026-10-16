@@ -184,8 +184,7 @@ def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
     snooze_script = _script_block(WORKDAY_PATH, "snooze_script")
 
     for token in (
-        "entity_id: input_boolean.wakeup_alarm_firing",
-        'state: "true"',
+        "entity_id: input_boolean.wakeup_alarm_firing\n        state: \"on\"",
         "entity_id: device_tracker.bayesian_resident_home",
         "entity_id: input_boolean.master_bed_occupancy",
         "entity_id: script.snooze_script",

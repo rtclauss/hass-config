@@ -47,10 +47,6 @@ homeassistant:
       friendly_name: "Turn off master bedroom lights automatically"
       icon: mdi:ceiling-light
 
-    automation.button_reset_basement:
-      <<: *customize
-      friendly_name: "Button Reset Basement"
-
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
       friendly_name: "Turn off all lights when bedroom lights turn off"
@@ -1568,36 +1564,6 @@ automation:
   #           - light.office_lamp
   #           - light.office_ceiling
 
-  - alias: toggle_dining_room
-    id: toggle_dining_room
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id:
-          - binary_sensor.dining_room_button_push
-    action:
-      - action: light.toggle
-        target:
-          entity_id: light.dining_room_all
-        data:
-          transition: 5
-
-  - alias: toggle_kitchen
-    id: toggle_kitchen
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id:
-          - binary_sensor.kitchen_button
-    action:
-      - action: light.toggle
-        target:
-          entity_id: light.kitchen_all
-        data:
-          transition: 5
-
   - alias: toggle_office
     id: toggle_office
     trace:
@@ -1978,21 +1944,6 @@ automation:
       - action: script.apply_owner_suite_inovelli_led_policy
         data:
           policy: night_red
-
-  - alias: button_reset_basement
-    id: button_reset_basement
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id:
-          - binary_sensor.basement_button_hold
-    action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.scene_reset_basement
-        data:
-          transition: 10
 
   - id: turn_off_all_lights_when_bed_off
     alias: turn_off_all_lights_when_bed_off
