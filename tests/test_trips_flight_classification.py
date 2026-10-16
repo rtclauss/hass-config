@@ -8,9 +8,19 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from tests.privacy_ids import HOME_CODE_LIST
+
 
 CENTRAL = ZoneInfo("America/Chicago")
-HOME_CODES = {"MSP", "RST", "MINNEAPOLIS", "MINNEAPOLISSTPAUL", "ROCHESTER", "MINNESOTA"}
+HOME_CODES = set(HOME_CODE_LIST)
+(
+    HOME_AIRPORT_PRIMARY,
+    HOME_AIRPORT_SECONDARY,
+    HOME_METRO_CODE,
+    HOME_METRO_COMPACT,
+    HOME_CITY_SECONDARY_CODE,
+    HOME_REGION_CODE,
+) = HOME_CODE_LIST
 TRIPS_PATH = Path(__file__).resolve().parents[1] / "packages" / "trips.yaml"
 MATRIX_PATH = Path(__file__).resolve().parents[1] / "docs" / "travel_detection_regression_matrix.md"
 
@@ -236,7 +246,7 @@ def build_vacation_plan(
             event.get("description", ""),
             event.get("location", ""),
         )
-        is_home_origin = signals.origin_code in {"MSP", "RST"}
+        is_home_origin = signals.origin_code in {HOME_AIRPORT_PRIMARY, HOME_AIRPORT_SECONDARY}
         is_home_destination = signals.destination_code in HOME_CODES
         outbound_priority = 0 if is_home_origin else 1 if signals.named_flight else 9
 
@@ -372,12 +382,12 @@ def build_vacation_plan(
 
 def test_generic_locations_do_not_look_like_flights() -> None:
     barber = parse_flight_signals(
-        "Appointment with The Brewing Barber",
-        location="3001 Hennepin Ave S, Minneapolis, MN 55408, United States",
+        "Appointment with Example Barber",
+        location="100 Example Ave, Sample City, ST 00000, United States",
     )
     dentist = parse_flight_signals(
         "Dentist Appointment",
-        location="Mayo Clinic, Rochester, MN 55905, United States",
+        location="Example Clinic, Sample City, ST 00000, United States",
     )
 
     assert barber.looks_like_flight is False
@@ -387,29 +397,29 @@ def test_generic_locations_do_not_look_like_flights() -> None:
 
 
 def test_route_summaries_keep_departure_and_return_directions_distinct() -> None:
-    outbound = parse_flight_signals("✈ MSP→CLT • DL 2819")
-    return_home = parse_flight_signals("✈ CLT→MSP • DL 2820")
+    outbound = parse_flight_signals(f"✈ {HOME_AIRPORT_PRIMARY}→CCC • EX 1001")
+    return_home = parse_flight_signals(f"✈ CCC→{HOME_AIRPORT_PRIMARY} • EX 1002")
 
-    assert outbound.origin_code == "MSP"
-    assert outbound.destination_code == "CLT"
+    assert outbound.origin_code == HOME_AIRPORT_PRIMARY
+    assert outbound.destination_code == "CCC"
     assert outbound.destination_code not in HOME_CODES
 
-    assert return_home.origin_code == "CLT"
-    assert return_home.destination_code == "MSP"
+    assert return_home.origin_code == "CCC"
+    assert return_home.destination_code == HOME_AIRPORT_PRIMARY
     assert return_home.destination_code in HOME_CODES
 
 
 def test_named_flights_extract_clean_destination_codes() -> None:
-    direct = parse_flight_signals("flight to CLT (DL 2819)")
-    verbose = parse_flight_signals("Flight: MSP TO CLT (DL 2819)")
-    homebound = parse_flight_signals("Flight to Minnesota (DL 2819)")
+    direct = parse_flight_signals("flight to CCC (EX 1001)")
+    verbose = parse_flight_signals(f"Flight: {HOME_AIRPORT_PRIMARY} TO CCC (EX 1001)")
+    homebound = parse_flight_signals(f"Flight to {HOME_REGION_CODE.title()} (EX 1001)")
 
-    assert direct.destination_name == "CLT"
-    assert direct.destination_code == "CLT"
-    assert verbose.destination_name == "CLT"
-    assert verbose.destination_code == "CLT"
-    assert homebound.destination_name == "Minnesota"
-    assert homebound.destination_code == "MINNESOTA"
+    assert direct.destination_name == "CCC"
+    assert direct.destination_code == "CCC"
+    assert verbose.destination_name == "CCC"
+    assert verbose.destination_code == "CCC"
+    assert homebound.destination_name == HOME_REGION_CODE.title()
+    assert homebound.destination_code == HOME_REGION_CODE
     assert homebound.destination_code in HOME_CODES
 
 
@@ -432,30 +442,37 @@ def test_trips_package_exposes_vacation_plan_diagnostics_and_logging() -> None:
     assert "name: Travel detection" in text
     assert "attribute: decision_code" in text
     assert "continue_on_error: true\n        action: logbook.log" in text
-    assert "not is_friend_itinerary and destination_code in ['MSP', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'MINNESOTA']" in text
-    assert "not is_friend_itinerary and destination_code in ['RST', 'ROCHESTER']" in text
+    assert (
+        "not is_friend_itinerary and destination_code in "
+        f"['{HOME_AIRPORT_PRIMARY}', '{HOME_METRO_CODE}', "
+        f"'{HOME_METRO_COMPACT}', '{HOME_REGION_CODE}']"
+    ) in text
+    assert (
+        "not is_friend_itinerary and destination_code in "
+        f"['{HOME_AIRPORT_SECONDARY}', '{HOME_CITY_SECONDARY_CODE}']"
+    ) in text
 
 
 def test_vacation_plan_ignores_barber_and_pairs_real_outbound_with_return() -> None:
-    now = iso("2026-03-24T10:30:00-05:00")
+    now = iso("2030-03-24T10:30:00-05:00")
     events = [
         {
-            "summary": "Appointment with The Brewing Barber",
-            "location": "3001 Hennepin Ave S, Minneapolis, MN 55408, United States",
-            "start": "2026-03-24T11:40:00-05:00",
-            "end": "2026-03-24T12:40:00-05:00",
+            "summary": "Appointment with Example Barber",
+            "location": "100 Example Ave, Sample City, ST 00000, United States",
+            "start": "2030-03-24T11:40:00-05:00",
+            "end": "2030-03-24T12:40:00-05:00",
         },
         {
-            "summary": "✈ MSP→CLT • DL 2819",
+            "summary": f"✈ {HOME_AIRPORT_PRIMARY}→CCC • EX 1001",
             "description": "Synced by Flighty",
-            "start": "2026-04-09T14:20:00-05:00",
-            "end": "2026-04-09T17:00:00-05:00",
+            "start": "2030-04-09T14:20:00-05:00",
+            "end": "2030-04-09T17:00:00-05:00",
         },
         {
-            "summary": "✈ CLT→MSP • DL 2820",
+            "summary": f"✈ CCC→{HOME_AIRPORT_PRIMARY} • EX 1002",
             "description": "Synced by Flighty",
-            "start": "2026-04-13T15:35:00-05:00",
-            "end": "2026-04-13T18:15:00-05:00",
+            "start": "2030-04-13T15:35:00-05:00",
+            "end": "2030-04-13T18:15:00-05:00",
         },
     ]
 
@@ -463,67 +480,67 @@ def test_vacation_plan_ignores_barber_and_pairs_real_outbound_with_return() -> N
 
     assert plan["reason"] == "flight"
     assert plan["decision_code"] == "flight_return"
-    assert plan["summary"] == "✈ MSP→CLT • DL 2819"
-    assert plan["start"] == iso("2026-04-09T14:20:00-05:00")
-    assert plan["end"] == iso("2026-04-13T13:35:00-05:00")
-    assert plan["return_summary"] == "✈ CLT→MSP • DL 2820"
-    assert plan["vacation_name"] == "CLT"
+    assert plan["summary"] == f"✈ {HOME_AIRPORT_PRIMARY}→CCC • EX 1001"
+    assert plan["start"] == iso("2030-04-09T14:20:00-05:00")
+    assert plan["end"] == iso("2030-04-13T13:35:00-05:00")
+    assert plan["return_summary"] == f"✈ CCC→{HOME_AIRPORT_PRIMARY} • EX 1002"
+    assert plan["vacation_name"] == "CCC"
 
 
 def test_multi_leg_outbound_uses_final_destination_before_homebound_return() -> None:
-    now = iso("2026-03-01T08:00:00-06:00")
+    now = iso("2030-03-01T08:00:00-06:00")
     events = [
         {
-            "summary": "✈ MSP→DTW • DL 2101",
+            "summary": f"✈ {HOME_AIRPORT_PRIMARY}→DDD • EX 1003",
             "description": "Synced by Flighty",
-            "start": "2026-03-05T09:10:00-06:00",
-            "end": "2026-03-05T11:30:00-05:00",
+            "start": "2030-03-05T09:10:00-06:00",
+            "end": "2030-03-05T11:30:00-05:00",
         },
         {
-            "summary": "✈ DTW→AMS • KL 606",
+            "summary": "✈ DDD→EEE • EX 1004",
             "description": "Synced by Flighty",
-            "start": "2026-03-05T15:45:00-05:00",
-            "end": "2026-03-06T06:10:00+01:00",
+            "start": "2030-03-05T15:45:00-05:00",
+            "end": "2030-03-06T06:10:00+01:00",
         },
         {
-            "summary": "✈ AMS→INV • KL 921",
+            "summary": "✈ EEE→FFF • EX 1005",
             "description": "Synced by Flighty",
-            "start": "2026-03-06T09:20:00+01:00",
-            "end": "2026-03-06T10:55:00Z",
+            "start": "2030-03-06T09:20:00+01:00",
+            "end": "2030-03-06T10:55:00Z",
         },
         {
-            "summary": "✈ AMS→MSP • KL 605",
+            "summary": f"✈ EEE→{HOME_AIRPORT_PRIMARY} • EX 1006",
             "description": "Synced by Flighty",
-            "start": "2026-03-16T14:15:00+01:00",
-            "end": "2026-03-16T17:20:00-05:00",
+            "start": "2030-03-16T14:15:00+01:00",
+            "end": "2030-03-16T17:20:00-05:00",
         },
     ]
 
     plan = build_vacation_plan(events, now)
 
     assert plan["decision_code"] == "flight_return"
-    assert plan["summary"] == "✈ MSP→DTW • DL 2101"
-    assert plan["return_summary"] == "✈ AMS→MSP • KL 605"
-    assert plan["vacation_name"] == "INV"
-    assert plan["destination_name"] == "INV"
+    assert plan["summary"] == f"✈ {HOME_AIRPORT_PRIMARY}→DDD • EX 1003"
+    assert plan["return_summary"] == f"✈ EEE→{HOME_AIRPORT_PRIMARY} • EX 1006"
+    assert plan["vacation_name"] == "FFF"
+    assert plan["destination_name"] == "FFF"
 
 
 def test_outbound_flight_without_return_uses_lodging_fallback() -> None:
-    now = iso("2026-04-01T08:00:00-05:00")
+    now = iso("2030-04-01T08:00:00-05:00")
     personal_events = [
         {
-            "summary": "✈ MSP→CLT • DL 2819",
+            "summary": f"✈ {HOME_AIRPORT_PRIMARY}→CCC • EX 1001",
             "description": "Synced by Flighty",
-            "start": "2026-04-09T14:20:00-05:00",
-            "end": "2026-04-09T17:00:00-04:00",
+            "start": "2030-04-09T14:20:00-05:00",
+            "end": "2030-04-09T17:00:00-04:00",
         }
     ]
     work_trip_events = [
         {
-            "summary": "Stay at Westin Charlotte",
-            "start": "2026-04-09T18:30:00-04:00",
-            "end": "2026-04-13T10:00:00-04:00",
-            "location": "Charlotte, NC",
+            "summary": "Stay at Example Hotel Sample City",
+            "start": "2030-04-09T18:30:00-04:00",
+            "end": "2030-04-13T10:00:00-04:00",
+            "location": "Sample City, ST",
         }
     ]
 
@@ -532,19 +549,19 @@ def test_outbound_flight_without_return_uses_lodging_fallback() -> None:
     assert plan["reason"] == "flight"
     assert plan["decision_code"] == "flight_lodging"
     assert plan["return_summary"] == ""
-    assert plan["fallback_summary"] == "Stay at Westin Charlotte"
+    assert plan["fallback_summary"] == "Stay at Example Hotel Sample City"
     assert plan["fallback_source"] == "lodging span"
-    assert plan["end"] == iso("2026-04-13T10:00:00-04:00")
+    assert plan["end"] == iso("2030-04-13T10:00:00-04:00")
 
 
 def test_standalone_lodging_trip_without_flights_uses_calendar_window() -> None:
-    now = iso("2026-04-01T08:00:00-05:00")
+    now = iso("2030-04-01T08:00:00-05:00")
     work_trip_events = [
         {
-            "summary": "Stay at AC Hotel Inverness",
-            "start": "2026-04-09T18:30:00+01:00",
-            "end": "2026-04-13T09:00:00+01:00",
-            "location": "Inverness, Scotland",
+            "summary": "Stay at Sample Hotel Example Destination",
+            "start": "2030-04-09T18:30:00+01:00",
+            "end": "2030-04-13T09:00:00+01:00",
+            "location": "Example Destination, ZZ",
         }
     ]
 
@@ -552,19 +569,19 @@ def test_standalone_lodging_trip_without_flights_uses_calendar_window() -> None:
 
     assert plan["reason"] == "calendar"
     assert plan["decision_code"] == "calendar_lodging"
-    assert plan["summary"] == "Stay at AC Hotel Inverness"
+    assert plan["summary"] == "Stay at Sample Hotel Example Destination"
     assert plan["fallback_source"] == "lodging span"
-    assert plan["vacation_name"] == "Stay at AC Hotel Inverness"
+    assert plan["vacation_name"] == "Stay at Sample Hotel Example Destination"
 
 
 def test_friend_itineraries_to_home_are_ignored() -> None:
-    now = iso("2026-03-01T08:00:00-06:00")
+    now = iso("2030-03-01T08:00:00-06:00")
     events = [
         {
-            "summary": "✈ AMS→MSP • KL 605",
+            "summary": f"✈ EEE→{HOME_AIRPORT_PRIMARY} • EX 1006",
             "description": "Synced by Flighty for Friend arrival",
-            "start": "2026-03-16T14:15:00+01:00",
-            "end": "2026-03-16T17:20:00-05:00",
+            "start": "2030-03-16T14:15:00+01:00",
+            "end": "2030-03-16T17:20:00-05:00",
         }
     ]
 
@@ -576,20 +593,20 @@ def test_friend_itineraries_to_home_are_ignored() -> None:
 
 
 def test_home_region_named_flight_does_not_override_curling_trip_block() -> None:
-    now = iso("2026-04-11T08:00:00-05:00")
+    now = iso("2030-04-11T08:00:00-05:00")
     personal_events = [
         {
-            "summary": "Flight to Minnesota (DL 2819)",
+            "summary": f"Flight to {HOME_REGION_CODE.title()} (EX 1001)",
             "description": "Created from an email you received in Gmail",
-            "start": "2026-04-12T17:47:00-05:00",
-            "end": "2026-04-12T20:00:00-05:00",
+            "start": "2030-04-12T17:47:00-05:00",
+            "end": "2030-04-12T20:00:00-05:00",
         }
     ]
     curling_events = [
         {
             "summary": "Arena play down",
-            "start": "2026-04-10",
-            "end": "2026-04-13",
+            "start": "2030-04-10",
+            "end": "2030-04-13",
             "location": "Brookings\nUnited States",
         }
     ]
@@ -603,20 +620,20 @@ def test_home_region_named_flight_does_not_override_curling_trip_block() -> None
     assert plan["fallback_source"] == "curling block"
 
 
-def test_local_rochester_appointments_do_not_create_trip_window() -> None:
-    now = iso("2026-03-01T08:00:00-06:00")
+def test_local_appointments_do_not_create_trip_window() -> None:
+    now = iso("2030-03-01T08:00:00-06:00")
     events = [
         {
             "summary": "Dentist Appointment",
-            "location": "Mayo Clinic, Rochester, MN 55905, United States",
-            "start": "2026-03-02T10:00:00-06:00",
-            "end": "2026-03-02T11:00:00-06:00",
+            "location": "Example Clinic, Sample City, ST 00000, United States",
+            "start": "2030-03-02T10:00:00-06:00",
+            "end": "2030-03-02T11:00:00-06:00",
         },
         {
             "summary": "Barber",
-            "location": "3001 Hennepin Ave S, Minneapolis, MN 55408, United States",
-            "start": "2026-03-03T09:00:00-06:00",
-            "end": "2026-03-03T10:00:00-06:00",
+            "location": "100 Example Ave, Sample City, ST 00000, United States",
+            "start": "2030-03-03T09:00:00-06:00",
+            "end": "2030-03-03T10:00:00-06:00",
         },
     ]
 
@@ -629,9 +646,9 @@ def test_local_rochester_appointments_do_not_create_trip_window() -> None:
 @pytest.mark.parametrize(
     ("phrase", "expected_source"),
     [
-        ("MSP -> DTW -> AMS -> INV", "multi-leg outbound"),
-        ("Friend flights arriving in MSP", "friend homebound"),
-        ("Local Rochester appointments", "local false positive"),
+        ("HOME -> DDD -> EEE -> FFF", "multi-leg outbound"),
+        ("Friend flights arriving in HOME", "friend homebound"),
+        ("Local Sample City appointments", "local false positive"),
         ("Hotel/calendar-only trips", "lodging fallback"),
     ],
 )

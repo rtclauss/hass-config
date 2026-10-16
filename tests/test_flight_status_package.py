@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tests.privacy_ids import OWNER_CALENDAR
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_PATH = ROOT / "packages" / "flight_status.yaml"
@@ -16,7 +18,7 @@ def test_flight_status_package_uses_calendar_and_rest_sources() -> None:
     text = _package_text()
 
     assert "calendar.get_events" in text
-    assert "calendar.ryan_claussen" in text
+    assert OWNER_CALENDAR in text
     assert "calendar.work_trip" in text
     assert "rest_command:" in text
     assert "flightaware_next_travel_flight:" in text
@@ -97,10 +99,7 @@ def test_flightaware_polling_policy_avoids_unnecessary_calls() -> None:
 def test_route_style_flighty_events_win_over_gmail_duplicates() -> None:
     text = _package_text()
 
-    assert "'CMH': {'name': 'Columbus'" in text
-    assert "'PIT': {'name': 'Pittsburgh'" in text
-    assert "'ATL': {'name': 'Atlanta'" in text
-    assert "'SFO': {'name': 'San Francisco'" in text
+    assert len(re.findall(r"(?m)^\s+'[A-Z]{3}': \{'name': ", text)) >= 30
     assert "source_priority = 0 if route_summary else 1 if ident_ns.value != '' else 2" in text
     assert "source_priority < ns.match.source_priority" in text
     assert "' ' not in destination_name and route_destination_code | length == 3" in text
@@ -110,10 +109,10 @@ def test_route_style_flighty_events_win_over_gmail_duplicates() -> None:
 def test_june_calendar_formats_are_supported() -> None:
     text = _package_text()
 
-    # June trip samples rely on Flighty route events for airport codes; Gmail
-    # duplicates can still contribute the flight ident and schedule as fallback.
+    # Route events supply airport codes; Gmail duplicates can still contribute
+    # the flight identifier and schedule as a fallback.
     assert "destination_alias_map" not in text
-    assert "'PIT': {'name': 'Pittsburgh'" in text
+    assert "airport_map.get(destination_code" in text
     assert "route_destination_code = destination_name | regex_replace('[^A-Za-z]', '') | upper" in text
 
 

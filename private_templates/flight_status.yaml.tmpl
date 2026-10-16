@@ -99,7 +99,7 @@ automation:
             target:
               entity_id: text.flightradar24_airport_track
             data:
-              value: "MSP"
+              value: "@@PRIVATE:home_airport_primary_code@@"
 
 
 ################################################
@@ -125,7 +125,7 @@ rest:
       {% if lat is number and lon is number %}
         https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(lat) }}&longitude={{ '%.4f' | format(lon) }}&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
       {% else %}
-        https://api.open-meteo.com/v1/forecast?latitude=44.8848&longitude=-93.2223&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
+        https://api.open-meteo.com/v1/forecast?latitude=@@PRIVATE:flight_weather_fallback_latitude@@&longitude=@@PRIVATE:flight_weather_fallback_longitude@@&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
       {% endif %}
     scan_interval: 1800
     timeout: 20
@@ -154,7 +154,7 @@ template:
         minutes: "/15"
       - trigger: state
         entity_id:
-          - calendar.ryan_claussen
+          - calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
           - calendar.work_trip
     action:
       - variables:
@@ -164,7 +164,7 @@ template:
             {{ (now() + timedelta(days=14)).replace(hour=23, minute=59, second=59, microsecond=0).isoformat() }}
       - action: calendar.get_events
         target:
-          entity_id: calendar.ryan_claussen
+          entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
         data:
           start_date_time: "{{ lookahead_start }}"
           end_date_time: "{{ lookahead_end }}"
@@ -180,8 +180,8 @@ template:
           personal_events: >-
             {% if personal_event_window is mapping and personal_event_window.events is defined %}
               {{ personal_event_window.events | to_json }}
-            {% elif personal_event_window is mapping and personal_event_window['calendar.ryan_claussen'] is defined and personal_event_window['calendar.ryan_claussen'].events is defined %}
-              {{ personal_event_window['calendar.ryan_claussen'].events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'] is defined and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events is defined %}
+              {{ personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events | to_json }}
             {% else %}
               {{ [] | to_json }}
             {% endif %}
@@ -195,39 +195,39 @@ template:
             {% endif %}
           next_flight_json: >-
             {% set now_ts = as_timestamp(now()) %}
-            {% set home_codes = ['MSP', 'RST', 'MINNEAPOLIS', 'MINNEAPOLISSTPAUL', 'ROCHESTER', 'MINNESOTA'] %}
+            {% set home_codes = ['@@PRIVATE:home_airport_primary_code@@', '@@PRIVATE:home_airport_secondary_code@@', '@@PRIVATE:home_metro_code@@', '@@PRIVATE:home_metro_compact_code@@', '@@PRIVATE:home_city_secondary_code@@', '@@PRIVATE:home_region_code@@'] %}
             {% set airport_map = {
-              'MSP': {'name': 'Minneapolis-Saint Paul', 'lat': 44.8848, 'lon': -93.2223},
-              'RST': {'name': 'Rochester', 'lat': 43.9083, 'lon': -92.5000},
-              'ATL': {'name': 'Atlanta', 'lat': 33.6407, 'lon': -84.4277},
-              'AUS': {'name': 'Austin', 'lat': 30.1975, 'lon': -97.6664},
-              'BNA': {'name': 'Nashville', 'lat': 36.1263, 'lon': -86.6774},
-              'BOS': {'name': 'Boston', 'lat': 42.3656, 'lon': -71.0096},
-              'CLT': {'name': 'Charlotte', 'lat': 35.2140, 'lon': -80.9431},
-              'CMH': {'name': 'Columbus', 'lat': 39.9980, 'lon': -82.8919},
-              'DEN': {'name': 'Denver', 'lat': 39.8561, 'lon': -104.6737},
-              'DFW': {'name': 'Dallas-Fort Worth', 'lat': 32.8998, 'lon': -97.0403},
-              'DTW': {'name': 'Detroit', 'lat': 42.2162, 'lon': -83.3554},
-              'EWR': {'name': 'Newark', 'lat': 40.6895, 'lon': -74.1745},
-              'FLL': {'name': 'Fort Lauderdale', 'lat': 26.0726, 'lon': -80.1527},
-              'IAD': {'name': 'Washington Dulles', 'lat': 38.9531, 'lon': -77.4565},
-              'IAH': {'name': 'Houston', 'lat': 29.9902, 'lon': -95.3368},
-              'JFK': {'name': 'New York JFK', 'lat': 40.6413, 'lon': -73.7781},
-              'LAS': {'name': 'Las Vegas', 'lat': 36.0840, 'lon': -115.1537},
-              'LAX': {'name': 'Los Angeles', 'lat': 33.9416, 'lon': -118.4085},
-              'LGA': {'name': 'New York LaGuardia', 'lat': 40.7769, 'lon': -73.8740},
-              'MCO': {'name': 'Orlando', 'lat': 28.4312, 'lon': -81.3081},
-              'MDW': {'name': 'Chicago Midway', 'lat': 41.7868, 'lon': -87.7522},
-              'MIA': {'name': 'Miami', 'lat': 25.7959, 'lon': -80.2870},
-              'ORD': {'name': 'Chicago O Hare', 'lat': 41.9742, 'lon': -87.9073},
-              'PDX': {'name': 'Portland', 'lat': 45.5898, 'lon': -122.5951},
-              'PHL': {'name': 'Philadelphia', 'lat': 39.8744, 'lon': -75.2424},
-              'PHX': {'name': 'Phoenix', 'lat': 33.4352, 'lon': -112.0101},
-              'PIT': {'name': 'Pittsburgh', 'lat': 40.4915, 'lon': -80.2329},
-              'SAN': {'name': 'San Diego', 'lat': 32.7338, 'lon': -117.1933},
-              'SEA': {'name': 'Seattle', 'lat': 47.4502, 'lon': -122.3088},
-              'SFO': {'name': 'San Francisco', 'lat': 37.6213, 'lon': -122.3790},
-              'SLC': {'name': 'Salt Lake City', 'lat': 40.7899, 'lon': -111.9791}
+              @@PRIVATE:airport_map_entry_001@@
+              @@PRIVATE:airport_map_entry_002@@
+              @@PRIVATE:airport_map_entry_003@@
+              @@PRIVATE:airport_map_entry_004@@
+              @@PRIVATE:airport_map_entry_005@@
+              @@PRIVATE:airport_map_entry_006@@
+              @@PRIVATE:airport_map_entry_007@@
+              @@PRIVATE:airport_map_entry_008@@
+              @@PRIVATE:airport_map_entry_009@@
+              @@PRIVATE:airport_map_entry_010@@
+              @@PRIVATE:airport_map_entry_011@@
+              @@PRIVATE:airport_map_entry_012@@
+              @@PRIVATE:airport_map_entry_013@@
+              @@PRIVATE:airport_map_entry_014@@
+              @@PRIVATE:airport_map_entry_015@@
+              @@PRIVATE:airport_map_entry_016@@
+              @@PRIVATE:airport_map_entry_017@@
+              @@PRIVATE:airport_map_entry_018@@
+              @@PRIVATE:airport_map_entry_019@@
+              @@PRIVATE:airport_map_entry_020@@
+              @@PRIVATE:airport_map_entry_021@@
+              @@PRIVATE:airport_map_entry_022@@
+              @@PRIVATE:airport_map_entry_023@@
+              @@PRIVATE:airport_map_entry_024@@
+              @@PRIVATE:airport_map_entry_025@@
+              @@PRIVATE:airport_map_entry_026@@
+              @@PRIVATE:airport_map_entry_027@@
+              @@PRIVATE:airport_map_entry_028@@
+              @@PRIVATE:airport_map_entry_029@@
+              @@PRIVATE:airport_map_entry_030@@
+              @@PRIVATE:airport_map_entry_031@@
             } %}
             {% set airline_codes = ['AA', 'AC', 'AF', 'AS', 'BA', 'B6', 'DL', 'F9', 'KL', 'NK', 'SY', 'UA', 'WN'] %}
             {% set events = (personal_events | default('[]', true) | string | trim | from_json) + (work_trip_events | default('[]', true) | string | trim | from_json) %}
@@ -296,12 +296,12 @@ template:
                 {% endif %}
               {% endif %}
               {% if origin_code == '' %}
-                {% if 'msp airport' in text_lower or 'minneapolis-st paul' in text_lower or 'minneapolis st paul' in text_lower or 'wold-chamberlain' in text_lower %}
-                  {% set origin_code = 'MSP' %}
-                {% elif 'rst airport' in text_lower or 'rochester international' in text_lower %}
-                  {% set origin_code = 'RST' %}
+                {% if '@@PRIVATE:home_airport_primary_code_lower@@ airport' in text_lower or '@@PRIVATE:home_metro_lower@@-@@PRIVATE:home_metro_st_paul_lower@@' in text_lower or '@@PRIVATE:home_metro_lower@@ @@PRIVATE:home_metro_st_paul_lower@@' in text_lower or '@@PRIVATE:home_secondary_airport_alias_lower@@' in text_lower %}
+                  {% set origin_code = '@@PRIVATE:home_airport_primary_code@@' %}
+                {% elif '@@PRIVATE:home_airport_secondary_code_lower@@ airport' in text_lower or '@@PRIVATE:home_city_secondary_lower@@ international' in text_lower %}
+                  {% set origin_code = '@@PRIVATE:home_airport_secondary_code@@' %}
                 {% elif destination_code not in home_codes %}
-                  {% set origin_code = 'MSP' %}
+                  {% set origin_code = '@@PRIVATE:home_airport_primary_code@@' %}
                 {% endif %}
               {% endif %}
               {% if destination_name == '' and destination_code != '' %}
