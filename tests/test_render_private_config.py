@@ -195,3 +195,23 @@ def test_public_zone_template_keeps_embedded_identity_in_private_mapping() -> No
         assert f"@@PRIVATE:{key}@@" in template
         assert key in examples
     assert len(re.findall(r"@@PRIVATE:zone_\d{2}_slug@@", template)) >= 7
+
+
+def test_flight_airports_and_home_aliases_are_private() -> None:
+    flight = (ROOT / "private_templates/flight_status.yaml.tmpl").read_text()
+    trips = (ROOT / "private_templates/trips.yaml.tmpl").read_text()
+    examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
+
+    assert len(re.findall(r"@@PRIVATE:airport_map_entry_\d{3}@@", flight)) >= 30
+    for key in (
+        "home_airport_primary_code",
+        "home_airport_secondary_code",
+        "home_metro_code",
+        "home_city_secondary_code",
+        "home_region_code",
+    ):
+        assert f"@@PRIVATE:{key}@@" in flight
+        assert f"@@PRIVATE:{key}@@" in trips
+        assert key in examples
+    assert "@@PRIVATE:flight_weather_fallback_latitude@@" in flight
+    assert "@@PRIVATE:flight_weather_fallback_longitude@@" in flight

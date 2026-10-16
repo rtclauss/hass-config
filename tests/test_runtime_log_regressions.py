@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from tests.privacy_ids import HOME_CODE_LIST
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CAR_PATH = ROOT / "packages" / "car.yaml"
@@ -160,12 +162,14 @@ def test_time_to_home_template_handles_unavailable_source_state() -> None:
     assert "'%02d:%02d:00' | format(hours, minutes)" in text
 
 
-def test_trip_templates_treat_minnesota_as_home_destination() -> None:
+def test_trip_templates_treat_private_region_as_home_destination() -> None:
     text = _read(TRIPS_PATH)
 
-    assert '"EXAMPLEREGION"' in text
-    assert 'destination_code not in ["", "AAA", "AAB", "EXAMPLEMETRO", "EXAMPLEMETROAREA", "EXAMPLECITY", "EXAMPLEREGION"]' in text
-    assert "{% set home_codes = ['AAA', 'AAB', 'EXAMPLEMETRO', 'EXAMPLEMETROAREA', 'EXAMPLECITY', 'EXAMPLEREGION'] %}" in text
+    double_quoted = ", ".join(f'"{code}"' for code in HOME_CODE_LIST)
+    single_quoted = ", ".join(f"'{code}'" for code in HOME_CODE_LIST)
+    assert f'"{HOME_CODE_LIST[5]}"' in text
+    assert f'destination_code not in ["", {double_quoted}]' in text
+    assert f"{{% set home_codes = [{single_quoted}] %}}" in text
 
 def test_trip_mode_manager_can_enable_trip_mode_when_departing_for_scheduled_travel() -> None:
     block = _automation_block(TRIPS_PATH, "trip_mode_manager")
