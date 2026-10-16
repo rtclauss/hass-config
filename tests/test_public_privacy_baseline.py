@@ -1,6 +1,7 @@
 """Keep active secrets and Zigbee network inventory out of the public index."""
 
 from pathlib import Path
+import json
 import re
 import subprocess
 import sys
@@ -70,16 +71,20 @@ def test_private_roster_checker_ignores_unnamed_ieee_devices() -> None:
 
 
 def test_zone_names_and_coordinates_are_private_secrets() -> None:
-    zone_block = (ROOT / "packages/zone.yaml").read_text().split("\nzone:\n", 1)[1]
+    zone_block = (ROOT / "private_templates/zone.yaml.tmpl").read_text().split("\nzone:\n", 1)[1]
     secrets_example = (ROOT / "travis_secrets.example.yaml").read_text()
+    private_examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
     names = re.findall(r"(?m)^  - name: !secret (private_zone_\d{2}_name)$", zone_block)
     coordinates = re.findall(
-        r"(?m)^    (?:latitude|longitude): !secret (private_zone_\d{2}_(?:latitude|longitude))$",
+        r"(?m)^    (?:latitude|longitude): !secret (\S+)$",
         zone_block,
     )
     assert len(names) == 11
-    assert len(coordinates) == 12
+    assert len(coordinates) == 22
     for key in names + coordinates:
+        if key.startswith("@@PRIVATE:"):
+            assert key.endswith("@@")
+            key = private_examples[key.removeprefix("@@PRIVATE:").removesuffix("@@")]
         assert re.search(rf"(?m)^{re.escape(key)}:", secrets_example)
 
 

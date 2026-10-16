@@ -1,6 +1,6 @@
 # Inky E-Ink Displays
 
-Issue: [#313](https://github.com/rtclauss/hass-config/issues/313)
+Issue: #313
 
 This document is the source of truth for the first e-ink display rollout. Keep
 hardware assignments, MQTT topics, payload contracts, display modes, and privacy
@@ -189,16 +189,16 @@ Primary entities:
   changes with a 15-second restart delay, then calls the publish script.
 
 The automation listens to wake alarm helpers, wake-up firing state, house mode,
-guest mode, Ryan's home state, bed/owner-suite activity, trip/vacation state,
+guest mode, the owner's home state, bed/owner-suite activity, trip/vacation state,
 flight status, garage/front-door exceptions, weather alerts, active weather,
 near-term precipitation/calendar weather, upcoming personal calendar events, and
 a noon refresh. It does not listen to `sensor.time`, so it will not redraw on
 clock ticks.
 
-The publish script only allows updates when guest mode is active, or when Ryan
-is home and trip mode is off. While Ryan is away or trip mode is on with guest
+The publish script only allows updates when guest mode is active, or when the owner
+is home and trip mode is off. While the owner is away or trip mode is on with guest
 mode off, the display keeps its last image and skips refreshes. Turning guest
-mode on or Ryan returning home is itself a meaningful source change and
+mode on or owner returning home is itself a meaningful source change and
 publishes again after the normal 15-second coalescing delay.
 
 Current owner-suite modes:
@@ -217,11 +217,11 @@ Current owner-suite rows:
 | Weather | `sensor.outside_temperature` converted and shown as Fahrenheit/Celsius, plus `sensor.active_weather_entity_id` weather state | `urgent` when NWS alerts are active |
 | Alarm | `input_datetime.weekday_alarm` or `input_datetime.weekend_alarm` when the matching alarm helper is on | Night-only; `emphasis` in `night_preview` when alarm is enabled |
 | Meeting | `input_datetime.next_work_meeting` when `input_boolean.special_meeting` is on | Night-only; shown when no urgent status is active |
-| Next | Next `calendar.ryan_claussen` event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
-| Place | Location from the next `calendar.ryan_claussen` event | Day-only |
+| Next | Next private owner calendar event from `calendar.get_events` in the next 12 hours | Day-only; `emphasis` when an event is available |
+| Place | Location from the next private calendar event | Day-only |
 | Quote | Rotating short sci-fi/fantasy quote | Day-only when no next event is available |
 | Speaker | Character attribution for the quote | Rendered under the centered quote, not as a standard row |
-| Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next `calendar.ryan_claussen` event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
+| Status | First active status from weather alert, garage door, front door, rain in the next hour, precipitation/weather during the next private calendar event, trip mode, vacation, otherwise `All clear` | `urgent` for alert/door/garage/rain/event weather, `emphasis` for trip/vacation |
 
 The quote source is the curated local file
 `data/inky_owner_suite_quotes.yaml`, included by
@@ -274,7 +274,7 @@ Flight rows use these normalized entities from `packages/flight_status.yaml`:
 
 Required travel integrations and secrets:
 
-- Google Calendar must expose `calendar.ryan_claussen` and `calendar.work_trip`.
+- Google Calendar must expose the private owner calendar and `calendar.work_trip`.
 - FlightAware AeroAPI is called by `rest_command.flightaware_next_travel_flight`
   with `flightaware_aeroapi_key` in `secrets.yaml`. It does not poll when no
   flight ident was parsed. It polls hourly inside the 3-day preflight window,

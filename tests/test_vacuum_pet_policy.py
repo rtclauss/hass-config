@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR
+
 from pathlib import Path
 
 
@@ -269,7 +271,7 @@ def test_mode_select_is_rechecked_for_rest_after_preparation() -> None:
 
 def test_supervised_run_docks_when_owner_presence_is_lost() -> None:
     automation = _automation_block(VACUUM_PATH, "vacuum_dock_supervised_on_presence_loss")
-    assert "entity_id: binary_sensor.bayesian_zeke_home" in automation
+    assert f"entity_id: {PRESENCE_SENSOR}" in automation
     assert 'to: "off"' in automation
     # Only while the policy is Supervised, and it docks all robots.
     assert "entity_id: input_select.vacuum_pet_policy" in automation
@@ -305,10 +307,10 @@ def test_supervised_requires_owner_home_but_unattended_does_not() -> None:
         "vacuum_upstairs_segment_supervised",
     ):
         block = _script_block(VACUUM_PATH, script_id)
-        assert "binary_sensor.bayesian_zeke_home" in block
+        assert PRESENCE_SENSOR in block
         # The gate allows Unattended regardless of presence, else requires home.
         assert "is_state('input_select.vacuum_pet_policy', 'Unattended')" in block
-        assert "is_state('binary_sensor.bayesian_zeke_home', 'on')" in block
+        assert f"is_state('{PRESENCE_SENSOR}', 'on')" in block
 
 
 def test_trip_path_cleans_all_three_areas() -> None:

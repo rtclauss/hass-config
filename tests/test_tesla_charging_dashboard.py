@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import OWNER_PERSON, OWNER_TITLE
+
 import os
 
 from pathlib import Path
@@ -46,7 +48,7 @@ def test_home_calendar_preconditioning_is_independent_of_charge_target() -> None
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "{% set manage_tesla_schedule = (not preserve_default_charging_schedule) or charge_limit != 80 %}" in package_text
-    assert "{% set resident_home = is_state('person.ryan', 'home') %}" in package_text
+    assert f"{{% set resident_home = is_state('{OWNER_PERSON}', 'home') %}}" in package_text
     assert (
         "{% set precondition = has_calendar_departure and departure_window_open and resident_home and location_name == 'home' %}"
         in package_text
@@ -91,10 +93,10 @@ def test_managed_departure_is_cancelled_when_resident_or_vehicle_leaves_home() -
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "id: tesla_departure_cancel_when_home_context_ends" in package_text
-    assert "- person.ryan\n          - device_tracker.nigori_location_tracker\n        from: \"home\"" in package_text
+    assert f"- {OWNER_PERSON}\n          - device_tracker.nigori_location_tracker\n        from: \"home\"" in package_text
     assert "force_disable: true" in package_text
     assert 'force_disable: "{{ not tesla_plan.resident_home or tesla_plan.location != \'home\' }}"' in package_text
-    assert "Cancel the Home Assistant-managed Tesla departure because Ryan or Nigori left home." in package_text
+    assert f"Cancel the Home Assistant-managed Tesla departure because {OWNER_TITLE} or Nigori left home." in package_text
 
 
 def test_preconditioning_plan_includes_low_tpms_air_reminder() -> None:

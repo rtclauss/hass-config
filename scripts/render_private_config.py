@@ -84,7 +84,7 @@ def _require_ignored_output(root: Path, output: Path) -> None:
 
 def render_all(
     root: Path, manifest: Path, values_path: Path, *,
-    check: bool = False, validate: bool = False,
+    check: bool = False, validate: bool = False, missing_only: bool = False,
 ) -> int:
     """Validate and render every target; return the number of files checked."""
     entries = _load_manifest(manifest)
@@ -124,6 +124,8 @@ def render_all(
         return len(prepared)
 
     for output, rendered in prepared:
+        if missing_only and output.is_file():
+            continue
         output.parent.mkdir(parents=True, exist_ok=True)
         descriptor, temporary = tempfile.mkstemp(prefix=".privacy-render-", dir=output.parent)
         try:
