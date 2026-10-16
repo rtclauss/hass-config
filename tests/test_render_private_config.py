@@ -146,6 +146,21 @@ def test_committed_manifest_and_examples_validate() -> None:
     ) >= 0
 
 
+def test_missing_only_keeps_existing_private_render(tmp_path: Path) -> None:
+    (tmp_path / "first.tmpl").write_text("name: @@PRIVATE:first@@\n")
+    (tmp_path / "second.tmpl").write_text("name: @@PRIVATE:second@@\n")
+    manifest, values = _fixture(
+        tmp_path,
+        [("first.tmpl", "first.yaml"), ("second.tmpl", "second.yaml")],
+        {"first": "Synthetic first", "second": "Synthetic second"},
+    )
+    (tmp_path / "first.yaml").write_text("name: Private first\n")
+
+    assert render_all(tmp_path, manifest, values, missing_only=True) == 2
+    assert (tmp_path / "first.yaml").read_text() == "name: Private first\n"
+    assert (tmp_path / "second.yaml").read_text() == "name: Synthetic second\n"
+
+
 def test_public_media_template_contains_no_concrete_account_or_device_ids() -> None:
     template = (ROOT / "private_templates/media_player.yaml.tmpl").read_text()
     examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
@@ -164,3 +179,19 @@ def test_public_media_template_contains_no_concrete_account_or_device_ids() -> N
         template,
         re.I,
     )
+
+
+def test_public_zone_template_keeps_embedded_identity_in_private_mapping() -> None:
+    template = (ROOT / "private_templates/zone.yaml.tmpl").read_text()
+    examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
+    for key in (
+        "presence_person_slug",
+        "presence_person_title",
+        "zone_04_slug",
+        "zone_04_label",
+        "zone_07_latitude_secret_key",
+        "zone_private_annotation_001",
+    ):
+        assert f"@@PRIVATE:{key}@@" in template
+        assert key in examples
+    assert len(re.findall(r"@@PRIVATE:zone_\d{2}_slug@@", template)) >= 7

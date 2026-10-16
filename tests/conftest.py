@@ -11,8 +11,6 @@ MEDIA_PLAYER_PATH = ROOT / "packages" / "media_player.yaml"
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     """Materialize synthetic ignored YAML before test modules import it."""
-    if MEDIA_PLAYER_PATH.is_file():
-        return
     sys.path.insert(0, str(ROOT))
     from scripts.render_private_config import render_all
 
@@ -20,6 +18,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         ROOT,
         ROOT / "docs/private_config_manifest.json",
         ROOT / "examples/private_values.example.json",
+        missing_only=True,
     )
 
 

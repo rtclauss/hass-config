@@ -30,6 +30,8 @@ still timing departure/preconditioning off the soonest qualifying event.
 
 from __future__ import annotations
 
+from privacy_ids import OWNER_CALENDAR
+
 import re
 from pathlib import Path
 
@@ -138,7 +140,7 @@ def test_real_drives_still_count_toward_charge_planning() -> None:
 
 def test_candidate_events_exclude_all_day_entries() -> None:
     # The original bug: a recurring all-day "Replace Contacts" reminder pinned
-    # calendar.ryan_claussen's single native start_time/message attribute for
+    # the owner's calendar's single native start_time/message attribute for
     # the whole day, hiding a real same-day timed event (a 10am dentist
     # appointment). The fix enumerates every event via calendar.get_events and
     # drops all-day events from candidacy before anything else runs.
@@ -170,9 +172,9 @@ def test_trip_sensor_no_longer_reads_each_calendars_single_pinned_attribute() ->
     block = trip_sensor_block.group(1)
 
     assert "action: calendar.get_events" in block
-    assert "entity_id: calendar.ryan_claussen" in block
+    assert f"entity_id: {OWNER_CALENDAR}" in block
     assert "entity_id: calendar.curling" in block
-    assert "state_attr('calendar.ryan_claussen', 'start_time')" not in block
+    assert f"state_attr('{OWNER_CALENDAR}', 'start_time')" not in block
     assert "state_attr('calendar.curling', 'start_time')" not in block
 
 
@@ -336,7 +338,7 @@ def test_departure_timing_follows_the_soonest_qualifying_event_even_when_a_later
             "source": "Personal",
             "message": "Dentist",
             "start": "2026-09-16T10:00:00-05:00",
-            "location": "Zumbro View Dental, Rochester, MN",
+            "location": "Example Dental, Sample City, ST",
             "distance_mi": 69.6,
             "duration_min": 68,
         },
@@ -395,7 +397,7 @@ def test_no_location_event_is_treated_as_local_not_a_trip() -> None:
             "source": "Personal",
             "message": "Dentist",
             "start": "2026-09-16T10:00:00-05:00",
-            "location": "Zumbro View Dental, Rochester, MN",
+            "location": "Example Dental, Sample City, ST",
             "distance_mi": 69.6,
             "duration_min": 68,
         },

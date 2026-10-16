@@ -22,7 +22,7 @@ homeassistant:
       tracked_devices: &tracked_devices
         <<: *customize
         devices:
-          - device_tracker.bayesian_zeke_home
+          - device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
 
       track_ios: &track_ios
         <<: *customize
@@ -36,13 +36,13 @@ homeassistant:
     ################################################
     ## Automations
     ################################################
-    automation.zeke_arrival_emitter:
+    automation.@@PRIVATE:presence_person_slug@@_arrival_emitter:
       <<: *customize
-      friendly_name: Zeke Arrival Event Emitter
+      friendly_name: @@PRIVATE:presence_person_title@@ Arrival Event Emitter
       icon: mdi:home-import-outline
-    automation.zeke_departure_emitter:
+    automation.@@PRIVATE:presence_person_slug@@_departure_emitter:
       <<: *customize
-      friendly_name: Zeke Departure Event Emitter
+      friendly_name: @@PRIVATE:presence_person_title@@ Departure Event Emitter
       icon: mdi:home-export-outline
     automation.cloudy_home_arrival:
       <<: *customize
@@ -65,7 +65,7 @@ homeassistant:
     ################################################
     ## Binary Sensors
     ################################################
-    binary_sensor.bayesian_zeke_home:
+    binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home:
       <<: *customize
       friendly_name: "Home"
       device_class: presence
@@ -97,7 +97,7 @@ homeassistant:
     ################################################
     ## Input Boolean
     ################################################
-    input_boolean.bayesian_zeke_home:
+    input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home:
       <<: *customize
       friendly_name: Bayesian Presence Constraint
     ################################################
@@ -123,9 +123,9 @@ homeassistant:
     sensor.home_time:
       <<: *customize
       friendly_name: "Last Change in Home Dir"
-    sensor.zeke_direction:
+    sensor.@@PRIVATE:presence_person_slug@@_direction:
       <<: *customize
-      friendly_name: "Zeke Direction"
+      friendly_name: "@@PRIVATE:presence_person_title@@ Direction"
     ################################################
     ## Thermostats
     ################################################
@@ -133,35 +133,35 @@ homeassistant:
     ################################################
     ## Zone
     ################################################
-    zone.allianzfield:
+    zone.@@PRIVATE:zone_01_slug@@:
       <<: *track_ios
-      friendly_name: "Allianz Field"
+      friendly_name: "@@PRIVATE:zone_01_label@@"
     zone.home:
       <<: *track_ios
-      friendly_name: "The Brewery"
+      friendly_name: "@@PRIVATE:zone_02_label@@"
       icon: mdi:home
-    zone.msp:
+    zone.@@PRIVATE:zone_04_slug@@:
       <<: *track_ios
-      friendly_name: "MSP Airport"
+      friendly_name: "@@PRIVATE:zone_04_label@@"
       icon: mdi:airplane-landing
-    zone.occ:
+    zone.@@PRIVATE:zone_05_slug@@:
       <<: *track_ios
-      friendly_name: "Owatonna Curling Club"
+      friendly_name: "@@PRIVATE:zone_05_label@@"
       icon: mdi:curling
-    zone.rochester:
+    zone.@@PRIVATE:zone_07_slug@@:
       <<: *track_ios
-      friendly_name: "Rochester"
+      friendly_name: "@@PRIVATE:zone_07_label@@"
       icon: mdi:city-variant
-    zone.spcc:
+    zone.@@PRIVATE:zone_08_slug@@:
       <<: *track_ios
-      friendly_name: "St Paul Curling Club"
+      friendly_name: "@@PRIVATE:zone_08_label@@"
       icon: mdi:curling
-    zone.targetfield:
+    zone.@@PRIVATE:zone_09_slug@@:
       <<: *track_ios
-      friendly_name: "Target Field"
-    zone.twincities:
+      friendly_name: "@@PRIVATE:zone_09_label@@"
+    zone.@@PRIVATE:zone_10_slug@@:
       <<: *track_ios
-      friendly_name: "Twin Cities"
+      friendly_name: "@@PRIVATE:zone_10_label@@"
       icon: mdi:city
     zone.work:
       <<: *track_ios
@@ -172,10 +172,10 @@ homeassistant:
 ## Automation
 ################################################
 automation:
-  - id: zeke_arrival_emitter
-    alias: zeke_arrival_emitter
+  - id: @@PRIVATE:presence_person_slug@@_arrival_emitter
+    alias: @@PRIVATE:presence_person_slug@@_arrival_emitter
     description: >-
-      Own the canonical Zeke arrival triggers and emit a shared event so each
+      Own the canonical @@PRIVATE:presence_person_title@@ arrival triggers and emit a shared event so each
       downstream reaction can keep its own mode, trace history, and conditions.
       Additional people should add their own emitter with the same event
       contract and a distinct person value.
@@ -185,27 +185,27 @@ automation:
     trigger:
       - trigger: zone
         id: tracker_entered_home
-        entity_id: device_tracker.bayesian_zeke_home
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
         zone: zone.home
         event: enter
       - trigger: state
         id: bayesian_presence_on
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         from: "off"
         to: "on"
     action:
-      - event: zeke_arrival
+      - event: @@PRIVATE:presence_person_slug@@_arrival
         event_data:
-          person: zeke
-          reason: zeke_arrival
+          person: @@PRIVATE:presence_person_slug@@
+          reason: @@PRIVATE:presence_person_slug@@_arrival
           source_trigger: "{{ trigger.id }}"
-          tracker_entity_id: device_tracker.bayesian_zeke_home
-          presence_entity_id: binary_sensor.bayesian_zeke_home
+          tracker_entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+          presence_entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
 
-  - id: zeke_departure_emitter
-    alias: zeke_departure_emitter
+  - id: @@PRIVATE:presence_person_slug@@_departure_emitter
+    alias: @@PRIVATE:presence_person_slug@@_departure_emitter
     description: >-
-      Own the canonical Zeke departure triggers and emit a shared event so each
+      Own the canonical @@PRIVATE:presence_person_title@@ departure triggers and emit a shared event so each
       downstream reaction can keep its own mode, trace history, and conditions.
       Additional people should add their own emitter with the same event
       contract and a distinct person value.
@@ -215,22 +215,22 @@ automation:
     trigger:
       - trigger: zone
         id: tracker_left_home
-        entity_id: device_tracker.bayesian_zeke_home
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
         zone: zone.home
         event: leave
       - trigger: state
         id: bayesian_presence_off
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         from: "on"
         to: "off"
     action:
-      - event: zeke_departure
+      - event: @@PRIVATE:presence_person_slug@@_departure
         event_data:
-          person: zeke
-          reason: zeke_departure
+          person: @@PRIVATE:presence_person_slug@@
+          reason: @@PRIVATE:presence_person_slug@@_departure
           source_trigger: "{{ trigger.id }}"
-          tracker_entity_id: device_tracker.bayesian_zeke_home
-          presence_entity_id: binary_sensor.bayesian_zeke_home
+          tracker_entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+          presence_entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
 
   - id: cloudy_home_arrival
     alias: cloudy_home_arrival
@@ -239,14 +239,14 @@ automation:
     trigger:
       - trigger: event
         id: cloudy_home_arrival_signal
-        event_type: zeke_arrival
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       condition: and
       conditions:
         - condition: numeric_state
-          entity_id: sensor.tomorrow_io_the_brewery_cloud_cover
+          entity_id: sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_cloud_cover
           above: 50
         - condition: state
           entity_id: binary_sensor.bayesian_bed_occupancy
@@ -269,9 +269,9 @@ automation:
     trigger:
       - trigger: event
         id: default_arrive_home_signal
-        event_type: zeke_arrival
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       and:
         - condition: state
@@ -299,12 +299,12 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         to: "on"
     action:
       - action: input_boolean.turn_on
         target:
-          entity_id: input_boolean.bayesian_zeke_home
+          entity_id: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
 
   - alias: input_boolean_tracker_off
     id: input_boolean_tracker_off
@@ -313,9 +313,9 @@ automation:
     trigger:
       - trigger: event
         id: empty_house_tracker_signal
-        event_type: zeke_departure
+        event_type: @@PRIVATE:presence_person_slug@@_departure
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       # Only the emitter's from:on -> off Bayesian source updates the empty-house
       # timestamp; the GPS zone leave source can fire before the house is empty.
@@ -325,7 +325,7 @@ automation:
     action:
       - action: input_boolean.turn_off
         target:
-          entity_id: input_boolean.bayesian_zeke_home
+          entity_id: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
       - action: input_datetime.set_datetime
         target:
           entity_id: input_datetime.contextual_arrival_last_empty_at
@@ -339,9 +339,9 @@ automation:
     trigger:
       - trigger: event
         id: arrival_music_signal
-        event_type: zeke_arrival
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       - alias: "Arrival music allowed when guest mode is off"
         condition: state
@@ -357,7 +357,7 @@ automation:
         state: "Automotive"
       # - condition: template
       #   value_template: >-
-      #     {{ not is_state('media_player.spotify_ryan_claussen', 'playing') }}
+@@PRIVATE:zone_private_annotation_001@@
     action:
       - action: script.turn_on
         target:
@@ -373,9 +373,9 @@ automation:
     trigger:
       - trigger: event
         id: night_arrival_signal
-        event_type: zeke_arrival
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       condition: and
       conditions:
@@ -411,9 +411,9 @@ automation:
     trigger:
       - trigger: event
         id: bedroom_prep_arrival_signal
-        event_type: zeke_arrival
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       condition: and
       conditions:
@@ -437,7 +437,7 @@ automation:
       - action: notify.all
         data:
           data:
-            url: "/ryan-new-mushroom/owner-suite"
+            url: "/@@PRIVATE:owner_dashboard_slug@@-new-mushroom/owner-suite"
           message: "Bedroom Prep Activated"
 
   # Use Ecobee Vacation mode now.
@@ -471,23 +471,23 @@ automation:
       stored_traces: 10
     trigger:
       # - platform: state
-      #   entity_id: device_tracker.bayesian_zeke_home
-      #   from: 'Twin Cities'
+      #   entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+      #   from: '@@PRIVATE:zone_10_label@@'
       - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.rochester
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_07_slug@@
         event: leave
       - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.allianzfield
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_01_slug@@
         event: leave
       - trigger: zone
-        entity_id: device_tracker.bayesian_zeke_home
-        zone: zone.targetfield
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+        zone: zone.@@PRIVATE:zone_09_slug@@
         event: leave
     # condition:
     #   condition: template
-    #   value_template: '{{ 110 <= sensor.zeke_direction <= 260 }}'
+    #   value_template: '{{ 110 <= sensor.@@PRIVATE:presence_person_slug@@_direction <= 260 }}'
     action:
       # - action: nest.set_eta
       #   data_template:
@@ -504,9 +504,9 @@ automation:
       - action: notify.all
         data:
           data:
-            url: "/ryan-new-mushroom/climate"
+            url: "/@@PRIVATE:owner_dashboard_slug@@-new-mushroom/climate"
           message: >-
-            Turn off HVAC Away Mode. You {{trigger.event}} {{trigger.zone}} in direction {{ states('sensor.zeke_direction') }}. Setting Ecobee Home.
+            Turn off HVAC Away Mode. You {{trigger.event}} {{trigger.zone}} in direction {{ states('sensor.@@PRIVATE:presence_person_slug@@_direction') }}. Setting Ecobee Home.
 
   - id: run_verified_departure
     alias: run_verified_departure
@@ -517,9 +517,9 @@ automation:
     trigger:
       - trigger: event
         id: departure_house_transition_signal
-        event_type: zeke_departure
+        event_type: @@PRIVATE:presence_person_slug@@_departure
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       - alias: "Only start departure integrity from Bayesian departure"
         condition: template
@@ -536,7 +536,7 @@ automation:
       # away transition never ran (#110, Codex P1).
       - alias: "House is empty per the Bayesian presence signal"
         condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         state: "off"
       - alias: "I'm driving away"
         enabled: false
@@ -576,14 +576,14 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: device_tracker.bayesian_zeke_home
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
     condition:
       - condition: template
         value_template: >-
           {{
-            as_timestamp(now(), default=now()) - as_timestamp(states.device_tracker.bayesian_zeke_home.last_changed, default=now()) |int > 72000
+            as_timestamp(now(), default=now()) - as_timestamp(states.device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home.last_changed, default=now()) |int > 72000
             or
-            not is_state('device_tracker.bayesian_zeke_home', 'not_home')
+            not is_state('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'not_home')
           }}
     action:
       - action: input_select.select_option
@@ -596,12 +596,12 @@ automation:
   #   alias: update_nest_eta
   #   trigger:
   #     - platform: zone
-  #       entity_id: device_tracker.bayesian_zeke_home
-  #       zone: zone.twincities
+  #       entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+  #       zone: zone.@@PRIVATE:zone_10_slug@@
   #       event: enter
   #     - platform: state
-  #       entity_id: device_tracker.bayesian_zeke_home
-  #       to: "Twin Cities"
+  #       entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
+  #       to: "@@PRIVATE:zone_10_label@@"
   #       from: "Away"
   #   action:
   #     # - action: nest.set_eta
@@ -618,7 +618,7 @@ automation:
   #     - action: notify.all
   #       data_template:
   #         message: >-
-  #           Entering Twin Cities from direction {{ states('sensor.zeke_direction') }}. Turning off Away Mode. ETA to home {{ states('sensor.time_to_home') }}.
+  #           Entering @@PRIVATE:zone_10_label@@ from direction {{ states('sensor.@@PRIVATE:presence_person_slug@@_direction') }}. Turning off Away Mode. ETA to home {{ states('sensor.time_to_home') }}.
 
   - id: vacuum_return_home
     alias: vacuum_return_home
@@ -627,9 +627,9 @@ automation:
     trigger:
       - trigger: event
         id: vacuum_return_arrival_signal
-        event_type: zeke_arrival
+        event_type: @@PRIVATE:presence_person_slug@@_arrival
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     action:
       - action: vacuum.return_to_base
         target:
@@ -655,9 +655,9 @@ automation:
     trigger:
       - trigger: event
         id: vacuum_departure_signal
-        event_type: zeke_departure
+        event_type: @@PRIVATE:presence_person_slug@@_departure
         event_data:
-          person: zeke
+          person: @@PRIVATE:presence_person_slug@@
     condition:
       - alias: "Only start departure vacuum from Bayesian departure"
         condition: template
@@ -679,7 +679,7 @@ binary_sensor:
   # Working prior to 6/27/2022
   # - platform: bayesian
   #   prior: 0.1
-  #   name: bayesian_zeke_home
+  #   name: bayesian_@@PRIVATE:presence_person_slug@@_home
   #   probability_threshold: 0.80
   #   observations:
   #     - entity_id: device_tracker.wethop
@@ -703,7 +703,7 @@ binary_sensor:
   #       platform: "state"
   #       to_state: "on"
   #     ### Try out the speed sensor
-  #     - entity_id: sensor.zeke_speed
+  #     - entity_id: sensor.@@PRIVATE:presence_person_slug@@_speed
   #       platform: "numeric_state"
   #       below: 25
   #       prob_given_true: 0.60
@@ -711,22 +711,22 @@ binary_sensor:
   #       prob_given_true: 0.95
   #       prob_given_false: 0.05
   #       value_template: >-
-  #         {{ is_state('sensor.wethop_activity', 'Walking') and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Twin Cities')) }}
+  #         {{ is_state('sensor.wethop_activity', 'Walking') and (states('sensor.@@PRIVATE:presence_person_slug@@_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', '@@PRIVATE:zone_10_label@@')) }}
   #     - platform: template
   #       prob_given_true: 0.95
   #       prob_given_false: 0.05
   #       value_template: >-
-  #         {{ is_state('sensor.wethop_activity', 'Biking') and (states('sensor.zeke_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_zeke_home', 'Twin Cities')) }}
+  #         {{ is_state('sensor.wethop_activity', 'Biking') and (states('sensor.@@PRIVATE:presence_person_slug@@_speed')|float(default=0) <=5) and (is_state('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', '@@PRIVATE:zone_10_label@@')) }}
   #     - platform: template
   #       prob_given_true: 0.05
   #       prob_given_false: 0.95
   #       value_template: >-
-  #         {{ is_state('sensor.wethop_activity', 'Automotive') and (states('sensor.zeke_speed')|float(default=0) >=5) }}
+  #         {{ is_state('sensor.wethop_activity', 'Automotive') and (states('sensor.@@PRIVATE:presence_person_slug@@_speed')|float(default=0) >=5) }}
 
   - platform: bayesian
-    unique_id: bayesian_zeke_home
+    unique_id: bayesian_@@PRIVATE:presence_person_slug@@_home
     prior: 0.92
-    name: bayesian_zeke_home
+    name: bayesian_@@PRIVATE:presence_person_slug@@_home
     probability_threshold: 0.80
     observations:
       - entity_id: device_tracker.wethop
@@ -746,7 +746,7 @@ binary_sensor:
         to_state: "home"
       - entity_id: binary_sensor.arrival_sensor_presence
         prob_given_true: 0.999
-        prob_given_false: 0.05  # sensor is in the car; car at home ≠ Zeke home; trip observation guards this
+        prob_given_false: 0.05  # sensor is in the car; car at home ≠ @@PRIVATE:presence_person_title@@ home; trip observation guards this
         platform: state
         to_state: "on"
       - entity_id: input_boolean.trip
@@ -764,7 +764,7 @@ device_tracker: []
 # Input Booleans
 ########################
 input_boolean:
-  bayesian_zeke_home:
+  bayesian_@@PRIVATE:presence_person_slug@@_home:
 
 ########################
 # Input Numbers
@@ -787,14 +787,14 @@ input_select:
   trip_origin:
     name: "Trip Origin"
     options:
-      - "MSP Airport"
-      - "Owatonna Curling Club"
-      - "St Paul Curling Club"
-      - "Twin Cities"
+      - "@@PRIVATE:zone_04_label@@"
+      - "@@PRIVATE:zone_05_label@@"
+      - "@@PRIVATE:zone_08_label@@"
+      - "@@PRIVATE:zone_10_label@@"
       - "Work"
       - "home"
       - "not_home"
-      - "Rochester"
+      - "@@PRIVATE:zone_07_label@@"
       - "Parents"
       - "Neighborhood"
     initial: "Work"
@@ -805,12 +805,12 @@ input_select:
 group:
   bayesian_inputs:
     entities:
-      - device_tracker.bayesian_zeke_home
+      - device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
       - device_tracker.wethop
       - sensor.wethop_ssid
       - binary_sensor.arrival_sensor_presence
       - input_boolean.trip
-      - sensor.zeke_speed
+      - sensor.@@PRIVATE:presence_person_slug@@_speed
       - sensor.wethop_battery_state
       - sensor.wethop_activity
       # - binary_sensor.nest_home
@@ -974,7 +974,7 @@ script:
       # the away transition (#110, Codex P1).
       - alias: "Departure integrity requires an empty house"
         condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         state: "off"
       - action: script.house_transition
         data:
@@ -989,7 +989,7 @@ script:
         state: "off"
       - alias: "Stop retry work if the resident returned"
         condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         state: "off"
       - variables:
           retry_lock: >-
@@ -1134,7 +1134,7 @@ script:
         state: "off"
       - alias: "Do not notify if the resident returned"
         condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         state: "off"
       - variables:
           final_interior_lights_on: >-
@@ -1309,10 +1309,10 @@ script:
       # has already been established (Bayesian "on" for more than the grace
       # window) as an occupied re-entry and force the minimal quick tier.
       seconds_since_presence: >-
-        {% set lc = states.binary_sensor.bayesian_zeke_home.last_changed %}
+        {% set lc = states.binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home.last_changed %}
         {{ (as_timestamp(now()) - as_timestamp(lc)) | int if lc is not none else 0 }}
       occupied_reentry: >-
-        {{ is_state('binary_sensor.bayesian_zeke_home', 'on')
+        {{ is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on')
            and (seconds_since_presence | int(0)) > 300 }}
       arrival_tier: >-
         {% if occupied_reentry %}
@@ -1412,7 +1412,7 @@ sensor:
 
   # - platform: places
   #   name: wethop
-  #   devicetracker_id: device_tracker.bayesian_zeke_home
+  #   devicetracker_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
   #   options: place
   #   map_provider: google
   #   map_zoom: 17
@@ -1472,14 +1472,14 @@ template:
       # HA derives it from same_state alone, so it still advances only when
       # the identity itself changes, which is what diy_store_current's
       # recency ranking depends on.
-      - name: diy_store_zeke
-        unique_id: diy_store_zeke
-        default_entity_id: sensor.diy_store_zeke
+      - name: diy_store_@@PRIVATE:presence_person_slug@@
+        unique_id: diy_store_@@PRIVATE:presence_person_slug@@
+        default_entity_id: sensor.diy_store_@@PRIVATE:presence_person_slug@@
         icon: mdi:store-marker
         state: >-
           {% from 'diy_store.jinja' import diy_store_identity, diy_place_is_vague %}
-          {%- set matched = diy_store_identity('zeke') | trim -%}
-          {%- set vague = diy_place_is_vague('zeke') | trim == 'true' -%}
+          {%- set matched = diy_store_identity('@@PRIVATE:presence_person_slug@@') | trim -%}
+          {%- set vague = diy_place_is_vague('@@PRIVATE:presence_person_slug@@') | trim == 'true' -%}
           {%- set previous = this.state
                if this is defined and this.state not in ['unknown', 'unavailable']
                else 'none' -%}
@@ -1565,7 +1565,7 @@ template:
                else 'none' -%}
           {%- set ns = namespace(
                newest='', newest_at=0, backing_at=0, still_backed=false) -%}
-          {%- for tracker in ['zeke', 'tesla'] -%}
+          {%- for tracker in ['@@PRIVATE:presence_person_slug@@', 'tesla'] -%}
             {%- set entity = states['sensor.diy_store_' ~ tracker] -%}
             {%- if entity is not none
                    and entity.state not in ['none', 'unknown', 'unavailable'] -%}
@@ -1613,10 +1613,10 @@ template:
       - name: test_homeward
         unique_id: test_homeward
         availability: >-
-          {{ states.sensor.the_brewery_nearest_direction_of_travel.last_changed is defined }}
+          {{ states.sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel.last_changed is defined }}
         state: >-
           {% if
-              (((as_timestamp(now(), default=now()) - as_timestamp(states.sensor.the_brewery_nearest_direction_of_travel.last_changed, default=now()))//60) | int > 95) and (states('sensor.the_brewery_nearest_direction_of_travel')=="towards")
+              (((as_timestamp(now(), default=now()) - as_timestamp(states.sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel.last_changed, default=now()))//60) | int > 95) and (states('sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel')=="towards")
           %} true
           {% else %}
             false
@@ -1625,18 +1625,18 @@ template:
       - name: home_time
         unique_id: home_time
         state: >-
-          {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.the_brewery_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
+          {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.@@PRIVATE:zone_02_name_slug@@_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
         unit_of_measurement: "minutes"
-      - name: zeke_speed
-        unique_id: zeke_speed
+      - name: @@PRIVATE:presence_person_slug@@_speed
+        unique_id: @@PRIVATE:presence_person_slug@@_speed
         unit_of_measurement: "mph"
         state: >-
-          {{ state_attr('device_tracker.bayesian_zeke_home', 'speed') | int(-1) }}
-      - name: zeke_direction
-        unique_id: zeke_direction
+          {{ state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'speed') | int(-1) }}
+      - name: @@PRIVATE:presence_person_slug@@_direction
+        unique_id: @@PRIVATE:presence_person_slug@@_direction
         state: >-
-          {% if (state_attr('device_tracker.bayesian_zeke_home', 'course') | int(-1)) >=0 -%}
-            {{ state_attr('device_tracker.bayesian_zeke_home', 'course') | int(-1) }}
+          {% if (state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'course') | int(-1)) >=0 -%}
+            {{ state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'course') | int(-1) }}
           {%- else -%}
             {{ -1 | int(-1) }}
           {%- endif %}
@@ -1672,13 +1672,13 @@ zone:
     radius: 500
 
   - name: !secret private_zone_06_name
-    latitude: !secret parents_latitude
-    longitude: !secret parents_longitude
+    latitude: !secret @@PRIVATE:zone_06_latitude_secret_key@@
+    longitude: !secret @@PRIVATE:zone_06_longitude_secret_key@@
     radius: 20000
 
   - name: !secret private_zone_07_name
-    latitude: !secret rst_latitude
-    longitude: !secret rst_longitude
+    latitude: !secret @@PRIVATE:zone_07_latitude_secret_key@@
+    longitude: !secret @@PRIVATE:zone_07_longitude_secret_key@@
     radius: 10000
 
   - name: !secret private_zone_08_name

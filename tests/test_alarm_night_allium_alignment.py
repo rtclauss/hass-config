@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_TRACKER
+
 import re
 from pathlib import Path
 
@@ -186,7 +188,7 @@ def test_snooze_cancel_and_rollover_cover_alarm_followup_semantics() -> None:
     for token in (
         "entity_id: input_boolean.wakeup_alarm_firing",
         'state: "true"',
-        "entity_id: device_tracker.bayesian_zeke_home",
+        f"entity_id: {PRESENCE_TRACKER}",
         "entity_id: input_boolean.master_bed_occupancy",
         "entity_id: script.snooze_script",
     ):
