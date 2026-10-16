@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR
+
 import re
 from pathlib import Path
 
@@ -336,7 +338,7 @@ def test_arrival_adaptive_lighting_scopes_occupied_arrivals_to_non_manual_lights
         "id: bayesian-presence-turned-on",
         "arrival_home_was_empty",
         "trigger.from_state.state == 'off'",
-        "is_state('binary_sensor.bayesian_zeke_home', 'off')",
+        f"is_state('{PRESENCE_SENSOR}', 'off')",
         "arrival_common_adaptive_switches:",
         "arrival_owner_suite_adaptive_switches:",
         "arrival_adaptive_switches:",
