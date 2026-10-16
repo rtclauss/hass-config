@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR
+
 from pathlib import Path
 
 
@@ -89,7 +91,7 @@ def test_guest_door_unlock_opens_house_and_lock_closes_it() -> None:
 
     assert "entity_id: lock.front_door_lock" in unlock
     assert "input_boolean.trip\n" in unlock
-    assert "binary_sensor.bayesian_zeke_home" in unlock
+    assert PRESENCE_SENSOR in unlock
     assert "action: alarm_control_panel.alarm_disarm" in unlock
     assert "action: switch.turn_on" in unlock
     assert "switch.basement_water_shutoff" in unlock
@@ -104,7 +106,7 @@ def test_guest_door_unlock_opens_house_and_lock_closes_it() -> None:
 def test_guest_visit_flag_clears_on_return_or_trip_end() -> None:
     block = _automation_block(TRIPS_PATH, "trip_guest_visit_clear_on_return")
 
-    assert "entity_id: binary_sensor.bayesian_zeke_home" in block
+    assert f"entity_id: {PRESENCE_SENSOR}" in block
     assert "entity_id: input_boolean.trip\n" in block
     assert "action: input_boolean.turn_off" in block
     assert "input_boolean.trip_guest_visit_active" in block
@@ -180,7 +182,7 @@ def test_visit_guards_unlock_loop_relock_presence_and_vacation_lights() -> None:
     assert unlock.rindex(guard) > unlock.index("wait_template")
     for block in (unlock, lock):
         assert "input_boolean.trip\n" in block
-        assert "binary_sensor.bayesian_zeke_home" in block
+        assert PRESENCE_SENSOR in block
 
     lights_on = _automation_block(TRIPS_PATH, "vacation_lights_on")
     lights_off = _automation_block(TRIPS_PATH, "vacation_lights_off")

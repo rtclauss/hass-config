@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR, PRESENCE_TRACKER
+
 from pathlib import Path
 
 
@@ -36,9 +38,9 @@ def _automation_block(automation_id: str) -> str:
 def test_owner_suite_light_auto_on_uses_home_presence_sensor() -> None:
     block = _automation_block("owner_suite_light_auto_on")
 
-    assert "binary_sensor.bayesian_zeke_home" in block
+    assert PRESENCE_SENSOR in block
     assert 'state: "on"' in block
-    assert "device_tracker.bayesian_zeke_home" not in block
+    assert PRESENCE_TRACKER not in block
     assert "zone: zone.home" not in block
     assert "light.owner_suite_lamps" in block
     assert "binary_sensor.bayesian_bed_occupancy" in block

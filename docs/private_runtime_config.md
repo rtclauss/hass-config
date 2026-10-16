@@ -184,6 +184,21 @@ The values in `travis_secrets.example.yaml` and
 `examples/private_values.example.json` are synthetic and intended only for
 tests and CI.
 
+## Shared presence identity
+
+The zone package produces the canonical presence entities, and 17 other
+Home Assistant packages consume them. All 18 packages now render the same
+private person identifier from the ignored mapping; synthetic CI values use
+one matching example identifier. The template migration does not rename any
+live entity: all real renders are byte-identical to their tracked baselines.
+The 17 additional live package files were byte-verified under
+`.private-runtime-backup/current-config/presence-template-2026-10-14/packages/`.
+Four package files in the full zone/presence set differ from their tracked
+source because earlier scalar values moved to `!secret`; resolving the live
+secrets confirms structural equivalence. Update the live checkout and render
+every manifest target as one deployment before reloading automations or
+packages. Do not deploy the synthetic render to the live host.
+
 ## Archived AppDaemon and ESPHome comments
 
 The old `appdaemon.bak/` tree is ignored. Its 30 live files have been copied
