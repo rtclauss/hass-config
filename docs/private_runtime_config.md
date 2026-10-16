@@ -199,6 +199,18 @@ secrets confirms structural equivalence. Update the live checkout and render
 every manifest target as one deployment before reloading automations or
 packages. Do not deploy the synthetic render to the live host.
 
+## Private flight and airport data
+
+`packages/flight_status.yaml` is rendered from a public template with its
+airport lookup entries, home airport aliases, fallback coordinates, and
+personal calendar entity in the ignored mapping. The existing trips template
+uses the same airport alias keys. The real renders of both packages match
+their tracked baselines byte for byte. The live flight package matches its
+tracked baseline and is backed up at
+`.private-runtime-backup/current-config/packages/flight_status.before-template-2026-10-16.yaml`.
+Synthetic examples use invented airport codes and places for CI. Render all
+manifest targets together before reloading either package on the live host.
+
 ## Archived AppDaemon and ESPHome comments
 
 The old `appdaemon.bak/` tree is ignored. Its 30 live files have been copied

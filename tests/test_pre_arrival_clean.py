@@ -1,6 +1,6 @@
 """The flying-home clean must FINISH before the plane lands.
 
-On 2026-10-09 the clean was started at takeoff, but a full vacuum+mop cycle (182-191 min)
+In a prior trip the clean was started at takeoff, but a full vacuum+mop cycle (182-191 min)
 is longer than the 150 min flight, and two more requests stacked behind it in the single
 X40 queue and ran after the owner got home. These tests pin the fix: the clean is anchored
 to the flight's ARRIVAL, flying-home days don't stack other launches, and queued requests
@@ -9,7 +9,7 @@ are re-validated when they are dequeued.
 
 from __future__ import annotations
 
-from privacy_ids import PRESENCE_SENSOR
+from privacy_ids import HOME_CODE_LIST, PRESENCE_SENSOR
 
 from pathlib import Path
 
@@ -103,8 +103,8 @@ def test_arrival_sensor_reads_both_flight_sensors_end_time() -> None:
     block = text.split("name: Next Flight Home Arrival", 1)[1].split("name: Pre-Arrival Clean Start", 1)[0]
 
     assert "device_class: timestamp" in block
-    assert "binary_sensor.flight_to_example_zone_04_today" in block
-    assert "binary_sensor.flight_to_aab_today" in block
+    assert f"binary_sensor.flight_to_{HOME_CODE_LIST[0].lower()}_today" in block
+    assert f"binary_sensor.flight_to_{HOME_CODE_LIST[1].lower()}_today" in block
     assert "state_attr(ent, 'end_time')" in block
     # Only a flight that has not landed yet, and the soonest of them.
     assert "as_timestamp(dt) > as_timestamp(now())" in block

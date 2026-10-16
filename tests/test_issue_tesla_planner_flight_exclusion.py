@@ -1,6 +1,6 @@
 """Regression tests for the Tesla charge planner's calendar trip selection.
 
-Background #1 (flights): a "flight to Atlanta" (or any far-destination flight)
+Background #1 (flights): a named outbound flight (or any far-destination flight)
 on the calendar used to drive `binary_sensor.upcoming_trip_charging` on,
 because the Waze distance to the arrival city is huge. With the
 `>= 90 mi -> 100%` rule that pinned the home Tesla to a 100% charge while the
@@ -30,7 +30,7 @@ still timing departure/preconditioning off the soonest qualifying event.
 
 from __future__ import annotations
 
-from privacy_ids import OWNER_CALENDAR
+from privacy_ids import HOME_CODE_LIST, OWNER_CALENDAR
 
 import re
 from pathlib import Path
@@ -120,21 +120,20 @@ def test_charge_planner_uses_shared_flight_macro_when_building_candidates() -> N
 
 
 def test_flight_events_are_excluded_from_charge_planning() -> None:
-    # Outbound "flight to Atlanta" style event (the original bug).
-    assert _skip_charging_event("Flight to Atlanta (DL 2819)", "Synced by Flighty") is True
-    # Route-arrow itineraries, including legs that do not depart from AAA.
-    assert _skip_charging_event("✈ CMH→SLC • DL 1234", "Synced by Flighty") is True
-    assert _skip_charging_event("✈ SFO→AAA • DL 5678", "Synced by Flighty") is True
+    # Named outbound and route-arrow itineraries must be excluded.
+    assert _skip_charging_event("Flight to Sample City (EX 1001)", "Synced by Flighty") is True
+    assert _skip_charging_event("✈ CCC→DDD • EX 1002", "Synced by Flighty") is True
+    assert _skip_charging_event(f"✈ EEE→{HOME_CODE_LIST[0]} • EX 1003", "Synced by Flighty") is True
     # Itinerary markers alone are enough.
     assert _skip_charging_event("Trip", "Created from an email you received in Gmail") is True
     # Manual opt-out still works.
-    assert _skip_charging_event("Road trip to Duluth", "nocharge please") is True
+    assert _skip_charging_event("Road trip to Example Town", "nocharge please") is True
 
 
 def test_real_drives_still_count_toward_charge_planning() -> None:
     # A genuine long drive with no flight signals and no nocharge tag must
     # still be eligible so the planner can raise the charge limit.
-    assert _skip_charging_event("Curling bonspiel", location="Brookings, SD") is False
+    assert _skip_charging_event("Curling bonspiel", location="Sample City, ST") is False
     assert _skip_charging_event("Visit the cabin", "Up north for the weekend") is False
 
 
@@ -297,7 +296,7 @@ def test_furthest_event_of_the_day_drives_the_charge_limit() -> None:
         {
             "source": "Personal",
             "message": "Grocery run",
-            "start": "2026-09-16T09:00:00-05:00",
+            "start": "2030-09-16T09:00:00-05:00",
             "location": "Local grocery store",
             "distance_mi": 3,
             "duration_min": 8,
@@ -305,7 +304,7 @@ def test_furthest_event_of_the_day_drives_the_charge_limit() -> None:
         {
             "source": "Personal",
             "message": "Pick up dry cleaning",
-            "start": "2026-09-16T11:00:00-05:00",
+            "start": "2030-09-16T11:00:00-05:00",
             "location": "Local dry cleaner",
             "distance_mi": 5,
             "duration_min": 10,
@@ -313,8 +312,8 @@ def test_furthest_event_of_the_day_drives_the_charge_limit() -> None:
         {
             "source": "Personal",
             "message": "Think Loan Closing",
-            "start": "2026-09-16T13:00:00-05:00",
-            "location": "Title company, Minneapolis, MN",
+            "start": "2030-09-16T13:00:00-05:00",
+            "location": "Example title company, Sample City, ST",
             "distance_mi": 100,
             "duration_min": 40,
         },
@@ -337,7 +336,7 @@ def test_departure_timing_follows_the_soonest_qualifying_event_even_when_a_later
         {
             "source": "Personal",
             "message": "Dentist",
-            "start": "2026-09-16T10:00:00-05:00",
+            "start": "2030-09-16T10:00:00-05:00",
             "location": "Example Dental, Sample City, ST",
             "distance_mi": 69.6,
             "duration_min": 68,
@@ -345,8 +344,8 @@ def test_departure_timing_follows_the_soonest_qualifying_event_even_when_a_later
         {
             "source": "Personal",
             "message": "Think Loan Closing",
-            "start": "2026-09-16T13:00:00-05:00",
-            "location": "Title company, Minneapolis, MN",
+            "start": "2030-09-16T13:00:00-05:00",
+            "location": "Example title company, Sample City, ST",
             "distance_mi": 100,
             "duration_min": 40,
         },
@@ -355,7 +354,7 @@ def test_departure_timing_follows_the_soonest_qualifying_event_even_when_a_later
     plan = _select_trip_plan(candidates)
 
     assert plan["entry"] == "Personal: Dentist"
-    assert plan["start_time"] == "2026-09-16T10:00:00-05:00"
+    assert plan["start_time"] == "2030-09-16T10:00:00-05:00"
     assert plan["duration_min"] == 68
     assert plan["distance_mi"] == 100
     assert plan["furthest_entry"] == "Personal: Think Loan Closing"
@@ -366,7 +365,7 @@ def test_all_local_events_never_produce_an_active_plan() -> None:
         {
             "source": "Personal",
             "message": "Grocery run",
-            "start": "2026-09-16T09:00:00-05:00",
+            "start": "2030-09-16T09:00:00-05:00",
             "location": "Local grocery store",
             "distance_mi": 3,
             "duration_min": 8,
@@ -388,7 +387,7 @@ def test_no_location_event_is_treated_as_local_not_a_trip() -> None:
         {
             "source": "Personal",
             "message": "Replace Contacts",
-            "start": "2026-09-16T00:00:00-05:00",
+            "start": "2030-09-16T00:00:00-05:00",
             "location": "",
             "distance_mi": 0,
             "duration_min": 0,
@@ -396,7 +395,7 @@ def test_no_location_event_is_treated_as_local_not_a_trip() -> None:
         {
             "source": "Personal",
             "message": "Dentist",
-            "start": "2026-09-16T10:00:00-05:00",
+            "start": "2030-09-16T10:00:00-05:00",
             "location": "Example Dental, Sample City, ST",
             "distance_mi": 69.6,
             "duration_min": 68,

@@ -99,7 +99,7 @@ automation:
             target:
               entity_id: text.flightradar24_airport_track
             data:
-              value: "AAA"
+              value: "@@PRIVATE:home_airport_primary_code@@"
 
 
 ################################################
@@ -125,7 +125,7 @@ rest:
       {% if lat is number and lon is number %}
         https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(lat) }}&longitude={{ '%.4f' | format(lon) }}&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
       {% else %}
-        https://api.open-meteo.com/v1/forecast?latitude=10.0000&longitude=-20.0000&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
+        https://api.open-meteo.com/v1/forecast?latitude=@@PRIVATE:flight_weather_fallback_latitude@@&longitude=@@PRIVATE:flight_weather_fallback_longitude@@&current=temperature_2m,weather_code,precipitation,wind_speed_10m&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto
       {% endif %}
     scan_interval: 1800
     timeout: 20
@@ -154,7 +154,7 @@ template:
         minutes: "/15"
       - trigger: state
         entity_id:
-          - calendar.example_example
+          - calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
           - calendar.work_trip
     action:
       - variables:
@@ -164,7 +164,7 @@ template:
             {{ (now() + timedelta(days=14)).replace(hour=23, minute=59, second=59, microsecond=0).isoformat() }}
       - action: calendar.get_events
         target:
-          entity_id: calendar.example_example
+          entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
         data:
           start_date_time: "{{ lookahead_start }}"
           end_date_time: "{{ lookahead_end }}"
@@ -180,8 +180,8 @@ template:
           personal_events: >-
             {% if personal_event_window is mapping and personal_event_window.events is defined %}
               {{ personal_event_window.events | to_json }}
-            {% elif personal_event_window is mapping and personal_event_window['calendar.example_example'] is defined and personal_event_window['calendar.example_example'].events is defined %}
-              {{ personal_event_window['calendar.example_example'].events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'] is defined and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events is defined %}
+              {{ personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events | to_json }}
             {% else %}
               {{ [] | to_json }}
             {% endif %}
@@ -195,39 +195,39 @@ template:
             {% endif %}
           next_flight_json: >-
             {% set now_ts = as_timestamp(now()) %}
-            {% set home_codes = ['AAA', 'AAB', 'EXAMPLEMETRO', 'EXAMPLEMETROAREA', 'EXAMPLECITY', 'EXAMPLEREGION'] %}
+            {% set home_codes = ['@@PRIVATE:home_airport_primary_code@@', '@@PRIVATE:home_airport_secondary_code@@', '@@PRIVATE:home_metro_code@@', '@@PRIVATE:home_metro_compact_code@@', '@@PRIVATE:home_city_secondary_code@@', '@@PRIVATE:home_region_code@@'] %}
             {% set airport_map = {
-              'AAA': {'name': 'Example Airport 01', 'lat': 10.01, 'lon': -20.01},
-              'AAB': {'name': 'Example Airport 02', 'lat': 10.02, 'lon': -20.02},
-              'AAC': {'name': 'Example Airport 03', 'lat': 10.03, 'lon': -20.03},
-              'AAD': {'name': 'Example Airport 04', 'lat': 10.04, 'lon': -20.04},
-              'AAE': {'name': 'Example Airport 05', 'lat': 10.05, 'lon': -20.05},
-              'AAF': {'name': 'Example Airport 06', 'lat': 10.06, 'lon': -20.06},
-              'AAG': {'name': 'Example Airport 07', 'lat': 10.07, 'lon': -20.07},
-              'AAH': {'name': 'Example Airport 08', 'lat': 10.08, 'lon': -20.08},
-              'AAI': {'name': 'Example Airport 09', 'lat': 10.09, 'lon': -20.09},
-              'AAJ': {'name': 'Example Airport 10', 'lat': 10.10, 'lon': -20.10},
-              'AAK': {'name': 'Example Airport 11', 'lat': 10.11, 'lon': -20.11},
-              'AAL': {'name': 'Example Airport 12', 'lat': 10.12, 'lon': -20.12},
-              'AAM': {'name': 'Example Airport 13', 'lat': 10.13, 'lon': -20.13},
-              'AAN': {'name': 'Example Airport 14', 'lat': 10.14, 'lon': -20.14},
-              'AAO': {'name': 'Example Airport 15', 'lat': 10.15, 'lon': -20.15},
-              'AAP': {'name': 'Example Airport 16', 'lat': 10.16, 'lon': -20.16},
-              'AAQ': {'name': 'Example Airport 17', 'lat': 10.17, 'lon': -20.17},
-              'AAR': {'name': 'Example Airport 18', 'lat': 10.18, 'lon': -20.18},
-              'AAS': {'name': 'Example Airport 19', 'lat': 10.19, 'lon': -20.19},
-              'AAT': {'name': 'Example Airport 20', 'lat': 10.20, 'lon': -20.20},
-              'AAU': {'name': 'Example Airport 21', 'lat': 10.21, 'lon': -20.21},
-              'AAV': {'name': 'Example Airport 22', 'lat': 10.22, 'lon': -20.22},
-              'AAW': {'name': 'Example Airport 23', 'lat': 10.23, 'lon': -20.23},
-              'AAX': {'name': 'Example Airport 24', 'lat': 10.24, 'lon': -20.24},
-              'AAY': {'name': 'Example Airport 25', 'lat': 10.25, 'lon': -20.25},
-              'AAZ': {'name': 'Example Airport 26', 'lat': 10.26, 'lon': -20.26},
-              'ABA': {'name': 'Example Airport 27', 'lat': 10.27, 'lon': -20.27},
-              'ABB': {'name': 'Example Airport 28', 'lat': 10.28, 'lon': -20.28},
-              'ABC': {'name': 'Example Airport 29', 'lat': 10.29, 'lon': -20.29},
-              'ABD': {'name': 'Example Airport 30', 'lat': 10.30, 'lon': -20.30},
-              'ABE': {'name': 'Example Airport 31', 'lat': 10.31, 'lon': -20.31},
+              @@PRIVATE:airport_map_entry_001@@
+              @@PRIVATE:airport_map_entry_002@@
+              @@PRIVATE:airport_map_entry_003@@
+              @@PRIVATE:airport_map_entry_004@@
+              @@PRIVATE:airport_map_entry_005@@
+              @@PRIVATE:airport_map_entry_006@@
+              @@PRIVATE:airport_map_entry_007@@
+              @@PRIVATE:airport_map_entry_008@@
+              @@PRIVATE:airport_map_entry_009@@
+              @@PRIVATE:airport_map_entry_010@@
+              @@PRIVATE:airport_map_entry_011@@
+              @@PRIVATE:airport_map_entry_012@@
+              @@PRIVATE:airport_map_entry_013@@
+              @@PRIVATE:airport_map_entry_014@@
+              @@PRIVATE:airport_map_entry_015@@
+              @@PRIVATE:airport_map_entry_016@@
+              @@PRIVATE:airport_map_entry_017@@
+              @@PRIVATE:airport_map_entry_018@@
+              @@PRIVATE:airport_map_entry_019@@
+              @@PRIVATE:airport_map_entry_020@@
+              @@PRIVATE:airport_map_entry_021@@
+              @@PRIVATE:airport_map_entry_022@@
+              @@PRIVATE:airport_map_entry_023@@
+              @@PRIVATE:airport_map_entry_024@@
+              @@PRIVATE:airport_map_entry_025@@
+              @@PRIVATE:airport_map_entry_026@@
+              @@PRIVATE:airport_map_entry_027@@
+              @@PRIVATE:airport_map_entry_028@@
+              @@PRIVATE:airport_map_entry_029@@
+              @@PRIVATE:airport_map_entry_030@@
+              @@PRIVATE:airport_map_entry_031@@
             } %}
             {% set airline_codes = ['AA', 'AC', 'AF', 'AS', 'BA', 'B6', 'DL', 'F9', 'KL', 'NK', 'SY', 'UA', 'WN'] %}
             {% set events = (personal_events | default('[]', true) | string | trim | from_json) + (work_trip_events | default('[]', true) | string | trim | from_json) %}
@@ -296,12 +296,12 @@ template:
                 {% endif %}
               {% endif %}
               {% if origin_code == '' %}
-                {% if 'example_zone_04 airport' in text_lower or 'examplemetro-example district' in text_lower or 'examplemetro example district' in text_lower or 'example-airfield' in text_lower %}
-                  {% set origin_code = 'AAA' %}
-                {% elif 'aab airport' in text_lower or 'example_zone_07 international' in text_lower %}
-                  {% set origin_code = 'AAB' %}
+                {% if '@@PRIVATE:home_airport_primary_code_lower@@ airport' in text_lower or '@@PRIVATE:home_metro_lower@@-@@PRIVATE:home_metro_st_paul_lower@@' in text_lower or '@@PRIVATE:home_metro_lower@@ @@PRIVATE:home_metro_st_paul_lower@@' in text_lower or '@@PRIVATE:home_secondary_airport_alias_lower@@' in text_lower %}
+                  {% set origin_code = '@@PRIVATE:home_airport_primary_code@@' %}
+                {% elif '@@PRIVATE:home_airport_secondary_code_lower@@ airport' in text_lower or '@@PRIVATE:home_city_secondary_lower@@ international' in text_lower %}
+                  {% set origin_code = '@@PRIVATE:home_airport_secondary_code@@' %}
                 {% elif destination_code not in home_codes %}
-                  {% set origin_code = 'AAA' %}
+                  {% set origin_code = '@@PRIVATE:home_airport_primary_code@@' %}
                 {% endif %}
               {% endif %}
               {% if destination_name == '' and destination_code != '' %}
