@@ -1,0 +1,21 @@
+{#- Open door/window/opening binary sensors that count as house egress points.
+    Single definition shared by sensor.open_egress_points (state + attributes).
+    The vehicle's openings are excluded by prefix so a renamed or re-added
+    Tesla trunk/frunk entity can never be listed as an open egress point. -#}
+{%- macro open_egress_entity_ids() -%}
+  {%- set excluded = [
+    'binary_sensor.mailbox_contact',
+    'binary_sensor.den_doors_contact',
+    'binary_sensor.laundry_room_washing_machine_door_contact',
+  ] -%}
+  {%- set ns = namespace(ids=[]) -%}
+  {%- for s in states.binary_sensor
+      if s.state == 'on'
+      and s.entity_id not in excluded
+      and not s.entity_id.startswith('binary_sensor.nigori_')
+      and not s.entity_id.startswith('binary_sensor.pressure_')
+      and (s.attributes.device_class | default('', true) | lower) in ['door', 'window', 'opening'] -%}
+    {%- set ns.ids = ns.ids + [s.entity_id] -%}
+  {%- endfor -%}
+  {{- ns.ids | sort | tojson -}}
+{%- endmacro -%}

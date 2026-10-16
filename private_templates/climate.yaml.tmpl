@@ -504,9 +504,14 @@ automation:
       - condition: state
         entity_id: input_boolean.window_climate_paused_by_windows
         state: "off"
+      # Climate entities never report "on"; match the active HVAC modes.
       - condition: state
         entity_id: climate.my_ecobee
-        state: "on"
+        state:
+          - heat
+          - cool
+          - heat_cool
+          - auto
     action:
       - choose:
           - conditions:
@@ -1005,7 +1010,6 @@ sensor:
     # device_class: "temperature"
     entity_ids:
       - sensor.basement_temperature
-      - sensor.basement_closet_tph_temperature
       - sensor.bedroom_temperature
       - sensor.den_temperature
       - sensor.guest_room_temperature
@@ -1026,7 +1030,6 @@ sensor:
     # device_class: "humidity"
     type: mean
     entity_ids:
-      - sensor.basement_closet_tph_humidity
       - sensor.guest_room_tph_humidity
       - sensor.office_tph_humidity
       - sensor.my_ecobee_current_humidity
@@ -1043,7 +1046,7 @@ sensor:
     # device_class: "atmospheric_pressure"
     type: mean
     entity_ids:
-      - sensor.basement_closet_tph_pressure
+      - sensor.basement_bathroom_tph_pressure
       - sensor.guest_room_tph_pressure
       - sensor.office_tph_pressure
       - sensor.owner_suite_bathroom_tph_pressure
@@ -1126,7 +1129,7 @@ template:
         default_entity_id: binary_sensor.ecobee_aux
         unique_id: ecobee_aux
         state: >-
-          {% if 'aux' in state_attr('climate.my_ecobee', 'equipment_running') %}
+          {% if 'aux' in (state_attr('climate.my_ecobee', 'equipment_running') | default('', true)) %}
             True
           {% else %}
             False

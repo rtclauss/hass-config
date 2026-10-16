@@ -39,7 +39,19 @@ script:
             min: 0
             max: 65535
             mode: box
+      entity_ids:
+        description: Optional Inovelli light/fan entities to limit the effect to; all active devices when omitted.
+        required: false
+        selector:
+          entity:
+            multiple: true
+            filter:
+              - domain:
+                  - light
+                  - fan
+                integration: mqtt
     variables:
+      requested_inovelli_entities: "{{ entity_ids | default([], true) }}"
       active_inovelli_z2m_entities: >-
         {{ states
           | selectattr('domain', 'in', ['light', 'fan'])
@@ -48,6 +60,7 @@ script:
           | rejectattr('state', 'in', ['unknown', 'unavailable'])
           | rejectattr('attributes.restored', 'eq', true)
           | map(attribute='entity_id')
+          | select('in', requested_inovelli_entities if requested_inovelli_entities | count > 0 else integration_entities('mqtt'))
           | unique
           | sort
           | list }}

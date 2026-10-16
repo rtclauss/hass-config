@@ -1,58 +1,71 @@
 # High-traffic Inovelli LED bars show the highest-priority active house-state
-# signal. Effects are applied through the repository's supported Inovelli
-# blueprint so device-specific MQTT payloads stay centralized there.
+# signal. Effects go through script.publish_inovelli_z2m_led_effect so the
+# Zigbee2MQTT payload is defined once and restored/unavailable targets are skipped.
+# Values mirror the retired blueprint mapping: Red=0, Orange=8, Cyan=127,
+# level = brightness * 10, duration 255 = Forever.
 
 script:
   # Priority 1: an actionable exterior-door security state.
   inovelli_house_state_front_door_unlocked:
-    use_blueprint:
-      path: kschlichter/inovelli_led_blueprint.yaml
-      input:
-        entity: &house_state_led_targets
-          - light.hall_transition_switch
-          - light.laundry_wall_switch
-          - light.garage_overhead_switch
-        effect: Pulse
-        brightness: 4
-        color: Red
-        duration: Forever
+    alias: Inovelli house state - front door needs attention
+    mode: restart
     trace:
       stored_traces: 10
+    sequence:
+      - action: script.publish_inovelli_z2m_led_effect
+        data:
+          entity_ids: &house_state_led_targets
+            - light.hall_transition_switch
+            - light.laundry_wall_switch
+            - light.garage_overhead_switch
+          effect: pulse # Z2M name for the blueprint's "Pulse"
+          color: 0 # Red
+          level: 40 # brightness 4
+          duration: 255 # Forever
 
   # Priority 2: the garage is open or moving open.
   inovelli_house_state_garage_open:
-    use_blueprint:
-      path: kschlichter/inovelli_led_blueprint.yaml
-      input:
-        entity: *house_state_led_targets
-        effect: Open Close
-        brightness: 3
-        color: Orange
-        duration: Forever
+    alias: Inovelli house state - garage open
+    mode: restart
     trace:
       stored_traces: 10
+    sequence:
+      - action: script.publish_inovelli_z2m_led_effect
+        data:
+          entity_ids: *house_state_led_targets
+          effect: pulse # blueprint "Open Close" maps to Z2M pulse
+          color: 8 # Orange
+          level: 30 # brightness 3
+          duration: 255
 
   # Priority 3: mail is waiting to be collected.
   inovelli_house_state_mail_waiting:
-    use_blueprint:
-      path: kschlichter/inovelli_led_blueprint.yaml
-      input:
-        entity: *house_state_led_targets
-        effect: Solid
-        brightness: 2
-        color: Cyan
-        duration: Forever
+    alias: Inovelli house state - mail waiting
+    mode: restart
     trace:
       stored_traces: 10
+    sequence:
+      - action: script.publish_inovelli_z2m_led_effect
+        data:
+          entity_ids: *house_state_led_targets
+          effect: solid
+          color: 127 # Cyan
+          level: 20 # brightness 2
+          duration: 255
 
   inovelli_house_state_clear:
-    use_blueprint:
-      path: kschlichter/inovelli_led_blueprint.yaml
-      input:
-        entity: *house_state_led_targets
-        effect: Clear Effect
+    alias: Inovelli house state - clear
+    mode: restart
     trace:
       stored_traces: 10
+    sequence:
+      - action: script.publish_inovelli_z2m_led_effect
+        data:
+          entity_ids: *house_state_led_targets
+          effect: clear_effect
+          color: 0
+          level: 281
+          duration: 0
 
   apply_inovelli_house_state_notification:
     alias: Apply Inovelli house-state notification

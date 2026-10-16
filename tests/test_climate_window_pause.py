@@ -44,3 +44,18 @@ def test_window_climate_resume_handler_resumes_ecobee_without_input_text_depende
 
     assert "input_text.set_value" not in block
     assert "window_climate_restore_preset_mode" not in block
+
+
+def test_window_prompts_do_not_wait_for_a_nonexistent_climate_on_state() -> None:
+    weather_text = (CLIMATE_PACKAGE_PATH.parent / "weather.yaml").read_text(encoding="utf-8")
+    prompt = _automation_block("window_climate_open_prompt")
+    reminder = re.search(
+        r"^  - id: window_open_cool_weather_reminder\n(.*?)(?=^  - id: |\Z)",
+        weather_text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert reminder is not None
+
+    for block in (prompt, reminder.group(0)):
+        assert 'entity_id: climate.my_ecobee\n        state: "on"' not in block
+        assert "entity_id: climate.my_ecobee\n        state:\n          - heat" in block

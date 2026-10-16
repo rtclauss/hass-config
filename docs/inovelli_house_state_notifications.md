@@ -32,7 +32,8 @@ during that wait restarts the coordinator and applies the new winner immediately
 - Use native state conditions with explicit actionable states so an unavailable
   entity does not become a false alert.
 - Add targets only after verifying that the live entity is an Inovelli device
-  supported by the checked-in blueprint.
+  an active Zigbee2MQTT Inovelli light/fan; the shared
+  `script.publish_inovelli_z2m_led_effect` skips restored and unavailable entities.
 - Keep the clear action as the default branch so resolved states cannot leave a
   stale effect behind.
 

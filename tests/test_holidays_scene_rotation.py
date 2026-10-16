@@ -65,3 +65,21 @@ def test_christmas_tree_behavior_uses_explicit_conditions_not_automation_toggles
     assert "id: midnight" in block
     assert "now().month == 1 and now().day == 1" in block
     assert "action: script.turn_off_christmas_lights" in block
+
+
+def test_christmas_tree_power_skips_unregistered_seasonal_targets() -> None:
+    text = HOLIDAYS_PATH.read_text(encoding="utf-8")
+    start = text.index("  set_christmas_tree_power:")
+    end = text.index("  turn_off_christmas_lights:")
+    script = text[start:end]
+
+    assert "value_template: \"{{ has_value(repeat.item.entity_id) }}\"" in script
+    assert "continue_on_error: true" in script
+    assert "switch.christmas_tree" in script
+    assert "light.christmas_lights" in script
+
+    # Callers go through the guarded script instead of addressing the seasonal
+    # entities directly, which logs service errors while they are unregistered.
+    callers = text[:start] + text[end:]
+    assert "action: switch.turn_on" not in callers
+    assert "action: script.set_christmas_tree_power" in callers

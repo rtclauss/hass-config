@@ -30,26 +30,31 @@ def _automation_block(automation_id: str) -> str:
 
 
 def test_three_house_state_effects_share_the_verified_target_set() -> None:
+    # (effect, Z2M hue, level = brightness * 10) mirror the retired blueprint mapping.
     expected = {
-        "inovelli_house_state_front_door_unlocked": ("Pulse", "Red", 4),
-        "inovelli_house_state_garage_open": ("Open Close", "Orange", 3),
-        "inovelli_house_state_mail_waiting": ("Solid", "Cyan", 2),
+        "inovelli_house_state_front_door_unlocked": ("pulse", 0, 40),
+        "inovelli_house_state_garage_open": ("pulse", 8, 30),
+        "inovelli_house_state_mail_waiting": ("solid", 127, 20),
     }
 
-    for script_id, (effect, color, brightness) in expected.items():
+    for script_id, (effect, color, level) in expected.items():
         block = _script_block(script_id)
-        assert "path: kschlichter/inovelli_led_blueprint.yaml" in block
+        assert "action: script.publish_inovelli_z2m_led_effect" in block
         assert f"effect: {effect}" in block
         assert f"color: {color}" in block
-        assert f"brightness: {brightness}" in block
-        assert "duration: Forever" in block
+        assert f"level: {level}" in block
+        assert "duration: 255" in block
+        assert "use_blueprint" not in block
 
     package_text = PACKAGE_PATH.read_text(encoding="utf-8")
     first_effect = _script_block("inovelli_house_state_front_door_unlocked")
     for entity_id in TARGETS:
         assert f"- {entity_id}" in first_effect
-    assert package_text.count("entity: *house_state_led_targets") == 3
-    assert "effect: Clear Effect" in _script_block("inovelli_house_state_clear")
+    assert package_text.count("entity_ids: *house_state_led_targets") == 3
+    clear = _script_block("inovelli_house_state_clear")
+    assert "effect: clear_effect" in clear
+    assert "level: 281" in clear
+    assert "zha." not in package_text and "zwave_js." not in package_text
 
 
 def test_coordinator_uses_native_conditions_in_documented_priority_order() -> None:
