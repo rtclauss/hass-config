@@ -323,9 +323,10 @@ automation:
     condition:
       - condition: template
         value_template: >-
-          {% set alert_type = state_attr('sensor.nws_alerts', 'TYPE') | default('', true) %}
-          {% set description = state_attr('sensor.nws_alerts', 'Description') | default('', true) %}
-          {{ alert_type == "TOR" or description == "Tornado Warning" }}
+          {# sensor.nws_alerts only exposes the Alerts list; no top-level TYPE/Description. #}
+          {% set alerts = state_attr('sensor.nws_alerts', 'Alerts') | default([], true) %}
+          {{ alerts | selectattr('NWSCode', 'defined') | selectattr('NWSCode', 'eq', 'TOR') | list | count > 0
+             or alerts | selectattr('Event', 'defined') | selectattr('Event', 'eq', 'Tornado Warning') | list | count > 0 }}
     action:
       - choose:
           - conditions:
@@ -387,9 +388,9 @@ automation:
           nws_alerts: "{{ state_attr('sensor.nws_alerts', 'Alerts') | default([], true) }}"
           primary_alert: "{{ nws_alerts[0] if nws_alerts is sequence and nws_alerts | count > 0 else dict() }}"
           alert_type: >-
-            {{ primary_alert.Event | default(state_attr('sensor.nws_alerts', 'TYPE') | default('', true), true) }}
+            {{ primary_alert.Event | default('', true) }}
           alert_message: >-
-            {% set description = primary_alert.Description | default(state_attr('sensor.nws_alerts', 'Description') | default('', true), true) %}
+            {% set description = primary_alert.Description | default('', true) %}
             {% if description | trim != '' %}
               {{ description }}
             {% else %}
@@ -538,9 +539,14 @@ automation:
       - condition: state
         entity_id: binary_sensor.any_window_open
         state: "on"
+      # Climate entities never report "on"; match the active HVAC modes.
       - condition: state
         entity_id: climate.my_ecobee
-        state: "on"
+        state:
+          - heat
+          - cool
+          - heat_cool
+          - auto
       - condition: or
         conditions:
           - condition: state
@@ -746,7 +752,7 @@ automation:
           #974).
         trigger: state
         entity_id: &pressure_inputs
-          - sensor.basement_closet_tph_pressure
+          - sensor.basement_bathroom_tph_pressure
           - sensor.guest_room_tph_pressure
           - sensor.office_tph_pressure
           - sensor.owner_suite_bathroom_tph_pressure
@@ -946,7 +952,7 @@ template:
       attributes:
         source_entity_id: sensor.nws_alerts
         alerts: >-
-          {% set source_alerts = state_attr('sensor.nws_alerts', 'alerts') | default(state_attr('sensor.nws_alerts', 'Alerts'), true) | default([], true) %}
+          {% set source_alerts = state_attr('sensor.nws_alerts', 'Alerts') | default([], true) %}
           {% set ns = namespace(alerts=[]) %}
           {% for alert in source_alerts if alert is mapping %}
             {% set event = alert.get('Event', alert.get('event', '')) %}

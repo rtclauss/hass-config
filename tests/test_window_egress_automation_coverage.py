@@ -109,17 +109,21 @@ def test_dynamic_egress_sensors_replace_legacy_group() -> None:
 
     assert "default_entity_id: sensor.open_egress_points" in block
     assert "entity_id.endswith('_contact')" not in block
-    assert "device_class in ['door', 'window', 'opening']" in block
+    assert "from 'egress.jinja' import open_egress_entity_ids" in block
+
+    macro = (ZIGBEE_ZWAVE_PATH.parents[1] / "custom_templates" / "egress.jinja").read_text(encoding="utf-8")
+    assert "device_class | default('', true) | lower) in ['door', 'window', 'opening']" in macro
     for entity_id in (
         "binary_sensor.mailbox_contact",
         "binary_sensor.den_doors_contact",
         "binary_sensor.laundry_room_washing_machine_door_contact",
-        "binary_sensor.nigori_windows",
-        "binary_sensor.nigori_doors",
-        "binary_sensor.nigori_trunk",
-        "binary_sensor.nigori_frunk",
     ):
-        assert entity_id in block
+        assert entity_id in macro
+    # Vehicle openings and pressure-trend sensors are excluded by prefix, so no
+    # literal (possibly removed) Tesla trunk/frunk ids are referenced.
+    assert "startswith('binary_sensor.nigori_')" in macro
+    assert "startswith('binary_sensor.pressure_')" in macro
+    assert "binary_sensor.nigori_trunk" not in block
     assert "group.egress_points" not in block
 
 

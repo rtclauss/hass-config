@@ -107,7 +107,7 @@ automation:
         at: 00:00:00
       - trigger: state
         id: bedroom_lights_off
-        entity_id: light.bedroom_lamp, light.bedroom_lamp_2
+        entity_id: light.owner_suite_lamps
         to: "off"
     condition:
       - condition: or
@@ -203,12 +203,9 @@ automation:
                 entity_id: binary_sensor.christmas_season
                 state: "on"
             sequence:
-              - action: switch.turn_on
-                target:
-                  entity_id: switch.christmas_tree
-              - action: light.turn_on
-                target:
-                  entity_id: light.christmas_lights
+              - action: script.set_christmas_tree_power
+                data:
+                  power: "on"
               - action: notify.all
                 data:
                   message: Turning on Christmas Tree.
@@ -512,16 +509,46 @@ scene:
 # Scripts
 ########################
 script:
+  # The tree and its light string are seasonal and are often unplugged or
+  # unregistered, so act only on targets Home Assistant currently reports and
+  # keep going if one call fails.
+  set_christmas_tree_power:
+    alias: Set Christmas tree power
+    mode: queued
+    max: 5
+    trace:
+      stored_traces: 10
+    fields:
+      power:
+        description: Desired power state for the tree and light string.
+        required: true
+        selector:
+          select:
+            options:
+              - "on"
+              - "off"
+    sequence:
+      - repeat:
+          for_each:
+            - domain: switch
+              entity_id: switch.christmas_tree
+            - domain: light
+              entity_id: light.christmas_lights
+          sequence:
+            - condition: template
+              value_template: "{{ has_value(repeat.item.entity_id) }}"
+            - continue_on_error: true
+              action: "{{ repeat.item.domain }}.turn_{{ power }}"
+              target:
+                entity_id: "{{ repeat.item.entity_id }}"
+
   turn_off_christmas_lights:
     trace:
       stored_traces: 10
     sequence:
-      - action: switch.turn_off
-        target:
-          entity_id: switch.christmas_tree
-      - action: light.turn_off
-        target:
-          entity_id: light.christmas_lights
+      - action: script.set_christmas_tree_power
+        data:
+          power: "off"
 
   apply_outdoor_holiday_scene:
     mode: queued
