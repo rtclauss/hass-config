@@ -173,7 +173,7 @@ automation:
         id: parked_home
       - trigger: state
         entity_id:
-          - person.example
+          - person.@@PRIVATE:owner_person_slug@@
           - device_tracker.example_vehicle
         to: "home"
         id: home_reconciliation
@@ -244,7 +244,7 @@ automation:
             {% set location_name = states('device_tracker.example_vehicle') | default('', true) | lower %}
             {% set location_label = location_name | replace('_', ' ') | title %}
             {% set preserve_default_charging_schedule = location_name in ['home', 'parents', 'example_zone_05', 'example_zone_08'] %}
-            {% set resident_home = is_state('person.example', 'home') %}
+            {% set resident_home = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') %}
             {% set tariff_name = tariff | lower %}
             {% set tariff_display = tariff | replace('_', '-') | title %}
             {% set high_tariff = tariff_name in ['on_peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
@@ -352,7 +352,7 @@ automation:
               {% set summary = summary ~ " Charge target reflects today's furthest stop: " ~ trip_furthest_entry ~ '.' %}
             {% endif %}
             {% if has_calendar_departure and not resident_home %}
-              {% set summary = summary ~ ' Cabin preconditioning is suppressed because Resident is away.' %}
+              {% set summary = summary ~ ' Cabin preconditioning is suppressed because @@PRIVATE:owner_person_title@@ is away.' %}
             {% endif %}
             {% if precondition and low_tpms %}
               {% set summary = summary ~ ' Tire pressure is low: ' ~ low_tpms_summary ~ '. Get air before you leave.' %}
@@ -476,7 +476,7 @@ automation:
                 action: notify.notify_all
                 data:
                   data:
-                    url: "/example-new-mushroom/tesla-v2"
+                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/tesla-v2"
                   message: "{{ tesla_plan.summary }}"
 
   - id: tesla_departure_cancel_when_home_context_ends
@@ -491,7 +491,7 @@ automation:
       # only a known non-home state counts as leaving (see #904/#907).
       - trigger: state
         entity_id:
-          - person.example
+          - person.@@PRIVATE:owner_person_slug@@
           - device_tracker.example_vehicle
         from: "home"
         not_to:
@@ -523,7 +523,7 @@ automation:
           # either: its own condition needs the tracker to read `home`.
           - condition: template
             value_template: >-
-              {{ states('person.example') not in ['home', 'unknown', 'unavailable'] or
+              {{ states('person.@@PRIVATE:owner_person_slug@@') not in ['home', 'unknown', 'unavailable'] or
                  states('device_tracker.example_vehicle') not in ['home', 'unknown', 'unavailable'] }}
     action:
       - action: script.tesla_set_precondition_schedule_time
@@ -531,7 +531,7 @@ automation:
           enabled: false
           force_disable: true
           reason: >-
-            Cancel the Home Assistant-managed Tesla departure because Resident or Example Vehicle left home.
+            Cancel the Home Assistant-managed Tesla departure because @@PRIVATE:owner_person_title@@ or Example Vehicle left home.
         response_variable: tesla_schedule_result
       # Only stop tracking once the Tesla schedule is actually gone; otherwise a
       # later planner run still has the helpers set and can retry the clear.
@@ -680,7 +680,7 @@ automation:
   #   alias: turn_off_max_range_charge_when_arrive_home
   #   trigger:
   #     - platform: zone
-  #       entity_id: device_tracker.bayesian_resident_home
+  #       entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
   #       zone: zone.home
   #       event: enter
   #   condition:
@@ -959,7 +959,7 @@ script:
         description: Optional reason to include in the logbook entry.
         example: "Weekday alarm departure plan"
       force_disable:
-        description: Disable the managed departure even at a protected location, such as when Resident or Example Vehicle leaves home.
+        description: Disable the managed departure even at a protected location, such as when @@PRIVATE:owner_person_title@@ or Example Vehicle leaves home.
         example: true
     sequence:
       - variables:
@@ -1144,7 +1144,7 @@ template:
         minutes: "/15"
       - trigger: state
         entity_id:
-          - calendar.example_example
+          - calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
           - calendar.curling
           - binary_sensor.work_trip_today
           - input_number.tesla_local_trip_threshold_mi
@@ -1163,7 +1163,7 @@ template:
       - action: calendar.get_events
         continue_on_error: true
         target:
-          entity_id: calendar.example_example
+          entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
         data:
           start_date_time: "{{ lookahead_start }}"
           end_date_time: "{{ lookahead_end }}"
@@ -1180,8 +1180,8 @@ template:
           personal_events: >-
             {% if personal_event_window is mapping and personal_event_window.events is defined %}
               {{ personal_event_window.events | to_json }}
-            {% elif personal_event_window is mapping and personal_event_window['calendar.example_example'] is defined and personal_event_window['calendar.example_example'].events is defined %}
-              {{ personal_event_window['calendar.example_example'].events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'] is defined and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events is defined %}
+              {{ personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events | to_json }}
             {% else %}
               {{ [] | to_json }}
             {% endif %}

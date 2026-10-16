@@ -204,7 +204,7 @@ automation:
       - choose:
           - conditions:
               - condition: state
-                entity_id: binary_sensor.bayesian_resident_home
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                 state: "on"
               - condition: template
                 value_template: "{{ trip_mode_on or vacation_sim_on }}"
@@ -216,7 +216,7 @@ automation:
                   reason: startup_reconcile
           - conditions:
               - condition: state
-                entity_id: binary_sensor.bayesian_resident_home
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                 state: "off"
               - condition: template
                 value_template: "{{ states_mismatch }}"
@@ -342,27 +342,27 @@ automation:
           reason: watchdog_home_1h
       - trigger: state
         id: away_for_20h
-        entity_id: binary_sensor.bayesian_resident_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         to: "off"
         for:
           hours: 20
       - trigger: state
         id: depart_for_scheduled_trip
-        entity_id: binary_sensor.bayesian_resident_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         from: "on"
         to: "off"
       - trigger: template
         id: away_over_radius_mi
         value_template: >-
-          {% set lat = state_attr('device_tracker.bayesian_resident_home', 'latitude') %}
-          {% set lon = state_attr('device_tracker.bayesian_resident_home', 'longitude') %}
+          {% set lat = state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'latitude') %}
+          {% set lon = state_attr('device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home', 'longitude') %}
           {% set home_lat = state_attr('zone.home', 'latitude') %}
           {% set home_lon = state_attr('zone.home', 'longitude') %}
           {% set trip_radius_mi = states('input_number.trip_trigger_radius_miles') | float(120) %}
           {{
             lat is not none and lon is not none and home_lat is not none and home_lon is not none
             and (distance(lat, lon, home_lat, home_lon) * 0.621371) > trip_radius_mi
-            and is_state('binary_sensor.bayesian_resident_home', 'off')
+            and is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'off')
           }}
       - trigger: state
         id: planned_work_trip
@@ -374,7 +374,7 @@ automation:
         to: "on"
       - trigger: calendar
         id: calendar_trip
-        entity_id: calendar.example_example
+        entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
         event: start
         offset: -00:50:00
       - trigger: state
@@ -387,7 +387,7 @@ automation:
         to: "off"
       - trigger: state
         id: return_home
-        entity_id: binary_sensor.bayesian_resident_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         from: "off"
         to: "on"
     action:
@@ -449,7 +449,7 @@ automation:
                   - planned_vacation
                   - depart_for_scheduled_trip
               - condition: state
-                entity_id: binary_sensor.bayesian_resident_home
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                 state: "off"
               - condition: state
                 entity_id: input_boolean.trip
@@ -493,7 +493,7 @@ automation:
               - condition: trigger
                 id: calendar_trip
               - condition: state
-                entity_id: binary_sensor.bayesian_resident_home
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                 state: "off"
               - condition: state
                 entity_id: input_boolean.trip
@@ -699,7 +699,7 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: binary_sensor.bayesian_resident_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         from: "off"
         to: "on"
         for:
@@ -743,7 +743,7 @@ automation:
           state: "on"
         - alias: "garage primary resident is away"
           condition: state
-          entity_id: binary_sensor.bayesian_resident_home
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
           state: "off"
     action:
       - choose:
@@ -787,7 +787,7 @@ automation:
         entity_id: input_boolean.trip
         state: "on"
       - condition: state
-        entity_id: binary_sensor.bayesian_resident_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         state: "off"
       - action: notify.all
         data:
@@ -834,11 +834,11 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: zone
-        entity_id: device_tracker.bayesian_resident_home
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
         zone: zone.parents
         event: leave
       # - platform: state
-      #   entity_id: device_tracker.bayesian_resident_home
+      #   entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
       #   from: 'Parents'
     condition:
       condition: time
@@ -859,7 +859,7 @@ automation:
       - action: notify.all
         data:
           data:
-            url: "/example-new-mushroom/climate"
+            url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/climate"
           message: >-
             Turning off Ecobee away while driving home from parents
 
@@ -869,7 +869,7 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: zone
-        entity_id: device_tracker.bayesian_resident_home
+        entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
         zone: zone.example_zone_04
         event: leave
     condition:
@@ -890,7 +890,7 @@ automation:
           reason: send_nest_airport_home_eta
       - action: notify.all
         data:
-          data: url:"/example-new-mushroom/climate"
+          data: url:"/@@PRIVATE:owner_person_slug@@-new-mushroom/climate"
           message: >-
             Turning off Ecobee Away mode while driving home from AAA
 
@@ -911,7 +911,7 @@ automation:
           state: "on"
         - alias: "vacation lights on while primary resident is away"
           condition: state
-          entity_id: binary_sensor.bayesian_resident_home
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
           state: "off"
         - alias: "no guest visit in progress"
           condition: state
@@ -948,7 +948,7 @@ automation:
           state: "on"
         - alias: "vacation lights off while primary resident is away"
           condition: state
-          entity_id: binary_sensor.bayesian_resident_home
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
           state: "off"
         - alias: "no guest visit in progress"
           condition: state
@@ -1000,7 +1000,7 @@ automation:
           state: "on"
         - alias: "not home"
           condition: state
-          entity_id: binary_sensor.bayesian_resident_home
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
           state: "off"
         - alias: "guest mode off"
           condition: state
@@ -1061,7 +1061,7 @@ automation:
           entity_id: input_boolean.trip
           state: "on"
         - condition: state
-          entity_id: binary_sensor.bayesian_resident_home
+          entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
           state: "off"
         - condition: state
           entity_id: input_boolean.guest_mode
@@ -1139,7 +1139,7 @@ automation:
           - action: notify.all
             data:
               data:
-                url: "/example-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 Pre-landing clean skipped: only {{ remaining_min | int }} min before your
                 {{ landing_label }} landing, not enough time to finish.
@@ -1174,7 +1174,7 @@ automation:
                 entity_id: input_boolean.trip
                 state: "on"
               - condition: state
-                entity_id: binary_sensor.bayesian_resident_home
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                 state: "off"
     action:
       - if:
@@ -1205,7 +1205,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1222,7 +1222,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1243,7 +1243,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1264,7 +1264,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1292,7 +1292,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1355,7 +1355,7 @@ automation:
                 entity_id: input_boolean.trip
                 state: "on"
               - condition: state
-                entity_id: binary_sensor.bayesian_resident_home
+                entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                 state: "off"
     action:
       - if:
@@ -1379,7 +1379,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1398,7 +1398,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1419,7 +1419,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1447,7 +1447,7 @@ automation:
                   entity_id: input_boolean.trip
                   state: "on"
                 - condition: state
-                  entity_id: binary_sensor.bayesian_resident_home
+                  entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
                   state: "off"
                 - condition: state
                   entity_id: input_boolean.trip_guest_visit_active
@@ -1491,7 +1491,7 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: binary_sensor.bayesian_resident_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         to: "on"
       - trigger: state
         entity_id: input_boolean.trip
@@ -1784,7 +1784,7 @@ script:
       - action: notify.all
         data:
           data:
-            url: "/example-new-mushroom/cleaning"
+            url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
           message: "{{ notify_message }}"
   # toggle_automations_showing_house:
   #   sequence:
@@ -1895,7 +1895,7 @@ template:
       - trigger: state
         entity_id:
           - calendar.curling
-          - calendar.example_example
+          - calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
           - calendar.work_trip
     action:
       - variables:
@@ -1912,7 +1912,7 @@ template:
         response_variable: curling_event_window
       - action: calendar.get_events
         target:
-          entity_id: calendar.example_example
+          entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
         data:
           start_date_time: "{{ lookahead_start }}"
           end_date_time: "{{ lookahead_end }}"
@@ -1936,8 +1936,8 @@ template:
           personal_events: >-
             {% if personal_event_window is mapping and personal_event_window.events is defined %}
               {{ personal_event_window.events | to_json }}
-            {% elif personal_event_window is mapping and personal_event_window['calendar.example_example'] is defined and personal_event_window['calendar.example_example'].events is defined %}
-              {{ personal_event_window['calendar.example_example'].events | to_json }}
+            {% elif personal_event_window is mapping and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'] is defined and personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events is defined %}
+              {{ personal_event_window['calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@'].events | to_json }}
             {% else %}
               {{ [] | to_json }}
             {% endif %}
@@ -2048,7 +2048,7 @@ template:
               }}
             {% endif %}
           # Only explicit flight summaries qualify here. Generic calendar locations like
-          # "United States" or "Example Zone 07" must not be treated as flights.
+          # "United States" or "@@PRIVATE:zone_07_label@@" must not be treated as flights.
           flight_to_example_zone_04_match_json: >-
             {% set now_ts = as_timestamp(now()) %}
             {% set ns = namespace(match=None) %}

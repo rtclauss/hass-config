@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR
+
 from pathlib import Path
 
 
@@ -211,7 +213,7 @@ def test_x40_mop_schedule_helpers_and_home_streak_automation_exist() -> None:
     # home_since is recorded by its own automation on the away->home edge (with a
     # startup seed), NOT the away edge, so a return does not pre-satisfy 4 days.
     home_block = _automation_block(VACUUM_PATH, "x40_ultra_record_home_since")
-    assert "entity_id: binary_sensor.bayesian_resident_home" in home_block
+    assert f"entity_id: {PRESENCE_SENSOR}" in home_block
     assert 'from: "off"' in home_block
     assert 'to: "on"' in home_block
     assert "input_datetime.x40_ultra_home_since_at" in home_block
