@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR
+
 from pathlib import Path
 
 
@@ -119,7 +121,7 @@ def test_workday_morning_activity_can_start_owner_suite_wake_transition() -> Non
         "- in_bed",
         "- asleep",
         "binary_sensor.workday_sensor",
-        "binary_sensor.bayesian_resident_home",
+        PRESENCE_SENSOR,
         "binary_sensor.planned_vacation_calendar",
         "binary_sensor.bayesian_bed_occupancy",
         "binary_sensor.bedroom_occupancy",

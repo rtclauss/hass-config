@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import OWNER_CALENDAR, OWNER_TITLE, PRESENCE_SENSOR
+
 from pathlib import Path
 import re
 
@@ -185,7 +187,7 @@ def test_owner_suite_calendar_lookup_skips_unavailable_calendar() -> None:
     assert "owner_suite_calendar_window: {}" in block
     assert "condition: not" in block[:calendar_action]
     assert "condition: state" in block[:calendar_action]
-    assert "entity_id: calendar.example_example" in block[:calendar_action]
+    assert f"entity_id: {OWNER_CALENDAR}" in block[:calendar_action]
     assert '  - "unknown"' in block[:calendar_action]
     assert '  - "unavailable"' in block[:calendar_action]
     assert block.index("owner_suite_calendar_window: {}") < calendar_action
@@ -265,14 +267,14 @@ def test_owner_suite_payload_warns_about_near_term_and_event_precipitation() -> 
     block = _script_block("publish_owner_suite_inky_display")
     automation = _automation_block("publish_owner_suite_inky_display")
 
-    for entity_id in ("sensor.precip_next_1hr", "calendar.example_example"):
+    for entity_id in ("sensor.precip_next_1hr", OWNER_CALENDAR):
         assert entity_id in block
         assert entity_id in automation
 
     assert "precip_next_hour >= 40" in block
     assert "'Rain soon ' ~ precip_next_hour ~ '%'" in block
-    assert "state_attr('calendar.example_example', 'start_time')" in block
-    assert "state_attr('calendar.example_example', 'end_time')" in block
+    assert f"state_attr('{OWNER_CALENDAR}', 'start_time')" in block
+    assert f"state_attr('{OWNER_CALENDAR}', 'end_time')" in block
     assert "as_timestamp(event_start, default=none)" in block
     assert "as_timestamp(forecast.datetime, default=none)" in block
     assert "forecast_ts >= event_start_ts" in block
@@ -319,21 +321,21 @@ def test_owner_suite_automation_skips_publish_when_house_is_unoccupied() -> None
     block = _automation_block("publish_owner_suite_inky_display")
 
     assert "input_boolean.guest_mode" in block
-    assert "binary_sensor.bayesian_resident_home" in block
-    assert "alias: Publish only when Resident is home or guest mode is active" in block
+    assert PRESENCE_SENSOR in block
+    assert f"alias: Publish only when {OWNER_TITLE} is home or guest mode is active" in block
     assert "is_state('input_boolean.guest_mode', 'on')" in block
-    assert "is_state('binary_sensor.bayesian_resident_home', 'on')" in block
+    assert f"is_state('{PRESENCE_SENSOR}', 'on')" in block
     assert "is_state('input_boolean.trip', 'off')" in block
 
 
 def test_owner_suite_publish_script_enforces_occupancy_guard() -> None:
     block = _script_block("publish_owner_suite_inky_display")
 
-    assert "alias: Publish only when Resident is home or guest mode is active" in block
+    assert f"alias: Publish only when {OWNER_TITLE} is home or guest mode is active" in block
     assert "is_state('input_boolean.guest_mode', 'on')" in block
-    assert "is_state('binary_sensor.bayesian_resident_home', 'on')" in block
+    assert f"is_state('{PRESENCE_SENSOR}', 'on')" in block
     assert "is_state('input_boolean.trip', 'off')" in block
-    assert block.index("alias: Publish only when Resident is home") < block.index("action: mqtt.publish")
+    assert block.index(f"alias: Publish only when {OWNER_TITLE} is home") < block.index("action: mqtt.publish")
 
 
 def test_owner_suite_sources_are_documented() -> None:
@@ -344,6 +346,6 @@ def test_owner_suite_sources_are_documented() -> None:
     assert "home/inky/owner_suite/state" in text
     assert "Updated 21:42" in text
     assert "publish script only allows updates when guest mode is active" in text
-    assert "Resident returning home" in text
+    assert "owner returning home" in text
     assert "rain in the next hour" in text
-    assert "precipitation/weather during the next `calendar.example_example` event" in text
+    assert "precipitation/weather during the next private calendar event" in text
