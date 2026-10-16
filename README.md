@@ -222,7 +222,7 @@ Software on the NUC:
   * [Music Assistant](https://music-assistant.io/) - Main playback engine for Sonos/Spotify/radio automations
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
-  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml), [Bed Occupancy Sensor](https://github.com/rtclauss/hass-config/blob/main/esphome/bedloadcell1.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
+  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
   * [Uplift Desk custom component](https://github.com/Bennett-Wendorf/hass-uplift-desk) - Upstream v2.0.0 supplies standing desk entities and controls in `packages/desk.yaml`. See [migration and verification notes](docs/uplift_desk.md).
   * ~~[Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)~~ Moving to Zigbee/Thread/Matter
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
@@ -282,7 +282,7 @@ replacement below.
 | <a id="live-peanut"></a>Securifi / Peanut Smart Plug | A live Peanut Smart Plug remains paired and in service. |
 | <a id="live-ecosmart"></a>EcoSmart | Tunable-white Zigbee bulbs still used in the owner suite lamps. |
 | <a id="live-xiaomi"></a>Xiaomi | Dafang cameras and Xiaomi BLE `MiFlora` plant sensors remain active. |
-| <a id="live-esphome-ratgdo"></a>ESPHome / ratgdo | Water softener sensor, bed load cells and bed presence, Bluetooth proxies, and the `ratgdo` garage-door controller. |
+| <a id="live-esphome-ratgdo"></a>ESPHome / ratgdo | Water softener sensor, bed presence, Bluetooth proxies, and the `ratgdo` garage-door controller. |
 | <a id="live-zigbee-infra"></a>Zigbee / Thread / Matter infrastructure | Zigbee2MQTT on Nabu Casa `ZBT-2`, plus active `SkyConnect`, `Thread`, `OTBR`, and `Matter` integrations. |
 | <a id="live-bond"></a>Bond | Bond Bridge fan control for den, office, guest room, and owner suite fans. |
 | <a id="live-localtuya"></a>LocalTuya / Good Earth | Good Earth / Tuya LED flat panels in kitchen and laundry areas. |

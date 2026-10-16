@@ -63,15 +63,13 @@ def _automation_block(path: Path, automation_id: str) -> str:
 def test_tv_bed_prep_supports_television_shutdown_and_button_entrypoints() -> None:
     block = _automation_block(TV_PATH, "tv_off_at_night_bed_prep")
 
+    assert "zha_event" not in block
     for token in (
         'entity_id: media_player.lg_webos_smart_tv',
         'from: "on"',
         'to: "off"',
         'to: "unavailable"',
         'from: "off"',
-        "event_type: zha_event",
-        'device_ieee: !secret private_tv_remote_eui',
-        'command: "attribute_updated"',
         "entity_id:\n          - sensor.hall_button_action",
         'to: "single"',
     ):

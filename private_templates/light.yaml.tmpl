@@ -880,22 +880,6 @@ automation:
                 target:
                   entity_id: input_boolean.garage_entry_auto_on
 
-  - id: guest_room_ceiling_lights_on_off
-    alias: guest_room_ceiling_lights_on_off
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: event
-        event_type: zha_event
-        event_data:
-          device_ieee: !secret private_light_device_01_eui
-          command: "hold"
-    action:
-      - action: homeassistant.toggle
-        data:
-          entity_id:
-            - light.guest_room_ceiling
-
   - id: hallway_light_toggle_at_night
     alias: hallway_light_toggle_at_night
     mode: restart
@@ -1595,23 +1579,6 @@ automation:
       - action: light.toggle
         target:
           entity_id: light.kitchen_all
-        data:
-          transition: 5
-
-  - alias: toggle_office
-    id: toggle_office
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: event
-        event_type: zha_event
-        event_data:
-          device_ieee: !secret private_light_device_02_eui
-          command: "attribute_updated"
-    action:
-      - action: light.toggle
-        target:
-          entity_id: light.office_all
         data:
           transition: 5
 

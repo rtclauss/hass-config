@@ -210,6 +210,11 @@ automation:
       - trigger: homeassistant
         event: start
     action:
+      # A reload or restart can run this before the script entity is registered,
+      # which raises a service_not_found repair; wait for it, then dock.
+      - wait_template: "{{ states.script.vacuum_dock_all_robots is not none }}"
+        timeout: "00:02:00"
+        continue_on_timeout: false
       - action: script.vacuum_dock_all_robots
 
   - id: vacuum_dock_supervised_on_presence_loss

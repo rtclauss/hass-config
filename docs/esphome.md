@@ -21,8 +21,6 @@ There is no bedroom BLE-capable ESPHome node in this repository today.
 
 The current ESPHome nodes that cannot participate in Bermuda BLE scanning are:
 
-- `esphome/bedloadcell1.yaml`
-- `esphome/bedloadcell2.yaml`
 - `esphome/tikiroom.yaml`
 - `esphome/watersoftener.yaml`
 
