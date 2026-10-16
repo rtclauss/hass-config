@@ -171,7 +171,7 @@ automation:
         entity_id: input_boolean.trip_guest_visit_active
         state: "off"
       - condition: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         state: "on"
       - condition: state
         entity_id: binary_sensor.bayesian_bed_occupancy
@@ -221,7 +221,7 @@ automation:
     alias: vacuum_dock_supervised_on_presence_loss
     description: >-
       Supervised runs assume the owner is present to watch the cats. If confirmed
-      presence is lost (bayesian_zeke_home -> off) while the policy is still
+      presence is lost (bayesian_@@PRIVATE:presence_person_slug@@_home -> off) while the policy is still
       Supervised, dock all robots so a room clean started while home cannot keep
       running with nobody present. Unattended is unaffected (it is the explicit
       hands-off mode); Acclimation already docks on entry.
@@ -230,7 +230,7 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         to: "off"
     condition:
       - condition: state
@@ -254,7 +254,7 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: binary_sensor.bayesian_zeke_home
+        entity_id: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
         from: "off"
         to: "on"
         id: returned
@@ -818,7 +818,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/ryan-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 X40 Ultra vacuum-only run skipped: sweeping mode did not apply,
                 or the pet policy / guest mode changed during preparation.
@@ -950,7 +950,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/ryan-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 X40 Ultra vacuum pass did not finish cleanly, so the mop was
                 skipped; it remains due and will retry on the next run.
@@ -1118,7 +1118,7 @@ script:
                   - action: notify.all
                     data:
                       data:
-                        url: "/ryan-new-mushroom/cleaning"
+                        url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
                       message: >-
                         X40 Ultra mop pass did not finish cleanly; it will retry
                         on the next scheduled cleaning run.
@@ -1126,7 +1126,7 @@ script:
               - action: notify.all
                 data:
                   data:
-                    url: "/ryan-new-mushroom/cleaning"
+                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
                   message: >-
                     X40 Ultra mop pass never started; it will retry on the next
                     scheduled cleaning run.
@@ -1134,7 +1134,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/ryan-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 X40 Ultra could not switch to mop mode (CleanGenius or the mode
                 select was unavailable); mop deferred to the next run.
@@ -1191,7 +1191,7 @@ script:
       require_away:
         description: >-
           When true the request is dropped at dequeue time unless the owner is
-          still confirmed away (bayesian_zeke_home off). Away-triggered launchers set
+          still confirmed away (bayesian_@@PRIVATE:presence_person_slug@@_home off). Away-triggered launchers set
           this so a request that sat in the queue cannot start after the owner arrives.
         example: true
       expires_at:
@@ -1226,7 +1226,7 @@ script:
             {% endif %}
           owner_not_away: >-
             {{ (require_away | default(false) | bool)
-               and not is_state('binary_sensor.bayesian_zeke_home', 'off') }}
+               and not is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'off') }}
       # Drop a stale request instead of running it late: it expired while queued, or
       # it is an away-only request and the owner is no longer confirmed away.
       - if:
@@ -1238,7 +1238,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/ryan-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 X40 Ultra queued clean dropped:
                 {{ 'it expired while waiting in the queue' if (request_expired | bool(false))
@@ -1277,7 +1277,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/ryan-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 X40 Ultra deterministic clean skipped: the robot is already busy
                 with a manual or app-initiated run.
@@ -1556,7 +1556,7 @@ script:
                 condition: template
                 value_template: >-
                   {{ is_state('input_select.vacuum_pet_policy', 'Unattended')
-                     or is_state('binary_sensor.bayesian_zeke_home', 'on') }}
+                     or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') }}
               - alias: "Recheck guest-mode veto immediately before segment start"
                 condition: state
                 entity_id: input_boolean.guest_mode
@@ -1598,7 +1598,7 @@ script:
               - action: notify.all
                 data:
                   data:
-                    url: "/ryan-new-mushroom/cleaning"
+                    url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
                   message: >-
                     X40 Ultra supervised room vacuum skipped: the sweeping mode
                     did not apply, or the pet policy / guest mode changed during
@@ -1622,7 +1622,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/ryan-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 X40 Ultra supervised room vacuum skipped: the robot was already
                 busy with a manual or app-initiated run.
@@ -1662,7 +1662,7 @@ script:
         condition: template
         value_template: >-
           {{ is_state('input_select.vacuum_pet_policy', 'Unattended')
-             or is_state('binary_sensor.bayesian_zeke_home', 'on') }}
+             or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') }}
       - alias: "Recheck guest-mode veto immediately before the upstairs segment START"
         condition: state
         entity_id: input_boolean.guest_mode
@@ -1738,7 +1738,7 @@ script:
         condition: template
         value_template: >-
           {{ is_state('input_select.vacuum_pet_policy', 'Unattended')
-             or is_state('binary_sensor.bayesian_zeke_home', 'on') }}
+             or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') }}
       - alias: "Guest mode vetoes automatic/supervised vacuuming"
         condition: state
         entity_id: input_boolean.guest_mode
@@ -1795,7 +1795,7 @@ script:
           - action: notify.all
             data:
               data:
-                url: "/ryan-new-mushroom/cleaning"
+                url: "/@@PRIVATE:owner_person_slug@@-new-mushroom/cleaning"
               message: >-
                 Pick a room in the cleaning dashboard before starting a
                 supervised clean.
