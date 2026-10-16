@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from privacy_ids import DASHBOARD_ROOT
+
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -167,8 +169,8 @@ def test_salt_notifications_link_to_existing_cleaning_view() -> None:
     text = WATER_SOFTENER_PATH.read_text(encoding="utf-8")
 
     # The dashboard view moved to `cleaning-v2`; `cleaning` no longer exists.
-    assert 'url: "/example-new-mushroom/cleaning"' not in text
-    assert text.count('url: "/example-new-mushroom/cleaning-v2"') == 2
+    assert f'url: "/{DASHBOARD_ROOT}/cleaning"' not in text
+    assert text.count(f'url: "/{DASHBOARD_ROOT}/cleaning-v2"') == 2
 
 
 def test_water_softener_forecast_reminder_is_one_shot_before_critical() -> None:
