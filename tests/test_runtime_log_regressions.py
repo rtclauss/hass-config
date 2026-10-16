@@ -11,6 +11,7 @@ ZIGBEE_ZWAVE_PATH = ROOT / "packages" / "zigbee_zwave.yaml"
 BIRDS_PATH = ROOT / "packages" / "birds.yaml"
 UTILITIES_PATH = ROOT / "packages" / "utilities.yaml"
 HOLIDAYS_PATH = ROOT / "packages" / "holidays.yaml"
+WORKDAY_PATH = ROOT / "packages" / "workday.yaml"
 CONFIGURATION_PATH = ROOT / "configuration.yaml"
 OCTOPRINT_PATH = ROOT / "packages" / "octoprint.yaml"
 
@@ -357,11 +358,24 @@ def test_owner_suite_led_shutdown_waits_for_inovelli_state_settle() -> None:
         1,
     )[0]
 
-    assert "initial_grace_period: 30" in block
+    assert "state_grace: 30" in block
+    assert "initial_grace_period" not in block
     assert "expected_state: 0" in block
     assert block.count("action: number.set_value") == 3
     assert "count: 2" in block
     assert block.count("seconds: 30") == 1
+
+
+def test_retry_actions_use_current_state_grace_schema() -> None:
+    text = _read(ZIGBEE_ZWAVE_PATH) + _read(WORKDAY_PATH)
+    office_block = _automation_block(
+        WORKDAY_PATH,
+        "turn_off_office_lamp_when_work_tp_camera_active",
+    )
+
+    assert "initial_grace_period" not in text
+    assert "state_grace: 5" in office_block
+    assert 'expected_state:\n            - "off"' in office_block
 
 
 def test_lights_off_except_only_targets_currently_on_lights() -> None:
