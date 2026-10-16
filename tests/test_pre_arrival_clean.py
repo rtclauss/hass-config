@@ -9,6 +9,8 @@ are re-validated when they are dequeued.
 
 from __future__ import annotations
 
+from privacy_ids import PRESENCE_SENSOR
+
 from pathlib import Path
 
 
@@ -156,7 +158,7 @@ def test_flying_home_keeps_all_existing_safety_conditions() -> None:
 
     for entity, state in (
         ("input_boolean.trip", "on"),
-        ("binary_sensor.bayesian_resident_home", "off"),
+        (PRESENCE_SENSOR, "off"),
         ("input_boolean.guest_mode", "off"),
         ("input_boolean.trip_guest_visit_active", "off"),
     ):
@@ -319,6 +321,6 @@ def test_dispatcher_drops_expired_or_owner_home_requests_before_touching_the_rob
     # Fail closed: an unparseable expiry drops the request, and "away" must be confirmed
     # (unknown/unavailable presence also drops an away-only request).
     assert "limit <= 0 or as_timestamp(now()) > limit" in variables
-    assert "not is_state('binary_sensor.bayesian_resident_home', 'off')" in variables
+    assert f"not is_state('{PRESENCE_SENSOR}', 'off')" in variables
     # A bare rendered `false` is a truthy STRING in Jinja `or`; the guard must coerce it.
     assert "(request_expired | bool(false)) or (owner_not_away | bool(false))" in sequence

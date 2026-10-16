@@ -125,8 +125,8 @@ template:
         event: start
       - trigger: state
         entity_id:
-          - person.example
-          - binary_sensor.bayesian_resident_home
+          - person.@@PRIVATE:owner_person_slug@@
+          - binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
           - sensor.iphone_17_pro_area
           - sensor.iphone_17_pro_floor
           - sensor.apple_watch_ultra_2_area
@@ -137,14 +137,14 @@ template:
           - binary_sensor.dining_room_bt_proxy_dining_room_bluetooth_proxy_status
           - binary_sensor.office_occupancy_2
           - binary_sensor.office_motion_occupancy
-          - binary_sensor.example_office_presence
+          - binary_sensor.@@PRIVATE:owner_person_slug@@_office_presence
           - binary_sensor.basement_occupancy_2
     sensor:
       - name: bedroom_room_confidence
         unique_id: bedroom_room_confidence
         unit_of_measurement: "%"
         state: >-
-          {% set home_present = is_state('person.example', 'home') or is_state('binary_sensor.bayesian_resident_home', 'on') %}
+          {% set home_present = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') %}
           {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
           {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
           {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
@@ -188,7 +188,7 @@ template:
         unique_id: office_room_confidence
         unit_of_measurement: "%"
         state: >-
-          {% set home_present = is_state('person.example', 'home') or is_state('binary_sensor.bayesian_resident_home', 'on') %}
+          {% set home_present = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') %}
           {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
           {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
           {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
@@ -205,7 +205,7 @@ template:
               {% set local_signal_count.value = local_signal_count.value + 1 %}
               {% set score.value = score.value + 20 %}
             {% endif %}
-            {% if is_state('binary_sensor.example_office_presence', 'on') %}
+            {% if is_state('binary_sensor.@@PRIVATE:owner_person_slug@@_office_presence', 'on') %}
               {% set local_signal_count.value = local_signal_count.value + 1 %}
               {% set score.value = score.value + 30 %}
             {% endif %}
@@ -234,7 +234,7 @@ template:
             {% endif %}
           phone_area: "{{ states('sensor.iphone_17_pro_area') }}"
           watch_area: "{{ states('sensor.apple_watch_ultra_2_area') }}"
-          office_proxy_presence: "{{ states('binary_sensor.example_office_presence') }}"
+          office_proxy_presence: "{{ states('binary_sensor.@@PRIVATE:owner_person_slug@@_office_presence') }}"
           local_signal_count: >-
             {% set count = 0 %}
             {% if is_state('binary_sensor.office_occupancy_2', 'on') %}
@@ -243,7 +243,7 @@ template:
             {% if is_state('binary_sensor.office_motion_occupancy', 'on') %}
               {% set count = count + 1 %}
             {% endif %}
-            {% if is_state('binary_sensor.example_office_presence', 'on') %}
+            {% if is_state('binary_sensor.@@PRIVATE:owner_person_slug@@_office_presence', 'on') %}
               {% set count = count + 1 %}
             {% endif %}
             {{ count }}
@@ -252,7 +252,7 @@ template:
         unique_id: den_room_confidence
         unit_of_measurement: "%"
         state: >-
-          {% set home_present = is_state('person.example', 'home') or is_state('binary_sensor.bayesian_resident_home', 'on') %}
+          {% set home_present = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') %}
           {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
           {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
           {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
@@ -293,7 +293,7 @@ template:
         unique_id: dining_room_room_confidence
         unit_of_measurement: "%"
         state: >-
-          {% set home_present = is_state('person.example', 'home') or is_state('binary_sensor.bayesian_resident_home', 'on') %}
+          {% set home_present = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') %}
           {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
           {% set dining_area_names = ['dining room'] %}
           {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
@@ -333,7 +333,7 @@ template:
         unique_id: basement_room_confidence
         unit_of_measurement: "%"
         state: >-
-          {% set home_present = is_state('person.example', 'home') or is_state('binary_sensor.bayesian_resident_home', 'on') %}
+          {% set home_present = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') or is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on') %}
           {% set unknown_states = ['unknown', 'unavailable', 'none', ''] %}
           {% set phone_area = states('sensor.iphone_17_pro_area') | lower %}
           {% set watch_area = states('sensor.apple_watch_ultra_2_area') | lower %}
