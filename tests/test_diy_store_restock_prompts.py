@@ -6,7 +6,7 @@ Three separate failures shaped this design, all observed in production:
    equality on one tracker. The arrival fix lands in the parking lot, so
    `place_name` reads `unknown` and `place_type` reads `parking`, and the
    phone then reports nothing for the rest of the visit. Real OSM names also
-   carry suffixes ("The Home Depot #2812"), and the car was never watched.
+   carry numbered branch suffixes, and the car was never watched.
 2. A garden centre prompted for furnace filters, and a 30-minute timed hold
    then swallowed the real Home Depot arrival 25 minutes later.
 3. Shortening that hold traded the swallow for a duplicate: a visit outlasting
@@ -30,6 +30,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CLIMATE_PATH = ROOT / "packages" / "climate.yaml"
 WATER_SOFTENER_PATH = ROOT / "packages" / "water_softener.yaml"
 ZONE_PATH = ROOT / "packages" / "zone.yaml"
+PRESENCE_SLUG = re.search(
+    r"(?m)^  - id: ([a-z]+)_arrival_emitter$",
+    ZONE_PATH.read_text(encoding="utf-8"),
+).group(1)
 
 # The arrival backstop only fires after a trip long enough to have shopped.
 ERRAND_THRESHOLD_SECONDS = 2700
@@ -80,7 +84,7 @@ def _diy_store_sensor_block() -> str:
 def test_both_trackers_are_watched() -> None:
     # The car has the same Places sensors as the phone and was ignored by the
     # original air-filter prompt.
-    for tracker in ("resident", "tesla"):
+    for tracker in (PRESENCE_SLUG, "tesla"):
         _template_block(f"diy_store_{tracker}")
 
 
@@ -121,8 +125,8 @@ def test_diy_store_sensor_structural_types_stock_filters_and_salt() -> None:
 
     # shop=department_store is Target as well as Fleet Farm, so it must not be a
     # structural match; Fleet Farm comes in via its brand tag instead.
-    # shop=garden_centre prompted for furnace filters at a garden centre on
-    # 2026-09-20, and shop=paint has the same problem: neither stocks filters
+    # shop=garden_centre can prompt for furnace filters at a garden centre,
+    # and shop=paint has the same problem: neither stocks filters
     # or softener salt.
     for shop_type in ("department_store", "garden_centre", "paint"):
         assert shop_type not in types_line, f"{shop_type!r} must not match structurally"
@@ -153,18 +157,18 @@ def test_store_identity_is_canonical() -> None:
 
 
 def test_hold_is_per_tracker_not_combined() -> None:
-    resident = _template_block("diy_store_resident")
+    resident = _template_block(f"diy_store_{PRESENCE_SLUG}")
     tesla = _template_block("diy_store_tesla")
 
     # Trackers move independently. Deciding the hold from all of them at once
     # fails both ways: "any clears" lets a car at home cancel the phone's
     # visit, "every clears" lets a car parked in a lot pin the last store
     # forever. Each tracker holds only its own state.
-    for block, tracker in ((resident, "resident"), (tesla, "tesla")):
+    for block, tracker in ((resident, PRESENCE_SLUG), (tesla, "tesla")):
         assert f"diy_store_identity('{tracker}')" in block
         assert f"diy_place_is_vague('{tracker}')" in block
         assert "this.state" in block
-        for other in {"resident", "tesla"} - {tracker}:
+        for other in {PRESENCE_SLUG, "tesla"} - {tracker}:
             assert other not in block, f"{tracker} sensor must not read {other}"
 
 
@@ -173,7 +177,7 @@ def test_combined_sensor_collapses_trackers_to_one_identity() -> None:
 
     # Two trackers arriving together must not race into two prompts.
     assert "states['sensor.diy_store_' ~ tracker]" in block
-    assert "for tracker in ['resident', 'tesla']" in block
+    assert f"for tracker in ['{PRESENCE_SLUG}', 'tesla']" in block
 
 
 def test_freshness_reads_the_per_tracker_sensors_not_raw_places() -> None:
@@ -206,7 +210,7 @@ def test_holds_through_uninformative_fixes_but_not_on_a_timer() -> None:
     # parking/unknown is the lot, not evidence of having left.
     assert "'parking'" in src
     assert "diy_place_is_vague" in src
-    for block in (_template_block("diy_store_resident"), _template_block("diy_store_tesla")):
+    for block in (_template_block(f"diy_store_{PRESENCE_SLUG}"), _template_block("diy_store_tesla")):
         assert "delay_off" not in block
 
 
@@ -293,8 +297,8 @@ def test_air_filter_prompt_uses_shared_sensor_not_place_strings() -> None:
     block = _automation_block(CLIMATE_PATH, "buy_more_air_filters")
 
     assert "sensor.diy_store_current" in block
-    assert "sensor.resident_place_place_name" not in block
-    assert "sensor.resident_place_place_type" not in block
+    assert not re.search(r"sensor\.[a-z]+_place_place_name", block)
+    assert not re.search(r"sensor\.[a-z]+_place_place_type", block)
 
 
 def test_air_filter_prompt_has_arrival_backstop() -> None:
@@ -303,7 +307,7 @@ def test_air_filter_prompt_has_arrival_backstop() -> None:
     # The store signal misses entirely when the geocode lands in the parking
     # lot, so arriving home has to be able to ask too.
     assert "id: home_from_errand" in block
-    assert "binary_sensor.bayesian_resident_home" in block
+    assert re.search(r"binary_sensor\.bayesian_[a-z]+_home", block)
     assert str(ERRAND_THRESHOLD_SECONDS) in block
     assert "trigger.from_state.last_changed" in block
 
@@ -359,7 +363,7 @@ def test_salt_prompt_uses_shared_sensor() -> None:
     block = _automation_block(WATER_SOFTENER_PATH, "buy_more_salt")
 
     assert "sensor.diy_store_current" in block
-    assert "sensor.resident_place_place_name" not in block
+    assert not re.search(r"sensor\.[a-z]+_place_place_name", block)
     assert "sensor.tesla_place_place_name" not in block
 
 
@@ -367,7 +371,7 @@ def test_salt_prompt_has_no_arrival_backstop() -> None:
     block = _automation_block(WATER_SOFTENER_PATH, "buy_more_salt")
 
     # Two restock questions on a single arrival is worse than one missed bag.
-    assert "binary_sensor.bayesian_resident_home" not in block
+    assert not re.search(r"binary_sensor\.bayesian_[a-z]+_home", block)
 
 
 ########################
@@ -1184,7 +1188,7 @@ def _ha_write(old: dict | None, new_state: str, new_attrs: dict, *, now: float) 
 
 
 def test_without_checked_at_a_repeated_identity_fires_no_event() -> None:
-    # This is the bug: diy_store_resident recomputes "ace hardware" three times in
+    # This is the bug: the resident store sensor recomputes the same store three times in
     # a row (matched, then held, then a genuine fresh re-match). Without a
     # changing attribute, only the first write fires; a downstream consumer
     # watching this entity is never told about the second or third.
@@ -1238,7 +1242,7 @@ def test_force_update_would_have_broken_last_changed_instead() -> None:
 
 
 def test_both_per_tracker_sensors_declare_checked_at() -> None:
-    for tracker in ("resident", "tesla"):
+    for tracker in (PRESENCE_SLUG, "tesla"):
         block = _template_block(f"diy_store_{tracker}")
         assert "checked_at" in block
         assert "now().timestamp()" in block
@@ -1249,7 +1253,7 @@ def test_checked_at_is_the_only_thing_now_is_used_for() -> None:
     # (a state template that silently goes stale between renders, or a
     # surprise periodic re-render). It belongs only in the attribute whose
     # entire purpose is to differ on every render.
-    for tracker in ("resident", "tesla"):
+    for tracker in (PRESENCE_SLUG, "tesla"):
         block = _template_block(f"diy_store_{tracker}")
         state_part = block[: block.index("attributes:")]
         assert "now()" not in state_part

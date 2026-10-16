@@ -52,7 +52,7 @@ automation:
           - input_boolean.guest_mode
           - input_boolean.trip
           - input_select.house_mode
-          - binary_sensor.bayesian_resident_home
+          - binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
           - binary_sensor.bayesian_bed_occupancy
           - binary_sensor.bedroom_occupancy
           - binary_sensor.owner_suite_bathroom_room_occupancy
@@ -67,7 +67,7 @@ automation:
           - sensor.precip_next_1hr
           - sensor.outside_temperature
           - sensor.active_weather_entity_id
-          - calendar.example_example
+          - calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
         id: state-change
       - trigger: state
         entity_id:
@@ -79,11 +79,11 @@ automation:
       - delay:
           seconds: 15
       - condition: template
-        alias: Publish only when Resident is home or guest mode is active
+        alias: Publish only when @@PRIVATE:owner_person_title@@ is home or guest mode is active
         value_template: >-
           {{ is_state('input_boolean.guest_mode', 'on')
              or (
-               is_state('binary_sensor.bayesian_resident_home', 'on')
+               is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on')
                and is_state('input_boolean.trip', 'off')
              ) }}
       - action: script.publish_owner_suite_inky_display
@@ -134,11 +134,11 @@ script:
               up_for_day
             {% endif %}
       - condition: template
-        alias: Publish only when Resident is home or guest mode is active
+        alias: Publish only when @@PRIVATE:owner_person_title@@ is home or guest mode is active
         value_template: >-
           {{ is_state('input_boolean.guest_mode', 'on')
              or (
-               is_state('binary_sensor.bayesian_resident_home', 'on')
+               is_state('binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home', 'on')
                and is_state('input_boolean.trip', 'off')
              ) }}
       - choose:
@@ -168,14 +168,14 @@ script:
               - condition: not
                 conditions:
                   - condition: state
-                    entity_id: calendar.example_example
+                    entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
                     state:
                       - "unknown"
                       - "unavailable"
             sequence:
               - action: calendar.get_events
                 target:
-                  entity_id: calendar.example_example
+                  entity_id: calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@
                 data:
                   start_date_time: "{{ (now() - timedelta(minutes=5)).isoformat() }}"
                   end_date_time: "{{ (now() + timedelta(hours=12)).isoformat() }}"
@@ -248,7 +248,7 @@ script:
               {% set alarm_value = 'Off' %}
             {% endif %}
             {% set meeting_value = states('input_datetime.next_work_meeting')[0:5] if meeting_alarm else 'Off' %}
-            {% set calendar_entity = 'calendar.example_example' %}
+            {% set calendar_entity = 'calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@' %}
             {% set calendar_response = owner_suite_calendar_window if owner_suite_calendar_window is mapping else {} %}
             {% set calendar_items = calendar_response.get('events', calendar_response.get(calendar_entity, {}).get('events', [])) %}
             {% set next_calendar = namespace(has_event=false, time='No event', place='No location') %}
@@ -276,9 +276,9 @@ script:
             {% set weather_alert = weather_alert_state not in ['no', 'off', '0', 'false', 'unknown', 'unavailable'] %}
             {% set precip_next_hour = states('sensor.precip_next_1hr') | int(default=-1) %}
             {% set rain_next_hour = precip_next_hour >= 40 %}
-            {% set event_start = state_attr('calendar.example_example', 'start_time') | default('', true) %}
-            {% set event_end = state_attr('calendar.example_example', 'end_time') | default('', true) %}
-            {% set event_title = state_attr('calendar.example_example', 'message') | default('Event', true) %}
+            {% set event_start = state_attr('calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@', 'start_time') | default('', true) %}
+            {% set event_end = state_attr('calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@', 'end_time') | default('', true) %}
+            {% set event_title = state_attr('calendar.@@PRIVATE:owner_person_slug@@_@@PRIVATE:owner_person_surname_slug@@', 'message') | default('Event', true) %}
             {% set event_forecasts = forecast_rows %}
             {% set precip_conditions = ['hail', 'lightning-rainy', 'pouring', 'rainy', 'snowy', 'snowy-rainy'] %}
             {% set event = namespace(max_precip=-1, weather=false) %}
