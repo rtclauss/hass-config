@@ -7,7 +7,7 @@ the user's button-driven input_booleans as truth labels.
 Key choices:
 - Uses HA recorder history for 0/1 numeric mirrors you created
   (sensor.east_bed_occupied_num, sensor.west_bed_occupied_num).
-- Masks out periods when person.ryan != 'home' or guest_mode == 'on'.
+- Masks out periods when the configured resident is away or guest mode is on.
 - Applies a minimum dwell filter to remove accidental taps.
 - Requires minimum sample counts for both classes before training.
 - Fits regularized logistic regression with class_weight='balanced'.
@@ -25,7 +25,7 @@ Publish:
     sensor.chatgpt_prob_east_bed_occupied
     sensor.chatgpt_prob_west_bed_occupied
 
-Author: Ryan Claussen + ChatGPT (GPT-5 Thinking)
+Author: Home automation contributors
 """
 
 import appdaemon.plugins.hass.hassapi as hass
@@ -47,7 +47,7 @@ class BedSidePredictor(hass.Hass):
         # Args
         self.east_sensor = self.args.get("east_sensor", "sensor.east_bed_occupied_num")
         self.west_sensor = self.args.get("west_sensor", "sensor.west_bed_occupied_num")
-        self.presence_sensor = self.args.get("presence_sensor", "person.ryan")
+        self.presence_sensor = self.args["presence_sensor"]
         self.guest_mode = self.args.get("guest_mode", "input_boolean.guest_mode")
 
         # Schedule config

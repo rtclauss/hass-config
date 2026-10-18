@@ -34,8 +34,18 @@ python3 scripts/appdaemon_sync.py diff
 Push the repo copy back to the live AppDaemon add-on:
 
 ```sh
+python3 scripts/render_private_config.py
+python3 scripts/render_private_config.py --check
 python3 scripts/appdaemon_sync.py push
 ```
+
+The generated `appdaemon/apps/apps.yaml` and
+`appdaemon/apps/vacuum_stall_monitor.yaml` are ignored and must be rendered
+from the private mapping before a push. Preserve the active add-on files and
+compare the rendered files with that backup before the first push. The
+`apps.yaml` render includes the active add-on changes that were absent from
+the old Git copy. Keep the inactive `bed_history.py` and Schedy YAML files
+local and ignored; they contain private history and identifiers.
 
 Use `--delete` on push only when you explicitly want the live add-on tree to be
 pruned to match the repo.

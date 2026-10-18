@@ -71,7 +71,8 @@ def _load_tracker_module(monkeypatch):
 def _make_app(monkeypatch, zones):
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
 
     # Mirror the real AppDaemon zone API: get_state("zone") -> {id: state};
     # per-entity get_state("zone.x", attribute="all") -> full dict. Querying
@@ -90,16 +91,16 @@ def _make_app(monkeypatch, zones):
     app.set_state = Mock()
     app.error = Mock()
     app.log = Mock()
-    app.tracker_friendly_name = "Zeke"
+    app.tracker_friendly_name = "Resident"
     return app
 
 
 HOME = {
     "zone.home": {
-        "attributes": {"latitude": 44.0, "longitude": -93.0, "radius": 100},
+        "attributes": {"latitude": 10.0, "longitude": -20.0, "radius": 100},
     },
-    "zone.rochester": {
-        "attributes": {"latitude": 44.02, "longitude": -92.46, "radius": 20000, "friendly_name": "Rochester"},
+    "zone.sample_city": {
+        "attributes": {"latitude": 10.02, "longitude": -19.46, "radius": 20000, "friendly_name": "Sample City"},
     },
 }
 
@@ -115,42 +116,42 @@ def test_see_service_no_longer_called_in_source() -> None:
 def test_update_tracker_uses_set_state_not_see(monkeypatch) -> None:
     app = _make_app(monkeypatch, HOME)
 
-    app.update_tracker(latitude=44.0, longitude=-93.0, attributes={"course": 0.0})
+    app.update_tracker(latitude=10.0, longitude=-20.0, attributes={"course": 0.0})
 
     app.set_state.assert_called_once()
     args, kwargs = app.set_state.call_args
-    assert args[0] == "device_tracker.bayesian_zeke_home"
+    assert args[0] == "device_tracker.bayesian_resident_home"
     assert kwargs["state"] == "home"
-    assert kwargs["attributes"]["latitude"] == 44.0
-    assert kwargs["attributes"]["longitude"] == -93.0
+    assert kwargs["attributes"]["latitude"] == 10.0
+    assert kwargs["attributes"]["longitude"] == -20.0
     assert kwargs["attributes"]["source_type"] == "gps"
     assert kwargs["attributes"]["course"] == 0.0
 
 
 def test_resolve_state_home_zone(monkeypatch) -> None:
     app = _make_app(monkeypatch, HOME)
-    assert app.resolve_tracker_state(44.0, -93.0) == "home"
+    assert app.resolve_tracker_state(10.0, -20.0) == "home"
 
 
 def test_resolve_state_named_zone_over_larger_zone(monkeypatch) -> None:
     app = _make_app(monkeypatch, HOME)
-    # Inside Rochester but far from the small home zone -> named zone.
-    assert app.resolve_tracker_state(44.02, -92.46) == "Rochester"
+    # Inside Sample City but far from the small home zone -> named zone.
+    assert app.resolve_tracker_state(10.02, -19.46) == "Sample City"
 
 
 def test_resolve_state_not_home_when_outside_all_zones(monkeypatch) -> None:
     app = _make_app(monkeypatch, HOME)
-    assert app.resolve_tracker_state(40.0, -80.0) == "not_home"
+    assert app.resolve_tracker_state(6.0, -7.0) == "not_home"
 
 
 def test_resolve_state_ignores_passive_zones(monkeypatch) -> None:
     zones = {
         "zone.passive_here": {
-            "attributes": {"latitude": 44.0, "longitude": -93.0, "radius": 50, "passive": True},
+            "attributes": {"latitude": 10.0, "longitude": -20.0, "radius": 50, "passive": True},
         },
     }
     app = _make_app(monkeypatch, zones)
-    assert app.resolve_tracker_state(44.0, -93.0) == "not_home"
+    assert app.resolve_tracker_state(10.0, -20.0) == "not_home"
 
 
 def test_resolve_state_none_coordinates(monkeypatch) -> None:
@@ -167,8 +168,9 @@ def test_location_update_survives_missing_tracker_entity(monkeypatch) -> None:
     """
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
-    app.bayesian = "binary_sensor.bayesian_zeke_home"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
+    app.bayesian = "binary_sensor.bayesian_resident_home"
     app.minimum_update_window = 300
     app.minimum_update_distance = 50
     app.gps_accuracy_tolerance = 100
@@ -187,11 +189,11 @@ def test_location_update_survives_missing_tracker_entity(monkeypatch) -> None:
 
     app.get_state = Mock(side_effect=fake_get_state)
 
-    new = {"attributes": {"latitude": 44.5, "longitude": -92.5, "gps_accuracy": 10}}
-    old = {"attributes": {"latitude": 45.0, "longitude": -92.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 10.5, "longitude": -19.5, "gps_accuracy": 10}}
+    old = {"attributes": {"latitude": 11.0, "longitude": -19.0, "gps_accuracy": 10}}
 
     # Should not raise despite the missing tracker entity.
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_called_once()
 
@@ -207,10 +209,11 @@ def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
     """
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
     app.error = Mock()
     app.log = Mock()
-    app.tracker_friendly_name = "Zeke"
+    app.tracker_friendly_name = "Resident"
 
     def fake_get_state(entity, attribute=None):
         if entity == "zone":
@@ -224,11 +227,11 @@ def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
 
     bayesian_state = {"state": "off", "attributes": {"probability": 0.9, "probability_threshold": 0.5}}
     sensor_state = {
-        "entity_id": "device_tracker.wethop",
+        "entity_id": "device_tracker.example_phone",
         "state": "not_home",
         "attributes": {
-            "latitude": 44.5,
-            "longitude": -92.5,
+            "latitude": 10.5,
+            "longitude": -19.5,
             "gps_accuracy": 10,
             "speed": 5.0,
             "battery": 80,
@@ -240,7 +243,7 @@ def test_run_update_survives_missing_tracker_entity(monkeypatch) -> None:
 
     app.set_state.assert_called_once()
     args, kwargs = app.set_state.call_args
-    assert args[0] == "device_tracker.bayesian_zeke_home"
+    assert args[0] == "device_tracker.bayesian_resident_home"
     assert kwargs["attributes"]["source_type"] == "gps"
 
 
@@ -253,14 +256,15 @@ def test_update_tracker_state_override_bypasses_zone_resolution(monkeypatch) -> 
     """
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
-    app.tracker_friendly_name = "Zeke"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
+    app.tracker_friendly_name = "Resident"
     app.set_state = Mock()
     app.get_state = Mock(return_value=None)  # every zone lookup fails
     app.log = Mock()
     app.error = Mock()
 
-    app.update_tracker(latitude=44.0, longitude=-93.0,
+    app.update_tracker(latitude=10.0, longitude=-20.0,
                        attributes={"course": 0.0}, state="home")
 
     _, kwargs = app.set_state.call_args
@@ -271,8 +275,8 @@ def test_update_tracker_strips_source_identity_attrs(monkeypatch) -> None:
     """A GPS source's identity attributes must not leak onto the fused tracker."""
     app = _make_app(monkeypatch, HOME)
 
-    app.update_tracker(latitude=44.0, longitude=-93.0, attributes={
-        "friendly_name": "Nigori Location tracker",
+    app.update_tracker(latitude=10.0, longitude=-20.0, attributes={
+        "friendly_name": "Example Vehicle Location tracker",
         "in_zones": ["zone.neighborhood"],
         "last_changed": "2026-08-10T00:00:00",
         "context": {"id": "abc"},
@@ -281,7 +285,7 @@ def test_update_tracker_strips_source_identity_attrs(monkeypatch) -> None:
 
     _, kwargs = app.set_state.call_args
     attrs = kwargs["attributes"]
-    assert attrs["friendly_name"] == "Zeke"          # stable name, not the source's
+    assert attrs["friendly_name"] == "Resident"          # stable name, not the source's
     assert "in_zones" not in attrs
     assert "last_changed" not in attrs
     assert "context" not in attrs
@@ -298,6 +302,7 @@ def test_zone_states_enumerates_per_entity(monkeypatch) -> None:
     """
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
     app.log = Mock()
 
     def fake_get_state(entity=None, attribute=None):
@@ -306,18 +311,19 @@ def test_zone_states_enumerates_per_entity(monkeypatch) -> None:
         if entity == "zone":
             return {"zone.home": "1"}  # domain enumeration
         if entity == "zone.home":
-            return {"attributes": {"latitude": 44.0, "longitude": -93.0, "radius": 100}}
+            return {"attributes": {"latitude": 10.0, "longitude": -20.0, "radius": 100}}
         return None
 
     app.get_state = Mock(side_effect=fake_get_state)
 
-    assert app.resolve_tracker_state(44.0, -93.0) == "home"
+    assert app.resolve_tracker_state(10.0, -20.0) == "home"
 
 
 def test_resolve_state_not_home_if_zone_query_raises(monkeypatch) -> None:
     """If even get_state('zone') raises, resolve degrades to not_home (no crash)."""
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
     app.log = Mock()
 
     def fake_get_state(entity=None, attribute=None):
@@ -325,7 +331,7 @@ def test_resolve_state_not_home_if_zone_query_raises(monkeypatch) -> None:
 
     app.get_state = Mock(side_effect=fake_get_state)
 
-    assert app.resolve_tracker_state(44.0, -93.0) == "not_home"
+    assert app.resolve_tracker_state(10.0, -20.0) == "not_home"
 
 
 def test_run_update_away_source_without_speed_still_updates(monkeypatch) -> None:
@@ -338,16 +344,17 @@ def test_run_update_away_source_without_speed_still_updates(monkeypatch) -> None
     """
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
     app.error = Mock()
     app.log = Mock()
-    app.tracker_friendly_name = "Zeke"
+    app.tracker_friendly_name = "Resident"
 
     def fake_get_state(entity, attribute=None):
         if entity == "zone":
             return HOME
         if entity.startswith("device_tracker."):
-            return {"attributes": {"latitude": 44.0, "longitude": -93.0}}
+            return {"attributes": {"latitude": 10.0, "longitude": -20.0}}
         return {"attributes": {}}
 
     app.get_state = Mock(side_effect=fake_get_state)
@@ -355,11 +362,11 @@ def test_run_update_away_source_without_speed_still_updates(monkeypatch) -> None
 
     bayesian_state = {"state": "off", "attributes": {"probability": 0.9, "probability_threshold": 0.5}}
     sensor_state = {
-        "entity_id": "device_tracker.wethop",
+        "entity_id": "device_tracker.example_phone",
         "state": "not_home",
         "attributes": {
-            "latitude": 44.5,
-            "longitude": -92.5,
+            "latitude": 10.5,
+            "longitude": -19.5,
             "gps_accuracy": 20,
             "battery_level": 100,
             # NB: no 'speed' key -- the iOS phone tracker omits it
@@ -370,7 +377,7 @@ def test_run_update_away_source_without_speed_still_updates(monkeypatch) -> None
 
     app.set_state.assert_called_once()
     _, kwargs = app.set_state.call_args
-    assert kwargs["state"] == "not_home"  # 44.5,-92.5 is outside the test zones
+    assert kwargs["state"] == "not_home"  # 10.5,-19.5 is outside the test zones
 
 
 def test_update_tracker_replaces_attributes(monkeypatch) -> None:
@@ -382,7 +389,7 @@ def test_update_tracker_replaces_attributes(monkeypatch) -> None:
     """
     app = _make_app(monkeypatch, HOME)
 
-    app.update_tracker(latitude=44.0, longitude=-93.0, attributes={"course": 0.0}, state="home")
+    app.update_tracker(latitude=10.0, longitude=-20.0, attributes={"course": 0.0}, state="home")
 
     _, kwargs = app.set_state.call_args
     assert kwargs.get("replace") is True
@@ -396,8 +403,9 @@ def _make_location_update_app(monkeypatch, baselines=None):
     from datetime import datetime, timezone
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
-    app.bayesian = "binary_sensor.bayesian_zeke_home"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
+    app.bayesian = "binary_sensor.bayesian_resident_home"
     app.minimum_update_window = 5
     app.minimum_update_distance = 20
     app.gps_accuracy_tolerance = 200
@@ -413,7 +421,7 @@ def _make_location_update_app(monkeypatch, baselines=None):
             return {"state": "off", "attributes": {"probability": 0.1}}
         if entity.startswith("device_tracker."):
             # Fused tracker: only needs gps_updated so the window check passes.
-            return {"attributes": {"latitude": 44.5, "longitude": -93.5,
+            return {"attributes": {"latitude": 10.5, "longitude": -20.5,
                                    "gps_updated": "2020-01-01T00:00:00+00:00"}}
         return {"attributes": {}}
 
@@ -424,29 +432,29 @@ def _make_location_update_app(monkeypatch, baselines=None):
 def test_location_update_accumulates_against_source_baseline(monkeypatch) -> None:
     """Sub-threshold consecutive deltas still accumulate against the source's OWN
     baseline, so walking-pace reports aren't discarded forever."""
-    app = _make_location_update_app(monkeypatch, baselines={"device_tracker.wethop": (44.0, -93.0)})
+    app = _make_location_update_app(monkeypatch, baselines={"device_tracker.example_phone": (10.0, -20.0)})
     # ~11 m between the source's last two reports, but ~211 m from its baseline.
-    old = {"attributes": {"latitude": 44.0018, "longitude": -93.0, "gps_accuracy": 10}}
-    new = {"attributes": {"latitude": 44.0019, "longitude": -93.0, "gps_accuracy": 10}}
+    old = {"attributes": {"latitude": 10.0018, "longitude": -20.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 10.0019, "longitude": -20.0, "gps_accuracy": 10}}
 
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_called_once()
-    assert app._last_accepted_pos["device_tracker.wethop"] == (44.0019, -93.0)  # baseline reset
+    assert app._last_accepted_pos["device_tracker.example_phone"] == (10.0019, -20.0)  # baseline reset
 
 
 def test_location_update_skips_near_own_baseline_no_ping_pong(monkeypatch) -> None:
     """A near-stationary source is skipped even if its old->new delta is large, and
     a *different* source's position is irrelevant -- so phone+vehicle can't ping-pong."""
     app = _make_location_update_app(monkeypatch, baselines={
-        "device_tracker.nigori_location_tracker": (44.0, -93.0),   # Tesla parked
-        "device_tracker.wethop": (44.5, -93.5),                    # phone far away
+        "device_tracker.example_vehicle": (10.0, -20.0),   # Tesla parked
+        "device_tracker.example_phone": (10.5, -20.5),                    # phone far away
     })
     # Tesla refresh ~11 m from its OWN baseline (the big old->new jump is a red herring).
-    old = {"attributes": {"latitude": 43.99, "longitude": -93.0, "gps_accuracy": 10}}
-    new = {"attributes": {"latitude": 44.0001, "longitude": -93.0, "gps_accuracy": 10}}
+    old = {"attributes": {"latitude": 43.99, "longitude": -20.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 10.0001, "longitude": -20.0, "gps_accuracy": 10}}
 
-    app.location_update(entity="device_tracker.nigori_location_tracker", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_vehicle", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_not_called()
 
@@ -456,54 +464,54 @@ def test_location_update_first_sighting_unchanged_seeds_without_publishing(monke
     first report with UNCHANGED coords seeds the baseline but must NOT publish --
     otherwise a parked vehicle's refresh could yank the fused location off the phone."""
     app = _make_location_update_app(monkeypatch, baselines={})
-    old = {"attributes": {"latitude": 45.0, "longitude": -94.0, "gps_accuracy": 10}}
-    new = {"attributes": {"latitude": 45.0, "longitude": -94.0, "gps_accuracy": 10}}  # unchanged
+    old = {"attributes": {"latitude": 11.0, "longitude": -21.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 11.0, "longitude": -21.0, "gps_accuracy": 10}}  # unchanged
 
-    app.location_update(entity="device_tracker.nigori_location_tracker", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_vehicle", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_not_called()
-    assert app._last_accepted_pos["device_tracker.nigori_location_tracker"] == (45.0, -94.0)
+    assert app._last_accepted_pos["device_tracker.example_vehicle"] == (11.0, -21.0)
 
 
 def test_location_update_first_sighting_with_movement_publishes(monkeypatch) -> None:
     """A source's first post-restart report that actually moved is published."""
     app = _make_location_update_app(monkeypatch, baselines={})
-    old = {"attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10}}
-    new = {"attributes": {"latitude": 44.01, "longitude": -93.0, "gps_accuracy": 10}}  # ~1.1 km
+    old = {"attributes": {"latitude": 10.0, "longitude": -20.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 10.01, "longitude": -20.0, "gps_accuracy": 10}}  # ~1.1 km
 
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_called_once()
-    assert app._last_accepted_pos["device_tracker.wethop"] == (44.01, -93.0)
+    assert app._last_accepted_pos["device_tracker.example_phone"] == (10.01, -20.0)
 
 
 def test_location_update_first_sighting_submove_anchors_at_previous_report(monkeypatch) -> None:
     """A first-sighting sub-threshold move seeds the baseline at the PREVIOUS report
     (not `new`), so the already-traveled segment still counts toward accumulation."""
     app = _make_location_update_app(monkeypatch, baselines={})
-    old = {"attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10}}       # P0
-    new = {"attributes": {"latitude": 44.00014, "longitude": -93.0, "gps_accuracy": 10}}   # ~15 m
+    old = {"attributes": {"latitude": 10.0, "longitude": -20.0, "gps_accuracy": 10}}       # P0
+    new = {"attributes": {"latitude": 10.00014, "longitude": -20.0, "gps_accuracy": 10}}   # ~15 m
 
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_not_called()
     # Baseline anchored at P0 (old), not at `new`, so the 15 m already counts.
-    assert app._last_accepted_pos["device_tracker.wethop"] == (44.0, -93.0)
+    assert app._last_accepted_pos["device_tracker.example_phone"] == (10.0, -20.0)
 
 
 def test_location_update_baseline_not_advanced_when_run_update_rejects(monkeypatch) -> None:
     """If run_update rejects the report (e.g. a false-positive 'home'), the source
     baseline must NOT advance -- otherwise a corrective callback looks stationary and
     gets skipped, leaving the fused tracker stale."""
-    app = _make_location_update_app(monkeypatch, baselines={"device_tracker.wethop": (44.0, -93.0)})
+    app = _make_location_update_app(monkeypatch, baselines={"device_tracker.example_phone": (10.0, -20.0)})
     app.run_update = Mock(return_value=False)  # simulate rejection
-    old = {"attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10}}
-    new = {"attributes": {"latitude": 44.01, "longitude": -93.0, "gps_accuracy": 10}}  # moved -> accept path
+    old = {"attributes": {"latitude": 10.0, "longitude": -20.0, "gps_accuracy": 10}}
+    new = {"attributes": {"latitude": 10.01, "longitude": -20.0, "gps_accuracy": 10}}  # moved -> accept path
 
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_called_once()
-    assert app._last_accepted_pos["device_tracker.wethop"] == (44.0, -93.0)  # unchanged
+    assert app._last_accepted_pos["device_tracker.example_phone"] == (10.0, -20.0)  # unchanged
 
 
 def test_run_update_false_positive_home_returns_false(monkeypatch) -> None:
@@ -511,19 +519,20 @@ def test_run_update_false_positive_home_returns_false(monkeypatch) -> None:
     run_update publishes nothing and returns False."""
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
     app.error = Mock()
     app.log = Mock()
-    app.tracker_friendly_name = "Zeke"
+    app.tracker_friendly_name = "Resident"
     app.get_state = Mock(return_value=HOME)
     app.set_state = Mock()
 
     bayesian_state = {"state": "off", "attributes": {"probability": 0.1, "probability_threshold": 0.8}}
     sensor_state = {
-        "entity_id": "device_tracker.wethop",
+        "entity_id": "device_tracker.example_phone",
         "state": "home",  # source flashing home...
         # ...with an extra attr so the away branch is entered (keys != lat/lon/acc)
-        "attributes": {"latitude": 44.0, "longitude": -93.0, "gps_accuracy": 10, "battery_level": 90},
+        "attributes": {"latitude": 10.0, "longitude": -20.0, "gps_accuracy": 10, "battery_level": 90},
     }
 
     result = app.run_update(bayesian_state=bayesian_state, sensor_state=sensor_state)
@@ -534,15 +543,16 @@ def test_run_update_false_positive_home_returns_false(monkeypatch) -> None:
 
 def _make_zone_aware_location_app(monkeypatch, baselines):
     """location_update app whose get_state also serves zones (single zone.home,
-    radius 100 m at 44.0,-93.0). Bayesian is 'off' (away). `baselines` seeds
+    radius 100 m at 10.0,-20.0). Bayesian is 'off' (away). `baselines` seeds
     `_last_accepted_pos`. The zone bypass compares each source's OWN baseline zone
     to its new zone -- the fused entity's published state is deliberately irrelevant.
     """
     from datetime import datetime, timezone
     module = _load_tracker_module(monkeypatch)
     app = module.BayesianDeviceTracker.__new__(module.BayesianDeviceTracker)
-    app.bayesian_device_tracker_id = "bayesian_zeke_home"
-    app.bayesian = "binary_sensor.bayesian_zeke_home"
+    app.ios_speed_tracker_entity = "device_tracker.example_phone"
+    app.bayesian_device_tracker_id = "bayesian_resident_home"
+    app.bayesian = "binary_sensor.bayesian_resident_home"
     app.minimum_update_window = 5
     app.minimum_update_distance = 20
     app.gps_accuracy_tolerance = 200
@@ -551,7 +561,7 @@ def _make_zone_aware_location_app(monkeypatch, baselines):
     app.run_update = Mock(return_value=True)
     app._last_accepted_pos = dict(baselines)
     app.convert_utc = Mock(return_value=datetime(2020, 1, 1, tzinfo=timezone.utc))
-    zones = {"zone.home": {"attributes": {"latitude": 44.0, "longitude": -93.0, "radius": 100}}}
+    zones = {"zone.home": {"attributes": {"latitude": 10.0, "longitude": -20.0, "radius": 100}}}
 
     def fake_get_state(entity, attribute=None):
         if entity == app.bayesian:
@@ -566,8 +576,8 @@ def _make_zone_aware_location_app(monkeypatch, baselines):
             # Fused entity: only gps_updated matters (for the window check). Its
             # published state is intentionally a DIFFERENT zone to prove the bypass
             # compares against the source baseline, not this.
-            return {"state": "Rochester",
-                    "attributes": {"latitude": 44.0, "longitude": -93.0,
+            return {"state": "Sample City",
+                    "attributes": {"latitude": 10.0, "longitude": -20.0,
                                    "gps_updated": "2020-01-01T00:00:00+00:00"}}
         return {"attributes": {}}
 
@@ -579,11 +589,11 @@ def test_location_update_publishes_zone_change_within_distance_gate(monkeypatch)
     """A sub-threshold move that crosses a zone boundary (away) must still publish."""
     # baseline ~89 m from home center (inside r=100); new ~105 m (outside) -> zone change,
     # but the two are only ~16 m apart, i.e. under the 20 m gate.
-    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.wethop": (44.00080, -93.0)})
-    old = {"attributes": {"latitude": 44.00080, "longitude": -93.0, "gps_accuracy": 5}}
-    new = {"attributes": {"latitude": 44.00095, "longitude": -93.0, "gps_accuracy": 5}}
+    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.example_phone": (10.00080, -20.0)})
+    old = {"attributes": {"latitude": 10.00080, "longitude": -20.0, "gps_accuracy": 5}}
+    new = {"attributes": {"latitude": 10.00095, "longitude": -20.0, "gps_accuracy": 5}}
 
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_called_once()  # baseline zone home -> new zone not_home, despite <20 m
 
@@ -593,22 +603,22 @@ def test_location_update_stationary_source_in_other_zone_no_ping_pong(monkeypatc
     must NOT publish -- the bypass compares against the source's own baseline zone,
     not the global fused zone (which would ping-pong)."""
     # Source baseline is OUTSIDE home (not_home); the fused entity currently reads
-    # "Rochester". A refresh ~5 m away is still not_home -> no per-source zone change.
-    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.wethop": (45.0, -94.0)})
-    old = {"attributes": {"latitude": 45.0, "longitude": -94.0, "gps_accuracy": 5}}
-    new = {"attributes": {"latitude": 45.00004, "longitude": -94.0, "gps_accuracy": 5}}  # ~4 m
+    # "Sample City". A refresh ~5 m away is still not_home -> no per-source zone change.
+    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.example_phone": (11.0, -21.0)})
+    old = {"attributes": {"latitude": 11.0, "longitude": -21.0, "gps_accuracy": 5}}
+    new = {"attributes": {"latitude": 11.00004, "longitude": -21.0, "gps_accuracy": 5}}  # ~4 m
 
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_not_called()
 
 
 def test_location_update_suppresses_jitter_when_zone_unchanged(monkeypatch) -> None:
     """A sub-threshold move that stays in the same zone is still suppressed."""
-    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.wethop": (44.00080, -93.0)})
-    old = {"attributes": {"latitude": 44.00080, "longitude": -93.0, "gps_accuracy": 5}}
-    new = {"attributes": {"latitude": 44.00085, "longitude": -93.0, "gps_accuracy": 5}}  # still inside home
+    app = _make_zone_aware_location_app(monkeypatch, baselines={"device_tracker.example_phone": (10.00080, -20.0)})
+    old = {"attributes": {"latitude": 10.00080, "longitude": -20.0, "gps_accuracy": 5}}
+    new = {"attributes": {"latitude": 10.00085, "longitude": -20.0, "gps_accuracy": 5}}  # still inside home
 
-    app.location_update(entity="device_tracker.wethop", attribute="all", old=old, new=new, kwargs={})
+    app.location_update(entity="device_tracker.example_phone", attribute="all", old=old, new=new, kwargs={})
 
     app.run_update.assert_not_called()
