@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
 
-import yaml
-
-
 ROOT = Path(__file__).resolve().parents[1]
 REBOOT_PATH = ROOT / "appdaemon/apps/reboot.py"
-APPS_PATH = ROOT / "appdaemon/apps/apps.yaml"
+APPS_TEMPLATE_PATH = ROOT / "private_templates/appdaemon_apps.yaml.tmpl"
 
 
 def _watchdog(monkeypatch):
@@ -47,27 +45,15 @@ def test_private_probe_configuration_keeps_watchdog_active(monkeypatch) -> None:
     assert len(scheduled) == 1
 
 
-def test_appdaemon_config_loads_network_and_device_values_from_secrets() -> None:
-    apps = APPS_PATH.read_text()
-    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+def test_appdaemon_config_loads_network_and_device_values_from_private_mapping() -> None:
+    apps = APPS_TEMPLATE_PATH.read_text()
+    examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
     for key in (
-        "private_reboot_probe_primary",
-        "private_reboot_probe_secondary",
-        "private_reboot_notify_service",
-        "private_living_room_remote_eui",
+        "appdaemon_probe_target_01",
+        "appdaemon_probe_target_02",
+        "appdaemon_magic_cube_mac_01",
     ):
-        assert f"!secret {key}" in apps
-        assert f"{key}:" in examples
-
-    values = yaml.safe_load(examples)
-
-    class ExampleSecretLoader(yaml.SafeLoader):
-        pass
-
-    ExampleSecretLoader.add_constructor(
-        "!secret", lambda loader, node: values[loader.construct_scalar(node)]
-    )
-    config = yaml.load(apps, Loader=ExampleSecretLoader)
-    watchdog = config["Restart HA if network down"]
-    assert watchdog["probe_targets"] == ["192.0.2.10:8006", "192.0.2.11:53"]
-    assert watchdog["notify_service"] == "notify/example_device"
+        assert f"@@PRIVATE:{key}@@" in apps
+        assert key in examples
+    assert "probe_targets:" in apps
+    assert "notify_service:" not in apps.split("Restart HA if network down:", 1)[1].split("\n\n", 1)[0]

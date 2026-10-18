@@ -519,7 +519,7 @@ class VacuumStallMonitor(hass.Hass):
         self.segments_sensor = self.args["segments_sensor"]
         self.friendly_name = self.args.get("friendly_name", self.vacuum_entity)
         self.notify_service = normalize_service(self.args.get("notify_service", "notify/all"))
-        self.dashboard_url = self.args.get("dashboard_url", "/ryan-new-mushroom/cleaning-v2")
+        self.dashboard_url = self.args["dashboard_url"]
         self.sample_interval_sec = int(self.args.get("sample_interval_sec", 90))
         self.history_size = int(self.args.get("history_size", 12))
         self.stall_samples = int(self.args.get("stall_samples", 6))

@@ -78,7 +78,7 @@ class BedFusionDetector(hass.Hass):
 
         # Optional boolean occupancy ground-truth-ish and gating:
         self.base_occupancy_boolean: str = cfg.get("base_occupancy_boolean", "input_boolean.chatgpt_bed_occupied")
-        self.person_entity: str = cfg.get("person_entity", "person.ryan")
+        self.person_entity: str = cfg["person_entity"]
         self.away_values: List[str] = cfg.get("away_values", ["away"])
 
         # Optional contextual sensors (numbers; they are normalized if ranges provided):
