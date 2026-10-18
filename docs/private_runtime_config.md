@@ -137,6 +137,13 @@ CI tests use two small synthetic fixtures in `tests/fixtures/`. Set
 private dashboard exports when running the same checks against live content;
 do not commit those exports.
 
+The file-backed guest dashboard is also private. Render `ui-guest.yaml` from
+`private_templates/ui-guest.yaml.tmpl` so its title and location-specific
+weather entity and station sensor come from the ignored mapping. Preserve the live YAML before
+updating an older checkout; Git removes its formerly tracked copy. Render all
+manifest targets before reloading the guest dashboard. The public README links
+to the template rather than the private rendered output.
+
 After changing the live Zigbee2MQTT roster, pass its private configuration to
 `scripts/check_z2m_availability_roster.py -` on stdin. The checker compares it
 with `packages/z2m_availability.yaml` and prints counts only.
