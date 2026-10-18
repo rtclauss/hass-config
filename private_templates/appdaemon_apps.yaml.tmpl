@@ -23,7 +23,7 @@ auto_fan_speed_owner_suite:
 #   class: BedSidePredictor
 #   east_sensor: sensor.east_bed_occupied_num
 #   west_sensor: sensor.west_bed_occupied_num
-#   presence_sensor: person.example
+#   presence_sensor: person.@@PRIVATE:owner_person_slug@@
 #   guest_mode: input_boolean.guest_mode
 #   train_hour: 16
 #   update_every_minutes: 60
@@ -46,7 +46,7 @@ auto_fan_speed_owner_suite:
 
 #   # Ground truth-ish + gating
 #   base_occupancy_boolean: input_boolean.chatgpt_bed_occupied
-#   person_entity: person.example
+#   person_entity: person.@@PRIVATE:owner_person_slug@@
 #   away_values: ["away","not_home"]
 
 #   # Optional context features, each normalized to [0..1] with min/max
@@ -92,7 +92,7 @@ auto_fan_speed_owner_suite:
 #   camera_on_sensor: binary_sensor.f7m69c_5d3d6e76_camera_in_use
 #   transition_time_sec: 600
 #   constrain_input_boolean: input_boolean.guest_mode,off
-#   constrain_input_boolean: input_boolean.bayesian_resident_home
+#   constrain_input_boolean: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
 #   constrain_input_boolean: input_boolean.master_bed_occupancy,off
 #   constrain_input_boolean: input_boolean.morning_routine,off
 #   constrain_input_boolean: binary_sensor.workday_sensor
@@ -110,7 +110,7 @@ auto_fan_speed_owner_suite:
 #   transition_time_sec: 600
 #   constrain_input_boolean: input_boolean.master_bed_occupancy,off
 #   constrain_input_boolean: input_boolean.guest_mode,off
-#   constrain_input_boolean: input_boolean.bayesian_resident_home
+#   constrain_input_boolean: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
 #   constrain_input_boolean: input_boolean.morning_routine,off
 #   constrain_input_boolean: binary_sensor.workday_sensor
 #   constrain_start_time: "06:50:00"
@@ -120,10 +120,12 @@ bayesian_device_tracker:
   class: BayesianDeviceTracker
   module: tracker
   gps_location_sources:
-    - device_tracker.example_phone
-    - device_tracker.example_vehicle
-  bayesian_input: binary_sensor.bayesian_resident_home
-  bayesian_device_tracker_name: "bayesian_resident_home"
+    - @@PRIVATE:appdaemon_location_source_01@@
+    - @@PRIVATE:appdaemon_location_source_02@@
+  ios_speed_tracker_entity: @@PRIVATE:appdaemon_location_source_01@@
+  bayesian_input: binary_sensor.bayesian_@@PRIVATE:presence_person_slug@@_home
+  bayesian_device_tracker_name: "bayesian_@@PRIVATE:presence_person_slug@@_home"
+  bayesian_device_tracker_friendly_name: "@@PRIVATE:presence_person_title@@"
   # Reject fixes worse than this (meters). resolve_tracker_state expands every
   # zone by the fix accuracy, so a loose value (was 2000) let a sloppy fix
   # inflate the 250 m home zone and false-positive "home". Observed real fixes
@@ -278,17 +280,17 @@ bayesian_device_tracker:
 Restart HA if network down:
   class: restart_ha
   module: reboot
-  # TCP probes avoid the unavailable `ping` binary.
+  # TCP-connect probes of always-on LAN infrastructure (the container has no
+  # `ping` binary - relying on it caused reboot loops on 2026-09-01/09-08).
   # A cycle only fails when EVERY target is unreachable; a refused connection
   # still counts as reachable (the host answered).
   probe_targets:
-    - !secret private_reboot_probe_primary
-    - !secret private_reboot_probe_secondary
+    - "@@PRIVATE:appdaemon_probe_target_01@@:8006"   # Proxmox web UI - this VM's hypervisor, same subnet
+    - "@@PRIVATE:appdaemon_probe_target_02@@:53"     # LAN DNS / firewall
   connect_timeout_seconds: 3
   max_failures: 5
   check_interval_minutes: 33
   min_reboot_interval_hours: 6
-  notify_service: !secret private_reboot_notify_service
 
 rtlsdr_watchdog:
   class: RtlSdrWatchdog
@@ -322,10 +324,10 @@ rtlsdr_watchdog:
   shutdown_notice_seconds: 60
   min_shutdown_interval_hours: 24
   renotify_minutes: 120
-  notify_service: !secret private_rtlsdr_primary_notify_service
-  secondary_notify_service: !secret private_rtlsdr_secondary_notify_service
+  notify_service: @@PRIVATE:appdaemon_notify_target_slash_01@@
+  secondary_notify_service: @@PRIVATE:appdaemon_notify_target_slash_02@@
 
-  # Original note kept privately
+  @@PRIVATE:appdaemon_original_annotation_001@@
 # Get Bed Load Cell Average Empty Data:
 #   class: bed_history
 #   module: bed_history
@@ -342,7 +344,7 @@ rtlsdr_watchdog:
 #   threshold_sensor: sensor.chatgpt_bed_threshold
 #   delta_sensor: sensor.chatgpt_bed_delta
 #   occupancy_boolean: binary_sensor.chatgpt_bed_occupied
-#   presence_entity: person.example
+#   presence_entity: person.@@PRIVATE:owner_person_slug@@
 #   input_threshold_entity: input_number.bed_manual_threshold
 #   cooldown_minutes: 120
 #   min_occupied_duration: 900
@@ -363,7 +365,7 @@ rtlsdr_watchdog:
 #   occupancy_boolean: binary_sensor.chatgpt_bed_occupied
 
 #   # Optional
-#   presence_entity: person.example  # or device_tracker, or remove if not used
+#   presence_entity: person.@@PRIVATE:owner_person_slug@@  # or device_tracker, or remove if not used
 #   cooldown_minutes: 120
 #   min_occupied_duration: 900  # seconds
 
@@ -382,7 +384,7 @@ rtlsdr_watchdog:
 #   occupancy_boolean: binary_sensor.chatgpt_bed_occupied
 
 #   # Optional: if provided, used only by dynamic‐history filtering (not for baseline updates)
-#   presence_entity: person.example
+#   presence_entity: person.@@PRIVATE:owner_person_slug@@
 
 #   # Sensor storing current threshold (numeric)
 #   threshold_sensor: sensor.chatgpt_bed_threshold
@@ -434,7 +436,7 @@ rtlsdr_watchdog:
 #   baseline_night_sensor: sensor.chatgpt_bed_baseline_night
 
 #   # Optional presence gating for threshold updates
-#   presence_entity: person.example
+#   presence_entity: person.@@PRIVATE:owner_person_slug@@
 
 #   # Smoothing and logic
 #   buffer_size: 5
@@ -462,8 +464,8 @@ rtlsdr_watchdog:
 #   occupancy_threshold: 100000
 #   baseline_sensor: sensor.bed_baseline
 #   delta_sensor: sensor.bed_delta
-#   presence_entity: person.example
-#   notify_service: notify.all
+#   presence_entity: person.@@PRIVATE:owner_person_slug@@
+#   notify_service: @@PRIVATE:appdaemon_notify_service_01@@
 #   max_skips_before_notify: 3
 
 # deconz_helper:
@@ -474,16 +476,16 @@ living_room_magic_cube:
   module: magic_cube
   class: RemoteControl
   event: zha_event
-  id: !secret private_living_room_remote_eui
+  id: "@@PRIVATE:appdaemon_magic_cube_mac_01@@"
   light: light.living_room_lamps_except_tv
 
 # Not used
 # automatic_helper:
 #   module: automatic_helper
 #   class: AutomaticHelper
-#   tracker_input: device_tracker.bayesian_resident_home
+#   tracker_input: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
 #   calendar: calendar.curling
-#   notify_target: notify/all
+#   notify_target: @@PRIVATE:appdaemon_notify_target_slash_03@@
 #   driving_time: 120
 
 # May not be needed anymore thanks to Schedy
@@ -493,7 +495,7 @@ living_room_magic_cube:
 #   outside_temp_feels_like: sensor.dark_sky_apparent_temperature
 #   outside_temp: sensor.dark_sky_temperature
 #   driving_sensor: binary_sensor.car_in_motion
-#   phone: device_tracker.bayesian_resident_home
+#   phone: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
 #   thermostat: climate.my_ecobee
 
 # 08/25/2022: Moved to automation in media_player
@@ -506,7 +508,7 @@ living_room_magic_cube:
 #     - binary_sensor.owner_suite_bathroom_room_occupancy
 #   transition_time_sec: 120
 #   constrain_input_boolean: input_boolean.guest_mode,off
-#   constrain_input_boolean: input_boolean.bayesian_resident_home
+#   constrain_input_boolean: input_boolean.bayesian_@@PRIVATE:presence_person_slug@@_home
 #   constrain_input_boolean: input_boolean.master_bed_occupancy,off
 #   constrain_start_time: "06:50:00"
 #   constrain_end_time: "11:30:00"
@@ -528,16 +530,16 @@ living_room_magic_cube:
 thermostat_stats:
   module: thermostat_stats
   class: ThermostatStats
-  outside_temp_feels_like: sensor.tomorrow_io_example_zone_02_feels_like
+  outside_temp_feels_like: sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_feels_like
   outside_temp: sensor.outside_temperature
   outside_humidity: sensor.outside_humidity
-  outside_cloud_cover: sensor.tomorrow_io_example_zone_02_cloud_cover
+  outside_cloud_cover: sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_cloud_cover
   occupancy: binary_sensor.ecobee_home
   window_open: binary_sensor.fresh_air_open
   # Optional wind entities for better HVAC ETA modeling:
-  # wind_speed: sensor.tomorrow_io_example_zone_02_wind_speed
-  # wind_gust: sensor.tomorrow_io_example_zone_02_wind_gust
-  # wind_bearing: sensor.tomorrow_io_example_zone_02_wind_direction
+  # wind_speed: sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_wind_speed
+  # wind_gust: sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_wind_gust
+  # wind_bearing: sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_wind_direction
   # Optional humidifier entities:
   humidifier: humidifier.my_ecobee
   thermostat_db: !secret thermostat_recorder_db_url
@@ -555,7 +557,7 @@ thermostat_stats:
 # ench:
 #   module: ench
 #   class: EnCh
-#   notify: notify.all
+#   notify: @@PRIVATE:appdaemon_notify_service_01@@
 #   show_friendly_name: false
 #   exclude:
 #     - sensor.out_of_order
