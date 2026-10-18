@@ -122,7 +122,7 @@ def test_device_ieee_values_are_private_secrets() -> None:
         source = (ROOT / path).read_text()
         assert not re.search(r"\b(?:[0-9A-Fa-f]{2}:){7}[0-9A-Fa-f]{2}\b", source)
         keys.update(re.findall(r"device_ieee: !secret (private_[a-z0-9_]+_eui)", source))
-    assert len(keys) == 4
+    assert len(keys) == 1  # only the workday remote still uses a ZHA event
     for key in keys:
         assert re.search(rf"(?m)^{re.escape(key)}:", examples)
     parasoll = (ROOT / "packages/parasoll_fix.yaml").read_text()
