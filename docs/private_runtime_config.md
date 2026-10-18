@@ -245,16 +245,27 @@ IEEE values, and the Parasoll selector displays a synthetic example.
 ## Private AppDaemon watchdog settings
 
 The AppDaemon reboot watchdog reads its two TCP probe targets and notification
-service from `!secret` values in `appdaemon/apps/apps.yaml`; a living-room
+service from the ignored, rendered `appdaemon/apps/apps.yaml`; a living-room
 remote IEEE is private too. The live root `secrets.yaml` contains the matching
-values and was byte-verified before this addition at
+values used by the former tracked configuration and was byte-verified at
 `.private-runtime-backup/current-config/secrets.before-appdaemon-privacy.yaml`.
 The live AppDaemon files remain unchanged until deployment. If the watchdog
 lacks probes or an alert destination, it disables scheduling instead of
 rebooting without a usable check or notification. CI uses synthetic values.
 
 The RTL-SDR watchdog's primary and secondary notification destinations are
-also `!secret` values. The live values were copied from its active `apps.yaml`
+also rendered privately. The live values were copied from its active `apps.yaml`
 after preserving root secrets at
 `.private-runtime-backup/current-config/secrets.before-rtlsdr-notify-privacy.yaml`.
 Missing the primary destination disables scheduling, including dry-run checks.
+
+The active AppDaemon `apps.yaml` and vacuum-stall YAML are rendered from public
+templates and the ignored mapping. The render retains the active add-on's
+notification destinations, tracker entities, city-specific weather sensors,
+network probes, and device identifier. Its only intended additions are explicit
+tracker friendly-name and iOS speed-source arguments, which replace private
+defaults in Python. The active add-on files and inactive bed-history/Schedy
+files were byte-verified under
+`.private-runtime-backup/appdaemon-active-2026-10-16/` on the host. Render and
+check all manifest targets before synchronizing AppDaemon. Never stage or push
+the generated YAML or the inactive history files.

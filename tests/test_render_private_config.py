@@ -215,3 +215,26 @@ def test_flight_airports_and_home_aliases_are_private() -> None:
         assert key in examples
     assert "@@PRIVATE:flight_weather_fallback_latitude@@" in flight
     assert "@@PRIVATE:flight_weather_fallback_longitude@@" in flight
+
+
+def test_appdaemon_identity_and_notification_targets_are_private() -> None:
+    apps = (ROOT / "private_templates/appdaemon_apps.yaml.tmpl").read_text()
+    vacuum = (ROOT / "private_templates/appdaemon_vacuum_stall_monitor.yaml.tmpl").read_text()
+    examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
+
+    for key in (
+        "appdaemon_location_source_01",
+        "appdaemon_location_source_02",
+        "appdaemon_notify_target_slash_01",
+        "appdaemon_notify_target_slash_02",
+        "appdaemon_probe_target_01",
+        "appdaemon_magic_cube_mac_01",
+    ):
+        assert f"@@PRIVATE:{key}@@" in apps
+        assert key in examples
+    assert "@@PRIVATE:appdaemon_notify_target_slash_03@@" in vacuum
+    assert "@@PRIVATE:owner_person_slug@@" in vacuum
+    assert "ios_speed_tracker_entity: @@PRIVATE:appdaemon_location_source_01@@" in apps
+    assert "bayesian_device_tracker_friendly_name: \"@@PRIVATE:presence_person_title@@\"" in apps
+    assert apps.count("sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@") == 5
+    assert not re.search(r"\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b", apps, re.I)

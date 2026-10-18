@@ -15,15 +15,14 @@ class BayesianDeviceTracker(hass.Hass):
         self.bayesian_device_tracker_id = self.args["bayesian_device_tracker_name"]
         self.bayesian = self.args["bayesian_input"]
         self.gps_sensor_sources = self.args["gps_location_sources"]
+        self.ios_speed_tracker_entity = self.args["ios_speed_tracker_entity"]
         self.minimum_update_distance = self.args["minimum_update_distance"]
         self.minimum_update_window = self.args["minimum_update_window"]
         self.gps_accuracy_tolerance = self.args["gps_accuracy_tolerance"]
         # Stable display name for the fused tracker. Without this, set_state would
-        # inherit whatever friendly_name the last GPS source carried (e.g. the
-        # Tesla's "Nigori Location tracker"), since set_state -- unlike the old
+        # inherit whatever friendly_name the last GPS source carried, since set_state -- unlike the old
         # device_tracker.see -- applies attributes verbatim.
-        self.tracker_friendly_name = self.args.get(
-            "bayesian_device_tracker_friendly_name", "Zeke")
+        self.tracker_friendly_name = self.args["bayesian_device_tracker_friendly_name"]
         # Per-source last accepted position {source_entity_id: (lat, lon)} for the
         # accumulated-distance gate in location_update.
         self._last_accepted_pos = {}
@@ -214,7 +213,7 @@ class BayesianDeviceTracker(hass.Hass):
         # self.log("do we have everything: {}".format(gps_attributes.viewKeys() & {"latitude", "longitude"})
 
         # iOS apps use m/s as the speed, not mph.  Need to convert.
-        if 'speed' in attributes.keys() and 'wethop' in sensor_state['entity_id']:
+        if 'speed' in attributes.keys() and sensor_state['entity_id'] == self.ios_speed_tracker_entity:
             if attributes['speed'] == -1:
                 self.log("ios says speed is -1, setting speed to 0")
                 attributes['speed'] = 0.0
@@ -262,7 +261,7 @@ class BayesianDeviceTracker(hass.Hass):
                     probability = bayesian_state["attributes"]["probability"]
                     attributes['home_probability'] = probability
 
-                    # We can get false positives, like WetHop flashing home on a geofence enter/exit.
+                    # A phone tracker can briefly report home at a geofence boundary.
                     # Use the attributes of the bayesian sensor to determine if the transition is correct
                     if probability <= bayesian_state["attributes"]["probability_threshold"] and sensor_state['state'] == "home":
                         #self.error(
@@ -376,10 +375,10 @@ class BayesianDeviceTracker(hass.Hass):
                     # Add source of update
                     attributes['source_tracker'] = sensor_state['entity_id']
 
-                    # rtclauss add gps_update_time_attribute
+                    # Add gps_update_time_attribute.
                     attributes['gps_updated'] = datetime.now(timezone.utc).isoformat()
                     self.update_tracker(
-                        # rtclauss 11/15/18 - use mean location
+                        # Use mean location.
                         latitude=mean_of_points.lat,
                         longitude=mean_of_points.lon,
                         attributes=attributes,
