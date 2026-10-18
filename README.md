@@ -1,5 +1,4 @@
-# The Brewery Home Assistant Configuration 🍺
-[![Validate Home Assistant Config](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml/badge.svg?branch=main)](https://github.com/rtclauss/hass-config/actions/workflows/validate-config.yml?query=branch%3Amain)
+# Home Assistant Configuration 🍺
 
 [Home Assistant](https://home-assistant.io/) configuration files (YAMLs) and [AppDaemon](https://appdaemon.readthedocs.io/en/latest/) apps.
 
@@ -211,7 +210,7 @@ MQTT topics, renderer tests, Pi setup, and physical verification workflow.
 
 I have Home Assistant running on an [Intel NUC]().  This has been a work in progress since Nov 2015 (HA v0.7 or earlier).
 
-I use the new dashboards in 0.107 to create a [dashboard for guests](https://github.com/rtclauss/hass-config/blob/main/ui-guest.yaml) on an Amazon Fire Tab running Fully Kiosk Browser.
+I use the new dashboards in 0.107 to create a [dashboard for guests](private_templates/ui-guest.yaml.tmpl) on an Amazon Fire Tab running Fully Kiosk Browser.
 
 Software on the NUC:
 * [Home Assistant](https://home-assistant.io/) via [Hass.io](https://www.home-assistant.io/hassio/)
@@ -222,7 +221,7 @@ Software on the NUC:
   * [Music Assistant](https://music-assistant.io/) - Main playback engine for Sonos/Spotify/radio automations
   * ~~[Traccar](https://github.com/hassio-addons/addon-traccar) - Used with OBDII Sensor to track my car.~~ New car has built-in tracking
   * [JupyterLab Lite](https://github.com/hassio-addons/addon-jupyterlab-lite) Only sometimes when I need to figure out event correllation
-  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](https://github.com/rtclauss/hass-config/blob/main/packages/water_softener.yaml), and [BLE Proxy](https://github.com/rtclauss/hass-config/blob/main/esphome/bluetoothproxy1.yaml)
+  * [ESPHome](https://esphomelib.com/esphomeyaml/index.html) - Used for [Water Softener](private_templates/water_softener.yaml.tmpl), and [BLE Proxy](esphome/bluetoothproxy1.yaml)
   * [Uplift Desk custom component](https://github.com/Bennett-Wendorf/hass-uplift-desk) - Upstream v2.0.0 supplies standing desk entities and controls in `packages/desk.yaml`. See [migration and verification notes](docs/uplift_desk.md).
   * ~~[Zwave-JS](https://www.home-assistant.io/integrations/zwave_js)~~ Moving to Zigbee/Thread/Matter
   * [I Can't Believe It's Not Valetudo](https://github.com/Poeschl/Hassio-Addons/tree/master/ICantBelieveItsNotValetudo)
@@ -310,10 +309,10 @@ Coordinator and protocol note:
 * [Automatic event helper](appdaemon/apps/automatic_helper.py) - Similar to deCONZ helper this translates matic events into a generic sensor.
 * ~~[Nest Travel helper](appdaemon/apps/nest_travel_helper.py) - When driving long distances the Nest will switch from heating/cooling back to away mode if you don't arrive home soon enough.  This listens for those changes and keeps Nest from switching back to away mode.~~
 * ~~[Schedy](appdaemon/apps/schedy_heating.yaml) - Replacement for Nest. Work in Progress.~~
-* [Thermostat Stats](https://github.com/rtclauss/hass-config/blob/main/appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
+* [Thermostat Stats](appdaemon/apps/thermostat_stats.py) - Gathers historical house temperature data.  Will feed into ML model to predict time to temp, etc.
 
 **Apple Shortcuts**
-* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](https://github.com/rtclauss/hass-config/blob/main/packages/workday.yaml#L107)
+* [Set wakeup time](https://www.icloud.com/shortcuts/61be3701823f444dbae0de1626020025) - [Slowly turn on bedroom lights in the morning before a meeting](private_templates/workday.yaml.tmpl)
 * iOS personal automation: run every day at `9:00 PM`, find the wake-up alarm you want to mirror on the phone, format its time as `HH:mm`, and `POST` JSON to `https://<your-home-assistant>/api/webhook/ios_phone_wakeup_alarm_sync` with `{"alarm_time":"07:30"}`. If there is no enabled alarm for the next day, send `{"alarm_enabled": false}` instead. If JSON is awkward, the webhook also accepts query parameters.
 * Optional Outlook integration: on iPhone, a separate Shortcut can call the same webhook with `meeting_time` from the Outlook `Next Meeting` shortcut. Home Assistant will convert that meeting start into the existing `next_work_meeting` reminder time by subtracting 5 minutes. If Outlook reports no next meeting, send `{"meeting_enabled": false}` instead. Alarm sync and meeting sync can be sent together or as separate webhook calls.
 
