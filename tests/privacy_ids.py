@@ -1,5 +1,6 @@
 """Identity-neutral references used by config regression tests."""
 
+import ast
 from pathlib import Path
 import re
 
@@ -22,3 +23,8 @@ OWNER_PERSON = "person." + _first(r"person\.([a-z]+)", "packages/home_analyst.ya
 OWNER_TITLE = OWNER_PERSON.split(".", 1)[1].title()
 OWNER_CALENDAR = "calendar." + _first(r"calendar\.([a-z]+_[a-z]+)", "packages/inky_displays.yaml")
 DASHBOARD_ROOT = _first(r'url: "/([^/]+)/cleaning-v2"', "packages/water_softener.yaml")
+HOME_CODE_LIST = tuple(
+    ast.literal_eval(_first(r"home_codes = (\[[^\]]+\])", "packages/flight_status.yaml"))
+)
+if len(HOME_CODE_LIST) != 6:
+    raise AssertionError("Expected six private home airport aliases")

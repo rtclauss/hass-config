@@ -17,9 +17,9 @@ This matrix documents the representative trip-detection cases covered for issues
 
 | Case | Source | Expected decision | Notes |
 | --- | --- | --- | --- |
-| AAA -> DTW -> AMS -> INV, then AMS -> AAA | multi-leg outbound | `flight_return` | Start at the AAA departure, keep the homebound return, and expose `INV` as the destination instead of the first layover. |
-| Friend flights arriving in AAA | friend homebound | `off_no_candidate` | Ignore friend itineraries so they do not satisfy homebound logic or airport-arrival automations. |
-| Local Example Zone 07 appointments | local false positive | `off_no_candidate` | Appointment locations in Example Zone 07/Minneapolis must not be classified as flights. |
+| HOME -> DDD -> EEE -> FFF, then EEE -> HOME | multi-leg outbound | `flight_return` | Start at the HOME departure, keep the homebound return, and expose `FFF` as the destination instead of the first layover. |
+| Friend flights arriving in HOME | friend homebound | `off_no_candidate` | Ignore friend itineraries so they do not satisfy homebound logic or airport-arrival automations. |
+| Local Sample City appointments | local false positive | `off_no_candidate` | Local appointment locations must not be classified as flights. |
 | Hotel/calendar-only trips | lodging fallback | `calendar_lodging` | A lodging span with no flights still produces a durable trip window. |
 | Outbound flight with no return yet, plus lodging | outbound fallback | `flight_lodging` | Use the outbound flight for the trip start and the lodging span for the trip end. |
 | Explicit `#vacation` block without flights | explicit vacation | `calendar_explicit_vacation` | Personal or calendar-tagged vacation blocks should still create a trip window. |

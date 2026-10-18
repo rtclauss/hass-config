@@ -237,7 +237,10 @@ def test_config_and_dashboard_wire_all_vacuums() -> None:
     assert "Den Stall Evidence" in dashboard_text
     assert "Upstairs Stall Evidence" in dashboard_text
     assert "!appdaemon/apps/vacuum_stall_monitor.py" in gitignore_text
-    assert "!appdaemon/apps/vacuum_stall_monitor.yaml" in gitignore_text
+    assert "appdaemon/apps/vacuum_stall_monitor.yaml" in gitignore_text
+    assert "private_templates/appdaemon_vacuum_stall_monitor.yaml.tmpl" in (
+        ROOT / "docs/private_config_manifest.json"
+    ).read_text(encoding="utf-8")
 
 
 def test_home_assistant_allows_vacuum_stall_snapshot_directory() -> None:

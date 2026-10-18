@@ -345,29 +345,26 @@
     {
       "spec": "specs/alarm_wakeup.allium",
       "implementation_paths": [
-        "packages/workday.yaml",
         "private_templates/workday.yaml.tmpl"
       ],
-      "classification": "private presence template migration",
-      "reason": "The workday package is rendered from a public template and an ignored private mapping. Its live render is byte-identical to the former tracked file, so alarm and wake-up behavior is unchanged."
-    },
-    {
-      "spec": "specs/arrival_lighting.allium",
-      "implementation_paths": [
-        "packages/adaptive_lighting.yaml",
-        "private_templates/adaptive_lighting.yaml.tmpl"
+      "allowed_changed_line_patterns": [
+        "-*initial_grace_period: 5",
+        "+*state_grace: 5"
       ],
-      "classification": "private presence template migration",
-      "reason": "The adaptive lighting package is rendered from a public template and an ignored private mapping. Its live render is byte-identical to the former tracked file, so arrival lighting behavior is unchanged."
+      "classification": "non-wakeup retry schema repair",
+      "reason": "Issue #1112 and PR #1113 update the retry.actions state-settle field used by the office camera privacy automation. Wake-up and alarm behavior is unchanged."
     },
     {
       "spec": "specs/diffusers.allium",
       "implementation_paths": [
-        "packages/workday.yaml",
         "private_templates/workday.yaml.tmpl"
       ],
-      "classification": "private presence template migration",
-      "reason": "The workday package is rendered from a public template and an ignored private mapping. Its live render is byte-identical to the former tracked file, so diffuser sleep and wake behavior is unchanged."
+      "allowed_changed_line_patterns": [
+        "-*initial_grace_period: 5",
+        "+*state_grace: 5"
+      ],
+      "classification": "non-diffuser retry schema repair",
+      "reason": "Issue #1112 and PR #1113 update the retry.actions state-settle field used by the office camera privacy automation. Diffuser sleep/wake participation, afternoon fallback, and oil reminders are unchanged."
     }
   ]
 }

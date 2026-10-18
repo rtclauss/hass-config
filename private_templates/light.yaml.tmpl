@@ -47,10 +47,6 @@ homeassistant:
       friendly_name: "Turn off master bedroom lights automatically"
       icon: mdi:ceiling-light
 
-    automation.button_reset_basement:
-      <<: *customize
-      friendly_name: "Button Reset Basement"
-
     automation.turn_off_all_lights_when_bed_off:
       <<: *customize
       friendly_name: "Turn off all lights when bedroom lights turn off"
@@ -89,12 +85,6 @@ homeassistant:
       icon: mdi:garage-open-variant
       hidden: true
 
-    input_boolean.owner_suite_bathroom_auto_on:
-      <<: *customize
-      friendly_name: "Owner Suite Lights Automatically Turned on"
-      icon: mdi:toilet
-      hidden: true
-
     ################################################
     ## Input Numbers
     ################################################
@@ -102,65 +92,25 @@ homeassistant:
     ################################################
     ## Light
     ################################################
-    light.bedroom_lamp:
-      <<: *customize
-      friendly_name: "Bedroom Lamp"
-      icon: mdi:bed
-
-    light.bedroom_lamp_2:
-      <<: *customize
-      friendly_name: "Bedroom Lamp"
-      icon: mdi:bed
-
     light.christmas_lights:
       <<: *customize
       friendly_name: "Christmas Lights"
       icon: mdi:led-on
-
-    light.front_door:
-      <<: *customize
-      friendly_name: "Front Door"
-      icon: mdi:home
 
     light.guest_room_ceiling:
       <<: *customize
       friendly_name: "Guest Ceiling Light"
       icon: mdi:home
 
-    light.guest_left_lamp:
-      <<: *customize
-      friendly_name: "Guest Left Lamp"
-      icon: mdi:home
-
-    light.guest_right_lamp:
-      <<: *customize
-      friendly_name: "Guest Right Lamp"
-      icon: mdi:home
-
-    light.hallway_light:
-      <<: *customize
-      friendly_name: "Hallway"
-      icon: mdi:ceiling-light
-
     light.kitchen_sink_overhead:
       <<: *customize
       friendly_name: "Kitchen Sink"
       icon: mdi:countertop
 
-    light.kitchen_table:
-      <<: *customize
-      friendly_name: "Kitchen Table"
-      icon: mdi:ceiling-light
-
     light.office_red_lava_lamp:
       <<: *customize
       friendly_name: "Lava Lamp"
       icon: mdi:lava-lamp
-
-    light.left_lamp:
-      <<: *customize
-      friendly_name: "Living Room Left"
-      icon: mdi:lamp
 
     # light.living_room_lamps:
     #   <<: *customize
@@ -171,26 +121,6 @@ homeassistant:
     #   <<: *customize
     #   friendly_name: "Living Room Lights except TV Bias"
     #   icon: mdi:television
-
-    light.owner_suite:
-      <<: *customize
-      friendly_name: "Master Bedroom"
-      icon: mdi:bed
-
-    light.office_lamp:
-      <<: *customize
-      friendly_name: "Office Lamp"
-      icon: mdi:desktop-tower
-
-    light.pendant_lamp:
-      <<: *customize
-      friendly_name: "Pendant Lamp"
-      icon: mdi:ceiling-light
-
-    light.right_lamp:
-      <<: *customize
-      friendly_name: "Living Room Right"
-      icon: mdi:lamp
 
     light.basement_tv_bias:
       <<: *customize
@@ -221,10 +151,6 @@ homeassistant:
       <<: *customize
       friendly_name: Outside Ambiance
 
-    scene.reset_bedroom:
-      <<: *customize
-      friendly_name: Reset Bedroom
-
     scene.scene_reset_basement:
       <<: *customize
       friendly_name: Reset Basement
@@ -247,16 +173,6 @@ homeassistant:
     ################################################
     ## Switches
     ################################################
-
-    light.deck:
-      <<: *customize
-      friendly_name: "Deck"
-      icon: mdi:nature-people
-
-    switch.front_door:
-      <<: *customize
-      friendly_name: "Front Door"
-      icon: mdi:home
 
     ################################################
     ## Thermostats
@@ -1552,36 +1468,6 @@ automation:
   #           - light.office_lamp
   #           - light.office_ceiling
 
-  - alias: toggle_dining_room
-    id: toggle_dining_room
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id:
-          - binary_sensor.dining_room_button_push
-    action:
-      - action: light.toggle
-        target:
-          entity_id: light.dining_room_all
-        data:
-          transition: 5
-
-  - alias: toggle_kitchen
-    id: toggle_kitchen
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id:
-          - binary_sensor.kitchen_button
-    action:
-      - action: light.toggle
-        target:
-          entity_id: light.kitchen_all
-        data:
-          transition: 5
-
   - alias: transition_on_lights_when_home_near_sunset
     id: transition_on_lights_when_home_near_sunset
     trace:
@@ -1945,21 +1831,6 @@ automation:
       - action: script.apply_owner_suite_inovelli_led_policy
         data:
           policy: night_red
-
-  - alias: button_reset_basement
-    id: button_reset_basement
-    trace:
-      stored_traces: 10
-    trigger:
-      - trigger: state
-        entity_id:
-          - binary_sensor.basement_button_hold
-    action:
-      - action: scene.turn_on
-        target:
-          entity_id: scene.scene_reset_basement
-        data:
-          transition: 10
 
   - id: turn_off_all_lights_when_bed_off
     alias: turn_off_all_lights_when_bed_off

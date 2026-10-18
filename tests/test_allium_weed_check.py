@@ -519,6 +519,27 @@ def test_default_config_lists_existing_specs_and_scopes() -> None:
         "private_templates/media_player.yaml.tmpl" in gap["implementation_paths"]
         for gap in media_gaps
     )
+    retry_gaps = [
+        gap for gap in later_gaps
+        if gap["classification"] in {
+            "non-wakeup retry schema repair",
+            "non-diffuser retry schema repair",
+        }
+    ]
+    assert {gap["spec"] for gap in retry_gaps} == {
+        "specs/alarm_wakeup.allium",
+        "specs/diffusers.allium",
+    }
+    assert all(
+        gap["implementation_paths"] == ["private_templates/workday.yaml.tmpl"]
+        and gap["allowed_changed_line_patterns"]
+        == ["-*initial_grace_period: 5", "+*state_grace: 5"]
+        for gap in retry_gaps
+    )
+    assert not any(
+        gap["classification"] == "private presence template migration"
+        for gap in later_gaps
+    )
     assert {(gap["spec"], tuple(gap["implementation_paths"])) for gap in privacy_gaps} == {
         ("specs/alarm_wakeup.allium", ("packages/workday.yaml",)),
         ("specs/diffusers.allium", ("packages/workday.yaml",)),
