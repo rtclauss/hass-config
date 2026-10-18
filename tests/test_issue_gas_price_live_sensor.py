@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from privacy_ids import HOME_POSTAL_CODE, HOME_CITY_SLUG, HOME_CITY_TITLE
 
 
 UTILITIES_PATH = Path(__file__).resolve().parents[1] / "packages" / "utilities.yaml"
@@ -15,7 +16,7 @@ def test_gas_price_live_sensor_uses_eia_api_and_guards_missing_data() -> None:
     """
     text = UTILITIES_PATH.read_text(encoding="utf-8")
 
-    assert "name: Example City Weekly Regular Gas Price Live" in text
+    assert f"name: {HOME_CITY_TITLE} Weekly Regular Gas Price Live" in text
     # EIA API replaces the defunct way.com HTML scrape
     assert "resource: !secret eia_gas_price_mn_url" in text
     assert "api.eia.gov/v2/petroleum/pri/gnd/data/" in text

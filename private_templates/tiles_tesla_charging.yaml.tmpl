@@ -21,7 +21,7 @@ cards:
             group: false
             #align_state: center
             entities:
-              - sensor.example_vehicle_battery
+              - sensor.@@PRIVATE:vehicle_entity_slug@@_battery
             color_thresholds:
               - value: 6
                 color: "red"
@@ -37,7 +37,7 @@ cards:
             group: false
             #align_state: center
             entities:
-              - sensor.example_vehicle_range
+              - sensor.@@PRIVATE:vehicle_entity_slug@@_range
             color_thresholds:
               - value: 60
                 color: "red"
@@ -53,7 +53,7 @@ cards:
             group: false
             #align_state: center
             entities:
-              - sensor.example_vehicle_charging_rate
+              - sensor.@@PRIVATE:vehicle_entity_slug@@_charging_rate
             color_thresholds:
               - value: 60
                 color: "red"
@@ -73,7 +73,7 @@ cards:
             entity_id: sensor.charge_complete
             title: "Estimated Completion Time"
             content: >-
-              {% if state_attr('sensor.example_vehicle_charging_rate','time_left') > 0 %}
+              {% if state_attr('sensor.@@PRIVATE:vehicle_entity_slug@@_charging_rate','time_left') > 0 %}
                 ### {{ states('sensor.charge_complete')|as_timestamp(default=now()) | timestamp_custom('%b %d at %H:%M %Z') }}
               {% else %}
                 ### Charging Complete
@@ -116,13 +116,13 @@ cards:
             content: >-
               {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
               {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
-              {% set charge_limit = states('number.example_vehicle_charge_limit') | int(default=80) %}
+              {% set charge_limit = states('number.@@PRIVATE:vehicle_entity_slug@@_charge_limit') | int(default=80) %}
               {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
-              {% set location_name = states('device_tracker.example_vehicle') | default('', true) | lower %}
+              {% set location_name = states('@@PRIVATE:appdaemon_location_source_02@@') | default('', true) | lower %}
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'example_zone_05', 'example_zone_08'] %}
               {% set home_planner = location_name == 'home' %}
-              {% set resident_home = is_state('person.example', 'home') %}
+              {% set resident_home = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') %}
               {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
               {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
               {% if is_state('input_boolean.long_range_travel', 'on') %}
@@ -136,7 +136,7 @@ cards:
                 {% if furthest_entry and furthest_entry != state_attr('binary_sensor.upcoming_trip_charging', 'entry') %}
                 #### Charge target reflects today's furthest stop: {{ furthest_entry }}
                 {% endif %}
-                #### Cabin preconditioning is {% if resident_home %}scheduled{% else %}suppressed because Resident is away{% endif %}
+                #### Cabin preconditioning is {% if resident_home %}scheduled{% else %}suppressed because @@PRIVATE:owner_person_title@@ is away{% endif %}
               {% elif protected_location and not home_planner %}
                 ### Protected location
                 #### Tesla-app charging schedule stays authoritative at {{ location_label }}
@@ -145,7 +145,7 @@ cards:
                 ### Daily planner is active
                 #### Charge limit and any needed Tesla schedule override follow tomorrow's trip, alarm, weather, and EV tariff inputs
                 #### Cabin preconditioning only runs when a real next-day departure is scheduled
-                #### Cabin preconditioning is scheduled separately when Resident and Example Vehicle are home
+                #### Cabin preconditioning is scheduled separately when @@PRIVATE:owner_person_title@@ and @@PRIVATE:vehicle_display_name@@ are home
               {% endif %}
               {% if protected_location and home_planner %}
                 #### {% if home_schedule_override_needed %}Home Assistant may temporarily override Tesla scheduling at {{ location_label }} because extra home charging is needed{% else %}Tesla-app charging schedule stays authoritative at {{ location_label }}{% endif %}
@@ -160,22 +160,22 @@ cards:
             content: >-
               {% set tariff = states('sensor.ev_charging_tariff') %}
               {% set rate = states('sensor.ev_charging_tariff_rate') | float(default=0) %}
-              {% set charge_limit = states('number.example_vehicle_charge_limit') | int(default=80) %}
+              {% set charge_limit = states('number.@@PRIVATE:vehicle_entity_slug@@_charge_limit') | int(default=80) %}
               {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
               {% set trip_start_raw = state_attr('binary_sensor.upcoming_trip_charging', 'start_time') %}
               {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
-              {% set location_name = states('device_tracker.example_vehicle') | default('', true) | lower %}
+              {% set location_name = states('@@PRIVATE:appdaemon_location_source_02@@') | default('', true) | lower %}
               {% set location_label = location_name | replace('_', ' ') | title %}
               {% set protected_location = location_name in ['home', 'parents', 'example_zone_05', 'example_zone_08'] %}
               {% set home_planner = location_name == 'home' %}
-              {% set resident_home = is_state('person.example', 'home') %}
+              {% set resident_home = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') %}
               {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
               {% set home_schedule_override_needed = home_planner and planned_departure and charge_limit != 80 %}
               ### {{ charge_limit }}% target
               {% if is_state('input_boolean.long_range_travel', 'on') %}
                 #### Manual override is forcing max range
               {% elif home_planner and has_calendar_departure and not resident_home %}
-                #### Cabin preconditioning is suppressed because Resident is away
+                #### Cabin preconditioning is suppressed because @@PRIVATE:owner_person_title@@ is away
               {% elif home_planner and is_state('binary_sensor.upcoming_trip_charging', 'on') %}
                 #### Planner is following the next trip
               {% elif home_planner and planned_departure and charge_limit == 80 %}
@@ -189,7 +189,7 @@ cards:
               {% else %}
                 #### No next-day departure plan is active
               {% endif %}
-              #### Cabin preconditioning is scheduled separately when Resident and Example Vehicle are home
+              #### Cabin preconditioning is scheduled separately when @@PRIVATE:owner_person_title@@ and @@PRIVATE:vehicle_display_name@@ are home
               #### Current EV tariff: {{ tariff }} at ${{ '%.4f' | format(rate) }}/kWh
               #### Charging schedule: {% if protected_location and not home_planner %}Preserve Tesla app default at {{ location_label }}{% elif home_schedule_override_needed %}Allow a temporary Home Assistant schedule override at {{ location_label }} because extra home charging is needed{% elif home_planner %}Preserve Tesla app default at {{ location_label }} because no extra home charging is needed{% else %}Allow Home Assistant off-peak charging management{% endif %}
           - type: entities
@@ -208,8 +208,8 @@ cards:
                 name: Avg EV Cost / Day
               - entity: sensor.average_daily_vehicle_miles
                 name: Avg Miles / Day
-              - entity: sensor.weekly_regular_gas_price_00000
-                name: 00000 Gas Price / Gal
+              - entity: sensor.weekly_regular_gas_price_@@PRIVATE:home_postal_code@@
+                name: @@PRIVATE:home_postal_code@@ Gas Price / Gal
               - entity: sensor.average_daily_gas_car_cost_30mpg
                 name: Avg Gas Cost / Day @ 30 MPG
               - entity: sensor.average_daily_ev_savings_vs_30mpg

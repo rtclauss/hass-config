@@ -100,7 +100,7 @@ The schedule helper preserves the Tesla app's own charging schedule when the car
 
 At `home`, Home Assistant always sets the charge limit. For a real calendar departure, it also schedules cabin preconditioning whenever both the resident and the vehicle are home, regardless of the selected charge target. The scheduled-departure command preserves the Tesla app's charging defaults by omitting off-peak charging fields at protected locations. Alarm-only plans still do not schedule cabin preconditioning.
 
-`person.<resident>` and `device_tracker.<private_vehicle_tracker>` are both safety inputs. The planner will not create a preconditioning schedule unless both are `home`. If either leaves after Home Assistant creates a managed departure, `automation.tesla_departure_cancel_when_home_context_ends` disables that managed departure and clears its tracking helpers after Tesla confirms the matching schedule. If the integration has not published the new departure timestamp yet, the automation keeps the departure tracked and retries when `binary_sensor.example_vehicle_scheduled_departure` catches up.
+`person.<resident>` and `device_tracker.<private_vehicle_tracker>` are both safety inputs. The planner will not create a preconditioning schedule unless both are `home`. If either leaves after Home Assistant creates a managed departure, `automation.tesla_departure_cancel_when_home_context_ends` disables that managed departure and clears its tracking helpers after Tesla confirms the matching schedule. If the integration has not published the new departure timestamp yet, the automation keeps the departure tracked and retries when `binary_sensor.<vehicle_slug>_scheduled_departure` catches up.
 
 At `parents`, `OCC`, and `SPCC`, the planner is currently hands-off. Those locations are protected so Tesla-app charging defaults remain authoritative there, and Home Assistant does not actively create departure plans there.
 
@@ -116,7 +116,7 @@ When it is on, the planner pins the charge limit to `100%`.
 
 ### Charge limit
 
-- `number.example_vehicle_charge_limit`
+- `number.<vehicle_slug>_charge_limit`
 
 Decision summary (`distance_mi` below is always the **furthest** qualifying event in the next 24 hours, not necessarily the next one to depart):
 
@@ -205,8 +205,8 @@ Manual regression cases worth checking in Template Developer Tools or against li
 
 - Waze `duration` as a numeric minute count still produces the same planned departure.
 - Waze `duration` as `HH:MM:SS` or ISO8601 (for example `PT42M`) still produces the same planned departure.
-- Tesla `sensor.example_vehicle_charging_rate` `time_left` as fractional hours still produces a valid `charge_complete` timestamp.
-- Tesla `sensor.example_vehicle_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
+- Tesla `sensor.<vehicle_slug>_charging_rate` `time_left` as fractional hours still produces a valid `charge_complete` timestamp.
+- Tesla `sensor.<vehicle_slug>_charging_rate` `time_left` as `HH:MM:SS` or ISO8601 still produces a valid `charge_complete` timestamp.
 - A just-finished calendar departure disappears from `binary_sensor.upcoming_trip_charging` and clears Tesla scheduled departure on the next planner recompute.
 - A calendar event that is still upcoming but already inside the departure buffer skips scheduled preconditioning instead of creating a stale past-due Tesla schedule.
 - A same-day all-day event (for example a recurring "Replace Contacts" reminder) never becomes the planner's selected `entry`/`start_time`, even while it is the only event calendar.<private_owner_calendar>'s own native attributes would otherwise expose; a real timed event later that day (for example a 10am dentist appointment) is still picked up via `calendar.get_events`.

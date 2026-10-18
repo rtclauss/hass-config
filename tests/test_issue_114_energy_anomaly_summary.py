@@ -51,7 +51,7 @@ def test_energy_anomaly_uses_native_numeric_state_and_sleep_or_empty_modes() -> 
         assert f"          - {mode}" in block
     assert "notification_id: energy-anomaly-high-load" in block
     assert "tag: energy-anomaly-high-load" in block
-    assert "notify.all" in block
+    assert f"notify.all" in block
 
 
 def test_weekly_energy_summary_uses_tariffed_last_period_costs() -> None:

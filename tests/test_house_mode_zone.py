@@ -244,7 +244,7 @@ def test_departure_integrity_retries_available_failures_and_notifies_once() -> N
     assert "action: media_player.turn_off" in block
     assert "action: fan.turn_off" in block
     assert "action: switch.turn_on" in block
-    assert block.count("action: notify.all") == 1
+    assert block.count(f"action: notify.all") == 1
 
 
 def test_departure_integrity_summarizes_all_remaining_exceptions() -> None:

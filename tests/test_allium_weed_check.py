@@ -587,7 +587,7 @@ def test_basement_atv_diffuser_gap_only_allows_entity_replacement() -> None:
 
 
 def test_markdown_report_includes_line_links(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GITHUB_REPOSITORY", "example_owner/hass-config")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "example-owner/hass-config")
     monkeypatch.setenv("GITHUB_SHA", "abc123")
     diagnostic = weed.Diagnostic(
         severity="error",
@@ -604,7 +604,7 @@ def test_markdown_report_includes_line_links(monkeypatch: pytest.MonkeyPatch) ->
         [],
     )
 
-    assert "https://github.com/example_owner/hass-config/blob/abc123/specs/alarm_wakeup.allium#L12" in report
+    assert "https://github.com/example-owner/hass-config/blob/abc123/specs/alarm_wakeup.allium#L12" in report
     assert "`allium.syntax.doubleEquals`" in report
 
 
