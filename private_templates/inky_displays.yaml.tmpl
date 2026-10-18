@@ -146,20 +146,20 @@ script:
               - condition: not
                 conditions:
                   - condition: state
-                    entity_id: weather.tomorrow_io_the_brewery_daily
+                    entity_id: weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily
                     state:
                       - "unknown"
                       - "unavailable"
             sequence:
               - action: weather.get_forecasts
                 target:
-                  entity_id: weather.tomorrow_io_the_brewery_daily
+                  entity_id: weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily
                 data:
                   type: daily
                 response_variable: owner_suite_daily_forecast
               - action: weather.get_forecasts
                 target:
-                  entity_id: weather.tomorrow_io_the_brewery_daily
+                  entity_id: weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily
                 data:
                   type: hourly
                 response_variable: owner_suite_hourly_forecast
@@ -186,7 +186,7 @@ script:
           qos: 1
           retain: true
           payload: >-
-            {% set preferred_weather_entity = 'weather.tomorrow_io_the_brewery_daily' %}
+            {% set preferred_weather_entity = 'weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily' %}
             {% set active_weather_entity = states('sensor.active_weather_entity_id') %}
             {% set weather_entity = active_weather_entity if active_weather_entity not in ['', 'unknown', 'unavailable'] else preferred_weather_entity %}
             {% set weather_state = states(weather_entity) %}

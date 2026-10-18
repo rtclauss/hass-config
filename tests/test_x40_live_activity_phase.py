@@ -203,10 +203,10 @@ def test_mop_after_vacuum_checks_mop_completion_latch_not_pending_flag() -> None
     mop_only_index = block.index("action: script.x40_ultra_main_level_mop_only")
     then_index = block.index("then:")
     # The OUTER else (vacuum-skip branch) starts with its distinctive
-    # notify.all action; a bare "else:" would instead match the NEW inner
+    # notification action; a bare "else:" would instead match the NEW inner
     # if/else this fix adds (Cleaning complete vs. Mop pass did not finish
     # cleanly), which sits between here and the outer else.
-    outer_else_marker = block.index("action: notify.all")
+    outer_else_marker = block.index(f"action: notify.all")
     assert then_index < mop_only_index < outer_else_marker
 
     success_section = block[mop_only_index:outer_else_marker]
@@ -227,11 +227,11 @@ def test_mop_after_vacuum_skip_branch_has_no_in_script_delay() -> None:
 
     # A bare "else:" would match the NEW inner if/else added to the success
     # branch first; the outer else (this skip branch) starts with its
-    # distinctive notify.all action instead.
-    outer_else_marker = block.index("action: notify.all")
+    # distinctive notification action instead.
+    outer_else_marker = block.index(f"action: notify.all")
     skip_section = block[outer_else_marker:]
 
-    assert "mop was" in skip_section  # the existing notify.all skip message
+    assert "mop was" in skip_section  # the existing notification skip message
     assert "tag: x40_vacuum" in skip_section
     assert "live_update: true" in skip_section
     # Same reasoning as the success branch: no delay/clear left in the script.

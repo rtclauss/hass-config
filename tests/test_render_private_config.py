@@ -248,3 +248,30 @@ def test_guest_dashboard_location_is_private() -> None:
     assert "sensor.@@PRIVATE:guest_dashboard_weather_station_slug@@_temperature" in guest
     manifest = json.loads((ROOT / "docs/private_config_manifest.json").read_text())
     assert {"template": "private_templates/ui-guest.yaml.tmpl", "output": "ui-guest.yaml"} in manifest["files"]
+
+
+def test_vehicle_tiles_and_consumers_use_private_identity() -> None:
+    templates = {
+        "private_templates/car.yaml.tmpl": ("@@PRIVATE:vehicle_display_name@@",),
+        "private_templates/utilities.yaml.tmpl": (
+            "@@PRIVATE:owner_person_title@@",
+            "@@PRIVATE:owner_person_slug@@",
+            "@@PRIVATE:appdaemon_location_source_02@@",
+        ),
+        "private_templates/plants.yaml.tmpl": ("@@PRIVATE:owner_dashboard_slug@@",),
+        "private_templates/tiles_tesla_charging.yaml.tmpl": (
+            "@@PRIVATE:owner_person_title@@",
+            "@@PRIVATE:owner_person_slug@@",
+            "@@PRIVATE:appdaemon_location_source_02@@",
+            "@@PRIVATE:vehicle_display_name@@",
+        ),
+        "private_templates/tiles_tesla_location.yaml.tmpl": (
+            "@@PRIVATE:appdaemon_location_source_02@@",
+        ),
+    }
+    for path, markers in templates.items():
+        text = (ROOT / path).read_text()
+        for marker in markers:
+            assert marker in text
+    examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
+    assert examples["vehicle_display_name"] == "Example Vehicle"

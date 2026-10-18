@@ -3,11 +3,11 @@
 # Complex areas: trusted network auth, recorder/influx exclusions, and Lovelace/HACS resources all live here because they affect the whole system.
 
 homeassistant:
-  name: The Brewery
-  unit_system: us_customary
-  currency: USD
-  country: US
-  time_zone: America/Chicago
+  name: !secret private_home_name
+  unit_system: !secret private_unit_system
+  currency: !secret private_currency
+  country: !secret private_country
+  time_zone: !secret private_timezone
   latitude: !secret home_latitude
   longitude: !secret home_longitude
   elevation: !secret home_elevation
@@ -20,7 +20,7 @@ homeassistant:
     - type: homeassistant
     - type: trusted_networks
       trusted_networks:
-        - 172.16.0.0/12
+        - !secret private_trusted_network_legacy
         - !secret private_subnet
         - !secret iot_subnet
         - !secret ipv6_subnet
@@ -90,7 +90,7 @@ tts:
   - platform: google_translate
     service_name: google_say
 
-# rtclauss - disable with move to zwave-thermostat
+# Legacy thermostat integration was retired.
 # Re-added temporarily on 17 Dec 21
 # Removed again on 4/21/2022
 # nest:

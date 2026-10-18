@@ -26,12 +26,12 @@ That keeps `switch.vacation_simulation` and
 ## Current Inputs
 
 - Manual toggle: `input_boolean.trip`
-- Presence: `binary_sensor.bayesian_zeke_home`
+- Presence: `binary_sensor.bayesian_occupant_home`
 - Distance threshold: `input_number.trip_trigger_radius_miles`
 - Calendar sensors: `binary_sensor.planned_vacation_calendar`,
   `binary_sensor.planned_work_trip_calendar`, and
   `sensor.ecobee_calendar_vacation_schedule`
-- Flight/calendar trigger: `calendar.ryan_claussen`
+- Flight/calendar trigger: `calendar.resident_example`
 - Reconciliation events: `trip_mode_resolution_requested`
 
 ## Side Effects
@@ -64,7 +64,7 @@ area presence signal and is idempotently controlled by `script.house_transition`
 `start = landing - input_number.pre_arrival_clean_lead_minutes` (default 210).
 
 - `sensor.next_flight_home_arrival` is the `end_time` of the next not-yet-landed
-  itinerary in `binary_sensor.flight_to_msp_today` / `flight_to_rst_today` (those keep
+  itinerary in `binary_sensor.flight_to_<private_home_airport_primary_code>_today` / `flight_to_<private_home_airport_secondary_code>_today` (those keep
   exposing the next flight in their attributes while off), so it is known days ahead.
 - `sensor.pre_arrival_clean_start` = arrival minus the lead. The automation uses a
   `time` trigger on that sensor, plus catch-up triggers when it changes and on HA start.
@@ -85,8 +85,8 @@ area presence signal and is idempotently controlled by `script.house_transition`
   is `mode: queued`, and script-level `variables:` render at invocation, so a request that
   waited behind a long run used a stale `mop_due` and re-mopped right after a finished
   mop; and nothing stopped it starting after you arrived (both observed 2026-10-09). The
-  dispatcher now computes its decisions as its first action, and drops a request that has
-  passed its `expires_at`, or that has `require_away` while `bayesian_zeke_home` is not
+  dispatcher now computes its decisions as its fi<private_home_airport_secondary_code> action, and drops a request that has
+  passed its `expires_at`, or that has `require_away` while `bayesian_occupant_home` is not
   confirmed `off`. Away-triggered trip launches set both; the litter pass sets a 2 h expiry.
   `vacuum_return_home` still only docks the running robot: it must not `script.turn_off`
   the dispatcher, because stopping it mid-run would skip the CleanGenius restore.
@@ -96,7 +96,7 @@ changes (for example a larger floor plan or a different mop mode).
 
 ## Guest Cat Check (Front Door)
 
-While `input_boolean.trip` is on and `binary_sensor.bayesian_zeke_home` is off,
+While `input_boolean.trip` is on and `binary_sensor.bayesian_occupant_home` is off,
 unlocking `lock.front_door_lock` (`trip_guest_door_unlock_open_house`) turns
 `switch.basement_water_shutoff` on, turns off the indoor camera motion-detection
 switches, disarms `alarm_control_panel.home_alarm`, and

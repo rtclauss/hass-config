@@ -288,7 +288,7 @@ replacement below.
 | <a id="live-rachio"></a>Rachio | Rachio Gen 3 irrigation controller and zone switches. |
 | <a id="live-smartthings"></a>SmartThings | The modified SmartThings Arrival Sensor is still paired via Zigbee2MQTT. |
 | <a id="live-uplift-desk"></a>Uplift Desk | Office standing desk using upstream [`Bennett-Wendorf/hass-uplift-desk`](https://github.com/Bennett-Wendorf/hass-uplift-desk) v2.0.0 via the office Bluetooth proxy. [Configuration and verified heights](docs/uplift_desk.md). |
-| <a id="live-tesla"></a>Tesla | Tesla Model 3 (`Nigori`) on the custom Tesla integration. |
+| <a id="live-tesla"></a>Tesla | Tesla Model 3 on the custom Tesla integration. |
 | <a id="live-unifi"></a>UniFi | The `unifi` integration is active for network entities, WLANs, and device trackers, although exact hardware model inventory is no longer fully represented in Home Assistant. |
 | <a id="live-adaptive-lighting"></a>Adaptive Lighting | Active room-specific Adaptive Lighting instances across the lighting stack. |
 

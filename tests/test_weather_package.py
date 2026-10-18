@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from privacy_ids import SECONDARY_NOTIFY_SERVICE, VEHICLE_ENTITY_SLUG
 
 
 WEATHER_PATH = Path(__file__).resolve().parents[1] / "packages" / "weather.yaml"
@@ -18,13 +19,13 @@ def test_car_window_alert_closes_windows_even_when_notification_is_throttled() -
     assert "state_attr('zone.home', 'longitude')" in text
     assert "latitude=0&longitude=0" not in text
     assert "Check if we already notified within the last hour" in text
-    assert "action: notify.mobile_app_wethop" in text
+    assert f"action: {SECONDARY_NOTIFY_SERVICE}" in text
 
 
 def test_open_meteo_precipitation_template_handles_non_json_response() -> None:
     text = WEATHER_PATH.read_text(encoding="utf-8")
 
-    assert "name: nigori_precip_next_2hr" in text
+    assert f"name: {VEHICLE_ENTITY_SLUG}_precip_next_2hr" in text
     assert "{% set payload = value_json if value_json is mapping else {} %}" in text
     assert "{% set hourly = payload.get('hourly', {}) %}" in text
     assert "value_json.hourly" not in text

@@ -221,7 +221,7 @@ automation:
               - condition: template
                 value_template: "{{ states_mismatch }}"
             sequence:
-              - action: notify.mobile_app_wethop
+              - action: @@PRIVATE:mobile_notify_service_02@@
                 data:
                   title: "Trip Mode Needs Confirmation"
                   message: >-
@@ -243,7 +243,7 @@ automation:
                         authenticationRequired: false
                         destructive: false
                         behavior: default
-              - action: notify.mobile_app_faro
+              - action: @@PRIVATE:mobile_notify_service_01@@
                 data:
                   title: "Trip Mode Needs Confirmation"
                   message: >-
@@ -305,12 +305,12 @@ automation:
                         event_data:
                           desired_state: "on"
                           reason: startup_reconcile
-              - action: notify.mobile_app_wethop
+              - action: @@PRIVATE:mobile_notify_service_02@@
                 data:
                   message: "clear_notification"
                   data:
                     tag: "{{ notification_tag }}"
-              - action: notify.mobile_app_faro
+              - action: @@PRIVATE:mobile_notify_service_01@@
                 data:
                   message: "clear_notification"
                   data:
@@ -751,7 +751,7 @@ automation:
               - condition: trigger
                 id: door_opened_while_gone
             sequence:
-              - action: notify.mobile_app_wethop
+              - action: @@PRIVATE:mobile_notify_service_02@@
                 data:
                   title: "Garage opened while on a trip"
                   # Fixed: `message` is a required field for all HA notify services.
@@ -1307,13 +1307,13 @@ automation:
                        and states('vacuum.valetudo_den') in ['docked', 'idle']
                        and states('vacuum.x40_ultra') in ['docked', 'idle'] }}
               then:
-                - action: notify.mobile_app_wethop
+                - action: @@PRIVATE:mobile_notify_service_02@@
                   continue_on_error: true
                   data:
                     title: "Guest visit"
                     message: "Front door unlocked during trip: alarm disarmed, cameras' motion detection off, water on."
                 - stop: "House ready for guest"
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         continue_on_error: true
         data:
           title: "Guest visit: house NOT ready"
@@ -1463,13 +1463,13 @@ automation:
                 - action: input_boolean.turn_off
                   target:
                     entity_id: input_boolean.trip_guest_visit_active
-                - action: notify.mobile_app_wethop
+                - action: @@PRIVATE:mobile_notify_service_02@@
                   continue_on_error: true
                   data:
                     title: "Guest visit over"
                     message: "Front door locked: alarm armed, cameras on, water off."
                 - stop: "House secured"
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         continue_on_error: true
         data:
           title: "Guest visit: house NOT secured"

@@ -97,11 +97,11 @@ homeassistant:
       <<: *customize
       friendly_name: Precipitation % in next 12 hours
       icon: mdi:weather-pouring
-    sensor.nigori_precip_next_2hr:
+    sensor.@@PRIVATE:vehicle_entity_slug@@_precip_next_2hr:
       <<: *customize
       friendly_name: Tesla Precipitation % in next 2 hours
       icon: mdi:weather-pouring
-    sensor.tomorrow_io_the_brewery_cloud_cover:
+    sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_cloud_cover:
       <<: *customize
       friendly_name: Cloud Cover
       icon: mdi:weather-cloudy
@@ -142,19 +142,19 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: numeric_state
-        entity_id: sensor.nigori_precip_next_2hr
+        entity_id: sensor.@@PRIVATE:vehicle_entity_slug@@_precip_next_2hr
         above: 50
         for:
           minutes: 5
     condition:
       - condition: numeric_state
-        entity_id: sensor.nigori_precip_next_2hr
+        entity_id: sensor.@@PRIVATE:vehicle_entity_slug@@_precip_next_2hr
         above: 50
       - condition: state
-        entity_id: binary_sensor.nigori_parking_brake
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_parking_brake
         state: "on"
       - condition: state
-        entity_id: cover.nigori_windows
+        entity_id: cover.@@PRIVATE:vehicle_entity_slug@@_windows
         state: "open"
       - condition: not
         conditions:
@@ -169,7 +169,7 @@ automation:
                 value_template: >-
                   {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.alert_car_windows_open_pressure_dropping', 'last_triggered'), 0)) > 3600 }}
             sequence:
-              - action: notify.mobile_app_wethop
+              - action: @@PRIVATE:mobile_notify_service_02@@
                 data:
                   title: "Tesla Windows"
                   message: >-
@@ -178,7 +178,7 @@ automation:
                     forecast.
       - action: cover.close_cover
         target:
-          entity_id: cover.nigori_windows
+          entity_id: cover.@@PRIVATE:vehicle_entity_slug@@_windows
 
   - id: alert_house_windows_open_pressure_dropping
     alias: alert_house_windows_open_pressure_dropping
@@ -277,7 +277,7 @@ automation:
           {% endif %}
           {{ ns.found }}
     action:
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           title: "Open Window"
           message: >-
@@ -325,7 +325,7 @@ automation:
               - action: light.turn_on
                 data:
                   entity_id: all
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           title: "Tornado Warning"
           message: "Go to the basement now."
@@ -340,7 +340,7 @@ automation:
                 name: default
                 critical: 1
                 volume: 1.0
-      - action: notify.mobile_app_faro
+      - action: @@PRIVATE:mobile_notify_service_01@@
         data:
           title: "Tornado Warning"
           message: "Go to the basement now."
@@ -419,7 +419,7 @@ automation:
         value_template: >-
           {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.window_open_departure_rain_warning', 'last_triggered'), 0)) > 3600 }}
     action:
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           title: "Rain warning"
           message: >-
@@ -471,7 +471,7 @@ automation:
         value_template: >-
           {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.window_open_home_rain_warning', 'last_triggered'), 0)) > 3600 }}
     action:
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           title: "Rain warning"
           message: "Rain is likely in the next 15 minutes and a window is open. Close the windows."
@@ -544,7 +544,7 @@ automation:
         value_template: >-
           {{ (as_timestamp(now()) - as_timestamp(state_attr('automation.window_open_cool_weather_reminder', 'last_triggered'), 0)) > 7200 }}
     action:
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           title: "Check windows"
           message: "It's cool outside and the climate is working hard. Check for open windows."
@@ -666,7 +666,7 @@ automation:
               {% set alert_type = state_attr('sensor.nws_dakota_county_alerts_alert_1', 'alert_event') | default('', true) %}
               {{ 'Flood' not in alert_type and 'Tornado Warning' not in alert_type }}
     action:
-      - action: notify.mobile_app_wethop
+      - action: @@PRIVATE:mobile_notify_service_02@@
         data:
           message: >
             Current NWS Weather Alerts:
@@ -889,11 +889,11 @@ sensor:
 
   # Follow the Tesla's coordinates so rain detection works away from home.
   - platform: rest
-    name: nigori_precip_next_2hr
-    unique_id: nigori_precip_next_2hr
+    name: @@PRIVATE:vehicle_entity_slug@@_precip_next_2hr
+    unique_id: @@PRIVATE:vehicle_entity_slug@@_precip_next_2hr
     resource_template: >-
-      {% set latitude = state_attr('device_tracker.nigori_location_tracker', 'latitude') | float(default=none) %}
-      {% set longitude = state_attr('device_tracker.nigori_location_tracker', 'longitude') | float(default=none) %}
+      {% set latitude = state_attr('@@PRIVATE:appdaemon_location_source_02@@', 'latitude') | float(default=none) %}
+      {% set longitude = state_attr('@@PRIVATE:appdaemon_location_source_02@@', 'longitude') | float(default=none) %}
       {% if latitude is number and longitude is number %}
         https://api.open-meteo.com/v1/forecast?latitude={{ '%.4f' | format(latitude) }}&longitude={{ '%.4f' | format(longitude) }}&hourly=precipitation_probability&forecast_hours=2&timezone=auto
       {% else %}
@@ -3577,7 +3577,7 @@ template:
       unique_id: active_weather_entity_id
       icon: mdi:weather-partly-cloudy
       state: >-
-        {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+        {% set preferred = 'weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily' %}
         {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
         {% if preferred_forecast | count > 0 %}
           {{ preferred }}
@@ -3593,7 +3593,7 @@ template:
         {% endif %}
       attributes:
         temperature: >-
-          {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+          {% set preferred = 'weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily' %}
           {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
           {% if preferred_forecast | count > 0 %}
             {% set weather_entity = preferred %}
@@ -3609,7 +3609,7 @@ template:
           {% endif %}
           {{ state_attr(weather_entity, 'temperature') | int(default=0) }}
         humidity: >-
-          {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+          {% set preferred = 'weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily' %}
           {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
           {% if preferred_forecast | count > 0 %}
             {% set weather_entity = preferred %}
@@ -3625,7 +3625,7 @@ template:
           {% endif %}
           {{ state_attr(weather_entity, 'humidity') | int(default=0) }}
         forecast_json: >-
-          {% set preferred = 'weather.tomorrow_io_the_brewery_daily' %}
+          {% set preferred = 'weather.tomorrow_io_@@PRIVATE:zone_02_name_slug@@_daily' %}
           {% set preferred_forecast = state_attr(preferred, 'forecast') or [] %}
           {% if preferred_forecast | count > 0 %}
             {% set weather_entity = preferred %}

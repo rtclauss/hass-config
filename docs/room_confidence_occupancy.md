@@ -17,7 +17,7 @@ Current rooms:
 ## Inputs
 
 Each room score is capped to `0-100` and forced to `0` when both
-`person.ryan` and `binary_sensor.bayesian_zeke_home` say the house is empty.
+`person.resident` and `binary_sensor.bayesian_occupant_home` say the house is empty.
 
 Signals currently blended:
 
@@ -27,7 +27,7 @@ Signals currently blended:
 - Existing room occupancy booleans such as
   `binary_sensor.office_occupancy_2` and `binary_sensor.den_occupancy_2`
 - Bed occupancy from `binary_sensor.bayesian_bed_occupancy`
-- Office proxy presence from `binary_sensor.ryan_office_presence`
+- Office proxy presence from `binary_sensor.resident_office_presence`
 
 ## Weighting
 
@@ -44,12 +44,12 @@ Signals currently blended:
   phone is assumed to be carried more consistently.
 
 That mismatch penalty is intentional. It prevents stale motion/occupancy
-booleans from winning outright when both Bermuda devices agree that Ryan is in
+booleans from winning outright when both Bermuda devices agree that Resident is in
 another room.
 
 For the office specifically, that disagreement penalty is suppressed once two
 local office signals agree (`binary_sensor.office_occupancy_2`,
-`binary_sensor.office_motion_occupancy`, or `binary_sensor.ryan_office_presence`).
+`binary_sensor.office_motion_occupancy`, or `binary_sensor.resident_office_presence`).
 That keeps a bad phone/watch room hint from forcing a false vacancy while the
 office sensors still corroborate each other.
 
@@ -86,8 +86,8 @@ office sensors still see occupancy.
    and confirm the score still reaches `50+`.
 4. Bed only: confirm bedroom confidence reaches `50+` when only
    `binary_sensor.bayesian_bed_occupancy` is on.
-5. Empty house: set `person.ryan` to `not_home` and
-   `binary_sensor.bayesian_zeke_home` to `off`, then confirm all room scores go
+5. Empty house: set `person.resident` to `not_home` and
+   `binary_sensor.bayesian_occupant_home` to `off`, then confirm all room scores go
    to `0`.
 6. Signal loss: mark one Bermuda room sensor unavailable and confirm the score
    drops but does not collapse to `0` when another positive signal remains.

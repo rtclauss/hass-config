@@ -28,3 +28,10 @@ HOME_CODE_LIST = tuple(
 )
 if len(HOME_CODE_LIST) != 6:
     raise AssertionError("Expected six private home airport aliases")
+
+VEHICLE_TRACKER = _first(r"home_charging = \(states\('([^']+)'\)", "packages/utilities.yaml")
+VEHICLE_ENTITY_SLUG = _first(r"source: sensor\.([a-z0-9_]+)_odometer", "packages/utilities.yaml")
+SECONDARY_NOTIFY_SERVICE = _first(r"action: (notify\.[a-z0-9_]+)", "packages/weather.yaml")
+HOME_POSTAL_CODE = _first(r"weekly_regular_gas_price_(\d+)_fallback", "packages/utilities.yaml")
+HOME_CITY_SLUG = _first(r"unique_id: ([a-z0-9_]+)_weekly_regular_gas_price_live", "packages/utilities.yaml")
+HOME_CITY_TITLE = _first(r"- name: ([A-Za-z ]+) Weekly Regular Gas Price Live", "packages/utilities.yaml")
