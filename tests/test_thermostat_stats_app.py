@@ -121,7 +121,7 @@ def test_initialize_uses_pool_pre_ping_for_database_engine(monkeypatch) -> None:
         "thermostat": "climate.my_ecobee",
         "sun": "sun.sun",
         "outside_temp": "sensor.outside_temperature",
-        "outside_cloud_cover": "sensor.tomorrow_io_the_brewery_cloud_cover",
+        "outside_cloud_cover": "sensor.tomorrow_io_example_place_cloud_cover",
         "outside_humidity": "sensor.outside_humidity",
     }
     app.listen_state = Mock()

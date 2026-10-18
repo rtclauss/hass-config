@@ -166,7 +166,7 @@ automation:
           - input_number.ev_electrical_rate
         id: planner_input
       - trigger: state
-        entity_id: binary_sensor.nigori_parking_brake
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_parking_brake
         to: "on"
         for:
           minutes: 5
@@ -174,7 +174,7 @@ automation:
       - trigger: state
         entity_id:
           - person.@@PRIVATE:owner_person_slug@@
-          - device_tracker.nigori_location_tracker
+          - @@PRIVATE:appdaemon_location_source_02@@
         to: "home"
         id: home_reconciliation
       - trigger: numeric_state
@@ -187,10 +187,10 @@ automation:
         id: warm_snap
     condition:
       - condition: state
-        entity_id: binary_sensor.nigori_parking_brake
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_parking_brake
         state: "on"
       - condition: state
-        entity_id: device_tracker.nigori_location_tracker
+        entity_id: @@PRIVATE:appdaemon_location_source_02@@
         state: "home"
     action:
       - alias: Delay planner startup reconciliation
@@ -241,7 +241,7 @@ automation:
               {% set tariff = states('select.hourly_ev_charging') %}
             {% endif %}
             {% set electrical_rate = states('input_number.ev_electrical_rate') | float(default=0) %}
-            {% set location_name = states('device_tracker.nigori_location_tracker') | default('', true) | lower %}
+            {% set location_name = states('@@PRIVATE:appdaemon_location_source_02@@') | default('', true) | lower %}
             {% set location_label = location_name | replace('_', ' ') | title %}
             {% set preserve_default_charging_schedule = location_name in ['home', 'parents', 'occ', 'spcc'] %}
             {% set resident_home = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') %}
@@ -250,10 +250,10 @@ automation:
             {% set high_tariff = tariff_name in ['on_peak', 'on-peak', 'onpeak'] or electrical_rate >= 0.13 %}
             {% set tpms_reminder_threshold_psi = states('input_number.tesla_tpms_air_threshold_psi') | float(default=38) %}
             {% set tpms_readings = [
-              {'label': 'front left', 'psi': states('sensor.nigori_tpms_front_left') | float(default=999)},
-              {'label': 'front right', 'psi': states('sensor.nigori_tpms_front_right') | float(default=999)},
-              {'label': 'rear left', 'psi': states('sensor.nigori_tpms_rear_left') | float(default=999)},
-              {'label': 'rear right', 'psi': states('sensor.nigori_tpms_rear_right') | float(default=999)}
+              {'label': 'front left', 'psi': states('sensor.@@PRIVATE:vehicle_entity_slug@@_tpms_front_left') | float(default=999)},
+              {'label': 'front right', 'psi': states('sensor.@@PRIVATE:vehicle_entity_slug@@_tpms_front_right') | float(default=999)},
+              {'label': 'rear left', 'psi': states('sensor.@@PRIVATE:vehicle_entity_slug@@_tpms_rear_left') | float(default=999)},
+              {'label': 'rear right', 'psi': states('sensor.@@PRIVATE:vehicle_entity_slug@@_tpms_rear_right') | float(default=999)}
             ] %}
             {% set tpms_ns = namespace(low=[]) %}
             {% for reading in tpms_readings %}
@@ -382,11 +382,11 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ states('number.nigori_charge_limit') | int(default=-1) != tesla_plan.charge_limit | int(default=80) }}"
+                value_template: "{{ states('number.@@PRIVATE:vehicle_entity_slug@@_charge_limit') | int(default=-1) != tesla_plan.charge_limit | int(default=80) }}"
             sequence:
               - action: number.set_value
                 target:
-                  entity_id: number.nigori_charge_limit
+                  entity_id: number.@@PRIVATE:vehicle_entity_slug@@_charge_limit
                 data:
                   value: "{{ tesla_plan.charge_limit }}"
       - choose:
@@ -492,7 +492,7 @@ automation:
       - trigger: state
         entity_id:
           - person.@@PRIVATE:owner_person_slug@@
-          - device_tracker.nigori_location_tracker
+          - @@PRIVATE:appdaemon_location_source_02@@
         from: "home"
         not_to:
           - "unknown"
@@ -504,7 +504,7 @@ automation:
       # the live schedule is HA-managed. Retry as soon as Tesla reports the
       # timestamp, but only while the owner or vehicle is still away.
       - trigger: state
-        entity_id: binary_sensor.nigori_scheduled_departure
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_scheduled_departure
         attribute: Departure timestamp
         id: tesla_schedule_synced
     condition:
@@ -524,14 +524,14 @@ automation:
           - condition: template
             value_template: >-
               {{ states('person.@@PRIVATE:owner_person_slug@@') not in ['home', 'unknown', 'unavailable'] or
-                 states('device_tracker.nigori_location_tracker') not in ['home', 'unknown', 'unavailable'] }}
+                 states('@@PRIVATE:appdaemon_location_source_02@@') not in ['home', 'unknown', 'unavailable'] }}
     action:
       - action: script.tesla_set_precondition_schedule_time
         data:
           enabled: false
           force_disable: true
           reason: >-
-            Cancel the Home Assistant-managed Tesla departure because @@PRIVATE:owner_person_title@@ or Nigori left home.
+            Cancel the Home Assistant-managed Tesla departure because @@PRIVATE:owner_person_title@@ or @@PRIVATE:vehicle_display_name@@ left home.
         response_variable: tesla_schedule_result
       # Only stop tracking once the Tesla schedule is actually gone; otherwise a
       # later planner run still has the helpers set and can retry the clear.
@@ -655,7 +655,7 @@ automation:
             sequence:
               - action: number.set_value
                 target:
-                  entity_id: number.nigori_charge_limit
+                  entity_id: number.@@PRIVATE:vehicle_entity_slug@@_charge_limit
                 data:
                   value: >-
                     100
@@ -668,7 +668,7 @@ automation:
             sequence:
               - action: number.set_value
                 target:
-                  entity_id: number.nigori_charge_limit
+                  entity_id: number.@@PRIVATE:vehicle_entity_slug@@_charge_limit
                 data:
                   value: >-
                     80
@@ -720,7 +720,7 @@ automation:
   #   alias: set_tesla_charge_limit_on_change
   #   trigger:
   #     - platform: state
-  #       entity_id: number.nigori_charge_limit
+  #       entity_id: number.@@PRIVATE:vehicle_entity_slug@@_charge_limit
   #   action:
   #     - alias: "Update SOC Limit"
   #       action: script.turn_on
@@ -756,10 +756,10 @@ automation:
       - condition: or
         conditions:
           - condition: state
-            entity_id: binary_sensor.nigori_charging
+            entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_charging
             state: "on"
           - condition: state
-            entity_id: binary_sensor.nigori_parking_brake
+            entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_parking_brake
             state: "off"
     action:
       - delay: "00:01:00"
@@ -775,24 +775,24 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: state
-        entity_id: binary_sensor.nigori_charging
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_charging
         to: "off"
         for:
           minutes: 15
         id: charger_disconnected
       - trigger: state
-        entity_id: binary_sensor.nigori_parking_brake
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_parking_brake
         to: "on"
         for:
           minutes: 15
         id: parked
     condition:
       - condition: state
-        entity_id: binary_sensor.nigori_charging
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_charging
         state: "off"
       - alias: Confirm Tesla is parked before long polling
         condition: state
-        entity_id: binary_sensor.nigori_parking_brake
+        entity_id: binary_sensor.@@PRIVATE:vehicle_entity_slug@@_parking_brake
         state: "on"
     action:
       - action: tesla_custom.polling_interval
@@ -806,10 +806,10 @@ automation:
       stored_traces: 10
     trigger:
       - trigger: numeric_state
-        entity_id: sensor.nigori_odometer
+        entity_id: sensor.@@PRIVATE:vehicle_entity_slug@@_odometer
         value_template: >-
-          {% if has_value('sensor.nigori_odometer') %}
-            {{ (states('sensor.nigori_odometer') | float(default=0)) % 6250 }}
+          {% if has_value('sensor.@@PRIVATE:vehicle_entity_slug@@_odometer') %}
+            {{ (states('sensor.@@PRIVATE:vehicle_entity_slug@@_odometer') | float(default=0)) % 6250 }}
           {% else %}
             6250
           {% endif %}
@@ -894,8 +894,8 @@ input_number:
     mode: slider
     unit_of_measurement: mi
     icon: mdi:home-map-marker
-  # nigori_charge_limit:
-  #   name: Nigori Charge Limit
+  # @@PRIVATE:vehicle_entity_slug@@_charge_limit:
+  #   name: @@PRIVATE:vehicle_display_name@@ Charge Limit
   #   min: 0
   #   max: 100
   #   step: 5
@@ -959,13 +959,13 @@ script:
         description: Optional reason to include in the logbook entry.
         example: "Weekday alarm departure plan"
       force_disable:
-        description: Disable the managed departure even at a protected location, such as when @@PRIVATE:owner_person_title@@ or Nigori leaves home.
+        description: Disable the managed departure even at a protected location, such as when @@PRIVATE:owner_person_title@@ or @@PRIVATE:vehicle_display_name@@ leaves home.
         example: true
     sequence:
       - variables:
           schedule_enabled: "{{ enabled | default(true) not in [false, 'false', 'False', 'off', 0, '0'] }}"
           requested_departure_text: "{{ departure_time | default('', true) | string | trim }}"
-          location_name: "{{ states('device_tracker.nigori_location_tracker') | default('', true) | lower }}"
+          location_name: "{{ states('@@PRIVATE:appdaemon_location_source_02@@') | default('', true) | lower }}"
           location_label: >-
             {% if location_name not in ['', 'unknown', 'unavailable', 'none', 'None'] %}
               {{ location_name | replace('_', ' ') | title }}
@@ -1005,9 +1005,9 @@ script:
           preserve_default_charging_schedule: "{{ location_name in ['home', 'parents', 'occ', 'spcc'] }}"
           stored_managed_departure_ts: "{{ states('input_number.tesla_managed_departure_ts') | int(0) }}"
           stored_managed_departure_active: "{{ is_state('input_boolean.tesla_managed_departure_active', 'on') }}"
-          tesla_departure_ts: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Departure timestamp') | int(0) }}"
-          tesla_scheduled_charging_active: "{{ is_state('binary_sensor.nigori_scheduled_charging', 'on') }}"
-          tesla_off_peak_charging_enabled: "{{ state_attr('binary_sensor.nigori_scheduled_departure', 'Off peak charging enabled') in [true, 'true', 'True', 'on'] }}"
+          tesla_departure_ts: "{{ state_attr('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_scheduled_departure', 'Departure timestamp') | int(0) }}"
+          tesla_scheduled_charging_active: "{{ is_state('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_scheduled_charging', 'on') }}"
+          tesla_off_peak_charging_enabled: "{{ state_attr('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_scheduled_departure', 'Off peak charging enabled') in [true, 'true', 'True', 'on'] }}"
           tesla_managed_departure_matches: >-
             {{ stored_managed_departure_active in [true, 'true', 'True', 'on'] and stored_managed_departure_ts > 0 and tesla_departure_ts > 0 and ((stored_managed_departure_ts - tesla_departure_ts) | abs) <= 300 }}
           force_disable_requested: "{{ force_disable | default(false) in [true, 'true', 'True', 'on', 1, '1'] }}"
@@ -1035,7 +1035,7 @@ script:
                           command: SCHEDULED_DEPARTURE
                           parameters:
                             path_vars:
-                              vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
+                              vehicle_id: "{{ state_attr('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_online', 'id') }}"
                             enable: false
                             wake_if_asleep: true
         default:
@@ -1071,7 +1071,7 @@ script:
                       command: SCHEDULED_DEPARTURE
                       parameters:
                         path_vars:
-                          vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
+                          vehicle_id: "{{ state_attr('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_online', 'id') }}"
                         enable: true
                         departure_time: "{{ departure_offset_from_midnight }}"
                         preconditioning_enabled: true
@@ -1084,7 +1084,7 @@ script:
                   command: SCHEDULED_DEPARTURE
                   parameters:
                     path_vars:
-                      vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
+                      vehicle_id: "{{ state_attr('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_online', 'id') }}"
                     enable: true
                     departure_time: "{{ departure_offset_from_midnight }}"
                     preconditioning_enabled: true
@@ -1115,8 +1115,8 @@ script:
   #         command: CHANGE_CHARGE_LIMIT
   #         parameters:
   #           path_vars:
-  #             vehicle_id: "{{ state_attr('binary_sensor.nigori_online', 'id') }}"
-  #           percent: "{{ states('input_number.nigori_charge_limit') | int(default=90) }}"
+  #             vehicle_id: "{{ state_attr('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_online', 'id') }}"
+  #           percent: "{{ states('input_number.@@PRIVATE:vehicle_entity_slug@@_charge_limit') | int(default=90) }}"
   #           wake_if_asleep: true
 
 ########################
@@ -1325,17 +1325,17 @@ template:
         unique_id: charge_complete
         device_class: timestamp
         availability: >-
-          {% set charge_time_left_raw = state_attr('sensor.nigori_charging_rate','time_left') %}
-          {{ states.sensor.nigori_charging_rate.last_updated is defined and charge_time_left_raw not in [none, '', 'None', 'unknown', 'unavailable'] }}
+          {% set charge_time_left_raw = state_attr('sensor.@@PRIVATE:vehicle_entity_slug@@_charging_rate','time_left') %}
+          {{ states.sensor.@@PRIVATE:vehicle_entity_slug@@_charging_rate.last_updated is defined and charge_time_left_raw not in [none, '', 'None', 'unknown', 'unavailable'] }}
         state: >-
-          {% set charge_time_left_raw = state_attr('sensor.nigori_charging_rate','time_left') %}
-          {% if states.sensor.nigori_charging_rate.last_updated is defined and charge_time_left_raw not in [none, '', 'None', 'unknown', 'unavailable'] %}
+          {% set charge_time_left_raw = state_attr('sensor.@@PRIVATE:vehicle_entity_slug@@_charging_rate','time_left') %}
+          {% if states.sensor.@@PRIVATE:vehicle_entity_slug@@_charging_rate.last_updated is defined and charge_time_left_raw not in [none, '', 'None', 'unknown', 'unavailable'] %}
             {% if charge_time_left_raw is number %}
               {% set charge_time_left = timedelta(hours=charge_time_left_raw) %}
             {% else %}
               {% set charge_time_left = charge_time_left_raw | as_timedelta %}
             {% endif %}
-            {{ (states.sensor.nigori_charging_rate.last_updated + charge_time_left).isoformat() }}
+            {{ (states.sensor.@@PRIVATE:vehicle_entity_slug@@_charging_rate.last_updated + charge_time_left).isoformat() }}
           {% else %}
             {{ now().isoformat() }}
           {% endif %}

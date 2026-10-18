@@ -63,7 +63,7 @@ class restart_ha(hass.Hass):
             socket.create_connection((host, port), timeout=self.timeout).close()
             return True
         except ConnectionRefusedError:
-            return True  # host answered with RST -> network path is fine
+            return True  # host answered with an expected response -> network path is fine
         except OSError as err:  # timeout, EHOSTUNREACH, ENETUNREACH, gaierror
             self.log("probe {}:{} failed: {}".format(host, port, err), level="DEBUG")
             return False

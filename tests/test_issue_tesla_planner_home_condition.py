@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from privacy_ids import VEHICLE_TRACKER
 
 
 CAR_PATH = Path(__file__).resolve().parents[1] / "packages" / "car.yaml"
@@ -19,7 +20,7 @@ def _automation_block(automation_id: str) -> str:
 def test_tesla_departure_planner_uses_state_check_for_home_presence() -> None:
     block = _automation_block("tesla_departure_planner_apply")
 
-    assert 'entity_id: device_tracker.nigori_location_tracker' in block
+    assert f"entity_id: {VEHICLE_TRACKER}" in block
     assert 'condition: zone' not in block
     assert 'state: "home"' in block
     assert 'zone: zone.home' not in block

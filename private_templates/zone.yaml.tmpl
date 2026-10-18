@@ -288,7 +288,7 @@ automation:
           requested_mode: home
           reason: default_arrive_home
       # - alias: "Notify action"
-      #   action: notify.mobile_app_wethop
+      #   action: @@PRIVATE:mobile_notify_service_02@@
       #   data:
       #     message: >-
       #       Arriving home with wethop activity {{ states('sensor.wethop_activity') }}
@@ -561,14 +561,14 @@ automation:
       - delay: "00:01:00"
       - action: button.press
         target:
-          entity_id: button.nigori_force_data_update
+          entity_id: button.@@PRIVATE:vehicle_entity_slug@@_force_data_update
       - action: homeassistant.update_entity
         target:
           entity_id:
-            - device_tracker.wethop
-            - device_tracker.nigori_location_tracker
+            - @@PRIVATE:appdaemon_location_source_01@@
+            - @@PRIVATE:appdaemon_location_source_02@@
             - binary_sensor.arrival_sensor_presence
-            - device_tracker.wethop_wifi
+            - @@PRIVATE:appdaemon_location_source_01@@_wifi
 
   - id: update_trip_origin
     alias: update_trip_origin
@@ -682,17 +682,17 @@ binary_sensor:
   #   name: bayesian_@@PRIVATE:presence_person_slug@@_home
   #   probability_threshold: 0.80
   #   observations:
-  #     - entity_id: device_tracker.wethop
+  #     - entity_id: @@PRIVATE:appdaemon_location_source_01@@
   #       prob_given_true: 0.80
   #       prob_given_false: 0.1
   #       platform: "state"
   #       to_state: "home"
-  #     - entity_id: device_tracker.wethop_wifi
+  #     - entity_id: @@PRIVATE:appdaemon_location_source_01@@_wifi
   #       prob_given_true: 0.70
   #       prob_given_false: 0.3
   #       platform: "state"
   #       to_state: "home"
-  #     - entity_id: device_tracker.nigori_location_tracker
+  #     - entity_id: @@PRIVATE:appdaemon_location_source_02@@
   #       prob_given_true: 0.80
   #       prob_given_false: 0.1
   #       platform: "state"
@@ -729,7 +729,7 @@ binary_sensor:
     name: bayesian_@@PRIVATE:presence_person_slug@@_home
     probability_threshold: 0.80
     observations:
-      - entity_id: device_tracker.wethop
+      - entity_id: @@PRIVATE:appdaemon_location_source_01@@
         prob_given_true: .995
         prob_given_false: 0.0005
         platform: state
@@ -739,7 +739,7 @@ binary_sensor:
         prob_given_false: 0.60  # brief disconnects common at home; travel router guards false positives
         platform: state
         to_state: !secret home_ssid
-      - entity_id: device_tracker.nigori_location_tracker
+      - entity_id: @@PRIVATE:appdaemon_location_source_02@@
         prob_given_true: 0.95
         prob_given_false: 0.55  # car stays home when flying; trip observation guards the false positive
         platform: state
@@ -806,7 +806,7 @@ group:
   bayesian_inputs:
     entities:
       - device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
-      - device_tracker.wethop
+      - @@PRIVATE:appdaemon_location_source_01@@
       - sensor.wethop_ssid
       - binary_sensor.arrival_sensor_presence
       - input_boolean.trip

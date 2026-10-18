@@ -68,7 +68,7 @@ with `apply_trip_policy: true` so vacation simulation stays in sync with
 
 `automation.run_verified_departure` starts only from the canonical
 Bayesian empty-house event and delegates to `script.departure_integrity`.
-It confirms the house is empty from `binary_sensor.bayesian_zeke_home` rather
+It confirms the house is empty from `binary_sensor.bayesian_occupant_home` rather
 than the derived GPS tracker, which can still read `home` at that moment.
 That script:
 

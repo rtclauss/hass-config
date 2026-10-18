@@ -206,7 +206,7 @@ def test_flying_home_degrades_to_vacuum_only_then_skips() -> None:
     assert "expires_at: \"{{ arrival_iso }}\"" in vacuum
 
     skipped = action.split("default:", 1)[1]
-    assert "action: notify.all" in skipped
+    assert f"action: notify.all" in skipped
     assert "script.trip_vacuum_main_and_upstairs_levels" not in skipped
 
 

@@ -30,6 +30,7 @@ def test_dashboard_examples_have_no_personal_markers() -> None:
         text = path.read_text(encoding="utf-8")
         dashboard = json.loads(text)
         assert dashboard["data"]["config"]["views"]
-        assert not re.search(r"(?i)ryan|nigori|zeke|tyson|wethop|rtclauss", text)
+        assert not re.search(r"\b(?:person|device_tracker|calendar)\.[a-z0-9_]+\b", text)
+        assert not re.search(r"https?://", text)
         assert not re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", text)
         assert not re.search(r"\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b", text)
