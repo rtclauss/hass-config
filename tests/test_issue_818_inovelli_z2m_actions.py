@@ -73,3 +73,12 @@ def test_inovelli_clear_wrapper_preserves_z2m_effect_payload() -> None:
         "level: 281",
     ):
         assert token in block
+
+
+def test_inovelli_publisher_can_be_limited_to_requested_entities() -> None:
+    block = _script_block("publish_inovelli_z2m_led_effect")
+
+    assert "entity_ids:" in block
+    assert "required: false" in block
+    assert "requested_inovelli_entities" in block
+    assert "select('in', requested_inovelli_entities if requested_inovelli_entities | count > 0" in block

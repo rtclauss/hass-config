@@ -55,8 +55,7 @@ def test_weather_package_restores_legacy_nws_raw_source_from_ui_managed_payload(
     assert "name: nws_dakota_county_alerts" in text
     assert "unique_id: nws_dakota_county_alerts_legacy_raw_source" in text
     assert "source_entity_id: sensor.nws_alerts" in text
-    assert "source_alerts = state_attr('sensor.nws_alerts', 'alerts')" in text
-    assert "default(state_attr('sensor.nws_alerts', 'Alerts'), true)" in text
+    assert "source_alerts = state_attr('sensor.nws_alerts', 'Alerts')" in text
     assert "state: \"{{ states('sensor.nws_alerts') | int(0) }}\"" in text
 
     for legacy_field in (
@@ -77,7 +76,7 @@ def test_weather_package_restores_legacy_nws_raw_source_from_ui_managed_payload(
         assert legacy_field in text
 
     assert len(NWS_ALERT_PAYLOAD_FIXTURES) == 3
-    assert "state_attr('sensor.nws_alerts', 'alerts')" in text
+    assert "state_attr('sensor.nws_alerts', 'alerts')" not in text
     assert "for alert in source_alerts if alert is mapping" in text
     assert "ns.alerts = ns.alerts + [dict(" in text
     assert "alert.get('ID', alert.get('Id', alert.get('id'" in text
@@ -111,3 +110,14 @@ def test_legacy_nws_alert_slots_guard_empty_source_lists_before_indexing() -> No
             "state_attr('sensor.nws_dakota_county_alerts', 'alerts') "
             f"| default([], true) | count) > {minimum_count - 1}"
         ) in text
+
+
+def test_nws_alert_reads_use_only_attributes_the_integration_exposes() -> None:
+    text = WEATHER_PATH.read_text(encoding="utf-8")
+
+    # sensor.nws_alerts exposes only the "Alerts" list; top-level TYPE and
+    # Description never existed, so tornado detection must read the list.
+    assert "state_attr('sensor.nws_alerts', 'TYPE')" not in text
+    assert "state_attr('sensor.nws_alerts', 'Description')" not in text
+    assert "selectattr('NWSCode', 'eq', 'TOR')" in text
+    assert "selectattr('Event', 'eq', 'Tornado Warning')" in text
