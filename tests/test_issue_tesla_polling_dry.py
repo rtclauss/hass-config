@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from privacy_ids import VEHICLE_ENTITY_SLUG
 
 
 CAR_PATH = Path(__file__).resolve().parents[1] / "packages" / "car.yaml"
@@ -43,9 +44,9 @@ def test_tesla_short_polling_startup_uses_one_native_or_condition() -> None:
     assert "trigger: homeassistant" in block
     assert "event: start" in block
     assert "condition: or" in block
-    assert "entity_id: binary_sensor.example_vehicle_charging" in block
+    assert f"entity_id: binary_sensor.{VEHICLE_ENTITY_SLUG}_charging" in block
     assert 'state: "on"' in block
-    assert "entity_id: binary_sensor.example_vehicle_parking_brake" in block
+    assert f"entity_id: binary_sensor.{VEHICLE_ENTITY_SLUG}_parking_brake" in block
     assert 'state: "off"' in block
     assert 'delay: "00:01:00"' in block
     assert "action: tesla_custom.polling_interval" in block
@@ -59,8 +60,8 @@ def test_tesla_long_polling_waits_for_idle_and_unplugged_state() -> None:
     assert block.count("trigger: state") == 2
     assert "id: charger_disconnected" in block
     assert "id: parked" in block
-    assert "entity_id: binary_sensor.example_vehicle_charging" in block
-    assert "entity_id: binary_sensor.example_vehicle_parking_brake" in block
+    assert f"entity_id: binary_sensor.{VEHICLE_ENTITY_SLUG}_charging" in block
+    assert f"entity_id: binary_sensor.{VEHICLE_ENTITY_SLUG}_parking_brake" in block
     assert block.count("minutes: 15") == 2
     assert 'state: "off"' in block
     assert 'state: "on"' in block

@@ -10,7 +10,7 @@ on the car with nothing on the HA side left to retry it.
 
 from __future__ import annotations
 
-from privacy_ids import OWNER_PERSON
+from privacy_ids import VEHICLE_ENTITY_SLUG, OWNER_PERSON, VEHICLE_TRACKER
 
 import re
 from pathlib import Path
@@ -119,7 +119,7 @@ def test_cleared_result_defaults_to_false_when_the_script_returns_nothing() -> N
 def test_away_cancel_retries_when_tesla_schedule_timestamp_catches_up() -> None:
     block = _automation_block("tesla_departure_cancel_when_home_context_ends")
 
-    assert "entity_id: binary_sensor.example_vehicle_scheduled_departure" in block
+    assert f"entity_id: binary_sensor.{VEHICLE_ENTITY_SLUG}_scheduled_departure" in block
     assert "attribute: Departure timestamp" in block
     assert "id: tesla_schedule_synced" in block
     assert "force_disable: true" in block
@@ -136,10 +136,10 @@ def test_away_check_does_not_treat_recovery_states_as_leaving_home() -> None:
     assert f"not is_state('{OWNER_PERSON}', 'home')" not in block, (
         "away check treats unknown/unavailable as away"
     )
-    assert "not is_state('device_tracker.example_vehicle', 'home')" not in block, (
+    assert f"not is_state('{VEHICLE_TRACKER}', 'home')" not in block, (
         "away check treats unknown/unavailable as away"
     )
-    for entity in (OWNER_PERSON, "device_tracker.example_vehicle"):
+    for entity in (OWNER_PERSON, VEHICLE_TRACKER):
         assert f"states('{entity}') not in ['home', 'unknown', 'unavailable']" in block, entity
 
 

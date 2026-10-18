@@ -418,7 +418,7 @@ automation:
                 - condition: template
                   value_template: "{{ repeat.index <= 36 }}"
               sequence:
-                - action: notify.mobile_app_example_device_02
+                - action: !secret mobile_notify_service_02
                   data:
                     message: >-
                       Zigbee2MQTT OTA update(s) in progress ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
@@ -428,7 +428,7 @@ automation:
                 entity_id: sensor.z2m_ota_updates_in_progress
                 above: 0
             then:
-              - action: notify.mobile_app_example_device_02
+              - action: !secret mobile_notify_service_02
                 data:
                   message: >-
                     Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping restart/shutdown to avoid interruption.
@@ -441,7 +441,7 @@ automation:
           - action: counter.increment
             target:
               entity_id: counter.reboot_counter
-          - action: notify.mobile_app_example_device_02
+          - action: !secret mobile_notify_service_02
             data:
               message: >-
                 Z2M recovery attempt {{ states('counter.reboot_counter') }} of {{ max_restart_attempts }}. Reason: {{ issue_reason }}. Restarting Zigbee2MQTT.
@@ -476,7 +476,7 @@ automation:
                     and not is_state('binary_sensor.z2m_bridge', 'off')
                   }}
             then:
-              - action: notify.mobile_app_example_device_02
+              - action: !secret mobile_notify_service_02
                 data:
                   message: >-
                     Zigbee2MQTT recovered after restart attempt {{ states('counter.reboot_counter') }}. Resetting recovery counter.
@@ -496,7 +496,7 @@ automation:
             entity_id: counter.reboot_counter
             above: 2
         then:
-          - action: notify.mobile_app_example_device_02
+          - action: !secret mobile_notify_service_02
             data:
               title: Z2M Recovery Escalation
               message: >-
@@ -538,7 +538,7 @@ automation:
                     and not is_state('binary_sensor.z2m_bridge', 'off')
                   }}
             then:
-              - action: notify.mobile_app_example_device_02
+              - action: !secret mobile_notify_service_02
                 data:
                   message: >-
                     Z2M recovered after EMQX + Z2M restart escalation. Resetting recovery counter.
@@ -546,7 +546,7 @@ automation:
                 target:
                   entity_id: counter.reboot_counter
               - stop: Z2M recovered before host shutdown
-          - action: notify.mobile_app_example_device_02
+          - action: !secret mobile_notify_service_02
             data:
               title: Z2M Failed
               message: >-
@@ -572,7 +572,7 @@ automation:
                     - condition: template
                       value_template: "{{ repeat.index <= 36 }}"
                   sequence:
-                    - action: notify.mobile_app_example_device_02
+                    - action: !secret mobile_notify_service_02
                       data:
                         message: >-
                           Zigbee2MQTT OTA update(s) started while recovery was running ({{ states('sensor.z2m_ota_updates_in_progress') }} active). Estimated completion: {%- set eta = state_attr('sensor.z2m_ota_updates_in_progress', 'eta_minutes') | int(-1) -%}{%- if eta >= 0 -%} ~{{ eta }} minute(s){%- else -%} unknown{%- endif -%}. Re-checking in 10 minutes.
@@ -582,7 +582,7 @@ automation:
                     entity_id: sensor.z2m_ota_updates_in_progress
                     above: 0
                 then:
-                  - action: notify.mobile_app_example_device_02
+                  - action: !secret mobile_notify_service_02
                     data:
                       message: >-
                         Zigbee2MQTT OTA update(s) still in progress after waiting 6 hours. Skipping host shutdown.

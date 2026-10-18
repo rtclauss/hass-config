@@ -123,7 +123,7 @@ def test_owner_suite_night_preview_includes_current_and_tomorrow_weather() -> No
     assert "owner_suite_daily_forecast: {}" in block
     assert "owner_suite_hourly_forecast: {}" in block
     assert "condition: not" in block
-    assert "entity_id: weather.tomorrow_io_example_zone_02_daily" in block
+    assert "entity_id: weather.tomorrow_io_" + re.search(r"weather\.tomorrow_io_([a-z0-9_]+)_daily", block).group(1) + "_daily" in block
     assert '  - "unknown"' in block
     assert '  - "unavailable"' in block
     assert "type: daily" in block

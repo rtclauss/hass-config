@@ -144,4 +144,4 @@ def test_holiday_lighting_notification_only_sends_on_holiday_days() -> None:
     assert "id: sunset" in text
     assert "states('sensor.active_outdoor_holiday') | trim not in ['none', 'unknown', 'unavailable', '']" in text
     assert "state_attr('sensor.active_outdoor_holiday', 'notification_message')" in text
-    assert "action: notify.all" in text
+    assert f"action: notify.all" in text

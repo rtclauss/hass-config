@@ -240,6 +240,13 @@ matching `private_*` keys. Its previous contents were byte-verified under
 The live packages remain unchanged until deployment. CI uses synthetic
 endpoints and payloads in `travis_secrets.example.yaml`.
 
+The Home Assistant instance name, unit system, currency, country, timezone,
+and formerly literal trusted network now also resolve from the ignored root
+`secrets.yaml`. The live values were preserved without behavior changes after
+its prior contents were byte-verified at
+`.private-runtime-backup/current-config/secrets.before-core-privacy-2026-10-18.yaml`.
+CI uses synthetic profile values and a documentation network.
+
 ## Private device identifiers
 
 The light, workday, and TV packages resolve their Zigbee IEEE identifiers
@@ -276,3 +283,19 @@ files were byte-verified under
 `.private-runtime-backup/appdaemon-active-2026-10-16/` on the host. Render and
 check all manifest targets before synchronizing AppDaemon. Never stage or push
 the generated YAML or the inactive history files.
+
+## Personal mobile notification targets
+
+Two other mobile notification targets use `mobile_notify_service_01` and
+`mobile_notify_service_02` in the ignored values mapping. The latter also has
+root `!secret` consumers. Their live mapping and root secret entries were
+backed up and updated together; changing either mobile app registration requires
+updating both consumers for that target.
+
+## Private vehicle and local market identifiers
+
+`vehicle_entity_slug`, `vehicle_display_name`, `home_city_slug`,
+`home_city_title`, and `home_postal_code` belong in the ignored values mapping.
+The matching public example uses synthetic values. The renderer validates every
+required key and writes ignored outputs atomically. The live mapping was backed
+up before these keys were added.

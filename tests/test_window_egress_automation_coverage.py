@@ -1,4 +1,5 @@
 from pathlib import Path
+from privacy_ids import VEHICLE_ENTITY_SLUG
 
 
 ALERTS_PATH = Path(__file__).resolve().parents[1] / "packages" / "alerts.yaml"
@@ -121,9 +122,9 @@ def test_dynamic_egress_sensors_replace_legacy_group() -> None:
         assert entity_id in macro
     # Vehicle openings and pressure-trend sensors are excluded by prefix, so no
     # literal (possibly removed) Tesla trunk/frunk ids are referenced.
-    assert "startswith('binary_sensor.example_vehicle_')" in macro
+    assert f"startswith('binary_sensor.{VEHICLE_ENTITY_SLUG}_')" in macro
     assert "startswith('binary_sensor.pressure_')" in macro
-    assert "binary_sensor.example_vehicle_trunk" not in block
+    assert f"binary_sensor.{VEHICLE_ENTITY_SLUG}_trunk" not in block
     assert "group.egress_points" not in block
 
 

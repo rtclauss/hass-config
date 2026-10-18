@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from privacy_ids import OWNER_PERSON, OWNER_TITLE
+from privacy_ids import VEHICLE_ENTITY_SLUG, OWNER_PERSON, OWNER_TITLE, VEHICLE_TRACKER
 
 import os
+import re
 
 from pathlib import Path
 
@@ -93,10 +94,10 @@ def test_managed_departure_is_cancelled_when_resident_or_vehicle_leaves_home() -
     package_text = CAR_PACKAGE_PATH.read_text(encoding="utf-8")
 
     assert "id: tesla_departure_cancel_when_home_context_ends" in package_text
-    assert f"- {OWNER_PERSON}\n          - device_tracker.example_vehicle\n        from: \"home\"" in package_text
+    assert f"- {OWNER_PERSON}\n          - {VEHICLE_TRACKER}\n        from: \"home\"" in package_text
     assert "force_disable: true" in package_text
     assert 'force_disable: "{{ not tesla_plan.resident_home or tesla_plan.location != \'home\' }}"' in package_text
-    assert f"Cancel the Home Assistant-managed Tesla departure because {OWNER_TITLE} or Example Vehicle left home." in package_text
+    assert re.search(rf"Cancel the Home Assistant-managed Tesla departure because {OWNER_TITLE} or .+ left home\.", package_text)
 
 
 def test_preconditioning_plan_includes_low_tpms_air_reminder() -> None:
@@ -107,10 +108,10 @@ def test_preconditioning_plan_includes_low_tpms_air_reminder() -> None:
     assert "initial: 38" in package_text
     assert "unit_of_measurement: psi" in package_text
     assert "states('input_number.tesla_tpms_air_threshold_psi') | float(default=38)" in package_text
-    assert "sensor.example_vehicle_tpms_front_left" in package_text
-    assert "sensor.example_vehicle_tpms_front_right" in package_text
-    assert "sensor.example_vehicle_tpms_rear_left" in package_text
-    assert "sensor.example_vehicle_tpms_rear_right" in package_text
+    assert f"sensor.{VEHICLE_ENTITY_SLUG}_tpms_front_left" in package_text
+    assert f"sensor.{VEHICLE_ENTITY_SLUG}_tpms_front_right" in package_text
+    assert f"sensor.{VEHICLE_ENTITY_SLUG}_tpms_rear_left" in package_text
+    assert f"sensor.{VEHICLE_ENTITY_SLUG}_tpms_rear_right" in package_text
     assert "{% if precondition and low_tpms %}" in package_text
     assert "Tire pressure is low: " in package_text
     assert "Get air before you leave." in package_text
