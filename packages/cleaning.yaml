@@ -1156,6 +1156,9 @@ template:
         delay_on: 0:05:00
         default_entity_id: binary_sensor.dishwasher_running
         unique_id: dishwasher_running
+        # No dishwasher power source is registered right now; report
+        # unavailable instead of a false "off" until one returns.
+        availability: "{{ has_value('binary_sensor.dishwasher') }}"
         state: "{{ is_state('binary_sensor.dishwasher', 'on') }}"
         name: dishwasher_running
       # Dryers bounce around their heater cycles, so only stop after a short
