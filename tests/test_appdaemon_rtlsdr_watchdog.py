@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import types
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 APP_PATH = ROOT / "appdaemon" / "apps" / "rtlsdr_watchdog.py"
 APPS_YAML_PATH = ROOT / "appdaemon" / "apps" / "apps.yaml"
+APPS_TEMPLATE_PATH = ROOT / "private_templates" / "appdaemon_apps.yaml.tmpl"
 GITIGNORE_PATH = ROOT / ".gitignore"
 SYNC_SCRIPT_PATH = ROOT / "scripts" / "appdaemon_sync.py"
 
@@ -66,16 +68,16 @@ def test_missing_private_notify_service_disables_watchdog(monkeypatch, tmp_path)
 
 
 def test_watchdog_notification_destinations_are_private_secrets():
-    apps = APPS_YAML_PATH.read_text()
+    apps = APPS_TEMPLATE_PATH.read_text()
     block = apps.split("rtlsdr_watchdog:", 1)[1].split("\n\n", 1)[0]
-    examples = (ROOT / "travis_secrets.example.yaml").read_text()
+    examples = json.loads((ROOT / "examples/private_values.example.json").read_text())
 
     for field, key in (
-        ("notify_service", "private_rtlsdr_primary_notify_service"),
-        ("secondary_notify_service", "private_rtlsdr_secondary_notify_service"),
+        ("notify_service", "appdaemon_notify_target_slash_01"),
+        ("secondary_notify_service", "appdaemon_notify_target_slash_02"),
     ):
-        assert f"{field}: !secret {key}" in block
-        assert f"{key}:" in examples
+        assert f"{field}: @@PRIVATE:{key}@@" in block
+        assert key in examples
     assert "mobile_app_" not in block
     assert "mobile_app_" not in APP_PATH.read_text()
 
