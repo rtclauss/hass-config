@@ -238,3 +238,13 @@ def test_appdaemon_identity_and_notification_targets_are_private() -> None:
     assert "bayesian_device_tracker_friendly_name: \"@@PRIVATE:presence_person_title@@\"" in apps
     assert apps.count("sensor.tomorrow_io_@@PRIVATE:zone_02_name_slug@@") == 5
     assert not re.search(r"\b(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\b", apps, re.I)
+
+
+def test_guest_dashboard_location_is_private() -> None:
+    guest = (ROOT / "private_templates/ui-guest.yaml.tmpl").read_text()
+    assert "title: @@PRIVATE:zone_02_label@@" in guest
+    assert "Time until @@PRIVATE:owner_person_title@@ returns home" in guest
+    assert "weather.@@PRIVATE:zone_02_name_slug@@" in guest
+    assert "sensor.@@PRIVATE:guest_dashboard_weather_station_slug@@_temperature" in guest
+    manifest = json.loads((ROOT / "docs/private_config_manifest.json").read_text())
+    assert {"template": "private_templates/ui-guest.yaml.tmpl", "output": "ui-guest.yaml"} in manifest["files"]
