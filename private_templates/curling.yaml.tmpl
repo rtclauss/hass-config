@@ -33,7 +33,7 @@ homeassistant:
     #   friendly_name: "Leave home for curling"
     #   icon: mdi:curling
 
-    automation.return_home_from_spcc:
+    automation.return_home_from_@@PRIVATE:zone_08_slug@@:
       <<: *customize
       friendly_name: "Return home from SPCC"
       icon: mdi:curling
@@ -118,14 +118,14 @@ automation:
           message: Good Curling!
         action: notify.all
 
-  - id: return_home_from_occ
-    alias: return_home_from_occ
+  - id: return_home_from_@@PRIVATE:zone_05_slug@@
+    alias: return_home_from_@@PRIVATE:zone_05_slug@@
     trace:
       stored_traces: 10
     trigger:
       - trigger: zone
         entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
-        zone: zone.occ
+        zone: zone.@@PRIVATE:zone_05_slug@@
         event: leave
     condition:
       condition: and
@@ -152,14 +152,14 @@ automation:
           message: >-
             Turning off Ecobee Away mode while driving home from OCC
 
-  - id: return_home_from_spcc
-    alias: return_home_from_spcc
+  - id: return_home_from_@@PRIVATE:zone_08_slug@@
+    alias: return_home_from_@@PRIVATE:zone_08_slug@@
     trace:
       stored_traces: 10
     trigger:
       - trigger: zone
         entity_id: device_tracker.bayesian_@@PRIVATE:presence_person_slug@@_home
-        zone: zone.spcc
+        zone: zone.@@PRIVATE:zone_08_slug@@
         event: leave
     condition:
       condition: state
@@ -198,7 +198,7 @@ automation:
       #     entity_id: automation.leave_home_for_curling
       - action: script.toggle_curling_automation_on_curling_season
         data:
-          entity_id: automation.return_home_from_spcc
+          entity_id: automation.return_home_from_@@PRIVATE:zone_08_slug@@
 
   # - id: toggle_curling_tab
   #   alias: toggle_curling_tab
@@ -228,17 +228,17 @@ group:
   curling_sensors:
     entities:
       - binary_sensor.curling_season
-      - sensor.occ_time
+      - sensor.@@PRIVATE:zone_05_slug@@_time
       - sensor.owatonna_curling_club_bayesian_@@PRIVATE:presence_person_slug@@_home_distance
       - sensor.owatonna_curling_club_nearest_direction_of_travel
-      - sensor.spcc_time
+      - sensor.@@PRIVATE:zone_08_slug@@_time
       - sensor.st_paul_curling_club_bayesian_@@PRIVATE:presence_person_slug@@_home_distance
       - sensor.st_paul_curling_club_nearest_direction_of_travel
   curling_automations:
     entities:
       - automation.leave_home_for_curling
-      - automation.return_home_from_occ
-      - automation.return_home_from_spcc
+      - automation.return_home_from_@@PRIVATE:zone_05_slug@@
+      - automation.return_home_from_@@PRIVATE:zone_08_slug@@
 
 ########################
 # Scripts
@@ -277,7 +277,7 @@ template:
         name: curling_season
   - sensor:
       - name: OCC Time
-        unique_id: occ_time
+        unique_id: @@PRIVATE:zone_05_slug@@_time
         state: >-
           {% if states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed is defined %}
              {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.owatonna_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}
@@ -287,7 +287,7 @@ template:
         unit_of_measurement: "min"
         device_class: duration
       - name: SPCC Time
-        unique_id: spcc_time
+        unique_id: @@PRIVATE:zone_08_slug@@_time
         state: >-
           {% if states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed is defined %}
              {{ (as_timestamp(now(), default=now()) - as_timestamp(states.sensor.st_paul_curling_club_nearest_direction_of_travel.last_changed, default=now())) | int //60 }}

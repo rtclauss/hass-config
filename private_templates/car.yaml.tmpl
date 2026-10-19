@@ -243,7 +243,7 @@ automation:
             {% set electrical_rate = states('input_number.ev_electrical_rate') | float(default=0) %}
             {% set location_name = states('@@PRIVATE:appdaemon_location_source_02@@') | default('', true) | lower %}
             {% set location_label = location_name | replace('_', ' ') | title %}
-            {% set preserve_default_charging_schedule = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+            {% set preserve_default_charging_schedule = location_name in ['home', 'parents', '@@PRIVATE:zone_05_slug@@', '@@PRIVATE:zone_08_slug@@'] %}
             {% set resident_home = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') %}
             {% set tariff_name = tariff | lower %}
             {% set tariff_display = tariff | replace('_', '-') | title %}
@@ -1002,7 +1002,7 @@ script:
             {% else %}
               0
             {% endif %}
-          preserve_default_charging_schedule: "{{ location_name in ['home', 'parents', 'occ', 'spcc'] }}"
+          preserve_default_charging_schedule: "{{ location_name in ['home', 'parents', '@@PRIVATE:zone_05_slug@@', '@@PRIVATE:zone_08_slug@@'] }}"
           stored_managed_departure_ts: "{{ states('input_number.tesla_managed_departure_ts') | int(0) }}"
           stored_managed_departure_active: "{{ is_state('input_boolean.tesla_managed_departure_active', 'on') }}"
           tesla_departure_ts: "{{ state_attr('binary_sensor.@@PRIVATE:vehicle_entity_slug@@_scheduled_departure', 'Departure timestamp') | int(0) }}"

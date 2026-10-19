@@ -120,7 +120,7 @@ cards:
               {% set alarm_enabled = is_state('input_boolean.weekday_alarm_on', 'on') or is_state('input_boolean.weekend_alarm_on', 'on') %}
               {% set location_name = states('@@PRIVATE:appdaemon_location_source_02@@') | default('', true) | lower %}
               {% set location_label = location_name | replace('_', ' ') | title %}
-              {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+              {% set protected_location = location_name in ['home', 'parents', '@@PRIVATE:zone_05_slug@@', '@@PRIVATE:zone_08_slug@@'] %}
               {% set home_planner = location_name == 'home' %}
               {% set resident_home = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') %}
               {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
@@ -166,7 +166,7 @@ cards:
               {% set has_calendar_departure = trip_start_raw not in [none, '', 'None'] %}
               {% set location_name = states('@@PRIVATE:appdaemon_location_source_02@@') | default('', true) | lower %}
               {% set location_label = location_name | replace('_', ' ') | title %}
-              {% set protected_location = location_name in ['home', 'parents', 'occ', 'spcc'] %}
+              {% set protected_location = location_name in ['home', 'parents', '@@PRIVATE:zone_05_slug@@', '@@PRIVATE:zone_08_slug@@'] %}
               {% set home_planner = location_name == 'home' %}
               {% set resident_home = is_state('person.@@PRIVATE:owner_person_slug@@', 'home') %}
               {% set planned_departure = is_state('binary_sensor.upcoming_trip_charging', 'on') or has_calendar_departure or alarm_enabled %}
