@@ -25,6 +25,14 @@ def test_esphome_build_runs_for_changed_esphome_yaml_or_includes() -> None:
     assert "while IFS= read -r config; do" in workflow_text
 
 
+def test_esphome_build_checks_all_configs_when_push_history_was_rewritten() -> None:
+    workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
+
+    assert 'git cat-file -e "${BEFORE_SHA}^{commit}"' in workflow_text
+    assert 'diff_output=$(git ls-files \'esphome/*\')' in workflow_text
+    assert 'diff_output=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")' in workflow_text
+
+
 def test_home_assistant_config_check_does_not_depend_on_esphome_build() -> None:
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
     ha_section = workflow_text.split("home-assistant-check-config:", maxsplit=1)[1]
