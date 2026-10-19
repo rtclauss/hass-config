@@ -169,7 +169,14 @@ jobs:
             diff_output=$(git diff --name-only "origin/$BASE_REF...HEAD")
           elif [[ "$EVENT_NAME" == "push" ]]; then
             if [[ -n "$BEFORE_SHA" && "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-              diff_output=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")
+              if git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+                diff_output=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")
+              else
+                # A history rewrite can remove the previous push tip entirely.
+                # Build every current config instead of failing or skipping validation.
+                echo "Previous push tip is unavailable; checking all ESPHome configs."
+                diff_output=$(git ls-files 'esphome/*')
+              fi
             else
               diff_output=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA")
             fi
