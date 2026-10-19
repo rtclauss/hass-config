@@ -16,6 +16,25 @@ from scripts.check_z2m_availability_roster import (  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_private_location_slug_is_rendered_for_travel_logic() -> None:
+    templates = {
+        "car.yaml.tmpl": {"zone_05_slug": 2, "zone_08_slug": 2},
+        "curling.yaml.tmpl": {"zone_05_slug": 6, "zone_08_slug": 8},
+        "tiles_tesla_charging.yaml.tmpl": {"zone_05_slug": 2, "zone_08_slug": 2},
+    }
+    for name, counts in templates.items():
+        source = (ROOT / "private_templates" / name).read_text()
+        for key, count in counts.items():
+            assert source.count(f"@@PRIVATE:{key}@@") == count
+
+    curling = (ROOT / "private_templates/curling.yaml.tmpl").read_text()
+    for key in ("zone_05_slug", "zone_08_slug"):
+        marker = f"@@PRIVATE:{key}@@"
+        assert f"zone: zone.{marker}" in curling
+        assert f"automation.return_home_from_{marker}" in curling
+        assert f"sensor.{marker}_time" in curling
+
+
 def test_runtime_zigbee_and_ci_secrets_are_not_tracked() -> None:
     tracked = set(
         subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
